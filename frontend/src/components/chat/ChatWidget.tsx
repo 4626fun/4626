@@ -21,8 +21,17 @@ import { X } from 'lucide-react'
 import { XmtpChatProvider, type ChatConversation, useXmtp } from '@/lib/xmtp/provider'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
+import { getChatCommandById } from './commandCenter'
 
 const MAX_OPEN_WINDOWS = 3
+const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
+const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'Keepr').trim() || 'Keepr'
+
+type PendingDeepLinkIntent = {
+  actionId: string
+  peerAddress: string
+  peerName: string
+}
 
 type OpenWindow = {
   id: string
@@ -32,6 +41,7 @@ type OpenWindow = {
   peerAddress?: string
   imageUrl?: string
   minimized: boolean
+  seedCommandId?: string | null
 }
 
 function ChatWidgetInner() {
@@ -45,12 +55,27 @@ function ChatWidgetInner() {
   const [newDmError, setNewDmError] = useState('')
   const [newDmLoading, setNewDmLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [pendingDeepLinkIntent, setPendingDeepLinkIntent] = useState<PendingDeepLinkIntent | null>(null)
 
   const maybeConnectMessaging = useCallback(() => {
     if (status === 'idle' || status === 'error') {
       void connect()
     }
   }, [connect, status])
+
+  const clearChatActionQuery = useCallback(() => {
+    if (typeof window === 'undefined') return
+    const nextUrl = new URL(window.location.href)
+    const hasAny =
+      nextUrl.searchParams.has('chatAction') ||
+      nextUrl.searchParams.has('chatPeer') ||
+      nextUrl.searchParams.has('chatName')
+    if (!hasAny) return
+    nextUrl.searchParams.delete('chatAction')
+    nextUrl.searchParams.delete('chatPeer')
+    nextUrl.searchParams.delete('chatName')
+    window.history.replaceState({}, '', nextUrl.toString())
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -61,12 +86,38 @@ function ChatWidgetInner() {
     return () => mq.removeEventListener('change', handleChange)
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const searchParams = new URLSearchParams(window.location.search)
+    const actionId = searchParams.get('chatAction')
+    if (!actionId) return
+    if (!getChatCommandById(actionId)) return
+    const maybePeer = String(searchParams.get('chatPeer') ?? '').trim().toLowerCase()
+    const peerAddress =
+      /^0x[a-fA-F0-9]{40}$/.test(maybePeer) ? maybePeer : AGENT_XMTP_ADDRESS
+    if (!/^0x[a-fA-F0-9]{40}$/.test(peerAddress)) return
+    const maybeName = String(searchParams.get('chatName') ?? '').trim()
+    const peerName = maybeName || (peerAddress === AGENT_XMTP_ADDRESS
+      ? AGENT_DISPLAY_NAME
+      : `${peerAddress.slice(0, 6)}…${peerAddress.slice(-4)}`)
+    setPendingDeepLinkIntent({
+      actionId,
+      peerAddress,
+      peerName,
+    })
+  }, [])
+
   const handleOpenChat = useCallback((convo: ChatConversation) => {
+    const seedCommandId = (convo as ChatConversation & { seedCommandId?: string }).seedCommandId ?? null
     setOpenWindows((prev) => {
       // Already open? Just un-minimize
       const existing = prev.find((w) => w.id === convo.id)
       if (existing) {
-        return prev.map((w) => (w.id === convo.id ? { ...w, minimized: false } : w))
+        return prev.map((w) =>
+          w.id === convo.id
+            ? { ...w, minimized: false, seedCommandId: seedCommandId ?? w.seedCommandId ?? null }
+            : w,
+        )
       }
       // Enforce max open windows (close oldest)
       const next = [...prev]
@@ -81,6 +132,7 @@ function ChatWidgetInner() {
         peerAddress: convo.peerAddress,
         imageUrl: convo.imageUrl,
         minimized: false,
+        seedCommandId,
       })
       return next
     })
@@ -89,9 +141,50 @@ function ChatWidgetInner() {
     }
   }, [isMobile])
 
+  useEffect(() => {
+    if (!pendingDeepLinkIntent) return
+    maybeConnectMessaging()
+  }, [pendingDeepLinkIntent, maybeConnectMessaging])
+
+  useEffect(() => {
+    if (!pendingDeepLinkIntent) return
+    if (status !== 'connected') return
+    if (!/^0x[a-fA-F0-9]{40}$/.test(pendingDeepLinkIntent.peerAddress)) {
+      setPendingDeepLinkIntent(null)
+      clearChatActionQuery()
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      const convoId = await startDm(pendingDeepLinkIntent.peerAddress as `0x${string}`)
+      if (cancelled || !convoId) return
+      handleOpenChat({
+        id: convoId,
+        type: 'dm',
+        name: pendingDeepLinkIntent.peerName,
+        peerAddress: pendingDeepLinkIntent.peerAddress,
+        unreadCount: 0,
+        seedCommandId: pendingDeepLinkIntent.actionId,
+      } as ChatConversation)
+      setPendingDeepLinkIntent(null)
+      clearChatActionQuery()
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [clearChatActionQuery, handleOpenChat, pendingDeepLinkIntent, startDm, status])
+
   const handleMinimize = useCallback((id: string) => {
     setOpenWindows((prev) =>
       prev.map((w) => (w.id === id ? { ...w, minimized: !w.minimized } : w)),
+    )
+  }, [])
+
+  const handleSeedConsumed = useCallback((id: string) => {
+    setOpenWindows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, seedCommandId: null } : w)),
     )
   }, [])
 
@@ -175,6 +268,8 @@ function ChatWidgetInner() {
               conversationImageUrl={activeMobileWindow.imageUrl}
               minimized={false}
               variant="mobile"
+              seedCommandId={activeMobileWindow.seedCommandId ?? null}
+              onSeedConsumed={() => handleSeedConsumed(activeMobileWindow.id)}
               onMinimize={() => handleMinimize(activeMobileWindow.id)}
               onClose={() => handleClose(activeMobileWindow.id)}
             />
@@ -209,6 +304,8 @@ function ChatWidgetInner() {
               peerAddress={win.peerAddress}
               conversationImageUrl={win.imageUrl}
               minimized={win.minimized}
+              seedCommandId={win.seedCommandId ?? null}
+              onSeedConsumed={() => handleSeedConsumed(win.id)}
               onMinimize={() => handleMinimize(win.id)}
               onClose={() => handleClose(win.id)}
             />
@@ -234,7 +331,7 @@ function ChatWidgetInner() {
 
       {/* New DM modal overlay */}
       {showNewDm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto">
           <div className="bg-zinc-900 border border-white/10 rounded-xl p-6 w-[360px] shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-zinc-200">New Message</h3>

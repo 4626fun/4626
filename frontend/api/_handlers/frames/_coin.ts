@@ -46,6 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const imageUrl = `${protocol}://${apiHost}/v1/token/${address}/image`
   const coinUrl = `${appUrl}/coin/${address}`
   const tradeUrl = `https://zora.co/coin/base:${address}`
+  const assistantUrl = `${appUrl}/?chatAction=market-quote-eth`
 
   const frameHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -68,10 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:button:2:action" content="link" />
   <meta property="fc:frame:button:2:target" content="${tradeUrl}" />
 
-  <!-- Button 3: Buy via Keepr -->
-  <meta property="fc:frame:button:3" content="Buy via Keepr" />
+  <!-- Button 3: Open Assistant -->
+  <meta property="fc:frame:button:3" content="Ask Keepr" />
   <meta property="fc:frame:button:3:action" content="link" />
-  <meta property="fc:frame:button:3:target" content="https://xmtp.chat/dm/${process.env.VITE_AGENT_XMTP_ADDRESS ?? ''}" />
+  <meta property="fc:frame:button:3:target" content="${assistantUrl}" />
 
   <!-- Open Graph -->
   <meta property="og:title" content="${title} — 4626" />

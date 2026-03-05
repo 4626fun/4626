@@ -67,6 +67,7 @@ import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/cre
 import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agentRegistrationPublisher.js'
+import { formatNumberedCommandFallback, formatWelcomeNumberedOptions } from '../../_lib/chatCommandFallback.js'
 import { createCorrelationLogger, logger } from '../../_lib/logger.js'
 import {
   TARGET_CANONICAL_CSW_ADDRESS,
@@ -434,15 +435,7 @@ const welcomedConversations = new WelcomeConversationTracker({
   maxTracked: WELCOME_TRACKER_MAX,
 })
 
-const WELCOME_MESSAGE = [
-  `o henlo! I'm Keepr, your 4626 assistant.`,
-  ``,
-  `Start with one of these:`,
-  ``,
-  `• /help — see all commands`,
-  `• /keepr status — check this vault`,
-  `• /ai <question> — ask anything in plain English`,
-].join('\n')
+const WELCOME_MESSAGE = formatWelcomeNumberedOptions()
 
 type EnvValidationResult = {
   errors: string[]
@@ -786,7 +779,11 @@ async function handleMessage(
     lower.startsWith('@keepr') ||
     lower.startsWith('@bot') ||
     !text.startsWith('/')
-  if (!isAi) return null
+  if (!isAi) {
+    return formatNumberedCommandFallback({
+      intro: 'I did not recognize that slash command.',
+    })
+  }
 
   const cleanText = text
     .replace(/^\/?ai\s*/i, '')

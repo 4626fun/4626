@@ -42,6 +42,12 @@ type BankrPromptSkillResult = {
 
 const WRITE_ERROR_PREFIX = 'Bankr write blocked by canonical CSW policy'
 
+export function isBankrWriteCommandText(text: string): boolean {
+  const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ')
+  if (!normalized) return false
+  return /^\/?bankr exec\b/.test(normalized)
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }

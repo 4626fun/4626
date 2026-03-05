@@ -142,6 +142,27 @@ type QueueExecutorResult = {
 
 type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
+export const CRE_WRITE_SUBCOMMAND_PREFIXES = [
+  'tend',
+  'report',
+  'settle',
+  'flush-fees',
+  'flush',
+  'relay-entries',
+  'relay-winners',
+  'relay',
+  'graduate',
+  'queue',
+] as const
+
+export function isCreWriteCommandText(text: string): boolean {
+  const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ')
+  if (!normalized.startsWith('/cre ') && !normalized.startsWith('cre ')) return false
+  const withoutPrefix = normalized.startsWith('/cre ') ? normalized.slice(5).trim() : normalized.slice(4).trim()
+  if (!withoutPrefix) return false
+  return CRE_WRITE_SUBCOMMAND_PREFIXES.some((cmd) => withoutPrefix.startsWith(cmd))
+}
+
 function roleForWallet(params: {
   wallet: string
   owner: string
@@ -464,14 +485,7 @@ const creTriggerAction: Action = {
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
-    if (!text.startsWith('/cre ')) return false
-    const sub = text.slice(5).trim()
-    const triggerCmds = [
-      'tend', 'report', 'settle', 'flush-fees', 'flush',
-      'relay-entries', 'relay-winners', 'relay',
-      'graduate', 'queue',
-    ]
-    return triggerCmds.some((cmd) => sub.startsWith(cmd))
+    return isCreWriteCommandText(text)
   },
 
   handler: async (

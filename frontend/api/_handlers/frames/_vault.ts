@@ -31,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Frame image URL (uses token metadata image as fallback)
   const imageUrl = `${protocol}://${apiUrl}/v1/frames/vault/${address}/image`
   const vaultUrl = `${protocol}://${baseUrl}/vault/${address}`
+  const assistantUrl = `${protocol}://${baseUrl}/?chatAction=vault-status`
 
   const frameHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -53,10 +54,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:button:2:action" content="link" />
   <meta property="fc:frame:button:2:target" content="${vaultUrl}?action=buy" />
   
-  <!-- Button 3: Trade on Uniswap -->
-  <meta property="fc:frame:button:3" content="Trade" />
+  <!-- Button 3: Open Assistant -->
+  <meta property="fc:frame:button:3" content="Ask Keepr" />
   <meta property="fc:frame:button:3:action" content="link" />
-  <meta property="fc:frame:button:3:target" content="https://app.uniswap.org/swap?chain=base&outputCurrency=${address}" />
+  <meta property="fc:frame:button:3:target" content="${assistantUrl}" />
   
   <!-- Open Graph -->
   <meta property="og:title" content="4626" />

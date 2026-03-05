@@ -180,6 +180,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     return u.toString()
   })()
+  const assistantUrl = (() => {
+    const u = new URL('/', appUrl)
+    u.searchParams.set('chatAction', 'help')
+    return u.toString()
+  })()
 
   const inputEmail = normalizeEmail(inputText)
   const isJoinWaitlistTap = Number(buttonIndex) === 1
@@ -223,9 +228,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:button:2" content="Open 4626" />
   <meta property="fc:frame:button:2:action" content="link" />
   <meta property="fc:frame:button:2:target" content="${appUrl}" />
-  <meta property="fc:frame:button:3" content="Chat with Keepr" />
+  <meta property="fc:frame:button:3" content="Open Assistant" />
   <meta property="fc:frame:button:3:action" content="link" />
-  <meta property="fc:frame:button:3:target" content="https://xmtp.chat/dm/${process.env.VITE_AGENT_XMTP_ADDRESS ?? ''}" />
+  <meta property="fc:frame:button:3:target" content="${assistantUrl}" />
   <meta property="og:title" content="4626" />
   <meta property="og:image" content="${appUrl}/og-image.png" />
 </head>

@@ -22,6 +22,7 @@ import { handleSendCommand } from './sendCommand.js'
 import { handleWhoisCommand } from './whoisCommand.js'
 import { generateLlmResponse } from '../ai/chat.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
+import { formatNumberedCommandFallback } from '../_lib/chatCommandFallback.js'
 
 export type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
@@ -612,7 +613,12 @@ async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
     return { ok: true, response: lines.join('\n') }
   }
 
-  return { ok: false, response: 'Unknown /mkt command. Try `/mkt help`.' }
+  return {
+    ok: false,
+    response: formatNumberedCommandFallback({
+      intro: 'Unknown /mkt command. Try `/mkt help`.',
+    }),
+  }
 }
 
 export async function handleKeeprCommand(params: {
@@ -760,7 +766,13 @@ export async function handleKeeprCommand(params: {
         ].join('\n'),
       }
     }
-    return { ok: false, response: 'Keepr is not configured for this group.' }
+    return {
+      ok: false,
+      response: formatNumberedCommandFallback({
+        intro: 'Keepr is not configured for this group.',
+        includeHint: 'Ask the creator to connect this group in 4626.',
+      }),
+    }
   }
 
   const owner = v.canonicalOwnerAddress
@@ -892,7 +904,12 @@ export async function handleKeeprCommand(params: {
     return { ok: true, response: 'Sync requested. The Keepr runtime will process this shortly.' }
   }
 
-    return { ok: false, response: 'Unknown command. Try `/keepr help`.' }
+    return {
+      ok: false,
+      response: formatNumberedCommandFallback({
+        intro: 'Unknown command. Try `/keepr help`.',
+      }),
+    }
   } catch (error) {
     const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'Keepr command failed')
     return {

@@ -46,6 +46,9 @@ import { getAddress, isAddress } from 'viem'
 
 export type XmtpStatus = 'idle' | 'signing' | 'connecting' | 'connected' | 'error'
 
+export type ChatMessageStatus = 'sending' | 'sent' | 'failed'
+export type ChatMessageContentType = 'text' | 'json' | 'code'
+
 export type ChatConversation = {
   id: string
   type: 'dm' | 'group'
@@ -63,8 +66,17 @@ export type ChatMessage = {
   conversationId: string
   senderInboxId: string
   content: string
+  contentType: ChatMessageContentType
+  richPreview?: string
+  replyToId?: string | null
+  status: ChatMessageStatus
+  error: string | null
   sentAt: Date
   isSelf: boolean
+}
+
+export type SendChatMessageOptions = {
+  replyToId?: string | null
 }
 
 type XmtpContextValue = {
@@ -79,7 +91,11 @@ type XmtpContextValue = {
   disconnect: () => void
   conversations: ChatConversation[]
   loadMessages: (conversationId: string) => Promise<ChatMessage[]>
-  sendMessage: (conversationId: string, text: string) => Promise<void>
+  sendMessage: (
+    conversationId: string,
+    text: string,
+    options?: SendChatMessageOptions,
+  ) => Promise<ChatMessage>
   startDm: (peerAddress: `0x${string}`) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
@@ -120,7 +136,17 @@ const XmtpContext = createContext<XmtpContextValue>({
   disconnect: noop,
   conversations: [],
   loadMessages: async () => [],
-  sendMessage: async () => {},
+  sendMessage: async () => ({
+    id: `local-${Date.now()}`,
+    conversationId: '',
+    senderInboxId: '',
+    content: '',
+    contentType: 'text',
+    status: 'failed',
+    error: 'not_connected',
+    sentAt: new Date(),
+    isSelf: true,
+  }),
   startDm: async () => null,
   subscribeToMessages: () => noop,
   resolveInboxAddress: async () => null,
@@ -275,6 +301,79 @@ function normalizeEvmAddress(value: unknown): string | null {
   const raw = value.trim()
   if (!raw || !isAddress(raw)) return null
   return getAddress(raw).toLowerCase()
+}
+
+type ParsedWireContent = {
+  content: string
+  contentType: ChatMessageContentType
+  richPreview?: string
+  replyToId: string | null
+}
+
+const REPLY_PREFIX_RE = /^\[reply:([a-zA-Z0-9._:-]{1,160})\]\s*/i
+const JSON_CODE_FENCE_RE = /^```json\s*([\s\S]*?)\s*```$/i
+const GENERIC_CODE_FENCE_RE = /^```[a-zA-Z0-9_-]*\s*([\s\S]*?)\s*```$/i
+
+function parseWireContent(raw: string): ParsedWireContent {
+  const initial = String(raw ?? '')
+  const replyMatch = initial.match(REPLY_PREFIX_RE)
+  const replyToId = replyMatch?.[1] ? replyMatch[1] : null
+  const content = replyMatch ? initial.slice(replyMatch[0].length).trim() : initial.trim()
+
+  const jsonFenceMatch = content.match(JSON_CODE_FENCE_RE)
+  if (jsonFenceMatch?.[1]) {
+    try {
+      const parsed = JSON.parse(jsonFenceMatch[1]) as unknown
+      if (parsed && typeof parsed === 'object') {
+        return {
+          content,
+          contentType: 'json',
+          richPreview: JSON.stringify(parsed, null, 2),
+          replyToId,
+        }
+      }
+    } catch {
+      // Fallback to plain text when JSON is invalid.
+    }
+  }
+
+  if (content.startsWith('{') && content.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(content) as unknown
+      if (parsed && typeof parsed === 'object') {
+        return {
+          content,
+          contentType: 'json',
+          richPreview: JSON.stringify(parsed, null, 2),
+          replyToId,
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  const codeFenceMatch = content.match(GENERIC_CODE_FENCE_RE)
+  if (codeFenceMatch?.[1]) {
+    return {
+      content: codeFenceMatch[1].trim(),
+      contentType: 'code',
+      replyToId,
+    }
+  }
+
+  return {
+    content,
+    contentType: 'text',
+    replyToId,
+  }
+}
+
+function encodeWireContent(text: string, options?: SendChatMessageOptions): string {
+  const body = text.trim()
+  const replyToId = options?.replyToId?.trim()
+  if (!replyToId) return body
+  return `[reply:${replyToId}] ${body}`
 }
 
 function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | null {
@@ -609,7 +708,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     try {
       const last = await convo.lastMessage()
       if (last) {
-        lastMessageText = typeof last.content === 'string' ? last.content : undefined
+        if (typeof last.content === 'string') {
+          lastMessageText = parseWireContent(last.content).content
+        }
         lastMessageAt = last.sentAt
       }
     } catch {}
@@ -913,7 +1014,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               const idx = prev.findIndex((c) => c.id === convoId)
               if (idx === -1) return prev
               const updated = { ...prev[idx] }
-              if (typeof msg.content === 'string') updated.lastMessageText = msg.content
+              if (typeof msg.content === 'string') {
+                updated.lastMessageText = parseWireContent(msg.content).content
+              }
               updated.lastMessageAt = msg.sentAt
               if (!chatMsg.isSelf) updated.unreadCount += 1
               const next = [...prev]
@@ -1425,11 +1528,19 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
   // ------- decode message helper -------
   function decodedToChat(msg: DecodedMessage, selfInboxId: string): ChatMessage {
+    const parsed = parseWireContent(
+      typeof msg.content === 'string' ? msg.content : (msg.fallback ?? '[unsupported]'),
+    )
     return {
       id: msg.id,
       conversationId: msg.conversationId,
       senderInboxId: msg.senderInboxId,
-      content: typeof msg.content === 'string' ? msg.content : (msg.fallback ?? '[unsupported]'),
+      content: parsed.content,
+      contentType: parsed.contentType,
+      richPreview: parsed.richPreview,
+      replyToId: parsed.replyToId,
+      status: 'sent',
+      error: null,
       sentAt: msg.sentAt,
       isSelf: msg.senderInboxId === selfInboxId,
     }
@@ -1454,13 +1565,47 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ------- send message -------
-  const sendMessage = useCallback(async (conversationId: string, text: string) => {
+  const sendMessage = useCallback(async (
+    conversationId: string,
+    text: string,
+    options?: SendChatMessageOptions,
+  ): Promise<ChatMessage> => {
     const client = clientRef.current
-    if (!client || !text.trim()) return
+    const trimmed = text.trim()
+    if (!client || !trimmed) {
+      throw new Error('not_connected')
+    }
+    const wireContent = encodeWireContent(trimmed, options)
+    const optimisticParsed = parseWireContent(wireContent)
     try {
       const convo = await client.conversations.getConversationById(conversationId)
       if (!convo) throw new Error('conversation_not_found')
-      await convo.sendText(text.trim())
+      const sent = (await convo.sendText(wireContent)) as unknown
+      const sentRecord =
+        sent && typeof sent === 'object'
+          ? (sent as { sentAt?: unknown; id?: unknown })
+          : null
+      const sentAt =
+        sentRecord?.sentAt instanceof Date
+          ? sentRecord.sentAt
+          : new Date()
+      const sentId =
+        typeof sentRecord?.id === 'string'
+          ? sentRecord.id
+          : `local-ack-${Date.now()}`
+      return {
+        id: sentId,
+        conversationId,
+        senderInboxId: client.inboxId ?? 'self',
+        content: optimisticParsed.content,
+        contentType: optimisticParsed.contentType,
+        richPreview: optimisticParsed.richPreview,
+        replyToId: optimisticParsed.replyToId,
+        status: 'sent',
+        error: null,
+        sentAt,
+        isSelf: true,
+      }
     } catch (e) {
       console.error('[xmtp] sendMessage error:', e)
       throw e

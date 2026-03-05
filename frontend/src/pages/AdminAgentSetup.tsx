@@ -6,6 +6,7 @@ import { encodeFunctionData, getAddress } from 'viem'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { getAppBaseUrl } from '@/lib/host'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -66,6 +67,14 @@ function isAddressLike(v: string): boolean {
 function truncAddr(addr: string): string {
   if (addr.length < 12) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+function buildAgentChatActionLink(agentAddress: string): string {
+  const url = new URL('/', getAppBaseUrl())
+  url.searchParams.set('chatAction', 'help')
+  url.searchParams.set('chatPeer', agentAddress)
+  url.searchParams.set('chatName', 'Keepr Agent')
+  return url.toString()
 }
 
 async function provisionServerWallet(creatorAddress: string): Promise<{ walletId: string; address: string }> {
@@ -637,12 +646,12 @@ export function AdminAgentSetup() {
               )}
               <div className="flex items-center gap-2 text-xs">
                 <a
-                  href={`https://xmtp.chat/dm/${agent.xmtpAgentAddress}`}
+                  href={buildAgentChatActionLink(agent.xmtpAgentAddress)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors"
                 >
-                  Test on xmtp.chat <ExternalLink className="w-3 h-3" />
+                  Open guided chat <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
               <div className="flex items-center gap-2">

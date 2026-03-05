@@ -81,6 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const galleryUrl = vault 
     ? `${protocol}://${baseUrl}/vault/${vault}?tab=gallery`
     : `${protocol}://${baseUrl}/gallery/${id || 'featured'}`
+  const assistantUrl = `${protocol}://${baseUrl}/?chatAction=help`
   
   const imageUrl = `${protocol}://${apiUrl}/v1/frames/gallery/image?id=${id || 'featured'}`
 
@@ -104,6 +105,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:button:2" content="Share" />
   <meta property="fc:frame:button:2:action" content="link" />
   <meta property="fc:frame:button:2:target" content="https://warpcast.com/~/compose?text=Check%20out%20this%20gallery%20on%204626&embeds[]=${encodeURIComponent(galleryUrl)}" />
+  
+  <!-- Button 3: Ask Keepr -->
+  <meta property="fc:frame:button:3" content="Ask Keepr" />
+  <meta property="fc:frame:button:3:action" content="link" />
+  <meta property="fc:frame:button:3:target" content="${assistantUrl}" />
   
   <!-- Open Graph -->
   <meta property="og:title" content="${gallery.title}" />

@@ -4,6 +4,7 @@ import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 
 import { selectZoraCrossAppAuthAction } from './ownerInstallMapping'
 import type { Variant } from './waitlistTypes'
@@ -59,6 +60,28 @@ function readApiErrorMessage(payload: unknown, fallback: string): string {
     if (typeof maybeError === 'string' && maybeError.trim()) return maybeError
   }
   return fallback
+}
+
+function readErrorStatusCode(error: unknown): number | null {
+  const candidate = Number(
+    (error as any)?.status ??
+      (error as any)?.statusCode ??
+      (error as any)?.response?.status ??
+      (error as any)?.cause?.status,
+  )
+  if (!Number.isFinite(candidate)) return null
+  return candidate
+}
+
+function isUnauthorizedCrossAppLinkError(error: unknown): boolean {
+  const status = readErrorStatusCode(error)
+  if (status === 401 || status === 403) return true
+
+  const message = String((error as any)?.message ?? '').trim().toLowerCase()
+  if (!message) return false
+  const mentionsCrossAppOAuth = message.includes('oauth/init') || message.includes('cross_app') || message.includes('cross-app')
+  if (!mentionsCrossAppOAuth) return false
+  return message.includes('401') || message.includes('unauthorized') || message.includes('not authorized')
 }
 
 function useSafePrivy() {
@@ -217,9 +240,35 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         throw new Error('Zora linking is unavailable in this environment.')
       }
       if (action === 'link') {
-        await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+        try {
+          const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
+          try {
+            await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+          } finally {
+            restoreCrossAppRedirect?.()
+          }
+        } catch (linkError: unknown) {
+          if (
+            typeof loginWithCrossAppAccount === 'function' &&
+            (isUnauthorizedCrossAppLinkError(linkError) || isPrivyRedirectUrlNotAllowedError(linkError))
+          ) {
+            const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
+            try {
+              await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+            } finally {
+              restoreCrossAppRedirect?.()
+            }
+          } else {
+            throw linkError
+          }
+        }
       } else {
-        await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+        const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
+        try {
+          await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+        } finally {
+          restoreCrossAppRedirect?.()
+        }
       }
 
       const token = await getAccessToken()
@@ -254,7 +303,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
           : prev,
       )
     } catch (zoraError: any) {
-      setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
+      if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
+        setError('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
+      } else {
+        setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
+      }
     } finally {
       setBusy(false)
     }

@@ -2,6 +2,7 @@ import type { Action, Content, HandlerCallback, IAgentRuntime, Memory, Plugin, S
 import type { Address } from 'viem'
 
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
+import { handleBankrCommand } from '../../../../bankr/commands.js'
 import { executeBankrSkill, type BankrRole, type BankrSkillName } from '../../../../bankr/agentSkills.js'
 
 const BANKR_SKILLS = new Set<BankrSkillName>(['bankr_status', 'bankr_me', 'bankr_balances', 'bankr_prompt'])
@@ -41,6 +42,11 @@ function parseSkillInvocation(text: string): { skill: BankrSkillName; payload: R
   }
 }
 
+function isBankrCommand(text: string): boolean {
+  const normalized = text.trim().toLowerCase()
+  return normalized.startsWith('/bankr') || normalized === 'bankr' || normalized.startsWith('bankr ')
+}
+
 function extractMetadata(message: Memory): {
   conversationId: string | null
   senderAddress: Address | null
@@ -65,7 +71,8 @@ const bankrSkillAction: Action = {
   description: 'Execute structured Bankr skills by command: /bankr <skill_name> <json_payload>.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
-    return parseSkillInvocation(message.content?.text ?? '') !== null
+    const text = message.content?.text ?? ''
+    return parseSkillInvocation(text) !== null || isBankrCommand(text)
   },
 
   handler: async (
@@ -75,11 +82,8 @@ const bankrSkillAction: Action = {
     _options?: Record<string, unknown>,
     callback?: HandlerCallback,
   ) => {
-    const parsed = parseSkillInvocation(message.content?.text ?? '')
-    if (!parsed) {
-      await callback?.({ text: 'Invalid /bankr skill command. Format: /bankr <skill_name> <json_payload>' } as Content)
-      return
-    }
+    const text = message.content?.text ?? ''
+    const parsed = parseSkillInvocation(text)
 
     const metadata = extractMetadata(message)
     let role: BankrRole = 'MEMBER'
@@ -101,12 +105,33 @@ const bankrSkillAction: Action = {
     }
 
     try {
-      const data = await executeBankrSkill(parsed.skill, parsed.payload, {
+      if (parsed) {
+        const data = await executeBankrSkill(parsed.skill, parsed.payload, {
+          role,
+          signerWallet: metadata.senderAddress ?? null,
+          canonicalWallet: canonicalOwnerAddress,
+        })
+        await callback?.({ text: JSON.stringify({ skill: parsed.skill, data }, null, 2) } as Content)
+        return
+      }
+
+      if (!metadata.conversationId) {
+        await callback?.({ text: 'Could not determine conversation ID.' } as Content)
+        return
+      }
+      if (!metadata.senderAddress) {
+        await callback?.({ text: 'Could not determine sender wallet address.' } as Content)
+        return
+      }
+
+      const result = await handleBankrCommand({
+        groupId: metadata.conversationId,
+        senderWallet: metadata.senderAddress,
+        text: text.trim(),
         role,
-        signerWallet: metadata.senderAddress ?? null,
-        canonicalWallet: canonicalOwnerAddress,
+        canonicalOwnerAddress,
       })
-      await callback?.({ text: JSON.stringify({ skill: parsed.skill, data }, null, 2) } as Content)
+      await callback?.({ text: result.response || 'Unknown /bankr command. Try `/bankr help`.' } as Content)
     } catch (error: unknown) {
       const messageText = String((error as Error | undefined)?.message ?? 'unknown error')
       await callback?.({ text: `Bankr skill failed: ${messageText}` } as Content)

@@ -18,6 +18,7 @@ import { encodeFunctionData, getAddress } from 'viem'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { getAppBaseUrl } from '@/lib/host'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,6 +87,14 @@ const CSW_ABI = [
 function truncAddr(addr: string): string {
   if (addr.length < 12) return addr
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
+
+function buildAgentChatActionLink(agentAddress: string): string {
+  const url = new URL('/', getAppBaseUrl())
+  url.searchParams.set('chatAction', 'help')
+  url.searchParams.set('chatPeer', agentAddress)
+  url.searchParams.set('chatName', 'Keepr Agent')
+  return url.toString()
 }
 
 function StepRow({
@@ -390,12 +399,12 @@ export function QuickstartModal({ onClose }: { onClose: () => void }) {
 
                   <div className="flex items-center gap-2">
                     <a
-                      href={`https://xmtp.chat/dm/${data.agentAddress}`}
+                      href={buildAgentChatActionLink(data.agentAddress)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 flex items-center justify-center gap-1.5 text-[11px] sm:text-xs px-3 py-2.5 sm:py-2 rounded-lg border border-white/10 text-zinc-400 hover:text-zinc-200 transition-colors"
                     >
-                      Test on XMTP <ExternalLink className="w-3 h-3" />
+                      Open guided chat <ExternalLink className="w-3 h-3" />
                     </a>
                     <button
                       type="button"
