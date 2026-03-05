@@ -17,6 +17,7 @@ import { CONTRACTS } from '@/config/contracts'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   claimLiquidityFees,
   createPosition,
@@ -300,8 +301,9 @@ export function Swap() {
   const [searchParams] = useSearchParams()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
-  const { authenticated: privyAuthenticated, user: privyUser } = usePrivy() as any
+  const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser } = usePrivy() as any
   const { wallets: privyWallets } = useWallets()
+  const auth = useSiweAuth()
   const publicClient = usePublicClient()
   const { switchChainAsync } = useSwitchChain()
   const [swapChainId, setSwapChainId] = useState<SupportedChainId>(DEFAULT_CHAIN_ID)
@@ -524,10 +526,11 @@ export function Swap() {
   const executionMode: WalletMode =
     accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
   const canonicalAuthStatus = useMemo<CanonicalAuthStatus>(() => {
+    if (privyReady !== true) return 'unknown'
     if (privyAuthenticated === true) return 'authenticated'
     if (privyAuthenticated === false) return 'unauthenticated'
     return 'unknown'
-  }, [privyAuthenticated])
+  }, [privyAuthenticated, privyReady])
   const canonicalOwnerCheckStatus = useMemo<CanonicalOwnerCheckStatus>(() => {
     if (privyEmbeddedEoaCanOperateCanonicalQuery.isLoading || privyEmbeddedEoaCanOperateCanonicalQuery.isFetching) {
       return 'pending'
@@ -597,6 +600,15 @@ export function Swap() {
   const executionFallbackActive = executionMode !== preferredExecutionMode
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
+  const needsPrivyCanonicalAuth = useMemo(
+    () =>
+      executionMode === 'canonical' &&
+      (canonicalSignerGate.code === 'privy-auth-required' ||
+        canonicalSignerGate.code === 'embedded-wallet-missing' ||
+        canonicalSignerGate.code === 'embedded-wallet-cannot-sign'),
+    [canonicalSignerGate.code, executionMode],
+  )
+  const canonicalSignInMethod: 'zora' | 'privy' = privyAuthenticated ? 'privy' : 'zora'
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&
@@ -1139,6 +1151,25 @@ export function Swap() {
         title="Swap"
         subtitle="Fast token swaps on Base."
       />
+
+      {activePanel === 'swap' && needsPrivyCanonicalAuth ? (
+        <div className="mx-auto mt-4 max-w-4xl">
+          <Alert
+            variant="warning"
+            title="Privy sign-in required for canonical swaps"
+            action={{
+              label: auth.busy ? 'Signing in...' : 'Sign in with Privy',
+              onClick: () => {
+                if (auth.busy) return
+                void auth.signIn({ method: canonicalSignInMethod })
+              },
+            }}
+          >
+            Canonical mode uses your Privy embedded EOA as the owner signer. Sign in with Privy, then retry the swap.
+            {auth.error ? <div className="mt-2 text-rose-300">{auth.error}</div> : null}
+          </Alert>
+        </div>
+      ) : null}
 
       {activePanel === 'swap' && diagnosticsEnabled ? (
         <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-white/10 bg-zinc-950/60 p-3">

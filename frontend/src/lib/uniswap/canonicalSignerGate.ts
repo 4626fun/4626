@@ -20,6 +20,7 @@ export type CanonicalSignerGateResult = {
   ready: boolean
   code:
     | 'not-required'
+    | 'privy-auth-loading'
     | 'privy-auth-required'
     | 'missing-canonical-address'
     | 'embedded-wallet-missing'
@@ -64,6 +65,13 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
     return gateFailure(
       'privy-auth-required',
       'Sign in with Privy to load your embedded wallet for canonical swaps.',
+    )
+  }
+
+  if ((input.authStatus ?? 'unknown') === 'unknown' && !input.embeddedWalletDetected) {
+    return gateFailure(
+      'privy-auth-loading',
+      'Waiting for Privy session state before canonical signer checks.',
     )
   }
 

@@ -42,6 +42,8 @@ export function ConnectButtonWeb3() {
       return !id.includes('injected')
     })
   }, [connectors, shouldHideInjectedConnector])
+  const allowExternalWalletButtons =
+    !prefersPrivyWalletLogin || (!hasMultipleInjectedProviders && !lockedEthereumProviderGlobal)
 
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`
 
@@ -143,11 +145,11 @@ export function ConnectButtonWeb3() {
           if (prefersPrivyWalletLogin) {
             // Avoid a dead-click path while Privy SDK is still hydrating.
             if (!privyReady) {
-              setShowOptions(true)
+              void auth.signIn({ method: 'privy' })
               return
             }
             void (async () => {
-              const signed = await auth.signIn({ method: privyAuthenticated ? 'auto' : 'zora' })
+              const signed = await auth.signIn({ method: privyAuthenticated ? 'privy' : 'zora' })
               setShowOptions(!signed)
             })()
           } else {
@@ -207,20 +209,22 @@ export function ConnectButtonWeb3() {
                 Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
               </div>
             ) : null}
-            {filteredConnectors.map((connector) => (
-              <button
-                key={connector.uid}
-                type="button"
-                disabled={isPending || auth.busy}
-                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
-                onClick={() => {
-                  connect({ connector })
-                  setShowOptions(false)
-                }}
-              >
-                <span className="label block">{connector.name}</span>
-              </button>
-            ))}
+            {allowExternalWalletButtons
+              ? filteredConnectors.map((connector) => (
+                  <button
+                    key={connector.uid}
+                    type="button"
+                    disabled={isPending || auth.busy}
+                    className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
+                    onClick={() => {
+                      connect({ connector })
+                      setShowOptions(false)
+                    }}
+                  >
+                    <span className="label block">{connector.name}</span>
+                  </button>
+                ))
+              : null}
           </div>
         </>
       )}

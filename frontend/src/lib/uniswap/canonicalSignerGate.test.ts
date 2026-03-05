@@ -36,6 +36,23 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.reason).toContain('Privy embedded wallet not detected')
   })
 
+  it('returns auth-loading while Privy state is unresolved and no embedded wallet is detected', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      authStatus: 'unknown',
+      embeddedWalletDetected: false,
+      embeddedWalletAddress: null,
+      embeddedWalletCanSign: false,
+      ownerCheckStatus: 'unknown',
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(result.code).toBe('privy-auth-loading')
+    expect(result.reason).toContain('Waiting for Privy')
+  })
+
   it('fails with auth-required when canonical mode is not Privy-authenticated', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
