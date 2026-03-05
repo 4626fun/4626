@@ -144,6 +144,7 @@ test/**
 !test/CreatorLotteryManager.OracleTimestampGuard.t.sol
 !test/CCALaunchStrategy.LaunchHandshake.t.sol
 !test/ve4626.LockTokenRestriction.t.sol
+!test/CreatorShareOFT.ContractURI.t.sol
 telegram-bot/
 relayer/
 monitoring/

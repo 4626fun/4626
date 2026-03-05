@@ -8,7 +8,9 @@ import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/Option
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {OFTMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTMsgCodec.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
@@ -48,6 +50,11 @@ interface ISimpleSellTaxHook {
         bool enabled_,
         bool lock_
     ) external;
+}
+
+/// @dev Optional vault extension used for metadata hints.
+interface ICreatorOVaultAsset {
+    function asset() external view returns (address);
 }
 
 /**
@@ -151,6 +158,22 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @dev Returns a URL to JSON metadata including token image, description, etc.
     string private _contractURI;
 
+    /// @notice Raw SVG snippet rendered into the center frame (normalized 1:1 coordinates).
+    string private _logoSvg;
+
+    /// @dev Default logo used when `_logoSvg` is empty.
+    string private constant DEFAULT_LOGO_SVG =
+        "<g id='logo-default'>"
+        "<circle cx='0.5' cy='0.53' r='0.30' fill='#f0b16b'/>"
+        "<circle cx='0.36' cy='0.28' r='0.10' fill='#d38e46'/>"
+        "<circle cx='0.64' cy='0.28' r='0.10' fill='#d38e46'/>"
+        "<circle cx='0.42' cy='0.50' r='0.036' fill='#111827'/>"
+        "<circle cx='0.58' cy='0.50' r='0.036' fill='#111827'/>"
+        "<path d='M0.44 0.62c0.04 0.05 0.08 0.05 0.12 0' stroke='#111827' stroke-width='0.04' "
+        "stroke-linecap='round' fill='none'/>"
+        "<circle cx='0.50' cy='0.58' r='0.028' fill='#111827'/>"
+        "</g>";
+
     // ================================
     // STATE - REMOTE CHAIN FEE FORWARDING
     // ================================
@@ -217,6 +240,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /// @notice ERC-7572: Emitted when contract URI is updated
     event ContractURIUpdated();
+
+    /// @notice Emitted when the contract-level logo SVG snippet changes
+    event LogoSvgUpdated();
 
     /// @notice Emitted when fees are accumulated on a remote chain
     event FeesAccumulated(uint256 amount, uint256 totalPending);
@@ -302,6 +328,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         registry = ICreatorRegistry(_registry);
         chainEid = uint32(block.chainid);
         addressType[address(this)] = OperationType.NoFees;
+        _logoSvg = DEFAULT_LOGO_SVG;
     }
 
     // ================================
@@ -1039,23 +1066,17 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /**
      * @notice ERC-7572 contract-level metadata URI
-     * @dev Returns a URL pointing to JSON metadata with token info including:
-     *      - name, symbol, decimals
-     *      - description
-     *      - image (framed creator coin logo)
-     *      - external_link
-     *      - properties (vault, underlying asset, supported chains, etc.)
+     * @dev ERC-7572 is contract-level metadata for fungible tokens (not ERC-721 tokenURI).
+     *      If `_contractURI` is explicitly set, return it as-is for backward compatibility.
+     *      Otherwise, return a fully on-chain JSON data URI with embedded SVG image.
      *
-     * @return URI string pointing to JSON metadata
-     *         Default: https://api.4626.fun/v1/token/{address}/metadata
+     * @return URI string for contract metadata.
      */
     function contractURI() external view returns (string memory) {
-        // If custom URI is set, use it
         if (bytes(_contractURI).length > 0) {
             return _contractURI;
         }
-        // Default to dynamic API endpoint
-        return string(abi.encodePacked("https://api.4626.fun/v1/token/", _toHexString(address(this)), "/metadata"));
+        return _buildOnchainContractURI();
     }
 
     /**
@@ -1068,19 +1089,91 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @dev Convert address to lowercase hex string
+     * @notice Set the centered logo SVG snippet used by on-chain metadata image rendering.
+     * @dev The snippet should draw in a normalized 1:1 coordinate space (0..1).
+     *      Pass an empty string to fall back to the default logo.
      */
-    function _toHexString(address addr) internal pure returns (string memory) {
-        bytes memory alphabet = "0123456789abcdef";
-        bytes memory str = new bytes(42);
-        str[0] = "0";
-        str[1] = "x";
-        uint160 value = uint160(addr);
-        for (uint256 i = 41; i > 1; i--) {
-            str[i] = alphabet[value & 0xf];
-            value >>= 4;
+    function setLogoSvg(string calldata logoSvg) external onlyOwner {
+        _logoSvg = logoSvg;
+        emit LogoSvgUpdated();
+        emit ContractURIUpdated();
+    }
+
+    function _buildOnchainContractURI() internal view returns (string memory) {
+        string memory image = string.concat("data:image/svg+xml;base64,", Base64.encode(bytes(_renderSvg(512))));
+        string memory json = _buildContractMetadataJson(image);
+        return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));
+    }
+
+    function _buildContractMetadataJson(string memory imageDataUri) internal view returns (string memory) {
+        address vaultAddress = vault;
+        address assetAddress = address(0);
+        if (vaultAddress != address(0) && vaultAddress.code.length > 0) {
+            try ICreatorOVaultAsset(vaultAddress).asset() returns (address asset) {
+                assetAddress = asset;
+            } catch {}
         }
-        return string(str);
+
+        return string(
+            abi.encodePacked(
+                '{"name":"',
+                Strings.escapeJSON(name()),
+                '","symbol":"',
+                Strings.escapeJSON(symbol()),
+                '","description":"4626.fun Share Token","external_link":"https://4626.fun","image":"',
+                imageDataUri,
+                '","properties":{"vault":',
+                _jsonAddressOrNull(vaultAddress),
+                ',"asset":',
+                _jsonAddressOrNull(assetAddress),
+                ',"chain_id":',
+                Strings.toString(block.chainid),
+                '}}'
+            )
+        );
+    }
+
+    function _jsonAddressOrNull(address addr) internal pure returns (string memory) {
+        if (addr == address(0)) return "null";
+        return string(abi.encodePacked('"', Strings.toHexString(addr), '"'));
+    }
+
+    function _renderSvg(uint256 size) internal view returns (string memory svg) {
+        string memory renderedSize = Strings.toString(size);
+        string memory logo = bytes(_logoSvg).length == 0 ? DEFAULT_LOGO_SVG : _logoSvg;
+        svg = string(
+            abi.encodePacked(
+                "<svg xmlns='http://www.w3.org/2000/svg' width='",
+                renderedSize,
+                "' height='",
+                renderedSize,
+                "' viewBox='0 0 512 512' fill='none'>",
+                "<defs><linearGradient id='frame-gradient' x1='72' y1='72' x2='440' y2='440' gradientUnits='userSpaceOnUse'>",
+                "<stop offset='0' stop-color='#d9e1ee'/>",
+                "<stop offset='0.52' stop-color='#8ea0bf'/>",
+                "<stop offset='1' stop-color='#2f6fff'/></linearGradient>",
+                "<linearGradient id='bg-gradient' x1='0' y1='0' x2='512' y2='512' gradientUnits='userSpaceOnUse'>",
+                "<stop offset='0' stop-color='#0b1320'/>",
+                "<stop offset='1' stop-color='#050a14'/></linearGradient>",
+                "<clipPath id='inner-clip'><rect x='96' y='96' width='320' height='320' rx='84'/></clipPath></defs>",
+                "<rect width='512' height='512' rx='118' fill='url(#bg-gradient)'/>",
+                "<rect x='96' y='96' width='320' height='320' rx='84' fill='#0f172a'/>",
+                "<g clip-path='url(#inner-clip)'><rect x='96' y='96' width='320' height='320' fill='#0b1220'/>",
+                "<g transform='translate(96 96) scale(320 320)'>",
+                logo,
+                "</g></g>",
+                "<rect x='96' y='96' width='320' height='320' rx='84' fill='rgba(3,7,18,0.22)'/>",
+                "<rect x='72' y='72' width='368' height='368' rx='102' stroke='url(#frame-gradient)' stroke-width='24' "
+                "stroke-linejoin='round'/>",
+                "<rect x='88' y='88' width='336' height='336' rx='92' stroke='rgba(255,255,255,0.12)' stroke-width='2'/>",
+                "<rect x='84' y='392' width='344' height='72' rx='36' fill='rgba(2,6,23,0.62)' "
+                "stroke='rgba(255,255,255,0.16)'/>",
+                "<text x='256' y='438' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' "
+                "font-size='33' font-weight='700' letter-spacing='1.4' fill='#ffffff'>",
+                symbol(),
+                "</text></svg>"
+            )
+        );
     }
 
     // ================================
