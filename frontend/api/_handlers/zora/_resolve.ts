@@ -11,7 +11,7 @@ import {
 
 type ZoraResolveResponse = {
   canonicalCswAddress: string | null
-  creatorCoin: { address: string; name: string | null; symbol: string | null } | null
+  creatorCoin: { address: string; name: string | null; symbol: string | null; imageUrl: string | null } | null
   zoraHandle: string | null
 }
 
@@ -47,7 +47,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const data: ZoraResolveResponse = {
       canonicalCswAddress: summary.canonicalCswAddress,
-      creatorCoin: summary.creatorCoin,
+      creatorCoin: summary.creatorCoin
+        ? {
+            address: summary.creatorCoin.address,
+            name: summary.creatorCoin.name,
+            symbol: summary.creatorCoin.symbol,
+            imageUrl: summary.creatorCoin.imageUrl,
+          }
+        : null,
       zoraHandle: summary.zoraHandle,
     }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ZoraResolveResponse>)

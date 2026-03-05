@@ -45,7 +45,7 @@ type WaitlistBootstrapResponse =
 
 type ZoraResolveResponse = {
   canonicalCswAddress: string | null
-  creatorCoin: { address: string; name: string | null; symbol: string | null } | null
+  creatorCoin: { address: string; name: string | null; symbol: string | null; imageUrl: string | null } | null
   zoraHandle: string | null
 }
 
@@ -113,6 +113,26 @@ function useSafeCrossAppAccounts() {
 function shortAddress(value: string | null | undefined): string {
   if (!value) return '—'
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
+}
+
+function CoinbaseLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#0052FF" />
+      <path
+        d="M12 4.8C8.03 4.8 4.8 8.03 4.8 12S8.03 19.2 12 19.2 19.2 15.97 19.2 12 15.97 4.8 12 4.8Zm0 9.9c-1.48 0-2.7-1.22-2.7-2.7S10.52 9.3 12 9.3s2.7 1.22 2.7 2.7-1.22 2.7-2.7 2.7Z"
+        fill="white"
+      />
+    </svg>
+  )
+}
+
+function ZoraLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2Zm4.5 13.5h-9l4.5-7 4.5 7Z" />
+    </svg>
+  )
 }
 
 export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string; onClose?: () => void }) {
@@ -316,9 +336,9 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   }, [privyAuthed, runBootstrap, step])
 
   const zoraStatus = useMemo(() => {
-    const summary = zoraSummary ?? (account ? {
+    const summary: ZoraResolveResponse | null = zoraSummary ?? (account ? {
       canonicalCswAddress: account.zora.canonicalCswAddress,
-      creatorCoin: account.zora.creatorCoin ? { address: account.zora.creatorCoin.address, name: null, symbol: null } : null,
+      creatorCoin: account.zora.creatorCoin ? { address: account.zora.creatorCoin.address, name: null, symbol: null, imageUrl: null } : null,
       zoraHandle: account.zora.zoraHandle,
     } : null)
     return summary
@@ -359,12 +379,10 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
           >
             <div className="space-y-1">
               <h2 className="text-2xl font-semibold tracking-tight text-white">Get early access</h2>
-              <p className="text-sm text-zinc-400">
-                Enter your email to join. Connect Zora next for extra points.
-              </p>
+              <p className="text-sm text-zinc-400">Enter your email to join.</p>
             </div>
 
-            <div className="space-y-2">
+            <div>
               <input
                 type="email"
                 value={email}
@@ -374,7 +392,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                 disabled={step === 'auth'}
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/20 disabled:opacity-60"
               />
-              <p className="text-xs text-zinc-600">No spam. Notifications only.</p>
             </div>
 
             <button
@@ -423,17 +440,40 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
             </div>
 
             {zoraStatus ? (
-              <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
                 <p className="text-xs font-medium text-emerald-400">Zora connected</p>
-                <div className="space-y-1 text-xs text-zinc-400">
+                <div className="space-y-2">
                   {zoraStatus.zoraHandle ? (
-                    <div><span className="text-zinc-600">Handle</span> · @{zoraStatus.zoraHandle}</div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <ZoraLogo className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+                      <span className="text-zinc-400">@{zoraStatus.zoraHandle}</span>
+                    </div>
                   ) : null}
                   {zoraStatus.canonicalCswAddress ? (
-                    <div><span className="text-zinc-600">Wallet</span> · {shortAddress(zoraStatus.canonicalCswAddress)}</div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <CoinbaseLogo className="w-3.5 h-3.5 shrink-0" />
+                      <span className="text-zinc-500">Smart Wallet</span>
+                      <span className="text-zinc-400 font-mono">{shortAddress(zoraStatus.canonicalCswAddress)}</span>
+                    </div>
                   ) : null}
                   {zoraStatus.creatorCoin?.address ? (
-                    <div><span className="text-zinc-600">Creator coin</span> · {shortAddress(zoraStatus.creatorCoin.address)}</div>
+                    <div className="flex items-center gap-2 text-xs">
+                      {zoraStatus.creatorCoin.imageUrl ? (
+                        <img
+                          src={zoraStatus.creatorCoin.imageUrl}
+                          alt={zoraStatus.creatorCoin.symbol ?? 'coin'}
+                          className="w-3.5 h-3.5 rounded-full shrink-0 object-cover"
+                        />
+                      ) : (
+                        <ZoraLogo className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+                      )}
+                      <span className="text-zinc-500">Creator coin</span>
+                      {zoraStatus.creatorCoin.symbol ? (
+                        <span className="text-zinc-400">{zoraStatus.creatorCoin.symbol}</span>
+                      ) : (
+                        <span className="text-zinc-400 font-mono">{shortAddress(zoraStatus.creatorCoin.address)}</span>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               </div>

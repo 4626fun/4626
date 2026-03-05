@@ -59,6 +59,7 @@ type CoinSummary = {
   address: string
   name: string | null
   symbol: string | null
+  imageUrl: string | null
 }
 
 type ResolveZoraSignalsResult = {
@@ -604,19 +605,26 @@ async function fetchCreatorCoinSummary(address: string): Promise<CoinSummary | n
   const normalized = normalizeEvmAddress(address)
   if (!normalized) return null
   const key = String(process.env.ZORA_SERVER_API_KEY ?? '').trim()
-  if (!key) return { address: normalized, name: null, symbol: null }
+  if (!key) return { address: normalized, name: null, symbol: null, imageUrl: null }
   try {
     const sdk: any = await import('@zoralabs/coins-sdk')
     sdk.setApiKey(key)
     const response = await sdk.getCoin({ address: normalized, chain: 8453 })
     const coin = (response as any)?.data?.zora20Token ?? null
+    const rawImage =
+      normalizeString(coin?.mediaContent?.previewImage?.small) ??
+      normalizeString(coin?.mediaContent?.previewImage?.medium) ??
+      normalizeString(coin?.mediaContent?.originalUri) ??
+      normalizeString(coin?.image) ??
+      null
     return {
       address: normalized,
       name: normalizeString(coin?.name),
       symbol: normalizeString(coin?.symbol),
+      imageUrl: rawImage,
     }
   } catch {
-    return { address: normalized, name: null, symbol: null }
+    return { address: normalized, name: null, symbol: null, imageUrl: null }
   }
 }
 
