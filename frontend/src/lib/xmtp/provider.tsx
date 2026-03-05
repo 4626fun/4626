@@ -18,6 +18,7 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
 import { getBasenameName } from '@/lib/xmtp/socialIdentity'
+import { resolveModePreferredIdentity } from '@/lib/xmtp/identityResolver'
 import { useAccountContext } from '@/wallet/accountContext'
 import {
   TARGET_CANONICAL_CSW_ADDRESS,
@@ -655,8 +656,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       })
     }
 
-    let preferred = connected
-    let isCanonicalSmartWallet = false
+    const accountContextSmartAddress =
+      normalizeEvmAddress(
+        accountContext.activeAccountType === 'SMART_WALLET'
+          ? accountContext.activeAccount ?? accountContext.cswAddress ?? null
+          : accountContext.cswAddress ?? null,
+      ) ?? null
+
+    let waitlistCanonicalAddress: string | null = null
+    let preferredSelection = resolveModePreferredIdentity({
+      connectedAddress: connected,
+      modeOverride,
+      accountContextSmartAddress,
+      waitlistCanonicalAddress: null,
+    })
+
+    let preferred = preferredSelection.preferredAddress
+    let isCanonicalSmartWallet = preferredSelection.isSmartWalletIdentity
     let policyApplies = enforceCanonicalForConnectedSigner
     try {
       const res = await apiFetch('/api/waitlist/me', {
@@ -666,10 +682,17 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
       const row = res.ok && json?.success ? (json.data ?? null) : null
       const canonical = pickCanonicalSmartWalletAddress(row)
-      if (canonical) {
-        preferred = canonical
-        isCanonicalSmartWallet = true
-      }
+      waitlistCanonicalAddress = canonical
+
+      preferredSelection = resolveModePreferredIdentity({
+        connectedAddress: connected,
+        modeOverride,
+        accountContextSmartAddress,
+        waitlistCanonicalAddress: canonical,
+      })
+      preferred = preferredSelection.preferredAddress
+      isCanonicalSmartWallet = preferredSelection.isSmartWalletIdentity
+
       policyApplies = shouldApplyCanonicalEnforcement({
         canonicalAddress: canonical,
         signerAddress: connected,
@@ -689,6 +712,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       isCanonicalSmartWallet = true
     }
 
+    const preserveSmartModeIdentity = modeOverride === 'SMART_WALLET' && isCanonicalSmartWallet
+
     if (preferred !== connected && publicClient) {
       try {
         const isOwner = (await publicClient.readContract({
@@ -701,20 +726,30 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           if (policyApplies) {
             throw new Error('Connected signer is not an owner of the canonical CSW identity')
           }
-          preferred = connected
-          isCanonicalSmartWallet = false
+          if (!preserveSmartModeIdentity) {
+            preferred = connected
+            isCanonicalSmartWallet = false
+          } else {
+            console.warn(
+              '[xmtp] owner check reported non-owner in SMART_WALLET mode; preserving smart identity to avoid EOA fallback churn',
+              { connected, preferred, waitlistCanonicalAddress, accountContextSmartAddress },
+            )
+          }
         }
       } catch {
         if (policyApplies) {
           throw new Error('Unable to verify canonical CSW owner relationship for XMTP identity')
         }
-        preferred = connected
-        isCanonicalSmartWallet = false
+        if (!preserveSmartModeIdentity) {
+          preferred = connected
+          isCanonicalSmartWallet = false
+        } else {
+          console.warn(
+            '[xmtp] owner check unavailable in SMART_WALLET mode; preserving smart identity to avoid EOA fallback churn',
+            { connected, preferred, waitlistCanonicalAddress, accountContextSmartAddress },
+          )
+        }
       }
-    }
-
-    if (!isCanonicalSmartWallet && modeOverride === 'SMART_WALLET') {
-      isCanonicalSmartWallet = false
     }
 
     if (isCanonicalSmartWallet && !isTargetCanonicalCsw(preferred) && policyApplies) {
@@ -726,7 +761,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const resolved = { identityAddress: preferred, isCanonicalSmartWallet }
     resolvedIdentityByWalletRef.current.set(cacheKey, resolved)
     return resolved
-  }, [publicClient])
+  }, [accountContext.activeAccount, accountContext.activeAccountType, accountContext.cswAddress, publicClient])
 
   const connect = useCallback(async () => {
     if (!address || !walletClient) return

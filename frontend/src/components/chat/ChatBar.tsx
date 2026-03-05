@@ -137,7 +137,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
   const hasWalletIdentity = Boolean(accountContext.signerAddress)
   const xmtpModeLabel = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'
   const xmtpModeHint =
-    accountContext.signerType === 'SMART_WALLET'
+    accountContext.activeAccountType === 'SMART_WALLET'
       ? 'Connected as Smart Wallet'
       : 'Connected as User Wallet'
 
