@@ -450,27 +450,35 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                 <div className="space-y-2">
                   {zoraStatus.zoraHandle ? (
                     <div className="flex items-center gap-2 text-xs">
-                      <ZoraLogo className="w-3.5 h-3.5 shrink-0 rounded-full" />
+                      {zoraStatus.creatorCoin?.imageUrl ? (
+                        <img
+                          src={zoraStatus.creatorCoin.imageUrl}
+                          alt={zoraStatus.creatorCoin.symbol ?? 'creator coin'}
+                          className="w-4 h-4 rounded-full shrink-0 object-cover"
+                        />
+                      ) : (
+                        <ZoraLogo className="w-4 h-4 shrink-0 rounded-full" />
+                      )}
                       <span className="text-zinc-400">@{zoraStatus.zoraHandle}</span>
                     </div>
                   ) : null}
                   {zoraStatus.canonicalCswAddress ? (
-                    <div className="flex items-center gap-2 text-xs">
-                      <CoinbaseLogo className="w-3.5 h-3.5 shrink-0" />
+                    <div className="flex items-center gap-2 text-xs pl-1">
+                      <CoinbaseLogo className="w-4 h-4 shrink-0" />
                       <span className="text-zinc-500">Smart Wallet</span>
                       <span className="text-zinc-400 font-mono">{shortAddress(zoraStatus.canonicalCswAddress)}</span>
                     </div>
                   ) : null}
                   {zoraStatus.creatorCoin?.address ? (
-                    <div className="flex items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-xs pl-1">
                       {zoraStatus.creatorCoin.imageUrl ? (
                         <img
                           src={zoraStatus.creatorCoin.imageUrl}
                           alt={zoraStatus.creatorCoin.symbol ?? 'coin'}
-                          className="w-3.5 h-3.5 rounded-full shrink-0 object-cover"
+                          className="w-4 h-4 rounded-full shrink-0 object-cover"
                         />
                       ) : (
-                        <ZoraLogo className="w-3.5 h-3.5 shrink-0 rounded-full" />
+                        <ZoraLogo className="w-4 h-4 shrink-0 rounded-full" />
                       )}
                       <span className="text-zinc-500">Creator coin</span>
                       {zoraStatus.creatorCoin.symbol ? (
@@ -576,26 +584,46 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                 </a>
               ) : null}
 
-              <Link
-                to="/accounts"
-                className={
-                  (account?.score?.tier ?? 0) >= 1
-                    ? 'w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block'
-                    : 'btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center'
-                }
-              >
-                Go to accounts
-              </Link>
+              {(account?.score?.tier ?? 0) >= 1 && isModal && props.onClose ? (
+                <div className="flex items-center gap-2">
+                  <Link
+                    to="/accounts"
+                    className="flex-1 text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block"
+                  >
+                    Go to accounts
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={props.onClose}
+                    className="flex-1 text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Link
+                    to="/accounts"
+                    className={
+                      (account?.score?.tier ?? 0) >= 1
+                        ? 'w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block'
+                        : 'btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center'
+                    }
+                  >
+                    Go to accounts
+                  </Link>
 
-              {isModal && props.onClose ? (
-                <button
-                  type="button"
-                  onClick={props.onClose}
-                  className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
-                >
-                  Close
-                </button>
-              ) : null}
+                  {isModal && props.onClose ? (
+                    <button
+                      type="button"
+                      onClick={props.onClose}
+                      className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
+                    >
+                      Close
+                    </button>
+                  ) : null}
+                </>
+              )}
             </div>
           </motion.div>
         ) : null}
