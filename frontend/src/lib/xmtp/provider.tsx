@@ -910,7 +910,6 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         signer: Signer
         scwSigner: Signer
         eoaSigner: Signer
-        hasContractCode: boolean | null
       }
 
       let signerSelectionPromise: Promise<SignerSelection> | null = null
@@ -963,7 +962,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           }
           const signer: Signer = signerDecision.signerType === 'SCW' ? scwSigner : eoaSigner
 
-          return { signer, scwSigner, eoaSigner, hasContractCode }
+          return { signer, scwSigner, eoaSigner }
         })()
         return signerSelectionPromise
       }
@@ -1235,7 +1234,6 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
                   writeStoredSignerType(xmtpIdentityAddress, 'SCW')
                 } else if (
                   registrationSigner.type === 'SCW' &&
-                  signerSelection.hasContractCode !== true &&
                   isScwSignatureValidationError(registerMsg)
                 ) {
                   console.warn(
@@ -1282,7 +1280,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setStatus('connecting')
 
       const signerSelection = await getSignerSelection()
-      const { signer, scwSigner, eoaSigner, hasContractCode } = signerSelection
+      const { signer, scwSigner, eoaSigner } = signerSelection
       if (signer.type === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
       else writeStoredSignerType(xmtpIdentityAddress, 'EOA')
 
@@ -1324,11 +1322,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           client = await tryCreate(scwSigner, encKeyBytes)
         } else if (
           signer.type === 'SCW' &&
-          hasContractCode !== true &&
           isScwSignatureValidationError(errMsg)
         ) {
           // Recover from stale/incorrect SCW classification (for EOAs this
-          // fails with provider "execution reverted" during EIP-1271 checks).
+          // can fail with provider-level EIP-1271 validation errors.
           console.warn('[xmtp] SCW signature validation failed; retrying with EOA signer…')
           writeStoredSignerType(xmtpIdentityAddress, 'EOA')
           client = await tryCreate(eoaSigner, encKeyBytes)
@@ -1494,7 +1491,6 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           await (Client as any).revokeInstallations(scwSigner, targetInboxId, toRevoke, XMTP_ENV as any)
         } else if (
           signer.type === 'SCW' &&
-          hasContractCode !== true &&
           isScwSignatureValidationError(errMsg)
         ) {
           console.warn('[xmtp] SCW signature validation failed during reset; retrying with EOA signer…')

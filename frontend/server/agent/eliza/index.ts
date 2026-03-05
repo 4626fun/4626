@@ -61,6 +61,7 @@ import { AgentError, isRetryableAgentError, toAgentError, toErrorDetails } from 
 import { SlidingWindowRateLimiter, parsePositiveNumber } from './_rateLimit.js'
 import { enqueueAgentBackgroundTask, getAgentBackgroundQueueStats, startAgentBackgroundTaskWorker } from './_taskQueue.js'
 import { WelcomeConversationTracker, fingerprintAgentConfig, getActionRetryBudget } from './_runtimePolicy.js'
+import { getHealthProbeStatusCode } from './_healthStatus.js'
 
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
@@ -1638,9 +1639,13 @@ function startHealthServer() {
       validation: latestEnvValidation,
     }
 
-    const statusCode = url === '/readyz'
-      ? (ready ? 200 : 503)
-      : (!agentBooted || ready ? 200 : 503)
+    const statusCode = getHealthProbeStatusCode({
+      probe: url as '/healthz' | '/readyz',
+      ready,
+      agentBooted,
+      agentCount,
+      xmtpReady,
+    })
     res.writeHead(statusCode, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(payload))
   })
