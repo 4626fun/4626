@@ -49,6 +49,27 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Math.floor(n)
 }
 
+function readErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message || error.name || 'unknown_error'
+  if (typeof error === 'string' && error.trim()) return error
+  return 'unknown_error'
+}
+
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof AgentError) {
+    if (error.retryable) return true
+    return error.code === 'UPSTREAM_TIMEOUT' || error.code === 'DEPENDENCY_UNAVAILABLE' || error.code === 'RATE_LIMITED'
+  }
+  const lower = readErrorMessage(error).toLowerCase()
+  return (
+    lower.includes('timeout') ||
+    lower.includes('tempor') ||
+    lower.includes('429') ||
+    lower.includes('503') ||
+    lower.includes('network')
+  )
+}
+
 async function withRetry<T>(input: {
   operationName: string
   maxAttempts: number
@@ -61,26 +82,22 @@ async function withRetry<T>(input: {
       return await input.run()
     } catch (error) {
       lastError = error
-      const message = error instanceof Error ? error.message : String(error)
-      const lower = message.toLowerCase()
-      const retryable =
-        lower.includes('timeout') ||
-        lower.includes('tempor') ||
-        lower.includes('429') ||
-        lower.includes('503') ||
-        lower.includes('network')
+      const retryable = isRetryableError(error)
       if (!retryable || attempt >= input.maxAttempts) break
       const waitMs = input.baseDelayMs * Math.pow(2, attempt - 1)
       await sleep(waitMs)
     }
   }
+  const lastMessage = readErrorMessage(lastError)
+  const retryable = isRetryableError(lastError)
   throw new AgentError(
     'UPSTREAM_ERROR',
-    `${input.operationName}_failed_after_retries`,
+    `${input.operationName}_failed_after_retries: ${lastMessage}`,
     {
-      retryable: true,
+      retryable,
       details: {
         maxAttempts: input.maxAttempts,
+        lastError: lastMessage,
       },
       cause: lastError,
     },

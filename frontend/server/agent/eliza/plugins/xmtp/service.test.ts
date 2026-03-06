@@ -66,6 +66,55 @@ describe('xmtp service lifecycle', () => {
     expect(stopMock).toHaveBeenCalledTimes(1)
   })
 
+  it('preserves non-retryable create errors and avoids redundant retries', async () => {
+    process.env.ELIZA_XMTP_START_MAX_RETRIES = '3'
+    process.env.ELIZA_XMTP_START_RETRY_BASE_MS = '1'
+
+    AgentCreateMock.mockRejectedValue(new Error('xmtp_owner_index_resolution_failed: signer is not owner'))
+
+    const { XmtpService } = await import('./service.ts')
+    const service = new XmtpService({
+      signer: { id: 'mock-signer' } as any,
+      env: 'production',
+      dbPath: null,
+    })
+
+    await expect(service.start()).rejects.toMatchObject({
+      message: expect.stringContaining('xmtp_owner_index_resolution_failed'),
+      retryable: false,
+      details: expect.objectContaining({
+        maxAttempts: 3,
+        lastError: expect.stringContaining('xmtp_owner_index_resolution_failed'),
+      }),
+    })
+    expect(AgentCreateMock).toHaveBeenCalledTimes(1)
+    expect(service.isRunning).toBe(false)
+  })
+
+  it('keeps retryable create errors retryable with bounded attempts', async () => {
+    process.env.ELIZA_XMTP_START_MAX_RETRIES = '3'
+    process.env.ELIZA_XMTP_START_RETRY_BASE_MS = '1'
+
+    AgentCreateMock.mockRejectedValue(new Error('network timeout while creating agent'))
+
+    const { XmtpService } = await import('./service.ts')
+    const service = new XmtpService({
+      signer: { id: 'mock-signer' } as any,
+      env: 'production',
+      dbPath: null,
+    })
+
+    await expect(service.start()).rejects.toMatchObject({
+      message: expect.stringContaining('network timeout'),
+      retryable: true,
+      details: expect.objectContaining({
+        maxAttempts: 3,
+      }),
+    })
+    expect(AgentCreateMock).toHaveBeenCalledTimes(3)
+    expect(service.isRunning).toBe(false)
+  })
+
   it('falls back to env db key immediately on unsupported format', async () => {
     process.env.ELIZA_XMTP_START_MAX_RETRIES = '1'
     process.env.ELIZA_XMTP_START_RETRY_BASE_MS = '1'
