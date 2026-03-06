@@ -5,6 +5,24 @@ import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 
+type ConnectButtonStateInput = {
+  sessionHydrated: boolean
+  isConnected: boolean
+  connectedAddress: string | null | undefined
+  sessionAddress: string | null | undefined
+}
+
+export function deriveConnectButtonState(input: ConnectButtonStateInput): 'hydrating' | 'connected-wallet' | 'session-restored' | 'signed-out' {
+  if (!input.sessionHydrated) return 'hydrating'
+  if (input.isConnected && typeof input.connectedAddress === 'string' && input.connectedAddress.trim().length > 0) {
+    return 'connected-wallet'
+  }
+  if (typeof input.sessionAddress === 'string' && input.sessionAddress.trim().length > 0) {
+    return 'session-restored'
+  }
+  return 'signed-out'
+}
+
 /**
  * Simple Connect Button
  * 
@@ -42,11 +60,31 @@ export function ConnectButtonWeb3() {
   }, [connectors, shouldHideInjectedConnector])
   const allowExternalWalletButtons =
     !prefersPrivyWalletLogin || (!hasMultipleInjectedProviders && !lockedEthereumProviderGlobal)
+  const sessionAddress = auth.authAddress ?? null
+  const buttonState = deriveConnectButtonState({
+    sessionHydrated: auth.sessionHydrated,
+    isConnected,
+    connectedAddress: address,
+    sessionAddress,
+  })
 
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`
 
+  if (buttonState === 'hydrating') {
+    return (
+      <button
+        type="button"
+        disabled
+        className="btn-accent btn-no-icon disabled:opacity-50 flex min-w-[152px] items-center justify-center gap-2"
+      >
+        <Wallet className="w-4 h-4" />
+        <span className="label">Checking session…</span>
+      </button>
+    )
+  }
+
   // Connected - show address with disconnect option
-  if (isConnected && address) {
+  if (buttonState === 'connected-wallet' && isConnected && address) {
     return (
       <div className="relative">
         <button
@@ -74,7 +112,7 @@ export function ConnectButtonWeb3() {
                 <span className="label block">View on Basescan</span>
               </a>
               <div className="h-px bg-white/8 my-2" />
-              {!auth.isSignedIn ? (
+              {!auth.hasSession ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -90,10 +128,14 @@ export function ConnectButtonWeb3() {
               ) : (
                 <div className="px-4 py-3">
                   <div className="label text-emerald-200">Signed in</div>
-                  <div className="text-[11px] text-zinc-600 mt-1">Session matches connected wallet.</div>
+                  <div className="text-[11px] text-zinc-600 mt-1">
+                    {auth.walletMatchesSession
+                      ? 'Session matches connected wallet.'
+                      : `4626 session is active as ${formatAddress(sessionAddress ?? address)}.`}
+                  </div>
                 </div>
               )}
-              {auth.isSignedIn ? (
+              {auth.hasSession ? (
                 <Link
                   to="/accounts"
                   onClick={() => setShowMenu(false)}
@@ -102,7 +144,7 @@ export function ConnectButtonWeb3() {
                   <span className="label block text-zinc-300">Account settings</span>
                 </Link>
               ) : null}
-              {auth.isSignedIn ? (
+              {auth.hasSession ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -126,6 +168,107 @@ export function ConnectButtonWeb3() {
               >
                 <span className="label block text-zinc-600">Disconnect</span>
               </button>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // Session restored, but no active wagmi connection.
+  // This happens after cross-origin Privy handoff where the 4626
+  // auth session exists but the client wallet provider is not yet
+  // connected on this page load.
+  if (buttonState === 'session-restored' && sessionAddress) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setShowMenu(!showMenu)}
+          className="btn-primary btn-no-icon flex min-w-[152px] items-center justify-center gap-3"
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="mono text-sm">{formatAddress(sessionAddress)}</span>
+          <ChevronDown className={`w-3 h-3 text-zinc-600 transition-transform ${showMenu ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showMenu && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setShowMenu(false)}
+            />
+            <div className="absolute right-0 top-full mt-4 w-56 card p-4 z-50 space-y-2">
+              <div className="px-4 py-3">
+                <div className="label text-emerald-200">Signed in</div>
+                <div className="text-[11px] text-zinc-600 mt-1">4626 session is active.</div>
+              </div>
+              <Link
+                to="/accounts"
+                onClick={() => setShowMenu(false)}
+                className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
+              >
+                <span className="label block text-zinc-300">Account settings</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false)
+                  setShowOptions(true)
+                }}
+                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
+              >
+                <span className="label block text-zinc-300">Connect wallet</span>
+                <span className="text-[11px] text-zinc-600 block mt-1">Optional local wallet connection</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void auth.signOut()
+                  setShowMenu(false)
+                }}
+                disabled={auth.busy}
+                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
+              >
+                <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
+              </button>
+              {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
+            </div>
+          </>
+        )}
+
+        {showOptions && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setShowOptions(false)}
+            />
+            <div className="absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1">
+              {hasMultipleInjectedProviders ? (
+                <div className="px-4 py-2 text-[11px] text-zinc-500">
+                  Multiple wallet extensions detected. Use Coinbase Wallet.
+                </div>
+              ) : lockedEthereumProviderGlobal ? (
+                <div className="px-4 py-2 text-[11px] text-zinc-500">
+                  Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
+                </div>
+              ) : null}
+              {allowExternalWalletButtons
+                ? filteredConnectors.map((connector) => (
+                    <button
+                      key={connector.uid}
+                      type="button"
+                      disabled={isPending || auth.busy}
+                      className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
+                      onClick={() => {
+                        connect({ connector })
+                        setShowOptions(false)
+                      }}
+                    >
+                      <span className="label block">{connector.name}</span>
+                    </button>
+                  ))
+                : null}
             </div>
           </>
         )}

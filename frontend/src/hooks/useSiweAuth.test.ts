@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldResetPrivyBridgeState } from './useSiweAuth'
+import { deriveSiweSessionState, shouldResetPrivyBridgeState } from './useSiweAuth'
 
 describe('shouldResetPrivyBridgeState', () => {
   it('resets for invalid or missing Privy auth tokens', () => {
@@ -20,5 +20,46 @@ describe('shouldResetPrivyBridgeState', () => {
     expect(shouldResetPrivyBridgeState('Network error')).toBe(false)
     expect(shouldResetPrivyBridgeState('Request failed')).toBe(false)
     expect(shouldResetPrivyBridgeState('')).toBe(false)
+  })
+})
+
+describe('deriveSiweSessionState', () => {
+  it('treats a restored auth address as an active session even without a connected wallet', () => {
+    expect(
+      deriveSiweSessionState({
+        connectedAddress: null,
+        authAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      }),
+    ).toEqual({
+      sessionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      hasSession: true,
+      walletMatchesSession: false,
+    })
+  })
+
+  it('marks walletMatchesSession only when the connected wallet equals the restored session', () => {
+    expect(
+      deriveSiweSessionState({
+        connectedAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        authAddress: '0xAB6D5C10B03300326CD7FAB7267AE192842967B5',
+      }),
+    ).toEqual({
+      sessionAddress: '0xAB6D5C10B03300326CD7FAB7267AE192842967B5',
+      hasSession: true,
+      walletMatchesSession: true,
+    })
+  })
+
+  it('reports no session when authAddress is missing', () => {
+    expect(
+      deriveSiweSessionState({
+        connectedAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        authAddress: null,
+      }),
+    ).toEqual({
+      sessionAddress: null,
+      hasSession: false,
+      walletMatchesSession: false,
+    })
   })
 })

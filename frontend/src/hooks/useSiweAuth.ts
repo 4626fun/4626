@@ -13,6 +13,17 @@ type CswOwnershipAttestation = {
   verified: boolean
 }
 
+type DerivedSiweSessionStateInput = {
+  connectedAddress: string | null | undefined
+  authAddress: string | null | undefined
+}
+
+type DerivedSiweSessionState = {
+  sessionAddress: string | null
+  hasSession: boolean
+  walletMatchesSession: boolean
+}
+
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 
 type PrivySessionResponse = { address: string; sessionToken: string; privyUserId?: string } | null
@@ -48,6 +59,24 @@ export function shouldResetPrivyBridgeState(message: string): boolean {
     lower.includes('privy token expired') ||
     lower.includes('privy verification failed')
   )
+}
+
+export function deriveSiweSessionState(input: DerivedSiweSessionStateInput): DerivedSiweSessionState {
+  const sessionAddress =
+    typeof input.authAddress === 'string' && input.authAddress.trim().length > 0 ? input.authAddress : null
+  const connectedAddress =
+    typeof input.connectedAddress === 'string' && input.connectedAddress.trim().length > 0 ? input.connectedAddress : null
+  const hasSession = Boolean(sessionAddress)
+  const walletMatchesSession =
+    Boolean(sessionAddress) &&
+    Boolean(connectedAddress) &&
+    String(sessionAddress).toLowerCase() === String(connectedAddress).toLowerCase()
+
+  return {
+    sessionAddress,
+    hasSession,
+    walletMatchesSession,
+  }
 }
 
 function coerceErrorMessage(e: unknown, fallback: string): string {
@@ -156,10 +185,15 @@ export function useSiweAuth() {
   const autoPrivyAttemptKeyRef = useRef<string>('')
   const autoPrivyGlobalAttemptRef = useRef(false)
 
-  const isSignedIn = useMemo(() => {
-    if (!address || !authAddress) return false
-    return address.toLowerCase() === authAddress.toLowerCase()
-  }, [address, authAddress])
+  const sessionState = useMemo(
+    () =>
+      deriveSiweSessionState({
+        connectedAddress: address,
+        authAddress,
+      }),
+    [address, authAddress],
+  )
+  const isSignedIn = sessionState.walletMatchesSession
 
   const refresh = useCallback(async () => {
     try {
@@ -462,5 +496,18 @@ export function useSiweAuth() {
     }
   }, [])
 
-  return { authAddress, isSignedIn, cswOwnership, busy, error, signIn, signInWithPrivyToken, signOut, refresh, sessionHydrated }
+  return {
+    authAddress,
+    hasSession: sessionState.hasSession,
+    walletMatchesSession: sessionState.walletMatchesSession,
+    isSignedIn,
+    cswOwnership,
+    busy,
+    error,
+    signIn,
+    signInWithPrivyToken,
+    signOut,
+    refresh,
+    sessionHydrated,
+  }
 }

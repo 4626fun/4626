@@ -23,6 +23,9 @@ export function AppContinue() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const siwe = useSiweAuth()
+  const authAddress = siwe.authAddress
+  const refreshSiweSession = siwe.refresh
+  const signInWithPrivyToken = siwe.signInWithPrivyToken
   const privyClientStatus = usePrivyClientStatus()
   const { ready: privyReady, authenticated: privyAuthenticated, getAccessToken } = usePrivy()
   const { login } = useLogin({})
@@ -39,12 +42,12 @@ export function AppContinue() {
       shouldNavigateAfterWaitlistHandoff({
         autoLogin,
         fromWaitlist,
-        siweAuthAddress: siwe.authAddress,
+        siweAuthAddress: authAddress,
         privyClientStatus,
         privyReady,
         privyAuthenticated,
       }),
-    [autoLogin, fromWaitlist, privyAuthenticated, privyClientStatus, privyReady, siwe.authAddress],
+    [authAddress, autoLogin, fromWaitlist, privyAuthenticated, privyClientStatus, privyReady],
   )
 
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
@@ -54,10 +57,10 @@ export function AppContinue() {
 
   useEffect(() => {
     if (!canNavigate) return
-    if (typeof siwe.authAddress === 'string' && siwe.authAddress.length > 0) {
+    if (typeof authAddress === 'string' && authAddress.length > 0) {
       navigate(nextPath, { replace: true })
     }
-  }, [canNavigate, navigate, nextPath, siwe.authAddress])
+  }, [authAddress, canNavigate, navigate, nextPath])
 
   useEffect(() => {
     if (!autoLogin || !fromWaitlist) return
@@ -111,7 +114,7 @@ export function AppContinue() {
           }).catch(() => null)
         }
 
-        await siwe.refresh().catch(() => null)
+        await refreshSiweSession().catch(() => null)
         setHandoffState('ready')
         setHandoffError(null)
         return true
@@ -151,7 +154,7 @@ export function AppContinue() {
           failHandoff('Could not read Privy access token. Click "Restore account connection" to retry.')
           return
         }
-        const addr = await siwe.signInWithPrivyToken(token)
+        const addr = await signInWithPrivyToken(token)
         if (!addr) {
           failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
           return
@@ -171,7 +174,8 @@ export function AppContinue() {
     login,
     privyAuthenticated,
     privyReady,
-    siwe,
+    refreshSiweSession,
+    signInWithPrivyToken,
   ])
 
   useEffect(() => {
