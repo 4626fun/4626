@@ -13,9 +13,11 @@ export function shouldNavigateAfterWaitlistHandoff(input: AppContinueGateInput):
   const hasSiweSession = typeof input.siweAuthAddress === 'string' && input.siweAuthAddress.trim().length > 0
   if (!hasSiweSession) return false
 
-  if (input.privyClientStatus !== 'ready') return true
-  if (!input.privyReady) return false
-  return input.privyAuthenticated
+  // The server session cookie is sufficient to gate API access.
+  // Privy client-side auth is domain-specific and won't be
+  // available on app.4626.fun after a cross-origin handoff from
+  // 4626.fun. Let it bridge lazily once the user is in the app.
+  return true
 }
 
 export type AppContinuePrivyWaitInput = {
@@ -26,13 +28,9 @@ export type AppContinuePrivyWaitInput = {
   privyAuthenticated: boolean
 }
 
-export function shouldWaitForPrivyRehydrationAfterHandoff(input: AppContinuePrivyWaitInput): boolean {
-  if (!input.handoffRedeemed) return false
-
-  const hasSiweSession = typeof input.siweAuthAddress === 'string' && input.siweAuthAddress.trim().length > 0
-  if (!hasSiweSession) return false
-
-  if (input.privyClientStatus !== 'ready') return false
-  if (!input.privyReady) return false
-  return !input.privyAuthenticated
+export function shouldWaitForPrivyRehydrationAfterHandoff(_input: AppContinuePrivyWaitInput): boolean {
+  // Navigation no longer blocks on Privy client auth.  Privy
+  // sessions are domain-specific so rehydration after a
+  // cross-origin handoff is best-effort / lazy.
+  return false
 }

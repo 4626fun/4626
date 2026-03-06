@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
-import { shouldNavigateAfterWaitlistHandoff, shouldWaitForPrivyRehydrationAfterHandoff } from '@/lib/auth/appContinueGate'
+import { shouldNavigateAfterWaitlistHandoff } from '@/lib/auth/appContinueGate'
 import { readSafeNextPath } from '@/lib/auth/appEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -18,8 +18,6 @@ type HandoffRedeemResponse = {
   sessionToken: string
   privyToken: string | null
 }
-
-const PRIVY_REHYDRATION_GRACE_MS = 2500
 
 export function AppContinue() {
   const [searchParams] = useSearchParams()
@@ -51,24 +49,8 @@ export function AppContinue() {
 
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
   const [handoffError, setHandoffError] = useState<string | null>(null)
-  const [handoffRedeemed, setHandoffRedeemed] = useState(false)
-  const [privyGraceExpired, setPrivyGraceExpired] = useState(false)
-
   const autoLoginAttemptRef = useRef(false)
   const autoHandoffRedeemAttemptRef = useRef(false)
-  const autoBridgeAttemptRef = useRef(false)
-
-  const shouldWaitForPrivyGrace = useMemo(
-    () =>
-      shouldWaitForPrivyRehydrationAfterHandoff({
-        handoffRedeemed,
-        siweAuthAddress: siwe.authAddress,
-        privyClientStatus,
-        privyReady,
-        privyAuthenticated,
-      }),
-    [handoffRedeemed, privyAuthenticated, privyClientStatus, privyReady, siwe.authAddress],
-  )
 
   useEffect(() => {
     if (!canNavigate) return
@@ -78,24 +60,10 @@ export function AppContinue() {
   }, [canNavigate, navigate, nextPath, siwe.authAddress])
 
   useEffect(() => {
-    if (!shouldWaitForPrivyGrace) return
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      if (!cancelled) setPrivyGraceExpired(true)
-    }, PRIVY_REHYDRATION_GRACE_MS)
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-      setPrivyGraceExpired(false)
-    }
-  }, [shouldWaitForPrivyGrace])
-
-  useEffect(() => {
     if (!autoLogin || !fromWaitlist) return
     if (handoffState === 'ready' || handoffState === 'error') return
 
     const failHandoff = (message: string) => {
-      autoBridgeAttemptRef.current = false
       setHandoffState('error')
       setHandoffError(message)
     }
@@ -126,8 +94,10 @@ export function AppContinue() {
           }
         }
 
-        // Bridge the Privy session from the marketing origin so the app
-        // recognises the user's wallet and linked accounts without re-auth.
+        // Bridge the Privy session from the marketing origin so the
+        // server resolves wallets and sets a richer cv_auth_session
+        // cookie (linked wallets, CSW, etc.).  Privy client-side
+        // auth is domain-specific so this is best-effort.
         const bridgedPrivyToken =
           json?.data && typeof json.data.privyToken === 'string' ? json.data.privyToken.trim() : ''
         if (bridgedPrivyToken) {
@@ -139,12 +109,10 @@ export function AppContinue() {
               Accept: 'application/json',
             },
           }).catch(() => null)
-          await siwe.refresh().catch(() => null)
-        } else {
-          await siwe.refresh().catch(() => null)
         }
 
-        setHandoffRedeemed(true)
+        await siwe.refresh().catch(() => null)
+        setHandoffState('ready')
         setHandoffError(null)
         return true
       } catch {
@@ -157,6 +125,7 @@ export function AppContinue() {
       const redeemed = await redeemOneTimeHandoff()
       if (redeemed) return
 
+      // No handoff code or redeem failed — fall back to Privy login.
       if (!privyReady) return
       if (!privyAuthenticated) {
         if (autoLoginAttemptRef.current) return
@@ -172,25 +141,8 @@ export function AppContinue() {
         return
       }
 
-      if (handoffRedeemed && canNavigate) {
-        setHandoffState('ready')
-        setHandoffError(null)
-        return
-      }
-
-      if (shouldWaitForPrivyGrace && !privyGraceExpired) {
-        setHandoffState('bridging')
-        setHandoffError(null)
-        return
-      }
-
-      if (autoBridgeAttemptRef.current) return
-      autoBridgeAttemptRef.current = true
-      if (typeof getAccessToken !== 'function') {
-        failHandoff('Privy token bridge is unavailable. Click "Restore account connection" to retry.')
-        return
-      }
-
+      // Privy is already authenticated on this domain (e.g. user had
+      // a prior session).  Bridge into a server session.
       try {
         setHandoffError(null)
         setHandoffState('bridging')
@@ -212,17 +164,13 @@ export function AppContinue() {
     })()
   }, [
     autoLogin,
-    canNavigate,
     fromWaitlist,
     getAccessToken,
     handoffCode,
-    handoffRedeemed,
     handoffState,
     login,
     privyAuthenticated,
-    privyGraceExpired,
     privyReady,
-    shouldWaitForPrivyGrace,
     siwe,
   ])
 
@@ -273,10 +221,8 @@ export function AppContinue() {
             <div className="text-sm text-zinc-400">
               {handoffState === 'signingIn'
                 ? 'Restoring your 4626 account connection…'
-                : shouldWaitForPrivyGrace && !privyGraceExpired
-                  ? 'Restoring your account on the app…'
-                  : handoffRedeemed && !canNavigate
-                    ? 'Restoring your wallet connection on the app…'
+                : handoffState === 'bridging'
+                  ? 'Setting up your session…'
                   : 'Restoring your session…'}
             </div>
           )}
