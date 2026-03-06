@@ -436,6 +436,11 @@ const AccountsPage = lazy(async () => {
   return { default: m.AccountsPage }
 })
 
+const AppContinue = lazy(async () => {
+  const m = await import('./pages/AppContinue')
+  return { default: m.AppContinue }
+})
+
 function NotFoundPage() {
   const location = useLocation()
   const access = useAccessContext()
@@ -523,6 +528,7 @@ function App() {
             />
             <Route path="/home" element={<Navigate to={withReason(resolveLegacyRedirect('/home') ?? CANONICAL_SWAP_ROUTE, 'legacy-route')} replace />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/continue" element={<AppContinue />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account" element={<AccountsPage />} />
             <Route path="/settings" element={<Navigate to={withReason('/accounts', 'legacy-route')} replace />} />

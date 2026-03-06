@@ -46,6 +46,15 @@ function normalizeEvmAddress(value: unknown): string | null {
   return raw
 }
 
+function shouldBypassWalletSyncThrottle(params: {
+  persistedSessionAddress: string | null
+  classifiedSessionAddress: string | null
+}): boolean {
+  const persisted = normalizeEvmAddress(params.persistedSessionAddress)
+  const classified = normalizeEvmAddress(params.classifiedSessionAddress)
+  return Boolean(persisted && classified && persisted !== classified)
+}
+
 async function resolvePersistedSessionAddress(db: any, privyUserId: string): Promise<string | null> {
   try {
     const result = await db.sql`
@@ -139,7 +148,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await client.getUserById(claims.userId)
 
     const classified = classifyLinkedAccounts(user as any)
-    let sessionAddress = classified.canonicalSmartWallet?.address ?? classified.primaryWalletAddress ?? null
+    const classifiedSessionAddress =
+      classified.canonicalSmartWallet?.address ?? classified.primaryWalletAddress ?? null
+    let sessionAddress = classifiedSessionAddress
 
     try {
       const db = await getDb()
@@ -152,7 +163,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const now = Date.now()
         const minInterval = getPrivyAuthDbSyncMinIntervalMs()
-        if (now - lastPrivyAuthDbSyncAtMs >= minInterval) {
+        const shouldSyncNow =
+          now - lastPrivyAuthDbSyncAtMs >= minInterval ||
+          shouldBypassWalletSyncThrottle({
+            persistedSessionAddress,
+            classifiedSessionAddress,
+          })
+        if (shouldSyncNow) {
           const syncResult = await syncUserWallets(db as any, user as any)
           sessionAddress = syncResult.canonicalSmartWallet?.address ?? syncResult.primaryWalletAddress ?? sessionAddress
           const rawEmail = typeof (user as any)?.email?.address === 'string' ? String((user as any).email.address).trim() : ''

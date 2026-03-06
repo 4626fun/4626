@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveModePreferredIdentity } from './identityResolver'
+import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from './identityResolver'
 
 describe('resolveModePreferredIdentity', () => {
   const eoa = '0x1111111111111111111111111111111111111111'
@@ -64,5 +64,38 @@ describe('resolveModePreferredIdentity', () => {
       isSmartWalletIdentity: false,
       source: 'connected',
     })
+  })
+
+  it('requires auth-backed identity in SMART_WALLET mode when a smart-wallet source exists', () => {
+    expect(
+      shouldRequireAuthBackedXmtpIdentity({
+        connectedAddress: eoa,
+        modeOverride: 'SMART_WALLET',
+        accountContextSmartAddress: smart,
+        enforceCanonicalForConnectedSigner: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('requires auth-backed identity when canonical enforcement applies', () => {
+    expect(
+      shouldRequireAuthBackedXmtpIdentity({
+        connectedAddress: eoa,
+        modeOverride: 'EOA',
+        accountContextSmartAddress: null,
+        enforceCanonicalForConnectedSigner: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not require auth-backed identity for plain EOA mode without canonical enforcement', () => {
+    expect(
+      shouldRequireAuthBackedXmtpIdentity({
+        connectedAddress: eoa,
+        modeOverride: 'EOA',
+        accountContextSmartAddress: null,
+        enforceCanonicalForConnectedSigner: false,
+      }),
+    ).toBe(false)
   })
 })

@@ -45,6 +45,17 @@ function shouldSkipAutoPrivyBridge(): boolean {
   return false
 }
 
+export function shouldResetPrivyBridgeState(message: string): boolean {
+  const lower = String(message || '').trim().toLowerCase()
+  if (!lower) return false
+  return (
+    lower.includes('invalid privy auth token') ||
+    lower.includes('missing privy auth token') ||
+    lower.includes('unauthorized') ||
+    lower.includes('forbidden')
+  )
+}
+
 function coerceErrorMessage(e: unknown, fallback: string): string {
   if (typeof e === 'string' && e.trim().length > 0) return e
   if (e instanceof Error && typeof e.message === 'string' && e.message.trim().length > 0) return e.message
@@ -232,7 +243,15 @@ export function useSiweAuth() {
         }
         return address
       } catch (e: unknown) {
-        setError(coerceErrorMessage(e, 'Privy sign-in failed'))
+        const message = coerceErrorMessage(e, 'Privy sign-in failed')
+        if (shouldResetPrivyBridgeState(message)) {
+          setStoredSessionToken(null)
+          setAuthAddress(null)
+          setCswOwnership(null)
+          autoPrivyAttemptKeyRef.current = ''
+          autoPrivyGlobalAttemptRef.current = false
+        }
+        setError(message)
         return null
       } finally {
         setBusy(false)

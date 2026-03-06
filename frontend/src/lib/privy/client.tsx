@@ -3,6 +3,7 @@ import { Component, createContext, useContext, useMemo } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
+import { createPrivyAppearance } from './clientAppearance'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -59,7 +60,8 @@ class PrivyProviderSafetyBoundary extends Component<
  * - The embedded wallet from Zora is shared with 4626
  * - No new wallet is created - they use their existing Zora wallet
  */
-export function PrivyClientProvider({ children }: { children: ReactNode }) {
+export function PrivyClientProvider(props: { children: ReactNode; showWalletLoginFirst?: boolean }) {
+  const { children, showWalletLoginFirst = true } = props
   const enabled = isPrivyClientEnabled()
   const appId = enabled ? getPrivyAppId() : null
 
@@ -90,16 +92,7 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>
   }
 
-  const appearance = {
-    showWalletLoginFirst: true,
-    // Signup flow provisions both embedded EVM + Solana wallets.
-    walletChainType: 'all',
-    walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets'],
-    logo: '',
-    landingHeader: 'Sign in to 4626',
-    loginMessage: 'Connect your wallet or continue with email.',
-    theme: '#0f1117',
-  } as const
+  const appearance = createPrivyAppearance({ showWalletLoginFirst })
   const loginMethods = ['wallet', 'email', 'google', 'twitter', 'farcaster'] as const
 
   // Privy OAuth redirects are validated against an allowlist and must match exactly (no query params).

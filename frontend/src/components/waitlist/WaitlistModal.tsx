@@ -22,7 +22,7 @@ export function WaitlistModal({ open, onClose }: WaitlistModalProps) {
           </div>
         }
       >
-        <WaitlistFlowWithProviders variant="modal" onClose={onClose} />
+        <WaitlistFlowWithProviders variant="modal" />
       </Suspense>
     </Modal>
   )

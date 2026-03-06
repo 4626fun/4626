@@ -18,7 +18,7 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
 import { getBasenameName } from '@/lib/xmtp/socialIdentity'
-import { resolveModePreferredIdentity } from '@/lib/xmtp/identityResolver'
+import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from '@/lib/xmtp/identityResolver'
 import { useAccountContext } from '@/wallet/accountContext'
 import {
   TARGET_CANONICAL_CSW_ADDRESS,
@@ -114,6 +114,10 @@ type WaitlistMeData = {
     isCanonicalSmartWallet?: boolean
   }>
 }
+
+type AuthMeData = {
+  address?: string | null
+} | null
 
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
   {
@@ -775,6 +779,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     let preferred = preferredSelection.preferredAddress
     let isCanonicalSmartWallet = preferredSelection.isSmartWalletIdentity
     let policyApplies = enforceCanonicalForConnectedSigner
+    let waitlistResolved = false
     try {
       const res = await apiFetch('/api/waitlist/me', {
         method: 'GET',
@@ -782,6 +787,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
       const row = res.ok && json?.success ? (json.data ?? null) : null
+      waitlistResolved = Boolean(res.ok && json?.success)
       const canonical = pickCanonicalSmartWalletAddress(row)
       waitlistCanonicalAddress = canonical
 
@@ -799,7 +805,45 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         signerAddress: connected,
       })
     } catch {
-      // Best-effort canonical identity resolution; fallback to connected wallet.
+      waitlistResolved = false
+    }
+
+    const requiresAuthBackedIdentity = shouldRequireAuthBackedXmtpIdentity({
+      connectedAddress: connected,
+      modeOverride,
+      accountContextSmartAddress,
+      waitlistCanonicalAddress,
+      enforceCanonicalForConnectedSigner: policyApplies,
+    })
+
+    if (!waitlistResolved && requiresAuthBackedIdentity) {
+      let authAddress: string | null = null
+      try {
+        const authRes = await apiFetch('/api/auth/me', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        })
+        const authJson = (await authRes.json().catch(() => null)) as ApiEnvelope<AuthMeData> | null
+        authAddress =
+          authRes.ok && authJson?.success
+            ? normalizeEvmAddress(authJson.data?.address ?? null)
+            : null
+      } catch {
+        authAddress = null
+      }
+
+      if (!authAddress) {
+        throw new Error(
+          'XMTP smart-wallet messaging requires an active 4626 session. Reconnect wallet, sign in again, and retry.',
+        )
+      }
+
+      const expectedAuthAddress = normalizeEvmAddress(policyApplies ? TARGET_CANONICAL_CSW_ADDRESS : preferred)
+      if (expectedAuthAddress && authAddress !== expectedAuthAddress) {
+        throw new Error(
+          'XMTP session identity does not match the smart wallet selected for messaging. Reconnect wallet, sign in again, and retry.',
+        )
+      }
     }
 
     if (policyApplies) {

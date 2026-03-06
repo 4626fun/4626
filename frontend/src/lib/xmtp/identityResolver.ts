@@ -60,3 +60,23 @@ export function resolveModePreferredIdentity(
     source: 'connected',
   }
 }
+
+export function shouldRequireAuthBackedXmtpIdentity(input: {
+  connectedAddress: string
+  modeOverride?: XmtpModeOverride
+  accountContextSmartAddress?: string | null
+  waitlistCanonicalAddress?: string | null
+  enforceCanonicalForConnectedSigner: boolean
+}): boolean {
+  if (input.enforceCanonicalForConnectedSigner) return true
+  if (input.modeOverride !== 'SMART_WALLET') return false
+
+  const preferred = resolveModePreferredIdentity({
+    connectedAddress: input.connectedAddress,
+    modeOverride: input.modeOverride,
+    accountContextSmartAddress: input.accountContextSmartAddress,
+    waitlistCanonicalAddress: input.waitlistCanonicalAddress ?? null,
+  })
+
+  return preferred.isSmartWalletIdentity
+}

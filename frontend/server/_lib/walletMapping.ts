@@ -32,6 +32,20 @@ export type PrivyUserLike = {
   linked_accounts?: unknown
 }
 
+function nestedWalletEntries(raw: any): any[] {
+  const smartWallets = Array.isArray(raw?.smartWallets)
+    ? raw.smartWallets
+    : Array.isArray(raw?.smart_wallets)
+      ? raw.smart_wallets
+      : []
+  const embeddedWallets = Array.isArray(raw?.embeddedWallets)
+    ? raw.embeddedWallets
+    : Array.isArray(raw?.embedded_wallets)
+      ? raw.embedded_wallets
+      : []
+  return [...smartWallets, ...embeddedWallets]
+}
+
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
@@ -130,8 +144,8 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
   const linkedAccountsSnake = Array.isArray(user?.linked_accounts) ? user.linked_accounts : []
   const wallets = Array.isArray(user?.wallets) ? user.wallets : []
   const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [user.wallet] : []
-
-  const allRaw = [...primaryWallet, ...wallets, ...linkedAccounts, ...linkedAccountsSnake]
+  const nestedLinkedWallets = [...linkedAccounts, ...linkedAccountsSnake].flatMap((raw) => nestedWalletEntries(raw))
+  const allRaw = [...primaryWallet, ...wallets, ...linkedAccounts, ...linkedAccountsSnake, ...nestedLinkedWallets]
   const mappedRaw: Array<MappedWallet & { rawType: string }> = []
 
   for (const raw of allRaw) {

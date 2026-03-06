@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCrossAppAccounts, usePrivy } from '@privy-io/react-auth'
+import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
+import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { getAppBaseUrl } from '@/lib/host'
+import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 
-import { selectZoraCrossAppAuthAction } from './ownerInstallMapping'
 import type { Variant } from './waitlistTypes'
+import { shouldAutoStartWaitlistPrivyAuth } from './waitlistAuthState'
+import { buildWaitlistPrivyLoginOptions } from './waitlistLoginOptions'
+import { canEnterAppFromAccountState, deriveWaitlistDoneUi, deriveWaitlistEmailUi, deriveWaitlistZoraUi } from './waitlistFlowUi'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -23,6 +27,7 @@ type WaitlistJoinResponse = {
 type AccountsSummary = {
   privyUserId: string
   email: string | null
+  appAccessStatus: string | null
   linkedMethods: Record<string, string[]>
   zora: {
     linked: boolean
@@ -59,7 +64,6 @@ type WaitlistStep = 'email' | 'auth' | 'zora' | 'done'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDOFF_QUERY_KEY = 'cv_handoff'
-const ENTER_APP_PATH = '/deploy?from=waitlist&autologin=1&auth=wallet'
 
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase()
@@ -71,28 +75,6 @@ function readApiErrorMessage(payload: unknown, fallback: string): string {
     if (typeof maybeError === 'string' && maybeError.trim()) return maybeError
   }
   return fallback
-}
-
-function readErrorStatusCode(error: unknown): number | null {
-  const candidate = Number(
-    (error as any)?.status ??
-      (error as any)?.statusCode ??
-      (error as any)?.response?.status ??
-      (error as any)?.cause?.status,
-  )
-  if (!Number.isFinite(candidate)) return null
-  return candidate
-}
-
-function isUnauthorizedCrossAppLinkError(error: unknown): boolean {
-  const status = readErrorStatusCode(error)
-  if (status === 401 || status === 403) return true
-
-  const message = String((error as any)?.message ?? '').trim().toLowerCase()
-  if (!message) return false
-  const mentionsCrossAppOAuth = message.includes('oauth/init') || message.includes('cross_app') || message.includes('cross-app')
-  if (!mentionsCrossAppOAuth) return false
-  return message.includes('401') || message.includes('unauthorized') || message.includes('not authorized')
 }
 
 function useSafePrivy() {
@@ -114,6 +96,16 @@ function useSafeCrossAppAccounts() {
     return {
       loginWithCrossAppAccount: null,
       linkCrossAppAccount: null,
+    } as any
+  }
+}
+
+function useSafeLogin() {
+  try {
+    return useLogin({}) as any
+  } catch {
+    return {
+      login: async () => {},
     } as any
   }
 }
@@ -147,13 +139,15 @@ function ZoraLogo({ className }: { className?: string }) {
   )
 }
 
-export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string; onClose?: () => void }) {
+export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
 
   const privy = useSafePrivy()
+  const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossAppAccounts()
 
+  const privyReady = Boolean(privy?.ready)
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
     () =>
@@ -172,6 +166,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [zoraSummary, setZoraSummary] = useState<ZoraResolveResponse | null>(null)
+  const authAttemptInFlightRef = useRef(false)
+  const authAutoAttemptedRef = useRef(false)
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
 
@@ -181,7 +177,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   const innerClass = isPage
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
-  const enterAppUrl = useMemo(() => `${getAppBaseUrl()}${ENTER_APP_PATH}`, [])
+  const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
 
   const runBootstrap = useCallback(async () => {
     const token = await getAccessToken()
@@ -235,50 +231,35 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     }
   }, [busy, email, emailIsValid, privyAuthed, runBootstrap])
 
+  const onContinueAuth = useCallback(async () => {
+    if (busy || privyAuthed || authAttemptInFlightRef.current) return
+    authAttemptInFlightRef.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      await login(buildWaitlistPrivyLoginOptions() as any)
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    } catch (authError: any) {
+      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start sign-in.')
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    }
+  }, [busy, login, privyAuthed])
+
   const onLinkZora = useCallback(async () => {
     if (busy) return
     setBusy(true)
     setError(null)
     try {
-      const action = selectZoraCrossAppAuthAction({
+      await performZoraCrossAppAuth({
         privyAuthed,
+        appId: ZORA_PRIVY_APP_ID,
         linkCrossAppAccount,
         loginWithCrossAppAccount,
+        sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
+        isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
       })
-      if (!action) {
-        throw new Error('Zora linking is unavailable in this environment.')
-      }
-      if (action === 'link') {
-        try {
-          const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
-          try {
-            await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-          } finally {
-            restoreCrossAppRedirect?.()
-          }
-        } catch (linkError: unknown) {
-          if (
-            typeof loginWithCrossAppAccount === 'function' &&
-            (isUnauthorizedCrossAppLinkError(linkError) || isPrivyRedirectUrlNotAllowedError(linkError))
-          ) {
-            const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
-            try {
-              await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-            } finally {
-              restoreCrossAppRedirect?.()
-            }
-          } else {
-            throw linkError
-          }
-        }
-      } else {
-        const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
-        try {
-          await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-        } finally {
-          restoreCrossAppRedirect?.()
-        }
-      }
 
       const token = await getAccessToken()
       if (!token) throw new Error('Missing Privy token after linking Zora.')
@@ -382,9 +363,28 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   }, [enterAppBusy, enterAppUrl, getAccessToken, privyAuthed])
 
   useEffect(() => {
+    if (
+      !shouldAutoStartWaitlistPrivyAuth({
+        step,
+        privyReady,
+        privyAuthed,
+        busy,
+        authAttemptInFlight: authAttemptInFlightRef.current,
+        authAutoAttempted: authAutoAttemptedRef.current,
+      })
+    ) {
+      return
+    }
+    authAutoAttemptedRef.current = true
+    void onContinueAuth()
+  }, [busy, onContinueAuth, privyAuthed, privyReady, step])
+
+  useEffect(() => {
     if (step !== 'auth') return
     if (!privyAuthed) return
     let cancelled = false
+    authAttemptInFlightRef.current = false
+    authAutoAttemptedRef.current = false
     ;(async () => {
       try {
         setBusy(true)
@@ -403,6 +403,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     }
   }, [privyAuthed, runBootstrap, step])
 
+  useEffect(() => {
+    if (step !== 'auth') {
+      authAttemptInFlightRef.current = false
+      authAutoAttemptedRef.current = false
+    }
+  }, [step])
+
   const zoraStatus = useMemo(() => {
     const summary: ZoraResolveResponse | null = zoraSummary ?? (account ? {
       canonicalCswAddress: account.zora.canonicalCswAddress,
@@ -411,6 +418,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     } : null)
     return summary
   }, [account, zoraSummary])
+  const emailUi = step === 'auth' ? deriveWaitlistEmailUi('auth') : deriveWaitlistEmailUi('email')
+  const zoraUi = deriveWaitlistZoraUi(Boolean(zoraStatus))
+  const canEnterApp = canEnterAppFromAccountState({
+    appAccessStatus: account?.appAccessStatus ?? null,
+    tier: account?.score?.tier ?? 0,
+  })
+  const doneUi = deriveWaitlistDoneUi(canEnterApp)
 
   const stepOrder: WaitlistStep[] = ['email', 'auth', 'zora', 'done']
   const stepIdx = stepOrder.indexOf(step)
@@ -446,8 +460,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
             className="space-y-5"
           >
             <div className="space-y-1">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">Get early access</h2>
-              <p className="text-sm text-zinc-400">Enter your email to join.</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">{emailUi.title}</h2>
+              <p className="text-sm text-zinc-400">{emailUi.subtitle}</p>
             </div>
 
             <div>
@@ -464,17 +478,17 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
 
             <button
               type="button"
-              disabled={!emailIsValid || busy}
-              onClick={() => void onJoinWaitlist()}
+              disabled={step === 'email' ? !emailIsValid || busy : busy}
+              onClick={() => void (step === 'auth' ? onContinueAuth() : onJoinWaitlist())}
               className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {busy ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Setting up…
+                  {emailUi.busyLabel}
                 </>
               ) : (
-                'Join waitlist'
+                emailUi.ctaLabel
               )}
             </button>
 
@@ -502,26 +516,19 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                   Optional
                 </span>
               </div>
-              <p className="text-sm text-zinc-400">
-                Link your Zora identity to unlock reputation signals, boost your ranking, and earn points.
-              </p>
+              <p className="text-sm text-zinc-400">{zoraUi.subtitle}</p>
+              {!zoraStatus ? (
+                <p className="text-xs text-zinc-500">You'll be briefly redirected to approve a read-only connection.</p>
+              ) : null}
             </div>
 
             {zoraStatus ? (
               <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
-                <p className="text-xs font-medium text-emerald-400">Zora connected</p>
+                <p className="text-xs font-medium text-emerald-400">{zoraUi.connectedLabel}</p>
                 <div className="space-y-2">
                   {zoraStatus.zoraHandle ? (
                     <div className="flex items-center gap-2 text-xs">
-                      {zoraStatus.creatorCoin?.imageUrl ? (
-                        <img
-                          src={zoraStatus.creatorCoin.imageUrl}
-                          alt={zoraStatus.creatorCoin.symbol ?? 'creator coin'}
-                          className="w-4 h-4 rounded-full shrink-0 object-cover"
-                        />
-                      ) : (
-                        <ZoraLogo className="w-4 h-4 shrink-0 rounded-full" />
-                      )}
+                      <ZoraLogo className="w-4 h-4 shrink-0 rounded-full" />
                       <span className="text-zinc-400">@{zoraStatus.zoraHandle}</span>
                     </div>
                   ) : null}
@@ -551,6 +558,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                       )}
                     </div>
                   ) : null}
+                  {!zoraStatus.zoraHandle && !zoraStatus.canonicalCswAddress && !zoraStatus.creatorCoin?.address ? (
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <ZoraLogo className="w-4 h-4 shrink-0 rounded-full opacity-80" />
+                      <span>{zoraUi.resolvingLabel}</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -559,7 +572,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void onLinkZora()}
+                onClick={() => void (zoraUi.primaryAction === 'finish' ? onFinish() : onLinkZora())}
                 className="btn-primary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {busy ? (
@@ -567,19 +580,17 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Linking…
                   </>
-                ) : zoraStatus ? (
-                  'Reconnect Zora'
                 ) : (
-                  'Connect Zora'
+                  zoraUi.primaryLabel
                 )}
               </button>
 
               <button
                 type="button"
-                onClick={onFinish}
+                onClick={() => void (zoraUi.secondaryAction === 'reconnect' ? onLinkZora() : onFinish())}
                 className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
               >
-                Skip for now →
+                {zoraUi.secondaryLabel}
               </button>
             </div>
 
@@ -626,19 +637,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
               </motion.div>
 
               <div className="space-y-1">
-                <h2 className="text-2xl font-semibold tracking-tight text-white">You&apos;re in!</h2>
-                <p className="text-sm text-zinc-400 max-w-xs mx-auto">
-                  Done! Visit{' '}
-                  <Link to="/accounts" className="text-zinc-300 hover:text-white transition-colors">
-                    accounts
-                  </Link>{' '}
-                  to manage connected accounts, earn points, and see the leaderboard.
-                </p>
+                <h2 className="text-2xl font-semibold tracking-tight text-white">{doneUi.title}</h2>
+                <p className="text-sm text-zinc-400 max-w-xs mx-auto">{doneUi.subtitle}</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              {(account?.score?.tier ?? 0) >= 1 ? (
+              {canEnterApp ? (
                 <button
                   type="button"
                   onClick={() => void onEnterApp()}
@@ -651,21 +656,26 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                       Entering App…
                     </>
                   ) : (
-                    'Enter App'
+                    doneUi.primaryLabel
                   )}
                 </button>
-              ) : null}
+              ) : (
+                <Link
+                  to="/accounts"
+                  className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center"
+                >
+                  {doneUi.primaryLabel}
+                </Link>
+              )}
 
-              <Link
-                to="/accounts"
-                className={
-                  (account?.score?.tier ?? 0) >= 1
-                    ? 'w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block'
-                    : 'btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center'
-                }
-              >
-                Go to accounts
-              </Link>
+              {doneUi.secondaryLabel ? (
+                <Link
+                  to="/accounts"
+                  className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block"
+                >
+                  {doneUi.secondaryLabel}
+                </Link>
+              ) : null}
             </div>
           </motion.div>
         ) : null}

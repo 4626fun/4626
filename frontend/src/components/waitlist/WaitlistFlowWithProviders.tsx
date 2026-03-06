@@ -3,14 +3,14 @@ import { Web3Providers } from '@/web3/Web3Providers'
 import { ThinWaitlistFlow } from './ThinWaitlistFlow'
 import type { Variant } from './waitlistTypes'
 
-export default function WaitlistFlowWithProviders(props: { variant?: Variant; sectionId?: string; onClose?: () => void }) {
+export default function WaitlistFlowWithProviders(props: { variant?: Variant; sectionId?: string }) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
 
   return (
-    <PrivyClientProvider>
+    <PrivyClientProvider showWalletLoginFirst={false}>
       <Web3Providers>
-        <ThinWaitlistFlow variant={variant} sectionId={sectionId} onClose={props.onClose} />
+        <ThinWaitlistFlow variant={variant} sectionId={sectionId} />
       </Web3Providers>
     </PrivyClientProvider>
   )

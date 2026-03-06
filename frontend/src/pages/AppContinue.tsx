@@ -1,0 +1,268 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
+
+import { apiFetch } from '@/lib/apiBase'
+import { shouldNavigateAfterWaitlistHandoff, shouldWaitForPrivyRehydrationAfterHandoff } from '@/lib/auth/appContinueGate'
+import { readSafeNextPath } from '@/lib/auth/appEntry'
+import { usePrivyClientStatus } from '@/lib/privy/client'
+import { PageMeta } from '@/components/seo/PageMeta'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
+
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+
+const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
+
+type HandoffRedeemResponse = {
+  address: string
+  sessionToken: string
+}
+
+const PRIVY_REHYDRATION_GRACE_MS = 2500
+
+export function AppContinue() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const siwe = useSiweAuth()
+  const privyClientStatus = usePrivyClientStatus()
+  const { ready: privyReady, authenticated: privyAuthenticated, getAccessToken } = usePrivy()
+  const { login } = useLogin({})
+
+  const nextPath = useMemo(() => readSafeNextPath(searchParams.get('next')), [searchParams])
+  const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
+  const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
+  const autoLogin = autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes'
+  const fromWaitlist = fromRaw === 'waitlist'
+  const handoffCode = (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim()
+
+  const canNavigate = useMemo(
+    () =>
+      shouldNavigateAfterWaitlistHandoff({
+        autoLogin,
+        fromWaitlist,
+        siweAuthAddress: siwe.authAddress,
+        privyClientStatus,
+        privyReady,
+        privyAuthenticated,
+      }),
+    [autoLogin, fromWaitlist, privyAuthenticated, privyClientStatus, privyReady, siwe.authAddress],
+  )
+
+  const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
+  const [handoffError, setHandoffError] = useState<string | null>(null)
+  const [handoffRedeemed, setHandoffRedeemed] = useState(false)
+  const [privyGraceExpired, setPrivyGraceExpired] = useState(false)
+
+  const autoLoginAttemptRef = useRef(false)
+  const autoHandoffRedeemAttemptRef = useRef(false)
+  const autoBridgeAttemptRef = useRef(false)
+
+  const shouldWaitForPrivyGrace = useMemo(
+    () =>
+      shouldWaitForPrivyRehydrationAfterHandoff({
+        handoffRedeemed,
+        siweAuthAddress: siwe.authAddress,
+        privyClientStatus,
+        privyReady,
+        privyAuthenticated,
+      }),
+    [handoffRedeemed, privyAuthenticated, privyClientStatus, privyReady, siwe.authAddress],
+  )
+
+  useEffect(() => {
+    if (!canNavigate) return
+    if (typeof siwe.authAddress === 'string' && siwe.authAddress.length > 0) {
+      navigate(nextPath, { replace: true })
+    }
+  }, [canNavigate, navigate, nextPath, siwe.authAddress])
+
+  useEffect(() => {
+    if (!shouldWaitForPrivyGrace) {
+      setPrivyGraceExpired(false)
+      return
+    }
+    setPrivyGraceExpired(false)
+    const timer = window.setTimeout(() => {
+      setPrivyGraceExpired(true)
+    }, PRIVY_REHYDRATION_GRACE_MS)
+    return () => window.clearTimeout(timer)
+  }, [shouldWaitForPrivyGrace])
+
+  useEffect(() => {
+    if (!autoLogin || !fromWaitlist) return
+    if (handoffState === 'ready' || handoffState === 'error') return
+    if (handoffState === 'idle') setHandoffState('signingIn')
+
+    const failHandoff = (message: string) => {
+      autoBridgeAttemptRef.current = false
+      setHandoffState('error')
+      setHandoffError(message)
+    }
+
+    const redeemOneTimeHandoff = async (): Promise<boolean> => {
+      const code = handoffCode.trim()
+      if (!code || autoHandoffRedeemAttemptRef.current) return false
+      autoHandoffRedeemAttemptRef.current = true
+
+      try {
+        setHandoffError(null)
+        setHandoffState('bridging')
+        const res = await apiFetch('/api/auth/handoff/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ code }),
+        })
+        const json = (await res.json().catch(() => null)) as ApiEnvelope<HandoffRedeemResponse> | null
+        if (!res.ok || !json?.success) return false
+
+        const sessionToken =
+          json?.data && typeof json.data.sessionToken === 'string' ? json.data.sessionToken.trim() : ''
+        if (sessionToken) {
+          try {
+            sessionStorage.setItem('cv_siwe_session_token', sessionToken)
+          } catch {
+            // ignore
+          }
+        }
+
+        await siwe.refresh().catch(() => null)
+        setHandoffRedeemed(true)
+        setHandoffError(null)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    void (async () => {
+      const redeemed = await redeemOneTimeHandoff()
+      if (redeemed) return
+
+      if (!privyReady) return
+      if (!privyAuthenticated) {
+        if (autoLoginAttemptRef.current) return
+        autoLoginAttemptRef.current = true
+        try {
+          setHandoffError(null)
+          setHandoffState('signingIn')
+          await login()
+        } catch {
+          autoLoginAttemptRef.current = false
+          failHandoff('Account connection was cancelled. Click "Restore account connection" to continue.')
+        }
+        return
+      }
+
+      if (handoffRedeemed && canNavigate) {
+        setHandoffState('ready')
+        setHandoffError(null)
+        return
+      }
+
+      if (shouldWaitForPrivyGrace && !privyGraceExpired) {
+        setHandoffState('bridging')
+        setHandoffError(null)
+        return
+      }
+
+      if (autoBridgeAttemptRef.current) return
+      autoBridgeAttemptRef.current = true
+      if (typeof getAccessToken !== 'function') {
+        failHandoff('Privy token bridge is unavailable. Click "Restore account connection" to retry.')
+        return
+      }
+
+      try {
+        setHandoffError(null)
+        setHandoffState('bridging')
+        const token = await getAccessToken()
+        if (!token) {
+          failHandoff('Could not read Privy access token. Click "Restore account connection" to retry.')
+          return
+        }
+        const addr = await siwe.signInWithPrivyToken(token)
+        if (!addr) {
+          failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
+          return
+        }
+        setHandoffState('ready')
+        setHandoffError(null)
+      } catch {
+        failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
+      }
+    })()
+  }, [
+    autoLogin,
+    canNavigate,
+    fromWaitlist,
+    getAccessToken,
+    handoffCode,
+    handoffRedeemed,
+    handoffState,
+    login,
+    privyAuthenticated,
+    privyGraceExpired,
+    privyReady,
+    shouldWaitForPrivyGrace,
+    siwe,
+  ])
+
+  useEffect(() => {
+    if (!autoLogin || !fromWaitlist) return
+    if (handoffState !== 'signingIn' && handoffState !== 'bridging') return
+    const t = window.setTimeout(() => {
+      setHandoffState('error')
+      setHandoffError('This is taking longer than expected. Click "Restore account connection" to continue.')
+    }, 25_000)
+    return () => window.clearTimeout(t)
+  }, [autoLogin, fromWaitlist, handoffState])
+
+  if (!autoLogin || !fromWaitlist) {
+    return <Navigate to={nextPath} replace />
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <PageMeta title="Continuing to app" description="Finishing secure sign-in handoff into the 4626 app." canonicalPath="/continue" />
+      <div className="mx-auto flex min-h-screen max-w-xl items-center px-6 py-16">
+        <div className="card w-full rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
+          <div className="space-y-2">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">4626</div>
+            <h1 className="text-2xl font-semibold tracking-tight">Entering app</h1>
+            <p className="text-sm text-zinc-400">
+              We&apos;re restoring your session and sending you to the app.
+            </p>
+          </div>
+
+          {handoffError ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {handoffError}
+              </div>
+              <button
+                type="button"
+                onClick={() => void login()}
+                className="btn-accent btn-no-icon inline-flex"
+              >
+                Restore account connection
+              </button>
+              <Link to={nextPath} className="text-sm text-zinc-500 hover:text-zinc-300">
+                Continue without auto sign-in
+              </Link>
+            </div>
+          ) : (
+            <div className="text-sm text-zinc-400">
+              {handoffState === 'signingIn'
+                ? 'Restoring your 4626 account connection…'
+                : shouldWaitForPrivyGrace && !privyGraceExpired
+                  ? 'Restoring your account on the app…'
+                  : handoffRedeemed && !canNavigate
+                    ? 'Restoring your wallet connection on the app…'
+                  : 'Restoring your session…'}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

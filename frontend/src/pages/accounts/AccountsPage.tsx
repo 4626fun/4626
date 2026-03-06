@@ -5,6 +5,7 @@ import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
 
 import { apiFetch } from '@/lib/apiBase'
+import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { selectZoraCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
@@ -38,7 +39,7 @@ type ZoraLinkStatusResponse = {
 
 type ZoraResolveResponse = {
   canonicalCswAddress: string | null
-  creatorCoin: { address: string; name: string | null; symbol: string | null } | null
+  creatorCoin: { address: string; name: string | null; symbol: string | null; imageUrl?: string | null } | null
   zoraHandle: string | null
 }
 
@@ -95,28 +96,6 @@ function readApiError(payload: unknown, fallback: string): string {
     if (typeof maybeError === 'string' && maybeError.trim()) return maybeError
   }
   return fallback
-}
-
-function readErrorStatusCode(error: unknown): number | null {
-  const candidate = Number(
-    (error as any)?.status ??
-      (error as any)?.statusCode ??
-      (error as any)?.response?.status ??
-      (error as any)?.cause?.status,
-  )
-  if (!Number.isFinite(candidate)) return null
-  return candidate
-}
-
-function isUnauthorizedCrossAppLinkError(error: unknown): boolean {
-  const status = readErrorStatusCode(error)
-  if (status === 401 || status === 403) return true
-
-  const message = String((error as any)?.message ?? '').trim().toLowerCase()
-  if (!message) return false
-  const mentionsCrossAppOAuth = message.includes('oauth/init') || message.includes('cross_app') || message.includes('cross-app')
-  if (!mentionsCrossAppOAuth) return false
-  return message.includes('401') || message.includes('unauthorized') || message.includes('not authorized')
 }
 
 function useSafePrivy() {
@@ -264,37 +243,14 @@ export function AccountsPage(props: {
           loginWithCrossAppAccount,
         })
         if (!action) throw new Error('Zora linking is unavailable in this client.')
-        if (action === 'link') {
-          try {
-            const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
-            try {
-              await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-            } finally {
-              restoreCrossAppRedirect?.()
-            }
-          } catch (linkError: unknown) {
-            if (
-              typeof loginWithCrossAppAccount === 'function' &&
-              (isUnauthorizedCrossAppLinkError(linkError) || isPrivyRedirectUrlNotAllowedError(linkError))
-            ) {
-              const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
-              try {
-                await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-              } finally {
-                restoreCrossAppRedirect?.()
-              }
-            } else {
-              throw linkError
-            }
-          }
-        } else {
-          const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
-          try {
-            await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-          } finally {
-            restoreCrossAppRedirect?.()
-          }
-        }
+        await performZoraCrossAppAuth({
+          privyAuthed,
+          appId: ZORA_PRIVY_APP_ID,
+          linkCrossAppAccount,
+          loginWithCrossAppAccount,
+          sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
+          isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
+        })
         return
       }
 
@@ -586,7 +542,7 @@ export function AccountsPage(props: {
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Accounts</div>
           <h1 className="text-3xl font-semibold">Identity management</h1>
           <p className="text-sm text-zinc-400">
-            `/accounts` is the canonical place to link identities, refresh Zora signals, and manage optional advanced wallet permissions.
+            Accounts is the canonical place to link identities, refresh Zora signals, and manage optional advanced wallet permissions.
           </p>
         </div>
 

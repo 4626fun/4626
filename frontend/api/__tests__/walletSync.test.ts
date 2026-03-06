@@ -122,6 +122,26 @@ describe('wallet mapping + sync', () => {
     expect(db.calls.some((q) => q.includes('insert into profile_wallets'))).toBe(true)
   })
 
+  it('treats cross-app nested smart wallets as canonical candidates', () => {
+    const user = {
+      id: 'did:privy:cross-app-nested',
+      linkedAccounts: [
+        {
+          type: 'cross_app',
+          providerAppId: 'clpgf04wn04hnkw0fv1m11mnb',
+          address: '0x00000000000000000000000000000000000000a1',
+          embeddedWallets: [{ address: '0x00000000000000000000000000000000000000a2', walletClientType: 'embedded_privy_wallet' }],
+          smartWallets: [{ address: '0x00000000000000000000000000000000000000a3', walletClientType: 'coinbase_smart_wallet' }],
+        },
+      ],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000a2')
+    expect(classified.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000a3')
+    expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000a3')
+  })
+
   it('prefers Zora-linked smart wallet when multiple candidates exist', async () => {
     fetchZoraProfileMock.mockResolvedValue({
       publicWallet: { walletAddress: '0x00000000000000000000000000000000000000f0' },

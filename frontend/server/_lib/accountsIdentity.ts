@@ -31,6 +31,7 @@ export type AccountScore = {
 export type AccountsMePayload = {
   privyUserId: string
   email: string | null
+  appAccessStatus: string | null
   linkedMethods: Record<string, string[]>
   zora: {
     linked: boolean
@@ -786,6 +787,14 @@ export async function buildAccountsMePayload(params: {
     LIMIT 1;
   `
   const accountRow = accountRowResult.rows?.[0] ?? null
+  const profileStatusResult = await db.sql`
+    SELECT app_access_status
+    FROM profiles
+    WHERE privy_user_id = ${privyUserId}
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+    LIMIT 1;
+  `
+  const profileStatusRow = profileStatusResult.rows?.[0] ?? null
   const dbMethods = await readLinkedMethods(db, privyUserId)
   const derivedMethods = privyUser ? deriveLinkedMethodsFromPrivyUser(privyUser) : {}
   const linkedMethods = mergeLinkedMethods(dbMethods, derivedMethods)
@@ -795,6 +804,7 @@ export async function buildAccountsMePayload(params: {
   return {
     privyUserId,
     email: normalizeEmail(accountRow?.email),
+    appAccessStatus: normalizeString(profileStatusRow?.app_access_status),
     linkedMethods,
     zora: {
       linked: zoraRow.zoraLinked,

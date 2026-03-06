@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest'
+
+import { canEnterAppFromAccountState, deriveWaitlistDoneUi, deriveWaitlistEmailUi, deriveWaitlistZoraUi } from './waitlistFlowUi'
+
+describe('deriveWaitlistEmailUi', () => {
+  it('uses the join-waitlist copy and black-square glyph on the email step', () => {
+    expect(deriveWaitlistEmailUi('email')).toEqual({
+      title: 'Get early access',
+      subtitle: 'Enter your email to join.',
+      ctaLabel: '■ Join waitlist',
+      busyLabel: 'Setting up…',
+    })
+  })
+
+  it('uses continuation copy on the auth step', () => {
+    expect(deriveWaitlistEmailUi('auth')).toEqual({
+      title: 'Secure your spot',
+      subtitle: 'We saved your email. Finish connecting your 4626 account to continue.',
+      ctaLabel: '■ Continue',
+      busyLabel: 'Opening sign-in…',
+    })
+  })
+})
+
+describe('deriveWaitlistZoraUi', () => {
+  it('defaults to connect and skip actions before Zora is linked', () => {
+    expect(deriveWaitlistZoraUi(false)).toEqual({
+      subtitle: 'Connect your Zora account to import your profile and creator coin. Optional.',
+      primaryAction: 'connect',
+      primaryLabel: '■ Connect Zora',
+      secondaryAction: 'skip',
+      secondaryLabel: 'Continue without Zora',
+      connectedLabel: 'Zora account connected',
+      resolvingLabel: 'Connected. Finishing your Zora details…',
+    })
+  })
+
+  it('switches to continue and reconnect actions after Zora is linked', () => {
+    expect(deriveWaitlistZoraUi(true)).toEqual({
+      subtitle: 'Connect your Zora account to import your profile and creator coin. Optional.',
+      primaryAction: 'finish',
+      primaryLabel: 'Continue',
+      secondaryAction: 'reconnect',
+      secondaryLabel: 'Reconnect Zora',
+      connectedLabel: 'Zora account connected',
+      resolvingLabel: 'Connected. Finishing your Zora details…',
+    })
+  })
+})
+
+describe('deriveWaitlistDoneUi', () => {
+  it('points accepted users toward app entry first', () => {
+    expect(deriveWaitlistDoneUi(true)).toEqual({
+      title: "You're in!",
+      subtitle: 'Your account is ready. Enter the app now, or visit accounts to manage connected identities and points.',
+      primaryLabel: '■ Enter App',
+      secondaryLabel: 'Go to accounts',
+    })
+  })
+
+  it('points unaccepted users toward accounts first', () => {
+    expect(deriveWaitlistDoneUi(false)).toEqual({
+      title: "You're in!",
+      subtitle: 'Visit accounts to manage connected identities, earn points, and track your status.',
+      primaryLabel: '■ Go to accounts',
+      secondaryLabel: null,
+    })
+  })
+})
+
+describe('canEnterAppFromAccountState', () => {
+  it('allows app entry when app access is approved even without points tier', () => {
+    expect(canEnterAppFromAccountState({ appAccessStatus: 'approved', tier: 0 })).toBe(true)
+  })
+
+  it('falls back to tier when explicit app access status is absent', () => {
+    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 1 })).toBe(true)
+    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 0 })).toBe(false)
+  })
+})
