@@ -1,2 +1,2 @@
-export { VaultGaugeVotingPanel, VaultGaugeVotingMini } from './VaultGaugeVotingPanel'
+export { VaultGaugeVotingPanel } from './VaultGaugeVotingPanel'
 

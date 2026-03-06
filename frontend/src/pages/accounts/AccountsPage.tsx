@@ -4,6 +4,8 @@ import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
 
+import { useFarcasterAuth } from '@/hooks/useFarcasterAuth'
+import { useMiniAppContext } from '@/hooks/useMiniAppContext'
 import { apiFetch } from '@/lib/apiBase'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
@@ -158,6 +160,8 @@ export function AccountsPage(props: {
   const { data: walletClient } = useWalletClient()
   const { chainId } = useAccount()
   const { switchChainAsync } = useSwitchChain()
+  const miniApp = useMiniAppContext()
+  const farcasterAuth = useFarcasterAuth()
 
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
@@ -643,6 +647,50 @@ export function AccountsPage(props: {
                 </button>
               </div>
             </section>
+
+            {miniApp.isMiniApp === true ? (
+              <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-medium">Farcaster</h2>
+                  <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-zinc-500">Optional</span>
+                </div>
+                {farcasterAuth.session?.fid ? (
+                  <div className="text-sm text-zinc-300">
+                    Linked as{' '}
+                    {miniApp.username ? (
+                      <a
+                        href={`https://warpcast.com/${miniApp.username}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-zinc-100 hover:text-white"
+                      >
+                        @{miniApp.username}
+                      </a>
+                    ) : (
+                      <span className="text-zinc-100">FID {farcasterAuth.session.fid}</span>
+                    )}
+                    .
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-zinc-400">
+                      Link Farcaster only if you want optional social points. It is not required for swaps or vault actions.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void farcasterAuth.signIn()}
+                      disabled={farcasterAuth.status === 'loading' || farcasterAuth.canSiwf === false}
+                      className="btn-secondary btn-no-icon inline-flex disabled:opacity-50"
+                    >
+                      {farcasterAuth.status === 'loading' ? 'Verifying Farcaster…' : 'Link Farcaster'}
+                    </button>
+                  </>
+                )}
+                {farcasterAuth.status === 'error' && farcasterAuth.error ? (
+                  <div className="text-xs text-rose-300">{farcasterAuth.error}</div>
+                ) : null}
+              </section>
+            ) : null}
 
             <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
               <div className="flex items-center justify-between gap-3">

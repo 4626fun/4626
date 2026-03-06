@@ -17,12 +17,6 @@ export function isPrivyRedirectUrlNotAllowedError(error: unknown): boolean {
   return normalized.includes('oauth/init') && normalized.includes('401') && normalized.includes('redirect')
 }
 
-export function shouldAttemptCrossAppLoginOnPath(pathname: string | null | undefined): boolean {
-  const value = String(pathname ?? '').trim()
-  if (!value) return true
-  return value === '/'
-}
-
 type CrossAppRedirectLocation = {
   pathname?: string | null
   search?: string | null

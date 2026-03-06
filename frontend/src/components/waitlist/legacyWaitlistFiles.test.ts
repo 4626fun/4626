@@ -14,8 +14,14 @@ const LEGACY_WAITLIST_FILES = [
   'steps/VerifyStep.tsx',
   'useWaitlistReferral.ts',
   'useWaitlistVerification.ts',
+  'referralsCopy.ts',
+  'waitlistConstants.ts',
+  'useWaitlistApi.ts',
+  'preprovisionStatus.ts',
   '../../pages/WaitlistLanding.tsx',
   '../../pages/WaitlistProfile.tsx',
+  '../../pages/Waitlist.tsx',
+  '../../pages/AccountSettings.tsx',
 ]
 
 describe('legacy waitlist cleanup', () => {

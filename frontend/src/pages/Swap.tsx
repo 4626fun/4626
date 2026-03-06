@@ -687,8 +687,7 @@ export function Swap() {
   const showPrivyClientDisabledHint =
     executionMode === 'canonical' && canonicalSignerGate.code === 'privy-client-disabled'
   const showPrivyLoadingHint = executionMode === 'canonical' && canonicalSignerGate.code === 'privy-auth-loading'
-  const canonicalSignInMethod: 'zora' | 'privy' =
-    privyClientStatus === 'ready' && privyAuthenticated ? 'privy' : 'zora'
+  const canonicalSignInMethod = 'privy' as const
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&

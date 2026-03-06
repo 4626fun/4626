@@ -78,21 +78,21 @@ export function AppContinue() {
   }, [canNavigate, navigate, nextPath, siwe.authAddress])
 
   useEffect(() => {
-    if (!shouldWaitForPrivyGrace) {
-      setPrivyGraceExpired(false)
-      return
-    }
-    setPrivyGraceExpired(false)
+    if (!shouldWaitForPrivyGrace) return
+    let cancelled = false
     const timer = window.setTimeout(() => {
-      setPrivyGraceExpired(true)
+      if (!cancelled) setPrivyGraceExpired(true)
     }, PRIVY_REHYDRATION_GRACE_MS)
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      setPrivyGraceExpired(false)
+    }
   }, [shouldWaitForPrivyGrace])
 
   useEffect(() => {
     if (!autoLogin || !fromWaitlist) return
     if (handoffState === 'ready' || handoffState === 'error') return
-    if (handoffState === 'idle') setHandoffState('signingIn')
 
     const failHandoff = (message: string) => {
       autoBridgeAttemptRef.current = false
@@ -153,6 +153,7 @@ export function AppContinue() {
     }
 
     void (async () => {
+      if (handoffState === 'idle') setHandoffState('signingIn')
       const redeemed = await redeemOneTimeHandoff()
       if (redeemed) return
 

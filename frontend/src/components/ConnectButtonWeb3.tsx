@@ -4,7 +4,6 @@ import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { usePrivy } from '@privy-io/react-auth'
 
 /**
  * Simple Connect Button
@@ -18,7 +17,6 @@ export function ConnectButtonWeb3() {
   const auth = useSiweAuth()
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
-  const { ready: privyReady, authenticated: privyAuthenticated } = usePrivy()
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
 
@@ -143,13 +141,8 @@ export function ConnectButtonWeb3() {
         disabled={isPending || auth.busy}
         onClick={() => {
           if (prefersPrivyWalletLogin) {
-            // Avoid a dead-click path while Privy SDK is still hydrating.
-            if (!privyReady) {
-              void auth.signIn({ method: 'privy' })
-              return
-            }
             void (async () => {
-              const signed = await auth.signIn({ method: privyAuthenticated ? 'privy' : 'zora' })
+              const signed = await auth.signIn({ method: 'privy' })
               setShowOptions(!signed)
             })()
           } else {
@@ -178,23 +171,11 @@ export function ConnectButtonWeb3() {
                   className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
                   onClick={() => {
                     setShowOptions(false)
-                    void auth.signIn({ method: 'zora' })
-                  }}
-                >
-                  <span className="label block">Continue with Zora</span>
-                  <span className="text-[11px] text-zinc-500 block mt-1">Recommended — uses your Zora smart wallet</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={auth.busy}
-                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
-                  onClick={() => {
-                    setShowOptions(false)
                     void auth.signIn({ method: 'privy' })
                   }}
                 >
-                  <span className="label block">Sign in another way</span>
-                  <span className="text-[11px] text-zinc-500 block mt-1">Email, social, or Farcaster</span>
+                  <span className="label block">Sign in with email or social</span>
+                  <span className="text-[11px] text-zinc-500 block mt-1">Email, Google, or Apple</span>
                 </button>
                 <div className="h-px bg-white/8 my-1" />
                 <div className="px-4 py-1 text-[10px] text-zinc-600 uppercase tracking-wider">External wallets</div>
