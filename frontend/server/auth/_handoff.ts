@@ -41,7 +41,8 @@ export async function ensureHandoffSchema(db: DbWithSql): Promise<void> {
         consumed_at TIMESTAMPTZ
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS auth_handoffs_expires_idx ON auth_handoffs (expires_at);`
+    // Index on expires_at omitted: table is tiny (ephemeral rows, purged by pg_cron nightly)
+    // and seq scan is faster than index maintenance overhead at this scale.
     // Backfill column for existing tables.
     await db.sql`
       ALTER TABLE auth_handoffs ADD COLUMN IF NOT EXISTS privy_token TEXT;
@@ -71,13 +72,24 @@ export async function createHandoffCode(db: DbWithSql, params: { address: string
 
 export async function consumeHandoffCode(db: DbWithSql, code: string): Promise<{ address: string; privyToken: string | null } | null> {
   const codeHash = hashHandoffCode(code)
+
+  // Mark consumed and read privy_token in one atomic step using a CTE.
+  // The CTE captures the token before the UPDATE clears it, preventing
+  // the RETURNING clause from always yielding NULL.
   const result = await db.sql`
-    UPDATE auth_handoffs
+    WITH target AS (
+      SELECT code_hash, address, privy_token
+      FROM auth_handoffs
+      WHERE code_hash = ${codeHash}
+        AND consumed_at IS NULL
+        AND expires_at > NOW()
+      FOR UPDATE
+    )
+    UPDATE auth_handoffs h
     SET consumed_at = NOW(), privy_token = NULL
-    WHERE code_hash = ${codeHash}
-      AND consumed_at IS NULL
-      AND expires_at > NOW()
-    RETURNING address, privy_token;
+    FROM target t
+    WHERE h.code_hash = t.code_hash
+    RETURNING t.address, t.privy_token;
   `
 
   const row = Array.isArray(result.rows) ? result.rows[0] : null

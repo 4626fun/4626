@@ -3,8 +3,16 @@ import type { Address } from 'viem'
 import { createPublicClient, http, isAddress } from 'viem'
 import { base } from 'viem/chains'
 
-import { readFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { readFile, unlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+
 import sharp from 'sharp'
+
+const execFileP = promisify(execFile)
 
 import {
   DEFAULT_CHAIN_ID,
@@ -119,6 +127,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         bytes: sourceBytes,
       })
       const frameOverlayImage = await getFrameOverlayAssetDataUri()
+      const glowLayout = getTokenIconLayout(size, prepared.recipe)
+      const glowLayerImage = await renderGlowLayerDataUri(size, glowLayout)
       const svg = generateFramedSvg({
         size,
         symbol: String(symbol),
@@ -130,6 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           prepared.breakoutLayerBytes && prepared.breakoutLayerBytes.length > 0
             ? `data:image/png;base64,${Buffer.from(prepared.breakoutLayerBytes).toString('base64')}`
             : null,
+        glowLayerImage,
         frameOverlayImage,
         recipe: prepared.recipe,
       })
@@ -216,12 +227,13 @@ interface FramedSvgParams {
   creatorCoinImage?: string | null
   baseLayerImage?: string | null
   breakoutLayerImage?: string | null
+  glowLayerImage?: string | null
   frameOverlayImage?: string
   recipe?: TokenIconRecipe
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 5
+const FRAME_STYLE_V = 6
 const FRAME_ASSET_URL = new URL('../../../public/miniapp-icon.svg', import.meta.url)
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
@@ -229,25 +241,34 @@ const FRAME_RADIUS_RATIO = 30 / 184
 const FRAME_STROKE_RATIO = 12 / FRAME_VIEWBOX_SIZE
 
 const TOKEN_ICON_STYLE = {
-  backgroundInner: '#09111d',
-  backgroundOuter: '#02040a',
+  backgroundInner: '#0c1828',
+  backgroundOuter: '#020408',
   panelFillTop: '#0d1523',
   panelFillBottom: '#08111c',
-  panelScrim: 'rgba(2, 6, 23, 0.08)',
-  glowColor: '#2563eb',
+  panelScrim: 'rgba(2, 6, 23, 0.03)',
+  glowColor: '#3b82f6',
   outerRadiusRatio: 0.22,
   panelInsetRatio: FRAME_INSET_RATIO,
   panelRadiusRatio: FRAME_RADIUS_RATIO,
   frameThicknessRatio: FRAME_STROKE_RATIO,
-  vignetteOpacity: 0.3,
+  vignetteOpacity: 0.12,
   glowOpacity: 0.78,
 } as const
 
 const TOKEN_ICON_RECIPES: Record<LayoutMode, Omit<TokenIconRecipe, 'breakout'>> = {
-  cover: { mode: 'cover', scale: 1.28, innerPadding: 0.005, breakoutTopRatio: 0.50 },
-  contain: { mode: 'contain', scale: 0.96, innerPadding: 0.08, breakoutTopRatio: 0.4 },
-  coin: { mode: 'coin', scale: 0.82, innerPadding: 0.14, breakoutTopRatio: 0.36 },
+  cover: { mode: 'cover', scale: 1.10, innerPadding: 0.0, breakoutTopRatio: 0.22 },
+  contain: { mode: 'contain', scale: 0.96, innerPadding: 0.08, breakoutTopRatio: 0.20 },
+  coin: { mode: 'coin', scale: 0.82, innerPadding: 0.14, breakoutTopRatio: 0.18 },
 }
+
+const BREAKOUT_CONFIG = {
+  enabled: true,
+  maskHeightRatio: 0.22,
+  fadeRatio: 0.10,
+  minForegroundCoverage: 0.03,
+  rembgTimeoutMs: 30_000,
+  rembgBin: process.env.REMBG_BIN || '/tmp/rembg-env/bin/rembg',
+} as const
 
 let frameOverlayAssetPromise: Promise<string> | null = null
 
@@ -315,6 +336,48 @@ function deriveTokenIconRecipe(
     ...base,
     breakout,
   }
+}
+
+async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Promise<string> {
+  const { r, g, b } = hexToRgb(TOKEN_ICON_STYLE.glowColor)
+  const pad = layout.frameStrokeWidth * 2
+  const glowW = layout.panelSize + pad * 2
+  const glowH = layout.panelSize + pad * 2
+  const glowX = layout.panelX - pad
+  const glowY = layout.panelY - pad
+  const glowR = layout.panelRadius + pad
+  const rectSvg = `<svg width="${glowW}" height="${glowH}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${glowW}" height="${glowH}" rx="${glowR}" fill="rgb(${r},${g},${b})"/>
+  </svg>`
+  const rectPng = await sharp(Buffer.from(rectSvg)).png().toBuffer()
+
+  const tightBlur = await sharp({
+    create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: rectPng, left: glowX, top: glowY }])
+    .blur(Math.max(1, Math.round(size * 0.055)))
+    .png()
+    .toBuffer()
+
+  const wideBlur = await sharp({
+    create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: rectPng, left: glowX, top: glowY }])
+    .blur(Math.max(1, Math.round(size * 0.13)))
+    .png()
+    .toBuffer()
+
+  const combined = await sharp(wideBlur)
+    .composite([{ input: tightBlur, blend: 'over' }])
+    .png()
+    .toBuffer()
+
+  return `data:image/png;base64,${combined.toString('base64')}`
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '')
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) }
 }
 
 async function getFrameOverlayAssetDataUri(): Promise<string> {
@@ -449,49 +512,46 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
   const layout = getTokenIconLayout(params.size, recipe)
   const fit: ArtworkFitMode = recipe.mode === 'cover' ? 'cover' : 'contain'
 
-  const baseLayerBytes = await renderArtworkLayer({
-    bytes: params.bytes,
-    size: params.size,
-    targetSize: layout.artSize,
-    x: layout.artX,
-    y: layout.artY,
-    fit,
-  })
-
-  return { recipe, baseLayerBytes, breakoutLayerBytes: null }
-}
-
-async function renderArtworkLayer(params: {
-  bytes: Uint8Array
-  size: number
-  targetSize: number
-  x: number
-  y: number
-  fit: ArtworkFitMode
-}): Promise<Uint8Array> {
-  const artBuffer = await sharp(Buffer.from(params.bytes))
+  const croppedArt = await sharp(Buffer.from(params.bytes))
     .rotate()
-    .resize(params.targetSize, params.targetSize, {
-      fit: params.fit,
-      position: params.fit === 'cover' ? sharp.strategy.attention : 'centre',
+    .resize(layout.artSize, layout.artSize, {
+      fit,
+      position: fit === 'cover' ? sharp.strategy.attention : 'centre',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png()
     .toBuffer()
 
-  const composed = await sharp({
-    create: {
-      width: params.size,
-      height: params.size,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    },
+  const baseCanvas = await sharp({
+    create: { width: params.size, height: params.size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
-    .composite([{ input: artBuffer, left: params.x, top: params.y }])
+    .composite([{ input: croppedArt, left: layout.artX, top: layout.artY }])
     .png()
     .toBuffer()
+  const baseLayerBytes = new Uint8Array(baseCanvas)
 
-  return new Uint8Array(composed)
+  let breakoutLayerBytes: Uint8Array | null = null
+  if (recipe.breakout && BREAKOUT_CONFIG.enabled) {
+    const fg = await extractForeground(new Uint8Array(croppedArt))
+    if (fg && (await isForegroundUsable(fg))) {
+      const fgCanvas = await sharp({
+        create: { width: params.size, height: params.size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      })
+        .composite([{ input: Buffer.from(fg), left: layout.artX, top: layout.artY }])
+        .png()
+        .toBuffer()
+
+      breakoutLayerBytes = await applyBreakoutAlphaMask({
+        foregroundBytes: new Uint8Array(fgCanvas),
+        width: params.size,
+        height: params.size,
+        maskHeightRatio: recipe.breakoutTopRatio ?? BREAKOUT_CONFIG.maskHeightRatio,
+        fadeRatio: BREAKOUT_CONFIG.fadeRatio,
+      })
+    }
+  }
+
+  return { recipe, baseLayerBytes, breakoutLayerBytes }
 }
 
 async function fetchSourceArtworkBytes(params: {
@@ -501,6 +561,61 @@ async function fetchSourceArtworkBytes(params: {
   if (!url) return null
   const fetched = await fetchBytes(url)
   return fetched.bytes
+}
+
+async function extractForeground(pngBytes: Uint8Array): Promise<Uint8Array | null> {
+  const id = randomUUID()
+  const inPath = join(tmpdir(), `rembg-in-${id}.png`)
+  const outPath = join(tmpdir(), `rembg-out-${id}.png`)
+  try {
+    await writeFile(inPath, Buffer.from(pngBytes))
+    await execFileP(BREAKOUT_CONFIG.rembgBin, ['i', inPath, outPath], {
+      timeout: BREAKOUT_CONFIG.rembgTimeoutMs,
+    })
+    const buf = await readFile(outPath)
+    return new Uint8Array(buf)
+  } catch (e) {
+    console.warn('[token/image] rembg extraction failed (breakout disabled):', (e as Error).message)
+    return null
+  } finally {
+    await Promise.all([unlink(inPath).catch(() => {}), unlink(outPath).catch(() => {})])
+  }
+}
+
+async function isForegroundUsable(fgBytes: Uint8Array): Promise<boolean> {
+  const stats = await sharp(Buffer.from(fgBytes)).stats()
+  const alphaMean = stats.channels[3]?.mean ?? 0
+  return alphaMean > BREAKOUT_CONFIG.minForegroundCoverage * 255
+}
+
+async function applyBreakoutAlphaMask(params: {
+  foregroundBytes: Uint8Array
+  width: number
+  height: number
+  maskHeightRatio: number
+  fadeRatio: number
+}): Promise<Uint8Array> {
+  const { foregroundBytes, width, height, maskHeightRatio, fadeRatio } = params
+  const solidEnd = Math.max(0, maskHeightRatio - fadeRatio)
+  const maskSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="white" stop-opacity="1"/>
+        <stop offset="${solidEnd}" stop-color="white" stop-opacity="1"/>
+        <stop offset="${maskHeightRatio}" stop-color="white" stop-opacity="0"/>
+        <stop offset="1" stop-color="white" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <rect width="${width}" height="${height}" fill="url(#fade)"/>
+  </svg>`
+  const maskBuf = await sharp(Buffer.from(maskSvg)).resize(width, height).ensureAlpha().png().toBuffer()
+  const masked = await sharp(Buffer.from(foregroundBytes))
+    .resize(width, height, { fit: 'fill' })
+    .ensureAlpha()
+    .composite([{ input: maskBuf, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+  return new Uint8Array(masked)
 }
 
 async function getOrCreatePng(params: {
@@ -532,6 +647,8 @@ async function getOrCreatePng(params: {
     bytes: sourceBytes,
   })
   const frameOverlayImage = await getFrameOverlayAssetDataUri()
+  const glowLayout = getTokenIconLayout(params.size, prepared.recipe)
+  const glowLayerImage = await renderGlowLayerDataUri(params.size, glowLayout)
   const svg = generateFramedSvg({
     size: params.size,
     symbol: params.symbol,
@@ -543,6 +660,7 @@ async function getOrCreatePng(params: {
       prepared.breakoutLayerBytes && prepared.breakoutLayerBytes.length > 0
         ? `data:image/png;base64,${Buffer.from(prepared.breakoutLayerBytes).toString('base64')}`
         : null,
+    glowLayerImage,
     frameOverlayImage,
     recipe: prepared.recipe,
   })
@@ -567,17 +685,13 @@ function generateFramedSvg({
   creatorCoinImage,
   baseLayerImage,
   breakoutLayerImage,
+  glowLayerImage,
   frameOverlayImage,
   recipe = getDefaultRecipe(),
 }: FramedSvgParams): string {
   const resolvedBaseLayerImage = baseLayerImage ?? creatorCoinImage ?? null
   const resolvedFrameOverlay = frameOverlayImage ?? ''
   const layout = getTokenIconLayout(size, recipe)
-  const glowInset = Math.round(layout.panelX * 0.42)
-  const glowBoxSize = size - glowInset * 2
-  const glowRadius = Math.round(layout.panelRadius + layout.frameStrokeWidth * 0.9)
-  const breakoutHeight = Math.round(layout.panelSize * (recipe.breakoutTopRatio ?? 0.4))
-  const breakoutOverflow = Math.round(layout.frameStrokeWidth * 2.4)
 
   const safeSymbol = symbol
     .replace(/&/g, '&amp;')
@@ -611,15 +725,14 @@ function generateFramedSvg({
       >■</text>`
 
   const breakoutElement =
-    recipe.breakout && resolvedBaseLayerImage
+    recipe.breakout && breakoutLayerImage
       ? `<image
-          href="${resolvedBaseLayerImage}"
+          href="${breakoutLayerImage}"
           x="0"
           y="0"
           width="${size}"
           height="${size}"
-          preserveAspectRatio="${imagePreserveAspect}"
-          clip-path="url(#breakoutClip)"
+          preserveAspectRatio="none"
         />`
       : ''
 
@@ -672,34 +785,11 @@ function generateFramedSvg({
     <clipPath id="innerPanelClip">
       <rect x="${layout.panelX}" y="${layout.panelY}" width="${layout.panelSize}" height="${layout.panelSize}" rx="${layout.panelRadius}"/>
     </clipPath>
-    <clipPath id="breakoutClip">
-      <rect
-        x="${layout.panelX - breakoutOverflow}"
-        y="${layout.panelY - breakoutOverflow}"
-        width="${layout.panelSize + breakoutOverflow * 2}"
-        height="${breakoutHeight + breakoutOverflow}"
-        rx="${Math.round(layout.panelRadius * 0.95)}"
-      />
-    </clipPath>
-    <filter id="ambient-glow" x="-35%" y="-35%" width="170%" height="170%">
-      <feDropShadow dx="0" dy="0" stdDeviation="${Math.max(10, Math.round(size * 0.088))}" flood-color="${TOKEN_ICON_STYLE.glowColor}" flood-opacity="${TOKEN_ICON_STYLE.glowOpacity}"/>
-    </filter>
   </defs>
 
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bg)" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#vignette)" />
-  <rect
-    x="${glowInset}"
-    y="${glowInset}"
-    width="${glowBoxSize}"
-    height="${glowBoxSize}"
-    rx="${glowRadius}"
-    fill="none"
-    stroke="${TOKEN_ICON_STYLE.glowColor}"
-    stroke-opacity="0.38"
-    stroke-width="${Math.max(2, Math.round(layout.frameStrokeWidth * 1.2))}"
-    filter="url(#ambient-glow)"
-  />
+  ${glowLayerImage ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="1.0"/>` : ''}
   <rect
     x="${layout.panelX}"
     y="${layout.panelY}"

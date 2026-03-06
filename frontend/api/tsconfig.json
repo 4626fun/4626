@@ -23,14 +23,9 @@
     "./auth/**/*.ts",
     "./status/**/*.ts",
     "./_handlers/**/*.ts",
-    "./creator-allowlist.ts",
     "./creator-access/**/*.ts",
     "./admin/**/*.ts",
     "./_lib/**/*.ts",
-    "./analytics.ts",
-    "./sync-vault-data.ts",
-    "./paymaster.ts",
-    "./webhook.ts",
     "../src/types/vercel-node.d.ts"
   ],
   "exclude": ["node_modules"]

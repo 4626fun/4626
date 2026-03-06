@@ -47,7 +47,7 @@ function createHandoffDb() {
       if (text.includes('create table if not exists auth_handoffs')) {
         return { rows: [] }
       }
-      if (text.includes('create index if not exists auth_handoffs_expires_idx')) {
+      if (text.includes('index') && text.includes('auth_handoffs')) {
         return { rows: [] }
       }
       if (text.includes('alter table auth_handoffs')) {
@@ -68,7 +68,7 @@ function createHandoffDb() {
         }
         return { rows: [] }
       }
-      if (text.includes('update auth_handoffs') && text.includes('returning address')) {
+      if (text.includes('auth_handoffs') && text.includes('returning') && text.includes('privy_token')) {
         const codeHash = String(values[0] ?? '')
         const record = rows.get(codeHash)
         if (!record) return { rows: [] }
@@ -148,5 +148,24 @@ describe('auth handoff endpoints', () => {
 
     expect(replayRes.statusCode).toBe(400)
     expect(replayRes.body?.error).toBe('Invalid or expired handoff code')
+  })
+
+  it('returns privyToken on redeem when provided during creation', async () => {
+    const db = createHandoffDb()
+    getDbMock.mockResolvedValue(db)
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000bb')
+
+    const createReq = createMockReq({ method: 'POST', body: { privyToken: 'test-privy-jwt-abc123' } })
+    const createRes = createMockRes()
+    await createHandoffHandler(createReq as any, createRes as any)
+    expect(createRes.statusCode).toBe(200)
+    const code = String(createRes.body?.data?.code ?? '')
+
+    const redeemReq = createMockReq({ method: 'POST', body: { code } })
+    const redeemRes = createMockRes()
+    await redeemHandoffHandler(redeemReq as any, redeemRes as any)
+
+    expect(redeemRes.statusCode).toBe(200)
+    expect(redeemRes.body?.data?.privyToken).toBe('test-privy-jwt-abc123')
   })
 })
