@@ -19,6 +19,22 @@ type HandoffRedeemResponse = {
   privyToken: string | null
 }
 
+type AppContinueRetryDirective = {
+  resetState: 'idle'
+  clearError: true
+  shouldForceLogout: boolean
+  loginOptions: { loginMethods: ['wallet'] }
+}
+
+export function getAppContinueRetryDirective(input: { privyAuthenticated: boolean }): AppContinueRetryDirective {
+  return {
+    resetState: 'idle',
+    clearError: true,
+    shouldForceLogout: input.privyAuthenticated,
+    loginOptions: { loginMethods: ['wallet'] },
+  }
+}
+
 export function AppContinue() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -27,7 +43,7 @@ export function AppContinue() {
   const refreshSiweSession = siwe.refresh
   const signInWithPrivyToken = siwe.signInWithPrivyToken
   const privyClientStatus = usePrivyClientStatus()
-  const { ready: privyReady, authenticated: privyAuthenticated, getAccessToken } = usePrivy()
+  const { ready: privyReady, authenticated: privyAuthenticated, getAccessToken, logout } = usePrivy()
   const { login } = useLogin({})
 
   const nextPath = useMemo(() => readSafeNextPath(searchParams.get('next')), [searchParams])
@@ -54,6 +70,22 @@ export function AppContinue() {
   const [handoffError, setHandoffError] = useState<string | null>(null)
   const autoLoginAttemptRef = useRef(false)
   const autoHandoffRedeemAttemptRef = useRef(false)
+
+  const restartHandoff = async () => {
+    const retry = getAppContinueRetryDirective({ privyAuthenticated })
+    autoLoginAttemptRef.current = false
+    autoHandoffRedeemAttemptRef.current = false
+    if (retry.clearError) setHandoffError(null)
+    setHandoffState(retry.resetState)
+
+    if (retry.shouldForceLogout && typeof logout === 'function') {
+      try {
+        await logout()
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   useEffect(() => {
     if (!canNavigate) return
@@ -136,7 +168,8 @@ export function AppContinue() {
         try {
           setHandoffError(null)
           setHandoffState('signingIn')
-          await login()
+          const retry = getAppContinueRetryDirective({ privyAuthenticated })
+          await login(retry.loginOptions as any)
         } catch {
           autoLoginAttemptRef.current = false
           failHandoff('Account connection was cancelled. Click "Restore account connection" to continue.')
@@ -172,6 +205,7 @@ export function AppContinue() {
     handoffCode,
     handoffState,
     login,
+    logout,
     privyAuthenticated,
     privyReady,
     refreshSiweSession,
@@ -212,7 +246,9 @@ export function AppContinue() {
               </div>
               <button
                 type="button"
-                onClick={() => void login()}
+                onClick={() => {
+                  void restartHandoff()
+                }}
                 className="btn-accent btn-no-icon inline-flex"
               >
                 Restore account connection
