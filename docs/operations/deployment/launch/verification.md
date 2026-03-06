@@ -32,14 +32,24 @@ vault.minimumTotalIdle()           -> 4_805_000e18
 
 ### What Happens
 
-Users launch via the frontend AA flow (`LaunchVaultAA`), which calls the on-chain `VaultActivationBatcher`:
+Users launch via the frontend AA flow, which now prefers Permit2 for the deposit pull whenever the wallet supports typed-data signatures.
 
-1. `approve(AKITA, VaultActivationBatcher, 50M)`
-2. `VaultActivationBatcher.batchActivate(...)`:
-   - Deposits AKITA into the vault (mints ▢AKITA shares to the batcher)
-   - Wraps shares to ■AKITA
-   - Launches the CCA auction with 25M ■AKITA
-   - Transfers the remaining 25M ■AKITA back to the user
+### Preferred deploy path
+
+1. Sign a Permit2 `PermitTransferFrom` payload for the creator token
+2. `DeploymentBatcher.finalizePhase2WithPermit2(...)`:
+   - Pulls the creator-token deposit with Permit2 signature transfer
+   - Deposits through the wrapper (minting wrapped share tokens)
+   - Defers the 50% auction allocation on the batcher
+   - Sends the remaining 50% to creator vesting
+   - Transfers final ownership to the protocol / creator destinations
+
+### Fallback path
+
+If Permit2 signing is unavailable, the frontend falls back to:
+
+1. `approve(creatorToken, DeploymentBatcher, depositAmount)`
+2. `DeploymentBatcher.finalizePhase2(...)`
 
 ### Strategy Deployment Timing
 

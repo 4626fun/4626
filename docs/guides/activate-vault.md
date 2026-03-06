@@ -7,42 +7,54 @@ sidebar_position: 3
 
 Guide to activating your vault and starting the CCA auction.
 
-## Activation Steps
+## Preferred Path: Permit2
+
+The preferred activation flow is a single Permit2 signature plus one batcher transaction.
+
+```solidity
+batchActivateWithPermit2For(
+    owner,
+    creatorCoin,
+    vault,
+    wrapper,
+    ccaStrategy,
+    depositAmount,
+    auctionPercent,
+    requiredRaise,
+    permit,
+    signature
+);
+```
+
+This path:
+
+- Pulls creator tokens with Permit2 signature transfer
+- Deposits into the vault
+- Wraps vault shares to `ShareOFT`
+- Sends the auction allocation to the CCA strategy
+- Returns the non-auction allocation to the owner
+
+## Compatibility Fallback
+
+If the wallet cannot produce the required typed-data signature, the product falls back to the approval-based path.
 
 ### 1. Approve Tokens
 
 ```solidity
-creatorCoin.approve(vault, depositAmount);
+creatorCoin.approve(batcher, depositAmount);
 ```
 
-### 2. Deposit to Vault
+### 2. Activate Through The Batcher
 
 ```solidity
-vault.deposit(depositAmount, msg.sender);
-```
-
-### 3. Wrap Shares
-
-```solidity
-vaultShares.approve(wrapper, shareAmount);
-wrapper.wrap(shareAmount);
-```
-
-### 4. Start CCA Auction
-
-```solidity
-ccaStrategy.startAuction(assets, auctionParams);
-```
-
-## Via VaultActivationBatcher
-
-For wallets supporting batching:
-
-```solidity
-batcher.activateAndLaunch(
+batchActivate(
+    creatorCoin,
     vault,
+    wrapper,
+    ccaStrategy,
     depositAmount,
-    auctionParams
+    auctionPercent,
+    requiredRaise
 );
 ```
 

@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
@@ -302,6 +303,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     error Phase2Missing();
     error InvalidSolanaEid();
     error InvalidSolanaBridgeConfig();
+    error PermitTokenMismatch();
+    error PermitAmountTooLow();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -725,6 +728,50 @@ contract DeploymentBatcher is ReentrancyGuard {
         );
     }
 
+    function deployPhase2AndLaunchWithPermit2(
+        Phase2Params calldata params,
+        CodeIds calldata codeIds,
+        ISignatureTransfer.PermitTransferFrom calldata permit,
+        bytes calldata signature
+    ) external nonReentrant returns (Phase2Result memory out) {
+        _requireOwner(params.owner);
+        _permit2Pull(params.creatorToken, params.owner, params.depositAmount, permit, signature);
+        Phase2Result memory coreOut = _deployPhase2Core(
+            Phase2CoreParams({
+                creatorToken: params.creatorToken,
+                owner: params.owner,
+                creatorTreasury: params.creatorTreasury,
+                payoutRecipient: params.payoutRecipient,
+                vault: params.vault,
+                wrapper: params.wrapper,
+                shareOFT: params.shareOFT,
+                shareSymbol: params.shareSymbol,
+                version: params.version,
+                floorPriceQ96: params.floorPriceQ96
+            }),
+            codeIds
+        );
+        out = _finalizePhase2Internal(
+            Phase2FinalizeParams({
+                creatorToken: params.creatorToken,
+                owner: params.owner,
+                vault: params.vault,
+                wrapper: params.wrapper,
+                shareOFT: params.shareOFT,
+                gaugeController: coreOut.gaugeController,
+                ccaStrategy: coreOut.ccaStrategy,
+                oracle: coreOut.oracle,
+                version: params.version,
+                depositAmount: params.depositAmount,
+                requiredRaise: params.requiredRaise,
+                floorPriceQ96: params.floorPriceQ96,
+                auctionSteps: params.auctionSteps,
+                meteoraAlphaVault: bytes32(0),
+                solanaIxs: new IBaseSolanaBridge.Ix[](0)
+            })
+        );
+    }
+
     function deployPhase2Core(Phase2CoreParams calldata params, CodeIds calldata codeIds)
         external
         nonReentrant
@@ -741,6 +788,16 @@ contract DeploymentBatcher is ReentrancyGuard {
     {
         _requireOwner(params.owner);
         _pullCreatorTokens(params.creatorToken, params.owner, params.depositAmount);
+        out = _finalizePhase2Internal(params);
+    }
+
+    function finalizePhase2WithPermit2(
+        Phase2FinalizeParams calldata params,
+        ISignatureTransfer.PermitTransferFrom calldata permit,
+        bytes calldata signature
+    ) external nonReentrant returns (Phase2Result memory out) {
+        _requireOwner(params.owner);
+        _permit2Pull(params.creatorToken, params.owner, params.depositAmount, permit, signature);
         out = _finalizePhase2Internal(params);
     }
 
@@ -1103,6 +1160,22 @@ contract DeploymentBatcher is ReentrancyGuard {
         IERC20Permit(creatorToken)
             .permit(msg.sender, address(this), amount, permit.deadline, permit.v, permit.r, permit.s);
         IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    function _permit2Pull(
+        address creatorToken,
+        address owner,
+        uint256 amount,
+        ISignatureTransfer.PermitTransferFrom calldata permit,
+        bytes calldata signature
+    ) internal {
+        if (owner != msg.sender) revert NotOwner();
+        if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
+        if (permit.permitted.amount < amount) revert PermitAmountTooLow();
+
+        ISignatureTransfer.SignatureTransferDetails memory details =
+            ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: amount});
+        ISignatureTransfer(permit2).permitTransferFrom(permit, details, owner, signature);
     }
 
     function _requirePhase1CodeIds(CodeIds calldata codeIds) internal pure {
