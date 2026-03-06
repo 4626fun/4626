@@ -19,7 +19,7 @@ type VaultConfig = {
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; message?: string }
 
 async function fetchActiveVaults(chainId: number): Promise<VaultConfig[]> {
-  const endpoint = `/api/cre/vaults/active?chainId=${chainId}&settled=false`
+  const endpoint = `/api/vaults/active?chainId=${chainId}&settled=false`
   const res = await apiFetch(endpoint)
   if (!res.ok) {
     const payload = await res.json().catch(() => null)

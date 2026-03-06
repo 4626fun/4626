@@ -122,6 +122,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'wallet/solana/sweep/enqueue': () => import('./wallet/solana/sweep/_enqueue.js'),
   'wallet/solana/sweep/process': () => import('./wallet/solana/sweep/_process.js'),
   'portfolio/me': () => import('./portfolio/_me.js'),
+  'vaults/active': () => import('./vaults/_active.js'),
 
   'creator-allowlist': () => import('./_creator-allowlist.js'),
   'creator-wallets/claim': () => import('./_creator-wallets-claim.js'),
