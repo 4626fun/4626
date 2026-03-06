@@ -1,10 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { createHandoffCode, ensureHandoffSchema } from '../../../server/auth/_handoff.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { getClientIp, checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
+type HandoffCreateBody = {
+  privyToken?: string
+}
 
 type HandoffCreateResponse = {
   code: string
@@ -43,9 +47,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
   }
 
+  const body = (await readJsonBody<HandoffCreateBody>(req).catch(() => null)) ?? (req.body as HandoffCreateBody | null) ?? {}
+  const privyToken = typeof body.privyToken === 'string' && body.privyToken.trim() ? body.privyToken.trim() : null
+
   try {
     await ensureHandoffSchema(db as any)
-    const handoff = await createHandoffCode(db as any, { address: principal })
+    const handoff = await createHandoffCode(db as any, { address: principal, privyToken })
     return res.status(200).json({
       success: true,
       data: {

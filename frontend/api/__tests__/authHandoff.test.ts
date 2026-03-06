@@ -31,6 +31,7 @@ import redeemHandoffHandler from '../_handlers/auth/_handoff-redeem.ts'
 
 type HandoffRecord = {
   address: string
+  privyToken: string | null
   expiresAtMs: number
   consumedAtMs: number | null
 }
@@ -49,13 +50,18 @@ function createHandoffDb() {
       if (text.includes('create index if not exists auth_handoffs_expires_idx')) {
         return { rows: [] }
       }
+      if (text.includes('alter table auth_handoffs')) {
+        return { rows: [] }
+      }
       if (text.includes('insert into auth_handoffs')) {
         const codeHash = String(values[0] ?? '')
         const address = String(values[1] ?? '').toLowerCase()
-        const expiresAtMs = Date.parse(String(values[2] ?? ''))
+        const privyToken = values[2] != null ? String(values[2]) : null
+        const expiresAtMs = Date.parse(String(values[3] ?? ''))
         if (!rows.has(codeHash)) {
           rows.set(codeHash, {
             address,
+            privyToken,
             expiresAtMs,
             consumedAtMs: null,
           })
@@ -68,8 +74,10 @@ function createHandoffDb() {
         if (!record) return { rows: [] }
         if (record.consumedAtMs !== null) return { rows: [] }
         if (!Number.isFinite(record.expiresAtMs) || record.expiresAtMs <= Date.now()) return { rows: [] }
+        const privyToken = record.privyToken
         record.consumedAtMs = Date.now()
-        return { rows: [{ address: record.address }] }
+        record.privyToken = null
+        return { rows: [{ address: record.address, privy_token: privyToken }] }
       }
 
       return { rows: [] }

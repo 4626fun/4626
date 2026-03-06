@@ -16,6 +16,7 @@ const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
 type HandoffRedeemResponse = {
   address: string
   sessionToken: string
+  privyToken: string | null
 }
 
 const PRIVY_REHYDRATION_GRACE_MS = 2500
@@ -125,7 +126,24 @@ export function AppContinue() {
           }
         }
 
-        await siwe.refresh().catch(() => null)
+        // Bridge the Privy session from the marketing origin so the app
+        // recognises the user's wallet and linked accounts without re-auth.
+        const bridgedPrivyToken =
+          json?.data && typeof json.data.privyToken === 'string' ? json.data.privyToken.trim() : ''
+        if (bridgedPrivyToken) {
+          await apiFetch('/api/auth/privy', {
+            method: 'POST',
+            withCredentials: true,
+            headers: {
+              Authorization: `Bearer ${bridgedPrivyToken}`,
+              Accept: 'application/json',
+            },
+          }).catch(() => null)
+          await siwe.refresh().catch(() => null)
+        } else {
+          await siwe.refresh().catch(() => null)
+        }
+
         setHandoffRedeemed(true)
         setHandoffError(null)
         return true

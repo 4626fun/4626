@@ -35,12 +35,17 @@ export async function ensureHandoffSchema(db: DbWithSql): Promise<void> {
       CREATE TABLE IF NOT EXISTS auth_handoffs (
         code_hash TEXT PRIMARY KEY,
         address TEXT NOT NULL,
+        privy_token TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         expires_at TIMESTAMPTZ NOT NULL,
         consumed_at TIMESTAMPTZ
       );
     `
     await db.sql`CREATE INDEX IF NOT EXISTS auth_handoffs_expires_idx ON auth_handoffs (expires_at);`
+    // Backfill column for existing tables.
+    await db.sql`
+      ALTER TABLE auth_handoffs ADD COLUMN IF NOT EXISTS privy_token TEXT;
+    `
     handoffSchemaEnsured = true
   } catch (err) {
     handoffSchemaEnsured = false
@@ -48,34 +53,36 @@ export async function ensureHandoffSchema(db: DbWithSql): Promise<void> {
   }
 }
 
-export async function createHandoffCode(db: DbWithSql, params: { address: string; now?: number }): Promise<{ code: string; expiresAt: string }> {
+export async function createHandoffCode(db: DbWithSql, params: { address: string; privyToken?: string | null; now?: number }): Promise<{ code: string; expiresAt: string }> {
   const nowMs = typeof params.now === 'number' ? params.now : Date.now()
   const code = makeHandoffCode()
   const codeHash = hashHandoffCode(code)
   const expiresAt = new Date(nowMs + HANDOFF_TTL_SECONDS * 1000)
+  const privyToken = typeof params.privyToken === 'string' && params.privyToken.trim() ? params.privyToken.trim() : null
 
   await db.sql`
-    INSERT INTO auth_handoffs (code_hash, address, expires_at)
-    VALUES (${codeHash}, ${params.address.toLowerCase()}, ${expiresAt.toISOString()})
+    INSERT INTO auth_handoffs (code_hash, address, privy_token, expires_at)
+    VALUES (${codeHash}, ${params.address.toLowerCase()}, ${privyToken}, ${expiresAt.toISOString()})
     ON CONFLICT (code_hash) DO NOTHING;
   `
 
   return { code, expiresAt: expiresAt.toISOString() }
 }
 
-export async function consumeHandoffCode(db: DbWithSql, code: string): Promise<{ address: string } | null> {
+export async function consumeHandoffCode(db: DbWithSql, code: string): Promise<{ address: string; privyToken: string | null } | null> {
   const codeHash = hashHandoffCode(code)
   const result = await db.sql`
     UPDATE auth_handoffs
-    SET consumed_at = NOW()
+    SET consumed_at = NOW(), privy_token = NULL
     WHERE code_hash = ${codeHash}
       AND consumed_at IS NULL
       AND expires_at > NOW()
-    RETURNING address;
+    RETURNING address, privy_token;
   `
 
   const row = Array.isArray(result.rows) ? result.rows[0] : null
   const address = row && typeof row.address === 'string' ? row.address.trim().toLowerCase() : ''
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return null
-  return { address }
+  const privyToken = row && typeof row.privy_token === 'string' && row.privy_token.trim() ? row.privy_token.trim() : null
+  return { address, privyToken }
 }

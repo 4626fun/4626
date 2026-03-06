@@ -21,6 +21,7 @@ type RedeemBody = {
 type HandoffRedeemResponse = {
   address: string
   sessionToken: string
+  privyToken: string | null
 }
 
 function isHandoffCode(value: string): boolean {
@@ -71,6 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: {
         address: consumed.address,
         sessionToken,
+        privyToken: consumed.privyToken,
       } satisfies HandoffRedeemResponse,
     } satisfies ApiEnvelope<HandoffRedeemResponse>)
   } catch {

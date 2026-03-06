@@ -295,16 +295,16 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setEnterAppBusy(true)
     try {
       let target = enterAppUrl
+      let privyToken: string | null = null
 
-      // Best-effort: materialize a server session from Privy before handoff mint.
       if (privyAuthed) {
-        const token = await getAccessToken().catch(() => null)
-        if (token) {
+        privyToken = await getAccessToken().catch(() => null)
+        if (privyToken) {
           await apiFetch('/api/auth/privy', {
             method: 'POST',
             withCredentials: true,
             headers: {
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${privyToken}`,
               Accept: 'application/json',
             },
           }).catch(() => null)
@@ -318,7 +318,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
             const handoffRes = await apiFetch('/api/auth/handoff/create', {
               method: 'POST',
               withCredentials: true,
-              headers: { Accept: 'application/json' },
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ privyToken }),
             }).catch(() => null)
             const handoffJson = handoffRes
               ? ((await handoffRes.json().catch(() => null)) as ApiEnvelope<HandoffCreateResponse> | null)
