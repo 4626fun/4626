@@ -51,8 +51,8 @@ export function shouldResetPrivyBridgeState(message: string): boolean {
   return (
     lower.includes('invalid privy auth token') ||
     lower.includes('missing privy auth token') ||
-    lower.includes('unauthorized') ||
-    lower.includes('forbidden')
+    lower.includes('privy token expired') ||
+    lower.includes('privy verification failed')
   )
 }
 

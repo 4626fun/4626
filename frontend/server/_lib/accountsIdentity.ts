@@ -657,7 +657,7 @@ export async function resolveAndPersistZoraSignals(params: {
   }
 
   const zoraCrossApp = extractZoraCrossAppAccounts(privyUser)
-  const zoraLinked = zoraCrossApp.length > 0
+  let zoraLinked = zoraCrossApp.length > 0
 
   for (const account of zoraCrossApp) {
     await upsertLinkedMethod({
@@ -695,9 +695,13 @@ export async function resolveAndPersistZoraSignals(params: {
   }
 
   const classification = classifyLinkedAccounts(privyUser)
+  const allEvmEoas = classification.allWallets
+    .filter((w) => w.chain === 'evm' && w.walletType === 'external_eoa')
+    .map((w) => w.address)
   const profileSeeds = dedupe([
     ...zoraCrossApp.map((item) => item.address),
     canonical,
+    ...allEvmEoas,
     classification.primaryWalletAddress ?? null,
     classification.embeddedEoa?.address ?? null,
   ])
@@ -707,6 +711,8 @@ export async function resolveAndPersistZoraSignals(params: {
     zoraProfile = await fetchZoraProfile(seed).catch(() => null)
     if (zoraProfile) break
   }
+
+  if (zoraProfile) zoraLinked = true
 
   const zoraHandle = normalizeString((zoraProfile as any)?.handle)
   const creatorCoinAddress = normalizeEvmAddress((zoraProfile as any)?.creatorCoin?.address) ?? existing.creatorCoinAddress

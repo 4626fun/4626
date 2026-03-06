@@ -17,7 +17,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { X } from 'lucide-react'
+import { useLogin } from '@privy-io/react-auth'
+import { MessageSquare, X } from 'lucide-react'
 import { XmtpChatProvider, type ChatConversation, useXmtp } from '@/lib/xmtp/provider'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
@@ -42,6 +43,54 @@ type OpenWindow = {
   imageUrl?: string
   minimized: boolean
   seedCommandId?: string | null
+}
+
+function ConnectToChatPrompt() {
+  const { login } = useLogin({})
+  const [busy, setBusy] = useState(false)
+
+  const handleConnect = useCallback(async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await login()
+    } catch {
+      // user dismissed
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, login])
+
+  return (
+    <>
+      {/* Desktop: bottom-right pill */}
+      <div className="fixed bottom-0 right-4 z-50 hidden md:flex items-end pointer-events-none">
+        <button
+          type="button"
+          onClick={handleConnect}
+          disabled={busy}
+          className="pointer-events-auto flex items-center gap-2 rounded-t-xl bg-zinc-900 border border-b-0 border-white/10 px-4 py-2.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-60"
+        >
+          <MessageSquare className="w-4 h-4" />
+          {busy ? 'Connecting…' : 'Chat'}
+        </button>
+      </div>
+      {/* Mobile: top-right icon */}
+      <div className="fixed inset-0 z-50 pointer-events-none md:hidden">
+        <div className="absolute top-4 right-4 pointer-events-auto">
+          <button
+            type="button"
+            onClick={handleConnect}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded-full bg-zinc-900/90 border border-white/10 px-3 py-2 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-60"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            {busy ? '…' : 'Chat'}
+          </button>
+        </div>
+      </div>
+    </>
+  )
 }
 
 function ChatWidgetInner() {
@@ -239,8 +288,7 @@ function ChatWidgetInner() {
     }
   }, [isMobile, showMobileBar, activeMobileWindow])
 
-  // Don't render anything if wallet is not connected
-  if (!isConnected) return null
+  if (!isConnected) return <ConnectToChatPrompt />
 
   return (
     <>

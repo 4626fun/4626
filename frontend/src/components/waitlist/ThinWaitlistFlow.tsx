@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { getAppBaseUrl } from '@/lib/host'
-import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
-import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
-import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 
 import type { Variant } from './waitlistTypes'
@@ -89,17 +86,6 @@ function useSafePrivy() {
   }
 }
 
-function useSafeCrossAppAccounts() {
-  try {
-    return useCrossAppAccounts() as any
-  } catch {
-    return {
-      loginWithCrossAppAccount: null,
-      linkCrossAppAccount: null,
-    } as any
-  }
-}
-
 function useSafeLogin() {
   try {
     return useLogin({}) as any
@@ -145,7 +131,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const privy = useSafePrivy()
   const { login } = useSafeLogin()
-  const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossAppAccounts()
 
   const privyReady = Boolean(privy?.ready)
   const privyAuthed = Boolean(privy?.authenticated)
@@ -162,12 +147,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const [busy, setBusy] = useState(false)
   const [enterAppBusy, setEnterAppBusy] = useState(false)
+  const [zoraAutoResolving, setZoraAutoResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [zoraSummary, setZoraSummary] = useState<ZoraResolveResponse | null>(null)
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
+  const zoraAutoResolvedRef = useRef(false)
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
 
@@ -247,61 +234,57 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
   }, [busy, login, privyAuthed])
 
+  const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
+    const response = await apiFetch('/api/zora/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Privy-Token': token },
+      body: JSON.stringify({}),
+    })
+    const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
+    if (!response.ok || !payload?.success || !payload.data) return null
+    return payload.data
+  }, [])
+
+  const applyZoraResult = useCallback((data: ZoraResolveResponse) => {
+    setZoraSummary(data)
+    setAccount((prev) =>
+      prev
+        ? {
+            ...prev,
+            zora: {
+              ...prev.zora,
+              linked: true,
+              canonicalCswAddress: data.canonicalCswAddress,
+              creatorCoin: data.creatorCoin ? { address: data.creatorCoin.address } : null,
+              zoraHandle: data.zoraHandle,
+            },
+          }
+        : prev,
+    )
+  }, [])
+
   const onLinkZora = useCallback(async () => {
     if (busy) return
     setBusy(true)
     setError(null)
     try {
-      await performZoraCrossAppAuth({
-        privyAuthed,
-        appId: ZORA_PRIVY_APP_ID,
-        linkCrossAppAccount,
-        loginWithCrossAppAccount,
-        sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
-        isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
-      })
+      if (typeof privy?.linkWallet !== 'function') {
+        throw new Error('Wallet linking is unavailable in this environment.')
+      }
+      await privy.linkWallet()
 
       const token = await getAccessToken()
-      if (!token) throw new Error('Missing Privy token after linking Zora.')
+      if (!token) throw new Error('Missing auth token after linking wallet.')
 
-      const response = await apiFetch('/api/zora/resolve', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Privy-Token': token,
-        },
-        body: JSON.stringify({}),
-      })
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
-      const data = payload?.data
-      if (!response.ok || !payload?.success || !data) {
-        throw new Error(readApiErrorMessage(payload, 'Failed to resolve Zora signals.'))
-      }
-      setZoraSummary(data)
-      setAccount((prev) =>
-        prev
-          ? {
-              ...prev,
-              zora: {
-                ...prev.zora,
-                linked: true,
-                canonicalCswAddress: data.canonicalCswAddress,
-                creatorCoin: data.creatorCoin ? { address: data.creatorCoin.address } : null,
-                zoraHandle: data.zoraHandle,
-              },
-            }
-          : prev,
-      )
+      const data = await resolveZora(token)
+      if (!data) throw new Error('Could not find a Zora profile for that wallet.')
+      applyZoraResult(data)
     } catch (zoraError: any) {
-      if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
-        setError('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
-      } else {
-        setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
-      }
+      setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link wallet.')
     } finally {
       setBusy(false)
     }
-  }, [busy, getAccessToken, linkCrossAppAccount, loginWithCrossAppAccount, privyAuthed])
+  }, [applyZoraResult, busy, getAccessToken, privy, resolveZora])
 
   const onFinish = useCallback(() => {
     setStep('done')
@@ -410,6 +393,29 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
   }, [step])
 
+  useEffect(() => {
+    if (step !== 'zora') return
+    if (zoraAutoResolvedRef.current || zoraSummary) return
+    zoraAutoResolvedRef.current = true
+    let cancelled = false
+    ;(async () => {
+      setZoraAutoResolving(true)
+      try {
+        const token = await getAccessToken()
+        if (!token || cancelled) return
+        const data = await resolveZora(token)
+        if (cancelled || !data) return
+        const hasProfile = !!(data.zoraHandle || data.canonicalCswAddress || data.creatorCoin)
+        if (hasProfile) applyZoraResult(data)
+      } catch {
+        // best-effort
+      } finally {
+        if (!cancelled) setZoraAutoResolving(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [applyZoraResult, getAccessToken, resolveZora, step, zoraSummary])
+
   const zoraStatus = useMemo(() => {
     const summary: ZoraResolveResponse | null = zoraSummary ?? (account ? {
       canonicalCswAddress: account.zora.canonicalCswAddress,
@@ -517,12 +523,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 </span>
               </div>
               <p className="text-sm text-zinc-400">{zoraUi.subtitle}</p>
-              {!zoraStatus ? (
-                <p className="text-xs text-zinc-500">You'll be briefly redirected to approve a read-only connection.</p>
-              ) : null}
             </div>
 
-            {zoraStatus ? (
+            {zoraAutoResolving ? (
+              <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 p-4">
+                <Loader2 className="w-4 h-4 animate-spin text-zinc-400 shrink-0" />
+                <span className="text-xs text-zinc-400">Checking your wallets for a Zora profile…</span>
+              </div>
+            ) : zoraStatus ? (
               <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
                 <p className="text-xs font-medium text-emerald-400">{zoraUi.connectedLabel}</p>
                 <div className="space-y-2">
@@ -568,31 +576,33 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
               </div>
             ) : null}
 
-            <div className="space-y-3">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void (zoraUi.primaryAction === 'finish' ? onFinish() : onLinkZora())}
-                className="btn-primary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Linking…
-                  </>
-                ) : (
-                  zoraUi.primaryLabel
-                )}
-              </button>
+            {!zoraAutoResolving ? (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void (zoraUi.primaryAction === 'finish' ? onFinish() : onLinkZora())}
+                  className="btn-primary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {busy ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Linking…
+                    </>
+                  ) : (
+                    zoraUi.primaryLabel
+                  )}
+                </button>
 
-              <button
-                type="button"
-                onClick={() => void (zoraUi.secondaryAction === 'reconnect' ? onLinkZora() : onFinish())}
-                className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
-              >
-                {zoraUi.secondaryLabel}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => void (zoraUi.secondaryAction === 'reconnect' ? onLinkZora() : onFinish())}
+                  className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
+                >
+                  {zoraUi.secondaryLabel}
+                </button>
+              </div>
+            ) : null}
 
             {error ? (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

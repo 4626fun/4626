@@ -51,24 +51,24 @@ export function deriveWaitlistEmailUi(step: 'email' | 'auth'): WaitlistEmailUi {
 export function deriveWaitlistZoraUi(hasLinkedZora: boolean): WaitlistZoraUi {
   if (hasLinkedZora) {
     return {
-      subtitle: 'Connect your Zora account to import your profile and creator coin. Optional.',
+      subtitle: 'We found your Zora profile from a linked wallet.',
       primaryAction: 'finish',
       primaryLabel: 'Continue',
       secondaryAction: 'reconnect',
-      secondaryLabel: 'Reconnect Zora',
-      connectedLabel: 'Zora account connected',
-      resolvingLabel: 'Connected. Finishing your Zora details…',
+      secondaryLabel: 'Link a different wallet',
+      connectedLabel: 'Zora profile found',
+      resolvingLabel: 'Resolving your Zora details…',
     }
   }
 
   return {
-    subtitle: 'Connect your Zora account to import your profile and creator coin. Optional.',
+    subtitle: 'Link the wallet you use on Zora to import your profile and creator coin.',
     primaryAction: 'connect',
-    primaryLabel: `${SHARE_SYMBOL_PREFIX} Connect Zora`,
+    primaryLabel: `${SHARE_SYMBOL_PREFIX} Link Zora wallet`,
     secondaryAction: 'skip',
     secondaryLabel: 'Continue without Zora',
-    connectedLabel: 'Zora account connected',
-    resolvingLabel: 'Connected. Finishing your Zora details…',
+    connectedLabel: 'Zora profile found',
+    resolvingLabel: 'Resolving your Zora details…',
   }
 }
 
