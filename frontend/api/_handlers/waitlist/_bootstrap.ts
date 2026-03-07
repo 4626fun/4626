@@ -30,6 +30,15 @@ function normalizeEmail(value: unknown): string | null {
   return email
 }
 
+function isPrivyUserIdUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('profiles_privy_user_id_unique') ||
+    (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
+  )
+}
+
 function readPrivyToken(req: VercelRequest): string | null {
   const fromHeader = typeof req.headers?.['x-privy-token'] === 'string' ? req.headers['x-privy-token'].trim() : ''
   if (fromHeader) return fromHeader
@@ -39,6 +48,44 @@ function readPrivyToken(req: VercelRequest): string | null {
     return token || null
   }
   return null
+}
+
+async function upsertBootstrapProfile(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  email: string
+  privyUserId: string
+}): Promise<void> {
+  const { db, email, privyUserId } = params
+
+  const updateByPrivyUserId = async () =>
+    db.sql`
+      UPDATE profiles
+      SET
+        email = COALESCE(profiles.email, ${email}),
+        updated_at = NOW()
+      WHERE privy_user_id = ${privyUserId}
+      RETURNING id;
+    `
+
+  const existingByPrivy = await updateByPrivyUserId()
+  if (Array.isArray(existingByPrivy.rows) && existingByPrivy.rows.length > 0) return
+
+  try {
+    await db.sql`
+      INSERT INTO profiles (email, privy_user_id, created_at, updated_at)
+      VALUES (${email}, ${privyUserId}, NOW(), NOW())
+      ON CONFLICT (email) DO UPDATE
+        SET privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+            updated_at = NOW();
+    `
+    return
+  } catch (error) {
+    if (!isPrivyUserIdUniqueViolation(error)) throw error
+  }
+
+  const recoveredByPrivy = await updateByPrivyUserId()
+  if (Array.isArray(recoveredByPrivy.rows) && recoveredByPrivy.rows.length > 0) return
+  throw new Error('waitlist_bootstrap_profile_upsert_failed')
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -103,13 +150,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: emailToPersist,
         emailVerified: true,
       })
-      await db.sql`
-        INSERT INTO profiles (email, privy_user_id, created_at, updated_at)
-        VALUES (${emailToPersist}, ${context.privyUserId}, NOW(), NOW())
-        ON CONFLICT (email) DO UPDATE
-          SET privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
-              updated_at = NOW();
-      `
+      await upsertBootstrapProfile({
+        db: db as any,
+        email: emailToPersist,
+        privyUserId: context.privyUserId,
+      })
     }
 
     const me = await buildAccountsMePayload({
