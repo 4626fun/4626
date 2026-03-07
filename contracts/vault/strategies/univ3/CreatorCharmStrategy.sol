@@ -767,7 +767,7 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         // Convert any USDC back to CREATOR before returning.
         uint256 totalUsdc = USDC.balanceOf(address(this));
         if (totalUsdc > 0) {
-            _swapUsdcToCreatorRequired(totalUsdc);
+            _swapUsdcToCreatorSafe(totalUsdc);
         }
 
         uint256 availableCreator = CREATOR.balanceOf(address(this));
