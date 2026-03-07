@@ -38,7 +38,7 @@ import {
   type AsyncStreamProxy,
 } from '@xmtp/browser-sdk'
 import { IdentifierKind } from '@xmtp/browser-sdk'
-import { getAddress, isAddress, encodeAbiParameters, recoverMessageAddress } from 'viem'
+import { getAddress, isAddress, encodeAbiParameters, recoverMessageAddress, hashMessage } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -171,18 +171,45 @@ async function findCswOwnerIndex(
 }
 
 /**
- * Wrap a raw ECDSA signature in the CSW `SignatureWrapper(ownerIndex, signatureData)`
- * format that `isValidSignature` expects.  Without this wrapping, the CSW contract
- * cannot `abi.decode` the raw 65-byte signature and reverts.
+ * ABI-encode a CSW `SignatureWrapper` as a **tuple struct**.
+ *
+ * The CSW's `_isValidSignature` does `abi.decode(signature, (SignatureWrapper))`
+ * which expects tuple encoding (with the leading 32-byte offset pointer),
+ * NOT flat `(uint256, bytes)` encoding.
  */
 function wrapCswSignature(ownerIndex: number, rawSig: Uint8Array): Uint8Array {
   const sigHex = `0x${Array.from(rawSig, (b) => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`
   const wrapped = encodeAbiParameters(
-    [{ type: 'uint256' }, { type: 'bytes' }],
-    [BigInt(ownerIndex), sigHex],
+    [{
+      type: 'tuple',
+      components: [
+        { name: 'ownerIndex', type: 'uint256' },
+        { name: 'signatureData', type: 'bytes' },
+      ],
+    }],
+    [{ ownerIndex: BigInt(ownerIndex), signatureData: sigHex }],
   )
   return hexToBytes(wrapped)
 }
+
+/**
+ * EIP-712 domain and type constants for Coinbase Smart Wallet.
+ * Used to produce the same `replaySafeHash` that the CSW computes
+ * inside `isValidSignature` before verifying `ecrecover`.
+ *
+ * The CSW's flow:  isValidSignature(hash, sig)
+ *   → rsh = replaySafeHash(hash)
+ *   → (ownerIndex, sigData) = abi.decode(sig, (SignatureWrapper))
+ *   → recovered = ecrecover(rsh, sigData)
+ *   → ownerAtIndex(ownerIndex) == recovered
+ *
+ * `signTypedData` with these params produces an ECDSA signature
+ * of exactly `rsh`, making `ecrecover(rsh, sigData)` return the
+ * correct signer address.
+ */
+const CSW_EIP712_TYPES = {
+  CoinbaseSmartWalletMessage: [{ name: 'hash', type: 'bytes32' }],
+} as const
 
 const noop = () => {}
 const XmtpContext = createContext<XmtpContextValue>({
@@ -1043,11 +1070,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             return hexToBytes(s)
           }
 
-          // For SCW signers: after signing, detect whether the result is a raw
-          // 65-byte ECDSA signature that needs CSW SignatureWrapper wrapping.
-          // Privy's smart-wallet connector reports the CSW as `address` but
-          // walletClient.signMessage still produces a raw EOA signature, so an
-          // address comparison alone is insufficient.
+          // For SCW signers backed by Coinbase Smart Wallet:
+          // 1. Detect if walletClient.signMessage returns a raw 65-byte EOA signature
+          // 2. If so, compute hashMessage(message) and sign the CSW's replaySafeHash
+          //    via signTypedData (EIP-712) to produce a signature ecrecover can verify
+          // 3. Wrap in the tuple-struct SignatureWrapper the CSW expects
           const scwSignMessageFn = async (message: string) => {
             const s = await walletClient.signMessage({ message })
             const sigBytes = hexToBytes(s)
@@ -1067,8 +1094,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               console.warn('[xmtp] Could not resolve CSW owner index for', signerAddr)
               return sigBytes
             }
-            console.log('[xmtp] Wrapping raw ECDSA with CSW ownerIndex', idx, 'for signer', signerAddr)
-            return wrapCswSignature(idx, sigBytes)
+            const msgHash = hashMessage(message)
+            try {
+              const typedSig = await walletClient.signTypedData({
+                domain: {
+                  name: 'Coinbase Smart Wallet',
+                  version: '1',
+                  chainId: Number(signerDecision.scwChainId),
+                  verifyingContract: xmtpIdentityAddress as `0x${string}`,
+                },
+                types: CSW_EIP712_TYPES,
+                primaryType: 'CoinbaseSmartWalletMessage' as const,
+                message: { hash: msgHash },
+              })
+              console.log('[xmtp] CSW EIP-712 replaySafeHash signed; wrapping with ownerIndex', idx)
+              return wrapCswSignature(idx, hexToBytes(typedSig))
+            } catch (e) {
+              console.warn('[xmtp] signTypedData failed; falling back to personal_sign wrapping', e)
+              return wrapCswSignature(idx, sigBytes)
+            }
           }
 
           const scwSigner: Signer = {
@@ -1514,25 +1558,6 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
     const xmtpIdentityAddress = resolved.identityAddress
 
-    const scwSignMessageFn = async (message: string) => {
-      const s = await walletClient.signMessage({ message })
-      const sigBytes = hexToBytes(s)
-      if (sigBytes.length !== 65 || !publicClient) return sigBytes
-      let signerAddr: string
-      try {
-        signerAddr = await recoverMessageAddress({ message, signature: s as `0x${string}` })
-      } catch { return sigBytes }
-      if (signerAddr.toLowerCase() === xmtpIdentityAddress.toLowerCase()) return sigBytes
-      const ck = `${xmtpIdentityAddress}:${signerAddr.toLowerCase()}`
-      let idx = cswOwnerIndexCache.current.get(ck)
-      if (idx === undefined) {
-        idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, signerAddr)
-        cswOwnerIndexCache.current.set(ck, idx)
-      }
-      if (idx === null) return sigBytes
-      return wrapCswSignature(idx, sigBytes)
-    }
-
     // Use the same signer shape we use for normal Client.create.
     const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
     let hasContractCode: boolean | null = null
@@ -1553,13 +1578,48 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       modeOverride: xmtpModeOverride ?? undefined,
     })
 
+    const resetScwSignMessageFn = async (message: string) => {
+      const s = await walletClient.signMessage({ message })
+      const sigBytes = hexToBytes(s)
+      if (sigBytes.length !== 65 || !publicClient) return sigBytes
+      let signerAddr: string
+      try {
+        signerAddr = await recoverMessageAddress({ message, signature: s as `0x${string}` })
+      } catch { return sigBytes }
+      if (signerAddr.toLowerCase() === xmtpIdentityAddress.toLowerCase()) return sigBytes
+      const ck = `${xmtpIdentityAddress}:${signerAddr.toLowerCase()}`
+      let idx = cswOwnerIndexCache.current.get(ck)
+      if (idx === undefined) {
+        idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, signerAddr)
+        cswOwnerIndexCache.current.set(ck, idx)
+      }
+      if (idx === null) return sigBytes
+      const msgHash = hashMessage(message)
+      try {
+        const typedSig = await walletClient.signTypedData({
+          domain: {
+            name: 'Coinbase Smart Wallet',
+            version: '1',
+            chainId: Number(signerDecision.scwChainId),
+            verifyingContract: xmtpIdentityAddress as `0x${string}`,
+          },
+          types: CSW_EIP712_TYPES,
+          primaryType: 'CoinbaseSmartWalletMessage' as const,
+          message: { hash: msgHash },
+        })
+        return wrapCswSignature(idx, hexToBytes(typedSig))
+      } catch {
+        return wrapCswSignature(idx, sigBytes)
+      }
+    }
+
     const scwSigner: Signer = {
       type: 'SCW',
       getIdentifier: () => ({
         identifier: xmtpIdentityAddress,
         identifierKind: IdentifierKind.Ethereum,
       }),
-      signMessage: scwSignMessageFn,
+      signMessage: resetScwSignMessageFn,
       getChainId: () => BigInt(CANONICAL_SCW_CHAIN_ID),
     }
     const eoaSigner: Signer = {
