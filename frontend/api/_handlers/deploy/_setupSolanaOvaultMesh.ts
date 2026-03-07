@@ -9,7 +9,6 @@ import registerSolanaBridgeTokenHandler from './_registerSolanaBridgeToken.js'
  * implementation while callers migrate from legacy route names.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const headers = req.headers as Record<string, string | string[] | undefined>
-  headers['x-cv-solana-registration-route'] = 'ovault'
+  ;(req as Record<string, unknown>).__cvSolanaRegistrationRouteKind = 'ovault'
   return registerSolanaBridgeTokenHandler(req, res)
 }

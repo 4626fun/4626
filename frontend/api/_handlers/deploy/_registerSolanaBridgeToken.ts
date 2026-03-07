@@ -322,6 +322,8 @@ function readDynamicSolanaRouteEnabled(): boolean {
 
 type SolanaRegistrationRouteKind = 'legacy' | 'ovault'
 
+const SOLANA_REGISTRATION_ROUTE_KIND_KEY = '__cvSolanaRegistrationRouteKind'
+
 function readLegacySolanaWriteDisabled(): boolean {
   const v = String(
     process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED ??
@@ -334,12 +336,23 @@ function readLegacySolanaWriteDisabled(): boolean {
 }
 
 function readSolanaRegistrationRouteKind(req: VercelRequest): SolanaRegistrationRouteKind {
-  const header = requestHeader(req, 'x-cv-solana-registration-route').toLowerCase()
-  if (header === 'ovault') return 'ovault'
-  if (header === 'legacy') return 'legacy'
-  const url = String((req as any)?.url ?? '').toLowerCase()
-  if (url.includes('/setupsolanaovaultmesh')) return 'ovault'
-  if (url.includes('/registersolanabridgetoken')) return 'legacy'
+  const internalRouteKind = (req as Record<string, unknown>)[
+    SOLANA_REGISTRATION_ROUTE_KIND_KEY
+  ]
+  if (internalRouteKind === 'ovault' || internalRouteKind === 'legacy') {
+    return internalRouteKind
+  }
+
+  const rawUrl = String((req as any)?.url ?? '')
+  let path = rawUrl
+  try {
+    path = new URL(rawUrl, 'http://localhost').pathname
+  } catch {
+    path = rawUrl.split('?')[0] ?? ''
+  }
+  const pathname = path.toLowerCase()
+  if (pathname.endsWith('/setupsolanaovaultmesh')) return 'ovault'
+  if (pathname.endsWith('/registersolanabridgetoken')) return 'legacy'
   return 'legacy'
 }
 
