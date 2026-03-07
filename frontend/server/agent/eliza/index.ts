@@ -410,8 +410,16 @@ async function withRetry<T>(params: {
         asAgentError.code === 'UPSTREAM_TIMEOUT' ||
         asAgentError.code === 'UPSTREAM_ERROR' ||
         asAgentError.code === 'DEPENDENCY_UNAVAILABLE'
-      if (!retryable || attempt >= maxRetries) break
+      if (!retryable || attempt >= maxRetries) {
+        console.error(
+          `[eliza] ${params.operation} failed (attempt ${attempt + 1}/${maxRetries + 1}, retryable=${retryable}): ${asAgentError.message}`,
+        )
+        break
+      }
       const waitMs = baseDelayMs * Math.pow(2, attempt)
+      console.warn(
+        `[eliza] ${params.operation} attempt ${attempt + 1} failed, retrying in ${waitMs}ms: ${asAgentError.message}`,
+      )
       logger.warn('[eliza] retrying operation after failure', {
         operation: params.operation,
         attempt: attempt + 1,
@@ -1655,8 +1663,11 @@ function startHealthServer() {
 }
 
 void main().catch((err) => {
+  const msg = err instanceof Error ? err.message : String(err)
+  console.error(`[eliza] Fatal error: ${msg}`)
+  if (err instanceof Error && err.stack) console.error(err.stack)
   logger.error('[eliza] Fatal error', {
-    error: err instanceof Error ? err.message : String(err),
+    error: msg,
     stack: err instanceof Error ? err.stack : undefined,
   })
   process.exit(1)
