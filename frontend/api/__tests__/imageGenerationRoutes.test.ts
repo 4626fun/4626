@@ -9,6 +9,8 @@ const {
   getImageGenerationJobMock,
   getImageGenerationProjectMock,
   processImageGenerationJobMock,
+  getSessionAddressMock,
+  isAdminAddressMock,
 } = vi.hoisted(() => ({
   createImageGenerationProjectMock: vi.fn(async () => ({
     id: 'proj_123',
@@ -35,6 +37,8 @@ const {
     latestJob: null,
   })),
   processImageGenerationJobMock: vi.fn(async () => ({ id: 'job_123', status: 'pending' })),
+  getSessionAddressMock: vi.fn(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
+  isAdminAddressMock: vi.fn(() => true),
 }))
 
 
@@ -63,6 +67,11 @@ vi.mock('../../server/_lib/imageGenerationRunner.js', () => ({
   processImageGenerationJob: processImageGenerationJobMock,
 }))
 
+vi.mock('../../server/_lib/session.js', () => ({
+  getSessionAddress: getSessionAddressMock,
+  isAdminAddress: isAdminAddressMock,
+}))
+
 describe('image generation route registration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -80,6 +89,45 @@ describe('image generation route registration', () => {
     await expect(getApiHandler('image/projects/refine')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('image/jobs/status')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('image/projects/get')).resolves.toBeTypeOf('function')
+  })
+})
+
+describe('image generation auth gate', () => {
+  it('returns 401 when caller is not signed in', async () => {
+    getSessionAddressMock.mockReturnValue(null)
+    const mod = await import('../_handlers/image/_projects-create.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'POST',
+      body: { instruction: 'test' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body).toEqual({ success: false, error: 'Sign in required' })
+    expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when caller is not an admin', async () => {
+    getSessionAddressMock.mockReturnValue('0x1111111111111111111111111111111111111111')
+    isAdminAddressMock.mockReturnValue(false)
+    const mod = await import('../_handlers/image/_projects-create.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'POST',
+      body: { instruction: 'test' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toEqual({ success: false, error: 'Admin only' })
+    expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
   })
 })
 

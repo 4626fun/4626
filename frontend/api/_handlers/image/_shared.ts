@@ -13,7 +13,19 @@ export type ApiFailure = { success: false; error: string }
 export function prepareImageApi(req: VercelRequest, res: VercelResponse): boolean {
   setCors(req, res)
   setNoStore(res)
-  return handleOptions(req, res)
+  if (handleOptions(req, res)) return true
+
+  const admin = getSessionAddress(req)
+  if (!admin) {
+    res.status(401).json({ success: false, error: 'Sign in required' })
+    return true
+  }
+  if (!isAdminAddress(admin)) {
+    res.status(403).json({ success: false, error: 'Admin only' })
+    return true
+  }
+
+  return false
 }
 
 export function requireImageApiAdmin(req: VercelRequest, res: VercelResponse): boolean {
