@@ -146,6 +146,7 @@ test/**
 !test/CCALaunchStrategy.LaunchHandshake.t.sol
 !test/ve4626.LockTokenRestriction.t.sol
 !test/CreatorShareOFT.ContractURI.t.sol
+!test/DeploymentBatcher.Phase3Ownership.t.sol
 telegram-bot/
 relayer/
 monitoring/
