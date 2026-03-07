@@ -38,7 +38,7 @@ import {
   type AsyncStreamProxy,
 } from '@xmtp/browser-sdk'
 import { IdentifierKind } from '@xmtp/browser-sdk'
-import { getAddress, isAddress } from 'viem'
+import { getAddress, isAddress, encodeAbiParameters } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -128,6 +128,61 @@ const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
     outputs: [{ name: '', type: 'bool' }],
   },
 ] as const
+
+const CSW_OWNER_AT_INDEX_ABI = [
+  {
+    type: 'function',
+    name: 'ownerAtIndex',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bytes' }],
+  },
+] as const
+
+/**
+ * Find the owner index of `signerAddress` in a Coinbase Smart Wallet.
+ * CSW stores EOA owners as `abi.encode(address)` (32 bytes, left-padded).
+ * Returns null if the signer is not found in indices 0-20.
+ */
+async function findCswOwnerIndex(
+  pub: { readContract: (...args: any[]) => Promise<any> },
+  cswAddress: string,
+  signerAddress: string,
+): Promise<number | null> {
+  const target = encodeAbiParameters(
+    [{ type: 'address' }],
+    [signerAddress as `0x${string}`],
+  ).toLowerCase()
+  const hints = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  for (const i of hints) {
+    try {
+      const raw = (await pub.readContract({
+        address: cswAddress as `0x${string}`,
+        abi: CSW_OWNER_AT_INDEX_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })) as string
+      if (raw.toLowerCase() === target) return i
+    } catch {
+      // ownerAtIndex reverts when index is out of bounds
+    }
+  }
+  return null
+}
+
+/**
+ * Wrap a raw ECDSA signature in the CSW `SignatureWrapper(ownerIndex, signatureData)`
+ * format that `isValidSignature` expects.  Without this wrapping, the CSW contract
+ * cannot `abi.decode` the raw 65-byte signature and reverts.
+ */
+function wrapCswSignature(ownerIndex: number, rawSig: Uint8Array): Uint8Array {
+  const sigHex = `0x${Array.from(rawSig, (b) => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`
+  const wrapped = encodeAbiParameters(
+    [{ type: 'uint256' }, { type: 'bytes' }],
+    [BigInt(ownerIndex), sigHex],
+  )
+  return hexToBytes(wrapped)
+}
 
 const noop = () => {}
 const XmtpContext = createContext<XmtpContextValue>({
@@ -626,6 +681,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const resolvedIdentityByWalletRef = useRef<
     Map<string, { identityAddress: string; isCanonicalSmartWallet: boolean }>
   >(new Map())
+  const cswOwnerIndexCache = useRef<Map<string, number | null>>(new Map())
 
   // Cleanup on unmount
   useEffect(() => {
@@ -987,13 +1043,37 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             return hexToBytes(s)
           }
 
+          // When the XMTP identity (CSW) differs from the connected wallet (Privy EOA),
+          // the raw ECDSA signature must be wrapped in the CSW's SignatureWrapper format
+          // so that isValidSignature can abi.decode(ownerIndex, signatureData).
+          const needsCswSigWrap =
+            xmtpIdentityAddress.toLowerCase() !== String(address).toLowerCase()
+          const scwSignMessageFn = needsCswSigWrap
+            ? async (message: string) => {
+                const s = await walletClient.signMessage({ message })
+                const sigBytes = hexToBytes(s)
+                if (!publicClient) return sigBytes
+                const ck = `${xmtpIdentityAddress}:${String(address).toLowerCase()}`
+                let idx = cswOwnerIndexCache.current.get(ck)
+                if (idx === undefined) {
+                  idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, String(address))
+                  cswOwnerIndexCache.current.set(ck, idx)
+                }
+                if (idx === null) {
+                  console.warn('[xmtp] Could not resolve CSW owner index; using unwrapped ECDSA signature')
+                  return sigBytes
+                }
+                return wrapCswSignature(idx, sigBytes)
+              }
+            : signMessageFn
+
           const scwSigner: Signer = {
             type: 'SCW',
             getIdentifier: () => ({
               identifier: xmtpIdentityAddress as `0x${string}`,
               identifierKind: IdentifierKind.Ethereum,
             }),
-            signMessage: signMessageFn,
+            signMessage: scwSignMessageFn,
             getChainId: () => BigInt(signerDecision.scwChainId),
           }
           const eoaSigner: Signer = {
@@ -1430,6 +1510,24 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
     const xmtpIdentityAddress = resolved.identityAddress
 
+    const needsCswSigWrap =
+      xmtpIdentityAddress.toLowerCase() !== String(address).toLowerCase()
+    const scwSignMessageFn = needsCswSigWrap
+      ? async (message: string) => {
+          const s = await walletClient.signMessage({ message })
+          const sigBytes = hexToBytes(s)
+          if (!publicClient) return sigBytes
+          const ck = `${xmtpIdentityAddress}:${String(address).toLowerCase()}`
+          let idx = cswOwnerIndexCache.current.get(ck)
+          if (idx === undefined) {
+            idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, String(address))
+            cswOwnerIndexCache.current.set(ck, idx)
+          }
+          if (idx === null) return sigBytes
+          return wrapCswSignature(idx, sigBytes)
+        }
+      : signMessageFn
+
     // Use the same signer shape we use for normal Client.create.
     const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
     let hasContractCode: boolean | null = null
@@ -1456,7 +1554,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         identifier: xmtpIdentityAddress,
         identifierKind: IdentifierKind.Ethereum,
       }),
-      signMessage: signMessageFn,
+      signMessage: scwSignMessageFn,
       getChainId: () => BigInt(CANONICAL_SCW_CHAIN_ID),
     }
     const eoaSigner: Signer = {
