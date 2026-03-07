@@ -158,6 +158,13 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
 
   'health': () => import('./_health.js'),
 
+  'image/projects/create': () => import('./image/_projects-create.js'),
+  'image/projects/assets/upload': () => import('./image/_assets-upload.js'),
+  'image/projects/generate': () => import('./image/_generate.js'),
+  'image/projects/refine': () => import('./image/_refine.js'),
+  'image/jobs/status': () => import('./image/_jobs-status.js'),
+  'image/projects/get': () => import('./image/_projects-get.js'),
+
   'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),
   'onchain/coinMarketRewardsCurrency': () => import('./onchain/_coinMarketRewardsCurrency.js'),
   'onchain/coinTradeRewardsBatch': () => import('./onchain/_coinTradeRewardsBatch.js'),

@@ -353,6 +353,10 @@ const AdminAgentSetup = lazy(async () => {
   const m = await import('./pages/AdminAgentSetup')
   return { default: m.AdminAgentSetup }
 })
+const AdminImageGeneration = lazy(async () => {
+  const m = await import('./pages/AdminImageGeneration')
+  return { default: m.AdminImageGeneration }
+})
 
 const GaugeVoting = lazy(async () => {
   const m = await import('./pages/GaugeVoting')
@@ -583,6 +587,7 @@ function App() {
                   <Route path="creator-access" element={<AdminCreatorAccess />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="agent-setup" element={<AdminAgentSetup />} />
+                  <Route path="imagegen" element={<AdminImageGeneration />} />
                   <Route
                     path="ops"
                     element={
