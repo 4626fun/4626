@@ -26,6 +26,15 @@ type AppContinueRetryDirective = {
   loginOptions: { loginMethods: ['wallet'] }
 }
 
+type AppContinueReadyTimeoutInput = {
+  autoLogin: boolean
+  fromWaitlist: boolean
+  handoffState: 'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'
+  authAddress: string | null | undefined
+}
+
+const READY_WITHOUT_SESSION_TIMEOUT_MS = 10_000
+
 export function getAppContinueRetryDirective(input: { privyAuthenticated: boolean }): AppContinueRetryDirective {
   return {
     resetState: 'idle',
@@ -33,6 +42,12 @@ export function getAppContinueRetryDirective(input: { privyAuthenticated: boolea
     shouldForceLogout: input.privyAuthenticated,
     loginOptions: { loginMethods: ['wallet'] },
   }
+}
+
+export function shouldScheduleReadyWithoutSessionTimeout(input: AppContinueReadyTimeoutInput): boolean {
+  if (!input.autoLogin || !input.fromWaitlist) return false
+  if (input.handoffState !== 'ready') return false
+  return !(typeof input.authAddress === 'string' && input.authAddress.trim().length > 0)
 }
 
 export function AppContinue() {
@@ -221,6 +236,24 @@ export function AppContinue() {
     }, 25_000)
     return () => window.clearTimeout(t)
   }, [autoLogin, fromWaitlist, handoffState])
+
+  useEffect(() => {
+    if (
+      !shouldScheduleReadyWithoutSessionTimeout({
+        autoLogin,
+        fromWaitlist,
+        handoffState,
+        authAddress,
+      })
+    ) {
+      return
+    }
+    const t = window.setTimeout(() => {
+      setHandoffState('error')
+      setHandoffError('Could not finish restoring your session. Click "Restore account connection" to continue.')
+    }, READY_WITHOUT_SESSION_TIMEOUT_MS)
+    return () => window.clearTimeout(t)
+  }, [authAddress, autoLogin, fromWaitlist, handoffState])
 
   if (!autoLogin || !fromWaitlist) {
     return <Navigate to={nextPath} replace />

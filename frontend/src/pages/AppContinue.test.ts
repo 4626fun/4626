@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getAppContinueRetryDirective } from './AppContinue'
+import { getAppContinueRetryDirective, shouldScheduleReadyWithoutSessionTimeout } from './AppContinue'
 
 describe('getAppContinueRetryDirective', () => {
   it('uses wallet-only Privy login for waitlist handoff recovery', () => {
@@ -19,5 +19,40 @@ describe('getAppContinueRetryDirective', () => {
       shouldForceLogout: true,
       loginOptions: { loginMethods: ['wallet'] },
     })
+  })
+})
+
+describe('shouldScheduleReadyWithoutSessionTimeout', () => {
+  it('schedules timeout when handoff is ready but session address is missing', () => {
+    expect(
+      shouldScheduleReadyWithoutSessionTimeout({
+        autoLogin: true,
+        fromWaitlist: true,
+        handoffState: 'ready',
+        authAddress: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not schedule timeout when session address is present', () => {
+    expect(
+      shouldScheduleReadyWithoutSessionTimeout({
+        autoLogin: true,
+        fromWaitlist: true,
+        handoffState: 'ready',
+        authAddress: '0x1234567890123456789012345678901234567890',
+      }),
+    ).toBe(false)
+  })
+
+  it('does not schedule timeout outside waitlist autologin flow', () => {
+    expect(
+      shouldScheduleReadyWithoutSessionTimeout({
+        autoLogin: false,
+        fromWaitlist: true,
+        handoffState: 'ready',
+        authAddress: null,
+      }),
+    ).toBe(false)
   })
 })
