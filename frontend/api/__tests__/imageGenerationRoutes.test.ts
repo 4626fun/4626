@@ -37,6 +37,17 @@ const {
   processImageGenerationJobMock: vi.fn(async () => ({ id: 'job_123', status: 'pending' })),
 }))
 
+
+const { getSessionAddressMock, isAdminAddressMock } = vi.hoisted(() => ({
+  getSessionAddressMock: vi.fn(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
+  isAdminAddressMock: vi.fn(() => true),
+}))
+
+vi.mock('../../server/_lib/session.js', () => ({
+  getSessionAddress: getSessionAddressMock,
+  isAdminAddress: isAdminAddressMock,
+}))
+
 vi.mock('../../server/_lib/imageProjects.js', () => ({
   createImageGenerationProject: createImageGenerationProjectMock,
   attachImageGenerationAsset: attachImageGenerationAssetMock,
@@ -56,6 +67,8 @@ describe('image generation route registration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    getSessionAddressMock.mockReturnValue('0xb05cf01231cf2ff99499682e64d3780d57c80fdd')
+    isAdminAddressMock.mockReturnValue(true)
   })
 
   it('registers all image generation routes in the API loader map', async () => {
@@ -116,6 +129,23 @@ describe('POST /api/image/projects/create', () => {
     expect(res.statusCode).toBe(405)
     expect(res.body).toEqual({ success: false, error: 'Method not allowed' })
   })
+
+  it('rejects unauthenticated callers', async () => {
+    getSessionAddressMock.mockReturnValue(null as any)
+
+    const mod = await import('../_handlers/image/_projects-create.ts')
+    const handler = mod.default
+
+    const req = createMockReq({ method: 'POST', body: { instruction: 'test' } })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body).toEqual({ success: false, error: 'Not authenticated' })
+    expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
+  })
+
 })
 
 describe('POST /api/image/projects/assets/upload', () => {

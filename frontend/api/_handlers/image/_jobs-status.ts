@@ -2,10 +2,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getImageGenerationJob } from '../../../server/_lib/imageGenerationJobs.js'
 import { processImageGenerationJob } from '../../../server/_lib/imageGenerationRunner.js'
-import { parseRequiredString, prepareImageApi } from './_shared.js'
+import { parseRequiredString, prepareImageApi, requireImageApiAdmin } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApi(req, res)) return
+  if (requireImageApiAdmin(req, res)) return
 
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
