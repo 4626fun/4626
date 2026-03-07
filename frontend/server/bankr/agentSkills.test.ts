@@ -81,6 +81,18 @@ describe('executeBankrSkill', () => {
     expect(bankrPromptMock).not.toHaveBeenCalled()
   })
 
+  it('blocks read-intent prompts for MEMBER role', async () => {
+    await expect(
+      executeBankrSkill(
+        'bankr_prompt',
+        { prompt: 'what is eth price', intent: 'read' },
+        { role: 'MEMBER' },
+      ),
+    ).rejects.toThrow(/ADMIN or OWNER role required/i)
+    expect(probeMock).not.toHaveBeenCalled()
+    expect(bankrPromptMock).not.toHaveBeenCalled()
+  })
+
   it('blocks write-intent prompts without explicit confirm=true', async () => {
     await expect(
       executeBankrSkill(
@@ -125,6 +137,19 @@ describe('executeBankrSkill', () => {
     expect(probeMock).toHaveBeenCalledTimes(1)
     expect(bankrPromptMock).toHaveBeenCalledTimes(1)
     expect((result as any).intent).toBe('write')
+    expect((result as any).walletProbe?.walletMatch).toBe(true)
+  })
+
+  it('allows read-intent prompts for OWNER without confirm', async () => {
+    const result = await executeBankrSkill(
+      'bankr_prompt',
+      { prompt: 'what is eth price', intent: 'read' },
+      { role: 'OWNER' },
+    )
+
+    expect(probeMock).toHaveBeenCalledTimes(1)
+    expect(bankrPromptMock).toHaveBeenCalledTimes(1)
+    expect((result as any).intent).toBe('read')
     expect((result as any).walletProbe?.walletMatch).toBe(true)
   })
 })
