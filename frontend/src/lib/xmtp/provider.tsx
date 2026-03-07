@@ -38,7 +38,7 @@ import {
   type AsyncStreamProxy,
 } from '@xmtp/browser-sdk'
 import { IdentifierKind } from '@xmtp/browser-sdk'
-import { getAddress, isAddress, encodeAbiParameters } from 'viem'
+import { getAddress, isAddress, encodeAbiParameters, recoverMessageAddress } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1043,29 +1043,33 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             return hexToBytes(s)
           }
 
-          // When the XMTP identity (CSW) differs from the connected wallet (Privy EOA),
-          // the raw ECDSA signature must be wrapped in the CSW's SignatureWrapper format
-          // so that isValidSignature can abi.decode(ownerIndex, signatureData).
-          const needsCswSigWrap =
-            xmtpIdentityAddress.toLowerCase() !== String(address).toLowerCase()
-          const scwSignMessageFn = needsCswSigWrap
-            ? async (message: string) => {
-                const s = await walletClient.signMessage({ message })
-                const sigBytes = hexToBytes(s)
-                if (!publicClient) return sigBytes
-                const ck = `${xmtpIdentityAddress}:${String(address).toLowerCase()}`
-                let idx = cswOwnerIndexCache.current.get(ck)
-                if (idx === undefined) {
-                  idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, String(address))
-                  cswOwnerIndexCache.current.set(ck, idx)
-                }
-                if (idx === null) {
-                  console.warn('[xmtp] Could not resolve CSW owner index; using unwrapped ECDSA signature')
-                  return sigBytes
-                }
-                return wrapCswSignature(idx, sigBytes)
-              }
-            : signMessageFn
+          // For SCW signers: after signing, detect whether the result is a raw
+          // 65-byte ECDSA signature that needs CSW SignatureWrapper wrapping.
+          // Privy's smart-wallet connector reports the CSW as `address` but
+          // walletClient.signMessage still produces a raw EOA signature, so an
+          // address comparison alone is insufficient.
+          const scwSignMessageFn = async (message: string) => {
+            const s = await walletClient.signMessage({ message })
+            const sigBytes = hexToBytes(s)
+            if (sigBytes.length !== 65 || !publicClient) return sigBytes
+            let signerAddr: string
+            try {
+              signerAddr = await recoverMessageAddress({ message, signature: s as `0x${string}` })
+            } catch { return sigBytes }
+            if (signerAddr.toLowerCase() === xmtpIdentityAddress.toLowerCase()) return sigBytes
+            const ck = `${xmtpIdentityAddress}:${signerAddr.toLowerCase()}`
+            let idx = cswOwnerIndexCache.current.get(ck)
+            if (idx === undefined) {
+              idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, signerAddr)
+              cswOwnerIndexCache.current.set(ck, idx)
+            }
+            if (idx === null) {
+              console.warn('[xmtp] Could not resolve CSW owner index for', signerAddr)
+              return sigBytes
+            }
+            console.log('[xmtp] Wrapping raw ECDSA with CSW ownerIndex', idx, 'for signer', signerAddr)
+            return wrapCswSignature(idx, sigBytes)
+          }
 
           const scwSigner: Signer = {
             type: 'SCW',
@@ -1510,23 +1514,24 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
     const xmtpIdentityAddress = resolved.identityAddress
 
-    const needsCswSigWrap =
-      xmtpIdentityAddress.toLowerCase() !== String(address).toLowerCase()
-    const scwSignMessageFn = needsCswSigWrap
-      ? async (message: string) => {
-          const s = await walletClient.signMessage({ message })
-          const sigBytes = hexToBytes(s)
-          if (!publicClient) return sigBytes
-          const ck = `${xmtpIdentityAddress}:${String(address).toLowerCase()}`
-          let idx = cswOwnerIndexCache.current.get(ck)
-          if (idx === undefined) {
-            idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, String(address))
-            cswOwnerIndexCache.current.set(ck, idx)
-          }
-          if (idx === null) return sigBytes
-          return wrapCswSignature(idx, sigBytes)
-        }
-      : signMessageFn
+    const scwSignMessageFn = async (message: string) => {
+      const s = await walletClient.signMessage({ message })
+      const sigBytes = hexToBytes(s)
+      if (sigBytes.length !== 65 || !publicClient) return sigBytes
+      let signerAddr: string
+      try {
+        signerAddr = await recoverMessageAddress({ message, signature: s as `0x${string}` })
+      } catch { return sigBytes }
+      if (signerAddr.toLowerCase() === xmtpIdentityAddress.toLowerCase()) return sigBytes
+      const ck = `${xmtpIdentityAddress}:${signerAddr.toLowerCase()}`
+      let idx = cswOwnerIndexCache.current.get(ck)
+      if (idx === undefined) {
+        idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, signerAddr)
+        cswOwnerIndexCache.current.set(ck, idx)
+      }
+      if (idx === null) return sigBytes
+      return wrapCswSignature(idx, sigBytes)
+    }
 
     // Use the same signer shape we use for normal Client.create.
     const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
