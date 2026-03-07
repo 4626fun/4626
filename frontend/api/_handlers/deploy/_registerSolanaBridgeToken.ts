@@ -334,12 +334,13 @@ function readLegacySolanaWriteDisabled(): boolean {
 }
 
 function readSolanaRegistrationRouteKind(req: VercelRequest): SolanaRegistrationRouteKind {
-  const header = requestHeader(req, 'x-cv-solana-registration-route').toLowerCase()
-  if (header === 'ovault') return 'ovault'
-  if (header === 'legacy') return 'legacy'
   const url = String((req as any)?.url ?? '').toLowerCase()
   if (url.includes('/setupsolanaovaultmesh')) return 'ovault'
   if (url.includes('/registersolanabridgetoken')) return 'legacy'
+
+  const header = requestHeader(req, 'x-cv-solana-registration-route').toLowerCase()
+  if (header === 'ovault') return 'ovault'
+  if (header === 'legacy') return 'legacy'
   return 'legacy'
 }
 
