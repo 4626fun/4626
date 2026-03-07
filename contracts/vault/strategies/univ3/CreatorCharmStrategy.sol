@@ -749,29 +749,29 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     // =================================
 
     function withdraw(uint256 amount) external override onlyVault nonReentrant returns (uint256 withdrawn) {
-        if (address(charmVault) == address(0)) return 0;
+        if (amount == 0) return 0;
 
         uint256 totalValue = getTotalAssets();
         if (totalValue == 0) return 0;
 
-        uint256 ourShares = charmVault.balanceOf(address(this));
-        uint256 sharesToWithdraw = (ourShares * amount) / totalValue;
-        if (sharesToWithdraw > ourShares) sharesToWithdraw = ourShares;
-        if (sharesToWithdraw == 0) return 0;
+        if (address(charmVault) != address(0)) {
+            uint256 ourShares = charmVault.balanceOf(address(this));
+            uint256 sharesToWithdraw = (ourShares * amount) / totalValue;
+            if (sharesToWithdraw > ourShares) sharesToWithdraw = ourShares;
 
-        bool creatorIsToken0 = address(charmVault.token0()) == address(CREATOR);
-
-        (uint256 amount0, uint256 amount1) = charmVault.withdraw(sharesToWithdraw, 0, 0, address(this));
-        uint256 creatorReceived = creatorIsToken0 ? amount0 : amount1;
-        uint256 usdcReceived = creatorIsToken0 ? amount1 : amount0;
+            if (sharesToWithdraw > 0) {
+                charmVault.withdraw(sharesToWithdraw, 0, 0, address(this));
+            }
+        }
 
         // Convert any USDC back to CREATOR before returning.
         uint256 totalUsdc = USDC.balanceOf(address(this));
-        if (usdcReceived > 0 || totalUsdc > 0) {
-            creatorReceived += _swapUsdcToCreatorRequired(totalUsdc);
+        if (totalUsdc > 0) {
+            _swapUsdcToCreatorRequired(totalUsdc);
         }
 
-        withdrawn = creatorReceived;
+        uint256 availableCreator = CREATOR.balanceOf(address(this));
+        withdrawn = availableCreator > amount ? amount : availableCreator;
         if (withdrawn > 0) {
             CREATOR.safeTransfer(vault, withdrawn);
         }
