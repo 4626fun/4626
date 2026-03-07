@@ -56,6 +56,15 @@ function normalizeEmail(value: unknown): string | null {
   return raw
 }
 
+function isPrivyUserIdUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('profiles_privy_user_id_unique') ||
+    (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
+  )
+}
+
 function extractPrivyEmail(user: PrivyUserLike): string | null {
   const direct = normalizeEmail((user as any)?.email?.address)
   if (direct) return direct
@@ -535,57 +544,91 @@ async function insertOrUpdateProfile(params: {
     return existing.id
   }
 
-  const inserted = await db.sql`
-    INSERT INTO profiles (
-      email,
-      privy_user_id,
-      primary_smart_wallet,
-      primary_embedded_eoa,
-      primary_wallet,
-      embedded_wallet,
-      embedded_wallet_chain,
-      embedded_wallet_client_type,
-      canonical_solana_wallet,
-      operational_solana_wallet,
-      solana_wallet,
-      csw_address,
-      base_sub_account,
-      updated_at
-    )
-    VALUES (
-      ${email},
-      ${privyUserId},
-      ${canonical},
-      ${embedded},
-      ${primary},
-      ${embedded},
-      ${classification.embeddedEoa?.chainType ?? null},
-      ${classification.embeddedEoa?.clientType ?? null},
-      ${canonicalSolana},
-      ${operationalSolana},
-      ${canonicalSolana},
-      ${canonical},
-      ${canonical},
-      NOW()
-    )
-    ON CONFLICT (email) DO UPDATE
-    SET
-      email = COALESCE(profiles.email, EXCLUDED.email),
-      privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
-      primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
-      primary_embedded_eoa = COALESCE(EXCLUDED.primary_embedded_eoa, profiles.primary_embedded_eoa),
-      primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
-      embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
-      embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
-      embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
-      canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
-      operational_solana_wallet = COALESCE(EXCLUDED.operational_solana_wallet, profiles.operational_solana_wallet),
-      solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
-      csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
-      base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
-      updated_at = NOW()
-    RETURNING id;
-  `
+  const updateByPrivyUserId = async () => {
+    if (!privyUserId) return null
+    const updated = await db.sql`
+      UPDATE profiles
+      SET
+        email = COALESCE(profiles.email, ${email}),
+        primary_smart_wallet = COALESCE(${canonical}, primary_smart_wallet),
+        primary_embedded_eoa = COALESCE(${embedded}, primary_embedded_eoa),
+        primary_wallet = COALESCE(${primary}, primary_wallet),
+        embedded_wallet = COALESCE(${embedded}, embedded_wallet),
+        embedded_wallet_chain = COALESCE(${classification.embeddedEoa?.chainType ?? null}, embedded_wallet_chain),
+        embedded_wallet_client_type = COALESCE(${classification.embeddedEoa?.clientType ?? null}, embedded_wallet_client_type),
+        canonical_solana_wallet = COALESCE(${canonicalSolana}, canonical_solana_wallet),
+        operational_solana_wallet = COALESCE(${operationalSolana}, operational_solana_wallet),
+        solana_wallet = COALESCE(${canonicalSolana}, solana_wallet),
+        csw_address = COALESCE(${canonical}, csw_address),
+        base_sub_account = COALESCE(${canonical}, base_sub_account),
+        updated_at = NOW()
+      WHERE privy_user_id = ${privyUserId}
+      RETURNING id;
+    `
+    const id = updated.rows?.[0]?.id
+    if (!id) return null
+    return Number(id)
+  }
+
+  let inserted: { rows: any[] }
+  try {
+    inserted = await db.sql`
+      INSERT INTO profiles (
+        email,
+        privy_user_id,
+        primary_smart_wallet,
+        primary_embedded_eoa,
+        primary_wallet,
+        embedded_wallet,
+        embedded_wallet_chain,
+        embedded_wallet_client_type,
+        canonical_solana_wallet,
+        operational_solana_wallet,
+        solana_wallet,
+        csw_address,
+        base_sub_account,
+        updated_at
+      )
+      VALUES (
+        ${email},
+        ${privyUserId},
+        ${canonical},
+        ${embedded},
+        ${primary},
+        ${embedded},
+        ${classification.embeddedEoa?.chainType ?? null},
+        ${classification.embeddedEoa?.clientType ?? null},
+        ${canonicalSolana},
+        ${operationalSolana},
+        ${canonicalSolana},
+        ${canonical},
+        ${canonical},
+        NOW()
+      )
+      ON CONFLICT (email) DO UPDATE
+      SET
+        email = COALESCE(profiles.email, EXCLUDED.email),
+        privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+        primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
+        primary_embedded_eoa = COALESCE(EXCLUDED.primary_embedded_eoa, profiles.primary_embedded_eoa),
+        primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
+        embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
+        embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
+        embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
+        canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
+        operational_solana_wallet = COALESCE(EXCLUDED.operational_solana_wallet, profiles.operational_solana_wallet),
+        solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
+        csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
+        base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
+        updated_at = NOW()
+      RETURNING id;
+    `
+  } catch (error) {
+    if (!isPrivyUserIdUniqueViolation(error)) throw error
+    const recoveredId = await updateByPrivyUserId()
+    if (recoveredId) return recoveredId
+    throw error
+  }
   const insertedId = inserted.rows?.[0]?.id
   if (insertedId) return Number(insertedId)
 

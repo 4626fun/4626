@@ -275,6 +275,30 @@ function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
 }
 
 /**
+ * Rotate all .db3 files in the XMTP DB directory to `.corrupt.{timestamp}`.
+ * Called when Agent.create fails with "database disk image is malformed".
+ * The SDK will create a fresh DB (and new installation) on the next attempt.
+ */
+function rotateCorruptXmtpDbFiles(): void {
+  try {
+    const files = fs.readdirSync(XMTP_DB_DIR).filter((f: string) => f.endsWith('.db3'))
+    const ts = Date.now()
+    for (const f of files) {
+      const src = path.join(XMTP_DB_DIR, f)
+      const dest = `${src}.corrupt.${ts}`
+      try {
+        fs.renameSync(src, dest)
+        console.warn(`[xmtp] Rotated corrupt DB: ${f} → ${path.basename(dest)}`)
+      } catch (err) {
+        console.error(`[xmtp] Failed to rotate ${f}:`, err)
+      }
+    }
+  } catch (err) {
+    console.error('[xmtp] Failed to scan DB directory for rotation:', err)
+  }
+}
+
+/**
  * Build a stable `dbPath` function for the XMTP SDK.
  * Ensures the directory exists and returns a deterministic path
  * per inboxId so the same installation is reused across restarts.
@@ -410,8 +434,16 @@ async function withRetry<T>(params: {
         asAgentError.code === 'UPSTREAM_TIMEOUT' ||
         asAgentError.code === 'UPSTREAM_ERROR' ||
         asAgentError.code === 'DEPENDENCY_UNAVAILABLE'
-      if (!retryable || attempt >= maxRetries) break
+      if (!retryable || attempt >= maxRetries) {
+        console.error(
+          `[eliza] ${params.operation} failed (attempt ${attempt + 1}/${maxRetries + 1}, retryable=${retryable}): ${asAgentError.message}`,
+        )
+        break
+      }
       const waitMs = baseDelayMs * Math.pow(2, attempt)
+      console.warn(
+        `[eliza] ${params.operation} attempt ${attempt + 1} failed, retrying in ${waitMs}ms: ${asAgentError.message}`,
+      )
       logger.warn('[eliza] retrying operation after failure', {
         operation: params.operation,
         attempt: attempt + 1,
@@ -1230,23 +1262,57 @@ async function startSingleAgentCsw(params: {
     )
   })
 
-  await withRetry({
-    operation: 'xmtp_start_single_csw',
-    maxRetries: EXTERNAL_MAX_RETRIES,
-    run: async () => {
-      await xmtp.start()
-    },
-  })
+  let activeXmtp = xmtp
+  try {
+    await withRetry({
+      operation: 'xmtp_start_single_csw',
+      maxRetries: EXTERNAL_MAX_RETRIES,
+      run: async () => {
+        await activeXmtp.start()
+      },
+    })
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.toLowerCase().includes('malformed') || msg.toLowerCase().includes('disk image')) {
+      console.warn('[eliza] XMTP database is corrupted — rotating corrupt files and creating fresh installation')
+      rotateCorruptXmtpDbFiles()
+      activeXmtp = new XmtpService({
+        signer: createPrivyScwSigner({
+          walletId: params.privyWalletId,
+          cswAddress: params.cswAddress,
+          ownerIndex: params.ownerIndex,
+          chainId: params.chainId ?? 8453,
+        }),
+        env: XMTP_ENV,
+        dbPath: makeDbPath(),
+        dbEncryptionKey,
+        revokeOtherInstallations: XMTP_REVOKE_OTHER,
+      })
+      activeXmtp.setMessageHandler(async (m) => {
+        logger.info(
+          `[eliza:csw] ${m.senderAddress?.slice(0, 10) ?? m.senderInboxId.slice(0, 10)}: ${m.content.slice(0, 80)}`,
+        )
+        return handleMessage(
+          { conversationId: m.conversationId, conversationType: m.conversationType, senderAddress: m.senderAddress, content: m.content },
+          { agentKey: 'single-agent-csw', runtimeBridge },
+        )
+      })
+      await activeXmtp.start()
+      console.log('[eliza] Fresh XMTP installation created after corrupt DB rotation')
+    } else {
+      throw error
+    }
+  }
 
   logger.info(`[eliza] Single CSW agent started`, {
-    agentAddress: xmtp.address,
+    agentAddress: activeXmtp.address,
     cswAddress: params.cswAddress,
     privyWalletId: params.privyWalletId.slice(0, 12) + '...',
   })
 
   return {
     creatorAddress: 'single-agent-csw',
-    xmtp,
+    xmtp: activeXmtp,
     runtimeBridge,
     rowFingerprint: `single-agent:csw:${params.cswAddress.toLowerCase()}`,
     startedAtMs: Date.now(),
@@ -1655,8 +1721,11 @@ function startHealthServer() {
 }
 
 void main().catch((err) => {
+  const msg = err instanceof Error ? err.message : String(err)
+  console.error(`[eliza] Fatal error: ${msg}`)
+  if (err instanceof Error && err.stack) console.error(err.stack)
   logger.error('[eliza] Fatal error', {
-    error: err instanceof Error ? err.message : String(err),
+    error: msg,
     stack: err instanceof Error ? err.stack : undefined,
   })
   process.exit(1)
