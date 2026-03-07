@@ -1422,15 +1422,40 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               await setupConversations(buildClient)
               return
             } catch (registerErr) {
+              const regMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
               console.error('[xmtp] In-place registration for restored installation failed:', registerErr)
               try { buildClient.close() } catch {}
               clientRef.current = null
-              setStatus('error')
-              setError(
-                'XMTP restored your local installation but identity registration failed. ' +
-                'Refusing to create a new installation to avoid churn. Retry after reconnecting wallet, or use Reset XMTP installations.',
-              )
-              return
+
+              if (regMsg.toLowerCase().includes('uninitialized')) {
+                console.warn(
+                  '[xmtp] Restored installation cannot be registered (stale OPFS state). ' +
+                  'Clearing OPFS database and falling through to Client.create for a fresh installation.',
+                )
+                try {
+                  const opfs = await Opfs.create()
+                  try {
+                    const files = await opfs.listFiles()
+                    for (const f of files) {
+                      if (f.endsWith('.db3')) {
+                        const ok = await opfs.deleteFile(f)
+                        console.log(`[xmtp] Deleted stale OPFS file: ${f} (${ok})`)
+                      }
+                    }
+                  } finally { opfs.close() }
+                } catch (opfsErr) {
+                  console.warn('[xmtp] OPFS cleanup failed:', opfsErr)
+                }
+                // Fall through — execution will exit the catch/if blocks and
+                // reach the Client.create path below with a clean OPFS.
+              } else {
+                setStatus('error')
+                setError(
+                  'XMTP restored your local installation but identity registration failed. ' +
+                  'Refusing to create a new installation to avoid churn. Retry after reconnecting wallet, or use Reset XMTP installations.',
+                )
+                return
+              }
             }
           } else {
             // Transient error (network timeout, server error, etc.).
