@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { validateRoutePolicy, validateTokenPolicy } from '../../../server/uniswap/guards.js'
+import { validateQuoteTokenPolicy, validateRoutePolicy } from '../../../server/uniswap/guards.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
 function isErc20EthEnabledHeader(req: VercelRequest): boolean {
@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     body.wrapUnwrapQuote ??
     body.bridgeQuote ??
     body.priorityQuote) as Record<string, unknown>
-  const tokenPolicyErr = validateTokenPolicy(quoteObj, ['tokenIn', 'tokenOut'])
+  const tokenPolicyErr = validateQuoteTokenPolicy(quoteObj)
   if (tokenPolicyErr) {
     return res.status(400).json({ success: false, error: tokenPolicyErr })
   }

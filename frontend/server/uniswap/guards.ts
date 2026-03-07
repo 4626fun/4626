@@ -36,6 +36,10 @@ function parseCsvStringSet(raw: string): Set<string> {
   return out
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function readMaxInputBaseUnits(): bigint | null {
   const raw = String(process.env.UNISWAP_MAX_INPUT_BASE_UNITS ?? '').trim()
   if (!raw || !DECIMAL_INT_RE.test(raw)) return null
@@ -118,6 +122,26 @@ export function validateTokenPolicy(payload: Record<string, unknown>, fields: st
     if (allowlist.size > 0 && !allowlist.has(normalized)) return `Token not allowlisted: ${field}`
   }
   return null
+}
+
+function quoteTokenFields(quote: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {
+    tokenIn: quote.tokenIn,
+    tokenOut: quote.tokenOut,
+  }
+
+  if (normalized.tokenIn == null && isObject(quote.input)) {
+    normalized.tokenIn = quote.input.token
+  }
+  if (normalized.tokenOut == null && isObject(quote.output)) {
+    normalized.tokenOut = quote.output.token
+  }
+
+  return normalized
+}
+
+export function validateQuoteTokenPolicy(quote: Record<string, unknown>): string | null {
+  return validateTokenPolicy(quoteTokenFields(quote), ['tokenIn', 'tokenOut'])
 }
 
 export function validateRoutePolicy(routing: unknown): string | null {

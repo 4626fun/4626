@@ -1,0 +1,47 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { applyEnv, createMockReq, createMockRes } from '../helpers'
+
+async function loadSwapHandler() {
+  const mod = await import('../../_handlers/uniswap/_swap.ts')
+  return mod.default
+}
+
+describe('/api/uniswap/swap token policy with nested quote tokens', () => {
+  let restoreEnv: (() => void) | null = null
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    if (restoreEnv) restoreEnv()
+    restoreEnv = null
+  })
+
+  it('rejects denylisted token from quote.input/quote.output', async () => {
+    restoreEnv = applyEnv({
+      UNISWAP_TOKEN_DENYLIST: '0x0000000000000000000000000000000000000001',
+    })
+
+    const handler = await loadSwapHandler()
+    const req = createMockReq({
+      method: 'POST',
+      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.99' },
+      body: {
+        quote: {
+          input: { token: '0x0000000000000000000000000000000000000001', amount: '1' },
+          output: { token: '0x0000000000000000000000000000000000000002', amount: '1' },
+          routing: 'CLASSIC',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toMatch(/denied/i)
+  })
+})
