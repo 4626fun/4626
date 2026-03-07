@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { getSessionAddress, isAdminAddress } from '../../../server/_lib/session.js'
 
 export type ImageMutationBody = {
   projectId?: string
@@ -13,6 +14,19 @@ export function prepareImageApi(req: VercelRequest, res: VercelResponse): boolea
   setCors(req, res)
   setNoStore(res)
   return handleOptions(req, res)
+}
+
+export function requireImageApiAdmin(req: VercelRequest, res: VercelResponse): boolean {
+  const actor = getSessionAddress(req)
+  if (!actor) {
+    res.status(401).json({ success: false, error: 'Not authenticated' })
+    return true
+  }
+  if (!isAdminAddress(actor)) {
+    res.status(403).json({ success: false, error: 'Admin only' })
+    return true
+  }
+  return false
 }
 
 export async function readBody<T>(req: VercelRequest): Promise<T> {

@@ -95,7 +95,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       privyUser: context.privyUser,
     })
 
-    const emailToPersist = email ?? normalizeEmail((context.privyUser as any)?.email?.address)
+    const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
+    if (email && email !== privyEmail) {
+      return res.status(400).json({ success: false, error: 'Email does not match authenticated user' } satisfies ApiEnvelope<never>)
+    }
+
+    const emailToPersist = privyEmail
     if (emailToPersist) {
       await upsertAccount({
         db: db as any,
@@ -132,4 +137,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 }
-
