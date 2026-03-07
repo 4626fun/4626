@@ -80,6 +80,42 @@ type PrivyDebugState = {
   embeddedWalletSource: string | null
 }
 
+type CanonicalSubmitSessionInput = {
+  executionMode: 'canonical' | 'eoa'
+  sessionHydrated: boolean
+  hasSession: boolean
+  sessionAddress: string | null | undefined
+  executionAddress: string | null | undefined
+}
+
+type CanonicalSubmitSessionResult =
+  | { ok: true; code: 'ok' | 'not-required'; message: null; shouldAttemptRefresh: false }
+  | {
+      ok: false
+      code: 'session-hydrating' | 'session-missing' | 'session-mismatch'
+      message: string
+      shouldAttemptRefresh: boolean
+    }
+
+export async function resolveCanonicalSubmitSession(
+  input: CanonicalSubmitSessionInput,
+  ensureCanonicalSession?: (() => Promise<boolean>) | null,
+): Promise<CanonicalSubmitSessionResult> {
+  const current = evaluateCanonicalSubmitSession(input)
+  if (current.ok) return current
+  if (!current.shouldAttemptRefresh || typeof ensureCanonicalSession !== 'function') return current
+
+  const refreshed = await ensureCanonicalSession().catch(() => false)
+  if (!refreshed) return current
+
+  return {
+    ok: true,
+    code: 'ok',
+    message: null,
+    shouldAttemptRefresh: false,
+  }
+}
+
 type SwapTxDebugState = {
   enabled: boolean
   chainId: number
@@ -107,6 +143,53 @@ const EMPTY_CAPABILITIES: AccountCapabilities = {
   paymasterService: false,
   atomicStatus: 'unknown',
   supports5792: false,
+}
+
+export function evaluateCanonicalSubmitSession(input: CanonicalSubmitSessionInput): CanonicalSubmitSessionResult {
+  if (input.executionMode !== 'canonical') {
+    return {
+      ok: true,
+      code: 'not-required',
+      message: null,
+      shouldAttemptRefresh: false,
+    }
+  }
+
+  if (!input.sessionHydrated) {
+    return {
+      ok: false,
+      code: 'session-hydrating',
+      message: 'Still restoring your 4626 session. Please wait a moment and try again.',
+      shouldAttemptRefresh: false,
+    }
+  }
+
+  if (!input.hasSession || !input.sessionAddress) {
+    return {
+      ok: false,
+      code: 'session-missing',
+      message: 'Your 4626 session expired. Restore your account connection and try again.',
+      shouldAttemptRefresh: true,
+    }
+  }
+
+  const executionAddress =
+    typeof input.executionAddress === 'string' && input.executionAddress.trim().length > 0 ? input.executionAddress : null
+  if (executionAddress && input.sessionAddress.toLowerCase() !== executionAddress.toLowerCase()) {
+    return {
+      ok: false,
+      code: 'session-mismatch',
+      message: 'Your restored 4626 session does not match the canonical swap wallet. Restore your account connection and try again.',
+      shouldAttemptRefresh: true,
+    }
+  }
+
+  return {
+    ok: true,
+    code: 'ok',
+    message: null,
+    shouldAttemptRefresh: false,
+  }
 }
 
 function isSwapDebugEnabled(): boolean {
@@ -160,6 +243,10 @@ export function useSwapExecution(params: {
   connectorName?: string | null
   canonicalSignerDebug?: CanonicalSignerDebugState | null
   privyDebug?: PrivyDebugState | null
+  sessionHydrated?: boolean
+  hasSession?: boolean
+  sessionAddress?: string | null
+  ensureCanonicalSession?: (() => Promise<boolean>) | null
 }) {
   const swapDebugEnabled = useMemo(() => isSwapDebugEnabled(), [])
   const [estimatedOut, setEstimatedOut] = useState<string>('')
@@ -482,6 +569,17 @@ export function useSwapExecution(params: {
   const approvalTx = approvalData?.approval as Record<string, unknown> | undefined
   const approvalRequired = Boolean(approvalTx?.to && approvalTx?.data)
   const quoteIsStale = quoteUpdatedAt ? quoteClockMs - quoteUpdatedAt > QUOTE_TTL_MS : true
+  const canonicalSubmitSession = useMemo(
+    () =>
+      evaluateCanonicalSubmitSession({
+        executionMode: params.executionMode,
+        sessionHydrated: Boolean(params.sessionHydrated),
+        hasSession: Boolean(params.hasSession),
+        sessionAddress: params.sessionAddress ?? null,
+        executionAddress: params.executionAddress ?? null,
+      }),
+    [params.executionAddress, params.executionMode, params.hasSession, params.sessionAddress, params.sessionHydrated],
+  )
 
   useEffect(() => {
     if (!quoteUpdatedAt) return
@@ -1094,6 +1192,21 @@ export function useSwapExecution(params: {
     setError('')
     try {
       const approvalTx = options?.approvalTx ?? null
+      if (params.executionMode === 'canonical') {
+        const sessionGuard = await resolveCanonicalSubmitSession(
+          {
+          executionMode: params.executionMode,
+          sessionHydrated: Boolean(params.sessionHydrated),
+          hasSession: Boolean(params.hasSession),
+          sessionAddress: params.sessionAddress ?? null,
+          executionAddress: params.executionAddress ?? null,
+        },
+          params.ensureCanonicalSession,
+        )
+        if (!sessionGuard.ok) {
+          throw new Error(sessionGuard.message)
+        }
+      }
       // Canary users get a best-effort 7702 preflight; send path still falls
       // back to canonical ERC-4337 on any issue.
       if (params.executionMode === 'canonical' && canary7702Eligible) {
@@ -1171,10 +1284,14 @@ export function useSwapExecution(params: {
     swapChainId,
     params.executionMode,
     params.executionAddress,
+    params.ensureCanonicalSession,
+    params.hasSession,
     params.signerAddress,
     params.canonicalAddress,
     params.connectorId,
     params.connectorName,
+    params.sessionAddress,
+    params.sessionHydrated,
     params.signerType,
     normalizedCapabilities,
     getErrorMessage,
@@ -1283,6 +1400,7 @@ export function useSwapExecution(params: {
     txState,
     txHash,
     isReady,
+    canonicalSubmitSession,
     approvalRequired,
     tokensEquivalent,
     quoteIsStale,

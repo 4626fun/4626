@@ -15,6 +15,24 @@ describe('normalizeUniswapError', () => {
     expect(normalizeUniswapError('approval required').code).toBe('APPROVAL_REQUIRED')
   })
 
+  it('maps missing 4626 session token during canonical submit', () => {
+    const normalized = normalizeUniswapError('Missing 4626 session token for paymaster request.')
+    expect(normalized.code).toBe('AUTH_REQUIRED')
+    expect(normalized.message).toContain('sign in again')
+  })
+
+  it('maps paymaster unauthenticated errors', () => {
+    const normalized = normalizeUniswapError('request denied - not authenticated')
+    expect(normalized.code).toBe('AUTH_REQUIRED')
+    expect(normalized.message.toLowerCase()).toContain('restore your 4626 session')
+  })
+
+  it('maps canonical ownership mismatch errors', () => {
+    const normalized = normalizeUniswapError('not_owner: session principal does not own sender CSW')
+    expect(normalized.code).toBe('AUTH_REQUIRED')
+    expect(normalized.message).toContain('session does not match')
+  })
+
   it('falls back safely', () => {
     const normalized = normalizeUniswapError('weird edge case')
     expect(normalized.code).toBe('UNKNOWN')
