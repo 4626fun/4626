@@ -269,6 +269,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint256 charmWeightBps;
         uint256 ajnaWeightBps;
         uint256 solanaWeightBps;
+        address solanaKeeper;
+        uint64 solanaMaxNavAge;
+        uint16 solanaMaxNavDeltaBpsPerUpdate;
+        uint16 solanaMinBaseLiquidityBps;
+        address solanaBridgeAddress;
         bool enableAutoAllocate;
     }
 
@@ -976,7 +981,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Deploy + register initial yield strategies (Charm CREATOR/USDC + Ajna lending).
+     * @notice Deploy + register initial yield strategies (Charm + Ajna + SolanaStrategy).
      * @dev Uses UniversalBytecodeStore + CREATE2 deployer to avoid embedding initcode in this batcher.
      */
     function deployPhase3Strategies(Phase3Params calldata params, StrategyCodeIds calldata codeIds)
@@ -990,17 +995,18 @@ contract DeploymentBatcher is ReentrancyGuard {
             revert ZeroAddress();
         }
         if (params.charmWeightBps == 0 || params.charmWeightBps > 10_000) revert InvalidWeight();
-        if (params.ajnaWeightBps > 10_000) revert InvalidWeight();
-        if (params.solanaWeightBps > 10_000) revert InvalidWeight();
+        if (params.ajnaWeightBps == 0 || params.ajnaWeightBps > 10_000) revert InvalidWeight();
+        if (params.solanaWeightBps == 0 || params.solanaWeightBps > 10_000) revert InvalidWeight();
         if (params.charmWeightBps + params.ajnaWeightBps + params.solanaWeightBps > 10_000) revert InvalidWeight();
 
-        if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)) {
+        if (
+            codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)
+                || codeIds.ajnaStrategy == bytes32(0) || codeIds.solanaStrategy == bytes32(0)
+        ) {
             revert InvalidCodeId();
         }
-        if (params.ajnaWeightBps > 0 && codeIds.ajnaStrategy == bytes32(0)) revert InvalidCodeId();
-        if (params.solanaWeightBps > 0 && codeIds.solanaStrategy == bytes32(0)) revert InvalidCodeId();
-        if (params.solanaWeightBps > 0 && (solanaBridgeAdapter == address(0) || solanaDestination == bytes32(0))) {
-            revert InvalidSolanaBridgeConfig();
+        if (params.solanaKeeper == address(0) || params.solanaBridgeAddress == address(0)) {
+            revert ZeroAddress();
         }
 
         // ───────────────────────────────
@@ -1053,38 +1059,36 @@ contract DeploymentBatcher is ReentrancyGuard {
         IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
 
         // ───────────────────────────────
-        // 4) Deploy Ajna strategy (optional) + transfer ownership
+        // 4) Deploy Ajna strategy + transfer ownership
         // ───────────────────────────────
-        if (params.ajnaWeightBps > 0) {
-            bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategy");
-            bytes memory ajnaArgs = abi.encode(params.vault, params.creatorToken, ajnaFactory, usdc, address(this));
-            out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.ajnaStrategy, ajnaArgs);
-            // Keep strategy-level admin powers under protocol custody to prevent creator-side
-            // owner accounts from pausing then rescuing vault-backed creator tokens.
-            IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
-        }
+        bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategy");
+        bytes memory ajnaArgs = abi.encode(params.vault, params.creatorToken, ajnaFactory, usdc, address(this));
+        out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.ajnaStrategy, ajnaArgs);
+        IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
 
         // ───────────────────────────────
-        // 5) Deploy Solana bridge strategy (optional) + transfer ownership
+        // 4b) Deploy Solana strategy + transfer ownership
         // ───────────────────────────────
-        if (params.solanaWeightBps > 0) {
-            bytes32 solanaSalt = _saltFor(baseSalt, "solanaBridgeStrategy");
-            bytes memory solanaArgs =
-                abi.encode(params.vault, params.creatorToken, solanaBridgeAdapter, solanaDestination, address(this));
-            out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
-            IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
-        }
+        bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
+        bytes memory solanaArgs = abi.encode(
+            params.vault,
+            params.creatorToken,
+            address(this),
+            params.solanaKeeper,
+            params.solanaMaxNavAge,
+            params.solanaMaxNavDeltaBpsPerUpdate,
+            params.solanaMinBaseLiquidityBps,
+            params.solanaBridgeAddress
+        );
+        out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
+        IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
 
         // ───────────────────────────────
-        // 6) Register strategies on the vault (batcher remains `management` from Phase 1)
+        // 5) Register strategies on the vault (batcher remains `management` from Phase 1)
         // ───────────────────────────────
         ICreatorOVaultStrategyManager(params.vault).addStrategy(out.charmStrategy, params.charmWeightBps);
-        if (params.ajnaWeightBps > 0) {
-            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
-        }
-        if (params.solanaWeightBps > 0) {
-            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.solanaStrategy, params.solanaWeightBps);
-        }
+        ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
+        ICreatorOVaultStrategyManager(params.vault).addStrategy(out.solanaStrategy, params.solanaWeightBps);
         if (params.enableAutoAllocate) {
             ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
         }

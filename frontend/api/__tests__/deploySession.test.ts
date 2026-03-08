@@ -529,6 +529,55 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
+  it('status progresses phase2 to phase3 then phase4 in order when both are present', async () => {
+    const recPhase2 = {
+      ...makeDeploySession('phase2_sent'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+      lastUserOpHash: `0x${'2'.repeat(64)}`,
+    }
+    const recPhase3 = {
+      ...recPhase2,
+      step: 'phase3_sent',
+      lastUserOpHash: `0x${'3'.repeat(64)}`,
+    }
+    const recPhase4 = {
+      ...recPhase2,
+      step: 'phase4_sent',
+      lastUserOpHash: `0x${'4'.repeat(64)}`,
+    }
+    getDeploySessionByIdMock
+      // first status poll
+      .mockResolvedValueOnce(recPhase2)
+      .mockResolvedValueOnce(recPhase3)
+      // second status poll
+      .mockResolvedValueOnce(recPhase3)
+      .mockResolvedValueOnce(recPhase4)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req1 = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res1 = createMockRes()
+    await statusHandler(req1, res1)
+
+    const req2 = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res2 = createMockRes()
+    await statusHandler(req2, res2)
+
+    expect(res1.statusCode).toBe(200)
+    expect(res1.body?.data?.step).toBe('phase3_sent')
+    expect(res2.statusCode).toBe(200)
+    expect(res2.body?.data?.step).toBe('phase4_sent')
+
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(2)
+    const firstArgs = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    const secondArgs = (sendUserOperationMock.mock.calls as any[])[1]?.[1] as any
+    expect(String(firstArgs.calls[0]?.to)).toBe('0xphase3target')
+    expect(String(secondArgs.calls[0]?.to)).toBe('0xphase4target')
+  })
+
   it('continue honors required downstream stages when payload is stringified JSON', async () => {
     const rec = {
       ...makeDeploySession('phase2_core_confirmed'),

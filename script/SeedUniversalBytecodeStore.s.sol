@@ -156,10 +156,7 @@ contract SeedUniversalBytecodeStore is Script {
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
-                store,
-                vm.getCode("out/SolanaBridgeStrategy.sol/SolanaBridgeStrategy.json"),
-                "SolanaBridgeStrategy",
-                supportsChunking
+                store, vm.getCode("out/SolanaStrategy.sol/SolanaStrategy.json"), "SolanaStrategy", supportsChunking
             );
         }
         vm.stopBroadcast();

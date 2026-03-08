@@ -135,15 +135,20 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             charmVaultName: "Charm Vault",
             charmVaultSymbol: "CHV",
             charmWeightBps: 7000,
-            ajnaWeightBps: 3000,
-            solanaWeightBps: 0,
+            ajnaWeightBps: 2000,
+            solanaWeightBps: 1000,
+            solanaKeeper: makeAddr("solanaKeeper"),
+            solanaMaxNavAge: 3600,
+            solanaMaxNavDeltaBpsPerUpdate: 500,
+            solanaMinBaseLiquidityBps: 1_000,
+            solanaBridgeAddress: makeAddr("solanaBridge"),
             enableAutoAllocate: true
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
             creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaStrategy: AJNA_STRATEGY_CODE_ID,
-            solanaStrategy: bytes32(0)
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID
         });
 
         vm.prank(ownerAddr);

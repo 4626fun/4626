@@ -3,7 +3,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   concatHex,
   decodeFunctionData,
-  encodeFunctionData,
   encodeAbiParameters,
   encodePacked,
   getAddress,
@@ -16,6 +15,7 @@ import {
 
 import { getApiContracts } from '../../server/_lib/contracts.js'
 import { logger } from '../../server/_lib/logger.js'
+import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../server/_lib/postgres.js'
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { resolveCoinParties } from '../../server/_lib/coinParties.js'
@@ -24,8 +24,6 @@ import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/s
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../server/auth/_shared.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
-import { hasContractBytecode } from '../../src/wallet/canonicalWalletPolicy.js'
-import { isOfficialCharmVault } from '../../server/_lib/charmVaults.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -456,34 +454,6 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
     ],
     outputs: [],
   },
-  // Legacy finalizePhase2 signature kept for in-flight old sessions.
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [],
-  },
   {
     type: 'function',
     name: 'deployPhase2AndLaunchWithPermit',
@@ -553,6 +523,11 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'solanaKeeper', type: 'address' },
+          { name: 'solanaMaxNavAge', type: 'uint64' },
+          { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
+          { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
+          { name: 'solanaBridgeAddress', type: 'address' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -564,40 +539,6 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'creatorCharmStrategy', type: 'bytes32' },
           { name: 'ajnaStrategy', type: 'bytes32' },
           { name: 'solanaStrategy', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-  // Legacy phase-3 signature for in-flight sessions.
-  {
-    type: 'function',
-    name: 'deployPhase3Strategies',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'initialSqrtPriceX96', type: 'uint160' },
-          { name: 'charmVaultName', type: 'string' },
-          { name: 'charmVaultSymbol', type: 'string' },
-          { name: 'charmWeightBps', type: 'uint256' },
-          { name: 'ajnaWeightBps', type: 'uint256' },
-          { name: 'enableAutoAllocate', type: 'bool' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-          { name: 'creatorCharmStrategy', type: 'bytes32' },
-          { name: 'ajnaStrategy', type: 'bytes32' },
         ],
       },
     ],
@@ -636,8 +577,6 @@ const COINBASE_SMART_WALLET_FACTORIES = new Set<Address>([
 const SELECTOR_ERC20_APPROVE = '0x095ea7b3'
 const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
-const SELECTOR_SWAP_ROUTER_EXECUTE = '0x24856bc3' // execute(bytes,bytes[])
-const SELECTOR_SWAP_ROUTER_EXECUTE_WITH_DEADLINE = '0x3593564c' // execute(bytes,bytes[],uint256)
 
 // Coinbase Smart Wallet owner management (used for deploy sessions)
 const SELECTOR_CSW_ADD_OWNER_ADDRESS = '0x0f0f3f24' // addOwnerAddress(address)
@@ -653,15 +592,8 @@ const SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT = '0x3bc09a8b'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
-// finalizePhase2 selectors:
-// - current (includes meteoraAlphaVault + solanaIxs): 0xbd4583fb
-// - permit2-backed current tuple: 0x0ecf9382
-// - legacy (pre-Solana tuple extension): 0xcafc9348
 const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
-const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0x0ecf9382'
-const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
-const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0xc5dd5bd0'
-const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY = '0x6e3f91b0'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 
@@ -672,10 +604,6 @@ const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23' // deploy(bytes32,bytes3
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
-const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
-const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
-const SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT = '0x3e6881c8' // updateStrategyWeight(address,uint256)
-const SELECTOR_CHARM_REBALANCE = '0x7d7c2a1c' // rebalance()
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 const SELECTOR_ERC8004_SET_AGENT_WALLET = '0x2d1ef5ae' // setAgentWallet(uint256,address,uint256,bytes)
@@ -698,10 +626,7 @@ const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT,
   SELECTOR_BATCHER_DEPLOY_PHASE2_CORE,
   SELECTOR_BATCHER_FINALIZE_PHASE2,
-  SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2,
-  SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
-  SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY,
   SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
 
@@ -712,37 +637,6 @@ const ALLOWED_ACTIVATION_SELECTORS = new Set<string>([
 
 const ALLOWED_TOKEN_SELECTORS = new Set<string>([SELECTOR_ERC20_APPROVE, SELECTOR_COIN_SET_PAYOUT_RECIPIENT])
 const ALLOWED_PERMIT2_SELECTORS = new Set<string>([SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM])
-const ALLOWED_SWAP_ROUTER_SELECTORS = new Set<string>([
-  SELECTOR_SWAP_ROUTER_EXECUTE,
-  SELECTOR_SWAP_ROUTER_EXECUTE_WITH_DEADLINE,
-])
-
-const SWAP_ROUTER_EXECUTE_ABI = [
-  {
-    type: 'function',
-    name: 'execute',
-    stateMutability: 'payable',
-    inputs: [
-      { name: 'commands', type: 'bytes' },
-      { name: 'inputs', type: 'bytes[]' },
-    ],
-    outputs: [],
-  },
-] as const
-
-const SWAP_ROUTER_EXECUTE_WITH_DEADLINE_ABI = [
-  {
-    type: 'function',
-    name: 'execute',
-    stateMutability: 'payable',
-    inputs: [
-      { name: 'commands', type: 'bytes' },
-      { name: 'inputs', type: 'bytes[]' },
-      { name: 'deadline', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-] as const
 const ALLOWED_SELF_SELECTORS = new Set<string>([SELECTOR_CSW_ADD_OWNER_ADDRESS, SELECTOR_CSW_REMOVE_OWNER_AT_INDEX])
 const ALLOWED_ERC8004_SELECTORS = new Set<string>([
   SELECTOR_ERC8004_REGISTER,
@@ -806,37 +700,8 @@ function readDeploySessionHeaders(req: VercelRequest): { token: string; signatur
 
 // Derive codeIds from the same generated bytecode table used by the frontend deploy builder.
 // This prevents frontend/backend drift that causes `CODE_NOT_FOUND` in paymaster validation.
-type DeployCodeIds = {
-  payoutRouterCodeId: Hex
-  vaultShareBurnStreamCodeId: Hex
-}
-
-let deployCodeIdsCache: DeployCodeIds | null = null
-
-async function getDeployCodeIds(): Promise<DeployCodeIds> {
-  if (deployCodeIdsCache) return deployCodeIdsCache
-
-  const mod = (await import('../../src/deploy/bytecode.generated.js')) as {
-    DEPLOY_BYTECODE?: Record<string, unknown>
-  }
-  const payoutRouterBytecode = mod.DEPLOY_BYTECODE?.PayoutRouter
-  const vaultShareBurnStreamBytecode = mod.DEPLOY_BYTECODE?.VaultShareBurnStream
-
-  if (
-    !isHexString(payoutRouterBytecode) ||
-    payoutRouterBytecode === '0x' ||
-    !isHexString(vaultShareBurnStreamBytecode) ||
-    vaultShareBurnStreamBytecode === '0x'
-  ) {
-    throw new Error('deploy_bytecode_unavailable')
-  }
-
-  deployCodeIdsCache = {
-    payoutRouterCodeId: keccak256(payoutRouterBytecode as Hex),
-    vaultShareBurnStreamCodeId: keccak256(vaultShareBurnStreamBytecode as Hex),
-  }
-  return deployCodeIdsCache
-}
+const PAYOUT_ROUTER_CODE_ID = keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex)
+const VAULT_SHARE_BURN_STREAM_CODE_ID = keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex)
 
 const BYTECODE_STORE_ABI = [
   {
@@ -872,11 +737,6 @@ const SHARE_OFT_VIEW_ABI = [
 const LEGACY_VESTING_VIEW_ABI = [
   { type: 'function', name: 'token', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'beneficiary', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-] as const
-
-const CHARM_VAULT_AUTH_VIEW_ABI = [
-  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'rebalanceDelegate', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
 const SELECTOR_VESTING_RELEASE = '0x86d1a69f'
@@ -953,18 +813,6 @@ function parseAllowlist(raw: string | undefined): Set<string> {
   return out
 }
 
-function readUniswapPermit2MaxAmount(): bigint | null {
-  const raw = String(process.env.UNISWAP_PAYMASTER_MAX_PERMIT2_AMOUNT ?? '').trim()
-  if (!raw) return null
-  if (!/^\d+$/.test(raw)) return null
-  try {
-    const parsed = BigInt(raw)
-    return parsed > 0n ? parsed : null
-  } catch {
-    return null
-  }
-}
-
 function normalizeAddresses(input: Array<Address | string | null | undefined>): Address[] {
   const out = new Set<string>()
   for (const a of input) {
@@ -1001,34 +849,6 @@ async function checkCswOwnership(sessionAddress: Address, cswAddress: Address): 
   } catch {
     return false
   }
-}
-
-async function isAuthorizedCharmRebalanceCaller(params: {
-  charmVaultAddress: Address
-  sender: Address
-}): Promise<boolean> {
-  const sender = getAddress(params.sender)
-  const client = await getBaseClient()
-  const [managerRaw, delegateRaw] = (await Promise.all([
-    client
-      .readContract({
-        address: params.charmVaultAddress,
-        abi: CHARM_VAULT_AUTH_VIEW_ABI,
-        functionName: 'manager',
-      })
-      .catch(() => null),
-    client
-      .readContract({
-        address: params.charmVaultAddress,
-        abi: CHARM_VAULT_AUTH_VIEW_ABI,
-        functionName: 'rebalanceDelegate',
-      })
-      .catch(() => null),
-  ])) as [Address | null, Address | null]
-
-  const manager = managerRaw && isAddress(managerRaw) ? getAddress(managerRaw) : null
-  const delegate = delegateRaw && isAddress(delegateRaw) ? getAddress(delegateRaw) : null
-  return manager === sender || delegate === sender
 }
 
 async function isCreatorAllowlisted(params: {
@@ -1179,29 +999,6 @@ function jsonRpcError(id: JsonRpcId, code: number, message: string) {
   return { jsonrpc: '2.0', id: id ?? null, error: { code, message } }
 }
 
-function getJsonRpcId(value: unknown): JsonRpcId {
-  if (typeof value === 'string' || typeof value === 'number' || value === null) return value
-  return null
-}
-
-function buildEntryPointProbeFallback(
-  requests: JsonRpcRequest[],
-  rawBody: unknown,
-): { jsonrpc: '2.0'; id: JsonRpcId; result: Address[] } | Array<{ jsonrpc: '2.0'; id: JsonRpcId; result: Address[] }> | null {
-  if (requests.length === 0) return null
-  const probeOnly = requests.every((r) => r?.method === 'eth_supportedEntryPoints')
-  if (!probeOnly) return null
-
-  const makeResult = (r: JsonRpcRequest) => ({
-    jsonrpc: '2.0' as const,
-    id: getJsonRpcId(r?.id),
-    result: [ENTRYPOINT_V06],
-  })
-
-  if (isRequestArray(rawBody)) return requests.map(makeResult)
-  return makeResult(requests[0] as JsonRpcRequest)
-}
-
 function getCdpEndpoint(): string | null {
   const v =
     (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
@@ -1227,40 +1024,6 @@ function isHexString(v: unknown): v is Hex {
 
 function getSelector(data: Hex): string {
   return data.length >= 10 ? data.slice(0, 10).toLowerCase() : ''
-}
-
-function assertCanonicalSwapRouterCalldata(data: Hex) {
-  const selector = getSelector(data)
-  try {
-    if (selector === SELECTOR_SWAP_ROUTER_EXECUTE) {
-      const decoded = decodeFunctionData({ abi: SWAP_ROUTER_EXECUTE_ABI, data })
-      const canonical = encodeFunctionData({
-        abi: SWAP_ROUTER_EXECUTE_ABI,
-        functionName: 'execute',
-        args: decoded.args as readonly [Hex, readonly Hex[]],
-      })
-      if (canonical.toLowerCase() !== data.toLowerCase()) {
-        throw new Error('swap_router_non_canonical_encoding')
-      }
-      return
-    }
-    if (selector === SELECTOR_SWAP_ROUTER_EXECUTE_WITH_DEADLINE) {
-      const decoded = decodeFunctionData({ abi: SWAP_ROUTER_EXECUTE_WITH_DEADLINE_ABI, data })
-      const canonical = encodeFunctionData({
-        abi: SWAP_ROUTER_EXECUTE_WITH_DEADLINE_ABI,
-        functionName: 'execute',
-        args: decoded.args as readonly [Hex, readonly Hex[], bigint],
-      })
-      if (canonical.toLowerCase() !== data.toLowerCase()) {
-        throw new Error('swap_router_non_canonical_encoding')
-      }
-      return
-    }
-    throw new Error('swap_router_selector_not_allowed')
-  } catch (error) {
-    if (error instanceof Error && error.message === 'swap_router_non_canonical_encoding') throw error
-    throw new Error('swap_router_decode_failed')
-  }
 }
 
 function summarizeSmartWalletCallData(callData: Hex): {
@@ -1372,17 +1135,6 @@ function decodeBoolArgFromCalldata(data: Hex, argIndex: number): boolean | null 
   }
 }
 
-function decodeUint256ArgFromCalldata(data: Hex, argIndex: number): bigint | null {
-  const start = 10 + argIndex * 64
-  const word = data.slice(start, start + 64)
-  if (word.length !== 64) return null
-  try {
-    return BigInt(`0x${word}`)
-  } catch {
-    return null
-  }
-}
-
 function abiEncodeAddresses(addrs: Address[]): Hex {
   // abi.encode(address...) (static types only)
   // Each address is left-padded to 32 bytes.
@@ -1395,16 +1147,6 @@ function abiEncodeAddresses(addrs: Address[]): Hex {
   return out as Hex
 }
 
-const BYTECODE_STORE_GET_ABI = [
-  {
-    type: 'function',
-    name: 'get',
-    stateMutability: 'view',
-    inputs: [{ name: 'codeId', type: 'bytes32' }],
-    outputs: [{ name: 'creationCode', type: 'bytes' }],
-  },
-] as const
-
 const _creationCodeCache: Map<string, Hex> = new Map()
 
 async function getCreationCodeFromStore(params: { store: Address; codeId: Hex }): Promise<Hex> {
@@ -1414,7 +1156,7 @@ async function getCreationCodeFromStore(params: { store: Address; codeId: Hex })
   const client = await getBaseClient()
   const code = (await client.readContract({
     address: params.store,
-    abi: BYTECODE_STORE_GET_ABI,
+    abi: BYTECODE_STORE_ABI,
     functionName: 'get',
     args: [params.codeId],
   })) as Hex
@@ -1569,9 +1311,7 @@ async function validateInnerCalls(params: {
 
   if (innerCalls.length === 0) throw new Error('no_inner_calls')
   for (const c of innerCalls) {
-    const selector = getSelector(c.data)
-    const isSwapRouterValueCall = c.target === BASE_SWAP_ROUTER && ALLOWED_SWAP_ROUTER_SELECTORS.has(selector)
-    if (c.value !== 0n && !isSwapRouterValueCall) throw new Error('value_transfer_not_allowed')
+    if (c.value !== 0n) throw new Error('value_transfer_not_allowed')
   }
 
   const erc8004Registry = getErc8004RegistryAddress()
@@ -1604,12 +1344,10 @@ async function validateInnerCalls(params: {
     | 'deploy'
     | 'activate'
     | 'approve_only'
-    | 'swap'
     | 'legacy_withdraw'
     | 'deploy_session_setup'
     | 'agent_registry'
     | 'reputation_feedback'
-    | 'charm_rebalance'
     | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null
@@ -1638,10 +1376,7 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
-        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
-        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
-        selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY ||
         selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
         let decodedBatcher: any
@@ -1671,9 +1406,7 @@ async function validateInnerCalls(params: {
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2
         ) {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
@@ -1685,10 +1418,7 @@ async function validateInnerCalls(params: {
               ? { vault: codeIds.vault as Hex }
               : null
           expectedVersion = typeof p?.version === 'string' ? p.version : null
-        } else if (
-          selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
-          selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY
-        ) {
+        } else if (selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES) {
           mode = 'deploy_phase3'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
           if (!expectedVault) throw new Error('batcher_vault_decode_failed')
@@ -1729,56 +1459,6 @@ async function validateInnerCalls(params: {
       mode = 'deploy_session_setup'
       expectedCreatorToken = null
     } else {
-      const isCharmRebalanceOnly =
-        innerCalls.length > 0 && innerCalls.every((c) => getSelector(c.data) === SELECTOR_CHARM_REBALANCE)
-      if (isCharmRebalanceOnly) {
-        const uniqueCharmVaults = Array.from(
-          new Set(
-            innerCalls
-              .map((c) => c.target)
-              .filter((target): target is Address => Boolean(target && isAddress(target)))
-              .map((target) => getAddress(target)),
-          ),
-        )
-        if (uniqueCharmVaults.length === 0) throw new Error('charm_vault_not_found')
-        for (const vault of uniqueCharmVaults) {
-          const isOfficial = await isOfficialCharmVault({
-            charmVaultAddress: vault,
-            publicClient: await getBaseClient(),
-          }).catch(() => false)
-          if (!isOfficial) throw new Error('charm_vault_not_official')
-          const authorized = await isAuthorizedCharmRebalanceCaller({
-            charmVaultAddress: vault,
-            sender: params.sender,
-          }).catch(() => false)
-          if (!authorized) throw new Error('charm_rebalance_not_authorized')
-        }
-        mode = 'charm_rebalance'
-        expectedCreatorToken = null
-      }
-      if (mode === 'charm_rebalance') {
-        // Mode resolved; continue validation in pass 2.
-      } else {
-      const swapFlowAllowed = (() => {
-        if (innerCalls.length === 0) return false
-        const hasSwapRouterCall = innerCalls.some(
-          (c) => c.target === BASE_SWAP_ROUTER && ALLOWED_SWAP_ROUTER_SELECTORS.has(getSelector(c.data)),
-        )
-        if (!hasSwapRouterCall) return false
-        return innerCalls.every((c) => {
-          const selector = getSelector(c.data)
-          if (c.target === BASE_SWAP_ROUTER) return ALLOWED_SWAP_ROUTER_SELECTORS.has(selector)
-          if (selector !== SELECTOR_ERC20_APPROVE) return false
-          const spender = decodeAddressArgFromCalldata(c.data, 0)
-          if (!spender) return false
-          return spender === permit2 || spender === BASE_SWAP_ROUTER
-        })
-      })()
-
-      if (swapFlowAllowed) {
-        mode = 'swap'
-        expectedCreatorToken = null
-      } else {
       const approveOnlyToken = (() => {
         if (innerCalls.length === 0) return null
         const firstTarget = innerCalls[0].target
@@ -1896,8 +1576,6 @@ async function validateInnerCalls(params: {
           )
         }
       }
-      }
-      }
     }
   }
 
@@ -1953,9 +1631,7 @@ async function validateInnerCalls(params: {
   // If codeIds are missing, fall back to the Phase1Deployed event for this creator/owner.
   let expectedBurnStream: Address | null = null
   let expectedPayoutRouter: Address | null = null
-  let deployCodeIds: DeployCodeIds | null = null
   if (mode === 'deploy_phase2' || mode === 'deploy_phase3') {
-    deployCodeIds = await getDeployCodeIds()
     if (!expectedVault) throw new Error('missing_vault')
     const client = await getBaseClient()
     const vaultCode = (await client.getBytecode({ address: expectedVault })) as Hex | undefined
@@ -2073,7 +1749,7 @@ async function validateInnerCalls(params: {
       store: bytecodeStore,
       deployer: create2DeployerFromStore,
       salt: burnSalt,
-      codeId: deployCodeIds.vaultShareBurnStreamCodeId,
+      codeId: VAULT_SHARE_BURN_STREAM_CODE_ID as Hex,
       constructorArgs: abiEncodeAddresses([expectedVault]),
     })
 
@@ -2082,7 +1758,7 @@ async function validateInnerCalls(params: {
       store: bytecodeStore,
       deployer: create2DeployerFromStore,
       salt: routerSalt,
-      codeId: deployCodeIds.payoutRouterCodeId,
+      codeId: PAYOUT_ROUTER_CODE_ID as Hex,
       constructorArgs: abiEncodeAddresses([
         expectedCreatorToken as Address,
         expectedVault,
@@ -2116,7 +1792,7 @@ async function validateInnerCalls(params: {
       // Find the deploy session so we can bind the session owner address.
       const ds =
         params.deploySessionOwner && isAddress(params.deploySessionOwner)
-          ? ({ sessionSigner: params.deploySessionOwner } as any)
+          ? ({ sessionOwner: params.deploySessionOwner } as any)
           : await getActiveDeploySessionForSender({
               sessionAddress: params.sessionAddress,
               smartWallet: params.sender,
@@ -2128,9 +1804,6 @@ async function validateInnerCalls(params: {
       if (decodedSelf.functionName === 'addOwnerAddress') {
         const ownerArg = getAddress(decodedSelf.args[0] as Address)
         if (ownerArg !== getAddress(ds.sessionSigner as Address)) throw new Error('deploy_session_owner_mismatch')
-        const client = await getBaseClient()
-        const ownerCode = (await client.getBytecode({ address: ownerArg }).catch(() => null)) as Hex | null
-        if (hasContractBytecode(ownerCode)) throw new Error('contract_owner_not_allowed')
         continue
       }
       if (decodedSelf.functionName === 'removeOwnerAtIndex') {
@@ -2162,21 +1835,6 @@ async function validateInnerCalls(params: {
         continue
       }
       throw new Error('legacy_target_not_allowed')
-    }
-
-    if (mode === 'charm_rebalance') {
-      if (selector !== SELECTOR_CHARM_REBALANCE) throw new Error('charm_selector_not_allowed')
-      const isOfficial = await isOfficialCharmVault({
-        charmVaultAddress: c.target,
-        publicClient: await getBaseClient(),
-      }).catch(() => false)
-      if (!isOfficial) throw new Error('charm_vault_not_official')
-      const authorized = await isAuthorizedCharmRebalanceCaller({
-        charmVaultAddress: c.target,
-        sender: params.sender,
-      }).catch(() => false)
-      if (!authorized) throw new Error('charm_rebalance_not_authorized')
-      continue
     }
 
     if (c.target === creatorVaultBatcher) {
@@ -2234,12 +1892,6 @@ async function validateInnerCalls(params: {
       if (getAddress(permit.permitted.token) !== expectedCreatorToken) throw new Error('permit2_token_mismatch')
       if (getAddress(details.to) !== params.sender) throw new Error('permit2_to_mismatch')
       if (getAddress(ownerArg) !== params.sessionAddress) throw new Error('permit2_owner_mismatch')
-      const permitAmount = BigInt(permit.permitted.amount ?? 0n)
-      const requestedAmount = BigInt(details.requestedAmount ?? 0n)
-      const maxPermit2Amount = readUniswapPermit2MaxAmount()
-      if (maxPermit2Amount !== null && (permitAmount > maxPermit2Amount || requestedAmount > maxPermit2Amount)) {
-        throw new Error('permit2_amount_exceeds_policy')
-      }
       continue
     }
 
@@ -2247,7 +1899,6 @@ async function validateInnerCalls(params: {
     if (c.target === create2DeployerFromStore) {
       if (mode !== 'deploy_phase2' && mode !== 'deploy_phase3') throw new Error('create2_deploy_not_allowed')
       if (!expectedVault || !expectedBurnStream || !expectedPayoutRouter) throw new Error('missing_expected_addresses')
-      if (!deployCodeIds) throw new Error('deploy_code_ids_not_loaded')
       if (selector !== SELECTOR_CREATE2_DEPLOY_FROM_STORE) throw new Error('create2_selector_not_allowed')
 
       const create2Abi = [
@@ -2272,12 +1923,12 @@ async function validateInnerCalls(params: {
       const ctorArgs = decodedDeploy.args[2] as Hex
 
       const codeIdLc = String(codeId).toLowerCase()
-      if (codeIdLc === String(deployCodeIds.vaultShareBurnStreamCodeId).toLowerCase()) {
+      if (codeIdLc === String(VAULT_SHARE_BURN_STREAM_CODE_ID).toLowerCase()) {
         const expectedSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
         const vaultArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
         if (!vaultArg || vaultArg !== expectedVault) throw new Error('burn_stream_vault_mismatch')
-      } else if (codeIdLc === String(deployCodeIds.payoutRouterCodeId).toLowerCase()) {
+      } else if (codeIdLc === String(PAYOUT_ROUTER_CODE_ID).toLowerCase()) {
         const expectedSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
 
@@ -2315,24 +1966,12 @@ async function validateInnerCalls(params: {
       continue
     }
 
-    // Vault admin calls (phase2/phase3/phase4 deploy flow)
-    if (
-      (mode === 'deploy_phase2' || mode === 'deploy_phase3' || mode === 'launch_auction') &&
-      expectedVault &&
-      c.target === expectedVault
-    ) {
-      const isWiringSelector = selector === SELECTOR_VAULT_SET_BURN_STREAM || selector === SELECTOR_VAULT_SET_WHITELIST
-      const isStrategySelector =
-        selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE ||
-        selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES ||
-        selector === SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT
-
-      if (mode === 'deploy_phase2' && !isWiringSelector) throw new Error('vault_selector_not_allowed')
-      if (mode === 'deploy_phase3' && !isWiringSelector && !isStrategySelector) throw new Error('vault_selector_not_allowed')
-      if (mode === 'launch_auction' && !isStrategySelector) throw new Error('vault_selector_not_allowed')
-
+    // Vault admin calls (phase2/phase3 deploy flow)
+    if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
+      if (selector !== SELECTOR_VAULT_SET_BURN_STREAM && selector !== SELECTOR_VAULT_SET_WHITELIST) {
+        throw new Error('vault_selector_not_allowed')
+      }
       if (selector === SELECTOR_VAULT_SET_BURN_STREAM) {
-        if (!expectedBurnStream || !expectedPayoutRouter) throw new Error('missing_expected_addresses')
         const burnStreamArg = decodeAddressArgFromCalldata(c.data, 0)
         if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
           params.debug?.({
@@ -2347,45 +1986,13 @@ async function validateInnerCalls(params: {
           })
           throw new Error('vault_burn_stream_mismatch')
         }
-      } else if (selector === SELECTOR_VAULT_SET_WHITELIST) {
-        if (!expectedPayoutRouter) throw new Error('missing_expected_addresses')
+      } else {
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
         if (!accountArg || accountArg !== expectedPayoutRouter) throw new Error('vault_whitelist_account_mismatch')
         if (statusArg !== true) throw new Error('vault_whitelist_status_mismatch')
-      } else if (selector === SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT) {
-        const strategyArg = decodeAddressArgFromCalldata(c.data, 0)
-        const weightArg = decodeUint256ArgFromCalldata(c.data, 1)
-        if (!strategyArg) throw new Error('vault_strategy_weight_strategy_decode_failed')
-        if (weightArg === null || weightArg > 10_000n) throw new Error('vault_strategy_weight_invalid')
-      } else if (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE) {
-        const minIdleArg = decodeUint256ArgFromCalldata(c.data, 0)
-        if (minIdleArg === null) throw new Error('vault_min_idle_decode_failed')
-      } else if (selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES) {
-        // no args
-      } else {
-        throw new Error('vault_selector_not_allowed')
       }
-
       continue
-    }
-
-    if (mode === 'swap') {
-      if (c.target === BASE_SWAP_ROUTER) {
-        if (!ALLOWED_SWAP_ROUTER_SELECTORS.has(selector)) throw new Error('swap_router_selector_not_allowed')
-        assertCanonicalSwapRouterCalldata(c.data)
-        continue
-      }
-
-      if (selector === SELECTOR_ERC20_APPROVE) {
-        const spender = decodeAddressArgFromCalldata(c.data, 0)
-        if (!spender) throw new Error('approve_decode_failed')
-        const allowedSwapSpenders = new Set<Address>([permit2, BASE_SWAP_ROUTER])
-        if (!allowedSwapSpenders.has(spender)) throw new Error('approve_spender_not_allowed')
-        continue
-      }
-
-      throw new Error('called_address_not_allowed')
     }
 
     // Dynamic token calls: only allow calls to the same creatorToken used in the primary call.
@@ -2474,14 +2081,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32000, 'Server misconfigured: AUTH_SESSION_SECRET is not set'))
   }
 
-  let body: unknown = null
-  try {
-    body = await readJsonBody<unknown>(req)
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err ?? 'unknown')
-    logger.warn('[paymaster-proxy] body parse failed', { msg })
-    return res.status(200).json(jsonRpcError(null, -32600, 'Invalid JSON body'))
-  }
+  const body = await readJsonBody<unknown>(req)
   if (!body) {
     return res.status(200).json(jsonRpcError(null, -32600, 'Invalid JSON body'))
   }
@@ -2504,11 +2104,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Require an authenticated principal for any sponsorship-related method.
   // - Primary: session (cookie or Authorization bearer token) or SIWA receipt.
   // - Secondary: deploy-session token (server-driven completion after one user signature).
-  let principalAddress = ''
+  const principalAddress = readRequestPrincipalAddress(req, { lowercase: false })
 
   try {
-    principalAddress = readRequestPrincipalAddress(req, { lowercase: false })
-
     // Validate sponsorship requests (UserOperations only).
     for (const r of requests) {
       const method = r.method as string
@@ -2697,7 +2295,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Forward to CDP if validation passed.
   try {
-    const entryPointProbeFallback = buildEntryPointProbeFallback(requests, body)
     const upstream = await fetch(cdpEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2748,17 +2345,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (upstream.status < 200 || upstream.status >= 300) {
-      if (entryPointProbeFallback) return res.status(200).send(JSON.stringify(entryPointProbeFallback))
       return res.status(200).json(jsonRpcError(null, -32000, `Upstream paymaster request failed (HTTP ${upstream.status})`))
     }
 
-    if (entryPointProbeFallback) return res.status(200).send(JSON.stringify(entryPointProbeFallback))
-    return res.status(200).json(jsonRpcError(null, -32000, 'Upstream paymaster returned a non-JSON response'))
+    return res.status(502).json(jsonRpcError(null, -32000, 'Upstream paymaster returned a non-JSON response'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Upstream request failed'
     logger.error('[paymaster-proxy] upstream error', { msg })
-    const entryPointProbeFallback = buildEntryPointProbeFallback(requests, body)
-    if (entryPointProbeFallback) return res.status(200).send(JSON.stringify(entryPointProbeFallback))
-    return res.status(200).json(jsonRpcError(null, -32000, msg))
+    return res.status(502).json(jsonRpcError(null, -32000, msg))
   }
 }

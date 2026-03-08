@@ -51,9 +51,9 @@ Production override safety:
 ### Split Phase-1 rollout (Base mainnet + Vercel)
 
 Current canonical Base defaults:
-- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753`
-- `UniversalBytecodeStoreV2`: `0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c`
-- `UniversalCreate2DeployerFromStoreV2`: `0x0243F14771054c890E5Ef5D467D0137a20B2d94B`
+- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0xB87CBb646dD14F520078F11196f79BF815F18c84`
+- `UniversalBytecodeStoreV2`: `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13`
+- `UniversalCreate2DeployerFromStoreV2`: `0x74183076C7D33346880A5bf0e263B761FB4d38BA`
 
 Mainnet deploy order:
 
@@ -75,7 +75,7 @@ forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
 ```bash
 export PRIVATE_KEY=...
 export BASE_RPC_URL=https://mainnet.base.org
-export UNIVERSAL_BYTECODE_STORE=0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c
+export UNIVERSAL_BYTECODE_STORE=0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13
 
 forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
   --rpc-url "$BASE_RPC_URL" \
@@ -88,7 +88,7 @@ If you use `./script/deploy.sh infra-v2` or `./script/deploy-infra-v2.sh`, this 
 
 ```bash
 export BASE_RPC_URL=https://mainnet.base.org
-export NEW_BATCHER=0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753
+export NEW_BATCHER=0xB87CBb646dD14F520078F11196f79BF815F18c84
 
 # infra wiring
 cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
@@ -98,18 +98,18 @@ cast call "$NEW_BATCHER" "create2Deployer()(address)" --rpc-url "$BASE_RPC_URL"
 cast code "$NEW_BATCHER" --rpc-url "$BASE_RPC_URL" | tr 'A-F' 'a-f' | rg "1331378b|a98ec9d8|4154f24e|3bc09a8b"
 
 # v2 store surface
-cast call 0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c \
+cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
   "chunkCount(bytes32)(uint256)" \
   0x0000000000000000000000000000000000000000000000000000000000000000 \
   --rpc-url "$BASE_RPC_URL"
 ```
 
-4. Optional Solana routing (recommended for default Solana spoke flow):
+4. Optional Solana bridge config (used by `SolanaStrategy` in Phase 3):
 
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export CREATOR_VAULT_BATCHER=0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753
+export DEPLOYMENT_BATCHER=0xB87CBb646dD14F520078F11196f79BF815F18c84
 export SOLANA_BRIDGE_ADAPTER=0x2414b595c4f18532A5836B6e2E6d536832c572e8
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1
@@ -122,22 +122,21 @@ forge script script/AuthorizeSolanaAdapter.s.sol:AuthorizeSolanaAdapter \
 Optional keeper setup (same script):
 - set `SOLANA_KEEPER_PUBKEY=0x<32-byte-solana-pubkey>` before running.
 
-### Default Meteora setup (Solana spoke)
+### Phase-3 strategy model (current)
 
-4626 defaults to **Meteora DLMM + Alpha Vault** for Solana-side launch/deposit flow.
+Phase 3 now uses a three-strategy accounting model on `CreatorOVault`:
 
-- Use dynamic route provisioning (`/provision`) to wrap/register the canonical creator token route.
-- Use Meteora ix payload provisioning (`/meteora-ixs`) to build Alpha Vault `deposit(max_amount)` calls.
-- Keep DBC and DAMM v1/v2 as optional, non-default paths.
+- Charm strategy: `30%` (`3_000` bps)
+- Ajna strategy: `30%` (`3_000` bps)
+- SolanaStrategy: `30%` (`3_000` bps)
+- Idle reserve: `10%` (`1_000` bps via `setMinimumTotalIdle`)
 
-### Current allocation model
+`SolanaStrategy` is a Base-side strategy adapter with keeper-reported remote NAV:
 
-There are two distinct allocations in the deploy flow:
-
-1. **Phase 2 launch split (Base):** 50% auction / 50% creator vesting.
-2. **Underlying vault deployment target:** 30% Charm, 30% Ajna, 30% reserved for Solana (executed out-of-band), 10% idle.
-
-The Solana reserve is intentionally handled outside the main deploy transaction path.
+- `solanaMaxNavAge` bounds how old reported NAV can be before valuation is ignored.
+- `solanaMaxNavDeltaBpsPerUpdate` limits per-update NAV jumps (circuit breaker).
+- `solanaMinBaseLiquidityBps` enforces a Base liquidity floor during rebalances.
+- Withdrawals remain synchronous on Base (strategy only withdraws available Base liquidity).
 
 Vercel cutover order:
 
@@ -156,8 +155,6 @@ Acceptance checks:
 - deploy-session path advances:
   - `created -> phase1_sent -> phase1_finalize_sent -> phase2_core_sent -> phase2_sent -> phase3_sent -> completed`
 - `/deploy` shows no bytecode infra blocker and no `deployment batcher not configured`
-- `/api/deploy/solanaInfraStatus` returns `readyForAutoRegistration=true` and empty `blockers` for Solana-enabled deploys
-- provisioner health (`/healthz`) reports `payerHealthy=true` with balance above `PROVISIONER_MIN_PAYER_SOL`
 
 ### Important: Zora cross-app is read-only here
 
@@ -175,12 +172,12 @@ Fix: add the EOA as an owner first (one-time). After that, deploys can use the 1
 
 ```solidity
 // Deploy using factory
-(address vault, address wrapper, address shareToken) = factory.deployVault(
+(address vault, address wrapper, address shareOFT) = factory.deployVault(
     creatorCoinAddress,     // Your Creator Coin
     "TOKEN Vault",          // Vault name
     "▢TOKEN",               // Vault symbol
-    "TOKEN Share",          // bridge share token name
-    "TOKEN",                // bridge share token symbol
+    "TOKEN Share",          // OFT name
+    "■TOKEN",               // OFT symbol
     "base",                 // Chain prefix
     msg.sender              // Revenue recipient
 );
@@ -188,25 +185,29 @@ Fix: add the EOA as an owner first (one-time). After that, deploys can use the 1
 
 ## Via Script
 
-For production deploys, use the app deploy-session flow at `/deploy` (recommended path).
-Script entrypoints are maintenance-only and may lag behind current split/preflight behavior.
+```bash
+forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
+  --rpc-url $BASE_RPC_URL \
+  --broadcast \
+  --verify
 
-### Solana routing
-
-Solana route provisioning and Meteora ix payload generation are out-of-band and are handled by the provisioner + deploy APIs. They are not part of `finalizePhase2`.
+forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
+  --rpc-url $BASE_RPC_URL \
+  --broadcast
+```
 
 ## Post-Deployment Configuration
 
 ### 1. Set DEX Pools
 
 ```solidity
-shareToken.setAddressType(uniswapPool, OperationType.SwapOnly);
+shareOFT.setAddressType(uniswapPool, OperationType.SwapOnly);
 ```
 
 ### 2. Configure GaugeController
 
 ```solidity
-shareToken.setGaugeController(gaugeController);
+shareOFT.setGaugeController(gaugeController);
 ```
 
 ### 3. Add Strategies (Optional)
