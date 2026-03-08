@@ -282,6 +282,43 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
+  it('routes canonical native-value swaps through canonicalDirect instead of ERC-4337 sponsorship', async () => {
+    const sendTransaction = vi.fn(async () => HASH_A)
+    const context = makeContext({
+      executionMode: 'canonical',
+      signerType: 'EOA',
+      connectorId: 'injected',
+      connectorName: 'Injected',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+      publicClient: {},
+    })
+
+    const result = await buildAndSendSwap({
+      context,
+      swapTx: {
+        to: ADDRESS_A,
+        from: ADDRESS_B,
+        data: '0xbbbb',
+        value: '123',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('canonicalDirect')
+    expect(result.send.mode).toBe('canonicalDirect')
+    expect(result.send.method).toBe('walletClient.sendTransaction')
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+  })
+
   it('keeps approval and swap in the same direct EOA route family', async () => {
     const sendTransaction = vi
       .fn()
