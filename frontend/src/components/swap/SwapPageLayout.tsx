@@ -4,7 +4,6 @@ type SwapPageLayoutProps = {
   children?: ReactNode
   swapPanel: ReactNode
   vaultPanel: ReactNode | null
-  gasIndicatorLabel: string | null
   title?: string
   subtitle?: string
 }
@@ -13,7 +12,6 @@ export function SwapPageLayout({
   children,
   swapPanel,
   vaultPanel,
-  gasIndicatorLabel,
   title,
   subtitle,
 }: SwapPageLayoutProps) {
@@ -30,14 +28,6 @@ export function SwapPageLayout({
               <h1 className="mt-1 font-display text-[2rem] font-medium tracking-[-0.02em] text-vault-text sm:text-[2.2rem]">
                 {title ?? 'Swap'}
               </h1>
-            </div>
-            <div
-              className="bv-chip sm:ml-auto gap-2 font-mono normal-case tracking-[0.02em] text-[11px]"
-              aria-live="polite"
-              aria-label="Current estimated gas"
-            >
-              <span className="text-vault-muted">Gas</span>
-              <span className="text-vault-text">{gasIndicatorLabel ?? '—'}</span>
             </div>
           </div>
 

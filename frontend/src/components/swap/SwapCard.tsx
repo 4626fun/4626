@@ -64,7 +64,6 @@ export function SwapCard(props: SwapCardProps) {
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="text-sm text-vault-subtext space-y-1">
           <div className="bv-kicker">Swap</div>
-          <div className="text-lg font-semibold tracking-tight text-vault-text">Editorial token exchange</div>
           <div className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] text-vault-subtext" style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.65)', background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
             <span>Powered by</span>
             <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />

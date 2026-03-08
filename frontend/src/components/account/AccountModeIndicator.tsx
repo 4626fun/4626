@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
+import { useAccount } from 'wagmi'
 
+import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { useAccountContext } from '@/wallet/accountContext'
 
 function shortAddress(value: string | undefined): string {
@@ -8,27 +10,14 @@ function shortAddress(value: string | undefined): string {
 }
 
 function formatAtomic(status: 'supported' | 'ready' | 'unsupported' | 'unknown'): string {
-  if (status === 'supported' || status === 'ready') return 'Bundling ✓'
-  if (status === 'unsupported') return 'Bundling —'
-  return 'Bundling ?'
+  if (status === 'supported' || status === 'ready') return '✓'
+  if (status === 'unsupported') return '—'
+  return '?'
 }
 
 export function AccountModeIndicator() {
+  const { connector } = useAccount()
   const account = useAccountContext()
-
-  const connectedLabel =
-    account.signerType === 'SMART_WALLET'
-      ? `Smart Wallet ${shortAddress(account.signerAddress)}`
-      : account.signerType === 'EOA'
-        ? `User Wallet ${shortAddress(account.signerAddress)}`
-        : 'Not connected'
-
-  const actingLabel =
-    account.activeAccountType === 'SMART_WALLET'
-      ? `Smart Wallet ${shortAddress(account.activeAccount)}`
-      : account.activeAccountType === 'EOA'
-        ? `User Wallet ${shortAddress(account.activeAccount)}`
-        : 'Unavailable'
 
   const showModeToggle =
     account.signerType === 'EOA' &&
@@ -41,27 +30,49 @@ export function AccountModeIndicator() {
     <div className="border-b border-vault-border/60 bg-black/45">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 min-h-[42px]">
         <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-[11px] scrollbar-hide">
-          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-            Connected as: {connectedLabel}
-          </span>
-          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-            Acting as: {actingLabel}
+          <span
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300"
+            title={account.signerType === 'SMART_WALLET' ? `Smart Wallet ${shortAddress(account.signerAddress)}` : account.signerType === 'EOA' ? `User Wallet ${shortAddress(account.signerAddress)}` : 'Not connected'}
+          >
+            <WalletProviderIcon
+              provider={account.signerType === 'SMART_WALLET' ? 'coinbase' : undefined}
+              walletType={account.signerType === 'SMART_WALLET' ? 'smart_wallet' : 'embedded_eoa'}
+              connectorId={connector?.id}
+              isCanonicalSmartWallet={account.signerType === 'SMART_WALLET'}
+              size={12}
+            />
+            {account.signerType ? shortAddress(account.signerAddress) : '—'}
           </span>
           <span
-            className={`shrink-0 rounded-full border px-2 py-0.5 ${
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300"
+            title={account.activeAccountType === 'SMART_WALLET' ? `Smart Wallet ${shortAddress(account.activeAccount)}` : account.activeAccountType === 'EOA' ? `User Wallet ${shortAddress(account.activeAccount)}` : 'Unavailable'}
+          >
+            <WalletProviderIcon
+              provider={account.activeAccountType === 'SMART_WALLET' ? 'coinbase' : undefined}
+              walletType={account.activeAccountType === 'SMART_WALLET' ? 'smart_wallet' : 'embedded_eoa'}
+              connectorId={connector?.id}
+              isCanonicalSmartWallet={account.activeAccountType === 'SMART_WALLET'}
+              size={12}
+            />
+            {account.activeAccountType !== 'UNKNOWN' ? shortAddress(account.activeAccount) : '—'}
+          </span>
+          <span
+            className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
               account.uiFlags.paymasterAvailable
                 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
                 : 'border-white/10 bg-white/5 text-zinc-400'
             }`}
+            title="Paymaster"
           >
-            {account.uiFlags.paymasterAvailable ? 'Paymaster ✓' : 'Paymaster —'}
+            {account.uiFlags.paymasterAvailable ? '✓' : '—'}
           </span>
           <span
-            className={`shrink-0 rounded-full border px-2 py-0.5 ${
+            className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
               account.capabilities.atomicStatus === 'supported' || account.capabilities.atomicStatus === 'ready'
                 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
                 : 'border-white/10 bg-white/5 text-zinc-400'
             }`}
+            title="Bundling"
           >
             {formatAtomic(account.capabilities.atomicStatus)}
           </span>

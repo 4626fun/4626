@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { AKITA } from '@/config/contracts'
 import { VaultCard } from '@/components/swap/VaultCard'
 import { apiFetch } from '@/lib/apiBase'
 import { useAccountContext } from '@/wallet/accountContext'
@@ -14,6 +15,8 @@ type VaultConfig = {
   groupId: string
   graduatedAt?: string | null
   settledAt?: string | null
+  ccaStrategyAddress?: `0x${string}`
+  shareOFTAddress?: `0x${string}`
 }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; message?: string }
@@ -43,7 +46,18 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
     refetchInterval: 60_000,
   })
 
-  const featuredVaults = useMemo(() => vaultsQuery.data ?? [], [vaultsQuery.data])
+  const featuredVaults = useMemo(() => {
+    const vaults = vaultsQuery.data ?? []
+    return vaults.map((v) => {
+      const lc = (a: string) => a.toLowerCase()
+      const isAkita = lc(v.vaultAddress) === lc(AKITA.vault) || lc(v.creatorCoinAddress) === lc(AKITA.token)
+      return {
+        ...v,
+        ...(isAkita && !v.shareOFTAddress ? { shareOFTAddress: AKITA.shareOFT } : {}),
+        ...(isAkita && !v.ccaStrategyAddress ? { ccaStrategyAddress: AKITA.ccaStrategy } : {}),
+      }
+    })
+  }, [vaultsQuery.data])
   const userVaults = useMemo(() => {
     if (!currentAddress) return []
     return featuredVaults.slice(0, 6)
