@@ -82,13 +82,15 @@ function ensurePromptPayload(payload: Record<string, unknown>): PromptPayload {
 async function requireWriteGuards(params: {
   payload: PromptPayload
   context: BankrSkillContext
+  requireConfirmation?: boolean
 }): Promise<BankrCanonicalProbe> {
   const role: BankrRole = params.context.role ?? 'MEMBER'
   if (role === 'MEMBER') {
     throw new Error(`${WRITE_ERROR_PREFIX}: ADMIN or OWNER role required`)
   }
 
-  const requireConfirmation = params.context.requireConfirmation !== false
+  const requireConfirmation =
+    params.requireConfirmation ?? params.context.requireConfirmation !== false
   if (requireConfirmation && params.payload.confirm !== true) {
     throw new Error(`${WRITE_ERROR_PREFIX}: confirm=true is required`)
   }
@@ -158,13 +160,11 @@ export async function executeBankrSkill(
     }
     case 'bankr_prompt': {
       const promptPayload = ensurePromptPayload(payload)
-      let walletProbe: BankrCanonicalProbe | null = null
-      if (promptPayload.intent === 'write') {
-        walletProbe = await requireWriteGuards({
-          payload: promptPayload,
-          context,
-        })
-      }
+      const walletProbe = await requireWriteGuards({
+        payload: promptPayload,
+        context,
+        requireConfirmation: promptPayload.intent === 'write',
+      })
 
       const promptResult = await bankrPrompt({
         prompt: promptPayload.prompt,

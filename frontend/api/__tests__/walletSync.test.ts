@@ -122,6 +122,41 @@ describe('wallet mapping + sync', () => {
     expect(db.calls.some((q) => q.includes('insert into profile_wallets'))).toBe(true)
   })
 
+  it('recovers when insert hits privy_user_id unique conflict', async () => {
+    const calls: string[] = []
+    const db = {
+      calls,
+      sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        calls.push(text)
+
+        if (text.includes('insert into profiles') && text.includes('returning id')) {
+          throw new Error('duplicate key value violates unique constraint "profiles_privy_user_id_unique"')
+        }
+        if (text.includes('update profiles') && text.includes('where privy_user_id')) {
+          return { rows: [{ id: 202 }] }
+        }
+        if (text.includes('select privy_user_id from profiles')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const user = {
+      id: 'did:privy:conflict-recovery',
+      linkedAccounts: [
+        { type: 'wallet', address: '0x0000000000000000000000000000000000000a01', walletClientType: 'embedded_privy_wallet' },
+        { type: 'smart_wallet', address: '0x0000000000000000000000000000000000000a02', walletClientType: 'coinbase_smart_wallet' },
+      ],
+      email: { address: 'conflict@example.com' },
+    }
+
+    const result = await syncUserWallets(db as any, user as any)
+    expect(result.profileId).toBe(202)
+    expect(calls.some((q) => q.includes('update profiles') && q.includes('where privy_user_id'))).toBe(true)
+  })
+
   it('treats cross-app nested smart wallets as canonical candidates', () => {
     const user = {
       id: 'did:privy:cross-app-nested',

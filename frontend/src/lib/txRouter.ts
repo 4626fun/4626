@@ -219,6 +219,10 @@ function toRoutedCalls(params: { swapTx: TransactionRequest; approvalTx?: Transa
   return calls
 }
 
+function callsIncludeNativeValue(calls: RoutedCall[]): boolean {
+  return calls.some((call) => call.value > 0n)
+}
+
 function resolveCanonicalIdentityAddress(context: TxRouterContext): `0x${string}` | null {
   return (
     resolvePolicyCanonicalAddress({
@@ -809,7 +813,25 @@ function ensureCanonicalOneClickBatchRouting(
   context: TxRouterContext,
   decision: TxRoutingDecision,
   hasApproval: boolean,
+  hasNativeValue: boolean,
 ): TxRoutingDecision {
+  if (hasNativeValue && context.executionMode === 'canonical') {
+    if (decision.mode === 'sendCalls') {
+      return {
+        ...decision,
+        fallbackMode: 'canonicalDirect',
+        reason: `${decision.reason}; native-value canonical swaps bypass ERC-4337 sponsorship`,
+      }
+    }
+
+    return {
+      ...decision,
+      mode: 'canonicalDirect',
+      fallbackMode: 'canonicalDirect',
+      reason: 'canonical native-value swap bypasses ERC-4337 sponsorship',
+    }
+  }
+
   if (!hasApproval) return decision
   if (context.executionMode !== 'canonical') return decision
 
@@ -853,14 +875,15 @@ export async function buildAndSendSwap(params: {
   swapTx: TransactionRequest
   approvalTx?: TransactionRequest | null
 }): Promise<{ routing: TxRoutingDecision; send: TxRouterSendResult }> {
-  const hasApproval = Boolean(params.approvalTx)
-  const baseRouting = detectTxSendMode(params.context)
-  const canonicalRouted = ensureCanonicalOneClickBatchRouting(params.context, baseRouting, hasApproval)
-  const routing = ensureDirectEOASendForSwapWithApproval(canonicalRouted, hasApproval)
   const calls = toRoutedCalls({
     swapTx: params.swapTx,
     approvalTx: params.approvalTx,
   })
+  const hasApproval = Boolean(params.approvalTx)
+  const hasNativeValue = callsIncludeNativeValue(calls)
+  const baseRouting = detectTxSendMode(params.context)
+  const canonicalRouted = ensureCanonicalOneClickBatchRouting(params.context, baseRouting, hasApproval, hasNativeValue)
+  const routing = ensureDirectEOASendForSwapWithApproval(canonicalRouted, hasApproval)
   const send = await sendViaMode({
     context: params.context,
     decision: routing,
