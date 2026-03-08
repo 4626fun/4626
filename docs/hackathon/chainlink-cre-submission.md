@@ -22,6 +22,23 @@ Reference templates: [smartcontractkit/cre-templates](https://github.com/smartco
 | README includes links to files using Chainlink | `cre/README.md` section: **Files Using Chainlink** |
 | Comprehensive A-I plan, threat model, roadmap, and product-by-product strengths | `docs/hackathon/chainlink-cre-a-to-i.md` |
 
+## Fresh-Machine Reproduction Notes
+
+For anyone reproducing the submission locally, the setup order is:
+
+1. Install the official Chainlink CRE CLI and verify `cre version`
+2. Clone the repo
+3. Install CRE dependencies with `npm --prefix cre install`
+4. Copy env templates and populate the values in `docs/hackathon/submission-env-vars-and-secrets.md`
+5. Start the mock bridge server
+6. Run `cre workflow simulate ...`
+
+Important:
+
+- The docs assume the official `cre` CLI is already installed and available in `PATH`
+- `npx cre` is not a supported fallback for locked-down environments
+- Proxy/firewall restrictions can block clone, auth, and CLI installation even when repo configuration is otherwise correct
+
 ## Problem We Are Solving
 
 4626 is a multi-strategy, multi-chain creator vault protocol. That creates a hard operations problem:

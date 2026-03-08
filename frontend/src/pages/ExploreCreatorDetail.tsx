@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, ArrowLeft, Copy, Check, Share2, Globe, Users, Coins, TrendingUp, Calendar } from 'lucide-react'
+import { ExternalLink, ArrowLeft, Copy, Check, Share2, Globe, Users, Coins, TrendingUp, Calendar, MessageSquare } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { getAddress, isAddress } from 'viem'
@@ -9,6 +9,8 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
+import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
+import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
 
 const CONTENT_COINS_PAGE_SIZE = 20
 
@@ -44,6 +46,42 @@ function shortAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 }
 
+function parseNumber(value: string | number | undefined | null): number {
+  if (value == null) return 0
+  const n = typeof value === 'number' ? value : Number.parseFloat(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function formatUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '$0.00'
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`
+  if (value < 0.01) return `$${value.toFixed(6)}`
+  return `$${value.toFixed(2)}`
+}
+
+function formatTokenAmount(value: number): string {
+  const abs = Math.abs(value)
+  if (!Number.isFinite(abs) || abs === 0) return '0'
+  if (abs < 0.0001) return abs.toExponential(2)
+  if (abs < 1) return abs.toFixed(6)
+  if (abs < 1000) return abs.toFixed(4)
+  return abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+function formatTimestamp(ts: number): string {
+  const ms = ts < 1_000_000_000_000 ? ts * 1000 : ts
+  const d = new Date(ms)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 // Dexscreener Chart Embed Component
 function DexscreenerChart({ pairAddress, tokenAddress }: { pairAddress?: string; tokenAddress: string }) {
   // Dexscreener embeds work with pair addresses, but we can use token address as fallback
@@ -53,7 +91,7 @@ function DexscreenerChart({ pairAddress, tokenAddress }: { pairAddress?: string;
 
   return (
     <div className="w-full rounded-xl overflow-hidden bg-vault-card/40">
-      <div className="w-full min-h-[280px] sm:min-h-[360px] md:min-h-[420px] aspect-[4/3] sm:aspect-[16/9] md:aspect-[16/10]">
+      <div className="w-full min-h-[280px] sm:min-h-[360px] md:min-h-[420px] aspect-4/3 sm:aspect-video md:aspect-16/10">
         <iframe
           src={embedUrl}
           title="Price Chart"
@@ -164,12 +202,12 @@ function ContentCoinRow({ coin, rank }: { coin: ZoraCoin; rank: number }) {
       to={`/explore/content/base/${address}`}
       className="flex items-center gap-2.5 sm:gap-4 px-3 py-3 sm:p-4 hover:bg-white/5 transition-colors rounded-xl active:scale-[0.99]"
     >
-      <span className="text-[11px] sm:text-xs text-zinc-600 w-5 sm:w-6 text-center flex-shrink-0">{rank}</span>
+      <span className="text-[11px] sm:text-xs text-zinc-600 w-5 sm:w-6 text-center shrink-0">{rank}</span>
       
       {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover flex-shrink-0" />
+        <img src={avatarUrl} alt={name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover shrink-0" />
       ) : (
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center shrink-0">
           <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-500" />
         </div>
       )}
@@ -179,12 +217,12 @@ function ContentCoinRow({ coin, rank }: { coin: ZoraCoin; rank: number }) {
         <div className="text-[10px] sm:text-xs text-zinc-500">{symbol}</div>
       </div>
       
-      <div className="text-right flex-shrink-0">
+      <div className="text-right shrink-0">
         <div className="text-[10px] sm:text-xs text-zinc-500">Earned</div>
         <div className="text-[13px] sm:text-sm text-green-400 font-medium">{earnings}</div>
       </div>
       
-      <div className="text-right hidden sm:block flex-shrink-0">
+      <div className="text-right hidden sm:block shrink-0">
         <div className="text-xs text-zinc-500">Volume</div>
         <div className="text-sm text-white">{totalVolume}</div>
       </div>
@@ -370,6 +408,56 @@ export function ExploreCreatorDetail() {
     return items
   }, [contentPage, totalContentPages])
 
+  const symbol = coin?.symbol || '...'
+
+  const { data: pools = [] } = useQuery({
+    queryKey: ['uniswap', 'poolsByToken', tokenAddress],
+    queryFn: async () => {
+      if (!tokenAddress) return []
+      return getPoolsByToken(tokenAddress)
+    },
+    enabled: Boolean(tokenAddress),
+    staleTime: 60_000,
+  })
+
+  const primaryPool = useMemo<UniswapPool | null>(() => {
+    if (!pools || pools.length === 0) return null
+    return [...pools].sort((a, b) => parseNumber(b.totalValueLockedUSD) - parseNumber(a.totalValueLockedUSD))[0]
+  }, [pools])
+
+  const { data: swaps = [], isLoading: swapsLoading } = useQuery({
+    queryKey: ['uniswap', 'poolSwaps', primaryPool?.id],
+    queryFn: async () => {
+      if (!primaryPool?.id) return []
+      return getPoolSwaps(primaryPool.id, 10)
+    },
+    enabled: Boolean(primaryPool?.id),
+    staleTime: 30_000,
+  })
+
+  const recentTransactions = useMemo(() => {
+    const creatorCoinAddressLower = tokenAddress?.toLowerCase() ?? ''
+    return (swaps ?? []).map((swap: UniswapSwap) => {
+      const amount0 = parseNumber(swap.amount0)
+      const amount1 = parseNumber(swap.amount1)
+      const creatorCoinInToken0 = swap.token0.id.toLowerCase() === creatorCoinAddressLower
+      const creatorCoinAmount = creatorCoinInToken0 ? amount0 : amount1
+      const side = creatorCoinAmount < 0 ? 'Buy' : creatorCoinAmount > 0 ? 'Sell' : 'Swap'
+      return {
+        id: swap.id,
+        timestamp: parseNumber(swap.timestamp || swap.transaction?.timestamp || 0),
+        side,
+        amountUsd: parseNumber(swap.amountUSD),
+        creatorCoinAmount,
+        otherAmount: creatorCoinInToken0 ? amount1 : amount0,
+        creatorCoinSymbol: creatorCoinInToken0 ? (swap.token0.symbol || symbol) : (swap.token1.symbol || symbol),
+        otherSymbol: creatorCoinInToken0 ? (swap.token1.symbol || 'TOKEN') : (swap.token0.symbol || 'TOKEN'),
+        wallet: swap.origin || swap.sender,
+        txHash: swap.transaction?.id ?? '',
+      }
+    })
+  }, [swaps, tokenAddress, symbol])
+
   if (!chain || !isSupportedChain(chain)) {
     return <Navigate replace to="/explore/creators" />
   }
@@ -385,13 +473,17 @@ export function ExploreCreatorDetail() {
   const handle = profile?.handle || coin?.creatorProfile?.handle
   const bio = profile?.bio
   const website = profile?.website
-  const symbol = coin?.symbol || '...'
   const marketCap = formatNumber(coin?.marketCap)
   const volume24h = formatNumber(coin?.volume24h)
   const totalVolume = formatNumber(coin?.totalVolume)
   const holders = coin?.uniqueHolders ? coin.uniqueHolders.toLocaleString() : '-'
   const createdAt = formatDate(coin?.createdAt)
   const totalCoinsCreated = createdCoins.length
+  const creatorChatPeer = profile?.publicWallet?.walletAddress || creatorAddress || coin?.payoutRecipientAddress || ''
+  const creatorChatHref =
+    creatorChatPeer && isAddress(creatorChatPeer)
+      ? `/?chatAction=help&chatPeer=${creatorChatPeer}&chatName=${encodeURIComponent(displayName)}`
+      : null
 
   return (
     <div className="relative min-h-screen bg-black">
@@ -427,9 +519,9 @@ export function ExploreCreatorDetail() {
             {/* Avatar & Name */}
             <div className="flex items-start gap-3 sm:gap-4">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName} className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover flex-shrink-0" />
+                <img src={avatarUrl} alt={displayName} className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover shrink-0" />
               ) : (
-                <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-gradient-to-br from-zinc-600 to-zinc-700 flex items-center justify-center flex-shrink-0">
+                <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-linear-to-br from-zinc-600 to-zinc-700 flex items-center justify-center shrink-0">
                   <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
                 </div>
               )}
@@ -545,32 +637,123 @@ export function ExploreCreatorDetail() {
 
             {/* Chart Tab */}
             {activeTab === 'chart' && (
-              <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
-                <div className="px-3 py-3 sm:p-4 border-b border-white/8">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-white font-medium">{displayName}</span>
-                      <span className="text-zinc-500 ml-2">{symbol}</span>
+              <>
+                <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
+                  <div className="px-3 py-3 sm:p-4 border-b border-white/8">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-white font-medium">{displayName}</span>
+                        <span className="text-zinc-500 ml-2">{symbol}</span>
+                      </div>
+                      <a
+                        href={`https://dexscreener.com/base/${tokenAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-zinc-500 hover:text-white flex items-center gap-1"
+                      >
+                        Open in Dexscreener
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                     </div>
-                    <a
-                      href={`https://dexscreener.com/base/${tokenAddress}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-zinc-500 hover:text-white flex items-center gap-1"
-                    >
-                      Open in Dexscreener
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                  </div>
+                  {isLoading ? (
+                    <div className="h-[400px] flex items-center justify-center">
+                      <div className="h-8 w-8 border-2 border-zinc-700 border-t-cyan-500 rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    <DexscreenerChart tokenAddress={tokenAddress} />
+                  )}
+                </div>
+
+                <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-white font-medium">Recent transactions</div>
+                      <div className="text-xs text-zinc-500">Latest swaps from the primary pool</div>
+                    </div>
+                    {primaryPool?.id ? (
+                      <a
+                        href={`https://app.uniswap.org/explore/pools/base/${primaryPool.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-zinc-400 hover:text-white"
+                      >
+                        Pool
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-sm">
+                      <thead className="bg-vault-card/60/70">
+                        <tr className="text-left text-zinc-500 text-xs font-medium">
+                          <th className="px-4 py-3">Time</th>
+                          <th className="px-4 py-3">Type</th>
+                          <th className="px-4 py-3 text-right">USD</th>
+                          <th className="px-4 py-3 text-right">{symbol}</th>
+                          <th className="px-4 py-3 text-right">Pair</th>
+                          <th className="px-4 py-3 text-right">Wallet</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {swapsLoading ? (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
+                              Loading swaps...
+                            </td>
+                          </tr>
+                        ) : recentTransactions.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
+                              No swap data available for this creator coin yet.
+                            </td>
+                          </tr>
+                        ) : (
+                          recentTransactions.map((row) => (
+                            <tr key={row.id} className="border-t border-white/8/70">
+                              <td className="px-4 py-3 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    row.side === 'Buy'
+                                      ? 'bg-emerald-500/15 text-emerald-300'
+                                      : row.side === 'Sell'
+                                        ? 'bg-rose-500/15 text-rose-300'
+                                        : 'bg-zinc-600/25 text-zinc-300'
+                                  }`}
+                                >
+                                  {row.side}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
+                              <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">
+                                {formatTokenAmount(row.creatorCoinAmount)} {row.creatorCoinSymbol}
+                              </td>
+                              <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">
+                                {formatTokenAmount(row.otherAmount)} {row.otherSymbol}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {row.txHash ? (
+                                  <a
+                                    href={`https://basescan.org/tx/${row.txHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-zinc-300 hover:text-white"
+                                  >
+                                    {shortAddress(row.wallet)}
+                                  </a>
+                                ) : (
+                                  <span className="text-zinc-400">{shortAddress(row.wallet)}</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-                {isLoading ? (
-                  <div className="h-[400px] flex items-center justify-center">
-                    <div className="h-8 w-8 border-2 border-zinc-700 border-t-cyan-500 rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <DexscreenerChart tokenAddress={tokenAddress} />
-                )}
-              </div>
+              </>
             )}
 
             {/* Content Coins Tab */}
@@ -680,7 +863,7 @@ export function ExploreCreatorDetail() {
                   {avatarUrl ? (
                     <img src={avatarUrl} alt={displayName} className="w-10 h-10 rounded-full object-cover" />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-700 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-linear-to-br from-zinc-600 to-zinc-700 flex items-center justify-center">
                       <span className="text-sm font-medium text-zinc-300">{symbol.slice(0, 2)}</span>
                     </div>
                   )}
@@ -707,6 +890,25 @@ export function ExploreCreatorDetail() {
               >
                 Buy Creator Coin
               </Link>
+
+              {creatorChatHref ? (
+                <Link
+                  to={creatorChatHref}
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/8 text-white font-medium text-sm transition-colors"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Chat with Creator
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl border border-white/10 bg-white/5 text-zinc-500 font-medium text-sm cursor-not-allowed"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Chat unavailable
+                </button>
+              )}
             </div>
 
             {/* Social + Links Card */}

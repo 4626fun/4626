@@ -39,6 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/vault/{address}/report': { get: { summary: 'Vault report', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/vault/{address}/strategies': { get: { summary: 'Vault strategies', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/auction/{address}/status': { get: { summary: 'CCA strategy auction status', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/auction/{address}/activity': { get: { summary: 'Recent live activity for a CCA strategy auction', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/auction/{address}/recentBids': { get: { summary: 'Recent bids for an auction contract', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/global': { get: { summary: 'Global lottery stats', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/creator/{creatorCoin}': { get: { summary: 'Creator lottery stats', parameters: [{ name: 'creatorCoin', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },

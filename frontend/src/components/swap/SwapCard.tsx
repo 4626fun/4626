@@ -6,7 +6,6 @@ import { TokenInput } from '@/components/swap/TokenInput'
 import { ChainSelector } from '@/components/trade/ChainSelector'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
-import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import type { SupportedChainId } from '@/config/chains'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
@@ -57,13 +56,10 @@ type SwapCardProps = {
 }
 
 export function SwapCard(props: SwapCardProps) {
-  const usingSmartWallet = props.executionMode === 'canonical'
-
   return (
     <div className="bv-panel p-4">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="text-sm text-vault-subtext space-y-1">
-          <div className="bv-kicker">Swap</div>
           <div className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] text-vault-subtext" style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.65)', background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
             <span>Powered by</span>
             <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
@@ -76,15 +72,6 @@ export function SwapCard(props: SwapCardProps) {
             onSelect={props.onSelectChain}
             compact
           />
-          <div className="bv-chip gap-1.5 normal-case tracking-[0.02em]">
-            <WalletProviderIcon
-              provider={usingSmartWallet ? 'coinbase' : 'privy'}
-              walletType={usingSmartWallet ? 'smart_wallet' : 'embedded_eoa'}
-              isCanonicalSmartWallet={usingSmartWallet}
-              size={12}
-            />
-            <span>{usingSmartWallet ? 'Coinbase Smart Wallet' : 'User Wallet'}</span>
-          </div>
           {props.fallbackActive ? (
             <div className="inline-flex items-center rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-amber-200">
               Fallback active

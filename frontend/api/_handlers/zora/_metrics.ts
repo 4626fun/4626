@@ -159,11 +159,12 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       driftPct: toNumber(state.drift_pct),
     },
     totals: {
-      creatorsTotal: exact ? creatorsTotal : null,
-      creatorsNew24h: exact ? creatorsNew24h : null,
-      creatorCoinsMarketCapUsd: exact ? creatorCoinsMarketCapUsd : null,
-      creatorCoinsVolume24hUsd: exact ? creatorCoinsVolume24hUsd : null,
-      creatorCoinsFees24hUsd: exact ? creatorCoinsFees24hUsd : null,
+      // Surface best-effort aggregate values even before canonical sync completes.
+      creatorsTotal,
+      creatorsNew24h,
+      creatorCoinsMarketCapUsd,
+      creatorCoinsVolume24hUsd,
+      creatorCoinsFees24hUsd,
       partial: !exact,
       sampledCreators,
     },

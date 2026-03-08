@@ -94,12 +94,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const currencyRaised = BigInt((status as any)?.[4] ?? 0n).toString()
 
     const tokenAddr = typeof auctionToken === 'string' && isAddress(auctionToken) ? (auctionToken as `0x${string}`) : null
-    const [tokenDecimals, tokenSymbol] = tokenAddr
-      ? await Promise.all([
-          client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null),
-          client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'symbol' }).catch(() => null),
-        ])
-      : [null, null]
+    const currencyAddr = typeof currency === 'string' && isAddressLike(currency) ? (currency as `0x${string}`) : null
+    const [tokenDecimals, tokenSymbol, currencyDecimals] = await Promise.all([
+      tokenAddr
+        ? client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
+        : null,
+      tokenAddr
+        ? client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'symbol' }).catch(() => null)
+        : null,
+      currencyAddr
+        ? client.readContract({ address: currencyAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
+        : null,
+    ])
 
     setCache(res, 20)
     return res.status(200).json({
@@ -113,7 +119,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         isGraduated,
         clearingPriceQ96,
         currencyRaised,
-        currency: typeof currency === 'string' && isAddressLike(currency) ? currency.toLowerCase() : null,
+        currency: currencyAddr ? currencyAddr.toLowerCase() : null,
+        currencyDecimals: typeof currencyDecimals === 'number' ? currencyDecimals : currencyDecimals === null ? null : Number(currencyDecimals),
         auctionToken: tokenAddr ? tokenAddr.toLowerCase() : null,
         auctionTokenSymbol: typeof tokenSymbol === 'string' ? tokenSymbol : null,
         auctionTokenDecimals: typeof tokenDecimals === 'number' ? tokenDecimals : tokenDecimals === null ? null : Number(tokenDecimals),

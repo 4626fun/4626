@@ -2,10 +2,44 @@
 
 ## Prerequisites
 
-- CRE CLI installed and authenticated (`cre login`)
+- Node.js and npm installed
+- CRE CLI installed and available in `PATH`
+- CRE CLI authenticated (`cre login`) when required
 - Bun installed
-- Secrets set in CRE
 - Working directory: repo root (`/home/akitav2/projects/4626`)
+
+Verify the local toolchain before doing anything else:
+
+```bash
+node -v
+npm -v
+cre version
+```
+
+If `cre` is not found, install the official Chainlink CRE CLI before continuing.  
+Do not rely on `npx cre` in locked-down environments, since registry access may be blocked.
+
+## Fresh Machine Bootstrap
+
+```bash
+git clone https://github.com/4626fun/convergence-chainlink-hackathon.git
+cd convergence-chainlink-hackathon
+npm --prefix cre install
+cp cre/cre-workflows/.env.example cre/cre-workflows/.env
+cp cre/secrets.example.env cre/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+Then fill in the required values described in:
+
+- `docs/hackathon/submission-env-vars-and-secrets.md`
+
+Minimum required for hackathon simulation:
+
+- `CRE_ETH_PRIVATE_KEY`
+- `KEEPR_API_KEY_VALUE`
+- `KEEPR_API_BASE_URL_VALUE`
+- `KEEPR_PRIVATE_KEY_VALUE`
 
 ## Simulate
 
@@ -133,6 +167,15 @@ Workflow mapping file: `cre/cre-workflows/secrets.yaml`
 
 ## Troubleshooting
 
+- **`cre: command not found`**
+  - Install the official Chainlink CRE CLI and make sure it is available in `PATH`
+  - Re-run `cre version` before attempting simulation
+- **`npx cre` fails**
+  - This usually means npm registry access is blocked or restricted
+  - Use the official CLI install path instead of registry fallback
+- **`git clone` fails with proxy / CONNECT / 403**
+  - The machine cannot reach GitHub directly
+  - Use a machine with normal outbound access or a pre-existing checkout
 - **Simulation fails with config/paths**
   - Run `bash cre/cre-workflows/scripts/validate-workflow-layout.sh`
 - **Type errors across shared modules**
