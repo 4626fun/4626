@@ -70,14 +70,11 @@ export function VaultNavBar() {
           <Logo showText={false} width={40} height={40} />
           <div className="flex flex-col justify-center">
             <span className="text-sm tracking-widest text-white font-medium transition-colors duration-300 leading-none">
-              Creator
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-brand-primary to-brand-accent ml-1">
-                Vaults
-              </span>
+              4626
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-brand-primary to-brand-accent ml-0.5">.fun</span>
             </span>
-            <span className="mt-1 text-[9px] tracking-[0.22em] uppercase text-zinc-600 leading-none">
-              <span className="font-mono uppercase">erc</span>
-              <span className="font-mono text-zinc-500">4626</span>
+            <span className="mt-1 text-[9px] tracking-[0.22em] uppercase text-zinc-500 leading-none">
+              Earn Together
             </span>
           </div>
         </Link>

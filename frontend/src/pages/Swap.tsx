@@ -1277,9 +1277,8 @@ export function Swap() {
           )
         }
         vaultPanel={activePanel === 'swap' ? <VaultsPanel chainId={swapChainId} /> : null}
-        gasIndicatorLabel={gasEstimateLabel}
         title="Swap"
-        subtitle="Fast token swaps on Base."
+        subtitle="1-Click Swaps on Base"
       />
 
       {activePanel === 'swap' && needsPrivyCanonicalAuth ? (

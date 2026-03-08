@@ -8,6 +8,7 @@ export interface VaultConfig {
   chainId: number
   creatorCoinAddress: `0x${string}`
   ccaStrategyAddress?: `0x${string}`
+  shareOFTAddress?: `0x${string}`
   oracleAddress?: `0x${string}`
   vrfHubAddress?: `0x${string}`
   gaugeControllerAddress?: `0x${string}`
@@ -113,6 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         graduatedAt: row.graduated_at ? new Date(row.graduated_at).toISOString() : null,
         settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : null,
         ...(contracts.ccaStrategy ? { ccaStrategyAddress: contracts.ccaStrategy } : {}),
+        ...(contracts.shareOFT ? { shareOFTAddress: contracts.shareOFT } : {}),
         ...(contracts.oracle ? { oracleAddress: contracts.oracle } : {}),
         ...(contracts.vrfHub ? { vrfHubAddress: contracts.vrfHub } : {}),
         ...(contracts.gaugeController ? { gaugeControllerAddress: contracts.gaugeController } : {}),
