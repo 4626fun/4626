@@ -123,6 +123,7 @@ function useSafeSwapPrivyHook(enabled: boolean) {
         ready: false,
         authenticated: false,
         user: null,
+        getAccessToken: null as null | (() => Promise<string | null>),
       } as any
     }
     return value
@@ -132,6 +133,7 @@ function useSafeSwapPrivyHook(enabled: boolean) {
       ready: false,
       authenticated: false,
       user: null,
+      getAccessToken: null as null | (() => Promise<string | null>),
     } as any
   }
 }
@@ -343,9 +345,23 @@ export function Swap() {
   const { data: walletClient } = useWalletClient()
   const privyClientStatus = usePrivyClientStatus()
   const privyHooksEnabled = privyClientStatus === 'ready'
-  const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser } = useSafeSwapPrivyHook(privyHooksEnabled)
+  const {
+    ready: privyReady,
+    authenticated: privyAuthenticated,
+    user: privyUser,
+    getAccessToken,
+  } = useSafeSwapPrivyHook(privyHooksEnabled)
   const { wallets: privyWallets } = useSafeSwapWalletsHook(privyHooksEnabled)
   const auth = useSiweAuth()
+  const {
+    authAddress,
+    hasSession,
+    sessionHydrated,
+    signInWithPrivyToken,
+    signIn,
+    busy: authBusy,
+    error: authError,
+  } = auth
   const publicClient = usePublicClient()
   const { switchChainAsync } = useSwitchChain()
   const [swapChainId, setSwapChainId] = useState<SupportedChainId>(DEFAULT_CHAIN_ID)
@@ -688,6 +704,18 @@ export function Swap() {
     executionMode === 'canonical' && canonicalSignerGate.code === 'privy-client-disabled'
   const showPrivyLoadingHint = executionMode === 'canonical' && canonicalSignerGate.code === 'privy-auth-loading'
   const canonicalSignInMethod = 'privy' as const
+  const ensureCanonicalSession = useCallback(async (): Promise<boolean> => {
+    if (executionMode !== 'canonical') return true
+    if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return false
+    try {
+      const token = await getAccessToken()
+      if (!token) return false
+      const bridgedAddress = await signInWithPrivyToken(token)
+      return Boolean(bridgedAddress)
+    } catch {
+      return false
+    }
+  }, [executionMode, getAccessToken, signInWithPrivyToken])
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&
@@ -845,6 +873,7 @@ export function Swap() {
     canary7702Eligible,
     diagnosticsBusy,
     diagnosticsResult,
+    canonicalSubmitSession,
     handleQuote,
     handleReviewTrade,
     confirmAndExecute,
@@ -882,7 +911,22 @@ export function Swap() {
       embeddedWalletAddress: privyEmbeddedEoaAddress,
       embeddedWalletSource: privyEmbeddedEoaAddressSource,
     },
+    sessionHydrated,
+    hasSession,
+    sessionAddress: authAddress,
+    ensureCanonicalSession,
   })
+  const showCanonicalSessionGuardHint =
+    activePanel === 'swap' &&
+    executionMode === 'canonical' &&
+    canonicalSignerGate.ready &&
+    !canonicalSubmitSession.ok
+  const canonicalSessionGuardTitle =
+    canonicalSubmitSession.code === 'session-hydrating'
+      ? 'Restoring 4626 session'
+      : canonicalSubmitSession.code === 'session-mismatch'
+        ? 'Canonical session needs refresh'
+        : '4626 session required for submit'
 
   const selectedQuote = useMemo<QuoteShape | null>(() => {
     if (!quote) return null
@@ -1244,15 +1288,15 @@ export function Swap() {
             variant="warning"
             title="Privy sign-in required for canonical swaps"
             action={{
-              label: auth.busy ? 'Signing in...' : 'Sign in with Privy',
+              label: authBusy ? 'Signing in...' : 'Sign in with Privy',
               onClick: () => {
-                if (auth.busy || privyClientStatus !== 'ready') return
-                void auth.signIn({ method: canonicalSignInMethod })
+                if (authBusy || privyClientStatus !== 'ready') return
+                void signIn({ method: canonicalSignInMethod })
               },
             }}
           >
             Canonical mode uses your Privy embedded EOA as the owner signer. Sign in with Privy, then retry the swap.
-            {auth.error ? <div className="mt-2 text-rose-300">{auth.error}</div> : null}
+            {authError ? <div className="mt-2 text-rose-300">{authError}</div> : null}
           </Alert>
         </div>
       ) : null}
@@ -1274,6 +1318,14 @@ export function Swap() {
         <div className="mx-auto mt-4 max-w-4xl">
           <Alert variant="warning" title="Initializing Privy for canonical signing">
             Waiting for the Privy client/session to finish loading before canonical signer checks can complete.
+          </Alert>
+        </div>
+      ) : null}
+
+      {showCanonicalSessionGuardHint ? (
+        <div className="mx-auto mt-4 max-w-4xl">
+          <Alert variant="warning" title={canonicalSessionGuardTitle}>
+            {canonicalSubmitSession.message}
           </Alert>
         </div>
       ) : null}

@@ -40,7 +40,6 @@ import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
   normalizeUnderlyingSymbol,
-  toCharmVaultSymbol,
   toShareName,
   toShareSymbol,
   toVaultName,
@@ -49,7 +48,6 @@ import {
 } from '@/lib/tokenSymbols'
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
-import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { readClientBootstrapSwapPrefs, type BootstrapSwapProvider } from '@/lib/deploy/bootstrapSwapPrefs'
 import { assertBootstrapSwapPlanReady } from '@/lib/deploy/bootstrapSwapGate'
@@ -78,15 +76,19 @@ const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
 // Keep this as a boolean gate for deferred launch wiring.
 const DEFAULT_AUCTION_PERCENT = 50
 // Strategy deployment targets (of total deposited creator tokens):
-// - 30% Charm strategy
-// - 30% Ajna strategy
-// - 30% Solana bridge strategy (explicit bridge operation)
+// - 30% Charm
+// - 30% Ajna
+// - 30% SolanaStrategy
 // - 10% idle operational buffer
 const DEFAULT_CHARM_WEIGHT_BPS = 3_000n
 const DEFAULT_AJNA_WEIGHT_BPS = 3_000n
 const DEFAULT_SOLANA_WEIGHT_BPS = 3_000n
 const DEFAULT_IDLE_PERCENT_BPS = 1_000n // 10% explicit idle target
 const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS
+const DEFAULT_SOLANA_MAX_NAV_AGE = 3_600n
+const DEFAULT_SOLANA_MAX_NAV_DELTA_BPS = 500
+const DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS = 1_000
+const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
@@ -101,7 +103,6 @@ const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
 const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
 const BATCHER_VAULT_ADMIN_MODULE_SELECTOR = '822f9d9b'
 const NO_EOA_STRICT_BLOCKER = 'No-EOA deploy is only available for preconfigured Privy-owner wallets.'
-const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',
@@ -134,7 +135,7 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.4.3'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.3.11'
 const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
@@ -170,15 +171,15 @@ function normalizeBytes32(value: unknown): Hex | null {
   return value as Hex
 }
 
-function parseUInt32(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 4_294_967_295) {
+function parseUint8(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 255) {
     return Math.floor(value)
   }
   if (typeof value === 'string') {
     const v = value.trim()
     if (!v) return null
     const n = Number(v)
-    if (Number.isFinite(n) && n >= 0 && n <= 4_294_967_295) return Math.floor(n)
+    if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
   }
   return null
 }
@@ -466,15 +467,6 @@ async function waitForPhase1CoreState(params: {
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
-type SolanaInfraStatusResponse = {
-  solanaEnabledOnBatcher: boolean
-  dynamicProvisioningMode: 'disabled' | 'local-cli' | 'remote-provisioner' | 'misconfigured'
-  existingMintCompatible: boolean
-  depositEligible: boolean
-  redeemEligible: boolean
-  readyForAutoRegistration: boolean
-  blockers: string[]
-}
 type ServerDeployResponse = {
   userOpHash: string
   addresses: {
@@ -489,13 +481,6 @@ type ServerDeployResponse = {
   }
 }
 type DeploySessionCall = { to: Address; value: string; data: Hex }
-type DeploySessionSolanaOvault = {
-  enabled?: boolean
-  assetMintOrigin?: 'existing' | 'new'
-  assetMeshMint?: Hex
-  shareMeshMint?: Hex
-  solanaEid?: number
-}
 type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
@@ -506,18 +491,7 @@ type DeploySessionCreateRequest = {
   phase2FinalizeCalls: DeploySessionCall[]
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
-  solanaOvault?: DeploySessionSolanaOvault
   version: string
-}
-type DeployBootstrapSwapSummary = {
-  providerRequested: BootstrapSwapProvider
-  providerUsed: string | null
-  fallbackUsed: boolean
-  bootstrapBps: number
-  slippageBps: number
-  bootstrapCreatorAmountBaseUnits: string | null
-  hasSwap: boolean
-  swapError: string | null
 }
 type DeployPlanExport = {
   generatedAt: string
@@ -546,7 +520,6 @@ type DeployPlanExport = {
     phase4: number
   }
   sessionCreateRequest: DeploySessionCreateRequest
-  bootstrapSwapPlan: DeployBootstrapSwapSummary | null
 }
 
 const CREATOR_COIN_OWNERS_ABI = [
@@ -650,6 +623,26 @@ function formatEthPerTokenForUi(weiPerToken: bigint): string {
   const compact = formatWithMaxDecimals(DEFAULT_MAX_DECIMALS)
   if (compact === '0' && weiPerToken > 0n) return formatWithMaxDecimals(FULL_MAX_DECIMALS)
   return compact
+}
+
+function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
+  const MPS = 10_000_000n
+  if (durationBlocks <= 0n) return '0x'
+
+  const mpsLow = MPS / durationBlocks
+  const remainder = MPS - mpsLow * durationBlocks
+  const mpsHigh = mpsLow + 1n
+
+  const highBlocks = remainder
+  const lowBlocks = durationBlocks - highBlocks
+
+  const packStep = (mps: bigint, blockDelta: bigint) =>
+    encodePacked(['uint24', 'uint40'], [Number(mps), Number(blockDelta)]) as Hex
+
+  const steps: Hex[] = []
+  if (highBlocks > 0n) steps.push(packStep(mpsHigh, highBlocks))
+  if (lowBlocks > 0n) steps.push(packStep(mpsLow, lowBlocks))
+  return concatHex(steps)
 }
 
 function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
@@ -796,18 +789,6 @@ async function fetchAdminAuth(): Promise<AdminAuthResponse> {
   if (!res.ok || !json) return null
   if (!json.success) return null
   return (json.data ?? null) as AdminAuthResponse
-}
-
-async function fetchSolanaInfraStatus(): Promise<SolanaInfraStatusResponse | null> {
-  const { apiFetch } = await import('@/lib/apiBase')
-  const res = await apiFetch('/api/deploy/solanaInfraStatus', {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  })
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<SolanaInfraStatusResponse> | null
-  if (!res.ok || !json) return null
-  if (!json.success) return null
-  return (json.data ?? null) as SolanaInfraStatusResponse | null
 }
 
 // Use the canonical EntryPoint v0.6 from the ERC-4337 module
@@ -1510,6 +1491,11 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'solanaKeeper', type: 'address' },
+          { name: 'solanaMaxNavAge', type: 'uint64' },
+          { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
+          { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
+          { name: 'solanaBridgeAddress', type: 'address' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -1647,10 +1633,8 @@ function DeployVaultBatcher({
   privyEmbeddedEoaCanSign,
   connectedEoaOwnerReady,
   strictNoEoaMode,
-  solanaAssetMintOrigin,
-  solanaAssetMeshMintOverride,
-  solanaShareMeshMintOverride,
-  solanaEidOverride,
+  solanaMintOverride,
+  solanaDecimalsOverride,
   connectorId,
   wagmiWalletClient,
 }: {
@@ -1684,10 +1668,8 @@ function DeployVaultBatcher({
   privyEmbeddedEoaCanSign: boolean
   connectedEoaOwnerReady: boolean
   strictNoEoaMode: boolean
-  solanaAssetMintOrigin: 'existing' | 'new'
-  solanaAssetMeshMintOverride: Hex | null
-  solanaShareMeshMintOverride: Hex | null
-  solanaEidOverride: number | null
+  solanaMintOverride: Hex | null
+  solanaDecimalsOverride: number | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
@@ -1696,6 +1678,9 @@ function DeployVaultBatcher({
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
+  // Legacy ShareOFT Solana overrides are intentionally unused in main deploy flow now.
+  void solanaMintOverride
+  void solanaDecimalsOverride
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
@@ -1861,9 +1846,6 @@ function DeployVaultBatcher({
   const [exportBusy, setExportBusy] = useState(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [resumePendingSetup, setResumePendingSetup] = useState<{ sessionId: string; sessionSigner: Address } | null>(null)
-  const [resumePendingSetupBusy, setResumePendingSetupBusy] = useState(false)
-  const [resumePendingSetupError, setResumePendingSetupError] = useState<string | null>(null)
   const [txId, setTxId] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2' | 'phase3' | 'phase4' | 'done'>('idle')
   const [phaseTxs, setPhaseTxs] = useState<{
@@ -2111,11 +2093,7 @@ function DeployVaultBatcher({
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }
-    if (
-      lower.includes('session_signer_not_installed') ||
-      lower.includes('session_owner_not_installed') ||
-      lower.includes('deploy-session signer is not installed')
-    ) {
+    if (lower.includes('session_owner_not_installed') || lower.includes('deploy-session signer is not installed')) {
       return (
         'Deploy-session signer is not installed on your canonical smart wallet yet. ' +
         'Approve the one-time add-owner transaction from an owner EOA (for example Coinbase Wallet), then retry deploy.'
@@ -2426,7 +2404,7 @@ function DeployVaultBatcher({
     }
 
     installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
-    if (!installed) throw new Error('session_signer_not_installed')
+    if (!installed) throw new Error('session_owner_not_installed')
   }, [
     connectedAddress,
     ensureBaseChain,
@@ -2477,7 +2455,6 @@ function DeployVaultBatcher({
       }
       if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
       else if (step.startsWith('phase2')) setPhase('phase2')
-      else if (step.startsWith('ovault_mesh')) setPhase('phase3')
       else if (step.startsWith('phase3')) setPhase('phase3')
       else if (step.startsWith('phase4')) setPhase('phase4')
       if (lastTxHash && isHexHash(lastTxHash)) {
@@ -2507,9 +2484,7 @@ function DeployVaultBatcher({
         clearDeploySession()
         throw new Error(String(sjson.data?.lastError ?? 'Server deploy failed'))
       }
-      const isUserOpBackedSentStep =
-        (step.endsWith('_sent') && step !== 'ovault_mesh_sent') || step === 'cleanup_sent'
-      if (isUserOpBackedSentStep) {
+      if (step.endsWith('_sent') || step === 'cleanup_sent') {
         const hasUserOpHash = isHexHash(lastUserOpHash)
         if (!hasUserOpHash) {
           if (sentStepWithoutHash !== step) {
@@ -2537,7 +2512,7 @@ function DeployVaultBatcher({
       if (Date.now() - started > 10 * 60 * 1000) {
         throw new Error('Server deploy did not complete in time. Check status and retry continue.')
       }
-      if (isUserOpBackedSentStep) {
+      if (step.endsWith('_sent') || step === 'cleanup_sent') {
         backoff = true
       }
       if (backoff) delayMs = Math.min(delayMs * 2, 8000)
@@ -2547,15 +2522,9 @@ function DeployVaultBatcher({
 
   useEffect(() => {
     if (!useServerContinue) return
-    if (busy || resumePendingSetupBusy) return
+    if (busy) return
     const sessionId = loadDeploySession()
-    if (!sessionId) {
-      if (resumePendingSetup) setResumePendingSetup(null)
-      if (resumePendingSetupError) setResumePendingSetupError(null)
-      return
-    }
-    // Do not auto-call addOwner on resumed sessions; wait for explicit user action.
-    if (resumePendingSetup?.sessionId === sessionId) return
+    if (!sessionId) return
 
     let cancelled = false
     ;(async () => {
@@ -2574,22 +2543,22 @@ function DeployVaultBatcher({
         if (!statusRes.ok || !statusJson?.success) throw new Error(statusJson?.error || 'Failed to fetch deploy status')
         const step = String(statusJson.data?.step ?? '')
         if (step === 'created') {
-          const sessionSignerRaw = String(statusJson.data?.sessionSignerAddress ?? '').trim()
+          const sessionSignerRaw = String(
+            statusJson.data?.sessionSignerAddress ?? statusJson.data?.sessionOwner ?? '',
+          ).trim()
           if (!isAddress(sessionSignerRaw)) {
             throw new Error('Invalid deploy session status response')
           }
-          if (!cancelled) {
-            setResumePendingSetup({
-              sessionId,
-              sessionSigner: getAddress(sessionSignerRaw) as Address,
-            })
-            setResumePendingSetupError(null)
+          await ensureDeploySessionSignerInstalled(getAddress(sessionSignerRaw) as Address)
+          const continueRes = await fetch('/api/deploy/session/continue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+          })
+          const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
+          if (!continueRes.ok || !continueJson?.success) {
+            throw new Error(continueJson?.error || 'Failed to continue deploy')
           }
-          return
-        }
-        if (!cancelled && resumePendingSetup?.sessionId === sessionId) {
-          setResumePendingSetup(null)
-          setResumePendingSetupError(null)
         }
         await pollServerDeploySession(sessionId)
       } catch (e) {
@@ -2604,59 +2573,12 @@ function DeployVaultBatcher({
     }
   }, [
     busy,
+    ensureDeploySessionSignerInstalled,
     ensurePaymasterSession,
     formatDeployError,
     loadDeploySession,
     pollServerDeploySession,
-    resumePendingSetup,
-    resumePendingSetupBusy,
-    resumePendingSetupError,
-    setResumePendingSetup,
-    setResumePendingSetupError,
     useServerContinue,
-  ])
-
-  const continueResumedDeploySession = useCallback(async (): Promise<void> => {
-    if (!resumePendingSetup || resumePendingSetupBusy) return
-    const sessionId = resumePendingSetup.sessionId
-    const sessionSigner = resumePendingSetup.sessionSigner
-
-    setResumePendingSetupBusy(true)
-    setBusy(true)
-    setError(null)
-    setResumePendingSetupError(null)
-    setPhase('phase1')
-    lastPolledStepRef.current = ''
-
-    try {
-      await ensurePaymasterSession()
-      await ensureDeploySessionSignerInstalled(sessionSigner)
-      const continueRes = await fetch('/api/deploy/session/continue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      })
-      const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
-      if (!continueRes.ok || !continueJson?.success) {
-        throw new Error(continueJson?.error || 'Failed to continue deploy')
-      }
-      setResumePendingSetup(null)
-      await pollServerDeploySession(sessionId)
-    } catch (e) {
-      const pretty = formatDeployError(e)
-      setResumePendingSetupError(pretty)
-      setError(pretty)
-    } finally {
-      setResumePendingSetupBusy(false)
-      setBusy(false)
-    }
-  }, [
-    ensureDeploySessionSignerInstalled,
-    ensurePaymasterSession,
-    formatDeployError,
-    pollServerDeploySession,
-    resumePendingSetup,
-    resumePendingSetupBusy,
   ])
 
   const isTxHash = (h?: string | null) => typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)
@@ -2717,8 +2639,8 @@ function DeployVaultBatcher({
   }, [])
 
   const shareOftVanitySuffix = useMemo(() => {
-    // Keep ShareOFT vanity deterministic for production deploys: enforce "...4626".
-    return DEFAULT_SHARE_OFT_VANITY_SUFFIX.toLowerCase()
+    const raw = (import.meta.env.VITE_SHARE_OFT_VANITY_SUFFIX as string | undefined) ?? DEFAULT_SHARE_OFT_VANITY_SUFFIX
+    return normalizeHexSuffix(raw)
   }, [])
 
   const shareOftVanityMaxTries = useMemo(() => {
@@ -2743,7 +2665,7 @@ function DeployVaultBatcher({
       charmAlphaVaultDeploy: keccak256(toBytes('charm-factory-sentinel-v1')),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
-      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaBridgeStrategy as Hex),
+      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex),
     } as const
   }, [])
 
@@ -2877,9 +2799,10 @@ function DeployVaultBatcher({
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersion })
       let shareOftSaltOverrideUsed = shareOftSaltOverride
       if (shareOftSaltOverrideUsed && !supportsPhase1WithSalt) {
-        throw new Error(
-          `Batcher ${batcherAddress} does not support ShareOFT salt overrides, so vanity suffix "${shareOftVanitySuffix}" cannot be guaranteed.`,
-        )
+        logger.warn('[DeployVault] Batcher lacks vanity salt support; ignoring ShareOFT override', {
+          batcher: batcherAddress,
+        })
+        shareOftSaltOverrideUsed = null
       }
       if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && supportsPhase1WithSalt) {
         const initCodeHash = keccak256(shareOftInitCode)
@@ -2928,11 +2851,6 @@ function DeployVaultBatcher({
       }
       const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
       const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
-      if (shareOftAddress.slice(-shareOftVanitySuffix.length).toLowerCase() !== shareOftVanitySuffix) {
-        throw new Error(
-          `ShareOFT vanity suffix check failed: expected address ending in "${shareOftVanitySuffix}", got ${shareOftAddress}.`,
-        )
-      }
 
       const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
         creatorToken,
@@ -3119,69 +3037,6 @@ function DeployVaultBatcher({
     [],
   )
 
-  const bootstrapSwapPrefs = useMemo(() => readClientBootstrapSwapPrefs(), [])
-
-  const requestBootstrapSwapPlan = useCallback(
-    async (params: {
-      smartWallet: Address
-      ownerAddress: Address
-      creatorToken: Address
-      creatorAmountBaseUnits: string
-    }): Promise<DeployBootstrapSwapSummary> => {
-      const requestBody = {
-        ...params,
-        bootstrapBps: 100,
-        provider: bootstrapSwapPrefs.provider,
-        allowFallback: bootstrapSwapPrefs.allowFallback,
-        slippageBps: bootstrapSwapPrefs.slippageBps,
-      } as const
-
-      const fallbackSummary = (swapError: string): DeployBootstrapSwapSummary => ({
-        providerRequested: bootstrapSwapPrefs.provider,
-        providerUsed: null,
-        fallbackUsed: false,
-        bootstrapBps: 100,
-        slippageBps: bootstrapSwapPrefs.slippageBps,
-        bootstrapCreatorAmountBaseUnits: null,
-        hasSwap: false,
-        swapError,
-      })
-
-      try {
-        const response = await fetch('/api/deploy/session/bootstrapSwap', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        })
-        const payload = (await response.json().catch(() => null)) as ApiEnvelope<Record<string, unknown>> | null
-        if (!response.ok || !payload?.success || !payload.data || typeof payload.data !== 'object') {
-          const swapError = String(payload?.error || 'bootstrap_swap_unavailable')
-          return fallbackSummary(swapError)
-        }
-
-        const data = payload.data as Record<string, unknown>
-        const summary: DeployBootstrapSwapSummary = {
-          providerRequested:
-            typeof data.providerRequested === 'string'
-              ? (String(data.providerRequested) as BootstrapSwapProvider)
-              : bootstrapSwapPrefs.provider,
-          providerUsed: typeof data.providerUsed === 'string' ? data.providerUsed : null,
-          fallbackUsed: data.fallbackUsed === true,
-          bootstrapBps: typeof data.bootstrapBps === 'number' ? data.bootstrapBps : 100,
-          slippageBps: typeof data.slippageBps === 'number' ? data.slippageBps : bootstrapSwapPrefs.slippageBps,
-          bootstrapCreatorAmountBaseUnits:
-            typeof data.bootstrapCreatorAmountBaseUnits === 'string' ? data.bootstrapCreatorAmountBaseUnits : null,
-          hasSwap: Boolean(data.swap && typeof data.swap === 'object'),
-          swapError: typeof data.swapError === 'string' ? data.swapError : null,
-        }
-        return summary
-      } catch (error) {
-        return fallbackSummary(error instanceof Error ? error.message : String(error ?? 'bootstrap_swap_failed'))
-      }
-    },
-    [bootstrapSwapPrefs.allowFallback, bootstrapSwapPrefs.provider, bootstrapSwapPrefs.slippageBps],
-  )
-
   const submit = async (opts?: { planOnly?: boolean }): Promise<DeployPlanExport | null> => {
     const planOnly = opts?.planOnly === true
     if (busy || exportBusy) return null
@@ -3246,8 +3101,7 @@ function DeployVaultBatcher({
 
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
-      // Schedule is enforced onchain by CCALaunchStrategy; caller-provided steps are ignored.
-      const auctionSteps = '0x' as Hex
+      const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
       // Safety: The deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
       // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
       // We always pass `address(0)` to the batcher and, when needed, set payoutRecipient from the identity wallet separately.
@@ -3622,13 +3476,27 @@ function DeployVaultBatcher({
           solanaIxs: [],
         } as const
 
-        // Phase 3 (strategies): Charm + Ajna + Solana bridge strategy
+        // Phase 3 (strategies): Charm CREATOR/USDC + Ajna + SolanaStrategy
         const charmWeightBps = DEFAULT_CHARM_WEIGHT_BPS
         const ajnaWeightBps = DEFAULT_AJNA_WEIGHT_BPS
         const solanaWeightBps = DEFAULT_SOLANA_WEIGHT_BPS
         if (charmWeightBps <= 0n) throw new Error('Charm strategy is required')
         if (ajnaWeightBps <= 0n) throw new Error('Ajna strategy is required')
         if (solanaWeightBps <= 0n) throw new Error('Solana strategy is required')
+        if (charmWeightBps + ajnaWeightBps + solanaWeightBps > 10_000n) {
+          throw new Error('Strategy weights exceed 100%')
+        }
+        const configuredSolanaBridge = (CONTRACTS as any).solanaBridgeAdapter
+        if (!configuredSolanaBridge || !isAddress(String(configuredSolanaBridge))) {
+          throw new Error('Solana bridge adapter is not configured.')
+        }
+        const solanaBridgeAddress = getAddress(configuredSolanaBridge as Address)
+        const configuredSolanaKeeper = (CONTRACTS as any).protocolTreasury
+        const solanaKeeper =
+          configuredSolanaKeeper && isAddress(String(configuredSolanaKeeper))
+            ? getAddress(configuredSolanaKeeper as Address)
+            : owner
+        const charmLabel = (depositSymbol || '').toLowerCase()
 
         // If the CREATOR/USDC v3 pool doesn't exist yet, `deployPhase3Strategies` needs a non-zero
         // `initialSqrtPriceX96` to create+initialize it.
@@ -3746,11 +3614,16 @@ function DeployVaultBatcher({
           vault: expected.vault,
           version: deploymentVersion,
           initialSqrtPriceX96: marketV3InitialSqrtPriceX96 ?? fallbackV3InitialSqrtPriceX96,
-          charmVaultName: '4626.fun Strategy: Charm',
-          charmVaultSymbol: toCharmVaultSymbol(normalizeUnderlyingSymbol(shareSymbol || 'CREATOR')),
+          charmVaultName: charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC',
+          charmVaultSymbol: charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC',
           charmWeightBps,
           ajnaWeightBps,
           solanaWeightBps,
+          solanaKeeper,
+          solanaMaxNavAge: DEFAULT_SOLANA_MAX_NAV_AGE,
+          solanaMaxNavDeltaBpsPerUpdate: DEFAULT_SOLANA_MAX_NAV_DELTA_BPS,
+          solanaMinBaseLiquidityBps: DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS,
+          solanaBridgeAddress,
           enableAutoAllocate: false,
         } as const
 
@@ -3780,36 +3653,6 @@ function DeployVaultBatcher({
           throw new Error(
             `Creator smart wallet needs ${formatDeposit(depositAmount)} ${depositSymbol} (has ${formatDeposit(smartWalletBalance)}). Transfer funds to ${shortAddress(owner)} and retry.`,
           )
-        }
-
-        // Controlled bootstrap planner:
-        // ask the server for a CREATOR->USDC bootstrap swap plan (1%) using the configured route provider.
-        // This does not execute a swap inside deploy; it gives an operator-ready route recommendation.
-        const bootstrapSwapPlan = await requestBootstrapSwapPlan({
-          smartWallet: owner,
-          ownerAddress: owner,
-          creatorToken,
-          creatorAmountBaseUnits: depositAmount.toString(),
-        })
-        if (!bootstrapSwapPlan.hasSwap) {
-          logger.error('[DeployVault] bootstrap_swap_plan_unavailable', {
-            providerRequested: bootstrapSwapPlan.providerRequested,
-            providerUsed: bootstrapSwapPlan.providerUsed,
-            fallbackUsed: bootstrapSwapPlan.fallbackUsed,
-            swapError: bootstrapSwapPlan.swapError,
-            planOnly,
-          })
-          if (!planOnly) {
-            assertBootstrapSwapPlanReady(bootstrapSwapPlan)
-          }
-        } else {
-          logger.info('[DeployVault] bootstrap_swap_plan_ready', {
-            providerRequested: bootstrapSwapPlan.providerRequested,
-            providerUsed: bootstrapSwapPlan.providerUsed,
-            fallbackUsed: bootstrapSwapPlan.fallbackUsed,
-            bootstrapCreatorAmountBaseUnits: bootstrapSwapPlan.bootstrapCreatorAmountBaseUnits,
-            planOnly,
-          })
         }
 
         const phase1Calls: Array<{ target: Address; value: bigint; data: Hex }> = phase1CallsPrepared
@@ -4054,7 +3897,7 @@ function DeployVaultBatcher({
         const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
           ...phase3StrategyCalls,
           vaultSetMinimumIdleCall,
-          // Apply the configured 30/30/30 strategy mix while preserving 10% idle on the vault.
+          // Apply 30/30/30 from the 90% deployable bucket; keep 10% idle.
           vaultDeployToStrategiesCall,
           ...phase2Create2Calls,
           ...phase2ConfigCalls,
@@ -4072,13 +3915,6 @@ function DeployVaultBatcher({
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
-          solanaOvault: {
-            enabled: true,
-            assetMintOrigin: solanaAssetMintOrigin,
-            ...(solanaAssetMeshMintOverride ? { assetMeshMint: solanaAssetMeshMintOverride } : {}),
-            ...(solanaShareMeshMintOverride ? { shareMeshMint: solanaShareMeshMintOverride } : {}),
-            ...(solanaEidOverride !== null ? { solanaEid: solanaEidOverride } : {}),
-          },
           version: deploymentVersion,
         }
         const deployPlanExport: DeployPlanExport = {
@@ -4108,7 +3944,6 @@ function DeployVaultBatcher({
             phase4: sessionCreatePayload.phase4Calls.length,
           },
           sessionCreateRequest: sessionCreatePayload,
-          bootstrapSwapPlan,
         }
 
         logger.info('[DeployVault] deploy_start', {
@@ -4298,10 +4133,7 @@ function DeployVaultBatcher({
                 {
                   from: connectedAddress,
                   to: canonicalSmartWallet,
-                  data:
-                    appendBuilderSuffixToHex(executeBatchData, {
-                      chainId: chainId ?? base.id,
-                    }) ?? executeBatchData,
+                  data: executeBatchData,
                   value: '0x0',
                 },
               ],
@@ -4514,9 +4346,9 @@ function DeployVaultBatcher({
                 }
                 if (simResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
                   throw new Error(
-                    `${logPhaseLabel} would revert: Solana OVault mesh route is not ready ` +
-                      '(WrappedSplRouteNotRegistered). Configure a supported ShareOFT↔SPL mesh route first, ' +
-                      'then retry deploy preflight.',
+                    `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
+                      '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
+                      'or disable Solana bridging for this deploy.',
                   )
                 }
                 // If we have directCallResult with an error, show that too
@@ -4542,9 +4374,9 @@ function DeployVaultBatcher({
                   }
                   if (simResult.directCallResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
                     throw new Error(
-                      `${logPhaseLabel} would revert: Solana OVault mesh route is not ready ` +
-                        '(WrappedSplRouteNotRegistered). Configure a supported ShareOFT↔SPL mesh route first, ' +
-                        'then retry deploy preflight.',
+                      `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
+                        '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
+                        'or disable Solana bridging for this deploy.',
                     )
                   }
                 }
@@ -5104,13 +4936,13 @@ function DeployVaultBatcher({
             // After installation of the temporary owner, the server will submit all phases and then clean up.
             const createJson = await postDeploySessionCreate(false)
             sessionId = String(createJson.data?.sessionId ?? '').trim()
-            const sessionSignerRaw = String(createJson.data?.sessionSignerAddress ?? '').trim()
-            if (!sessionId || !isAddress(sessionSignerRaw)) throw new Error('Invalid deploy session response')
-            const sessionSigner = getAddress(sessionSignerRaw) as Address
+            const sessionOwnerRaw = String(createJson.data?.sessionSignerAddress ?? createJson.data?.sessionOwner ?? '').trim()
+            if (!sessionId || !isAddress(sessionOwnerRaw)) throw new Error('Invalid deploy session response')
+            const sessionOwner = getAddress(sessionOwnerRaw) as Address
             persistDeploySession(sessionId)
 
             // Install the deploy-session signer via a one-time owner EOA transaction if needed.
-            await ensureDeploySessionSignerInstalled(sessionSigner)
+            await ensureDeploySessionSignerInstalled(sessionOwner)
 
             // Kick off server continuation; status polling will advance remaining phases.
             const continueRes = await fetch('/api/deploy/session/continue', {
@@ -5290,13 +5122,10 @@ function DeployVaultBatcher({
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
     : null
 
-  const hasResumePendingSetup = Boolean(resumePendingSetup)
   const disabledReason =
     busy
       ? 'Deployment in progress…'
-      : hasResumePendingSetup
-        ? 'Resumed deploy is waiting for one manual owner approval before continue.'
-        : expectedQuery.isLoading
+      : expectedQuery.isLoading
         ? 'Computing deployment addresses…'
         : !expected
           ? expectedError || 'Deployment addresses are not ready.'
@@ -5425,13 +5254,6 @@ function DeployVaultBatcher({
             Addresses are deterministic on Base. Click to view on BaseScan.
           </div>
           <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
-            <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Token roles</div>
-            <div className="text-[11px] text-zinc-400 leading-relaxed">
-              Underlying creator coin ({depositSymbol || 'TOKEN'}) is what gets deposited and withdrawn. Vault share token (
-              {shareSymbol || 'ShareOFT'}) is a receipt token that gets minted on deposit and burned on redeem.
-            </div>
-          </div>
-          <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
             <AddressRow label="Active batcher" address={batcherAddress} />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Deploy mode</div>
@@ -5443,10 +5265,9 @@ function DeployVaultBatcher({
             <div className="py-3">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
               <div className="space-y-2">
-                <AddressRow label="Underlying creator coin" address={creatorToken} />
                 <AddressRow label="Vault" address={expected?.vault} />
                 <AddressRow label="Wrapper" address={expected?.wrapper} />
-                <AddressRow label="Vault share token (ShareOFT)" address={expected?.shareOFT} />
+                <AddressRow label="Share token" address={expected?.shareOFT} />
               </div>
             </div>
 
@@ -5507,28 +5328,6 @@ function DeployVaultBatcher({
         )}
       </div>
 
-      {resumePendingSetup ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
-          <div className="text-sm font-medium text-amber-200">Resume requires one manual approval</div>
-          <div className="text-[11px] text-amber-200/80 leading-relaxed">
-            This resumed deploy session is paused at setup. Approve installing the deploy-session signer once, then we
-            continue phases server-side.
-          </div>
-          <div className="text-[11px] text-zinc-300/90">
-            Session signer: <span className="font-mono">{shortAddress(resumePendingSetup.sessionSigner)}</span>
-          </div>
-          {resumePendingSetupError ? <div className="text-[11px] text-red-400">{resumePendingSetupError}</div> : null}
-          <button
-            type="button"
-            onClick={() => void continueResumedDeploySession()}
-            disabled={resumePendingSetupBusy || busy}
-            className="btn-primary w-full sm:w-auto"
-          >
-            {resumePendingSetupBusy ? 'Waiting for wallet confirmation…' : 'Resume Deploy'}
-          </button>
-        </div>
-      ) : null}
-
       {/* Show deploy button only if we have a valid ERC-4337 path */}
       {hasDeploySignerPath ? (
         <div className="space-y-2">
@@ -5548,12 +5347,7 @@ function DeployVaultBatcher({
                         : 'via app smart wallet owner'
                 }`}
           </div>
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={disabled || exportBusy || hasResumePendingSetup}
-            className="btn-accent w-full rounded-lg"
-          >
+          <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-accent w-full rounded-lg">
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
           </button>
         </div>
@@ -5637,9 +5431,12 @@ function DeployVaultMain() {
   const [addPrivySmartWalletOwnerBusy, setAddPrivySmartWalletOwnerBusy] = useState(false)
   const [addPrivySmartWalletOwnerTxHash, setAddPrivySmartWalletOwnerTxHash] = useState<string | null>(null)
   const [addPrivySmartWalletOwnerError, setAddPrivySmartWalletOwnerError] = useState<string | null>(null)
+  const [autoSmartWalletOwnerAttemptCount, setAutoSmartWalletOwnerAttemptCount] = useState(0)
+  const [autoSmartWalletOwnerRetryTick, setAutoSmartWalletOwnerRetryTick] = useState(0)
+  const autoSmartWalletOwnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSmartWalletOwnerAttemptKeyRef = useRef<string | null>(null)
   const autoLoginAttemptRef = useRef(false)
   const autoBridgeAttemptRef = useRef(false)
-  const autoHandoffRedeemAttemptRef = useRef(false)
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
   const [handoffError, setHandoffError] = useState<string | null>(null)
   
@@ -5837,132 +5634,72 @@ function DeployVaultMain() {
     const query = normalizeBytes32(params.get('shareOftSaltOverride'))
     return query ?? env
   }, [])
-  const [solanaAssetMintOrigin, setSolanaAssetMintOrigin] = useState<'existing' | 'new'>(() => {
-    const envRaw = String(import.meta.env.VITE_SOLANA_OVAULT_ASSET_MINT_ORIGIN ?? '').trim().toLowerCase()
-    const env = envRaw === 'new' ? 'new' : 'existing'
-    if (typeof window === 'undefined') return env
-    try {
-      const storedRaw = String(window.localStorage.getItem('cv:deploy:solanaAssetMintOrigin') ?? '').trim().toLowerCase()
-      if (storedRaw === 'existing' || storedRaw === 'new') return storedRaw
-    } catch {
-      // ignore
-    }
-    const params = new URLSearchParams(window.location.search)
-    const queryRaw = String(params.get('solanaAssetMintOrigin') ?? '').trim().toLowerCase()
-    if (queryRaw === 'existing' || queryRaw === 'new') return queryRaw
-    return env
-  })
-  const [solanaAssetMeshMintInput, setSolanaAssetMeshMintInput] = useState<string>(() => {
+  const [solanaMintOverrideInput, setSolanaMintOverrideInput] = useState<string>(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SOLANA_DEFAULT_MINT_BYTES32 as string | undefined)
     if (typeof window === 'undefined') return String(env ?? '')
     try {
-      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaAssetMeshMint'))
-      if (stored) return String(stored)
-      const legacy = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaMintOverride'))
-      if (legacy) return String(legacy)
-    } catch {
-      // ignore
-    }
-    const params = new URLSearchParams(window.location.search)
-    const query = normalizeBytes32(params.get('solanaAssetMint') ?? params.get('solanaMint'))
-    return String(query ?? env ?? '')
-  })
-  const [solanaShareMeshMintInput, setSolanaShareMeshMintInput] = useState<string>(() => {
-    const env = normalizeBytes32(import.meta.env.VITE_SOLANA_OVAULT_SHARE_MINT_BYTES32 as string | undefined)
-    if (typeof window === 'undefined') return String(env ?? '')
-    try {
-      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaShareMeshMint'))
+      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaMintOverride'))
       if (stored) return String(stored)
     } catch {
       // ignore
     }
     const params = new URLSearchParams(window.location.search)
-    const query = normalizeBytes32(params.get('solanaShareMint'))
+    const query = normalizeBytes32(params.get('solanaMint'))
     return String(query ?? env ?? '')
   })
-  const [solanaEidInput, setSolanaEidInput] = useState<string>(() => {
-    const env = parseUInt32(import.meta.env.VITE_SOLANA_EID as string | undefined)
+  const [solanaDecimalsOverrideInput, setSolanaDecimalsOverrideInput] = useState<string>(() => {
+    const env = parseUint8(import.meta.env.VITE_SOLANA_DEFAULT_MINT_DECIMALS as string | undefined)
     if (typeof window === 'undefined') return env !== null ? String(env) : ''
     try {
-      const stored = parseUInt32(window.localStorage.getItem('cv:deploy:solanaEid'))
+      const stored = parseUint8(window.localStorage.getItem('cv:deploy:solanaDecimalsOverride'))
       if (stored !== null) return String(stored)
     } catch {
       // ignore
     }
     const params = new URLSearchParams(window.location.search)
-    const query = parseUInt32(params.get('solanaEid'))
+    const query = parseUint8(params.get('solanaDecimals'))
     const v = query ?? env
     return v !== null ? String(v) : ''
   })
-  const solanaAssetMeshMintOverride = useMemo(
-    () => normalizeBytes32(solanaAssetMeshMintInput),
-    [solanaAssetMeshMintInput],
+  const solanaMintOverride = useMemo(
+    () => normalizeBytes32(solanaMintOverrideInput),
+    [solanaMintOverrideInput],
   )
-  const solanaShareMeshMintOverride = useMemo(
-    () => normalizeBytes32(solanaShareMeshMintInput),
-    [solanaShareMeshMintInput],
+  const solanaDecimalsOverride = useMemo(
+    () => parseUint8(solanaDecimalsOverrideInput),
+    [solanaDecimalsOverrideInput],
   )
-  const solanaEidOverride = useMemo(
-    () => parseUInt32(solanaEidInput),
-    [solanaEidInput],
-  )
-  const solanaAssetMeshMintInvalid = solanaAssetMeshMintInput.trim().length > 0 && !solanaAssetMeshMintOverride
-  const solanaShareMeshMintInvalid = solanaShareMeshMintInput.trim().length > 0 && !solanaShareMeshMintOverride
-  const solanaEidOverrideInvalid = solanaEidInput.trim().length > 0 && solanaEidOverride === null
+  const solanaMintOverrideInvalid = solanaMintOverrideInput.trim().length > 0 && !solanaMintOverride
+  const solanaDecimalsOverrideInvalid =
+    solanaDecimalsOverrideInput.trim().length > 0 && solanaDecimalsOverride === null
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.setItem('cv:deploy:solanaAssetMintOrigin', solanaAssetMintOrigin)
-    } catch {
-      // ignore
-    }
-  }, [solanaAssetMintOrigin])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const v = solanaAssetMeshMintInput.trim()
+      const v = solanaMintOverrideInput.trim()
       if (v.length > 0) {
-        window.localStorage.setItem('cv:deploy:solanaAssetMeshMint', v)
-        // Backward compatibility for operators using older localStorage keys.
         window.localStorage.setItem('cv:deploy:solanaMintOverride', v)
       } else {
-        window.localStorage.removeItem('cv:deploy:solanaAssetMeshMint')
         window.localStorage.removeItem('cv:deploy:solanaMintOverride')
       }
     } catch {
       // ignore
     }
-  }, [solanaAssetMeshMintInput])
+  }, [solanaMintOverrideInput])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const v = solanaShareMeshMintInput.trim()
+      const v = solanaDecimalsOverrideInput.trim()
       if (v.length > 0) {
-        window.localStorage.setItem('cv:deploy:solanaShareMeshMint', v)
+        window.localStorage.setItem('cv:deploy:solanaDecimalsOverride', v)
       } else {
-        window.localStorage.removeItem('cv:deploy:solanaShareMeshMint')
+        window.localStorage.removeItem('cv:deploy:solanaDecimalsOverride')
       }
     } catch {
       // ignore
     }
-  }, [solanaShareMeshMintInput])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const v = solanaEidInput.trim()
-      if (v.length > 0) {
-        window.localStorage.setItem('cv:deploy:solanaEid', v)
-      } else {
-        window.localStorage.removeItem('cv:deploy:solanaEid')
-      }
-    } catch {
-      // ignore
-    }
-  }, [solanaEidInput])
+  }, [solanaDecimalsOverrideInput])
 
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
@@ -6023,7 +5760,6 @@ function DeployVaultMain() {
     autoLogin: boolean
     fromWaitlist: boolean
     debugEnabledFromQuery: boolean
-    handoffCode: string
   } | null>(null)
 
   if (!initialQueryRef.current) {
@@ -6034,7 +5770,6 @@ function DeployVaultMain() {
       autoLogin: autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes',
       fromWaitlist: fromRaw === 'waitlist',
       debugEnabledFromQuery: (searchParams.get('debug') ?? '').trim() === '1',
-      handoffCode: (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim(),
     }
   }
 
@@ -6042,12 +5777,11 @@ function DeployVaultMain() {
   const autoLogin = initialQueryRef.current.autoLogin
   const fromWaitlist = initialQueryRef.current.fromWaitlist
   const debugEnabledFromQuery = initialQueryRef.current.debugEnabledFromQuery
-  const handoffCode = initialQueryRef.current.handoffCode
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
     let changed = false
-    for (const key of ['autologin', 'auth', 'from', AUTH_HANDOFF_QUERY_KEY, 'shareOftSaltOverride', 'debug']) {
+    for (const key of ['autologin', 'auth', 'from', 'shareOftSaltOverride', 'debug']) {
       if (next.has(key)) {
         next.delete(key)
         changed = true
@@ -6072,10 +5806,11 @@ function DeployVaultMain() {
   }, [cdpPaymasterUrl])
 
   // Smooth waitlist → deploy:
-  // If we arrived with `autologin=1&from=waitlist`, first redeem any one-time handoff code,
-  // then fall back to Privy login/bridge if needed.
+  // If we arrived with `autologin=1&from=waitlist`, prompt wallet login on app host
+  // and bridge into a 4626 session.
   useEffect(() => {
     if (!autoLogin || !fromWaitlist) return
+    if (!privyReady) return
     if (handoffState === 'ready' || handoffState === 'error') return
     if (handoffState === 'idle') setHandoffState('signingIn')
 
@@ -6085,52 +5820,10 @@ function DeployVaultMain() {
       setHandoffError(message)
     }
 
-    const redeemOneTimeHandoff = async (): Promise<boolean> => {
-      const code = handoffCode.trim()
-      if (!code || autoHandoffRedeemAttemptRef.current) return false
-      autoHandoffRedeemAttemptRef.current = true
-
-      try {
-        setHandoffError(null)
-        setHandoffState('bridging')
-        const { apiFetch } = await import('@/lib/apiBase')
-        const res = await apiFetch('/api/auth/handoff/redeem', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ code }),
-        })
-        const json = (await res.json().catch(() => null)) as
-          | { success?: boolean; data?: { sessionToken?: string; address?: string } | null }
-          | null
-        if (!res.ok || !json?.success) return false
-
-        const sessionToken =
-          json?.data && typeof json.data.sessionToken === 'string' ? json.data.sessionToken.trim() : ''
-        if (sessionToken) {
-          try {
-            sessionStorage.setItem('cv_siwe_session_token', sessionToken)
-          } catch {
-            // ignore
-          }
-        }
-
-        await siwe.refresh().catch(() => null)
-        setHandoffState('ready')
-        setHandoffError(null)
-        return true
-      } catch {
-        return false
-      }
-    }
-
-    void (async () => {
-      const redeemed = await redeemOneTimeHandoff()
-      if (redeemed) return
-
-      if (!privyReady) return
-      if (!privyAuthenticated) {
-        if (autoLoginAttemptRef.current) return
-        autoLoginAttemptRef.current = true
+    if (!privyAuthenticated) {
+      if (autoLoginAttemptRef.current) return
+      autoLoginAttemptRef.current = true
+      void (async () => {
         try {
           setHandoffError(null)
           setHandoffState('signingIn')
@@ -6140,16 +5833,18 @@ function DeployVaultMain() {
           autoLoginAttemptRef.current = false
           failHandoff('Sign-in cancelled. Click “Sign in with wallet” to continue.')
         }
-        return
-      }
+      })()
+      return
+    }
 
-      if (autoBridgeAttemptRef.current) return
-      autoBridgeAttemptRef.current = true
-      if (typeof getAccessToken !== 'function') {
-        failHandoff('Privy token bridge is unavailable. Click “Sign in with wallet” to retry.')
-        return
-      }
+    if (autoBridgeAttemptRef.current) return
+    autoBridgeAttemptRef.current = true
 
+    if (typeof getAccessToken !== 'function') {
+      failHandoff('Privy token bridge is unavailable. Click “Sign in with wallet” to retry.')
+      return
+    }
+    void (async () => {
       try {
         setHandoffError(null)
         setHandoffState('bridging')
@@ -6171,7 +5866,7 @@ function DeployVaultMain() {
         failHandoff('Could not establish a session. Click “Sign in with wallet” and retry.')
       }
     })()
-  }, [autoLogin, fromWaitlist, getAccessToken, handoffCode, handoffState, login, privyAuthenticated, privyReady, siwe])
+  }, [autoLogin, fromWaitlist, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
 
   // Mark handoff ready once we have an app session.
   useEffect(() => {
@@ -6269,13 +5964,6 @@ function DeployVaultMain() {
     retry: 0,
   })
   const isAdmin = Boolean(adminAuthQuery.data?.isAdmin)
-  const solanaInfraStatusQuery = useQuery({
-    queryKey: ['deployVault', 'solanaInfraStatus'],
-    enabled: hasWallet && isAdmin,
-    queryFn: fetchSolanaInfraStatus,
-    staleTime: 30_000,
-    retry: 0,
-  })
 
   const [minCoinAgeDays, setMinCoinAgeDays] = useState<number>(DEFAULT_MIN_COIN_AGE_DAYS)
   useEffect(() => {
@@ -6766,6 +6454,16 @@ function DeployVaultMain() {
     walletClient,
   ])
 
+  useEffect(() => {
+    return () => {
+      if (autoSmartWalletOwnerTimerRef.current) {
+        clearTimeout(autoSmartWalletOwnerTimerRef.current)
+        autoSmartWalletOwnerTimerRef.current = null
+      }
+    }
+  }, [])
+
+
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
   // Uses server-side API to avoid client-side RPC rate limits.
@@ -6962,7 +6660,7 @@ function DeployVaultMain() {
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
-      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaBridgeStrategy as Hex),
+      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex),
     } as const
   }, [])
 
@@ -7042,7 +6740,7 @@ function DeployVaultMain() {
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
         { key: 'creatorCharmStrategy', label: 'CreatorCharmStrategy', codeId: deployCodeIds.creatorCharmStrategy },
         { key: 'ajnaStrategy', label: 'AjnaStrategy', codeId: deployCodeIds.ajnaStrategy },
-        { key: 'solanaStrategy', label: 'SolanaBridgeStrategy', codeId: deployCodeIds.solanaStrategy },
+        { key: 'solanaStrategy', label: 'SolanaStrategy', codeId: deployCodeIds.solanaStrategy },
       ] as const
 
       const pointerResults = await publicClient!.multicall({
@@ -7158,8 +6856,63 @@ function DeployVaultMain() {
   
   const isCoinbaseWalletDirect = connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet'
 
-  // Owner approval is intentionally manual via "Approve Once".
-  // Avoid auto-calling addOwnerAddress to prevent repeated wallet prompts.
+  useEffect(() => {
+    if (strictNoEoaMode) return
+    if (isCoinbaseWalletDirect) return
+    if (smartWalletMatchesCanonical) return
+    if (!privySmartWalletAddress || !privySmartWalletCanSign) return
+    // Wait until the owner-check query has resolved before attempting setup.
+    // `data === undefined` during initial load should not be treated as "not owner".
+    if (!privySmartWalletIsCanonicalOwnerQuery.isFetched) return
+    if (privySmartWalletIsCanonicalOwnerQuery.isFetching) return
+    if (privySmartWalletIsCanonicalOwner) return
+    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) return
+    if (!connectedWalletAddress) return
+    if (addPrivySmartWalletOwnerBusy) return
+    if (autoSmartWalletOwnerAttemptCount >= 3) return
+
+    const attemptKey = `${canonicalIdentityAddress.toLowerCase()}:${connectedWalletAddress.toLowerCase()}:${privySmartWalletAddress.toLowerCase()}`
+    if (autoSmartWalletOwnerAttemptKeyRef.current !== attemptKey) {
+      autoSmartWalletOwnerAttemptKeyRef.current = attemptKey
+      if (autoSmartWalletOwnerTimerRef.current) {
+        clearTimeout(autoSmartWalletOwnerTimerRef.current)
+        autoSmartWalletOwnerTimerRef.current = null
+      }
+      setAutoSmartWalletOwnerAttemptCount(0)
+    }
+
+    const run = async () => {
+      const ok = await handleAddPrivyAppSmartWalletOwner({ skipConfirm: true })
+      if (ok) return
+      if (autoSmartWalletOwnerAttemptCount >= 2) return
+      if (autoSmartWalletOwnerTimerRef.current) {
+        clearTimeout(autoSmartWalletOwnerTimerRef.current)
+      }
+      const backoffMs = 2000 * (autoSmartWalletOwnerAttemptCount + 1)
+      autoSmartWalletOwnerTimerRef.current = setTimeout(() => {
+        setAutoSmartWalletOwnerAttemptCount((count) => count + 1)
+        setAutoSmartWalletOwnerRetryTick((tick) => tick + 1)
+      }, backoffMs)
+    }
+
+    void run()
+  }, [
+    addPrivySmartWalletOwnerBusy,
+    autoSmartWalletOwnerAttemptCount,
+    autoSmartWalletOwnerRetryTick,
+    canonicalIdentityAddress,
+    canonicalIdentityIsContract,
+    connectedWalletAddress,
+    handleAddPrivyAppSmartWalletOwner,
+    isCoinbaseWalletDirect,
+    strictNoEoaMode,
+    privySmartWalletAddress,
+    privySmartWalletCanSign,
+    privySmartWalletIsCanonicalOwner,
+    privySmartWalletIsCanonicalOwnerQuery.isFetched,
+    privySmartWalletIsCanonicalOwnerQuery.isFetching,
+    smartWalletMatchesCanonical,
+  ])
   
   const privyEmbeddedOwnerReady = privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign
   const privySmartWalletOwnerReady = privySmartWalletIsCanonicalOwner && privySmartWalletCanSign
@@ -7194,18 +6947,6 @@ function DeployVaultMain() {
       !privySmartWalletIsCanonicalOwner,
   )
   const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
-  const solanaOvaultStatus = solanaInfraStatusQuery.data ?? null
-  const solanaOvaultFirstBlocker = useMemo(() => {
-    const blockers = solanaOvaultStatus?.blockers ?? []
-    if (blockers.length === 0) return null
-    const compatibility = blockers.find((b) => /ovault compatibility/i.test(String(b)))
-    return compatibility ?? blockers[0]
-  }, [solanaOvaultStatus?.blockers])
-  const ovaultAutoSetupReady =
-    !isAdmin ||
-    !solanaOvaultStatus ||
-    !solanaOvaultStatus.solanaEnabledOnBatcher ||
-    solanaOvaultStatus.readyForAutoRegistration === true
 
   const canDeploy =
     tokenIsValid &&
@@ -7225,12 +6966,10 @@ function DeployVaultMain() {
     fundingGateOk &&
     creatorVaultBatcherConfigured &&
     bytecodeInfraOk &&
-    !solanaAssetMeshMintInvalid &&
-    !solanaShareMeshMintInvalid &&
-    !solanaEidOverrideInvalid &&
+    !solanaMintOverrideInvalid &&
+    !solanaDecimalsOverrideInvalid &&
     !identityBlockingReason &&
-    smartWalletCapabilityReady &&
-    ovaultAutoSetupReady
+    smartWalletCapabilityReady
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -7247,41 +6986,6 @@ function DeployVaultMain() {
   const coinAgeReady = creatorCoinReady && coinAgeOk
   const fundingReady = fundingGateOk
   const authReady = isAuthorizedDeployerOrOperator
-  const solanaOvaultChecklistItems =
-    !isAdmin
-      ? []
-      : solanaInfraStatusQuery.isFetching && !solanaOvaultStatus
-        ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'checking' }]
-        : solanaInfraStatusQuery.isError
-          ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'error' }]
-          : !solanaOvaultStatus
-            ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'unavailable' }]
-            : !solanaOvaultStatus.solanaEnabledOnBatcher
-              ? [{ label: 'OVault mesh on batcher', ok: true, hint: 'disabled' }]
-              : [
-                  {
-                    label: 'OVault existing mint compatibility',
-                    ok: solanaOvaultStatus.existingMintCompatible,
-                    hint: solanaOvaultStatus.existingMintCompatible ? 'ok' : 'blocked',
-                  },
-                  {
-                    label: 'OVault deposit eligibility',
-                    ok: solanaOvaultStatus.depositEligible,
-                    hint: solanaOvaultStatus.depositEligible ? 'ok' : 'blocked',
-                  },
-                  {
-                    label: 'OVault redeem eligibility',
-                    ok: solanaOvaultStatus.redeemEligible,
-                    hint: solanaOvaultStatus.redeemEligible ? 'ok' : 'blocked',
-                  },
-                  {
-                    label: 'OVault auto-setup readiness',
-                    ok: solanaOvaultStatus.readyForAutoRegistration,
-                    hint: solanaOvaultStatus.readyForAutoRegistration
-                      ? solanaOvaultStatus.dynamicProvisioningMode
-                      : 'blocked',
-                  },
-                ]
 
   const firstLaunchChecklist = [
     {
@@ -7368,13 +7072,12 @@ function DeployVaultMain() {
             ? `${Number(formatUnits(marketFloorQuery.data.weiPerToken, 18)).toFixed(6)} ETH`
             : 'missing',
     },
-    ...solanaOvaultChecklistItems,
     {
       label: 'Ready to deploy',
       ok: canDeploy,
       hint: canDeploy ? 'ready' : 'missing requirements',
     },
-  ]
+  ] as const
 
   const deployBlocker =
     !tokenIsValid
@@ -7403,16 +7106,10 @@ function DeployVaultMain() {
                         ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
                         ? identityBlockingReason
-                      : solanaAssetMeshMintInvalid
-                        ? 'Solana asset mesh mint must be bytes32 hex (`0x` + 64 chars).'
-                      : solanaShareMeshMintInvalid
-                        ? 'Solana share mesh mint must be bytes32 hex (`0x` + 64 chars).'
-                      : solanaEidOverrideInvalid
-                        ? 'Solana EID override must be an unsigned 32-bit integer.'
-                      : isAdmin && !ovaultAutoSetupReady
-                        ? solanaOvaultFirstBlocker
-                          ? `OVault mesh preflight is not ready: ${solanaOvaultFirstBlocker}`
-                          : 'OVault mesh preflight is not ready.'
+                      : solanaMintOverrideInvalid
+                        ? 'Solana mint override must be bytes32 hex (`0x` + 64 chars).'
+                      : solanaDecimalsOverrideInvalid
+                        ? 'Solana decimals override must be 0-255.'
                       : oneTimePrivyOwnerApprovalNeeded
                         ? connectedWalletAddress
                           ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Zora smart wallet.'
@@ -7650,11 +7347,6 @@ function DeployVaultMain() {
                     </div>
                   ))}
                 </div>
-                {solanaOvaultStatus?.solanaEnabledOnBatcher && solanaOvaultFirstBlocker ? (
-                  <div className="mt-2 rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-200/80">
-                    OVault blocker: {solanaOvaultFirstBlocker}
-                  </div>
-                ) : null}
               </div>
             ) : null}
 
@@ -7774,6 +7466,26 @@ function DeployVaultMain() {
             <div className="space-y-2">
                 <label className="label">Creator Coin</label>
 
+                {miniApp.isMiniApp && farcasterAuth.status !== 'verified' && farcasterAuth.canSiwf !== false ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[11px] text-zinc-600">
+                      Verify your profile to enable Mini App autofill.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void farcasterAuth.signIn()}
+                      disabled={farcasterAuth.status === 'loading'}
+                      className="text-[10px] text-zinc-600 hover:text-zinc-200 transition-colors disabled:opacity-60"
+                      title="Requests an in-app sign-in credential (no transaction)"
+                    >
+                      {farcasterAuth.status === 'loading' ? 'Verifying…' : 'Verify'}
+                    </button>
+                  </div>
+                ) : null}
+                {miniApp.isMiniApp && farcasterAuth.status === 'error' && farcasterAuth.error ? (
+                  <div className="text-[11px] text-red-400/80">{farcasterAuth.error}</div>
+                ) : null}
+
                 {!hasWallet ? (
                   tokenIsValid ? (
                     <input
@@ -7832,57 +7544,35 @@ function DeployVaultMain() {
             </div>
 
               <div className="space-y-2">
-                <label className="label">Solana OVault Mesh (Optional)</label>
-                <select
-                  value={solanaAssetMintOrigin}
-                  onChange={(e) => setSolanaAssetMintOrigin(e.target.value === 'new' ? 'new' : 'existing')}
-                  className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 outline-none focus:border-cyan-500/50 transition-colors"
-                >
-                  <option value="existing">Asset mint origin: existing mint</option>
-                  <option value="new">Asset mint origin: new mint</option>
-                </select>
+                <label className="label">Solana Mint (Optional)</label>
                 <input
-                  value={solanaAssetMeshMintInput}
-                  onChange={(e) => setSolanaAssetMeshMintInput(e.target.value)}
-                  placeholder="Asset mesh mint (bytes32): 0x<64 hex chars>"
+                  value={solanaMintOverrideInput}
+                  onChange={(e) => setSolanaMintOverrideInput(e.target.value)}
+                  placeholder="0x<32-byte solana mint pubkey>"
                   className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaAssetMeshMintInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                    solanaMintOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
                   }`}
                 />
                 <input
-                  value={solanaShareMeshMintInput}
-                  onChange={(e) => setSolanaShareMeshMintInput(e.target.value)}
-                  placeholder="Share mesh mint (bytes32): 0x<64 hex chars>"
-                  className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaShareMeshMintInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
-                  }`}
-                />
-                <input
-                  value={solanaEidInput}
-                  onChange={(e) => setSolanaEidInput(e.target.value)}
-                  placeholder="Solana EID (optional)"
+                  value={solanaDecimalsOverrideInput}
+                  onChange={(e) => setSolanaDecimalsOverrideInput(e.target.value)}
+                  placeholder="Decimals (default 9)"
                   inputMode="numeric"
                   className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaEidOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                    solanaDecimalsOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
                   }`}
                 />
                 <div className="text-xs text-zinc-600">
-                  Passed into deploy-session OVault preflight (`setupSolanaOvaultMesh`) for mesh readiness and
-                  deposit/redeem eligibility checks. If empty, server defaults are used.
+                  Used for automatic ShareOFT registration on the Solana adapter when bridging is enabled. If empty, server defaults are used.
                 </div>
-                {solanaAssetMeshMintInvalid ? (
+                {solanaMintOverrideInvalid ? (
                   <div className="text-[11px] text-red-400/90">
-                    Asset mesh mint must be a bytes32 hex value (`0x` + 64 hex chars).
+                    Mint must be a bytes32 hex value (`0x` + 64 hex chars).
                   </div>
                 ) : null}
-                {solanaShareMeshMintInvalid ? (
+                {solanaDecimalsOverrideInvalid ? (
                   <div className="text-[11px] text-red-400/90">
-                    Share mesh mint must be a bytes32 hex value (`0x` + 64 hex chars).
-                  </div>
-                ) : null}
-                {solanaEidOverrideInvalid ? (
-                  <div className="text-[11px] text-red-400/90">
-                    Solana EID must be an integer in range `0` to `4294967295`.
+                    Decimals must be an integer between 0 and 255.
                   </div>
                 ) : null}
               </div>
@@ -8046,10 +7736,8 @@ function DeployVaultMain() {
                     privyEmbeddedEoaCanSign={privyEmbeddedEoaCanSign}
                     connectedEoaOwnerReady={connectedEoaOwnerReady}
                     strictNoEoaMode={strictNoEoaMode}
-                    solanaAssetMintOrigin={solanaAssetMintOrigin}
-                    solanaAssetMeshMintOverride={solanaAssetMeshMintOverride}
-                    solanaShareMeshMintOverride={solanaShareMeshMintOverride}
-                    solanaEidOverride={solanaEidOverride}
+                    solanaMintOverride={solanaMintOverride}
+                    solanaDecimalsOverride={solanaDecimalsOverride}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
                   />

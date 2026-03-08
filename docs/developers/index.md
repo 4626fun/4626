@@ -32,6 +32,9 @@ This guide covers how to build on and contribute to 4626.
     vault/strategies/             # Yield strategies
       BaseCreatorStrategy.sol
       CCALaunchStrategy.sol
+      CreatorCharmStrategy.sol
+      AjnaStrategy.sol
+      SolanaStrategy.sol
     factories/                    # Deployment factories
       CreatorOVaultFactory.sol
     helpers/                      # Batchers and infra helpers
@@ -63,11 +66,16 @@ forge test -vvv
 # Run specific test
 forge test --match-test testVaultDeposit -vvv
 
-# Deploy phased infra on Base (example)
+# Deploy phased infra to Base (example)
 forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
   --rpc-url $BASE_RPC_URL \
   --broadcast \
   --verify
+
+# Seed bytecode store after deployer rollout
+forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
+  --rpc-url $BASE_RPC_URL \
+  --broadcast
 
 # Start frontend dev server
 cd frontend && pnpm dev
@@ -112,7 +120,10 @@ shareOFT.setGaugeController(gaugeControllerAddress);
 **Add yield strategies:**
 
 ```solidity
-vault.addStrategy(strategyAddress, 5000); // 50% allocation to strategy
+vault.addStrategy(charmStrategy, 3000);  // 30%
+vault.addStrategy(ajnaStrategy, 3000);   // 30%
+vault.addStrategy(solanaStrategy, 3000); // 30%
+vault.setMinimumTotalIdle(1000e18);      // Keep 10% idle buffer
 ```
 
 ### For Users

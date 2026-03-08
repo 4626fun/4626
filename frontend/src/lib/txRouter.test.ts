@@ -21,7 +21,13 @@ vi.mock('@/lib/baseBuilderCodes', async () => {
   }
 })
 
-import { buildAndSendApproval, buildAndSendSwap, detectTxSendMode, type TxRouterContext } from './txRouter'
+import {
+  buildAndSendApproval,
+  buildAndSendSwap,
+  detectTxSendMode,
+  normalizeCanonicalSendError,
+  type TxRouterContext,
+} from './txRouter'
 import { payloadEndsWithDataSuffix } from '@/lib/baseBuilderCodes'
 import { TARGET_ALLOWED_OWNER_EOA_ADDRESSES, TARGET_CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
@@ -282,6 +288,43 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
+  it('routes canonical native-value swaps through canonicalDirect instead of ERC-4337 sponsorship', async () => {
+    const sendTransaction = vi.fn(async () => HASH_A)
+    const context = makeContext({
+      executionMode: 'canonical',
+      signerType: 'EOA',
+      connectorId: 'injected',
+      connectorName: 'Injected',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+      publicClient: {},
+    })
+
+    const result = await buildAndSendSwap({
+      context,
+      swapTx: {
+        to: ADDRESS_A,
+        from: ADDRESS_B,
+        data: '0xbbbb',
+        value: '123',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('canonicalDirect')
+    expect(result.send.mode).toBe('canonicalDirect')
+    expect(result.send.method).toBe('walletClient.sendTransaction')
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+  })
+
   it('keeps approval and swap in the same direct EOA route family', async () => {
     const sendTransaction = vi
       .fn()
@@ -504,5 +547,17 @@ describe('txRouter', () => {
         },
       }),
     ).rejects.toThrow(/allowed owner signer/i)
+  })
+
+  it('normalizes unauthenticated paymaster errors into canonical session guidance', () => {
+    expect(normalizeCanonicalSendError(new Error('request denied - not authenticated')).message).toBe(
+      'Paymaster rejected the swap because your 4626 session is not authenticated.',
+    )
+  })
+
+  it('normalizes canonical owner mismatch errors into explicit guidance', () => {
+    expect(normalizeCanonicalSendError(new Error('not_owner: session principal does not own sender CSW')).message).toBe(
+      'Session principal does not own sender CSW for canonical swap execution.',
+    )
   })
 })

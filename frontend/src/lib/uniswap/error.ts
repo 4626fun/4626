@@ -1,6 +1,7 @@
 export type UniswapErrorCode =
   | 'INSUFFICIENT_FUNDS'
   | 'INSUFFICIENT_GAS'
+  | 'AUTH_REQUIRED'
   | 'APPROVAL_REQUIRED'
   | 'QUOTE_EXPIRED'
   | 'CHAIN_MISMATCH'
@@ -56,6 +57,25 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     return {
       code: 'APPROVAL_REQUIRED',
       message: 'Token approval needed. Click Approve to continue.',
+      retryable: true,
+    }
+  }
+
+  // Restored app session / paymaster auth
+  if (
+    msg.includes('missing 4626 session token') ||
+    msg.includes('request denied - not authenticated') ||
+    msg.includes('not authenticated') ||
+    msg.includes('session principal does not own sender csw') ||
+    msg.includes('not_owner')
+  ) {
+    const mismatch =
+      msg.includes('session principal does not own sender csw') || msg.includes('not_owner')
+    return {
+      code: 'AUTH_REQUIRED',
+      message: mismatch
+        ? 'Your restored 4626 session does not match the canonical swap wallet. Restore your account connection and try again.'
+        : 'Your 4626 session expired. Restore your 4626 session and sign in again before submitting the swap.',
       retryable: true,
     }
   }

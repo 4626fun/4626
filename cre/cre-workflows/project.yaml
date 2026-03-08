@@ -18,7 +18,7 @@ local-simulation:
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-base-1
-      url: https://eu.endpoints.matrixed.link/rpc/base?auth=p886of4gitu82
+      url: https://mainnet.base.org
 
 staging-settings:
   cre-cli:
@@ -28,7 +28,7 @@ staging-settings:
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-base-1
-      url: https://eu.endpoints.matrixed.link/rpc/base?auth=p886of4gitu82
+      url: https://mainnet.base.org
 
 production-settings:
   cre-cli:

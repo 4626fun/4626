@@ -529,6 +529,55 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
+  it('status progresses phase2 to phase3 then phase4 in order when both are present', async () => {
+    const recPhase2 = {
+      ...makeDeploySession('phase2_sent'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+      lastUserOpHash: `0x${'2'.repeat(64)}`,
+    }
+    const recPhase3 = {
+      ...recPhase2,
+      step: 'phase3_sent',
+      lastUserOpHash: `0x${'3'.repeat(64)}`,
+    }
+    const recPhase4 = {
+      ...recPhase2,
+      step: 'phase4_sent',
+      lastUserOpHash: `0x${'4'.repeat(64)}`,
+    }
+    getDeploySessionByIdMock
+      // first status poll
+      .mockResolvedValueOnce(recPhase2)
+      .mockResolvedValueOnce(recPhase3)
+      // second status poll
+      .mockResolvedValueOnce(recPhase3)
+      .mockResolvedValueOnce(recPhase4)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req1 = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res1 = createMockRes()
+    await statusHandler(req1, res1)
+
+    const req2 = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res2 = createMockRes()
+    await statusHandler(req2, res2)
+
+    expect(res1.statusCode).toBe(200)
+    expect(res1.body?.data?.step).toBe('phase3_sent')
+    expect(res2.statusCode).toBe(200)
+    expect(res2.body?.data?.step).toBe('phase4_sent')
+
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(2)
+    const firstArgs = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    const secondArgs = (sendUserOperationMock.mock.calls as any[])[1]?.[1] as any
+    expect(String(firstArgs.calls[0]?.to)).toBe('0xphase3target')
+    expect(String(secondArgs.calls[0]?.to)).toBe('0xphase4target')
+  })
+
   it('continue honors required downstream stages when payload is stringified JSON', async () => {
     const rec = {
       ...makeDeploySession('phase2_core_confirmed'),
@@ -742,6 +791,81 @@ describe('deploy session optimistic concurrency', () => {
       expect(payload.expectedSolanaAmount).toBe('1500000000000000000000000')
       expect(payload.assetMintOrigin).toBe('existing')
       expect(payload.enforceCompatibility).toBe(true)
+      expect(String(url).startsWith('https://app.4626.fun/')).toBe(true)
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+    }
+  })
+
+  it('status ignores request host when choosing Solana preflight origin', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
+        phase3Calls: [makeCall('0xphase3target')],
+      }),
+    }
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          success: true,
+          data: {
+            registered: true,
+            existingMintCompatible: true,
+            depositEligible: true,
+            redeemEligible: true,
+          },
+        }),
+    })) as any
+
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      const viem = await import('viem')
+      ;(viem.createPublicClient as any).mockReturnValue({
+        readContract: vi.fn(async ({ functionName }: any) => {
+          switch (functionName) {
+            case 'ownerCount':
+              return 1n
+            case 'nextOwnerIndex':
+              return 1n
+            case 'ownerAtIndex':
+              return '0xownerbytes'
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return true
+            default:
+              return '0xownerbytes'
+          }
+        }),
+      })
+      getDeploySessionByIdMock
+        .mockResolvedValueOnce(rec)
+        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
+      transitionDeploySessionMock.mockResolvedValue(true)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: {
+          host: 'attacker.example',
+          'x-forwarded-host': 'attacker.example',
+          'x-forwarded-proto': 'https',
+        },
+        body: { sessionId: 'sess_1' },
+      })
+      const res = createMockRes()
+      await statusHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(fetchMock).toHaveBeenCalled()
+      const [url] = (fetchMock.mock.calls as any[])[0] as [string]
+      expect(String(url)).toContain('https://app.4626.fun/api/deploy/setupSolanaOvaultMesh')
+      expect(String(url)).not.toContain('attacker.example')
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }
