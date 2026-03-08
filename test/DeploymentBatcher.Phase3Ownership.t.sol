@@ -125,7 +125,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         );
     }
 
-    function test_deployPhase3Strategies_setsAjnaOwnerToCanonicalOwner_forKeeperPath() external {
+    function test_deployPhase3Strategies_setsAjnaOwnerToProtocolTreasury() external {
         DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
             creatorToken: makeAddr("creatorToken"),
             owner: ownerAddr,
@@ -149,7 +149,9 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         vm.prank(ownerAddr);
         DeploymentBatcher.Phase3Result memory out = batcher.deployPhase3Strategies(params, codeIds);
 
-        assertEq(MockOwnableTransfer(out.ajnaStrategy).owner(), ownerAddr, "ajna owner should stay canonical owner");
+        assertEq(
+            MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna owner should remain protocol treasury"
+        );
         assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "charm owner remains treasury");
         assertEq(vault.addedWeights(out.charmStrategy), params.charmWeightBps, "charm strategy should be registered");
         assertEq(vault.addedWeights(out.ajnaStrategy), params.ajnaWeightBps, "ajna strategy should be registered");
