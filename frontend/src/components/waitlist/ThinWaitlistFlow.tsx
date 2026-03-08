@@ -74,6 +74,11 @@ function readApiErrorMessage(payload: unknown, fallback: string): string {
   return fallback
 }
 
+function isSessionEmailMismatchError(message: unknown): boolean {
+  const text = typeof message === 'string' ? message.toLowerCase() : ''
+  return text.includes('email does not match authenticated user') || text.includes('session email mismatch')
+}
+
 function useSafePrivy() {
   try {
     return usePrivy() as any
@@ -220,12 +225,16 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   }, [busy, email, emailIsValid, privyAuthed, runBootstrap])
 
   const onContinueAuth = useCallback(async () => {
-    if (busy || privyAuthed || authAttemptInFlightRef.current) return
+    if (busy || authAttemptInFlightRef.current) return
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
     try {
-      await login(buildWaitlistPrivyLoginOptions() as any)
+      if (privyAuthed) {
+        await runBootstrap()
+      } else {
+        await login(buildWaitlistPrivyLoginOptions() as any)
+      }
       authAttemptInFlightRef.current = false
       setBusy(false)
     } catch (authError: any) {
@@ -233,7 +242,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privyAuthed])
+  }, [busy, login, privyAuthed, runBootstrap])
 
   const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
     const response = await apiFetch('/api/zora/resolve', {
@@ -376,8 +385,16 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         setError(null)
         await runBootstrap()
       } catch (bootstrapError: any) {
+        const message = typeof bootstrapError?.message === 'string' ? bootstrapError.message : 'Failed to load account state.'
+        if (isSessionEmailMismatchError(message) && typeof privy?.logout === 'function') {
+          await privy.logout().catch(() => null)
+        }
         if (!cancelled) {
-          setError(typeof bootstrapError?.message === 'string' ? bootstrapError.message : 'Failed to load account state.')
+          setError(
+            isSessionEmailMismatchError(message)
+              ? 'Signed in as a different account. Click Continue to sign in again.'
+              : message,
+          )
         }
       } finally {
         if (!cancelled) setBusy(false)
@@ -386,7 +403,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     return () => {
       cancelled = true
     }
-  }, [privyAuthed, runBootstrap, step])
+  }, [privy, privyAuthed, runBootstrap, step])
 
   useEffect(() => {
     if (step !== 'auth') {

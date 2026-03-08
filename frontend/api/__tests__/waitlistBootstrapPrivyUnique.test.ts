@@ -140,4 +140,22 @@ describe('waitlist bootstrap privy profile upsert', () => {
     expect(seenValues).toContain('privy@example.com')
     expect(seenValues).not.toContain('submitted@example.com')
   })
+
+  it('maps Privy email mismatch to a re-auth error', async () => {
+    verifyPrivyForAccountsMock.mockRejectedValueOnce(new Error('Email does not match authenticated user'))
+    getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) } as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+      body: { email: 'submitted@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe('Session email mismatch. Please sign in again.')
+  })
 })
