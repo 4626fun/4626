@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { enqueueImageGenerationJob } from '../../../server/_lib/imageGenerationJobs.js'
-import { parseRequiredString, prepareImageApi, readBody } from './_shared.js'
+import { parseRequiredString, prepareImageApi, readBody, requireImageApiAdmin } from './_shared.js'
 
 type Body = {
   projectId?: string
@@ -10,6 +10,7 @@ type Body = {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApi(req, res)) return
+  if (requireImageApiAdmin(req, res)) return
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
