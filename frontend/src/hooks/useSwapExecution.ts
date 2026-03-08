@@ -618,9 +618,7 @@ export function useSwapExecution(params: {
         swapper: params.executionAddress,
         slippageTolerance: params.parsedSlippage,
         routingPreference: 'BEST_PRICE',
-        // Canonical AA path prefers FULL to reduce repeated Permit2 signature prompts.
-        // EOA mode keeps EXACT approvals to limit spend scope.
-        permitAmount: params.executionMode === 'canonical' ? 'FULL' : 'EXACT',
+        permitAmount: 'EXACT',
         walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
@@ -816,7 +814,7 @@ export function useSwapExecution(params: {
           swapper: params.executionAddress,
           slippageTolerance: params.parsedSlippage,
           routingPreference: 'BEST_PRICE',
-          permitAmount: params.executionMode === 'canonical' ? 'FULL' : 'EXACT',
+          permitAmount: 'EXACT',
           walletModeKey: params.executionMode,
         }),
         approvalPromise,

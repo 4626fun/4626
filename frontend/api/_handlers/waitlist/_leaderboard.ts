@@ -5,6 +5,8 @@ import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type PointsType = 'total' | 'invite' | 'agent'
 
+const MAX_LEADERBOARD_USERS = 1000
+
 type LeaderboardRow = {
   rank: number
   signupId: number
@@ -84,6 +86,8 @@ export default async function handler(req: any, res: any) {
       SELECT id, primary_wallet, embedded_wallet
       FROM profiles
       WHERE profile_completed_at IS NOT NULL
+      ORDER BY id ASC
+      LIMIT ${MAX_LEADERBOARD_USERS}
     ),
     eligible_with_key AS (
       SELECT
@@ -110,6 +114,8 @@ export default async function handler(req: any, res: any) {
       SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
       FROM profiles
       WHERE profile_completed_at IS NOT NULL
+      ORDER BY id ASC
+      LIMIT ${MAX_LEADERBOARD_USERS}
     ),
     eligible_with_key AS (
       SELECT
@@ -218,6 +224,8 @@ export default async function handler(req: any, res: any) {
           SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
           FROM profiles
           WHERE profile_completed_at IS NOT NULL
+          ORDER BY id ASC
+          LIMIT ${MAX_LEADERBOARD_USERS}
         ),
         eligible_with_key AS (
           SELECT
@@ -302,4 +310,3 @@ export default async function handler(req: any, res: any) {
   const data: LeaderboardResponse = { page, limit, pointsType, totalCount, totalPages, hasMore, leaderboard, me }
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<LeaderboardResponse>)
 }
-

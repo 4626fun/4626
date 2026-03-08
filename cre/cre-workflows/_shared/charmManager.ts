@@ -30,6 +30,7 @@ export type CharmManualPayload = {
   vaultAddress?: string
   maxVaultsPerExecution?: number
   forceEnqueue?: boolean
+  authToken?: string
   strategyAddress?: string
   charmVaultAddress?: string
   referenceTick?: number
@@ -325,6 +326,7 @@ export function evaluateAndEnqueueCharmActions(
   manual: CharmManualPayload = {},
 ): CharmWorkflowResult {
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  const canForceEnqueue = manual.forceEnqueue === true && manual.authToken === apiKey
   const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
   const evmClient = createEvmClientForChain(runtime.config.chainName)
   const httpClient = new HTTPClient()
@@ -354,7 +356,15 @@ export function evaluateAndEnqueueCharmActions(
     if (!vault.oracleAddress) continue
 
     try {
-      if (manual.forceEnqueue) {
+      if (manual.forceEnqueue && !canForceEnqueue) {
+        skippedActions += 1
+        runtime.log(
+          `Skipping forced Charm enqueue for ${vault.vaultAddress}: missing or invalid authToken in manual payload`,
+        )
+        continue
+      }
+
+      if (canForceEnqueue) {
         const forcedStrategyAddress = normalizeVaultAddress(manual.strategyAddress)
         if (!forcedStrategyAddress) {
           skippedActions += 1
@@ -366,6 +376,29 @@ export function evaluateAndEnqueueCharmActions(
         const forcedCharmVaultAddress = normalizeVaultAddress(manual.charmVaultAddress) ?? zeroAddress
         const forcedReferenceTick = normalizeOptionalInteger(manual.referenceTick) ?? 0
 
+        const strategies = readCharmStrategiesForVault(runtime, evmClient, vault.vaultAddress)
+        const forcedStrategy = strategies.find(
+          (strategy) => strategy.strategyAddress.toLowerCase() === forcedStrategyAddress,
+        )
+        if (!forcedStrategy) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Charm enqueue for ${vault.vaultAddress}: strategy ${forcedStrategyAddress} not found in vault strategy list`,
+          )
+          continue
+        }
+
+        if (
+          forcedCharmVaultAddress !== zeroAddress &&
+          forcedStrategy.charmVaultAddress.toLowerCase() !== forcedCharmVaultAddress
+        ) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Charm enqueue for ${vault.vaultAddress}: charmVaultAddress ${forcedCharmVaultAddress} does not match strategy vault`,
+          )
+          continue
+        }
+
         const actionType = "strategy.charm.rebalance"
         const actionPayload = {
           action: actionType,
@@ -373,7 +406,7 @@ export function evaluateAndEnqueueCharmActions(
           forced: true,
           vaultAddress: vault.vaultAddress,
           strategyAddress: forcedStrategyAddress,
-          charmVaultAddress: forcedCharmVaultAddress,
+          charmVaultAddress: forcedStrategy.charmVaultAddress,
           oracleAddress: vault.oracleAddress,
           triggerTick: forcedReferenceTick,
           referenceTick: forcedReferenceTick,
