@@ -23,14 +23,12 @@ import { ClaimPrizeToSolana } from '../components/ClaimPrizeToSolana'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
-import { AmoeEntryCard } from '@/components/lottery/AmoeEntryCard'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { useZoraCoin } from '@/lib/zora/hooks'
 import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokenSymbols'
-import { useAccountContext } from '@/wallet/accountContext'
 
 // ABIs
 const WRAPPER_ABI = [
@@ -79,7 +77,7 @@ function TokenAvatar({
         {image ? (
           <img src={image} alt={symbol} className="w-full h-full object-cover" loading="lazy" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-white/[0.06] via-black to-black">
+          <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-white/6 via-black to-black">
             <span className="font-serif text-white/80 select-none">{symbol.trim()?.[0]?.toUpperCase() || '?'}</span>
           </div>
         )}
@@ -165,30 +163,10 @@ export function Vault() {
 
   const queryClient = useQueryClient()
   const { address: userAddress } = useAccount()
-  const accountContext = useAccountContext()
   const [activeTab, setActiveTab] = useState<TabType>('Deposit')
   const [amount, setAmount] = useState('')
-  const connectedSignerLabel = useMemo(
-    () =>
-      accountContext.signerAddress
-        ? `${accountContext.signerType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'} ${accountContext.signerAddress.slice(0, 6)}…${accountContext.signerAddress.slice(-4)}`
-        : 'Not connected',
-    [accountContext.signerAddress, accountContext.signerType],
-  )
-  const actingAccountLabel = useMemo(() => {
-    if (!accountContext.activeAccount) return 'Unavailable'
-    const type = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'
-    return `${type} ${accountContext.activeAccount.slice(0, 6)}…${accountContext.activeAccount.slice(-4)}`
-  }, [accountContext.activeAccount, accountContext.activeAccountType])
   const [vaultError, setVaultError] = useState<string | null>(null)
   const [lastSuccess, setLastSuccess] = useState<string | null>(null)
-  const amoeWalletAddress = useMemo(() => {
-    if (accountContext.activeAccount && isAddress(accountContext.activeAccount)) {
-      return getAddress(accountContext.activeAccount) as Address
-    }
-    if (userAddress && isAddress(userAddress)) return getAddress(userAddress) as Address
-    return null
-  }, [accountContext.activeAccount, userAddress])
 
   const tokenAddress = (resolved?.token ?? (akitaFallback ? (AKITA.token as Address) : null)) as Address | null
   const wrapperAddress = (resolved?.info.wrapper ?? (akitaFallback ? (AKITA.wrapper as Address) : null)) as Address | null
@@ -332,8 +310,8 @@ export function Vault() {
     zoraCoin?.mediaContent?.previewImage?.medium ||
     zoraCoin?.mediaContent?.previewImage?.small ||
     undefined
-  const { imageUrl } = useTokenMetadata(tokenAddress ?? undefined)
-  const heroImage = zoraPreview || imageUrl || '/logo.svg'
+  const { imageUrl } = useTokenMetadata(shareOFTAddress ?? tokenAddress ?? undefined)
+  const heroImage = imageUrl || zoraPreview || '/logo.svg'
 
   const formatAmount = (value: bigint, decimals: number = 18) => {
     if (!value) return '0'
@@ -561,7 +539,7 @@ export function Vault() {
               className="absolute -top-32 -left-24 w-[520px] h-[520px] bg-zinc-500/10 rounded-full blur-[140px] pointer-events-none"
             />
 
-            <div className="relative z-10 grid lg:grid-cols-[260px_minmax(0,1fr)] gap-8 sm:gap-10 items-center">
+            <div className="relative z-10 grid lg:grid-cols-[260px_minmax(0,1fr)] gap-8 sm:gap-12 items-center">
               {/* Vessel */}
               <div className="mx-auto lg:mx-0">
                 <div className="relative w-56 h-56 sm:w-64 sm:h-64">
@@ -574,8 +552,8 @@ export function Vault() {
                   </OrbBorder>
 
                   {/* Corner mark */}
-                  <div className="absolute -bottom-1 -right-1 rounded-full backdrop-blur-md border border-brand-primary/20 bg-black/70 text-brand-accent font-mono leading-none text-[11px] px-2 py-0.5">
-                    {SHARE_SYMBOL_PREFIX}
+                  <div className="absolute -bottom-2 -right-2 rounded-full backdrop-blur-md border border-brand-primary/20 bg-black/75 text-brand-accent font-mono leading-none text-xs px-2.5 py-1 min-w-[40px] text-center shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+                    {shareSymbol || SHARE_SYMBOL_PREFIX}
                   </div>
                 </div>
               </div>
@@ -596,28 +574,20 @@ export function Vault() {
                 </div>
 
                 <div className="mt-3 flex items-start justify-between gap-6">
-                  <div className="min-w-0">
+                  <div className="min-w-0 max-w-2xl">
                     <span className="label mt-2 block">Creator Vault</span>
-                    <h1 className="headline text-4xl sm:text-6xl mt-3">
+                    <h1 className="headline mt-3 text-4xl leading-[0.94] sm:text-6xl sm:leading-[0.92]">
                       {underlyingSymbol}{' '}
-                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-primary to-brand-accent italic">
+                      <span className="text-transparent bg-clip-text bg-linear-to-r from-brand-primary to-brand-accent italic">
                         Vault
                       </span>
                     </h1>
-                    <p className="text-zinc-600 text-sm font-light mono mt-3">
+                    <p className="mt-4 max-w-[40ch] text-sm font-light leading-relaxed text-zinc-500 mono">
                       Deposit {underlyingSymbol || 'underlying token'} to mint {shareSymbol || 'vault shares'}
                     </p>
-                    <p className="text-zinc-700 text-xs font-light mono mt-1">
+                    <p className="mt-1 max-w-[40ch] text-xs font-light leading-relaxed text-zinc-600 mono">
                       Redeem {shareSymbol || 'vault shares'} to withdraw {underlyingSymbol || 'underlying token'}
                     </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-400">
-                        Connected: {connectedSignerLabel}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-400">
-                        Acting as: {actingAccountLabel}
-                      </span>
-                    </div>
                   </div>
 
                   <div className="shrink-0 hidden sm:flex flex-col items-end gap-3">
@@ -628,13 +598,13 @@ export function Vault() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                <div className="mt-7 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                   {wrapperAddress ? (
                     <a
                       href={`https://basescan.org/address/${wrapperAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn-primary btn-compact inline-flex items-center justify-center gap-2 rounded-full text-xs"
+                      className="inline-flex items-center gap-1.5 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
                     >
                       View wrapper <ExternalLink className="w-3 h-3" />
                     </a>
@@ -642,10 +612,10 @@ export function Vault() {
                   {vaultAddress ? (
                     <Link
                       to={`/status?vault=${encodeURIComponent(vaultAddress)}`}
-                      className="btn-primary btn-compact inline-flex items-center justify-center gap-2 rounded-full text-xs"
+                      className="inline-flex items-center gap-1.5 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
                       title="Verification checks"
                     >
-                      Status checks <ShieldCheck className="w-3 h-3 text-emerald-300" />
+                      Status checks <ShieldCheck className="w-3 h-3 text-zinc-500" />
                     </Link>
                   ) : null}
                   {canManageVault ? (
@@ -727,10 +697,6 @@ export function Vault() {
               </div>
             </div>
           ) : null}
-
-          <div className="mt-6">
-            <AmoeEntryCard walletAddress={amoeWalletAddress} creatorCoin={tokenAddress} />
-          </div>
 
           <div id="auction" className="mt-10">
             {ccaStrategy && vaultAddress ? (

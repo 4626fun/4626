@@ -25,6 +25,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/vault/report': () => import('./v1/vault/_report.js'),
   'v1/vault/strategies': () => import('./v1/vault/_strategies.js'),
   'v1/auction/status': () => import('./v1/auction/_status.js'),
+  'v1/auction/activity': () => import('./v1/auction/_activity.js'),
   'v1/auction/recentBids': () => import('./v1/auction/_recentBids.js'),
   'v1/lottery/global': () => import('./v1/lottery/_global.js'),
   'v1/lottery/creator': () => import('./v1/lottery/_creator.js'),
@@ -271,7 +272,7 @@ const V1_TOKEN_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/(metadata|image)$/
 
 // Match v1 REST patterns that embed an address in the path.
 const V1_VAULT_PATTERN = /^v1\/vault\/([a-fA-F0-9x]+)\/(report|strategies)$/
-const V1_AUCTION_PATTERN = /^v1\/auction\/([a-fA-F0-9x]+)\/(status|recentBids)$/
+const V1_AUCTION_PATTERN = /^v1\/auction\/([a-fA-F0-9x]+)\/(status|activity|recentBids)$/
 const V1_LOTTERY_CREATOR_PATTERN = /^v1\/lottery\/creator\/([a-fA-F0-9x]+)$/
 const V1_GAUGE_USER_PATTERN = /^v1\/gauge\/user\/([a-fA-F0-9x]+)$/
 const V1_VE4626_USER_PATTERN = /^v1\/ve4626\/user\/([a-fA-F0-9x]+)$/
@@ -328,7 +329,7 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
     }
   }
 
-  // Handle dynamic v1 auction routes: v1/auction/{address}/status|recentBids
+  // Handle dynamic v1 auction routes: v1/auction/{address}/status|activity|recentBids
   const v1AuctionMatch = subpath.match(V1_AUCTION_PATTERN)
   if (v1AuctionMatch) {
     const [, address, action] = v1AuctionMatch
@@ -340,10 +341,10 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
       if (typeof baseHandler === 'function') {
         const wrappedHandler: ApiHandler = (req, res) => {
           if (!req.query.address) req.query.address = address
-          if (action === 'status') {
-            if (!req.query.ccaStrategy) req.query.ccaStrategy = address
-          } else {
+          if (action === 'recentBids') {
             if (!req.query.auction) req.query.auction = address
+          } else {
+            if (!req.query.ccaStrategy) req.query.ccaStrategy = address
           }
           return baseHandler(req, res)
         }

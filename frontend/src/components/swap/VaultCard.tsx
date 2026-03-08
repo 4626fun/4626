@@ -2,7 +2,9 @@ import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import { FileSpreadsheet, TrendingUp, Wallet } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
+import { useReadContract } from 'wagmi'
 import { formatUnits } from 'viem'
+import { erc20Abi } from 'viem'
 
 import { useVault } from '@/hooks/useVault'
 import { apiFetch } from '@/lib/apiBase'
@@ -31,18 +33,85 @@ type VaultCardProps = {
   withMyVault?: boolean
 }
 
-async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<{ isActive: boolean; isGraduated: boolean }> {
+type AuctionStatus = {
+  isActive: boolean
+  isGraduated: boolean
+  currencyRaised?: string
+  currencyDecimals?: number
+  auctionTokenSymbol?: string
+}
+
+type AuctionActivityItem = {
+  transactionHash: string
+  owner: string
+  amountDisplay: string
+}
+
+type AuctionActivity = {
+  activity: AuctionActivityItem[]
+}
+
+async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<AuctionStatus> {
   const res = await apiFetch(`/api/v1/auction/status?ccaStrategy=${ccaStrategy}`)
   if (!res.ok) throw new Error('Auction status unavailable')
-  const json = (await res.json()) as { success?: boolean; data?: { isActive?: boolean; isGraduated?: boolean } }
+  const json = (await res.json()) as {
+    success?: boolean
+    data?: {
+      isActive?: boolean
+      isGraduated?: boolean
+      currencyRaised?: string
+      currencyDecimals?: number
+      auctionTokenSymbol?: string
+    }
+  }
   return {
     isActive: Boolean(json.data?.isActive),
     isGraduated: Boolean(json.data?.isGraduated),
+    currencyRaised: json.data?.currencyRaised,
+    currencyDecimals: json.data?.currencyDecimals ?? 6,
+    auctionTokenSymbol: json.data?.auctionTokenSymbol,
   }
+}
+
+async function fetchAuctionActivity(ccaStrategy: `0x${string}`): Promise<AuctionActivity> {
+  const res = await apiFetch(`/api/v1/auction/activity?ccaStrategy=${ccaStrategy}&limit=2`)
+  if (!res.ok) throw new Error('Auction activity unavailable')
+  const json = (await res.json()) as {
+    success?: boolean
+    data?: {
+      activity?: AuctionActivityItem[]
+    }
+  }
+  return {
+    activity: Array.isArray(json.data?.activity) ? json.data.activity : [],
+  }
+}
+
+function formatCompactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+function shortAddress(value: string): string {
+  if (!value) return 'Unknown'
+  return `${value.slice(0, 6)}…${value.slice(-4)}`
 }
 
 export function VaultCard({ vault, compact = false, withMyVault = false }: VaultCardProps) {
   const data = useVault(vault.vaultAddress)
+
+  const { data: assetSymbol } = useReadContract({
+    address: data.asset ?? undefined,
+    abi: erc20Abi,
+    functionName: 'symbol',
+  })
+
+  const { data: assetDecimals } = useReadContract({
+    address: data.asset ?? undefined,
+    abi: erc20Abi,
+    functionName: 'decimals',
+  })
 
   const ccaStrategy = vault.ccaStrategyAddress ?? (vault.shareOFTAddress ? SHARE_TO_CCA[vault.shareOFTAddress.toLowerCase()] : undefined)
   const auctionQuery = useQuery({
@@ -51,13 +120,22 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
     enabled: Boolean(ccaStrategy),
     staleTime: 20_000,
   })
+  const auctionLive = auctionQuery.data?.isActive === true
+  const activityQuery = useQuery({
+    queryKey: ['auction-activity', ccaStrategy],
+    queryFn: () => fetchAuctionActivity(ccaStrategy!),
+    enabled: Boolean(ccaStrategy && auctionLive),
+    staleTime: 20_000,
+  })
 
   const totalAssets = data.totalAssets ?? 0n
-  const formattedTvl = totalAssets > 0n
-    ? Number(formatUnits(totalAssets, 18)).toLocaleString(undefined, { maximumFractionDigits: 2 })
-    : '—'
+  const normalizedAssetDecimals = typeof assetDecimals === 'number' ? assetDecimals : 18
+  const tvlRaw = totalAssets > 0n ? Number(formatUnits(totalAssets, normalizedAssetDecimals)) : 0
+  const formattedTvl = totalAssets > 0n ? formatCompactNumber(tvlRaw) : '—'
+  const tvlLabel = assetSymbol ? `${formattedTvl} ${assetSymbol}` : `${formattedTvl} tokens`
   const userHasShare = !!data.userShares && data.userShares > 0n
   const vaultPath = useMemo(() => `/vault/${vault.vaultAddress}`, [vault.vaultAddress])
+  const displaySymbol = typeof assetSymbol === 'string' && assetSymbol.trim().length > 0 ? assetSymbol.trim() : null
 
   const shareOFT = vault.shareOFTAddress
   const tokenImageUrl = shareOFT
@@ -66,8 +144,16 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
       : `/api/token/image?address=${shareOFT}&chain=${vault.chainId}&size=64`
     : null
 
-  const auctionLive = auctionQuery.data?.isActive === true
   const auctionUrl = ccaStrategy ? `${UNISWAP_AUCTION_BASE}/${ccaStrategy}` : null
+  const recentActivity = activityQuery.data?.activity ?? []
+  const committedDisplay = useMemo(() => {
+    if (!auctionLive || auctionQuery.data?.currencyRaised == null) return null
+    const amount = formatCompactNumber(Number(formatUnits(BigInt(auctionQuery.data.currencyRaised), auctionQuery.data.currencyDecimals ?? 6)))
+    return auctionQuery.data.auctionTokenSymbol === 'USDC' || !auctionQuery.data.auctionTokenSymbol
+      ? `$${amount}`
+      : `${amount} ${auctionQuery.data.auctionTokenSymbol}`
+  }, [auctionLive, auctionQuery.data?.auctionTokenSymbol, auctionQuery.data?.currencyDecimals, auctionQuery.data?.currencyRaised])
+  const title = displaySymbol ? `${displaySymbol} Vault` : data.name ?? 'Vault'
 
   return (
     <article
@@ -86,20 +172,25 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
               loading="lazy"
             />
           ) : null}
-          <div>
-            <div className="text-sm font-semibold text-white truncate">
-              {data.name ?? 'Vault'}
-              <span className="ml-2 inline-block rounded-full border border-brand-primary/20 bg-brand-primary/10 px-2 py-0.5 text-[10px] text-brand-200">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-sm font-semibold text-white truncate">{title}</div>
+              <span className="inline-block rounded-full border border-brand-primary/20 bg-brand-primary/10 px-2 py-0.5 text-[10px] text-brand-200">
                 Creator
               </span>
             </div>
-            <div className="mt-1 text-[11px] text-zinc-500 truncate">Creator coin: {vault.creatorCoinAddress}</div>
-            <div className="mt-1 text-[11px] text-zinc-500">Chain {vault.chainId}</div>
+            <div className="mt-1 text-[11px] leading-4 text-zinc-500 break-all">
+              Share token: {shareOFT ?? 'Unavailable'}
+            </div>
+            <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400">
+              <img alt="Base" className="h-3.5 w-3.5 rounded-full object-cover shrink-0" loading="lazy" src="/base-logo.svg" />
+              <span>Base</span>
+            </div>
           </div>
         </div>
         <div className="text-right text-xs text-zinc-500">
-          <div>TVL</div>
-          <div className="text-sm text-zinc-200">{formattedTvl}</div>
+          <div>Assets in vault</div>
+          <div className="text-sm text-zinc-200">{tvlLabel}</div>
         </div>
       </div>
 
@@ -114,14 +205,29 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             Auction Live Now
           </a>
         ) : null}
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">Underlying: {vault.creatorCoinAddress.slice(0, 6)}…{vault.creatorCoinAddress.slice(-4)}</span>
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
-          APY <span className={data.totalAssets ? 'text-zinc-300' : 'text-zinc-500'}>TBD</span>
-        </span>
+        {committedDisplay ? (
+          <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
+            Committed {committedDisplay}
+          </span>
+        ) : null}
         {withMyVault && userHasShare ? (
           <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">Position found</span>
         ) : null}
       </div>
+
+      {auctionLive && recentActivity.length > 0 ? (
+        <div className="rounded-xl border border-white/10 bg-white/3 px-3 py-2">
+          <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Live activity</div>
+          <div className="space-y-1.5">
+            {recentActivity.map((item) => (
+              <div key={item.transactionHash} className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="text-zinc-400">{shortAddress(item.owner)}</span>
+                <span className="text-zinc-200">{item.amountDisplay}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2">
         <Link
@@ -146,7 +252,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 px-3 py-1.5 text-xs',
             userHasShare
               ? 'bg-white/5 text-zinc-300 hover:bg-white/8'
-              : 'bg-white/[0.025] text-zinc-600 cursor-not-allowed',
+              : 'bg-white/2.5 text-zinc-600 cursor-not-allowed',
           )}
         >
           <TrendingUp className="h-3.5 w-3.5 mr-1" />

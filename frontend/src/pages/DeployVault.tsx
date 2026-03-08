@@ -49,8 +49,6 @@ import {
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import { readClientBootstrapSwapPrefs, type BootstrapSwapProvider } from '@/lib/deploy/bootstrapSwapPrefs'
-import { assertBootstrapSwapPlanReady } from '@/lib/deploy/bootstrapSwapGate'
 import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonce } from '@/lib/deploy/permit2'
 import { 
   sendCoinbaseSmartWalletUserOperation, 

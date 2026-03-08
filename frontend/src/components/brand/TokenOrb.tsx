@@ -49,7 +49,7 @@ export function TokenOrb({
     <motion.button
       ref={ref}
       type="button"
-      className="relative w-full h-full rounded-full cursor-pointer group focus:outline-none [perspective:500px]"
+      className="relative w-full h-full rounded-full cursor-pointer group focus:outline-none perspective-normal"
       onClick={onClick}
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
@@ -62,7 +62,7 @@ export function TokenOrb({
       }}
       aria-label={onClick ? 'Token' : 'Token image'}
     >
-      <div className="absolute inset-0 rounded-full overflow-hidden bg-black [backface-visibility:hidden]">
+      <div className="absolute inset-0 rounded-full overflow-hidden bg-black backface-hidden">
         {image && !imgError ? (
           <img
             src={image}
@@ -74,7 +74,7 @@ export function TokenOrb({
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-primary/25 via-brand-accent/10 to-black">
+          <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-brand-primary/25 via-brand-accent/10 to-black">
             <span className="text-white/80 font-sans text-4xl select-none">
               {(symbol?.trim()?.[0] ?? '?').toUpperCase()}
             </span>
@@ -92,11 +92,8 @@ export function TokenOrb({
 
       {!isUnlocked ? (
         <div className="absolute inset-0 flex items-center justify-center z-30" style={{ transformStyle: 'preserve-3d', transform: 'translateZ(10px)' }}>
-          <div className="relative">
-            <div className="absolute inset-0 bg-black/50 blur-xl rounded-full" />
-            <div className="relative text-white/90 drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
-              <Lock size={28} strokeWidth={1.5} />
-            </div>
+          <div className="text-white/90 drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
+            <Lock size={28} strokeWidth={1.5} />
           </div>
         </div>
       ) : null}
