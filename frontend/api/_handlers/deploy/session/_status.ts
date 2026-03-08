@@ -615,19 +615,6 @@ function headerValue(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : ''
 }
 
-function inferRequestOrigin(req: VercelRequest): string | null {
-  const host = headerValue(req.headers['x-forwarded-host'] as string | string[] | undefined) ||
-    headerValue(req.headers.host as string | string[] | undefined)
-  if (!host) return null
-  const protoRaw = headerValue(req.headers['x-forwarded-proto'] as string | string[] | undefined).toLowerCase()
-  const proto = protoRaw.startsWith('https') ? 'https' : 'http'
-  try {
-    return new URL(`${proto}://${host}`).origin
-  } catch {
-    return null
-  }
-}
-
 function parseConfiguredOrigin(value: string): string | null {
   const raw = String(value ?? '').trim()
   if (!raw) return null
@@ -1390,14 +1377,9 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     .then((v: unknown) => Boolean(v))
     .catch(() => null)
 
-  // Prefer the canonical app origin for internal API calls (avoids Vercel preview auth gates).
-  // Fall back to the request origin only if it's the production domain.
+  // Use only trusted origins for internal API calls to avoid host-header injection.
   const canonicalOrigin = getCanonicalOrigin(params.req)
-  const requestOrigin = inferRequestOrigin(params.req)
-  const isPreviewOrigin = requestOrigin && /\.vercel\.app$/i.test(new URL(requestOrigin).hostname)
-  const defaultOrigins = isPreviewOrigin
-    ? [canonicalOrigin].filter((o): o is string => Boolean(o))
-    : [requestOrigin, canonicalOrigin].filter((o): o is string => Boolean(o))
+  const defaultOrigins = [canonicalOrigin].filter((o): o is string => Boolean(o))
   const configuredOrigins = readAdditionalSolanaRegistrationOrigins()
   const candidateOrigins = dedupeOrigins([...configuredOrigins, ...defaultOrigins])
   if (candidateOrigins.length === 0) {
