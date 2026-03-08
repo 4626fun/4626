@@ -225,6 +225,11 @@ apps/docs-site/build/
 apps/docs-site/.docusaurus/
 apps/docs-site/.cache/
 
+# Local hackathon secrets/value dumps
+docs/hackathon/submission-env-vars-and-secrets.actual.local.md
+docs/hackathon/*.actual.local.md
+docs/hackathon/*secrets*.local.md
+
 # Dependencies
 **/node_modules/
 bun.lock
