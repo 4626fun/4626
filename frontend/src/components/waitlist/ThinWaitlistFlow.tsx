@@ -170,12 +170,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     const token = await getAccessToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) headers['X-Privy-Token'] = token
+    const emailForBootstrap = !token && emailIsValid ? normalizeEmail(email) : undefined
 
     const response = await apiFetch('/api/waitlist/bootstrap', {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        email: emailIsValid ? normalizeEmail(email) : undefined,
+        email: emailForBootstrap,
       }),
     })
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null

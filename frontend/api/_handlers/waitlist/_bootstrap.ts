@@ -142,7 +142,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       privyUser: context.privyUser,
     })
 
-    const emailToPersist = email ?? normalizeEmail((context.privyUser as any)?.email?.address)
+    const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
+    // Once authenticated, prefer Privy's verified email and only fall back
+    // to pre-auth input if Privy doesn't expose an email.
+    const emailToPersist = privyEmail ?? email
     if (emailToPersist) {
       await upsertAccount({
         db: db as any,
