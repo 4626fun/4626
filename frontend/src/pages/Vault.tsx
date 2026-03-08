@@ -25,6 +25,7 @@ import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { useZoraCoin } from '@/lib/zora/hooks'
+import { apiFetch } from '@/lib/apiBase'
 import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
@@ -55,6 +56,10 @@ const CCA_STRATEGY_ABI = [
     ],
     stateMutability: 'view',
   },
+] as const
+
+const VAULT_STATS_ABI = [
+  { name: 'totalAssets', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
 ] as const
 
 const tabs = ['Deposit', 'Withdraw'] as const
@@ -124,6 +129,43 @@ function VaultChatCard() {
       </button>
     </div>
   )
+}
+
+function formatCompactUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '$0'
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}M`
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2).replace(/\.?0+$/, '')}K`
+  return `$${value.toFixed(2)}`
+}
+
+type AuctionStatusSummary = {
+  isActive: boolean
+  isGraduated: boolean
+  currencyRaised?: string
+  currencyDecimals?: number
+  auctionTokenSymbol?: string
+}
+
+async function fetchAuctionStatusSummary(ccaStrategy: `0x${string}`): Promise<AuctionStatusSummary> {
+  const res = await apiFetch(`/api/v1/auction/status?ccaStrategy=${ccaStrategy}`)
+  if (!res.ok) throw new Error('Auction status unavailable')
+  const json = (await res.json()) as {
+    data?: {
+      isActive?: boolean
+      isGraduated?: boolean
+      currencyRaised?: string
+      currencyDecimals?: number
+      auctionTokenSymbol?: string
+    }
+  }
+  return {
+    isActive: Boolean(json.data?.isActive),
+    isGraduated: Boolean(json.data?.isGraduated),
+    currencyRaised: json.data?.currencyRaised,
+    currencyDecimals: json.data?.currencyDecimals ?? 6,
+    auctionTokenSymbol: json.data?.auctionTokenSymbol,
+  }
 }
 
 export function Vault() {
@@ -252,11 +294,25 @@ export function Vault() {
     query: { enabled: Boolean(shareOFTAddress) },
   })
 
+  const { data: totalAssets } = useReadContract({
+    address: (vaultAddress ?? ZERO_ADDRESS) as `0x${string}`,
+    abi: VAULT_STATS_ABI,
+    functionName: 'totalAssets',
+    query: { enabled: Boolean(vaultAddress) },
+  })
+
   const { data: auctionStatus } = useReadContract({
     address: (ccaStrategy ?? ZERO_ADDRESS) as `0x${string}`,
     abi: CCA_STRATEGY_ABI,
     functionName: 'getAuctionStatus',
     query: { enabled: Boolean(ccaStrategy) },
+  })
+
+  const auctionSummaryQuery = useQuery({
+    queryKey: ['auction-status', ccaStrategy],
+    queryFn: () => fetchAuctionStatusSummary(ccaStrategy as `0x${string}`),
+    enabled: Boolean(ccaStrategy),
+    staleTime: 20_000,
   })
 
   const { data: tokenAllowance } = useReadContract({
@@ -312,6 +368,17 @@ export function Vault() {
     undefined
   const { imageUrl } = useTokenMetadata(shareOFTAddress ?? tokenAddress ?? undefined)
   const heroImage = imageUrl || zoraPreview || '/logo.svg'
+  const assetPriceUsd = useMemo(() => {
+    const direct = Number(zoraCoin?.tokenPrice?.priceInUsdc ?? '')
+    if (Number.isFinite(direct) && direct > 0) return direct
+
+    const marketCap = Number(zoraCoin?.marketCap ?? '')
+    const totalSupply = Number(zoraCoin?.totalSupply ?? '')
+    if (Number.isFinite(marketCap) && marketCap > 0 && Number.isFinite(totalSupply) && totalSupply > 0) {
+      return marketCap / totalSupply
+    }
+    return null
+  }, [zoraCoin?.marketCap, zoraCoin?.tokenPrice?.priceInUsdc, zoraCoin?.totalSupply])
 
   const formatAmount = (value: bigint, decimals: number = 18) => {
     if (!value) return '0'
@@ -319,6 +386,21 @@ export function Vault() {
       maximumFractionDigits: 4,
     })
   }
+
+  const totalAssetsDisplay = totalAssets !== undefined ? formatAmount(totalAssets, creatorDecimals) : null
+  const tvlUsdDisplay = useMemo(() => {
+    if (totalAssets === undefined || assetPriceUsd == null) return null
+    const totalAssetsNormalized = Number(formatUnits(totalAssets, creatorDecimals))
+    if (!Number.isFinite(totalAssetsNormalized) || totalAssetsNormalized <= 0) return '$0'
+    return formatCompactUsd(totalAssetsNormalized * assetPriceUsd)
+  }, [assetPriceUsd, creatorDecimals, totalAssets])
+  const committedDisplay = useMemo(() => {
+    if (!isAuctionActive || auctionSummaryQuery.data?.currencyRaised == null) return null
+    const amount = Number(formatUnits(BigInt(auctionSummaryQuery.data.currencyRaised), auctionSummaryQuery.data.currencyDecimals ?? 6))
+    if (!Number.isFinite(amount) || amount <= 0) return '$0'
+    const compactAmount = amount >= 1000 ? formatCompactUsd(amount) : `$${amount.toFixed(2).replace(/\.?0+$/, '')}`
+    return compactAmount
+  }, [auctionSummaryQuery.data?.currencyDecimals, auctionSummaryQuery.data?.currencyRaised, isAuctionActive])
 
   // Amount validation
   const amountError = useMemo((): string | null => {
@@ -665,21 +747,32 @@ export function Vault() {
       {/* Stats */}
       <section className="cinematic-section bg-zinc-950/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          {canManageVault ? (
+          {canManageVault || isAuctionActive ? (
             <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/5">
+                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                  <span className="label">
+                    {isAuctionActive ? 'Committed' : tvlUsdDisplay ? 'TVL' : 'Assets in vault'}
+                  </span>
+                  <div className="value mono text-2xl sm:text-3xl">
+                    {isAuctionActive
+                      ? committedDisplay ?? '—'
+                      : totalAssets !== undefined
+                        ? tvlUsdDisplay ?? formatAmount(totalAssets, creatorDecimals)
+                      : <Skeleton className="h-8 w-24 mt-1" />}
+                  </div>
+                  {!isAuctionActive && tvlUsdDisplay && totalAssetsDisplay ? (
+                    <div className="text-[11px] text-zinc-500">
+                      {totalAssetsDisplay} {underlyingSymbol} in vault
+                    </div>
+                  ) : null}
+                </div>
                 <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Total Supply</span>
                   <div className="value mono text-2xl sm:text-3xl">
                     {totalShareSupply !== undefined
                       ? formatAmount(totalShareSupply, shareTokenDecimals)
                       : <Skeleton className="h-8 w-24 mt-1" />}
-                  </div>
-                </div>
-                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
-                  <span className="label">APY</span>
-                  <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
-                    —
                   </div>
                 </div>
                 <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">

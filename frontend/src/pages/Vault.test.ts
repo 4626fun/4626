@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { Vault } from './Vault'
 
-const { RESOLVED } = vi.hoisted(() => ({
+const { RESOLVED, ONCHAIN_AUCTION_STATUS, API_AUCTION_STATUS } = vi.hoisted(() => ({
   RESOLVED: {
     token: '0x1111111111111111111111111111111111111111',
     ccaStrategy: '0x2222222222222222222222222222222222222222',
@@ -14,6 +14,14 @@ const { RESOLVED } = vi.hoisted(() => ({
       vault: '0x5555555555555555555555555555555555555555',
       symbol: 'AKITA',
     },
+  },
+  ONCHAIN_AUCTION_STATUS: [0n, false, true, 0n, 0n] as [bigint, boolean, boolean, bigint, bigint],
+  API_AUCTION_STATUS: {
+    isActive: false,
+    isGraduated: true,
+    currencyRaised: '0',
+    currencyDecimals: 6,
+    auctionTokenSymbol: 'USDC',
   },
 }))
 
@@ -40,10 +48,12 @@ vi.mock('wagmi', () => ({
     switch (functionName) {
       case 'decimals':
         return { data: 18 }
+      case 'totalAssets':
+        return { data: 5_000_000n * 10n ** 18n }
       case 'totalSupply':
         return { data: 5_000_000n * 10n ** 18n }
       case 'getAuctionStatus':
-        return { data: [RESOLVED.info.vault, false, false, 0n, 0n] }
+        return { data: [RESOLVED.info.vault, ONCHAIN_AUCTION_STATUS[1], ONCHAIN_AUCTION_STATUS[2], ONCHAIN_AUCTION_STATUS[3], ONCHAIN_AUCTION_STATUS[4]] }
       case 'allowance':
         return { data: 0n }
       case 'balanceOf':
@@ -59,6 +69,7 @@ vi.mock('wagmi', () => ({
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: any) => {
     if (queryKey?.[0] === 'vaultResolve') return { data: RESOLVED, isLoading: false, error: null }
+    if (queryKey?.[0] === 'auction-status') return { data: API_AUCTION_STATUS, isLoading: false, error: null }
     return { data: undefined, isLoading: false, error: null }
   },
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -73,7 +84,10 @@ vi.mock('@/components/ui/Alert', () => ({
 }))
 
 vi.mock('@/components/ui/Button', () => ({
-  Button: ({ children, ...props }: any) => React.createElement('button', props, children),
+  Button: ({ children, loading, ...props }: any) => {
+    void loading
+    return React.createElement('button', props, children)
+  },
 }))
 
 vi.mock('@/components/ui/Skeleton', () => ({
@@ -107,7 +121,13 @@ vi.mock('@/hooks/useTokenMetadata', () => ({
 }))
 
 vi.mock('@/lib/zora/hooks', () => ({
-  useZoraCoin: () => ({ data: null }),
+  useZoraCoin: () => ({
+    data: {
+      tokenPrice: { priceInUsdc: '0.125' },
+      marketCap: '625000',
+      totalSupply: '5000000',
+    },
+  }),
 }))
 
 vi.mock('@/lib/onchain/vaultResolve', () => ({
@@ -153,7 +173,12 @@ vi.mock('../config/contracts', () => ({
 }))
 
 describe('Vault', () => {
-  it('removes the account chips, keeps hero links minimal, and prefers share OFT media', () => {
+  it('shows USD TVL with token-denominated context on the vault stats panel', () => {
+    ONCHAIN_AUCTION_STATUS[1] = false
+    ONCHAIN_AUCTION_STATUS[2] = true
+    API_AUCTION_STATUS.isActive = false
+    API_AUCTION_STATUS.isGraduated = true
+    API_AUCTION_STATUS.currencyRaised = '0'
     const html = renderToStaticMarkup(React.createElement(Vault))
 
     expect(html).not.toContain('Connected: Not connected')
@@ -163,5 +188,22 @@ describe('Vault', () => {
     expect(html).toContain('Status checks')
     expect(html).toContain('Auction panel')
     expect(html).toContain('https://example.com/share-oft.png')
+    expect(html).toContain('TVL')
+    expect(html).toContain('$625K')
+    expect(html).toContain('5,000,000 AKITA in vault')
+    expect(html).toContain('Total Supply')
+  })
+
+  it('shows committed capital in the stats grid while the auction is active', () => {
+    ONCHAIN_AUCTION_STATUS[1] = true
+    ONCHAIN_AUCTION_STATUS[2] = false
+    API_AUCTION_STATUS.isActive = true
+    API_AUCTION_STATUS.isGraduated = false
+    API_AUCTION_STATUS.currencyRaised = '125000000'
+
+    const html = renderToStaticMarkup(React.createElement(Vault))
+
+    expect(html).toContain('Committed')
+    expect(html).toContain('$125')
   })
 })

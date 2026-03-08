@@ -7,8 +7,12 @@ import { formatUnits } from 'viem'
 import { erc20Abi } from 'viem'
 
 import { useVault } from '@/hooks/useVault'
+import { useZoraCoin } from '@/lib/zora/hooks'
 import { apiFetch } from '@/lib/apiBase'
+import { toShareSymbol } from '@/lib/tokenSymbols'
 import { cn } from '@/lib/utils'
+
+const BASE_BRANDMARK_BLUE = '/base/base-square-blue.svg'
 
 /** Static mapping: share token address -> CCA strategy (for vaults not yet in keepr) */
 const SHARE_TO_CCA: Record<string, `0x${string}`> = {
@@ -93,6 +97,11 @@ function formatCompactNumber(n: number): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
+function formatCompactUsd(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '$0'
+  return `$${formatCompactNumber(n)}`
+}
+
 function shortAddress(value: string): string {
   if (!value) return 'Unknown'
   return `${value.slice(0, 6)}…${value.slice(-4)}`
@@ -100,6 +109,7 @@ function shortAddress(value: string): string {
 
 export function VaultCard({ vault, compact = false, withMyVault = false }: VaultCardProps) {
   const data = useVault(vault.vaultAddress)
+  const { data: zoraCoin } = useZoraCoin(vault.creatorCoinAddress)
 
   const { data: assetSymbol } = useReadContract({
     address: data.asset ?? undefined,
@@ -136,6 +146,19 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
   const userHasShare = !!data.userShares && data.userShares > 0n
   const vaultPath = useMemo(() => `/vault/${vault.vaultAddress}`, [vault.vaultAddress])
   const displaySymbol = typeof assetSymbol === 'string' && assetSymbol.trim().length > 0 ? assetSymbol.trim() : null
+  const shareSymbol = displaySymbol ? toShareSymbol(displaySymbol) : null
+  const assetPriceUsd = useMemo(() => {
+    const direct = Number(zoraCoin?.tokenPrice?.priceInUsdc ?? '')
+    if (Number.isFinite(direct) && direct > 0) return direct
+
+    const marketCap = Number(zoraCoin?.marketCap ?? '')
+    const totalSupply = Number(zoraCoin?.totalSupply ?? '')
+    if (Number.isFinite(marketCap) && marketCap > 0 && Number.isFinite(totalSupply) && totalSupply > 0) {
+      return marketCap / totalSupply
+    }
+    return null
+  }, [zoraCoin?.marketCap, zoraCoin?.tokenPrice?.priceInUsdc, zoraCoin?.totalSupply])
+  const tvlUsd = assetPriceUsd != null ? tvlRaw * assetPriceUsd : null
 
   const shareOFT = vault.shareOFTAddress
   const tokenImageUrl = shareOFT
@@ -153,7 +176,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
       ? `$${amount}`
       : `${amount} ${auctionQuery.data.auctionTokenSymbol}`
   }, [auctionLive, auctionQuery.data?.auctionTokenSymbol, auctionQuery.data?.currencyDecimals, auctionQuery.data?.currencyRaised])
-  const title = displaySymbol ? `${displaySymbol} Vault` : data.name ?? 'Vault'
+  const title = shareSymbol ?? data.name ?? 'Vault'
 
   return (
     <article
@@ -183,14 +206,15 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
               Share token: {shareOFT ?? 'Unavailable'}
             </div>
             <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400">
-              <img alt="Base" className="h-3.5 w-3.5 rounded-full object-cover shrink-0" loading="lazy" src="/base-logo.svg" />
+              <img alt="Base" className="h-3.5 w-3.5 rounded-full object-contain shrink-0" loading="lazy" src={BASE_BRANDMARK_BLUE} />
               <span>Base</span>
             </div>
           </div>
         </div>
         <div className="text-right text-xs text-zinc-500">
-          <div>Assets in vault</div>
-          <div className="text-sm text-zinc-200">{tvlLabel}</div>
+          <div>{tvlUsd != null ? 'TVL' : 'Assets in vault'}</div>
+          <div className="text-sm text-zinc-200">{tvlUsd != null ? formatCompactUsd(tvlUsd) : tvlLabel}</div>
+          {tvlUsd != null ? <div className="mt-1 text-[10px] text-zinc-500">{tvlLabel} in vault</div> : null}
         </div>
       </div>
 

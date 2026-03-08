@@ -2,7 +2,10 @@ import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import { useMemo, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useMiniAppContext } from '@/hooks/useMiniAppContext'
+import { getBasenameName } from '@/lib/xmtp/socialIdentity'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 
 type ConnectButtonStateInput = {
@@ -23,6 +26,103 @@ export function deriveConnectButtonState(input: ConnectButtonStateInput): 'hydra
   return 'signed-out'
 }
 
+type WalletIdentityPresentationInput = {
+  address: string
+  basename: string | null
+  miniUsername: string | null
+  miniAvatarUrl: string | null
+}
+
+type WalletIdentityPresentation = {
+  primaryLabel: string
+  secondaryLabel: string
+  avatarUrl: string | null
+  avatarFallback: string
+}
+
+function formatAddress(addr: string): string {
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
+
+function normalizeBasename(value: string | null): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!trimmed) return null
+  return trimmed.replace(/\.base\.eth$/i, '') || null
+}
+
+export function deriveWalletIdentityPresentation(input: WalletIdentityPresentationInput): WalletIdentityPresentation {
+  const shortAddress = formatAddress(input.address)
+  const normalizedMiniUsername = typeof input.miniUsername === 'string' ? input.miniUsername.trim().replace(/^@+/, '') : ''
+  if (normalizedMiniUsername) {
+    return {
+      primaryLabel: `@${normalizedMiniUsername}`,
+      secondaryLabel: shortAddress,
+      avatarUrl: input.miniAvatarUrl,
+      avatarFallback: normalizedMiniUsername.charAt(0).toUpperCase(),
+    }
+  }
+
+  const basename = normalizeBasename(input.basename)
+  if (basename) {
+    return {
+      primaryLabel: basename,
+      secondaryLabel: shortAddress,
+      avatarUrl: null,
+      avatarFallback: basename.charAt(0).toUpperCase(),
+    }
+  }
+
+  return {
+    primaryLabel: shortAddress,
+    secondaryLabel: 'Base account',
+    avatarUrl: null,
+    avatarFallback: shortAddress.charAt(0).toUpperCase(),
+  }
+}
+
+function IdentityButton({
+  presentation,
+  connected,
+  menuOpen,
+  onToggle,
+}: {
+  presentation: WalletIdentityPresentation
+  connected: boolean
+  menuOpen: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="group relative flex min-w-[196px] items-center gap-3 overflow-hidden rounded-2xl border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.06))] px-3 py-2.5 shadow-[0_14px_40px_-18px_rgba(0,0,0,0.9)] backdrop-blur-xl transition hover:border-white/18 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.08))]"
+    >
+      <div className="relative shrink-0">
+        {presentation.avatarUrl ? (
+          <img
+            src={presentation.avatarUrl}
+            alt=""
+            className="h-9 w-9 rounded-full object-cover ring-1 ring-white/12"
+          />
+        ) : (
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(0,82,255,0.95),rgba(90,138,255,0.7))] text-sm font-semibold text-white ring-1 ring-white/12">
+            {presentation.avatarFallback}
+          </div>
+        )}
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[rgb(8,8,8)] ${connected ? 'bg-cyan-400' : 'bg-emerald-400'}`}
+          aria-hidden="true"
+        />
+      </div>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-sm font-medium text-white">{presentation.primaryLabel}</span>
+        <span className="block truncate text-[11px] text-zinc-400">{presentation.secondaryLabel}</span>
+      </span>
+      <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+    </button>
+  )
+}
+
 /**
  * Simple Connect Button
  * 
@@ -33,6 +133,7 @@ export function ConnectButtonWeb3() {
   const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
+  const mini = useMiniAppContext()
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
@@ -68,7 +169,15 @@ export function ConnectButtonWeb3() {
     sessionAddress,
   })
 
-  const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`
+  const identityAddress = buttonState === 'connected-wallet' ? address ?? null : buttonState === 'session-restored' ? sessionAddress : null
+  const basenameEnabled = Boolean(identityAddress) && !(mini.isMiniApp === true && mini.username)
+  const basenameQuery = useQuery({
+    queryKey: ['basename', identityAddress ?? 'none'],
+    queryFn: async () => await getBasenameName(identityAddress as string),
+    enabled: basenameEnabled,
+    staleTime: 1000 * 60 * 10,
+  })
+  const basename = basenameEnabled ? basenameQuery.data ?? null : null
 
   if (buttonState === 'hydrating') {
     return (
@@ -85,16 +194,16 @@ export function ConnectButtonWeb3() {
 
   // Connected - show address with disconnect option
   if (buttonState === 'connected-wallet' && isConnected && address) {
+    const presentation = deriveWalletIdentityPresentation({
+      address,
+      basename,
+      miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
+      miniAvatarUrl: mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : null,
+    })
+
     return (
       <div className="relative">
-        <button
-          onClick={() => setShowMenu(!showMenu)}
-          className="btn-primary btn-no-icon flex min-w-[152px] items-center justify-center gap-3"
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-          <span className="mono text-sm">{formatAddress(address)}</span>
-          <ChevronDown className={`w-3 h-3 text-zinc-600 transition-transform ${showMenu ? 'rotate-180' : ''}`} />
-        </button>
+        <IdentityButton presentation={presentation} connected menuOpen={showMenu} onToggle={() => setShowMenu(!showMenu)} />
 
         {showMenu && (
           <>
@@ -180,17 +289,16 @@ export function ConnectButtonWeb3() {
   // auth session exists but the client wallet provider is not yet
   // connected on this page load.
   if (buttonState === 'session-restored' && sessionAddress) {
+    const presentation = deriveWalletIdentityPresentation({
+      address: sessionAddress,
+      basename,
+      miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
+      miniAvatarUrl: mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : null,
+    })
+
     return (
       <div className="relative">
-        <button
-          type="button"
-          onClick={() => setShowMenu(!showMenu)}
-          className="btn-primary btn-no-icon flex min-w-[152px] items-center justify-center gap-3"
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          <span className="mono text-sm">{formatAddress(sessionAddress)}</span>
-          <ChevronDown className={`w-3 h-3 text-zinc-600 transition-transform ${showMenu ? 'rotate-180' : ''}`} />
-        </button>
+        <IdentityButton presentation={presentation} connected={false} menuOpen={showMenu} onToggle={() => setShowMenu(!showMenu)} />
 
         {showMenu && (
           <>

@@ -21,6 +21,16 @@ vi.mock('@/hooks/useVault', () => ({
   })),
 }))
 
+vi.mock('@/lib/zora/hooks', () => ({
+  useZoraCoin: vi.fn(() => ({
+    data: {
+      tokenPrice: { priceInUsdc: '0.125' },
+      marketCap: '625000',
+      totalSupply: '5000000',
+    },
+  })),
+}))
+
 vi.mock('@tanstack/react-query', () => ({
   useQuery: vi.fn(({ queryKey }: { queryKey: unknown[] }) => {
     if (queryKey[0] === 'auction-status') {
@@ -58,7 +68,7 @@ vi.mock('@tanstack/react-query', () => ({
 }))
 
 describe('VaultCard', () => {
-  it('renders symbol-first vault identity, explicit asset totals, and live committed capital', () => {
+  it('renders USD TVL from creator coin price plus the token-denominated vault balance', () => {
     const html = renderToStaticMarkup(
       React.createElement(VaultCard, {
         vault: {
@@ -72,11 +82,13 @@ describe('VaultCard', () => {
       }),
     )
 
-    expect(html).toContain('AKITA Vault')
+    expect(html).toContain('■AKITA')
+    expect(html).not.toContain('AKITA Vault')
     expect(html).toContain('Share token')
     expect(html).toContain('0x00f80e71e77b562fdf28522a7b80a7d53438d38b')
-    expect(html).toContain('Assets in vault')
-    expect(html).toContain('5M AKITA')
+    expect(html).toContain('TVL')
+    expect(html).toContain('$625K')
+    expect(html).toContain('5M AKITA in vault')
     expect(html).toContain('Committed')
     expect(html).toContain('$125')
     expect(html).toContain('Base')
