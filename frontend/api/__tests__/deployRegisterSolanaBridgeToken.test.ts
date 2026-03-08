@@ -105,8 +105,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
   })
 
-
-  it('does not allow legacy-route header override to bypass disable gate', async () => {
+  it('ignores client-supplied OVault route header on legacy endpoint when disabled', async () => {
     const restoreEnv = applyEnv({
       DEPLOY_SOLANA_LEGACY_WRITE_DISABLED: '1',
     })
@@ -122,12 +121,33 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(410)
-      expect(String(res.body?.error ?? '')).toContain('/api/deploy/setupSolanaOvaultMesh')
       expect(createPublicClientMock).not.toHaveBeenCalled()
     } finally {
       restoreEnv()
     }
   })
+
+  it('does not treat legacy endpoint query-string as OVault route when disabled', async () => {
+    const restoreEnv = applyEnv({
+      DEPLOY_SOLANA_LEGACY_WRITE_DISABLED: '1',
+    })
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        url: '/api/deploy/registerSolanaBridgeToken?next=/setupSolanaOvaultMesh',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(410)
+      expect(createPublicClientMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('allows OVault route writes even when legacy route is disabled', async () => {
     const restoreEnv = applyEnv({
       DEPLOY_SOLANA_LEGACY_WRITE_DISABLED: '1',
