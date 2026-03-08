@@ -21,7 +21,13 @@ vi.mock('@/lib/baseBuilderCodes', async () => {
   }
 })
 
-import { buildAndSendApproval, buildAndSendSwap, detectTxSendMode, type TxRouterContext } from './txRouter'
+import {
+  buildAndSendApproval,
+  buildAndSendSwap,
+  detectTxSendMode,
+  normalizeCanonicalSendError,
+  type TxRouterContext,
+} from './txRouter'
 import { payloadEndsWithDataSuffix } from '@/lib/baseBuilderCodes'
 import { TARGET_ALLOWED_OWNER_EOA_ADDRESSES, TARGET_CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
@@ -541,5 +547,17 @@ describe('txRouter', () => {
         },
       }),
     ).rejects.toThrow(/allowed owner signer/i)
+  })
+
+  it('normalizes unauthenticated paymaster errors into canonical session guidance', () => {
+    expect(normalizeCanonicalSendError(new Error('request denied - not authenticated')).message).toBe(
+      'Paymaster rejected the swap because your 4626 session is not authenticated.',
+    )
+  })
+
+  it('normalizes canonical owner mismatch errors into explicit guidance', () => {
+    expect(normalizeCanonicalSendError(new Error('not_owner: session principal does not own sender CSW')).message).toBe(
+      'Session principal does not own sender CSW for canonical swap execution.',
+    )
   })
 })

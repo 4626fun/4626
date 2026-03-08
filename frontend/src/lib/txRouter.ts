@@ -212,6 +212,29 @@ function normalizeTx(tx: TransactionRequest): RoutedCall {
   }
 }
 
+export function normalizeCanonicalSendError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+
+  if (lower.includes('missing 4626 session token')) {
+    return new Error('Missing 4626 session token for paymaster request.')
+  }
+
+  if (lower.includes('request denied') || lower.includes('not authenticated')) {
+    return new Error('Paymaster rejected the swap because your 4626 session is not authenticated.')
+  }
+
+  if (lower.includes('session principal does not own sender csw') || lower.includes('not_owner')) {
+    return new Error('Session principal does not own sender CSW for canonical swap execution.')
+  }
+
+  if (lower.includes('not an onchain owner of the smart wallet')) {
+    return new Error('Privy embedded wallet is not an owner on the canonical smart wallet.')
+  }
+
+  return error instanceof Error ? error : new Error(message || 'Canonical swap send failed.')
+}
+
 function toRoutedCalls(params: { swapTx: TransactionRequest; approvalTx?: TransactionRequest | null }): RoutedCall[] {
   const calls: RoutedCall[] = []
   if (params.approvalTx) calls.push(normalizeTx(params.approvalTx))
@@ -524,22 +547,27 @@ async function sendViaCanonical4337(params: {
   })
   const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
   const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-  const result = await sendCoinbaseSmartWalletUserOperation({
-    publicClient: context.publicClient as any,
-    walletClient: context.walletClient as any,
-    bundlerUrl,
-    smartWallet: canonicalIdentity,
-    ownerAddress: context.signerAddress,
-    calls: calls.map((call) => ({
-      to: call.to,
-      data:
-        appendBuilderSuffixToHex(call.data, {
-          chainId: context.chainId,
-        }) ?? call.data,
-      value: call.value,
-    })),
-    version: '1',
-  })
+  let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>
+  try {
+    result = await sendCoinbaseSmartWalletUserOperation({
+      publicClient: context.publicClient as any,
+      walletClient: context.walletClient as any,
+      bundlerUrl,
+      smartWallet: canonicalIdentity,
+      ownerAddress: context.signerAddress,
+      calls: calls.map((call) => ({
+        to: call.to,
+        data:
+          appendBuilderSuffixToHex(call.data, {
+            chainId: context.chainId,
+          }) ?? call.data,
+        value: call.value,
+      })),
+      version: '1',
+    })
+  } catch (error) {
+    throw normalizeCanonicalSendError(error)
+  }
   context.debug?.({
     event: 'send_success',
     mode: decision.mode,
