@@ -83,6 +83,9 @@ async function withRetry<T>(input: {
     } catch (error) {
       lastError = error
       const retryable = isRetryableError(error)
+      console.warn(
+        `[xmtp-service] ${input.operationName} attempt ${attempt}/${input.maxAttempts} failed (retryable=${retryable}): ${readErrorMessage(error)}`,
+      )
       if (!retryable || attempt >= input.maxAttempts) break
       const waitMs = input.baseDelayMs * Math.pow(2, attempt - 1)
       await sleep(waitMs)

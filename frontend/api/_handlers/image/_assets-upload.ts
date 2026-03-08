@@ -6,6 +6,7 @@ import {
   isReferenceAssetRole,
   parseRequiredString,
   prepareImageApi,
+  requireImageApiAdmin,
   readBody,
 } from './_shared.js'
 
@@ -19,6 +20,7 @@ type Body = {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApi(req, res)) return
+  if (requireImageApiAdmin(req, res)) return
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })

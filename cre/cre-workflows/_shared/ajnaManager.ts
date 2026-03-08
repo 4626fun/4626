@@ -39,6 +39,7 @@ export type AjnaManualPayload = {
   vaultAddress?: string
   maxVaultsPerExecution?: number
   forceEnqueue?: boolean
+  authToken?: string
   strategyAddress?: string
   targetBucket?: number
 }
@@ -335,6 +336,7 @@ export function evaluateAndEnqueueAjnaActions(
   manual: AjnaManualPayload = {},
 ): AjnaWorkflowResult {
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  const canForceEnqueue = manual.forceEnqueue === true && manual.authToken === apiKey
   const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
   const evmClient = createEvmClientForChain(runtime.config.chainName)
   const httpClient = new HTTPClient()
@@ -364,7 +366,15 @@ export function evaluateAndEnqueueAjnaActions(
     if (!vault.oracleAddress) continue
 
     try {
-      if (manual.forceEnqueue) {
+      if (manual.forceEnqueue && !canForceEnqueue) {
+        skippedActions += 1
+        runtime.log(
+          `Skipping forced Ajna enqueue for ${vault.vaultAddress}: missing or invalid authToken in manual payload`,
+        )
+        continue
+      }
+
+      if (canForceEnqueue) {
         const forcedStrategyAddress = normalizeVaultAddress(manual.strategyAddress)
         if (!forcedStrategyAddress) {
           skippedActions += 1
@@ -375,6 +385,26 @@ export function evaluateAndEnqueueAjnaActions(
         }
 
         const forcedTargetBucket = normalizeOptionalInteger(manual.targetBucket) ?? 1
+        if (forcedTargetBucket < 1) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Ajna enqueue for ${vault.vaultAddress}: targetBucket must be >= 1`,
+          )
+          continue
+        }
+
+        const strategies = readAjnaStrategiesForVault(runtime, evmClient, vault.vaultAddress)
+        const forcedStrategy = strategies.find(
+          (strategy) => strategy.strategyAddress.toLowerCase() === forcedStrategyAddress,
+        )
+        if (!forcedStrategy) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Ajna enqueue for ${vault.vaultAddress}: strategy ${forcedStrategyAddress} not found in vault strategy list`,
+          )
+          continue
+        }
+
         const actionType = "strategy.ajna.rebucket"
         const actionPayload = {
           action: actionType,
@@ -383,7 +413,7 @@ export function evaluateAndEnqueueAjnaActions(
           vaultAddress: vault.vaultAddress,
           strategyAddress: forcedStrategyAddress,
           oracleAddress: vault.oracleAddress,
-          currentBucket: null,
+          currentBucket: forcedStrategy.currentBucket,
           suggestedBucket: forcedTargetBucket,
           steppedBucket: forcedTargetBucket,
           targetBucket: forcedTargetBucket,
