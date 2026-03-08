@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import registerSolanaBridgeTokenHandler from './_registerSolanaBridgeToken.js'
+import registerSolanaBridgeTokenHandler, {
+  SOLANA_REGISTRATION_ROUTE_KIND_KEY,
+} from './_registerSolanaBridgeToken.js'
 
 /**
  * OVault-first alias for Solana mesh preparation.
@@ -9,6 +11,6 @@ import registerSolanaBridgeTokenHandler from './_registerSolanaBridgeToken.js'
  * implementation while callers migrate from legacy route names.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  ;(req as Record<string, unknown>).__cvSolanaRegistrationRouteKind = 'ovault'
+  ;(req as unknown as Record<string, unknown>)[SOLANA_REGISTRATION_ROUTE_KIND_KEY] = 'ovault'
   return registerSolanaBridgeTokenHandler(req, res)
 }

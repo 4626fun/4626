@@ -322,7 +322,7 @@ function readDynamicSolanaRouteEnabled(): boolean {
 
 type SolanaRegistrationRouteKind = 'legacy' | 'ovault'
 
-const SOLANA_REGISTRATION_ROUTE_KIND_KEY = '__cvSolanaRegistrationRouteKind'
+export const SOLANA_REGISTRATION_ROUTE_KIND_KEY = '__cvSolanaRegistrationRouteKind'
 
 function readLegacySolanaWriteDisabled(): boolean {
   const v = String(
@@ -336,7 +336,7 @@ function readLegacySolanaWriteDisabled(): boolean {
 }
 
 function readSolanaRegistrationRouteKind(req: VercelRequest): SolanaRegistrationRouteKind {
-  const internalRouteKind = (req as Record<string, unknown>)[
+  const internalRouteKind = (req as unknown as Record<string, unknown>)[
     SOLANA_REGISTRATION_ROUTE_KIND_KEY
   ]
   if (internalRouteKind === 'ovault' || internalRouteKind === 'legacy') {
