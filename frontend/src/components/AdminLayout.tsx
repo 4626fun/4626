@@ -4,6 +4,7 @@ import { ShieldCheck } from 'lucide-react'
 import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { deriveAdminWalletRoles } from '@/lib/wallet/adminWalletRoles'
 
 const ADMIN_TABS = [
   {
@@ -52,9 +53,16 @@ export function AdminLayout() {
   const { address } = useAccount()
   const { busy: authBusy, error: authError, signIn, signOut, authAddress } = useSiweAuth()
   const location = useLocation()
-  const hasSessionAddress = Boolean(authAddress)
-
-  const hasAddressMismatch = address && authAddress && address.toLowerCase() !== authAddress.toLowerCase()
+  const walletRoles = useMemo(
+    () =>
+      deriveAdminWalletRoles({
+        sessionWallet: authAddress,
+        connectedWallet: address,
+      }),
+    [address, authAddress],
+  )
+  const hasSessionAddress = Boolean(walletRoles.adminWallet)
+  const hasAddressMismatch = Boolean(walletRoles.sessionWallet && walletRoles.connectedWallet && !walletRoles.connectedMatchesSession)
   const handleSignIn = async () => {
     if (authBusy) return
     if (hasAddressMismatch) {
@@ -80,52 +88,20 @@ export function AdminLayout() {
               <ShieldCheck className="w-7 h-7 text-zinc-300" />
             </div>
             <div className="font-display text-xl text-white">Admin</div>
-
-            {hasAddressMismatch ? (
-              <>
-                <div className="text-xs text-amber-400">
-                  Session mismatch: signed in as a different wallet.
-                </div>
-                <div className="text-[11px] text-zinc-500">
-                  Refresh the session to match your connected wallet.
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleSignIn()}
-                    disabled={authBusy}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
-                  >
-                    {authBusy ? 'Refreshing...' : 'Refresh session'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void signOut()}
-                    disabled={authBusy}
-                    className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                  >
-                    {authBusy ? 'Signing out...' : 'Sign out'}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-xs text-zinc-600">Sign in (no transaction) to verify admin access.</div>
-                <button
-                  type="button"
-                  onClick={() => void handleSignIn()}
-                  disabled={authBusy}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
-                >
-                  {authBusy ? 'Signing in...' : 'Sign in with wallet'}
-                </button>
-              </>
-            )}
+            <div className="text-xs text-zinc-600">Sign in (no transaction) to verify admin access.</div>
+            <button
+              type="button"
+              onClick={() => void handleSignIn()}
+              disabled={authBusy}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
+            >
+              {authBusy ? 'Signing in...' : 'Sign in with wallet'}
+            </button>
 
             {authError ? <div className="text-[11px] text-red-400/90">{authError}</div> : null}
             <div className="text-[10px] text-zinc-700 mt-2 space-y-1">
-              <div>Connected: {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'No'}</div>
-              <div>Auth: {authAddress ? `${authAddress.slice(0, 6)}...${authAddress.slice(-4)}` : 'Not signed in'}</div>
+              <div>Connected signer: {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'No wallet'}</div>
+              <div>Admin session: {authAddress ? `${authAddress.slice(0, 6)}...${authAddress.slice(-4)}` : 'Not signed in'}</div>
             </div>
           </div>
         </div>
@@ -137,8 +113,38 @@ export function AdminLayout() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-6">
       {hasAddressMismatch ? (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200">
-          Connected wallet and session wallet differ. Admin access uses your active session; refresh sign-in if you need to switch.
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 space-y-3">
+          <div>
+            Connected wallet and session wallet differ. Admin authorization uses your active session; signatures and transactions use your connected
+            signer.
+          </div>
+          <div className="text-[11px] text-amber-100/90 space-y-1">
+            <div>
+              Admin session: {walletRoles.sessionWallet ? `${walletRoles.sessionWallet.slice(0, 6)}...${walletRoles.sessionWallet.slice(-4)}` : 'Missing'}
+            </div>
+            <div>
+              Connected signer:{' '}
+              {walletRoles.connectedWallet ? `${walletRoles.connectedWallet.slice(0, 6)}...${walletRoles.connectedWallet.slice(-4)}` : 'No wallet'}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleSignIn()}
+              disabled={authBusy}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-400/10 border border-amber-300/20 px-3 py-2 text-[11px] text-amber-100 hover:bg-amber-400/15 transition-colors disabled:opacity-60"
+            >
+              {authBusy ? 'Switching...' : 'Switch admin session to connected wallet'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={authBusy}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-transparent border border-white/10 px-3 py-2 text-[11px] text-zinc-300 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
+            >
+              {authBusy ? 'Signing out...' : 'Sign out current session'}
+            </button>
+          </div>
         </div>
       ) : null}
       {/* Tab navigation */}
