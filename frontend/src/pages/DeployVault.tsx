@@ -53,6 +53,7 @@ import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { readClientBootstrapSwapPrefs, type BootstrapSwapProvider } from '@/lib/deploy/bootstrapSwapPrefs'
 import { assertBootstrapSwapPlanReady } from '@/lib/deploy/bootstrapSwapGate'
+import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonce } from '@/lib/deploy/permit2'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
@@ -93,6 +94,7 @@ const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
 const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
+const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
@@ -313,6 +315,18 @@ function ensureSignatureHex(value: unknown, context: string): Hex {
     })
   }
   return signature
+}
+
+function isUserRejectedErrorMessage(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lower = msg.toLowerCase()
+  return (
+    lower.includes('user rejected') ||
+    lower.includes('rejected the request') ||
+    lower.includes('action_rejected') ||
+    lower.includes('user denied') ||
+    lower.includes('user cancelled')
+  )
 }
 
 function debugSignatureReady(context: string, signature: Hex, details?: Record<string, unknown>) {
@@ -1353,6 +1367,71 @@ const CREATOR_VAULT_BATCHER_ABI = [
   },
   {
     type: 'function',
+    name: 'finalizePhase2WithPermit2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'permit',
+        type: 'tuple',
+        components: [
+          {
+            name: 'permitted',
+            type: 'tuple',
+            components: [
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+            ],
+          },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'auction', type: 'address' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
     name: 'deployPhase2AndLaunchWithPermit',
     stateMutability: 'nonpayable',
     inputs: [
@@ -1673,6 +1752,79 @@ function DeployVaultBatcher({
     }
     return null
   }, [privyEmbeddedEoaWallet])
+
+  const signOwnerPermit2TypedData = useCallback(
+    async (typedData: Record<string, unknown>): Promise<Hex> => {
+      if (privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign && privyEmbeddedEoaAddress) {
+        const embeddedProvider = await getPrivyEmbeddedEoaProvider()
+        if (embeddedProvider?.request) {
+          await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+          const rawSig = await embeddedProvider.request({
+            method: 'eth_signTypedData_v4',
+            params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
+          })
+          return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
+        }
+      }
+
+      if (privySmartWalletIsCanonicalOwner && privySmartWalletCanSign && smartWalletClient && privySmartWalletAddress) {
+        await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
+        const client: any = smartWalletClient as any
+        const account: any = client?.account
+        if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
+          const context =
+            typeof account?.signTypedData === 'function'
+              ? 'privySmartWallet.account.signTypedData'
+              : 'privySmartWallet.signTypedData'
+          const rawResult = await withTimeout(
+            typeof account?.signTypedData === 'function'
+              ? account.signTypedData(typedData as any)
+              : client.signTypedData({ account: privySmartWalletAddress, ...(typedData as any) }),
+            20_000,
+            context,
+          )
+          const sig = ensureSignatureHex(rawResult, context)
+          logNonEoaSignature(sig, context)
+          return sig
+        }
+      }
+
+      if (connectedAddress && wagmiWalletClient) {
+        await ensureProviderOnBase(wagmiWalletClient, 'Connected wallet')
+        const walletAny: any = wagmiWalletClient as any
+        if (typeof walletAny?.signTypedData === 'function') {
+          const rawResult = await withTimeout(
+            walletAny.signTypedData({ account: connectedAddress as Address, ...(typedData as any) }),
+            20_000,
+            'connectedWallet.signTypedData',
+          )
+          return ensureSignatureHex(rawResult, 'connectedWallet.signTypedData')
+        }
+        if (typeof walletAny?.request === 'function') {
+          const rawResult = await walletAny.request({
+            method: 'eth_signTypedData_v4',
+            params: [connectedAddress, JSON.stringify(typedData)],
+          })
+          return ensureSignatureHex(rawResult, 'connectedWallet.eth_signTypedData_v4')
+        }
+      }
+
+      throw new Error('Connected wallet does not support typed-data signatures required for Permit2 deploy activation.')
+    },
+    [
+      connectedAddress,
+      ensureProviderOnBase,
+      getPrivyEmbeddedEoaProvider,
+      privyEmbeddedEoaAddress,
+      privyEmbeddedEoaCanSign,
+      privyEmbeddedEoaIsCanonicalOwner,
+      privySmartWalletAddress,
+      privySmartWalletCanSign,
+      privySmartWalletIsCanonicalOwner,
+      smartWalletClient,
+      wagmiWalletClient,
+    ],
+  )
 
   const smartWalletAddrForAuth = useMemo(() => {
     try {
@@ -3247,6 +3399,10 @@ function DeployVaultBatcher({
           batcherBytecodeLower.includes(BATCHER_VAULT_ADMIN_MODULE_SELECTOR)
         )
       })()
+      const supportsPhase2Permit2 = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return batcherBytecodeLower.includes(BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR)
+      })()
       if (isTwoStepBatcher && !supportsVaultModuleGetters) {
         logger.warn('[DeployVault] legacy_batcher_blocked', {
           deploy_mode: strictNoEoaEnforced ? 'no_eoa_strict' : 'default',
@@ -3660,34 +3816,82 @@ function DeployVaultBatcher({
 
         const phase2Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
         const phase2ApproveCalls: Array<{ target: Address; value: bigint; data: Hex }> = []
-        const swAllowanceToBatcher = (await publicClient.readContract({
-          address: creatorToken,
-          abi: erc20Abi,
-          functionName: 'allowance',
-          args: [owner, batcherAddress],
-        })) as bigint
+        let phase2UsesPermit2 = false
+        if (!planOnly && supportsPhase2Permit2 && CONTRACTS.permit2) {
+          try {
+            const permit2Address = getAddress(CONTRACTS.permit2 as Address)
+            const nonce = createPermit2Nonce()
+            const deadline = createPermit2Deadline()
+            const { permit, typedData } = buildPermit2SignatureTransfer({
+              chainId: base.id,
+              permit2: permit2Address,
+              token: creatorToken,
+              amount: depositAmount,
+              spender: batcherAddress,
+              nonce,
+              deadline,
+            })
+            const signature = await signOwnerPermit2TypedData(typedData as unknown as Record<string, unknown>)
+            phase2UsesPermit2 = true
+            logger.info('[DeployVault] phase2 finalize using Permit2 signature transfer', {
+              owner,
+              batcher: batcherAddress,
+              permit2: permit2Address,
+              nonce: nonce.toString(),
+              deadline: deadline.toString(),
+            })
+            const phase2FinalizeCall = {
+              target: batcherAddress,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: CREATOR_VAULT_BATCHER_ABI,
+                functionName: 'finalizePhase2WithPermit2',
+                args: [phase2FinalizeParams, permit, signature],
+              }),
+            } as const
+            phase2Calls.push(phase2FinalizeCall)
+          } catch (permit2Err) {
+            if (isUserRejectedErrorMessage(permit2Err)) {
+              throw permit2Err
+            }
+            logger.warn('[DeployVault] Permit2 phase2 finalize unavailable; falling back to approvals', {
+              batcher: batcherAddress,
+              owner,
+              error: permit2Err instanceof Error ? permit2Err.message : String(permit2Err ?? ''),
+            })
+          }
+        }
 
-        if (swAllowanceToBatcher < depositAmount) {
-          if (swAllowanceToBatcher !== 0n) {
+        if (!phase2UsesPermit2) {
+          const swAllowanceToBatcher = (await publicClient.readContract({
+            address: creatorToken,
+            abi: erc20Abi,
+            functionName: 'allowance',
+            args: [owner, batcherAddress],
+          })) as bigint
+
+          if (swAllowanceToBatcher < depositAmount) {
+            if (swAllowanceToBatcher !== 0n) {
+              phase2ApproveCalls.push({
+                target: creatorToken,
+                value: 0n,
+                data: encodeFunctionData({
+                  abi: erc20Abi,
+                  functionName: 'approve',
+                  args: [batcherAddress, 0n],
+                }),
+              })
+            }
             phase2ApproveCalls.push({
               target: creatorToken,
               value: 0n,
               data: encodeFunctionData({
                 abi: erc20Abi,
                 functionName: 'approve',
-                args: [batcherAddress, 0n],
+                args: [batcherAddress, depositAmount],
               }),
             })
           }
-          phase2ApproveCalls.push({
-            target: creatorToken,
-            value: 0n,
-            data: encodeFunctionData({
-              abi: erc20Abi,
-              functionName: 'approve',
-              args: [batcherAddress, depositAmount],
-            }),
-          })
         }
 
         const phase2CoreState = await (async () => {
@@ -3730,26 +3934,34 @@ function DeployVaultBatcher({
           }),
         } as const
 
-        const phase2FinalizeCall = {
-          target: batcherAddress,
-          value: 0n,
-          data: encodeFunctionData({
-            abi: CREATOR_VAULT_BATCHER_ABI,
-            functionName: 'finalizePhase2',
-            args: [phase2FinalizeParams],
-          }),
-        } as const
+        const phase2FinalizeCall = phase2UsesPermit2
+          ? (phase2Calls[0] as { target: Address; value: bigint; data: Hex })
+          : ({
+              target: batcherAddress,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: CREATOR_VAULT_BATCHER_ABI,
+                functionName: 'finalizePhase2',
+                args: [phase2FinalizeParams],
+              }),
+            } as const)
 
         const phase2CoreNeeded = !phase2CoreAll
         if (phase2CoreNeeded) {
-          phase2Calls.push(...phase2ApproveCalls, phase2CoreCall, phase2FinalizeCall)
+          if (phase2UsesPermit2) {
+            phase2Calls.unshift(phase2CoreCall)
+          } else {
+            phase2Calls.push(...phase2ApproveCalls, phase2CoreCall, phase2FinalizeCall)
+          }
         } else {
           logger.info('[DeployVault] phase2.core already deployed; skipping deployPhase2Core call', {
             expectedGauge: expected.gaugeController,
             expectedCca: expected.ccaStrategy,
             expectedOracle: expected.oracle,
           })
-          phase2Calls.push(...phase2ApproveCalls, phase2FinalizeCall)
+          if (!phase2UsesPermit2) {
+            phase2Calls.push(...phase2ApproveCalls, phase2FinalizeCall)
+          }
         }
 
         if (!burnStreamAlreadyDeployed) phase2Calls.push(burnStreamDeployCall)
