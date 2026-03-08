@@ -592,7 +592,13 @@ const SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT = '0x3bc09a8b'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
+// finalizePhase2 selectors:
+// - current (includes meteoraAlphaVault + solanaIxs): 0xbd4583fb
+// - permit2-backed current tuple: 0x0ecf9382
+// - legacy (pre-Solana tuple extension): 0xcafc9348
 const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0x0ecf9382'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
 const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
@@ -626,6 +632,8 @@ const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT,
   SELECTOR_BATCHER_DEPLOY_PHASE2_CORE,
   SELECTOR_BATCHER_FINALIZE_PHASE2,
+  SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2,
+  SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
   SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
@@ -1376,6 +1384,8 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
         selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
@@ -1406,7 +1416,9 @@ async function validateInnerCalls(params: {
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE2
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY
         ) {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
