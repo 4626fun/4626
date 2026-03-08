@@ -47,9 +47,8 @@ function recordReply() {
 function verifyWebhookSignature(body: string, signature: string): boolean {
   const secret = (process.env.FC_MENTION_WEBHOOK_SECRET ?? '').trim()
   if (!secret) {
-    // If no secret is configured, skip verification (but log a warning)
-    logger.warn('[fc/mention] FC_MENTION_WEBHOOK_SECRET not set — skipping webhook verification')
-    return true
+    logger.error('[fc/mention] FC_MENTION_WEBHOOK_SECRET not set')
+    return false
   }
 
   const hmac = createHmac('sha512', secret)

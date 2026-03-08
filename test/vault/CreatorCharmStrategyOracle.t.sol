@@ -380,7 +380,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         assertEq(strategy.twapDuration(), 3600);
     }
 
-    function test_withdraw_revertsAtomically_whenRequiredSwapFails() external {
+    function test_withdraw_returnsIdleCreator_whenSwapFails() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
@@ -400,8 +400,38 @@ contract CreatorCharmStrategyOracleTest is Test {
         creator.mint(address(charm), 50e18);
         usdc.mint(address(charm), 5_000_000e6);
 
-        vm.expectRevert(CreatorCharmStrategy.RequiredSwapFailed.selector);
-        strategy.withdraw(100e18);
+        uint256 withdrawn = strategy.withdraw(100e18);
+
+        assertEq(withdrawn, 20e18, "withdraw should still return available creator");
+        assertEq(creator.balanceOf(address(this)), 20e18, "vault should receive idle creator");
+        assertEq(usdc.balanceOf(address(strategy)), 2_000_000e6, "unswapped usdc should remain in strategy");
+    }
+
+    function test_withdraw_returnsIdleCreator_whenTwapUnavailable() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        pool.setObservationCardinality(1); // force TWAP unavailable
+        MockRouter router = new MockRouter();
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        strategy.initializeApprovals();
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(100e18, 1_000_000e6);
+        charm.setWithdrawAmounts(15e18, 1_500_000e6);
+
+        creator.mint(address(charm), 50e18);
+        usdc.mint(address(charm), 5_000_000e6);
+
+        uint256 withdrawn = strategy.withdraw(100e18);
+
+        assertEq(withdrawn, 15e18, "withdraw should still return creator when TWAP is unavailable");
+        assertEq(creator.balanceOf(address(this)), 15e18, "vault should receive idle creator");
+        assertEq(usdc.balanceOf(address(strategy)), 1_500_000e6, "unswapped usdc should remain in strategy");
+        assertFalse(router.called(), "router should not be called when TWAP is unavailable");
     }
 
     function test_withdraw_usesTwapQuote_notSpot_forMinOut() external {

@@ -17,6 +17,15 @@ function normalizeEmail(value: string | null | undefined): string | null {
   return raw
 }
 
+function isPrivyUserIdUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('profiles_privy_user_id_unique') ||
+    (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
+  )
+}
+
 export type ProfileWalletUpsertInput = {
   email?: string | null
   primaryWallet?: string | null
@@ -120,45 +129,73 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
     return
   }
 
-  await db.sql`
-    INSERT INTO profiles (
-      email,
-      primary_wallet,
-      embedded_wallet,
-      embedded_wallet_chain,
-      embedded_wallet_client_type,
-      privy_user_id,
-      csw_address,
-      base_sub_account,
-      primary_smart_wallet,
-      primary_embedded_eoa,
-      updated_at
-    )
-    VALUES (
-      ${email},
-      ${primaryWallet},
-      ${embeddedWallet},
-      ${embeddedWalletChain},
-      ${embeddedWalletClientType},
-      ${privyUserId},
-      ${cswAddress},
-      ${baseSubAccount},
-      ${cswAddress},
-      ${embeddedWallet},
-      NOW()
-    )
-    ON CONFLICT (email) DO UPDATE
-    SET
-      email = COALESCE(profiles.email, EXCLUDED.email),
-      primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
-      embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
-      embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
-      embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
-      privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
-      csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
-      base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
-      primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
-      primary_embedded_eoa = COALESCE(EXCLUDED.primary_embedded_eoa, profiles.primary_embedded_eoa),
-      updated_at = NOW();
-  `
+  const updateByPrivyUserId = async () => {
+    if (!privyUserId) return false
+    const updated = await db.sql`
+      UPDATE profiles
+      SET
+        email = COALESCE(profiles.email, ${email}),
+        primary_wallet = COALESCE(${primaryWallet}, primary_wallet),
+        embedded_wallet = COALESCE(${embeddedWallet}, embedded_wallet),
+        embedded_wallet_chain = COALESCE(${embeddedWalletChain}, embedded_wallet_chain),
+        embedded_wallet_client_type = COALESCE(${embeddedWalletClientType}, embedded_wallet_client_type),
+        csw_address = COALESCE(${cswAddress}, csw_address),
+        base_sub_account = COALESCE(${baseSubAccount}, base_sub_account),
+        primary_smart_wallet = COALESCE(${cswAddress}, primary_smart_wallet),
+        primary_embedded_eoa = COALESCE(${embeddedWallet}, primary_embedded_eoa),
+        updated_at = NOW()
+      WHERE privy_user_id = ${privyUserId}
+      RETURNING id;
+    `
+    return Array.isArray(updated.rows) && updated.rows.length > 0
+  }
+
+  try {
+    await db.sql`
+      INSERT INTO profiles (
+        email,
+        primary_wallet,
+        embedded_wallet,
+        embedded_wallet_chain,
+        embedded_wallet_client_type,
+        privy_user_id,
+        csw_address,
+        base_sub_account,
+        primary_smart_wallet,
+        primary_embedded_eoa,
+        updated_at
+      )
+      VALUES (
+        ${email},
+        ${primaryWallet},
+        ${embeddedWallet},
+        ${embeddedWalletChain},
+        ${embeddedWalletClientType},
+        ${privyUserId},
+        ${cswAddress},
+        ${baseSubAccount},
+        ${cswAddress},
+        ${embeddedWallet},
+        NOW()
+      )
+      ON CONFLICT (email) DO UPDATE
+      SET
+        email = COALESCE(profiles.email, EXCLUDED.email),
+        primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
+        embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
+        embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
+        embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
+        privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+        csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
+        base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
+        primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
+        primary_embedded_eoa = COALESCE(EXCLUDED.primary_embedded_eoa, profiles.primary_embedded_eoa),
+        updated_at = NOW();
+    `
+  } catch (error) {
+    if (!isPrivyUserIdUniqueViolation(error)) throw error
+    const recovered = await updateByPrivyUserId()
+    if (recovered) return
+    throw error
+  }
 }
