@@ -128,20 +128,22 @@ function quoteTokenFields(quote: Record<string, unknown>): Record<string, unknow
   const normalized: Record<string, unknown> = {
     tokenIn: quote.tokenIn,
     tokenOut: quote.tokenOut,
+    'input.token': undefined,
+    'output.token': undefined,
   }
 
-  if (normalized.tokenIn == null && isObject(quote.input)) {
-    normalized.tokenIn = quote.input.token
+  if (isObject(quote.input)) {
+    normalized['input.token'] = quote.input.token
   }
-  if (normalized.tokenOut == null && isObject(quote.output)) {
-    normalized.tokenOut = quote.output.token
+  if (isObject(quote.output)) {
+    normalized['output.token'] = quote.output.token
   }
 
   return normalized
 }
 
 export function validateQuoteTokenPolicy(quote: Record<string, unknown>): string | null {
-  return validateTokenPolicy(quoteTokenFields(quote), ['tokenIn', 'tokenOut'])
+  return validateTokenPolicy(quoteTokenFields(quote), ['tokenIn', 'tokenOut', 'input.token', 'output.token'])
 }
 
 export function validateRoutePolicy(routing: unknown): string | null {

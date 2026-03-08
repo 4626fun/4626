@@ -76,6 +76,19 @@ describe('uniswap server guards policy', () => {
     ).toMatch(/denied/i)
   })
 
+  it('does not allow nested denied token to bypass via top-level tokenIn/tokenOut', () => {
+    process.env.UNISWAP_TOKEN_DENYLIST = '0x0000000000000000000000000000000000000001'
+
+    expect(
+      validateQuoteTokenPolicy({
+        tokenIn: '0x0000000000000000000000000000000000000002',
+        tokenOut: '0x0000000000000000000000000000000000000003',
+        input: { token: '0x0000000000000000000000000000000000000001' },
+        output: { token: '0x0000000000000000000000000000000000000004' },
+      }),
+    ).toBe('Token denied by policy: input.token')
+  })
+
   it('enforces allowed route policy when configured', () => {
     process.env.UNISWAP_ALLOWED_ROUTE_TYPES = 'CLASSIC,WRAP'
     expect(validateRoutePolicy('PRIORITY')).toMatch(/not allowed/i)
