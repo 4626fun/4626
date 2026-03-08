@@ -98,4 +98,64 @@ describe('waitlist bootstrap privy profile upsert', () => {
     expect(updateByPrivyCalls).toBe(2)
     expect(db.sql).toHaveBeenCalled()
   })
+
+  it('prefers authenticated Privy email over pre-auth submitted email', async () => {
+    verifyPrivyForAccountsMock.mockResolvedValueOnce({
+      privyUserId: 'did:privy:test-user',
+      privyUser: {
+        id: 'did:privy:test-user',
+        email: { address: 'privy@example.com' },
+        linkedAccounts: [],
+      },
+    })
+
+    const seenValues: any[] = []
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('update profiles') && text.includes('where privy_user_id')) {
+          seenValues.push(...values)
+          return { rows: [] }
+        }
+        if (text.includes('insert into profiles')) {
+          seenValues.push(...values)
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+    getDbMock.mockResolvedValue(db as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+      body: { email: 'submitted@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(seenValues).toContain('privy@example.com')
+    expect(seenValues).not.toContain('submitted@example.com')
+  })
+
+  it('maps Privy email mismatch to a re-auth error', async () => {
+    verifyPrivyForAccountsMock.mockRejectedValueOnce(new Error('Email does not match authenticated user'))
+    getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) } as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+      body: { email: 'submitted@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe('Session email mismatch. Please sign in again.')
+  })
 })

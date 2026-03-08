@@ -143,11 +143,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
-    if (email && email !== privyEmail) {
-      return res.status(400).json({ success: false, error: 'Email does not match authenticated user' } satisfies ApiEnvelope<never>)
-    }
-
-    const emailToPersist = privyEmail
+    // Once authenticated, prefer Privy's verified email and only fall back
+    // to pre-auth input if Privy doesn't expose an email.
+    const emailToPersist = privyEmail ?? email
     if (emailToPersist) {
       await upsertAccount({
         db: db as any,
@@ -178,6 +176,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error: any) {
     const message = typeof error?.message === 'string' ? error.message : 'Failed to bootstrap waitlist account'
     const lower = message.toLowerCase()
+    const isEmailMismatch =
+      lower.includes('email does not match authenticated user') || lower.includes('does not match authenticated user')
+    if (isEmailMismatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session email mismatch. Please sign in again.',
+      } satisfies ApiEnvelope<never>)
+    }
     const status = lower.includes('token') || lower.includes('unauthorized') || lower.includes('privy') ? 401 : 500
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
