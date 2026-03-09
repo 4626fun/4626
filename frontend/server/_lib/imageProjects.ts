@@ -502,7 +502,7 @@ export async function getCompletedImageProjectForVault(vaultAddress: string): Pr
       JOIN image_generation_assets a ON a.project_id = p.id AND a.role = 'output'
      WHERE p.vault_address = ${vaultAddress.toLowerCase()}
        AND p.status = 'completed'
-     ORDER BY p.updated_at DESC
+     ORDER BY p.updated_at DESC, a.created_at DESC
      LIMIT 1;
   `
 
