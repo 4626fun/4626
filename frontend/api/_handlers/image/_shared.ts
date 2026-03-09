@@ -10,6 +10,7 @@ export type ImageMutationBody = {
 export type ApiSuccess<T> = { success: true; data: T }
 export type ApiFailure = { success: false; error: string }
 
+/** CORS + no-store + admin-only gate. Used by AdminImageGeneration flows. */
 export function prepareImageApi(req: VercelRequest, res: VercelResponse): boolean {
   setCors(req, res)
   setNoStore(res)
@@ -28,6 +29,21 @@ export function prepareImageApi(req: VercelRequest, res: VercelResponse): boolea
   return false
 }
 
+/** CORS + no-store + any-authenticated-user gate. Used by vault-deploy image gen flows. */
+export function prepareImageApiAuthenticated(req: VercelRequest, res: VercelResponse): boolean {
+  setCors(req, res)
+  setNoStore(res)
+  if (handleOptions(req, res)) return true
+
+  const actor = getSessionAddress(req)
+  if (!actor) {
+    res.status(401).json({ success: false, error: 'Sign in required' })
+    return true
+  }
+
+  return false
+}
+
 export function requireImageApiAdmin(req: VercelRequest, res: VercelResponse): boolean {
   const actor = getSessionAddress(req)
   if (!actor) {
@@ -39,6 +55,11 @@ export function requireImageApiAdmin(req: VercelRequest, res: VercelResponse): b
     return true
   }
   return false
+}
+
+/** Returns the authenticated session address, or null if not signed in. */
+export function getImageApiActor(req: VercelRequest): string | null {
+  return getSessionAddress(req) ?? null
 }
 
 export async function readBody<T>(req: VercelRequest): Promise<T> {
