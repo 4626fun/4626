@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { enqueueImageGenerationJob } from '../../../server/_lib/imageGenerationJobs.js'
+import { enqueueImageGenerationJob, getImageGenerationJob } from '../../../server/_lib/imageGenerationJobs.js'
+import { processImageGenerationJob } from '../../../server/_lib/imageGenerationRunner.js'
 import { parseRequiredString, prepareImageApi, readBody, requireImageApiAdmin } from './_shared.js'
 
 type Body = {
@@ -28,9 +29,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     kind: 'refine',
     refineInstruction,
   })
+  await processImageGenerationJob(job.id)
+  const nextJob = (await getImageGenerationJob(job.id)) ?? job
 
   return res.status(200).json({
     success: true,
-    data: { job },
+    data: { job: nextJob },
   })
 }

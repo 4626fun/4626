@@ -183,6 +183,14 @@ export function ExploreCreators() {
       : syncStatus === 'error'
         ? 'Canonical sync error. Retrying soon...'
         : 'Canonical backfill pending...'
+  const creatorsLabel = exactMetrics ? 'Creators' : 'Indexed creators'
+  const marketLabel = exactMetrics ? 'Market Cap' : 'Indexed MCap'
+  const showSyncingEmptyState =
+    !searchQuery.trim() &&
+    filteredCoins.length === 0 &&
+    !isLoading &&
+    !isError &&
+    ((creatorsTotalDisplay ?? 0) > 0 || syncStatus === 'running' || syncStatus === 'error')
 
   // Handle infinite scroll
   const handleScroll = useCallback(() => {
@@ -305,7 +313,7 @@ export function ExploreCreators() {
           {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
           <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">Creators</div>
+              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">{creatorsLabel}</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {creatorsTotalDisplay?.toLocaleString() ?? '—'}
               </div>
@@ -317,7 +325,7 @@ export function ExploreCreators() {
             </div>
 
             <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">TVL</div>
+              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">{marketLabel}</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(marketCapDisplay)}
               </div>
@@ -457,6 +465,13 @@ export function ExploreCreators() {
                 <div className="px-6 py-12 text-center">
                   <p className="text-zinc-400 mb-4">Failed to load creators</p>
                   <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
+                </div>
+              ) : showSyncingEmptyState ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400">Creator list is still syncing</p>
+                  <p className="mt-2 text-xs text-zinc-600">
+                    Global stats are available, but the ranked creator rows have not finished loading yet.
+                  </p>
                 </div>
               ) : filteredCoins.length === 0 ? (
                 // Empty state

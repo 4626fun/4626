@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getImageGenerationJob } from '../../../server/_lib/imageGenerationJobs.js'
-import { processImageGenerationJob } from '../../../server/_lib/imageGenerationRunner.js'
 import { parseRequiredString, prepareImageApi, requireImageApiAdmin } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -17,11 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'jobId is required' })
   }
 
-  let job = await getImageGenerationJob(jobId)
-  if (job && (job.status === 'pending' || job.status === 'processing')) {
-    await processImageGenerationJob(jobId)
-    job = await getImageGenerationJob(jobId)
-  }
+  const job = await getImageGenerationJob(jobId)
   if (!job) {
     return res.status(404).json({ success: false, error: 'Job not found' })
   }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { blobPutBytes } from './blob.js'
+import { uploadImageStorageObject } from './imageStorage.js'
 import { getDb } from './postgres.js'
 
 export type ImageGenerationProjectStatus =
@@ -267,7 +267,7 @@ export async function attachImageGenerationAsset(input: {
   const assetId = `imgasset_${randomUUID()}`
   const filename = input.filename ? String(input.filename) : null
   const blobPathname = `imagegen/projects/${input.projectId}/${input.role}/${assetId}-${safeFilename(filename)}`
-  const upload = await blobPutBytes({
+  const upload = await uploadImageStorageObject({
     pathname: blobPathname,
     bytes: input.bytes,
     contentType: input.contentType,
@@ -312,7 +312,7 @@ export async function createOutputImageGenerationAsset(input: {
   const assetId = `imgasset_${randomUUID()}`
   const filename = input.filename ? String(input.filename) : 'output.png'
   const blobPathname = `imagegen/projects/${input.projectId}/output/${assetId}-${safeFilename(filename)}`
-  const upload = await blobPutBytes({
+  const upload = await uploadImageStorageObject({
     pathname: blobPathname,
     bytes: input.bytes,
     contentType: input.contentType,

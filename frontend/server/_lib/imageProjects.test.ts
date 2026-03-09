@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getDbMock, blobPutBytesMock } = vi.hoisted(() => ({
+const { getDbMock, uploadImageStorageObjectMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
-  blobPutBytesMock: vi.fn(),
+  uploadImageStorageObjectMock: vi.fn(),
 }))
 
 vi.mock('./postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('./blob.js', () => ({
-  blobPutBytes: blobPutBytesMock,
+vi.mock('./imageStorage.js', () => ({
+  uploadImageStorageObject: uploadImageStorageObjectMock,
 }))
 
 function createImageDb() {
@@ -148,7 +148,7 @@ function createImageDb() {
 describe('image project storage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    blobPutBytesMock.mockResolvedValue({ url: 'https://blob.example/frame.png' })
+    uploadImageStorageObjectMock.mockResolvedValue({ url: 'https://supabase.example/frame.png' })
   })
 
   it('creates draft projects with style metadata', async () => {
@@ -168,7 +168,7 @@ describe('image project storage', () => {
     expect(project.brandContext).toEqual(['creator coin', 'vault icon'])
   })
 
-  it('uploads reference assets through blob storage', async () => {
+  it('uploads reference assets through Supabase storage', async () => {
     const db = createImageDb()
     getDbMock.mockResolvedValue(db)
 
@@ -181,9 +181,9 @@ describe('image project storage', () => {
       bytes: new Uint8Array([1, 2, 3]),
     })
 
-    expect(blobPutBytesMock).toHaveBeenCalled()
+    expect(uploadImageStorageObjectMock).toHaveBeenCalled()
     expect(asset.role).toBe('frame')
-    expect(asset.blobUrl).toBe('https://blob.example/frame.png')
+    expect(asset.blobUrl).toBe('https://supabase.example/frame.png')
     expect(asset.byteSize).toBe(3)
   })
 

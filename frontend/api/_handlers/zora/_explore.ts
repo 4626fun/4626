@@ -31,6 +31,11 @@ function parseList(value: string | null): ExploreList {
   }
 }
 
+function normalizeExploreResponse(response: any) {
+  if (response?.data?.edges || response?.data?.pageInfo) return response.data
+  return response?.data?.exploreList ?? response?.data?.creatorCoins ?? response?.data?.coins ?? null
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   if (handleOptions(req, res)) return
@@ -72,8 +77,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const fn = sdkFunctions[list] || (() => sdk.getCoinsTopGainers(options))
     const response = await fn()
 
-    // Handle different response structures
-    const data = response.data?.exploreList ?? response.data?.creatorCoins ?? response.data?.coins ?? null
+    // Handle different response structures from both coin and creator list endpoints.
+    const data = normalizeExploreResponse(response)
 
     setCache(res, 300)
     return res.status(200).json({

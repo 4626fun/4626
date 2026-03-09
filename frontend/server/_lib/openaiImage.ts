@@ -9,11 +9,10 @@ export type ImageEvaluation = {
   brandFit: number
   pass: boolean
   reasons: string[]
+  breakoutApplied?: boolean
 }
 
 type GenerateParams = {
-  frameBytes: Uint8Array
-  frameContentType: string
   subjectBytes: Uint8Array
   subjectContentType: string
   prompt: string
@@ -30,6 +29,11 @@ type EvaluateParams = {
   subjectContentType: string
 }
 
+function parseEnvBool(value: string | undefined): boolean {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes'
+}
+
 function requireOpenAiApiKey(): string {
   const apiKey = String(process.env.OPENAI_API_KEY ?? '').trim()
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
@@ -41,26 +45,51 @@ function getResponsesModel(): string {
   return configured || 'gpt-5.4'
 }
 
+function getOpenAiImageTimeoutMs(): number {
+  const raw = Number(String(process.env.OPENAI_IMAGE_TIMEOUT_MS ?? '').trim())
+  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw)
+  return 45_000
+}
+
+export function shouldRunImageEvaluation(): boolean {
+  return parseEnvBool(process.env.OPENAI_IMAGE_EVAL_ENABLED)
+}
+
 function toDataUrl(bytes: Uint8Array, contentType: string): string {
   return `data:${contentType};base64,${Buffer.from(bytes).toString('base64')}`
 }
 
 async function postResponsesApi(body: Record<string, unknown>): Promise<any> {
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${requireOpenAiApiKey()}`,
-    },
-    body: JSON.stringify(body),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), getOpenAiImageTimeoutMs())
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${requireOpenAiApiKey()}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(`openai_responses_failed(${response.status}): ${text || 'unknown_error'}`)
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(`openai_responses_failed(${response.status}): ${text || 'unknown_error'}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    const name = String((error as any)?.name ?? '')
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    const lower = message.toLowerCase()
+    if (name === 'AbortError' || lower.includes('aborted')) {
+      throw new Error('Image generation timed out. Please try again.')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
   }
-
-  return await response.json()
 }
 
 function getStyleDirections(stylePreset: string | null | undefined): string[] {
@@ -91,10 +120,13 @@ export function buildImageGenerationPrompt(input: {
     : ''
 
   return [
-    'Edit the first reference image by placing the subject from the second reference image inside the main frame while preserving the frame as the dominant visual identity.',
+    'Generate premium inner artwork using the subject reference for a fixed frame layout that is rendered later in code.',
     instruction,
-    'Keep the rounded square or frame as the dominant shape.',
-    'Center the subject and keep it iconic, token-like, and compositionally clean.',
+    'The frame layout is fixed and rendered in code.',
+    'Generate premium inner artwork only inside that fixed layout.',
+    'Use a dark background with clean negative space and a centered subject.',
+    'Keep the subject iconic, token-like, and compositionally clean.',
+    'Do not redraw, restyle, or redesign the frame.',
     `Style direction: ${styleDirections}.`,
     `Brand feel: ${brandContext}.`,
     'Avoid: text, clutter, extra symbols, busy background, collage feel, cartoon styling.',
@@ -118,7 +150,6 @@ export async function generateImageWithOpenAi(params: GenerateParams): Promise<{
         role: 'user',
         content: [
           { type: 'input_text', text: params.prompt },
-          { type: 'input_image', image_url: toDataUrl(params.frameBytes, params.frameContentType) },
           { type: 'input_image', image_url: toDataUrl(params.subjectBytes, params.subjectContentType) },
         ],
       },
@@ -160,13 +191,34 @@ function extractOutputText(json: any): string {
   throw new Error('openai_evaluation_missing_text')
 }
 
+function parseEvaluationJson(text: string): ImageEvaluation {
+  const raw = String(text ?? '').trim()
+  try {
+    return JSON.parse(raw) as ImageEvaluation
+  } catch {
+    const firstBrace = raw.indexOf('{')
+    const lastBrace = raw.lastIndexOf('}')
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(raw.slice(firstBrace, lastBrace + 1)) as ImageEvaluation
+    }
+    throw new Error('openai_evaluation_invalid_json')
+  }
+}
+
 export async function evaluateImageGenerationOutput(params: EvaluateParams): Promise<ImageEvaluation> {
   const rubricPrompt = [
     'You are evaluating whether a generated token icon matches the brief.',
     `Original brief: ${params.brief}`,
     'Image 1 is the generated output.',
-    'Image 2 is the frame reference.',
+    'Image 2 is the locked frame reference for layout context only.',
     'Image 3 is the subject reference.',
+    'Focus on subject fit and composition inside the fixed layout.',
+    'Focus on whether the inner artwork looks premium and modern.',
+    'Focus on whether the background is dark, clean, and uncluttered.',
+    'Use frameProminence to score breakout naturalness only when breakout is present.',
+    'If breakout is present, score whether it feels subtle and natural.',
+    'If breakout is not present, use frameProminence to score whether the composition feels restrained and well-balanced within the fixed layout.',
+    'Do not judge whether the model preserved, recreated, or emphasized the frame itself.',
     'Return strict JSON only with keys: insideFrame, frameProminence, subjectProminence, modernElegantStyle, cleanliness, brandFit, pass, reasons.',
   ].join('\n')
 
@@ -185,26 +237,30 @@ export async function evaluateImageGenerationOutput(params: EvaluateParams): Pro
     ],
   })
 
-  return JSON.parse(extractOutputText(json)) as ImageEvaluation
+  return parseEvaluationJson(extractOutputText(json))
 }
 
 export function getRetryReasonsFromEvaluation(evaluation: ImageEvaluation): string[] {
-  const reasons = [...evaluation.reasons]
+  const reasons: string[] = []
 
   if (evaluation.insideFrame < 4) {
-    reasons.push('The subject must be fully contained within the main frame.')
+    reasons.push('Improve subject composition so the main subject sits cleanly inside the fixed layout.')
   }
   if (evaluation.frameProminence < 4) {
-    reasons.push('Make the frame more visually dominant.')
+    reasons.push(
+      evaluation.breakoutApplied === true
+        ? 'If breakout is used, keep it subtle and anatomically natural.'
+        : 'Keep the composition more restrained and well-balanced within the fixed layout.',
+    )
   }
   if (evaluation.subjectProminence < 4) {
-    reasons.push('Scale the subject slightly larger and keep it centered.')
+    reasons.push('Improve subject composition so it feels properly centered and sized within the fixed layout.')
   }
   if (evaluation.modernElegantStyle < 4) {
-    reasons.push('Increase the modern elegant premium feel.')
+    reasons.push('Make the inner artwork feel more premium, refined, and modern.')
   }
   if (evaluation.cleanliness < 4) {
-    reasons.push('Simplify and darken the background.')
+    reasons.push('Darken and simplify the background so the artwork feels cleaner.')
   }
   if (evaluation.brandFit < 4) {
     reasons.push('Make the result feel more like a polished creator coin or vault icon.')

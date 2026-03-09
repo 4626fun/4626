@@ -171,11 +171,12 @@ export function AdminImageGeneration() {
           <div>
             <h2 className="text-lg text-white">Output</h2>
             <p className="text-sm text-zinc-500">One output at a time, with a single refine box underneath.</p>
+            <p className="text-xs text-zinc-500">Preview expects a public Supabase image bucket for direct asset URLs.</p>
           </div>
           {projectId ? <div className="text-xs text-zinc-500">Project: {projectId}</div> : null}
         </div>
 
-        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 min-h-[18rem] flex items-center justify-center overflow-hidden">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 min-h-72 flex items-center justify-center overflow-hidden">
           {outputUrl ? (
             <img src={outputUrl} alt="Generated output" className="h-full w-full object-contain" />
           ) : (

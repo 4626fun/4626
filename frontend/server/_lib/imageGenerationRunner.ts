@@ -1,4 +1,4 @@
-import { fetchBytes } from './blob.js'
+import { downloadImageStorageObject } from './imageStorage.js'
 import { getImageGenerationJob, leaseImageGenerationJob, updateImageGenerationJob } from './imageGenerationJobs.js'
 import {
   createOutputImageGenerationAsset,
@@ -6,15 +6,18 @@ import {
   recordImageGenerationAttempt,
   updateImageGenerationProject,
 } from './imageProjects.js'
+import { composeLockedFrameImage } from './imageCompositor.js'
 import {
   buildImageGenerationPrompt,
   evaluateImageGenerationOutput,
   generateImageWithOpenAi,
   getRetryReasonsFromEvaluation,
+  shouldRunImageEvaluation,
 } from './openaiImage.js'
+import { extractForegroundFromArtwork } from './imageForegroundExtraction.js'
 
 function selectLatestAssetByRole(
-  assets: Array<{ role: string; blobUrl: string; mimeType: string }>,
+  assets: Array<{ role: string; blobPathname: string; blobUrl: string; mimeType: string }>,
   role: 'frame' | 'subject',
 ) {
   return assets.find((asset) => asset.role === role) ?? null
@@ -39,142 +42,204 @@ function sumEvaluationScore(evaluation: {
 }
 
 export async function processImageGenerationJob(jobId: string): Promise<{ id: string; status: string } | null> {
-  const current = await getImageGenerationJob(jobId)
+  let current = await getImageGenerationJob(jobId)
   if (!current) return null
   if (current.status === 'completed' || current.status === 'failed') {
     return { id: current.id, status: current.status }
   }
 
-  const leased = await leaseImageGenerationJob(jobId, 'imagegen-inline-runner')
-  if (!leased) {
-    return { id: current.id, status: current.status }
-  }
+  const maxCycles = Math.max(1, Number(current.maxAttempts ?? 3)) + 1
 
-  const project = await getImageGenerationProject(leased.projectId)
-  if (!project) {
-    await updateImageGenerationJob({
-      jobId,
-      status: 'failed',
-      latestError: 'Project not found',
-      completed: true,
-    })
-    return { id: jobId, status: 'failed' }
-  }
+  for (let cycle = 0; cycle < maxCycles; cycle += 1) {
+    if (current.status === 'completed' || current.status === 'failed') {
+      return { id: current.id, status: current.status }
+    }
 
-  const frameAsset = selectLatestAssetByRole(project.assets as any, 'frame')
-  const subjectAsset = selectLatestAssetByRole(project.assets as any, 'subject')
-  if (!frameAsset || !subjectAsset) {
-    await updateImageGenerationJob({
-      jobId,
-      status: 'failed',
-      latestError: 'Frame and subject assets are required before generation',
-      completed: true,
-    })
-    await updateImageGenerationProject({
-      projectId: leased.projectId,
-      status: 'failed',
-      latestError: 'Frame and subject assets are required before generation',
-    })
-    return { id: jobId, status: 'failed' }
-  }
+    const leased = await leaseImageGenerationJob(jobId, 'imagegen-inline-runner')
+    if (!leased) {
+      return { id: current.id, status: current.status }
+    }
 
-  const frame = await fetchBytes(frameAsset.blobUrl)
-  const subject = await fetchBytes(subjectAsset.blobUrl)
-  const latestAttempt = Array.isArray(project.attempts) ? project.attempts[0] : null
-  const retryReasons = latestAttempt?.evaluation ? getRetryReasonsFromEvaluation(latestAttempt.evaluation as any) : []
-  const prompt = leased.kind === 'refine'
-    ? buildImageGenerationPrompt({
-        instruction: `${project.instruction}\nRefine the previous image: ${leased.refineInstruction ?? ''}`.trim(),
-        stylePreset: project.stylePreset,
-        brandContext: project.brandContext,
+    try {
+      const project = await getImageGenerationProject(leased.projectId)
+      if (!project) {
+        await updateImageGenerationJob({
+          jobId,
+          status: 'failed',
+          latestError: 'Project not found',
+          completed: true,
+        })
+        return { id: jobId, status: 'failed' }
+      }
+
+      const frameAsset = selectLatestAssetByRole(project.assets as any, 'frame')
+      const subjectAsset = selectLatestAssetByRole(project.assets as any, 'subject')
+      if (!frameAsset || !subjectAsset) {
+        await updateImageGenerationJob({
+          jobId,
+          status: 'failed',
+          latestError: 'Frame and subject assets are required before generation',
+          completed: true,
+        })
+        await updateImageGenerationProject({
+          projectId: leased.projectId,
+          status: 'failed',
+          latestError: 'Frame and subject assets are required before generation',
+        })
+        return { id: jobId, status: 'failed' }
+      }
+
+      const frame = await downloadImageStorageObject(frameAsset.blobPathname)
+      const subject = await downloadImageStorageObject(subjectAsset.blobPathname)
+      const latestAttempt = Array.isArray(project.attempts) ? project.attempts[0] : null
+      const retryReasons = latestAttempt?.evaluation ? getRetryReasonsFromEvaluation(latestAttempt.evaluation as any) : []
+      const prompt = leased.kind === 'refine'
+        ? buildImageGenerationPrompt({
+            instruction: `${project.instruction}\nRefine the previous image: ${leased.refineInstruction ?? ''}`.trim(),
+            stylePreset: project.stylePreset,
+            brandContext: project.brandContext,
+          })
+        : buildImageGenerationPrompt({
+            instruction: project.instruction,
+            stylePreset: project.stylePreset,
+            brandContext: project.brandContext,
+            retryReasons: leased.attempts > 1 ? retryReasons : [],
+          })
+
+      const generation = await generateImageWithOpenAi({
+        subjectBytes: subject.bytes,
+        subjectContentType: subject.contentType ?? subjectAsset.mimeType,
+        prompt,
+        previousResponseId: leased.kind === 'refine' ? project.lastResponseId : null,
       })
-    : buildImageGenerationPrompt({
-        instruction: project.instruction,
-        stylePreset: project.stylePreset,
-        brandContext: project.brandContext,
-        retryReasons: leased.attempts > 1 ? retryReasons : [],
+      const extractedForegroundBytes = await extractForegroundFromArtwork(generation.imageBytes)
+      const composited = await composeLockedFrameImage({
+        artworkBytes: generation.imageBytes,
+        frameBytes: frame.bytes,
+        extractedForegroundBytes,
       })
 
-  const generation = await generateImageWithOpenAi({
-    frameBytes: frame.bytes,
-    frameContentType: frame.contentType ?? frameAsset.mimeType,
-    subjectBytes: subject.bytes,
-    subjectContentType: subject.contentType ?? subjectAsset.mimeType,
-    prompt,
-    previousResponseId: leased.kind === 'refine' ? project.lastResponseId : null,
-  })
+      const outputAsset = await createOutputImageGenerationAsset({
+        projectId: leased.projectId,
+        filename: `${leased.kind}-${leased.attempts}.png`,
+        contentType: 'image/png',
+        bytes: composited.imageBytes,
+      })
 
-  const outputAsset = await createOutputImageGenerationAsset({
-    projectId: leased.projectId,
-    filename: `${leased.kind}-${leased.attempts}.png`,
-    contentType: 'image/png',
-    bytes: generation.imageBytes,
-  })
+      const evaluation = shouldRunImageEvaluation()
+        ? await evaluateImageGenerationOutput({
+            brief: project.instruction,
+            outputBytes: composited.imageBytes,
+            outputContentType: 'image/png',
+            frameBytes: frame.bytes,
+            frameContentType: frame.contentType ?? frameAsset.mimeType,
+            subjectBytes: subject.bytes,
+            subjectContentType: subject.contentType ?? subjectAsset.mimeType,
+          })
+        : {
+            insideFrame: 5,
+            frameProminence: 5,
+            subjectProminence: 5,
+            modernElegantStyle: 5,
+            cleanliness: 5,
+            brandFit: 5,
+            pass: true,
+            reasons: [],
+          }
+      const evaluationWithComposition = {
+        ...evaluation,
+        breakoutApplied: composited.breakoutApplied,
+      }
 
-  const evaluation = await evaluateImageGenerationOutput({
-    brief: project.instruction,
-    outputBytes: generation.imageBytes,
-    outputContentType: 'image/png',
-    frameBytes: frame.bytes,
-    frameContentType: frame.contentType ?? frameAsset.mimeType,
-    subjectBytes: subject.bytes,
-    subjectContentType: subject.contentType ?? subjectAsset.mimeType,
-  })
-
-  const score = sumEvaluationScore(evaluation)
-  await recordImageGenerationAttempt({
-    projectId: leased.projectId,
-    jobId: leased.id,
-    attemptNumber: leased.attempts,
-    kind: leased.kind,
-    prompt,
-    revisedPrompt: generation.revisedPrompt,
-    responseId: generation.responseId,
-    evaluation,
-    score,
-    passed: evaluation.pass,
-    outputAssetId: outputAsset.id,
-  })
-
-  if (evaluation.pass) {
-    await updateImageGenerationJob({
-      jobId: leased.id,
-      status: 'completed',
-      latestError: null,
-      result: {
-        outputAssetId: outputAsset.id,
+      const score = sumEvaluationScore(evaluation)
+      await recordImageGenerationAttempt({
+        projectId: leased.projectId,
+        jobId: leased.id,
+        attemptNumber: leased.attempts,
+        kind: leased.kind,
+        prompt,
+        revisedPrompt: generation.revisedPrompt,
+        responseId: generation.responseId,
+        evaluation: evaluationWithComposition,
         score,
-        evaluation,
-      },
-      completed: true,
-    })
-    await updateImageGenerationProject({
-      projectId: leased.projectId,
-      status: 'completed',
-      lastResponseId: generation.responseId,
-      latestError: null,
-    })
-    return { id: leased.id, status: 'completed' }
+        passed: evaluation.pass,
+        outputAssetId: outputAsset.id,
+      })
+
+      if (evaluation.pass) {
+        await updateImageGenerationJob({
+          jobId: leased.id,
+          status: 'completed',
+          latestError: null,
+          result: {
+            outputAssetId: outputAsset.id,
+            score,
+            evaluation: evaluationWithComposition,
+            breakoutApplied: composited.breakoutApplied,
+          },
+          completed: true,
+        })
+        await updateImageGenerationProject({
+          projectId: leased.projectId,
+          status: 'completed',
+          lastResponseId: generation.responseId,
+          latestError: null,
+        })
+        return { id: leased.id, status: 'completed' }
+      }
+
+      const retryError = evaluation.reasons[0] ?? 'Generation did not satisfy evaluation'
+      const shouldRetry = leased.attempts < leased.maxAttempts
+      await updateImageGenerationJob({
+        jobId: leased.id,
+        status: shouldRetry ? 'pending' : 'failed',
+        latestError: retryError,
+        result: {
+          outputAssetId: outputAsset.id,
+          score,
+          evaluation: evaluationWithComposition,
+          breakoutApplied: composited.breakoutApplied,
+        },
+        completed: !shouldRetry,
+      })
+      await updateImageGenerationProject({
+        projectId: leased.projectId,
+        status: shouldRetry ? 'queued' : 'failed',
+        lastResponseId: generation.responseId,
+        latestError: shouldRetry ? null : retryError,
+      })
+      if (shouldRetry) {
+        current = { ...leased, status: 'pending' }
+        continue
+      }
+      return { id: leased.id, status: 'failed' }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const shouldRetry = leased.attempts < leased.maxAttempts
+      await updateImageGenerationJob({
+        jobId: leased.id,
+        status: shouldRetry ? 'pending' : 'failed',
+        latestError: message,
+        completed: !shouldRetry,
+      })
+      await updateImageGenerationProject({
+        projectId: leased.projectId,
+        status: shouldRetry ? 'queued' : 'failed',
+        latestError: shouldRetry ? null : message,
+      })
+      if (shouldRetry) {
+        current = { ...leased, status: 'pending' }
+        continue
+      }
+      return { id: leased.id, status: 'failed' }
+    }
   }
 
-  const retryError = evaluation.reasons[0] ?? 'Generation did not satisfy evaluation'
-  const shouldRetry = leased.attempts < leased.maxAttempts
   await updateImageGenerationJob({
-    jobId: leased.id,
-    status: shouldRetry ? 'pending' : 'failed',
-    latestError: retryError,
-    result: {
-      outputAssetId: outputAsset.id,
-      score,
-      evaluation,
-    },
-    completed: !shouldRetry,
+    jobId,
+    status: 'failed',
+    latestError: 'image_generation_retry_limit_exhausted',
+    completed: true,
   })
-  await updateImageGenerationProject({
-    projectId: leased.projectId,
-    status: shouldRetry ? 'queued' : 'failed',
-    lastResponseId: generation.responseId,
-    latestError: shouldRetry ? null : retryError,
-  })
-  return { id: leased.id, status: shouldRetry ? 'pending' : 'failed' }
+  return { id: jobId, status: 'failed' }
 }

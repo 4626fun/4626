@@ -37,13 +37,7 @@ const {
     latestJob: null,
   })),
   processImageGenerationJobMock: vi.fn(async () => ({ id: 'job_123', status: 'pending' })),
-  getSessionAddressMock: vi.fn(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
-  isAdminAddressMock: vi.fn(() => true),
-}))
-
-
-const { getSessionAddressMock, isAdminAddressMock } = vi.hoisted(() => ({
-  getSessionAddressMock: vi.fn(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
+  getSessionAddressMock: vi.fn<() => string | null>(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
   isAdminAddressMock: vi.fn(() => true),
 }))
 
@@ -190,7 +184,7 @@ describe('POST /api/image/projects/create', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(401)
-    expect(res.body).toEqual({ success: false, error: 'Not authenticated' })
+    expect(res.body).toEqual({ success: false, error: 'Sign in required' })
     expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
   })
 
@@ -270,6 +264,7 @@ describe('image generation job endpoints', () => {
       projectId: 'proj_123',
       kind: 'generate',
     })
+    expect(processImageGenerationJobMock).toHaveBeenCalledWith('job_123')
     expect(res.body?.data?.job?.id).toBe('job_123')
   })
 
@@ -294,6 +289,7 @@ describe('image generation job endpoints', () => {
       kind: 'refine',
       refineInstruction: 'Make the glow subtler.',
     })
+    expect(processImageGenerationJobMock).toHaveBeenCalledWith('job_123')
   })
 
   it('returns job status by id', async () => {
@@ -310,6 +306,7 @@ describe('image generation job endpoints', () => {
 
     expect(res.statusCode).toBe(200)
     expect(getImageGenerationJobMock).toHaveBeenCalledWith('job_123')
+    expect(processImageGenerationJobMock).not.toHaveBeenCalled()
     expect(res.body?.data?.job?.status).toBe('pending')
   })
 
