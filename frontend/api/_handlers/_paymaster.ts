@@ -594,12 +594,12 @@ const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
 // finalizePhase2 selectors:
 // - current (includes meteoraAlphaVault + solanaIxs): 0xbd4583fb
-// - permit2-backed current tuple: 0x0ecf9382
+// - permit2-backed current tuple: 0xab56c176
 // - legacy (pre-Solana tuple extension): 0xcafc9348
 const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
-const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0x0ecf9382'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0xab56c176'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
-const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x1d39c22c'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 
