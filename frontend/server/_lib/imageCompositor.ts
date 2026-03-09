@@ -355,8 +355,11 @@ async function shouldApplyBreakout(foregroundLayer: Buffer): Promise<boolean> {
 function buildBreakoutMaskSvg(width: number, height: number, contentBox: ImageCompositorBox): Buffer {
   const riseAboveFrame = Math.round(contentBox.height * BREAKOUT_RISE_RATIO)
   const zoneTop = Math.max(0, contentBox.top - riseAboveFrame)
-  // Top zone: solid above the frame, fades into the frame interior over 20px
-  const topFadeBottom = Math.min(contentBox.top + 20, height)
+  // Top zone: solid above the frame, fades into the frame interior over 60px.
+  // A wider fade makes any sub-pixel RGB mismatch between the breakout and
+  // interior layers imperceptible — critical for flat/horizontal shapes like
+  // hat brims that cross the frame boundary.
+  const topFadeBottom = Math.min(contentBox.top + 60, height)
   const topZoneHeight = Math.max(1, topFadeBottom - zoneTop)
   const topSolidEnd = Math.max(0, (contentBox.top - zoneTop) / topZoneHeight)
 
