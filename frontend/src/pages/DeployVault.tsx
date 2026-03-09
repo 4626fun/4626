@@ -34,6 +34,7 @@ import { VaultImageGenerator } from '@/components/VaultImageGenerator'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { logger } from '@/lib/logger'
+import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { getFarcasterUserByFid } from '@/lib/neynar-api'
@@ -4132,7 +4133,10 @@ function DeployVaultBatcher({
                 {
                   from: connectedAddress,
                   to: canonicalSmartWallet,
-                  data: executeBatchData,
+                  data:
+                    appendBuilderSuffixToHex(executeBatchData, {
+                      chainId: base.id,
+                    }) ?? executeBatchData,
                   value: '0x0',
                 },
               ],

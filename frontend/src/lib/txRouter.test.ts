@@ -288,7 +288,7 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
-  it('routes canonical native-value swaps through canonicalDirect instead of ERC-4337 sponsorship', async () => {
+  it('routes canonical native-value swaps through ERC-4337 instead of direct fallback', async () => {
     const sendTransaction = vi.fn(async () => HASH_A)
     const context = makeContext({
       executionMode: 'canonical',
@@ -318,11 +318,51 @@ describe('txRouter', () => {
       },
     })
 
-    expect(result.routing.mode).toBe('canonicalDirect')
-    expect(result.send.mode).toBe('canonicalDirect')
-    expect(result.send.method).toBe('walletClient.sendTransaction')
-    expect(sendTransaction).toHaveBeenCalledTimes(1)
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(result.routing.mode).toBe('canonical4337')
+    expect(result.send.mode).toBe('canonical4337')
+    expect(result.send.method).toBe('eth_sendUserOperation')
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('locks sendCalls fallback to canonical4337 for canonical native-value swaps', async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'wallet_sendCalls') throw new Error('Method not found')
+      throw new Error(`unexpected method: ${method}`)
+    })
+    const sendTransaction = vi.fn(async () => HASH_A)
+    const context = makeContext({
+      executionMode: 'canonical',
+      signerType: 'SMART_WALLET',
+      capabilities: {
+        paymasterService: true,
+        atomicStatus: 'supported',
+        supports5792: true,
+      },
+      walletClient: {
+        request,
+        sendTransaction,
+      },
+      publicClient: {},
+    })
+
+    const result = await buildAndSendSwap({
+      context,
+      swapTx: {
+        to: ADDRESS_A,
+        from: ADDRESS_B,
+        data: '0xbbbb',
+        value: '123',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('sendCalls')
+    expect(result.routing.fallbackMode).toBe('canonical4337')
+    expect(result.send.mode).toBe('canonical4337')
+    expect(result.send.method).toBe('eth_sendUserOperation')
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps approval and swap in the same direct EOA route family', async () => {

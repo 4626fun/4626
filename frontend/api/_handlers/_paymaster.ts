@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   concatHex,
   decodeFunctionData,
+  encodeFunctionData,
   encodeAbiParameters,
   encodePacked,
   getAddress,
@@ -577,6 +578,7 @@ const COINBASE_SMART_WALLET_FACTORIES = new Set<Address>([
 const SELECTOR_ERC20_APPROVE = '0x095ea7b3'
 const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
+const SELECTOR_SWAP_ROUTER_EXECUTE = '0x3593564c' // execute(bytes,bytes[],uint256)
 
 // Coinbase Smart Wallet owner management (used for deploy sessions)
 const SELECTOR_CSW_ADD_OWNER_ADDRESS = '0x0f0f3f24' // addOwnerAddress(address)
@@ -783,6 +785,20 @@ const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
 const BASE_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
 const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
 const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
+
+const UNISWAP_UNIVERSAL_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
 
 type InnerCall = { target: Address; value: bigint; data: Hex }
 
@@ -1032,6 +1048,32 @@ function isHexString(v: unknown): v is Hex {
 
 function getSelector(data: Hex): string {
   return data.length >= 10 ? data.slice(0, 10).toLowerCase() : ''
+}
+
+function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
+  let decoded: any
+  try {
+    decoded = decodeFunctionData({
+      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
+      data,
+    })
+  } catch {
+    throw new Error('swap_router_decode_failed')
+  }
+
+  if (decoded.functionName !== 'execute') {
+    throw new Error('swap_router_selector_not_allowed')
+  }
+
+  const canonicalData = encodeFunctionData({
+    abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
+    functionName: 'execute',
+    args: decoded.args,
+  })
+
+  if (canonicalData.toLowerCase() !== data.toLowerCase()) {
+    throw new Error('swap_router_non_canonical_encoding')
+  }
 }
 
 function summarizeSmartWalletCallData(callData: Hex): {
@@ -1319,7 +1361,10 @@ async function validateInnerCalls(params: {
 
   if (innerCalls.length === 0) throw new Error('no_inner_calls')
   for (const c of innerCalls) {
-    if (c.value !== 0n) throw new Error('value_transfer_not_allowed')
+    if (c.value === 0n) continue
+    const selector = getSelector(c.data)
+    const isRouterSwapCall = c.target === BASE_SWAP_ROUTER && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+    if (!isRouterSwapCall) throw new Error('value_transfer_not_allowed')
   }
 
   const erc8004Registry = getErc8004RegistryAddress()
@@ -1351,6 +1396,7 @@ async function validateInnerCalls(params: {
     | 'launch_auction'
     | 'deploy'
     | 'activate'
+    | 'swap'
     | 'approve_only'
     | 'legacy_withdraw'
     | 'deploy_session_setup'
@@ -1471,6 +1517,44 @@ async function validateInnerCalls(params: {
       mode = 'deploy_session_setup'
       expectedCreatorToken = null
     } else {
+      const swapMode = (() => {
+        let sawSwapRouter = false
+        let approvedToken: Address | null = null
+        for (const c of innerCalls) {
+          const selector = getSelector(c.data)
+
+          if (c.target === BASE_SWAP_ROUTER) {
+            if (selector !== SELECTOR_SWAP_ROUTER_EXECUTE) {
+              return { matched: false, creatorToken: null as Address | null }
+            }
+            assertCanonicalSwapRouterExecuteEncoding(c.data)
+            sawSwapRouter = true
+            continue
+          }
+
+          if (selector !== SELECTOR_ERC20_APPROVE) return { matched: false, creatorToken: null as Address | null }
+          if (c.value !== 0n) throw new Error('value_transfer_not_allowed')
+          const spender = decodeAddressArgFromCalldata(c.data, 0)
+          if (!spender || spender !== permit2) return { matched: false, creatorToken: null as Address | null }
+          const approvalToken = getAddress(c.target)
+          if (!approvedToken) {
+            approvedToken = approvalToken
+          } else if (approvedToken !== approvalToken) {
+            throw new Error('swap_approval_token_mismatch')
+          }
+        }
+
+        return {
+          matched: sawSwapRouter,
+          creatorToken: approvedToken,
+        }
+      })()
+
+      if (swapMode.matched) {
+        mode = 'swap'
+        expectedCreatorToken = swapMode.creatorToken
+      }
+
       const approveOnlyToken = (() => {
         if (innerCalls.length === 0) return null
         const firstTarget = innerCalls[0].target
@@ -1484,7 +1568,9 @@ async function validateInnerCalls(params: {
         return ok ? getAddress(firstTarget) : null
       })()
 
-      if (approveOnlyToken) {
+      if (mode === 'swap') {
+        // Swap-only sponsorship path validated above (strict target/selector/value checks).
+      } else if (approveOnlyToken) {
         mode = 'approve_only'
         expectedCreatorToken = approveOnlyToken
       } else {
@@ -1589,6 +1675,10 @@ async function validateInnerCalls(params: {
         }
       }
     }
+  }
+
+  if (mode === 'swap') {
+    return { expectedCreatorToken, mode: 'swap' }
   }
 
   // Prefer deriving the bytecode store from the deployer itself (`deployer.store()`),
