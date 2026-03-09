@@ -168,6 +168,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'image/projects/associate-vault': () => import('./image/_associate-vault.js'),
   'image/projects/auto-assets': () => import('./image/_auto-assets.js'),
   'image/projects/direct-compose': () => import('./image/_direct-compose.js'),
+  'image/projects/vault-image': () => import('./image/_vault-image-get.js'),
 
   'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),
   'onchain/coinMarketRewardsCurrency': () => import('./onchain/_coinMarketRewardsCurrency.js'),

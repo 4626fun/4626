@@ -143,6 +143,17 @@ export async function autoProvisionProjectAssets(input: {
   return data
 }
 
+export async function getVaultImage(vaultAddress: string): Promise<{
+  projectId: string
+  outputBlobUrl: string
+} | null> {
+  const response = await apiFetch(
+    `/api/image/projects/vault-image?vaultAddress=${encodeURIComponent(vaultAddress)}`,
+  )
+  const data = await readJson<{ projectId: string; outputBlobUrl: string } | null>(response)
+  return data
+}
+
 export async function associateImageProjectToVault(input: {
   projectId: string
   vaultAddress: string

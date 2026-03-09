@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { isAddress } from 'viem'
 
 import {
   associateImageProjectToVault,
   autoProvisionProjectAssets,
   createImageGenerationProject,
   directComposeProject,
+  getVaultImage,
 } from '@/lib/imageGenerationApi'
 
 type Props = {
@@ -13,96 +15,134 @@ type Props = {
   tokenSymbol?: string
 }
 
+type Phase = 'idle' | 'checking' | 'fetching' | 'compositing' | 'saving' | 'done' | 'error'
+
+const PHASE_LABEL: Record<Phase, string> = {
+  idle: '',
+  checking: 'Checking for existing vault icon…',
+  fetching: 'Fetching creator coin image…',
+  compositing: 'Compositing vault icon…',
+  saving: 'Saving vault icon…',
+  done: '',
+  error: '',
+}
+
 export function VaultImageGenerator({ vaultAddress, creatorCoinAddress, tokenSymbol }: Props) {
-  const [subjectPreviewUrl, setSubjectPreviewUrl] = useState<string | null>(null)
+  const [phase, setPhase] = useState<Phase>('idle')
   const [outputUrl, setOutputUrl] = useState<string | null>(null)
-  const [projectId, setProjectId] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleApplyFrame = async () => {
-    setBusy(true)
-    setError(null)
-    setOutputUrl(null)
-    setSaved(false)
+  // Tracks whether a generation is currently running to prevent concurrent calls
+  // (e.g. double-click on Regenerate or React StrictMode remount in dev).
+  const runningRef = useRef(false)
+  // Allows in-flight async work to detect component unmount and bail out of
+  // setState calls, preventing React's "update on unmounted component" warning.
+  const mountedRef = useRef(true)
+
+  const safeSet = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
+    if (mountedRef.current) setter(value)
+  }
+
+  const runGeneration = async () => {
+    if (runningRef.current) return
+    runningRef.current = true
+
     try {
+      safeSet(setPhase, 'fetching')
+      safeSet(setError, null)
+
       const project = await createImageGenerationProject({
         instruction: tokenSymbol ? `Vault icon for $${tokenSymbol}` : 'Vault icon',
         stylePreset: 'modern_elegant',
         brandContext: ['creator coin', 'ERC-4626 vault icon'],
       })
-      setProjectId(project.id)
 
-      const { subjectImageUrl } = await autoProvisionProjectAssets({
-        projectId: project.id,
-        creatorCoinAddress,
-      })
-      setSubjectPreviewUrl(subjectImageUrl)
+      await autoProvisionProjectAssets({ projectId: project.id, creatorCoinAddress })
 
+      safeSet(setPhase, 'compositing')
       const { outputBlobUrl } = await directComposeProject(project.id)
-      setOutputUrl(outputBlobUrl)
+      safeSet(setOutputUrl, outputBlobUrl)
+
+      safeSet(setPhase, 'saving')
+      await associateImageProjectToVault({ projectId: project.id, vaultAddress })
+
+      safeSet(setPhase, 'done')
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const message = err instanceof Error ? err.message : String(err)
+      safeSet(setError, message)
+      safeSet(setPhase, 'error')
     } finally {
-      setBusy(false)
+      runningRef.current = false
     }
   }
 
-  const handleSave = async () => {
-    if (!projectId) return
-    setBusy(true)
-    setError(null)
-    try {
-      await associateImageProjectToVault({ projectId, vaultAddress })
-      setSaved(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
+  useEffect(() => {
+    mountedRef.current = true
+
+    // Skip if the coin address hasn't resolved yet — parent will re-render once
+    // the address is known, triggering this effect again.
+    if (!creatorCoinAddress || !isAddress(creatorCoinAddress)) return
+    if (!vaultAddress || !isAddress(vaultAddress)) return
+
+    void (async () => {
+      safeSet(setPhase, 'checking')
+      try {
+        const existing = await getVaultImage(vaultAddress)
+        if (!mountedRef.current) return
+
+        if (existing) {
+          safeSet(setOutputUrl, existing.outputBlobUrl)
+          safeSet(setPhase, 'done')
+          return
+        }
+
+        await runGeneration()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        safeSet(setError, message)
+        safeSet(setPhase, 'error')
+      }
+    })()
+
+    return () => {
+      mountedRef.current = false
     }
+    // vaultAddress and creatorCoinAddress are stable after deploy — deps are
+    // intentionally limited to avoid re-triggering on unrelated parent renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaultAddress, creatorCoinAddress])
+
+  const handleRegenerate = () => {
+    setOutputUrl(null)
+    setError(null)
+    void runGeneration()
   }
+
+  const busy = phase === 'checking' || phase === 'fetching' || phase === 'compositing' || phase === 'saving'
+
+  // The stable canonical image URL that protocols like Uniswap will resolve via
+  // the on-chain contractURI(). Always points to api.4626.fun regardless of the
+  // underlying Supabase storage URL.
+  const canonicalImageUrl = isAddress(vaultAddress)
+    ? `https://api.4626.fun/v1/token/${vaultAddress}/image`
+    : null
 
   return (
     <div className="space-y-5">
-      {/* Asset preview strip */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 rounded-xl border border-white/10 bg-black/20 p-3 space-y-1.5">
-          <div className="text-xs font-medium text-zinc-400">Frame</div>
-          <div className="flex items-center gap-2">
-            <img src="/brand/4626fun.svg" alt="4626 frame" className="h-10 w-10 rounded-lg object-contain" />
-            <span className="text-xs text-zinc-500">4626 branded frame</span>
-          </div>
+      {busy ? (
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+          <svg
+            className="h-4 w-4 animate-spin shrink-0 text-brand-primary"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <span className="text-sm text-zinc-300">{PHASE_LABEL[phase]}</span>
         </div>
-
-        <div className="flex-1 rounded-xl border border-white/10 bg-black/20 p-3 space-y-1.5">
-          <div className="text-xs font-medium text-zinc-400">Subject</div>
-          {subjectPreviewUrl ? (
-            <div className="flex items-center gap-2">
-              <img src={subjectPreviewUrl} alt="Creator coin" className="h-10 w-10 rounded-lg object-cover" />
-              <span className="text-xs text-zinc-500">From Zora coin</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 opacity-50">
-              <div className="h-10 w-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                <span className="text-zinc-600 text-xs">?</span>
-              </div>
-              <span className="text-xs text-zinc-600">Auto-fetched from Zora</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => void handleApplyFrame()}
-          disabled={busy}
-          className="inline-flex items-center justify-center rounded-lg border border-brand-primary/40 bg-brand-primary/10 px-4 py-2 text-sm text-zinc-100 disabled:opacity-40"
-        >
-          {busy ? 'Compositing…' : 'Apply frame'}
-        </button>
-      </div>
+      ) : null}
 
       {outputUrl ? (
         <div className="space-y-4">
@@ -110,21 +150,56 @@ export function VaultImageGenerator({ vaultAddress, creatorCoinAddress, tokenSym
             <img src={outputUrl} alt="Vault icon" className="w-full h-full object-contain" />
           </div>
 
+          <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 space-y-1">
+            <div className="text-xs font-medium text-zinc-400">Permanent image URL</div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate text-xs text-zinc-300 font-mono">
+                {canonicalImageUrl}
+              </code>
+              {canonicalImageUrl ? (
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard.writeText(canonicalImageUrl)}
+                  className="shrink-0 rounded border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-zinc-400 hover:text-zinc-200"
+                >
+                  Copy
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs text-zinc-600">
+              Embedded in your vault's on-chain <code className="text-zinc-500">contractURI()</code> — readable by Uniswap, DEXs, and wallets.
+            </p>
+          </div>
+
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => void handleSave()}
-              disabled={saved || busy}
-              className="inline-flex items-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-sm text-emerald-200 disabled:opacity-40"
+              onClick={handleRegenerate}
+              disabled={busy}
+              className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
             >
-              {saved ? '✓ Saved as vault icon' : 'Save as vault icon'}
+              Regenerate
             </button>
           </div>
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {error}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={busy}
+              className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-300 disabled:opacity-40"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   )

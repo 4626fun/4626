@@ -37,8 +37,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const project = await getImageGenerationProject(projectId)
   if (!project) return res.status(404).json({ success: false, error: 'Project not found' })
 
-  const frameAsset = (project.assets as any[]).find((a) => a.role === 'frame') ?? null
-  const subjectAsset = (project.assets as any[]).find((a) => a.role === 'subject') ?? null
+  const assets = (project.assets as any[]) ?? []
+  const frameAsset = assets.find((a) => a.role === 'frame') ?? null
+  const subjectAsset = assets.find((a) => a.role === 'subject') ?? null
+  const existingOutput = assets.find((a) => a.role === 'output') ?? null
+
+  // Idempotency: if this project was already composed successfully, return the
+  // existing output rather than re-running the entire sharp pipeline. This makes
+  // retries and React StrictMode double-invocations safe.
+  if (project.status === 'completed' && existingOutput) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        outputAssetId: existingOutput.id,
+        outputBlobUrl: existingOutput.blobUrl,
+        breakoutApplied: true,
+        cached: true,
+      },
+    })
+  }
+
+  // Concurrency guard: refuse a second compose while one is already in flight.
+  // A stuck `generating` project should be reset via admin tooling or will be
+  // re-attempted if the client retries after the Vercel function timeout (60 s).
+  if (project.status === 'generating') {
+    return res.status(409).json({ success: false, error: 'Composition already in progress for this project' })
+  }
 
   if (!frameAsset || !subjectAsset) {
     return res.status(409).json({ success: false, error: 'Frame and subject assets must be provisioned first' })

@@ -22,6 +22,7 @@ export type ImageGenerationProject = {
   lastResponseId: string | null
   latestError: string | null
   vaultAddress: string | null
+  creatorAddress: string | null
   createdAt: string
   updatedAt: string
 }
@@ -63,6 +64,7 @@ export type ImageGenerationProjectSnapshot = {
   lastResponseId: string | null
   latestError: string | null
   vaultAddress: string | null
+  creatorAddress: string | null
   createdAt: string
   updatedAt: string
   assets: ImageGenerationAsset[]
@@ -98,9 +100,20 @@ export async function ensureImageGenerationSchema() {
   `
 
   await db.sql`
+    ALTER TABLE image_generation_projects
+      ADD COLUMN IF NOT EXISTS creator_address TEXT;
+  `
+
+  await db.sql`
     CREATE INDEX IF NOT EXISTS image_generation_projects_vault_address_idx
       ON image_generation_projects (vault_address)
       WHERE vault_address IS NOT NULL;
+  `
+
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS image_generation_projects_creator_address_idx
+      ON image_generation_projects (creator_address)
+      WHERE creator_address IS NOT NULL;
   `
 
   await db.sql`
@@ -199,6 +212,7 @@ function rowToProject(row: any): ImageGenerationProject {
     lastResponseId: row.last_response_id == null ? null : String(row.last_response_id),
     latestError: row.latest_error == null ? null : String(row.latest_error),
     vaultAddress: row.vault_address == null ? null : String(row.vault_address),
+    creatorAddress: row.creator_address == null ? null : String(row.creator_address),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   }
@@ -242,6 +256,7 @@ export async function createImageGenerationProject(input: {
   instruction?: string
   stylePreset?: string | null
   brandContext?: string[]
+  creatorAddress?: string | null
 }): Promise<ImageGenerationProject> {
   await ensureImageGenerationSchema()
   const db = await getDb()
@@ -251,16 +266,18 @@ export async function createImageGenerationProject(input: {
   const instruction = String(input.instruction ?? '').trim()
   const stylePreset = input.stylePreset ? String(input.stylePreset).trim() : null
   const brandContext = parseBrandContext(input.brandContext)
+  const creatorAddress = input.creatorAddress ? input.creatorAddress.toLowerCase() : null
 
   const result = await db.sql`
     INSERT INTO image_generation_projects (
-      id, status, instruction, style_preset, brand_context_json
+      id, status, instruction, style_preset, brand_context_json, creator_address
     ) VALUES (
       ${projectId},
       'draft',
       ${instruction},
       ${stylePreset},
-      ${JSON.stringify(brandContext)}::jsonb
+      ${JSON.stringify(brandContext)}::jsonb,
+      ${creatorAddress}
     )
     RETURNING *;
   `

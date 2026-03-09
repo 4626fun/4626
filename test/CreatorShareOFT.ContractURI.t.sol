@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {Base64} from "solady/utils/Base64.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {CreatorShareOFT} from "../contracts/utilities/messaging/CreatorShareOFT.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -34,8 +33,7 @@ contract MockVaultWithAsset {
 
 contract CreatorShareOFTContractURITest is Test {
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
-    string internal constant JSON_DATA_URI_PREFIX = "data:application/json;base64,";
-    string internal constant API_BASE_URL = "https://api.4626.fun";
+    string internal constant API_BASE = "https://api.4626.fun/v1/token/";
 
     address internal owner = address(0xA11CE);
 
@@ -50,21 +48,30 @@ contract CreatorShareOFTContractURITest is Test {
         shareOFT = new CreatorShareOFT("Dog Share", "DOGE", address(registry), owner);
     }
 
-    function test_contractURI_returnsDataURIWhenUnset() public view {
+    // Default contractURI must be a fetchable HTTPS URL so that Uniswap, DEX
+    // aggregators, and wallet token-list services can resolve token metadata.
+    // A `data:application/json;base64,...` blob is NOT sufficient because those
+    // clients treat contractURI as a URL to fetch, not inline data to decode.
+    function test_contractURI_defaultIsHttpsUrl() public view {
         string memory uri = shareOFT.contractURI();
-        assertTrue(LibString.startsWith(uri, JSON_DATA_URI_PREFIX), "expected base64 JSON data URI");
+        assertTrue(LibString.startsWith(uri, "https://"), "contractURI must start with https://");
     }
 
-    function test_contractURI_jsonIncludesCanonicalImageUrl() public view {
-        string memory json = _decodeContractJson();
-        string memory image = vm.parseJsonString(json, ".image");
-        assertEq(image, _expectedImageUrl("png"), "expected canonical PNG renderer url");
+    function test_contractURI_defaultIncludesTokenAddress() public view {
+        string memory uri = shareOFT.contractURI();
+        string memory expected = string.concat(API_BASE, Strings.toHexString(address(shareOFT)));
+        assertTrue(LibString.startsWith(uri, expected), "contractURI must embed token address");
     }
 
-    function test_contractURI_jsonIncludesCanonicalAnimationUrl() public view {
-        string memory json = _decodeContractJson();
-        string memory animationUrl = vm.parseJsonString(json, ".animation_url");
-        assertEq(animationUrl, _expectedImageUrl("svg"), "expected canonical SVG renderer url");
+    function test_contractURI_defaultIncludesChainId() public view {
+        string memory uri = shareOFT.contractURI();
+        string memory chainFragment = string.concat("?chain=", Strings.toString(block.chainid));
+        assertTrue(LibString.contains(uri, chainFragment), "contractURI must include chain id");
+    }
+
+    function test_contractURI_defaultPointsToMetadataEndpoint() public view {
+        string memory uri = shareOFT.contractURI();
+        assertTrue(LibString.contains(uri, "/metadata"), "contractURI must point to /metadata endpoint");
     }
 
     function test_contractURI_usesCustomURIWhenSet() public {
@@ -76,37 +83,17 @@ contract CreatorShareOFTContractURITest is Test {
         assertEq(shareOFT.contractURI(), custom);
     }
 
-    function test_contractURI_propertiesIncludeVaultAndAssetWhenAvailable() public {
-        address expectedAsset = address(0xBEEF);
-        MockVaultWithAsset vault = new MockVaultWithAsset(expectedAsset);
+    function test_contractURI_customURIOverridesDefault() public {
+        string memory before = shareOFT.contractURI();
+        string memory custom = "ipfs://QmCustomMetadata";
 
         vm.prank(owner);
-        shareOFT.setVault(address(vault));
+        shareOFT.setContractURI(custom);
 
-        string memory json = _decodeContractJson();
-
-        address parsedVault = vm.parseJsonAddress(json, ".properties.vault");
-        address parsedAsset = vm.parseJsonAddress(json, ".properties.asset");
-        assertEq(parsedVault, address(vault), "vault property mismatch");
-        assertEq(parsedAsset, expectedAsset, "asset property mismatch");
-    }
-
-    function _decodeContractJson() internal view returns (string memory) {
-        string memory uri = shareOFT.contractURI();
-        assertTrue(LibString.startsWith(uri, JSON_DATA_URI_PREFIX), "contractURI prefix mismatch");
-        string memory base64Part = LibString.slice(uri, bytes(JSON_DATA_URI_PREFIX).length);
-        return string(Base64.decode(base64Part));
-    }
-
-    function _expectedImageUrl(string memory format) internal view returns (string memory) {
-        return string.concat(
-            API_BASE_URL,
-            "/v1/token/",
-            Strings.toHexString(address(shareOFT)),
-            "/image?chain=",
-            Strings.toString(block.chainid),
-            "&format=",
-            format
+        assertEq(shareOFT.contractURI(), custom);
+        assertTrue(
+            keccak256(bytes(before)) != keccak256(bytes(custom)),
+            "custom URI must differ from default"
         );
     }
 }
