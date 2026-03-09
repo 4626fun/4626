@@ -841,29 +841,22 @@ function ensureCanonicalOneClickBatchRouting(
   context: TxRouterContext,
   decision: TxRoutingDecision,
   hasApproval: boolean,
-  hasNativeValue: boolean,
+  _hasNativeValue: boolean,
 ): TxRoutingDecision {
-  if (hasNativeValue && context.executionMode === 'canonical') {
-    if (decision.mode === 'sendCalls') {
-      return {
-        ...decision,
-        fallbackMode: 'canonicalDirect',
-        reason: `${decision.reason}; native-value canonical swaps bypass ERC-4337 sponsorship`,
-      }
-    }
+  void _hasNativeValue
 
+  const canonical4337Ready = Boolean(context.publicClient && context.canonicalAddress && context.signerAddress)
+  if (context.executionMode === 'canonical' && canonical4337Ready && decision.mode === 'sendCalls') {
     return {
       ...decision,
-      mode: 'canonicalDirect',
-      fallbackMode: 'canonicalDirect',
-      reason: 'canonical native-value swap bypasses ERC-4337 sponsorship',
+      fallbackMode: 'canonical4337',
+      reason: `${decision.reason}; fallback locked to canonical4337 for canonical swap execution`,
     }
   }
 
   if (!hasApproval) return decision
   if (context.executionMode !== 'canonical') return decision
 
-  const canonical4337Ready = Boolean(context.publicClient && context.canonicalAddress && context.signerAddress)
   if (!canonical4337Ready) return decision
 
   if (decision.mode === 'canonical4337') return decision

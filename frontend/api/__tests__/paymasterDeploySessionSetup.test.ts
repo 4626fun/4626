@@ -591,6 +591,111 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/missing_primary_call/i)
   })
 
+  it('rejects swap batch when approvals target multiple tokens', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'executeBatch',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'calls',
+            type: 'tuple[]',
+            components: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const ERC20_ABI = [
+      {
+        type: 'function',
+        name: 'approve',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'spender', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+        outputs: [{ name: '', type: 'bool' }],
+      },
+    ] as const
+
+    const UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const baseSwapRouter = '0x2626664c2603336E57B271c5C0b26F421741e481'
+    const permit2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3'
+    const tokenA = '0x5555555555555555555555555555555555555555'
+    const tokenB = '0x6666666666666666666666666666666666666666'
+    const approveA = encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [permit2, 1_000_000n],
+    })
+    const approveB = encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [permit2, 2_000_000n],
+    })
+    const swapData = encodeFunctionData({
+      abi: UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: ['0x00', ['0x'], 1_900_000_000n],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [[
+        { target: tokenA, value: 0n, data: approveA },
+        { target: tokenB, value: 0n, data: approveB },
+        { target: baseSwapRouter, value: 0n, data: swapData },
+      ]],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/swap_approval_token_mismatch/i)
+  })
+
   it('rejects non-canonical universal router execute calldata', async () => {
     const COINBASE_SMART_WALLET_ABI = [
       {
