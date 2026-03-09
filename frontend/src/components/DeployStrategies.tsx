@@ -79,13 +79,12 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
   const [charmVaultName, setCharmVaultName] = useState<string>('4626.fun Strategy: Charm')
   const [charmVaultSymbol, setCharmVaultSymbol] = useState<string>('AKITA-USDC')
 
-  // Absolute target model for a 5,000,000 baseline:
-  // 30% Charm + 30% Ajna + 30% Solana reserve + 10% idle.
-  // Since vault strategy weights are relative to deployable balance, use 50/50
-  // strategy weights and reserve 40% as minimum idle.
+  // Legacy admin helper: deploys only Charm + Ajna.
+  // Since the remaining 40% stays idle on Base, use 50/50 strategy weights
+  // and reserve the rest as minimum idle.
   const [charmWeightBps, setCharmWeightBps] = useState<number>(5000)
   const [ajnaWeightBps, setAjnaWeightBps] = useState<number>(5000)
-  // 40% of 5,000,000 = 2,000,000 reserved in-vault (Solana reserve + idle buffer).
+  // 40% of 5,000,000 = 2,000,000 reserved in-vault as idle.
   const [minimumIdle, setMinimumIdle] = useState<string>('2000000')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -257,11 +256,17 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-semibold text-white mb-1">Deploy Yield Strategies</h3>
+        <h3 className="text-xl font-semibold text-white mb-1">Deploy Yield Strategies (Legacy)</h3>
         <p className="text-sm text-zinc-500">
-          Deploys Charm + Ajna strategies and configures vault allocations (requires vault management permissions).
+          Manual two-strategy helper for Charm + Ajna only. The canonical `/deploy` flow is the only path that deploys
+          Charm, Ajna, and `SolanaStrategy` together with Solana preflight.
         </p>
       </div>
+
+      <Alert variant="warning" title="Legacy Admin Helper">
+        This page does not deploy `SolanaStrategy` and does not run the Solana route/OVault preflight. Use `/deploy`
+        for the production three-strategy launch flow.
+      </Alert>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
@@ -365,7 +370,7 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
         disabled={!canSubmit || isSubmitting}
         className="btn-primary w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isSubmitting ? 'Submitting…' : 'Deploy + Configure Strategies'}
+        {isSubmitting ? 'Submitting…' : 'Deploy + Configure Legacy Strategies'}
       </button>
 
       {bundleId && (
