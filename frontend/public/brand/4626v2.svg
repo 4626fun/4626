@@ -1,0 +1,26 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+    <linearGradient id="modernGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EEF2FF"/>
+      <stop offset="40%" stop-color="#8FA8FF"/>
+      <stop offset="75%" stop-color="#4A6CFF"/>
+      <stop offset="100%" stop-color="#274BFF"/>
+    </linearGradient>
+  </defs>
+
+  <rect
+    x="144"
+    y="144"
+    width="736"
+    height="736"
+    rx="200"
+    ry="200"
+    fill="none"
+    stroke="url(#modernGradient)"
+    stroke-width="48"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+</svg>

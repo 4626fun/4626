@@ -25,6 +25,7 @@ async function normalizeImageToPng(imageBytes: Uint8Array): Promise<Uint8Array> 
 }
 
 async function refineForegroundCutout(foregroundBytes: Uint8Array): Promise<Uint8Array> {
+  // Sharpen the alpha mask: threshold + slight blur to clean up jagged edges
   const alphaMask = await sharp(Buffer.from(foregroundBytes))
     .ensureAlpha()
     .extractChannel('alpha')
@@ -33,14 +34,12 @@ async function refineForegroundCutout(foregroundBytes: Uint8Array): Promise<Uint
     .png()
     .toBuffer()
 
-  const rgbForeground = await sharp(Buffer.from(foregroundBytes))
+  // Apply the refined mask via dest-in blend (same pattern used by buildFrameOverlayLayer).
+  // joinChannel does not reliably write the 4th channel as alpha in all sharp versions;
+  // dest-in composite is the correct approach for masking.
+  const refined = await sharp(Buffer.from(foregroundBytes))
     .ensureAlpha()
-    .removeAlpha()
-    .png()
-    .toBuffer()
-
-  const refined = await sharp(Buffer.from(rgbForeground))
-    .joinChannel(alphaMask)
+    .composite([{ input: alphaMask, blend: 'dest-in' }])
     .png()
     .toBuffer()
 

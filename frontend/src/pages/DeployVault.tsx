@@ -7317,16 +7317,18 @@ function DeployVaultMain() {
 
           {alreadyDeployed && (() => {
             const shareOft = justCompletedDeployment?.contracts.shareOFT ?? trackerDeployment?.contracts.shareOFT
-            return shareOft && isAddress(shareOft) ? (
+            const creatorCoin = justCompletedDeployment?.creatorToken ?? trackerDeployment?.creatorToken
+            return shareOft && isAddress(shareOft) && creatorCoin && isAddress(creatorCoin) ? (
               <div className="card rounded-xl p-6 space-y-4">
                 <div className="space-y-1">
                   <div className="label">Vault token icon</div>
                   <div className="text-xs text-zinc-600">
-                    Generate a custom AI-composed icon for your vault's share token. Upload your frame template and mascot, then generate — the result becomes the token image served by 4626.fun.
+                    Generate a custom AI-composed icon using the 4626 frame and your Zora creator coin image. Edit the instruction and hit Generate — the result becomes the token image served by 4626.fun.
                   </div>
                 </div>
                 <VaultImageGenerator
                   vaultAddress={shareOft}
+                  creatorCoinAddress={creatorCoin}
                   tokenSymbol={underlyingSymbolUpper || undefined}
                 />
               </div>

@@ -1,6 +1,6 @@
 import sharp from 'sharp'
 import { classifyArtwork, type ArtworkLayout } from './imageClassifier.js'
-import { getFixedContentBox, type FixedContentBox } from './imageContentBox.js'
+import { getFixedContentBox, getContentBoxInnerRadius, type FixedContentBox } from './imageContentBox.js'
 
 export type ImageCompositorBox = FixedContentBox
 
@@ -10,6 +10,8 @@ export type ComposeLockedFrameImageParams = {
   frameBytes: Uint8Array
   extractedForegroundBytes?: Uint8Array | null
   layoutHint?: ArtworkLayout
+  /** Skip heuristic subject-detection and always render the breakout layer. */
+  forceBreakout?: boolean
 }
 
 export type ComposeLockedFrameImageResult = {
@@ -28,29 +30,28 @@ const MAX_FOREGROUND_ASPECT_RATIO = 1.35
 const MIN_TOP_COVERAGE_RATIO = 0.06
 const MIN_COHERENT_TOP_ROWS = 8
 const MAX_FRAGMENTED_TOP_ROWS = 2
-const BREAKOUT_RISE_RATIO = 0.15
-const BREAKOUT_VISIBLE_BELOW_RATIO = 0.18
-const BREAKOUT_FADE_BELOW_RATIO = 0.42
+const BREAKOUT_RISE_RATIO = 0.10
 const COIN_INNER_SCALE = 0.82
 
 function buildGlowSvg(width: number, height: number, contentBox: ImageCompositorBox): Buffer {
-  const centerX = contentBox.left + contentBox.width / 2
-  const centerY = contentBox.top + contentBox.height / 2
-  const radiusX = Math.round(contentBox.width * 0.8)
-  const radiusY = Math.round(contentBox.height * 0.8)
+  const cx = contentBox.left + contentBox.width / 2
+  const cy = contentBox.top + contentBox.height / 2
+  // Large ellipse — radius covers the full canvas for a dramatic bloom
+  const rx = Math.round(width * 0.54)
+  const ry = Math.round(height * 0.54)
 
-  return Buffer.from(`
-    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="locked-frame-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="rgba(90, 122, 255, 0.34)" />
-          <stop offset="58%" stop-color="rgba(90, 122, 255, 0.18)" />
-          <stop offset="100%" stop-color="rgba(90, 122, 255, 0)" />
-        </radialGradient>
-      </defs>
-      <ellipse cx="${centerX}" cy="${centerY}" rx="${radiusX}" ry="${radiusY}" fill="url(#locked-frame-glow)" />
-    </svg>
-  `)
+  return Buffer.from(
+    `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">` +
+      `<defs>` +
+      `<radialGradient id="g" cx="${cx}" cy="${cy}" r="${Math.max(rx, ry)}" fx="${cx}" fy="${cy}" gradientUnits="userSpaceOnUse">` +
+      `<stop offset="0%"   stop-color="#507fff" stop-opacity="0.75"/>` +
+      `<stop offset="28%"  stop-color="#4070ee" stop-opacity="0.46"/>` +
+      `<stop offset="60%"  stop-color="#3060cc" stop-opacity="0.20"/>` +
+      `<stop offset="100%" stop-color="#2050aa" stop-opacity="0"/>` +
+      `</radialGradient></defs>` +
+      `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#g)"/>` +
+      `</svg>`,
+  )
 }
 
 type AlphaBounds = {
@@ -60,11 +61,37 @@ type AlphaBounds = {
   bottom: number
 }
 
-async function renderForegroundLayer(foregroundBytes: Uint8Array, contentBox: ImageCompositorBox): Promise<Buffer> {
+async function renderForegroundLayer(
+  foregroundBytes: Uint8Array,
+  contentBox: ImageCompositorBox,
+  layout: ArtworkLayout = 'contain',
+  /** Match the interior artwork's target height so both layers share the same
+   *  scale. Pass artworkVerticalShift here when the interior uses an extended
+   *  target box to fill the bottom. */
+  extraHeight = 0,
+): Promise<Buffer> {
+  const targetH = contentBox.height + extraHeight
+  // For cover layouts the foreground must match the artwork's scale and crop so
+  // the head above the frame aligns with the head shown inside the frame.
+  // Use 'top' position so the ears (top of the trimmed source) are never cropped;
+  // only the bottom overflows when the source is taller than the target ratio.
+  if (layout === 'cover') {
+    return await sharp(Buffer.from(foregroundBytes))
+      .ensureAlpha()
+      .resize(contentBox.width, targetH, {
+        fit: 'cover',
+        position: 'top',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer()
+  }
+
   return await sharp(Buffer.from(foregroundBytes))
     .ensureAlpha()
-    .resize(contentBox.width, contentBox.height, {
+    .resize(contentBox.width, targetH, {
       fit: 'contain',
+      position: 'top',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png()
@@ -77,10 +104,13 @@ async function resizeArtworkForLayout(
   layout: ArtworkLayout,
 ): Promise<Buffer> {
   if (layout === 'cover') {
+    // Use 'top' so the subject's head (top of the source) is always preserved
+    // and only the bottom overflows. This keeps the interior artwork aligned
+    // with the breakout foreground layer which also uses position: 'top'.
     return await sharp(Buffer.from(artworkBytes))
       .resize(contentBox.width, contentBox.height, {
         fit: 'cover',
-        position: 'centre',
+        position: 'top',
       })
       .png()
       .toBuffer()
@@ -117,6 +147,19 @@ async function resizeArtworkForLayout(
     .toBuffer()
 }
 
+function buildRoundedClipSvg(
+  width: number,
+  height: number,
+  contentBox: ImageCompositorBox,
+  rx: number,
+): Buffer {
+  return Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
+      `<rect x="${contentBox.left}" y="${contentBox.top}" width="${contentBox.width}" height="${contentBox.height}" rx="${rx}" ry="${rx}" fill="white"/>` +
+      `</svg>`,
+  )
+}
+
 async function buildInteriorLayer(params: {
   width: number
   height: number
@@ -124,8 +167,12 @@ async function buildInteriorLayer(params: {
   artworkBytes?: Uint8Array
   interiorLayerBytes?: Uint8Array
   layout: ArtworkLayout
+  /** Shift artwork up this many px so the interior starts at the same subject row
+   *  that the breakout foreground shows at the frame boundary — eliminates the
+   *  double-subject discontinuity when a large rise is used. */
+  artworkVerticalShift?: number
 }): Promise<Buffer> {
-  const { width, height, contentBox, artworkBytes, interiorLayerBytes, layout } = params
+  const { width, height, contentBox, artworkBytes, interiorLayerBytes, layout, artworkVerticalShift = 0 } = params
 
   if (interiorLayerBytes && interiorLayerBytes.length > 0) {
     const interiorLayerBuffer = Buffer.from(interiorLayerBytes)
@@ -139,9 +186,19 @@ async function buildInteriorLayer(params: {
   }
 
   if (artworkBytes && artworkBytes.length > 0) {
-    const artworkLayer = await resizeArtworkForLayout(artworkBytes, contentBox, layout)
+    // When shifting the artwork up, resize to a taller target box so that real
+    // photo/artwork content fills the bottom rows instead of dark fill.
+    // artworkLayer will be (contentBox.width × (contentBox.height + shift)) of
+    // actual source content; no dark extension required.
+    // Extend the target height so real photo content fills the bottom rows
+    // instead of dark fill. Clamp to canvas height so the composite never fails.
+    const targetBox =
+      artworkVerticalShift > 0
+        ? { ...contentBox, height: Math.min(contentBox.height + artworkVerticalShift, height) }
+        : contentBox
+    const artworkLayerFinal = await resizeArtworkForLayout(artworkBytes, targetBox, layout)
 
-    return await sharp({
+    const canvas = await sharp({
       create: {
         width,
         height,
@@ -149,7 +206,18 @@ async function buildInteriorLayer(params: {
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       },
     })
-      .composite([{ input: artworkLayer, left: contentBox.left, top: contentBox.top }])
+      // Shift artwork up by artworkVerticalShift so at the frame top the artwork
+      // and the breakout foreground both show the same pixel row of the subject.
+      .composite([{ input: artworkLayerFinal, left: contentBox.left, top: Math.max(0, contentBox.top - artworkVerticalShift) }])
+      .png()
+      .toBuffer()
+
+    // Clip to the frame's actual inner rounded rectangle so the artwork
+    // has matching corner geometry instead of hard rectangular corners.
+    const rx = getContentBoxInnerRadius(contentBox)
+    const clipMask = await sharp(buildRoundedClipSvg(width, height, contentBox, rx)).png().toBuffer()
+    return await sharp(canvas)
+      .composite([{ input: clipMask, blend: 'dest-in' }])
       .png()
       .toBuffer()
   }
@@ -158,16 +226,15 @@ async function buildInteriorLayer(params: {
 }
 
 function buildFrameOverlayMaskSvg(width: number, height: number, contentBox: ImageCompositorBox): Buffer {
-  const contentRight = contentBox.left + contentBox.width
-  const contentBottom = contentBox.top + contentBox.height
-
-  return Buffer.from(`<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-    <path
-      fill="white"
-      fill-rule="evenodd"
-      d="M0 0H${width}V${height}H0Z M${contentBox.left} ${contentBox.top}H${contentRight}V${contentBottom}H${contentBox.left}Z"
-    />
-  </svg>`)
+  const rx = getContentBoxInnerRadius(contentBox)
+  // Outer fill covers the whole canvas; inner rounded rect punches the hole so
+  // frame ring pixels that arc INTO the content area are correctly preserved.
+  return Buffer.from(
+    `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">` +
+      `<rect width="${width}" height="${height}" fill="white"/>` +
+      `<rect x="${contentBox.left}" y="${contentBox.top}" width="${contentBox.width}" height="${contentBox.height}" rx="${rx}" ry="${rx}" fill="black"/>` +
+      `</svg>`,
+  )
 }
 
 async function buildFrameOverlayLayer(params: {
@@ -287,55 +354,53 @@ async function shouldApplyBreakout(foregroundLayer: Buffer): Promise<boolean> {
 
 function buildBreakoutMaskSvg(width: number, height: number, contentBox: ImageCompositorBox): Buffer {
   const riseAboveFrame = Math.round(contentBox.height * BREAKOUT_RISE_RATIO)
-  const visibleBelowFrame = Math.round(contentBox.height * BREAKOUT_VISIBLE_BELOW_RATIO)
-  const fadeBelowFrame = Math.max(visibleBelowFrame + 1, Math.round(contentBox.height * BREAKOUT_FADE_BELOW_RATIO))
   const zoneTop = Math.max(0, contentBox.top - riseAboveFrame)
-  const solidBottom = Math.min(height, contentBox.top + visibleBelowFrame)
-  const fadeBottom = Math.min(height, contentBox.top + fadeBelowFrame)
-  const zoneHeight = Math.max(1, fadeBottom - zoneTop)
-  const gradientSolidEnd = Math.max(0, (solidBottom - zoneTop) / zoneHeight)
+  // Top zone: solid above the frame, fades into the frame interior over 20px
+  const topFadeBottom = Math.min(contentBox.top + 20, height)
+  const topZoneHeight = Math.max(1, topFadeBottom - zoneTop)
+  const topSolidEnd = Math.max(0, (contentBox.top - zoneTop) / topZoneHeight)
 
   return Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="breakout-zone" gradientUnits="userSpaceOnUse" x1="0" y1="${zoneTop}" x2="0" y2="${fadeBottom}">
-        <stop offset="0" stop-color="white" stop-opacity="1"/>
-        <stop offset="${gradientSolidEnd}" stop-color="white" stop-opacity="1"/>
-        <stop offset="1" stop-color="white" stop-opacity="0"/>
+      <linearGradient id="breakout-top" gradientUnits="userSpaceOnUse" x1="0" y1="${zoneTop}" x2="0" y2="${topFadeBottom}">
+        <stop offset="0"           stop-color="white" stop-opacity="1"/>
+        <stop offset="${topSolidEnd}" stop-color="white" stop-opacity="1"/>
+        <stop offset="1"           stop-color="white" stop-opacity="0"/>
       </linearGradient>
     </defs>
-    <rect
-      x="${contentBox.left}"
-      y="${zoneTop}"
-      width="${contentBox.width}"
-      height="${zoneHeight}"
-      fill="url(#breakout-zone)"
-    />
+    <rect x="${contentBox.left}" y="${zoneTop}" width="${contentBox.width}" height="${topZoneHeight}" fill="url(#breakout-top)"/>
   </svg>`)
 }
+
 
 async function buildBreakoutLayer(params: {
   width: number
   height: number
   contentBox: ImageCompositorBox
   extractedForegroundBytes: Uint8Array
+  layout: ArtworkLayout
+  forceBreakout?: boolean
 }): Promise<Buffer | null> {
-  const { width, height, contentBox, extractedForegroundBytes } = params
-  const renderedForeground = await renderForegroundLayer(extractedForegroundBytes, contentBox)
-  const breakoutAllowed = await shouldApplyBreakout(renderedForeground)
+  const { width, height, contentBox, extractedForegroundBytes, layout, forceBreakout } = params
+  const riseAboveFrame = Math.round(contentBox.height * BREAKOUT_RISE_RATIO)
+  // Render at the same extended target height as the interior artwork so both
+  // layers share an identical scale — eliminates the proportion mismatch at the
+  // frame top boundary.
+  const renderedForeground = await renderForegroundLayer(
+    extractedForegroundBytes,
+    contentBox,
+    layout,
+    riseAboveFrame,
+  )
+  const breakoutAllowed = forceBreakout ? true : await shouldApplyBreakout(renderedForeground)
 
   if (!breakoutAllowed) {
     return null
   }
 
-  const riseAboveFrame = Math.round(contentBox.height * BREAKOUT_RISE_RATIO)
   const shiftedTop = Math.max(0, contentBox.top - riseAboveFrame)
   const shiftedForeground = await sharp({
-    create: {
-      width,
-      height,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    },
+    create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
     .composite([{ input: renderedForeground, left: contentBox.left, top: shiftedTop }])
     .png()
@@ -350,6 +415,52 @@ async function buildBreakoutLayer(params: {
     .toBuffer()
 }
 
+/**
+ * Detect the inner content box of a frame PNG by scanning inward from the
+ * image center until opaque ring pixels are hit on each axis. Falls back to
+ * the hardcoded SVG-geometry values when the frame is transparent at the center.
+ */
+async function detectFrameContentBox(
+  frameBuffer: Buffer,
+  width: number,
+  height: number,
+): Promise<ImageCompositorBox> {
+  try {
+    const { data, info } = await sharp(frameBuffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const ch = info.channels
+    const cx = Math.floor(width / 2)
+    const cy = Math.floor(height / 2)
+    const OPAQUE = 32
+
+    const alpha = (x: number, y: number) => data[(y * width + x) * ch + 3]
+
+    // Scan from center outward on each axis to find the ring's inner edge.
+    // Use a high threshold (200) to skip glow spill pixels (which peak at
+    // ~155–237 alpha inside the ring) and land on the solid stroke itself.
+    const SOLID = 200
+    let leftEdge = 0, rightEdge = width - 1, topEdge = 0, bottomEdge = height - 1
+    for (let x = cx; x >= 0; x--) { if (alpha(x, cy) >= SOLID) { leftEdge = x + 1; break } }
+    for (let x = cx; x < width; x++) { if (alpha(x, cy) >= SOLID) { rightEdge = x - 1; break } }
+    for (let y = cy; y >= 0; y--) { if (alpha(cx, y) >= SOLID) { topEdge = y + 1; break } }
+    for (let y = cy; y < height; y++) { if (alpha(cx, y) >= SOLID) { bottomEdge = y - 1; break } }
+
+    // Symmetrize: take the largest margin on each axis so the box is centered
+    const marginH = Math.max(leftEdge, width - 1 - rightEdge)
+    const marginV = Math.max(topEdge, height - 1 - bottomEdge)
+    const left = marginH, top = marginV
+    const boxWidth = width - 2 * marginH
+    const boxHeight = height - 2 * marginV
+    if (boxWidth < 32 || boxHeight < 32) throw new Error('Degenerate content box detected')
+
+    return { left, top, width: boxWidth, height: boxHeight }
+  } catch {
+    return getFixedContentBox(width, height)
+  }
+}
+
 export async function composeLockedFrameImage(
   params: ComposeLockedFrameImageParams,
 ): Promise<ComposeLockedFrameImageResult> {
@@ -362,7 +473,7 @@ export async function composeLockedFrameImage(
 
   const width = frameMetadata.width
   const height = frameMetadata.height
-  const contentBox = getFixedContentBox(width, height)
+  const contentBox = await detectFrameContentBox(frameBuffer, width, height)
 
   const layout: ArtworkLayout = params.layoutHint ??
     (params.artworkBytes ? await classifyArtwork(params.artworkBytes) : 'contain')
@@ -374,6 +485,16 @@ export async function composeLockedFrameImage(
     frameBuffer,
   })
 
+  // Pre-compute the breakout rise so the interior artwork can be shifted by the
+  // same amount — this ensures both layers show the same subject pixel row at the
+  // frame boundary, eliminating the double-subject discontinuity.
+  const breakoutAllowedForLayout = layout !== 'coin'
+  const willBreakout =
+    breakoutAllowedForLayout &&
+    (params.forceBreakout || false) &&
+    !!params.extractedForegroundBytes?.length
+  const riseAboveFrame = willBreakout ? Math.round(contentBox.height * BREAKOUT_RISE_RATIO) : 0
+
   const interiorLayer = await buildInteriorLayer({
     width,
     height,
@@ -381,12 +502,11 @@ export async function composeLockedFrameImage(
     artworkBytes: params.artworkBytes,
     interiorLayerBytes: params.interiorLayerBytes,
     layout,
+    artworkVerticalShift: riseAboveFrame,
   })
 
   const glowLayer = await sharp(buildGlowSvg(width, height, contentBox)).png().toBuffer()
   let breakoutLayer: Buffer | null = null
-
-  const breakoutAllowedForLayout = layout !== 'coin'
 
   if (breakoutAllowedForLayout && params.extractedForegroundBytes && params.extractedForegroundBytes.length > 0) {
     try {
@@ -395,6 +515,8 @@ export async function composeLockedFrameImage(
         height,
         contentBox,
         extractedForegroundBytes: params.extractedForegroundBytes,
+        layout,
+        forceBreakout: params.forceBreakout,
       })
     } catch {
       breakoutLayer = null
