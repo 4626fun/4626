@@ -165,6 +165,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'image/projects/refine': () => import('./image/_refine.js'),
   'image/jobs/status': () => import('./image/_jobs-status.js'),
   'image/projects/get': () => import('./image/_projects-get.js'),
+  'image/projects/associate-vault': () => import('./image/_associate-vault.js'),
 
   'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),
   'onchain/coinMarketRewardsCurrency': () => import('./onchain/_coinMarketRewardsCurrency.js'),

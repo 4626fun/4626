@@ -21,6 +21,7 @@ export type ImageGenerationProject = {
   brandContext: string[]
   lastResponseId: string | null
   latestError: string | null
+  vaultAddress: string | null
   createdAt: string
   updatedAt: string
 }
@@ -61,6 +62,7 @@ export type ImageGenerationProjectSnapshot = {
   brandContext: string[]
   lastResponseId: string | null
   latestError: string | null
+  vaultAddress: string | null
   createdAt: string
   updatedAt: string
   assets: ImageGenerationAsset[]
@@ -84,9 +86,21 @@ export async function ensureImageGenerationSchema() {
       brand_context_json JSONB NOT NULL DEFAULT '[]'::jsonb,
       last_response_id TEXT,
       latest_error TEXT,
+      vault_address TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `
+
+  await db.sql`
+    ALTER TABLE image_generation_projects
+      ADD COLUMN IF NOT EXISTS vault_address TEXT;
+  `
+
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS image_generation_projects_vault_address_idx
+      ON image_generation_projects (vault_address)
+      WHERE vault_address IS NOT NULL;
   `
 
   await db.sql`
@@ -184,6 +198,7 @@ function rowToProject(row: any): ImageGenerationProject {
     brandContext: parseBrandContext(row.brand_context_json),
     lastResponseId: row.last_response_id == null ? null : String(row.last_response_id),
     latestError: row.latest_error == null ? null : String(row.latest_error),
+    vaultAddress: row.vault_address == null ? null : String(row.vault_address),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   }
@@ -457,4 +472,45 @@ export async function getImageGenerationAssetsForProject(projectId: string): Pro
   `
 
   return (result.rows ?? []).map(rowToAsset)
+}
+
+export async function setImageProjectVaultAddress(projectId: string, vaultAddress: string): Promise<void> {
+  await ensureImageGenerationSchema()
+  const db = await getDb()
+  if (!db) throw new Error('Image generation database unavailable')
+
+  await db.sql`
+    UPDATE image_generation_projects
+       SET vault_address = ${vaultAddress.toLowerCase()},
+           updated_at = NOW()
+     WHERE id = ${projectId}
+       AND status = 'completed';
+  `
+}
+
+export async function getCompletedImageProjectForVault(vaultAddress: string): Promise<{
+  projectId: string
+  outputBlobUrl: string
+} | null> {
+  await ensureImageGenerationSchema()
+  const db = await getDb()
+  if (!db) return null
+
+  const result = await db.sql`
+    SELECT p.id AS project_id, a.blob_url AS output_blob_url
+      FROM image_generation_projects p
+      JOIN image_generation_assets a ON a.project_id = p.id AND a.role = 'output'
+     WHERE p.vault_address = ${vaultAddress.toLowerCase()}
+       AND p.status = 'completed'
+     ORDER BY p.updated_at DESC
+     LIMIT 1;
+  `
+
+  const row = (result.rows ?? [])[0]
+  if (!row) return null
+
+  return {
+    projectId: String(row.project_id),
+    outputBlobUrl: String(row.output_blob_url),
+  }
 }

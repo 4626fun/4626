@@ -30,6 +30,7 @@ import { LaunchCoinCard } from '@/components/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
 import { useCreatorAllowlist, useFarcasterAuth, useMiniAppContext, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/DeploymentSuccess'
+import { VaultImageGenerator } from '@/components/VaultImageGenerator'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { logger } from '@/lib/logger'
@@ -7309,6 +7310,24 @@ function DeployVaultMain() {
               </button>
             </div>
           ) : null}
+
+          {alreadyDeployed && (() => {
+            const shareOft = justCompletedDeployment?.contracts.shareOFT ?? trackerDeployment?.contracts.shareOFT
+            return shareOft && isAddress(shareOft) ? (
+              <div className="card rounded-xl p-6 space-y-4">
+                <div className="space-y-1">
+                  <div className="label">Vault token icon</div>
+                  <div className="text-xs text-zinc-600">
+                    Generate a custom AI-composed icon for your vault's share token. Upload your frame template and mascot, then generate — the result becomes the token image served by 4626.fun.
+                  </div>
+                </div>
+                <VaultImageGenerator
+                  vaultAddress={shareOft}
+                  tokenSymbol={underlyingSymbolUpper || undefined}
+                />
+              </div>
+            ) : null
+          })()}
 
           {!alreadyDeployed && isAdmin ? (
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">

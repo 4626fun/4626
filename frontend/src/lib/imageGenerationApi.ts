@@ -115,3 +115,15 @@ export async function getImageGenerationProject(projectId: string): Promise<Imag
   const data = await readJson<{ project: ImageGenerationProject }>(response)
   return data.project
 }
+
+export async function associateImageProjectToVault(input: {
+  projectId: string
+  vaultAddress: string
+}): Promise<void> {
+  const response = await apiFetch('/api/image/projects/associate-vault', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  await readJson<{ projectId: string; vaultAddress: string }>(response)
+}

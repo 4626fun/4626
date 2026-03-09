@@ -24,6 +24,7 @@ import {
 } from '../../../server/zora/_shared.js'
 
 import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/blob.js'
+import { getCompletedImageProjectForVault } from '../../../server/_lib/imageProjects.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -77,6 +78,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chain: base,
       transport: http(rpcUrl),
     })
+
+    // Check for a creator-customized AI-generated image first.
+    // If one exists, proxy it directly — skip the compositor entirely.
+    const aiOverride = await getCompletedImageProjectForVault(address).catch(() => null)
+    if (aiOverride) {
+      const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
+      const rawBytes = fetched?.bytes
+      if (rawBytes && rawBytes.length > 0) {
+        res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
+        if (format === 'svg') {
+          const b64 = Buffer.from(rawBytes).toString('base64')
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}"/></svg>`
+          res.setHeader('Content-Type', 'image/svg+xml')
+          return res.status(200).send(svg)
+        }
+        const resized = await sharp(Buffer.from(rawBytes)).resize(size, size, { fit: 'cover' }).png().toBuffer()
+        res.setHeader('Content-Type', 'image/png')
+        return res.status(200).send(resized)
+      }
+    }
 
     // Get symbol and vault
     const [symbol, vault] = await Promise.all([
