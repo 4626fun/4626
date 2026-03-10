@@ -25,15 +25,16 @@ function createImageDb() {
 
       if (text.includes('create table if not exists image_generation_')) return { rows: [] }
       if (text.includes('create index if not exists image_generation_')) return { rows: [] }
-      if (text.includes('alter table image_generation_projects') && text.includes('add column if not exists')) return { rows: [] }
+      if (text.includes('alter table image_generation_projects')) return { rows: [] }
 
       if (text.includes('insert into image_generation_projects')) {
         const row = {
           id: String(values[0]),
+          owner_address: values[1] == null ? null : String(values[1]),
           status: 'draft',
-          instruction: String(values[1] ?? ''),
-          style_preset: values[2] == null ? null : String(values[2]),
-          brand_context_json: JSON.parse(String(values[3] ?? '[]')),
+          instruction: String(values[2] ?? ''),
+          style_preset: values[3] == null ? null : String(values[3]),
+          brand_context_json: JSON.parse(String(values[4] ?? '[]')),
           last_response_id: null,
           latest_error: null,
           vault_address: null,
@@ -160,6 +161,7 @@ describe('image project storage', () => {
 
     const { createImageGenerationProject } = await import('./imageProjects.ts')
     const project = await createImageGenerationProject({
+      ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
       instruction: 'Put the dog in the square.',
       stylePreset: 'modern_elegant',
       brandContext: ['creator coin', 'vault icon'],
@@ -198,6 +200,7 @@ describe('image project storage', () => {
       await import('./imageProjects.ts')
 
     const project = await createImageGenerationProject({
+      ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
       instruction: 'Put the dog in the square.',
     })
 

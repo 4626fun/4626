@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { attachImageGenerationAsset } from '../../../server/_lib/imageProjects.js'
+import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/imageProjects.js'
 import {
   decodeBase64Payload,
+  getImageApiActor,
   isReferenceAssetRole,
   parseRequiredString,
   prepareImageApiAuthenticated,
@@ -19,6 +20,10 @@ type Body = {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApiAuthenticated(req, res)) return
+  const actor = getImageApiActor(req)
+  if (!actor) {
+    return res.status(401).json({ success: false, error: 'Sign in required' })
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
@@ -31,6 +36,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!projectId || !contentType || !dataBase64 || !isReferenceAssetRole(body.role)) {
     return res.status(400).json({ success: false, error: 'Invalid asset payload' })
+  }
+
+  const project = await getImageGenerationProject(projectId)
+  if (!project || project.ownerAddress !== actor) {
+    return res.status(404).json({ success: false, error: 'Project not found' })
   }
 
   const asset = await attachImageGenerationAsset({

@@ -15,6 +15,7 @@ export type ImageGenerationAssetRole = 'frame' | 'subject' | 'output'
 
 export type ImageGenerationProject = {
   id: string
+  ownerAddress: string | null
   status: ImageGenerationProjectStatus
   instruction: string
   stylePreset: string | null
@@ -57,6 +58,7 @@ export type ImageGenerationAttempt = {
 
 export type ImageGenerationProjectSnapshot = {
   id: string
+  ownerAddress: string | null
   status: ImageGenerationProjectStatus
   instruction: string
   stylePreset: string | null
@@ -82,6 +84,7 @@ export async function ensureImageGenerationSchema() {
   await db.sql`
     CREATE TABLE IF NOT EXISTS image_generation_projects (
       id TEXT PRIMARY KEY,
+      owner_address TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
       instruction TEXT NOT NULL DEFAULT '',
       style_preset TEXT,
@@ -92,6 +95,11 @@ export async function ensureImageGenerationSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `
+
+  await db.sql`
+    ALTER TABLE image_generation_projects
+      ADD COLUMN IF NOT EXISTS owner_address TEXT;
   `
 
   await db.sql`
@@ -205,6 +213,7 @@ function safeFilename(value: string | null | undefined): string {
 function rowToProject(row: any): ImageGenerationProject {
   return {
     id: String(row.id),
+    ownerAddress: row.owner_address == null ? null : String(row.owner_address),
     status: String(row.status) as ImageGenerationProjectStatus,
     instruction: String(row.instruction ?? ''),
     stylePreset: row.style_preset == null ? null : String(row.style_preset),
@@ -253,6 +262,7 @@ function rowToAttempt(row: any): ImageGenerationAttempt {
 }
 
 export async function createImageGenerationProject(input: {
+  ownerAddress: string
   instruction?: string
   stylePreset?: string | null
   brandContext?: string[]
@@ -263,6 +273,7 @@ export async function createImageGenerationProject(input: {
   if (!db) throw new Error('Image generation database unavailable')
 
   const projectId = `imgproj_${randomUUID()}`
+  const ownerAddress = String(input.ownerAddress).toLowerCase()
   const instruction = String(input.instruction ?? '').trim()
   const stylePreset = input.stylePreset ? String(input.stylePreset).trim() : null
   const brandContext = parseBrandContext(input.brandContext)
@@ -270,9 +281,10 @@ export async function createImageGenerationProject(input: {
 
   const result = await db.sql`
     INSERT INTO image_generation_projects (
-      id, status, instruction, style_preset, brand_context_json, creator_address
+      id, owner_address, status, instruction, style_preset, brand_context_json
     ) VALUES (
       ${projectId},
+      ${ownerAddress},
       'draft',
       ${instruction},
       ${stylePreset},
