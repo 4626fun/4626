@@ -20,7 +20,7 @@ import {
   getStringQuery,
   handleOptions,
   requireServerKey,
-  setCors,
+  setPublicCors,
 } from '../../../server/zora/_shared.js'
 
 import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/blob.js'
@@ -53,7 +53,8 @@ const VAULT_ABI = [
  * Response: PNG by default (wallet-friendly), or SVG with `?format=svg`
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCors(req, res)
+  setPublicCors(res)
+  if (req.method === 'OPTIONS') { res.status(200).end(); return }
   if (handleOptions(req, res)) return
   const host = typeof req.headers.host === 'string' ? req.headers.host : ''
   const isLocalPreview = host.includes('localhost') || host.includes('127.0.0.1')
