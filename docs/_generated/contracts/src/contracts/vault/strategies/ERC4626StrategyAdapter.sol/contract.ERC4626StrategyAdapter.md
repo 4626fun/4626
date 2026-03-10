@@ -1,5 +1,5 @@
 # ERC4626StrategyAdapter
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/strategies/ERC4626StrategyAdapter.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/strategies/ERC4626StrategyAdapter.sol)
 
 **Inherits:**
 [IStrategy](/contracts/interfaces/IStrategy.sol/interface.IStrategy.md), [IStrategyValuation](/contracts/interfaces/IStrategyValuation.sol/interface.IStrategyValuation.md), Ownable, ReentrancyGuard
@@ -58,6 +58,51 @@ Target % of strategy assets to keep idle (basis points).
 
 ```solidity
 uint256 public idleBufferBps = 1000
+```
+
+
+### valuationMaxIncreaseBps
+Maximum upward valuation move allowed per check window (basis points).
+
+
+```solidity
+uint256 public valuationMaxIncreaseBps = 1000
+```
+
+
+### valuationMaxDecreaseBps
+Maximum downward valuation move allowed per check window (basis points).
+
+
+```solidity
+uint256 public valuationMaxDecreaseBps = 1000
+```
+
+
+### valuationCheckWindow
+Length of one valuation guard window (seconds).
+
+
+```solidity
+uint256 public valuationCheckWindow = 30 minutes
+```
+
+
+### lastValuationAssetsPerShare
+Last trusted assets-per-share snapshot (1e18 scale).
+
+
+```solidity
+uint256 public lastValuationAssetsPerShare
+```
+
+
+### lastValuationTimestamp
+Timestamp when valuation snapshot was last synchronized.
+
+
+```solidity
+uint256 public lastValuationTimestamp
 ```
 
 
@@ -186,11 +231,63 @@ function setActive(bool active) external onlyOwner;
 function setIdleBufferBps(uint256 newBps) external onlyOwner;
 ```
 
+### setValuationGuard
+
+Configure valuation guard thresholds and window.
+
+The allowed valuation drift scales by full elapsed windows since the last trusted snapshot.
+
+
+```solidity
+function setValuationGuard(uint256 maxIncreaseBps, uint256 maxDecreaseBps, uint256 checkWindow) external onlyOwner;
+```
+
 ### rescueTokens
 
 
 ```solidity
 function rescueTokens(address token, uint256 amount, address to) external onlyOwner;
+```
+
+### _readCurrentAssetsPerShare
+
+
+```solidity
+function _readCurrentAssetsPerShare() internal view returns (bool ok, uint256 assetsPerShare);
+```
+
+### _allowedBpsForElapsedWindows
+
+
+```solidity
+function _allowedBpsForElapsedWindows(uint256 perWindowBps) internal view returns (uint256 allowedBps);
+```
+
+### _isWithinValuationBounds
+
+
+```solidity
+function _isWithinValuationBounds(uint256 snapshotPps, uint256 currentPps) internal view returns (bool);
+```
+
+### _syncValuationSnapshotBestEffort
+
+
+```solidity
+function _syncValuationSnapshotBestEffort() internal;
+```
+
+## Events
+### ValuationGuardUpdated
+
+```solidity
+event ValuationGuardUpdated(uint256 maxIncreaseBps, uint256 maxDecreaseBps, uint256 checkWindow);
+```
+
+### ValuationSnapshotSynced
+
+```solidity
+event ValuationSnapshotSynced(uint256 assetsPerShare, uint256 timestamp);
 ```
 
 ## Errors
@@ -204,5 +301,17 @@ error OnlyVault();
 
 ```solidity
 error StrategyPaused();
+```
+
+### InvalidBps
+
+```solidity
+error InvalidBps();
+```
+
+### InvalidWindow
+
+```solidity
+error InvalidWindow();
 ```
 

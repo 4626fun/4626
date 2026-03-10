@@ -25,6 +25,7 @@ function createImageDb() {
 
       if (text.includes('create table if not exists image_generation_')) return { rows: [] }
       if (text.includes('create index if not exists image_generation_')) return { rows: [] }
+      if (text.includes('alter table image_generation_projects') && text.includes('add column if not exists')) return { rows: [] }
 
       if (text.includes('insert into image_generation_projects')) {
         const row = {
@@ -35,6 +36,8 @@ function createImageDb() {
           brand_context_json: JSON.parse(String(values[3] ?? '[]')),
           last_response_id: null,
           latest_error: null,
+          vault_address: null,
+          creator_address: values[4] == null ? null : String(values[4]),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }

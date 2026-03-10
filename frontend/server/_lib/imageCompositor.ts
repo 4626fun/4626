@@ -227,12 +227,12 @@ async function buildInteriorLayer(params: {
 
 function buildFrameOverlayMaskSvg(width: number, height: number, contentBox: ImageCompositorBox): Buffer {
   const rx = getContentBoxInnerRadius(contentBox)
-  // Outer fill covers the whole canvas; inner rounded rect punches the hole so
-  // frame ring pixels that arc INTO the content area are correctly preserved.
+  // This is a hole mask, not an alpha-preserve mask. We subtract it from the
+  // source frame with `dest-out` so even fully opaque frame interiors are cut
+  // away and the composed artwork remains visible inside the opening.
   return Buffer.from(
     `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">` +
-      `<rect width="${width}" height="${height}" fill="white"/>` +
-      `<rect x="${contentBox.left}" y="${contentBox.top}" width="${contentBox.width}" height="${contentBox.height}" rx="${rx}" ry="${rx}" fill="black"/>` +
+      `<rect x="${contentBox.left}" y="${contentBox.top}" width="${contentBox.width}" height="${contentBox.height}" rx="${rx}" ry="${rx}" fill="white"/>` +
       `</svg>`,
   )
 }
@@ -251,7 +251,7 @@ async function buildFrameOverlayLayer(params: {
 
   return await sharp(params.frameBuffer)
     .ensureAlpha()
-    .composite([{ input: frameOverlayMask, blend: 'dest-in' }])
+    .composite([{ input: frameOverlayMask, blend: 'dest-out' }])
     .png()
     .toBuffer()
 }

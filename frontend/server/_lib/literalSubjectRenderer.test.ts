@@ -42,10 +42,10 @@ describe('literal subject renderer', () => {
     })
 
     expect(getFixedContentBox(201, 149)).toEqual({
-      left: 40,
-      top: 30,
-      width: 121,
-      height: 89,
+      left: 30,
+      top: 22,
+      width: 141,
+      height: 105,
     })
     expect(result.contentBox).toEqual(getFixedContentBox(201, 149))
   })
@@ -68,12 +68,7 @@ describe('literal subject renderer', () => {
     const gutterPixel = await samplePixel(result.interiorLayerBytes, 50, 100)
     const subjectPixel = await samplePixel(result.interiorLayerBytes, 100, 100)
 
-    expect(result.contentBox).toEqual({
-      left: 40,
-      top: 40,
-      width: 120,
-      height: 120,
-    })
+    expect(result.contentBox).toEqual(getFixedContentBox(200, 200))
     expect(outerPixel).toEqual({ r: 0, g: 0, b: 0, a: 0 })
     expect(gutterPixel).toEqual({ r: 10, g: 12, b: 18, a: 255 })
     expect(subjectPixel).toEqual({ r: 34, g: 197, b: 94, a: 255 })
@@ -120,7 +115,7 @@ describe('literal subject renderer', () => {
     })
 
     expect(result.layout).toBe('cover')
-    expect(result.contentBox).toEqual({ left: 40, top: 40, width: 120, height: 120 })
+    expect(result.contentBox).toEqual(getFixedContentBox(200, 200))
   })
 
   it('classifies a circular badge as coin and renders it smaller than the content box', async () => {

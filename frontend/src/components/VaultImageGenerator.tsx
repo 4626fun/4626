@@ -39,8 +39,16 @@ export function VaultImageGenerator({ vaultAddress, creatorCoinAddress, tokenSym
   // setState calls, preventing React's "update on unmounted component" warning.
   const mountedRef = useRef(true)
 
-  const safeSet = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
-    if (mountedRef.current) setter(value)
+  const safeSetPhase = (value: Phase) => {
+    if (mountedRef.current) setPhase(value)
+  }
+
+  const safeSetOutputUrl = (value: string | null) => {
+    if (mountedRef.current) setOutputUrl(value)
+  }
+
+  const safeSetError = (value: string | null) => {
+    if (mountedRef.current) setError(value)
   }
 
   const runGeneration = async () => {
@@ -48,8 +56,8 @@ export function VaultImageGenerator({ vaultAddress, creatorCoinAddress, tokenSym
     runningRef.current = true
 
     try {
-      safeSet(setPhase, 'fetching')
-      safeSet(setError, null)
+      safeSetPhase('fetching')
+      safeSetError(null)
 
       const project = await createImageGenerationProject({
         instruction: tokenSymbol ? `Vault icon for $${tokenSymbol}` : 'Vault icon',
@@ -59,18 +67,18 @@ export function VaultImageGenerator({ vaultAddress, creatorCoinAddress, tokenSym
 
       await autoProvisionProjectAssets({ projectId: project.id, creatorCoinAddress })
 
-      safeSet(setPhase, 'compositing')
+      safeSetPhase('compositing')
       const { outputBlobUrl } = await directComposeProject(project.id)
-      safeSet(setOutputUrl, outputBlobUrl)
+      safeSetOutputUrl(outputBlobUrl)
 
-      safeSet(setPhase, 'saving')
+      safeSetPhase('saving')
       await associateImageProjectToVault({ projectId: project.id, vaultAddress })
 
-      safeSet(setPhase, 'done')
+      safeSetPhase('done')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      safeSet(setError, message)
-      safeSet(setPhase, 'error')
+      safeSetError(message)
+      safeSetPhase('error')
     } finally {
       runningRef.current = false
     }
@@ -85,22 +93,22 @@ export function VaultImageGenerator({ vaultAddress, creatorCoinAddress, tokenSym
     if (!vaultAddress || !isAddress(vaultAddress)) return
 
     void (async () => {
-      safeSet(setPhase, 'checking')
+      safeSetPhase('checking')
       try {
         const existing = await getVaultImage(vaultAddress)
         if (!mountedRef.current) return
 
         if (existing) {
-          safeSet(setOutputUrl, existing.outputBlobUrl)
-          safeSet(setPhase, 'done')
+          safeSetOutputUrl(existing.outputBlobUrl)
+          safeSetPhase('done')
           return
         }
 
         await runGeneration()
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        safeSet(setError, message)
-        safeSet(setPhase, 'error')
+        safeSetError(message)
+        safeSetPhase('error')
       }
     })()
 

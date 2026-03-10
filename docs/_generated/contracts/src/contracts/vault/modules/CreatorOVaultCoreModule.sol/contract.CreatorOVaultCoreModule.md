@@ -1,5 +1,5 @@
 # CreatorOVaultCoreModule
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/modules/CreatorOVaultCoreModule.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/modules/CreatorOVaultCoreModule.sol)
 
 **Inherits:**
 [CreatorOVaultModuleBase](/contracts/vault/modules/CreatorOVaultModuleBase.sol/abstract.CreatorOVaultModuleBase.md)
@@ -234,6 +234,13 @@ function _autoAllocateToStrategy() internal;
 function _checkPriceChange(uint256 priceBefore, uint256 priceAfter) internal pure;
 ```
 
+### _checkTrustedPpsDeviation
+
+
+```solidity
+function _checkTrustedPpsDeviation(uint256 currentPps) internal view;
+```
+
 ### pricePerShare
 
 
@@ -393,6 +400,12 @@ error FirstDepositTooSmall(uint256 provided, uint256 minimum);
 
 ```solidity
 error PriceChangeExceedsLimit(uint256 priceBefore, uint256 priceAfter, uint256 maxChangeBps);
+```
+
+### TrustedPpsDeviationExceeded
+
+```solidity
+error TrustedPpsDeviationExceeded(uint256 checkpointPps, uint256 currentPps, uint256 maxDeviationBps);
 ```
 
 ### InflationAttackDetected

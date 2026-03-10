@@ -1,5 +1,5 @@
 # DeploymentBatcher
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/batchers/DeploymentBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/helpers/batchers/DeploymentBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
@@ -229,6 +229,15 @@ bytes32 public solanaDestination
 ```
 
 
+### ovaultRuntimeConfig
+OVault runtime wiring used for Solana compose orchestration.
+
+
+```solidity
+OVaultRuntimeConfig private ovaultRuntimeConfig
+```
+
+
 ## Functions
 ### constructor
 
@@ -340,6 +349,18 @@ function deployPhase2AndLaunchWithPermit(
 ) external nonReentrant returns (Phase2Result memory out);
 ```
 
+### deployPhase2AndLaunchWithPermit2
+
+
+```solidity
+function deployPhase2AndLaunchWithPermit2(
+    Phase2Params calldata params,
+    CodeIds calldata codeIds,
+    ISignatureTransfer.PermitTransferFrom calldata permit,
+    bytes calldata signature
+) external nonReentrant returns (Phase2Result memory out);
+```
+
 ### deployPhase2Core
 
 
@@ -358,6 +379,17 @@ function finalizePhase2(Phase2FinalizeParams calldata params)
     external
     nonReentrant
     returns (Phase2Result memory out);
+```
+
+### finalizePhase2WithPermit2
+
+
+```solidity
+function finalizePhase2WithPermit2(
+    Phase2FinalizeParams calldata params,
+    ISignatureTransfer.PermitTransferFrom calldata permit,
+    bytes calldata signature
+) external nonReentrant returns (Phase2Result memory out);
 ```
 
 ### launchDeferredAuction
@@ -388,7 +420,7 @@ function _finalizePhase2Internal(Phase2FinalizeParams memory params) internal re
 
 ### deployPhase3Strategies
 
-Deploy + register initial yield strategies (Charm CREATOR/USDC + Ajna lending).
+Deploy + register initial yield strategies (Charm + Ajna + SolanaStrategy).
 
 Uses UniversalBytecodeStore + CREATE2 deployer to avoid embedding initcode in this batcher.
 
@@ -411,6 +443,24 @@ finalizePhase2 no longer bridges ShareOFT; Solana routing is handled separately.
 function setSolanaConfig(address _adapter, bytes32 _destination) external;
 ```
 
+### setOVaultRuntimeConfig
+
+Configure OVault runtime composer + Solana EID.
+
+Enabled configs require a non-zero composer and EID.
+
+
+```solidity
+function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external;
+```
+
+### getOVaultRuntimeConfig
+
+
+```solidity
+function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory);
+```
+
 ### _requireOwner
 
 
@@ -430,6 +480,19 @@ function _pullCreatorTokens(address creatorToken, address owner, uint256 amount)
 
 ```solidity
 function _permitAndPull(address creatorToken, address owner, uint256 amount, PermitData calldata permit) internal;
+```
+
+### _permit2Pull
+
+
+```solidity
+function _permit2Pull(
+    address creatorToken,
+    address owner,
+    uint256 amount,
+    ISignatureTransfer.PermitTransferFrom calldata permit,
+    bytes calldata signature
+) internal;
 ```
 
 ### _requirePhase1CodeIds
@@ -596,8 +659,10 @@ event Phase3StrategiesDeployed(
     address charmVault,
     address charmStrategy,
     address ajnaStrategy,
+    address solanaStrategy,
     uint256 charmWeightBps,
-    uint256 ajnaWeightBps
+    uint256 ajnaWeightBps,
+    uint256 solanaWeightBps
 );
 ```
 
@@ -618,6 +683,12 @@ event CreatorShareVestingDeployed(
 
 ```solidity
 event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
+```
+
+### OVaultRuntimeConfigSet
+
+```solidity
+event OVaultRuntimeConfigSet(address indexed hubComposer, uint32 indexed solanaEid, bool enabled);
 ```
 
 ## Errors
@@ -709,6 +780,30 @@ error AuctionAmountMismatch();
 
 ```solidity
 error Phase2Missing();
+```
+
+### InvalidSolanaEid
+
+```solidity
+error InvalidSolanaEid();
+```
+
+### InvalidSolanaBridgeConfig
+
+```solidity
+error InvalidSolanaBridgeConfig();
+```
+
+### PermitTokenMismatch
+
+```solidity
+error PermitTokenMismatch();
+```
+
+### PermitAmountTooLow
+
+```solidity
+error PermitAmountTooLow();
 ```
 
 ## Structs
@@ -879,6 +974,7 @@ struct StrategyCodeIds {
     bytes32 charmAlphaVaultDeploy;
     bytes32 creatorCharmStrategy;
     bytes32 ajnaStrategy;
+    bytes32 solanaStrategy;
 }
 ```
 
@@ -897,6 +993,12 @@ struct Phase3Params {
     string charmVaultSymbol;
     uint256 charmWeightBps;
     uint256 ajnaWeightBps;
+    uint256 solanaWeightBps;
+    address solanaKeeper;
+    uint64 solanaMaxNavAge;
+    uint16 solanaMaxNavDeltaBpsPerUpdate;
+    uint16 solanaMinBaseLiquidityBps;
+    address solanaBridgeAddress;
     bool enableAutoAllocate;
 }
 ```
@@ -909,6 +1011,17 @@ struct Phase3Result {
     address charmVault;
     address charmStrategy;
     address ajnaStrategy;
+    address solanaStrategy;
+}
+```
+
+### OVaultRuntimeConfig
+
+```solidity
+struct OVaultRuntimeConfig {
+    address hubComposer;
+    uint32 solanaEid;
+    bool enabled;
 }
 ```
 

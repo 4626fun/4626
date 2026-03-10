@@ -1,5 +1,5 @@
 # CreatorShareOFT
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/utilities/messaging/CreatorShareOFT.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/utilities/messaging/CreatorShareOFT.sol)
 
 **Inherits:**
 OFT, ReentrancyGuard
@@ -963,12 +963,13 @@ function getRemoteStatus()
 
 ERC-7572 contract-level metadata URI
 
-Returns a URL pointing to JSON metadata with token info including:
-- name, symbol, decimals
-- description
-- image (framed creator coin logo)
-- external_link
-- properties (vault, underlying asset, supported chains, etc.)
+ERC-7572 is contract-level metadata for fungible tokens (not ERC-721 tokenURI).
+If `_contractURI` is explicitly set, return it as-is for backward compatibility.
+Otherwise, return the canonical HTTPS metadata endpoint for this token so that
+Uniswap, DEX aggregators, and wallets can fetch the JSON over HTTP and display
+the token image. A `data:application/json;base64,...` default was the previous
+behaviour but many indexers treat contractURI as a URL to fetch and silently skip
+`data:` schemes, leaving the token with no image in their UIs.
 
 
 ```solidity
@@ -978,7 +979,7 @@ function contractURI() external view returns (string memory);
 
 |Name|Type|Description|
 |----|----|-----------|
-|`<none>`|`string`|URI string pointing to JSON metadata Default: https://api.4626.fun/v1/token/{address}/metadata|
+|`<none>`|`string`|URI string for contract metadata.|
 
 
 ### setContractURI
@@ -996,13 +997,38 @@ function setContractURI(string calldata uri) external onlyOwner;
 |`uri`|`string`|New metadata URI (empty string to use default)|
 
 
-### _toHexString
+### _buildOnchainContractURI
 
-Convert address to lowercase hex string
+Returns the canonical HTTPS metadata endpoint for this token.
+The endpoint responds with ERC-7572-compliant JSON containing the
+`image` field pointing at the AI-generated vault icon (or the
+auto-composited fallback), allowing any client that can make an
+HTTP GET request to display the correct token image.
 
 
 ```solidity
-function _toHexString(address addr) internal pure returns (string memory);
+function _buildOnchainContractURI() internal view returns (string memory);
+```
+
+### _buildContractMetadataJson
+
+
+```solidity
+function _buildContractMetadataJson() internal view returns (string memory);
+```
+
+### _jsonAddressOrNull
+
+
+```solidity
+function _jsonAddressOrNull(address addr) internal pure returns (string memory);
+```
+
+### _buildRendererImageUrl
+
+
+```solidity
+function _buildRendererImageUrl(string memory format) internal view returns (string memory);
 ```
 
 ### payoutRecipient

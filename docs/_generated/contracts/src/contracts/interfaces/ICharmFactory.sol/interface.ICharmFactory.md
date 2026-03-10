@@ -1,5 +1,5 @@
 # ICharmFactory
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/interfaces/ICharmFactory.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/interfaces/ICharmFactory.sol)
 
 **Title:**
 ICharmFactory
@@ -17,31 +17,13 @@ Create a new Alpha Vault
 
 
 ```solidity
-function createVault(
-    address pool,
-    address manager,
-    uint256 maxTotalSupply,
-    int24 baseThreshold,
-    int24 limitThreshold,
-    uint24 fullRangeWeight,
-    uint32 period,
-    string memory name,
-    string memory symbol
-) external returns (address vault);
+function createVault(VaultParams calldata params) external returns (address vault);
 ```
 **Parameters**
 
 |Name|Type|Description|
 |----|----|-----------|
-|`pool`|`address`|Uniswap V3 pool address|
-|`manager`|`address`|Address that will manage the vault (rebalancing)|
-|`maxTotalSupply`|`uint256`|Maximum total supply of vault shares (use type(uint256).max for unlimited)|
-|`baseThreshold`|`int24`|Threshold for base position in ticks|
-|`limitThreshold`|`int24`|Threshold for limit position in ticks|
-|`fullRangeWeight`|`uint24`|Weight for full range position (0-10000 basis points)|
-|`period`|`uint32`|Rebalance period in seconds|
-|`name`|`string`|ERC20 name for vault shares|
-|`symbol`|`string`|ERC20 symbol for vault shares|
+|`params`|`VaultParams`|Vault initialization parameters|
 
 **Returns**
 
@@ -50,22 +32,22 @@ function createVault(
 |`vault`|`address`|Address of the created vault|
 
 
-### allVaults
+### vaults
 
 Get vault by index
 
 
 ```solidity
-function allVaults(uint256 index) external view returns (address);
+function vaults(uint256 index) external view returns (address);
 ```
 
-### allVaultsLength
+### numVaults
 
 Total number of vaults created
 
 
 ```solidity
-function allVaultsLength() external view returns (uint256);
+function numVaults() external view returns (uint256);
 ```
 
 ### governance
@@ -75,5 +57,27 @@ Charm governance address
 
 ```solidity
 function governance() external view returns (address);
+```
+
+## Structs
+### VaultParams
+
+```solidity
+struct VaultParams {
+    address pool;
+    address manager;
+    uint24 managerFee;
+    address rebalanceDelegate;
+    uint256 maxTotalSupply;
+    int24 baseThreshold;
+    int24 limitThreshold;
+    uint24 fullRangeWeight;
+    uint32 period;
+    int24 minTickMove;
+    int24 maxTwapDeviation;
+    uint32 twapDuration;
+    string name;
+    string symbol;
+}
 ```
 

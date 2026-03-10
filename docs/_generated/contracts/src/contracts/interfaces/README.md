@@ -2,6 +2,7 @@
 
 # Contents
 - [core](/contracts/interfaces/core)
+- [ovault](/contracts/interfaces/ovault)
 - [uniswap](/contracts/interfaces/uniswap)
 - [IAjnaPool](IAjnaPool.sol/interface.IAjnaPool.md)
 - [IAjnaPoolFactory](IAjnaPool.sol/interface.IAjnaPoolFactory.md)
