@@ -17,6 +17,7 @@ const { getDbMock, ensureWaitlistSchemaMock, syncUserWalletsMock, getUserByIdMoc
 
 vi.mock('../../server/_lib/postgres.js', () => ({
   getDb: getDbMock,
+  isDbConfigured: vi.fn(() => true),
 }))
 
 vi.mock('../../server/_lib/waitlistSchema.js', () => ({
@@ -61,7 +62,31 @@ describe('wallet sync endpoint', () => {
 
   it('returns 409 when no privy mapping exists', async () => {
     getDbMock.mockResolvedValue({
-      sql: vi.fn(async () => ({ rows: [] })),
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('select p.id') && text.includes('lower(canonical.address)')) {
+          return { rows: [{ id: 1 }] }
+        }
+        if (text.includes('canonical.address as canonical_wallet') && text.includes('where p.id =')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                primary_wallet: '0x00000000000000000000000000000000000000bb',
+                primary_embedded_eoa: null,
+                primary_smart_wallet: '0x00000000000000000000000000000000000000aa',
+                csw_address: '0x00000000000000000000000000000000000000aa',
+                base_sub_account: '0x00000000000000000000000000000000000000aa',
+                canonical_wallet: '0x00000000000000000000000000000000000000aa',
+              },
+            ],
+          }
+        }
+        if (text.includes('select privy_user_id') && text.includes('where id =')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
     })
     const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
     const req = createMockReq({
@@ -75,11 +100,53 @@ describe('wallet sync endpoint', () => {
     expect(syncUserWalletsMock).not.toHaveBeenCalled()
   })
 
+  it('returns 403 when the session wallet is no longer a current authorized wallet', async () => {
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('select p.id') && text.includes('lower(canonical.address)')) {
+          return { rows: [] }
+        }
+        return { rows: [{ privy_user_id: 'did:privy:test-user' }] }
+      }),
+    })
+    const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { cookie: `cv_auth_session=${encodeURIComponent(token)}` },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(syncUserWalletsMock).not.toHaveBeenCalled()
+  })
+
   it('returns normalized sync payload', async () => {
     getDbMock.mockResolvedValue({
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('from profile_wallets pw')) return { rows: [{ privy_user_id: 'did:privy:test-user' }] }
+        if (text.includes('select p.id') && text.includes('lower(canonical.address)')) {
+          return { rows: [{ id: 1 }] }
+        }
+        if (text.includes('canonical.address as canonical_wallet') && text.includes('where p.id =')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                primary_wallet: '0x00000000000000000000000000000000000000bb',
+                primary_embedded_eoa: null,
+                primary_smart_wallet: '0x00000000000000000000000000000000000000aa',
+                csw_address: '0x00000000000000000000000000000000000000aa',
+                base_sub_account: '0x00000000000000000000000000000000000000aa',
+                canonical_wallet: '0x00000000000000000000000000000000000000aa',
+              },
+            ],
+          }
+        }
+        if (text.includes('select privy_user_id') && text.includes('where id =')) {
+          return { rows: [{ privy_user_id: 'did:privy:test-user' }] }
+        }
         return { rows: [] }
       }),
     })

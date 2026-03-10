@@ -17,6 +17,7 @@ export type MappedWallet = {
 
 export type ClassifiedLinkedAccounts = {
   embeddedEoa: { address: string; chainType: string; clientType: string | null } | null
+  activeOwnerWallet: { address: string; provider: WalletProvider; walletType: WalletType } | null
   canonicalSmartWallet: { address: string; provider: WalletProvider } | null
   canonicalSolanaWallet: { address: string; provider: WalletProvider } | null
   operationalSolanaWallet: { address: string; provider: WalletProvider } | null
@@ -195,6 +196,14 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
   const embeddedEoa = embedded
     ? { address: embedded.address, chainType: embedded.chain, clientType: embedded.clientType }
     : null
+  const activeOwner = allWallets.find((w) => w.chain === 'evm' && w.walletType !== 'smart_wallet') ?? null
+  const activeOwnerWallet = activeOwner
+    ? {
+        address: activeOwner.address,
+        provider: activeOwner.provider,
+        walletType: activeOwner.walletType,
+      }
+    : null
 
   const solanaWallets = allWallets.filter((w) => w.chain === 'solana')
   const externalSolana = solanaWallets.find((w) => w.walletType === 'external_eoa') ?? null
@@ -218,6 +227,7 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
 
   return {
     embeddedEoa,
+    activeOwnerWallet,
     canonicalSmartWallet,
     canonicalSolanaWallet,
     operationalSolanaWallet,

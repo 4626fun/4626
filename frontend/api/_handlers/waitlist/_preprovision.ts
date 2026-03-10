@@ -13,10 +13,9 @@ import {
   setCors,
   setNoStore,
 } from '../../../server/auth/_shared.js'
-import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
 import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../../server/_lib/waitlistPreprovision.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -58,50 +57,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Database connection failed' } satisfies ApiEnvelope<never>)
   }
 
-  // Find the user's waitlist profile by wallet (match any linked wallet field)
   try {
+    const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
+    if (!authorizedPrincipal) {
+      return res.status(404).json({ success: false, error: 'No waitlist profile found for this wallet' } satisfies ApiEnvelope<never>)
+    }
+
     const q = await (db as any).sql`
-      SELECT id, primary_wallet, embedded_wallet, csw_address, preprovisioned_at
+      SELECT id, primary_wallet, embedded_wallet, csw_address, primary_smart_wallet, base_sub_account, preprovisioned_at
       FROM profiles
-      WHERE LOWER(primary_wallet) = ${principalWallet}
-         OR LOWER(embedded_wallet) = ${principalWallet}
-         OR LOWER(csw_address) = ${principalWallet}
-      ORDER BY created_at DESC
+      WHERE id = ${authorizedPrincipal.profileId}
       LIMIT 1;
     `
-    let row = q.rows?.[0]
-
-    // If no direct match, check if principal wallet is an owner of a profile's linked CSW
-    if (!row?.id) {
-      const cswProfiles = await (db as any).sql`
-        SELECT id, primary_wallet, embedded_wallet, csw_address, preprovisioned_at
-        FROM profiles
-        WHERE csw_address IS NOT NULL
-          AND LOWER(csw_address) != ${principalWallet}
-        ORDER BY updated_at DESC
-        LIMIT 50
-      `
-      for (const p of cswProfiles?.rows ?? []) {
-        const csw = p?.csw_address ? String(p.csw_address).trim() : ''
-        if (!csw || !/^0x[a-fA-F0-9]{40}$/.test(csw)) continue
-        try {
-          const owned = await isCswOwner(principalWallet, csw)
-          if (owned) {
-            row = p
-            break
-          }
-        } catch {
-          continue
-        }
-      }
-    }
+    const row = q.rows?.[0]
 
     if (!row?.id) {
       return res.status(404).json({ success: false, error: 'No waitlist profile found for this wallet' } satisfies ApiEnvelope<never>)
     }
 
     const walletForProvision = String(
-      row.csw_address || row.primary_wallet || row.embedded_wallet || principalWallet
+      row.csw_address ||
+        row.primary_smart_wallet ||
+        row.base_sub_account ||
+        row.primary_wallet ||
+        row.embedded_wallet ||
+        authorizedPrincipal.canonicalSmartWalletAddress ||
+        principalWallet
     ).toLowerCase()
     const result = await preprovisionWaitlistUser(
       typeof row.id === 'number' ? row.id : Number(row.id),

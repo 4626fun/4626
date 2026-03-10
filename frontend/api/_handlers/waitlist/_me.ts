@@ -7,7 +7,7 @@ import {
   setNoStore,
 } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type ConnectedAccount = {
@@ -125,8 +125,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const address = readRequestPrincipalAddress(req)
-  if (!address) {
+  const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
+  if (!authorizedPrincipal) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistMeResponse | null>)
   }
 
@@ -167,27 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updated_at,
       created_at
     FROM profiles
-    WHERE LOWER(primary_wallet) = ${address}
-       OR LOWER(embedded_wallet) = ${address}
-       OR LOWER(csw_address) = ${address}
-       OR LOWER(base_sub_account) = ${address}
-       OR LOWER(primary_smart_wallet) = ${address}
-       OR LOWER(primary_embedded_eoa) = ${address}
-       OR EXISTS (
-         SELECT 1
-         FROM profile_wallets pw
-         WHERE pw.profile_id = profiles.id
-           AND LOWER(pw.address) = ${address}
-       )
-    ORDER BY
-      CASE
-        WHEN email IS NULL THEN 2
-        WHEN LOWER(email) LIKE '%@noemail.4626.fun' OR LOWER(email) LIKE '%@wallet.4626.fun' THEN 1
-        WHEN LOWER(email) ~ '^(solinfer-|wallet-|anon-|0x[0-9a-f]+).*@example\\.com$' THEN 1
-        ELSE 0
-      END ASC,
-      updated_at DESC,
-      created_at ASC
+    WHERE id = ${authorizedPrincipal.profileId}
     LIMIT 1;
   `
 

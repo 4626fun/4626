@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions } from '../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import { resolveAmoeWallet } from '../../../server/_lib/amoeWalletResolver.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { checkDurableRateLimit } from '../../../server/_lib/durableRateLimit.js'
 import { getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
@@ -35,6 +36,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Missing or invalid wallet/creatorCoin' })
   }
 
+  const resolvedWallet = await resolveAmoeWallet({
+    requestedWallet: walletRaw,
+    authAddress: g.auth?.address ?? null,
+  })
+  if (!resolvedWallet.ok) {
+    const status = resolvedWallet.error === 'wallet_authority_mismatch' ? 403 : 400
+    return res.status(status).json({
+      success: false,
+      error: resolvedWallet.error,
+    })
+  }
+  const wallet = resolvedWallet.value.wallet
+
   const contracts = getApiContracts()
   const lotteryManager = contracts.lotteryManager
   if (!isAddressLike(String(lotteryManager ?? ''))) {
@@ -42,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const ip = getClientIp(req as any)
-  const rl = await checkDurableRateLimit(rateLimitKey('amoe', 'nonce', ip, walletRaw.toLowerCase()), {
+  const rl = await checkDurableRateLimit(rateLimitKey('amoe', 'nonce', ip, wallet), {
     windowMs: 60_000,
     maxRequests: 6,
   })
@@ -53,15 +67,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const noncePayload = await issueAmoeNonce({
-    wallet: walletRaw.toLowerCase() as `0x${string}`,
+    wallet,
     creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
   })
   const creditSnapshot = await getAmoeCreditSnapshot({
-    wallet: walletRaw.toLowerCase() as `0x${string}`,
+    wallet,
   })
 
   const message = buildAmoeEntryMessage({
-    wallet: walletRaw.toLowerCase() as `0x${string}`,
+    wallet,
     creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
     nonce: noncePayload.nonce,
     issuedAt: noncePayload.issuedAt,
@@ -73,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({
     success: true,
     data: {
-      wallet: walletRaw.toLowerCase(),
+      wallet,
       creatorCoin: creatorCoinRaw.toLowerCase(),
       nonce: noncePayload.nonce,
       issuedAt: noncePayload.issuedAt,
