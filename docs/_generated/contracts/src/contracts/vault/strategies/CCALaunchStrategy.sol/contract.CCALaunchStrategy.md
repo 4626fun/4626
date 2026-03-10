@@ -1,5 +1,5 @@
 # CCALaunchStrategy
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/strategies/CCALaunchStrategy.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/strategies/CCALaunchStrategy.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -35,7 +35,7 @@ See https://github.com/Uniswap/continuous-clearing-auction#deployments
 
 
 ```solidity
-address public constant UNISWAP_CCA_FACTORY_V110 = 0xcca1101C61cF5cb44C968947985300DF945C3565
+address public constant UNISWAP_CCA_FACTORY_V110 = 0xCCccCcCAE7503Cac057829BF2811De42E16e0bD5
 ```
 
 
@@ -306,12 +306,9 @@ That changes `msg.sender` (breaks auth) and also trips ReentrancyGuard (both ent
 
 
 ```solidity
-function _launchAuctionInternal(
-    uint256 amount,
-    uint256 floorPrice,
-    uint128 requiredRaise,
-    bytes memory auctionSteps
-) internal returns (address auction);
+function _launchAuctionInternal(uint256 amount, uint256 floorPrice, uint128 requiredRaise)
+    internal
+    returns (address auction);
 ```
 
 ### launchAuction
@@ -333,7 +330,7 @@ function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise
 |`amount`|`uint256`|Amount of tokens to auction|
 |`floorPrice`|`uint256`|Starting floor price (Q96 format)|
 |`requiredRaise`|`uint128`|Minimum currency to raise for graduation|
-|`auctionSteps`|`bytes`|Packed auction steps data|
+|`auctionSteps`|`bytes`|Deprecated. Ignored in favor of strategy-enforced safe schedule.|
 
 
 ### launchAuctionSimple

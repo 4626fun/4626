@@ -105,7 +105,7 @@ describe('image generation auth gate', () => {
     expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
   })
 
-  it('returns 403 when caller is not an admin', async () => {
+  it('allows authenticated non-admin callers for creator deploy image generation', async () => {
     getSessionAddressMock.mockReturnValue('0x1111111111111111111111111111111111111111')
     isAdminAddressMock.mockReturnValue(false)
     const mod = await import('../_handlers/image/_projects-create.ts')
@@ -119,9 +119,13 @@ describe('image generation auth gate', () => {
 
     await handler(req, res)
 
-    expect(res.statusCode).toBe(403)
-    expect(res.body).toEqual({ success: false, error: 'Admin only' })
-    expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(createImageGenerationProjectMock).toHaveBeenCalledWith({
+      instruction: 'test',
+      stylePreset: null,
+      brandContext: [],
+      creatorAddress: '0x1111111111111111111111111111111111111111',
+    })
   })
 })
 
@@ -147,6 +151,7 @@ describe('POST /api/image/projects/create', () => {
       instruction: 'Put the dog inside the blue square.',
       stylePreset: 'modern_elegant',
       brandContext: ['creator coin', 'ERC-4626 vault'],
+      creatorAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
     })
     expect(res.body).toEqual({
       success: true,

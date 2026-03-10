@@ -530,12 +530,27 @@ describe('deploy session optimistic concurrency', () => {
   })
 
   it('status progresses phase2 to phase3 then phase4 in order when both are present', async () => {
+    const batcher = '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753'
+    const vault = '0x3000000000000000000000000000000000000003'
+    const shareOft = '0x7000000000000000000000000000000000000007'
+    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const charmStrategy = '0x8100000000000000000000000000000000000008'
+    const ajnaStrategy = '0x9100000000000000000000000000000000000009'
+    const solanaStrategy = '0xa10000000000000000000000000000000000000a'
+    const charmVault = '0xb10000000000000000000000000000000000000b'
+    const ajnaPool = '0xc10000000000000000000000000000000000000c'
+    const bridgeAddress = '0xd10000000000000000000000000000000000000d'
+    const v3Factory = '0xe10000000000000000000000000000000000000e'
+    const usdc = '0xf10000000000000000000000000000000000000f'
+    const v3Pool = '0x1110000000000000000000000000000000000011'
+    const auction = '0xe00000000000000000000000000000000000000e'
+    const ccaFactory = '0xf00000000000000000000000000000000000000f'
     const recPhase2 = {
       ...makeDeploySession('phase2_sent'),
       payload: {
-        phase2Calls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase2FinalizeCalls: [makeCall(batcher, '0xphase2finalize')],
+        phase3Calls: [makeCall(batcher, '0xphase3deployv2')],
+        phase4Calls: [makeCall(batcher, '0xphase4launch')],
       },
       lastUserOpHash: `0x${'2'.repeat(64)}`,
     }
@@ -549,6 +564,129 @@ describe('deploy session optimistic concurrency', () => {
       step: 'phase4_sent',
       lastUserOpHash: `0x${'4'.repeat(64)}`,
     }
+    const viem = await import('viem')
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase3deployv2') {
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              version: 'v1.4.8',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+              solanaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy,
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase4launch') {
+        return {
+          functionName: 'launchDeferredAuction',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              shareOFT: shareOft,
+              version: 'v1.4.8',
+              floorPriceQ96: 1n,
+              requiredRaise: 1n,
+              auctionSteps: '0x1234',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args, address }: any) => {
+        switch (functionName) {
+          case 'ownerCount':
+            return 1n
+          case 'ownerAtIndex':
+            return '0xownerbytes'
+          case 'strategyList':
+            if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaStrategy
+            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            return '0xownerbytes'
+          case 'strategyWeights':
+            if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            return 0n
+          case 'charmVault':
+            if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
+            throw new Error('not_charm_strategy')
+          case 'ajnaPool':
+            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_strategy')
+          case 'bridgeAddress':
+            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_solana_strategy')
+          case 'uniswapV3Factory':
+            return v3Factory
+          case 'usdc':
+            return usdc
+          case 'getPool':
+            return v3Pool
+          case 'currentAuction':
+            return auction
+          case 'ccaFactory':
+            return ccaFactory
+          case 'isGraduated':
+            return false
+          case 'totalSupply':
+            return 1000n
+          case 'balanceOf':
+            return 1000n
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          vault.toLowerCase(),
+          shareOft.toLowerCase(),
+          ccaStrategy.toLowerCase(),
+          charmStrategy.toLowerCase(),
+          ajnaStrategy.toLowerCase(),
+          solanaStrategy.toLowerCase(),
+          charmVault.toLowerCase(),
+          ajnaPool.toLowerCase(),
+          bridgeAddress.toLowerCase(),
+          v3Pool.toLowerCase(),
+          auction.toLowerCase(),
+          ccaFactory.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
     getDeploySessionByIdMock
       // first status poll
       .mockResolvedValueOnce(recPhase2)
@@ -570,12 +708,15 @@ describe('deploy session optimistic concurrency', () => {
     expect(res1.body?.data?.step).toBe('phase3_sent')
     expect(res2.statusCode).toBe(200)
     expect(res2.body?.data?.step).toBe('phase4_sent')
-
-    expect(sendUserOperationMock).toHaveBeenCalledTimes(2)
-    const firstArgs = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
-    const secondArgs = (sendUserOperationMock.mock.calls as any[])[1]?.[1] as any
-    expect(String(firstArgs.calls[0]?.to)).toBe('0xphase3target')
-    expect(String(secondArgs.calls[0]?.to)).toBe('0xphase4target')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_sent', toStep: 'phase2_confirmed' }),
+    )
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_confirmed', toStep: 'phase4_sent' }),
+    )
   })
 
   it('continue honors required downstream stages when payload is stringified JSON', async () => {
@@ -1791,6 +1932,137 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
+  it('status advances phase3_sent with extra strategies when SolanaStrategy exposes bridgeAddress', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv3')],
+        phase4Calls: [],
+      }),
+      lastUserOpHash: `0x${'9'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const charmStrategy = '0x8200000000000000000000000000000000000008'
+    const extraStrategy = '0x8300000000000000000000000000000000000008'
+    const ajnaStrategy = '0x9200000000000000000000000000000000000009'
+    const solanaStrategy = '0xa20000000000000000000000000000000000000a'
+    const charmVault = '0xb20000000000000000000000000000000000000b'
+    const ajnaPool = '0xc20000000000000000000000000000000000000c'
+    const bridgeAddress = '0xd20000000000000000000000000000000000000d'
+    const v3Factory = '0xe20000000000000000000000000000000000000e'
+    const usdc = '0xf20000000000000000000000000000000000000f'
+    const v3Pool = '0x1210000000000000000000000000000000000012'
+    const vault = '0x3000000000000000000000000000000000000003'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase3deployv3') {
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              version: 'v1.4.9',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+              solanaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args, address }: any) => {
+        switch (functionName) {
+          case 'strategyList':
+            if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return extraStrategy
+            if (Number(args?.[0] ?? 0n) === 2) return ajnaStrategy
+            if (Number(args?.[0] ?? 0n) === 3) return solanaStrategy
+            return '0xownerbytes'
+          case 'strategyWeights':
+            if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === extraStrategy.toLowerCase()) return 100n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            return 0n
+          case 'charmVault':
+            if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
+            throw new Error('not_charm_strategy')
+          case 'ajnaPool':
+            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_strategy')
+          case 'bridgeAddress':
+            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_solana_strategy')
+          case 'bridgeAdapter':
+            throw new Error('bridge_adapter_not_exposed')
+          case 'uniswapV3Factory':
+            return v3Factory
+          case 'usdc':
+            return usdc
+          case 'getPool':
+            return v3Pool
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          vault.toLowerCase(),
+          charmStrategy.toLowerCase(),
+          extraStrategy.toLowerCase(),
+          ajnaStrategy.toLowerCase(),
+          solanaStrategy.toLowerCase(),
+          charmVault.toLowerCase(),
+          ajnaPool.toLowerCase(),
+          bridgeAddress.toLowerCase(),
+          v3Pool.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('completed')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+  })
+
   it('status advances phase4_sent when CCA/Uniswap post-check succeeds', async () => {
     const rec = {
       ...makeDeploySession('phase4_sent'),
@@ -2176,6 +2448,179 @@ describe('deploy session optimistic concurrency', () => {
       expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
     )
     expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('continue preserves deployToStrategies in stored phase3 calls', async () => {
+    const vault = '0x3000000000000000000000000000000000000003'
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalizewithvault')],
+        phase3Calls: [makeCall('0xphase3target'), makeCall(vault, '0x355aa867')],
+        phase4Calls: [],
+      },
+    }
+    const viem = await import('viem')
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase2finalizewithvault') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase3_sent')
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const options = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(Array.isArray(options?.calls)).toBe(true)
+    expect(options.calls.map((call: any) => call.data)).toContain('0x355aa867')
+  })
+
+  it('continue sends only stored phase4 calls after phase3 is confirmed', async () => {
+    const charmStrategy = '0x8100000000000000000000000000000000000008'
+    const ajnaStrategy = '0x9100000000000000000000000000000000000009'
+    const charmVault = '0xa10000000000000000000000000000000000000a'
+    const asset = '0xb10000000000000000000000000000000000000b'
+    const vault = '0x3000000000000000000000000000000000000003'
+    const rec = {
+      ...makeDeploySession('phase3_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalizewithvault')],
+        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv2')],
+        phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
+      },
+    }
+    const viem = await import('viem')
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase2finalizewithvault') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase3deployv2') {
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              version: 'v1.4.8',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+              solanaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase4launch') {
+        return {
+          functionName: 'launchDeferredAuction',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              shareOFT: '0x7000000000000000000000000000000000000007',
+              version: 'v1.4.8',
+              floorPriceQ96: 1n,
+              requiredRaise: 1n,
+              auctionSteps: '0x1234',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args, address }: any) => {
+        switch (functionName) {
+          case 'ownerCount':
+            return 1n
+          case 'ownerAtIndex':
+            return '0xownerbytes'
+          case 'strategyList':
+            if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaStrategy
+            return '0xownerbytes'
+          case 'strategyWeights':
+            if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
+            return 0n
+          case 'charmVault':
+            if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
+            throw new Error('not_charm_strategy')
+          case 'totalStrategyWeight':
+            return 6000n
+          case 'minimumTotalIdle':
+            return 1000n
+          case 'asset':
+            return asset
+          case 'balanceOf':
+            return 9000n
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x'),
+    })
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const options = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(Array.isArray(options?.calls)).toBe(true)
+    expect(options.calls).toHaveLength(2)
+    expect(options.calls[0]?.data).toBe('0xphase4launch')
   })
 
   it('persists server-side revert debug on continue reverts (no debug blob leaked)', async () => {

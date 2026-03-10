@@ -284,7 +284,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return true
   }
 
-  let result = await verifySIWA(
+  let result: Awaited<ReturnType<typeof verifySIWA>> | FallbackVerifyResult = await verifySIWA(
     message,
     signature,
     parsed.domain,

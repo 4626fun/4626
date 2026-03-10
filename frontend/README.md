@@ -26,6 +26,29 @@ cp .env.example .env
 pnpm dev
 ```
 
+## Local deploy dry-run
+
+Use this when you want `/deploy` to hit a local Base fork for the new dry-run flow:
+
+```bash
+cd frontend
+cp .env.deploy-dry-run.example .env.deploy-dry-run.local
+# set BASE_FORK_UPSTREAM_RPC_URL in .env.deploy-dry-run.local
+pnpm -C frontend dev:deploy-dry-run
+```
+
+What it does:
+
+- starts an Anvil Base fork on `127.0.0.1:8545`
+- deploys a local `DeploymentBatcher` copy onto that fork and points `/deploy` at the local batcher by default
+- exports `BASE_RPC_URL` and `VITE_BASE_RPC` to that local fork for the process
+- forces `VITE_ALLOW_CONTRACT_OVERRIDES=0` and `ALLOW_API_CONTRACT_OVERRIDES=0`
+- runs the frontend dev server in the foreground
+
+Required input:
+
+- `BASE_FORK_UPSTREAM_RPC_URL` must point at a real Base mainnet RPC endpoint for forking.
+
 ## Build workflow (fast vs full)
 
 - **Frontend-only (fast)**: `pnpm build` (Vite build for the SPA)

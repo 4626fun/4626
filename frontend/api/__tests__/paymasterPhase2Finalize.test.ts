@@ -351,7 +351,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           ajnaWeightBps: 3_000n,
           solanaWeightBps: 3_000n,
           solanaKeeper: sender,
-          solanaMaxNavAge: 86_400,
+          solanaMaxNavAge: 86_400n,
           solanaMaxNavDeltaBpsPerUpdate: 500,
           solanaMinBaseLiquidityBps: 100,
           solanaBridgeAddress: sender,

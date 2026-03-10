@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { isAddress } from 'viem'
 
-import { parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
+import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 import { getImageGenerationProject, setImageProjectVaultAddress } from '../../../server/_lib/imageProjects.js'
 
 type Body = {
@@ -16,6 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  const actor = getImageApiActor(req)
   const body = await readBody<Body>(req)
   const projectId = parseRequiredString(body.projectId)
   const vaultAddress = parseRequiredString(body.vaultAddress)
@@ -31,6 +32,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(409).json({ success: false, error: 'Project must be completed before associating a vault' })
   }
 
+  // Ownership check: the caller must be the address that created this project.
+  // Projects created before this check was introduced have creatorAddress = null;
+  // we allow those through to preserve backward compatibility with existing data.
+  if (project.creatorAddress !== null && actor !== null) {
+    if (project.creatorAddress.toLowerCase() !== actor.toLowerCase()) {
+      return res.status(403).json({ success: false, error: 'Only the project creator may associate this project with a vault' })
+    }
+  }
   await setImageProjectVaultAddress(projectId, vaultAddress)
 
   return res.status(200).json({ success: true, data: { projectId, vaultAddress } })

@@ -1,5 +1,5 @@
 # CreatorOVaultAdminModule
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/modules/CreatorOVaultAdminModule.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/modules/CreatorOVaultAdminModule.sol)
 
 **Inherits:**
 [CreatorOVaultModuleBase](/contracts/vault/modules/CreatorOVaultModuleBase.sol/abstract.CreatorOVaultModuleBase.md)
@@ -10,6 +10,13 @@ Must be invoked via delegatecall from CreatorOVault.
 
 
 ## State Variables
+### MAX_BPS
+
+```solidity
+uint256 internal constant MAX_BPS = 10_000
+```
+
+
 ### MAX_FEE
 
 ```solidity
@@ -172,6 +179,13 @@ function setPerformanceFeeRecipient(address _performanceFeeRecipient) external o
 function setProfitMaxUnlockTime(uint256 _profitMaxUnlockTime) external onlyDelegateCall;
 ```
 
+### setTrustedPpsDeviationBps
+
+
+```solidity
+function setTrustedPpsDeviationBps(uint256 _trustedPpsMaxDeviationBps) external onlyDelegateCall;
+```
+
 ### setPendingManagement
 
 
@@ -279,6 +293,12 @@ event UpdatePerformanceFeeRecipient(address indexed newRecipient);
 
 ```solidity
 event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
+```
+
+### UpdateTrustedPpsDeviationBps
+
+```solidity
+event UpdateTrustedPpsDeviationBps(uint256 newTrustedPpsDeviationBps);
 ```
 
 ### BalancesSynced

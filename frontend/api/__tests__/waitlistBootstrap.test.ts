@@ -40,7 +40,7 @@ vi.mock('../../server/_lib/accountsIdentity.js', () => ({
 describe('POST /api/waitlist/bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    getDbMock.mockResolvedValue({ sql: vi.fn() })
+    getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
     verifyPrivyForAccountsMock.mockResolvedValue({
       privyUserId: 'did:privy:test-user',
       privyUser: { id: 'did:privy:test-user', email: { address: 'user@example.com' } },
@@ -54,7 +54,7 @@ describe('POST /api/waitlist/bootstrap', () => {
     })
   })
 
-  it('rejects body email when it does not match authenticated privy email', async () => {
+  it('prefers the authenticated Privy email over the submitted body email', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-token' },
@@ -64,8 +64,13 @@ describe('POST /api/waitlist/bootstrap', () => {
 
     await handler(req, res)
 
-    expect(res.statusCode).toBe(400)
-    expect(res.body?.success).toBe(false)
-    expect(upsertAccountMock).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(upsertAccountMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'user@example.com',
+        emailVerified: true,
+      }),
+    )
   })
 })

@@ -1,5 +1,5 @@
 # CreatorOVaultStrategiesModule
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/modules/CreatorOVaultStrategiesModule.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/modules/CreatorOVaultStrategiesModule.sol)
 
 **Inherits:**
 [CreatorOVaultModuleBase](/contracts/vault/modules/CreatorOVaultModuleBase.sol/abstract.CreatorOVaultModuleBase.md)
@@ -67,11 +67,15 @@ function updateStrategyWeight(address strategy, uint256 newWeight) external only
 function _syncCoinBalance() internal returns (uint256 actual);
 ```
 
-### _depositIntoStrategyExact
+### _depositIntoStrategyMeasured
+
+Strategy deposit accounting is based on measured vault outflow (`spent`),
+not strategy-reported values, so fee-on-transfer and partial-spend
+strategy internals do not brick keeper deploys.
 
 
 ```solidity
-function _depositIntoStrategyExact(address strategy, uint256 amount) internal returns (uint256 deposited);
+function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 deposited);
 ```
 
 ### _withdrawFromStrategyMeasured

@@ -116,6 +116,43 @@ export async function getImageGenerationProject(projectId: string): Promise<Imag
   return data.project
 }
 
+export async function directComposeProject(projectId: string): Promise<{
+  outputBlobUrl: string
+  breakoutApplied: boolean
+}> {
+  const response = await apiFetch('/api/image/projects/direct-compose', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId }),
+  })
+  const data = await readJson<{ outputBlobUrl: string; breakoutApplied: boolean }>(response)
+  return data
+}
+
+export async function autoProvisionProjectAssets(input: {
+  projectId: string
+  creatorCoinAddress: string
+  chainId?: number
+}): Promise<{ subjectImageUrl: string }> {
+  const response = await apiFetch('/api/image/projects/auto-assets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const data = await readJson<{ subjectImageUrl: string }>(response)
+  return data
+}
+
+export async function getVaultImage(vaultAddress: string): Promise<{
+  projectId: string
+  outputBlobUrl: string
+} | null> {
+  const response = await apiFetch(
+    `/api/image/projects/vault-image?vaultAddress=${encodeURIComponent(vaultAddress)}`,
+  )
+  const data = await readJson<{ projectId: string; outputBlobUrl: string } | null>(response)
+  return data
+}
 export async function associateImageProjectToVault(input: {
   projectId: string
   vaultAddress: string

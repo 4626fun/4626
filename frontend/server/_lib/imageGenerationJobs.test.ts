@@ -27,9 +27,7 @@ function createJobsDb() {
 
       if (text.includes('create table if not exists image_generation_')) return { rows: [] }
       if (text.includes('create index if not exists image_generation_')) return { rows: [] }
-
-      if (text.includes('create table if not exists image_generation_')) return { rows: [] }
-      if (text.includes('create index if not exists image_generation_')) return { rows: [] }
+      if (text.includes('alter table image_generation_projects') && text.includes('add column if not exists')) return { rows: [] }
 
       if (text.includes('insert into image_generation_jobs')) {
         const row = {

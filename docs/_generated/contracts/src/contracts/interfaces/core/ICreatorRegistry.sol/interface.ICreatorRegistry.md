@@ -1,5 +1,5 @@
 # ICreatorRegistry
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/interfaces/core/ICreatorRegistry.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/interfaces/core/ICreatorRegistry.sol)
 
 **Title:**
 ICreatorRegistry
@@ -117,6 +117,15 @@ function setCanonicalWallet(address _token, address _wallet) external;
 |`_wallet`|`address`|Canonical smart wallet address|
 
 
+### setOmnichainVaultMesh
+
+Configure Solana OVault mesh metadata for a creator coin.
+
+
+```solidity
+function setOmnichainVaultMesh(address _token, OmnichainVaultMeshConfig calldata _cfg) external;
+```
+
 ### getCreatorCoin
 
 Get full Creator Coin info
@@ -198,6 +207,33 @@ Reverse-lookup: get the Creator Coin address for a canonical wallet
 
 ```solidity
 function getTokenForCanonicalWallet(address _wallet) external view returns (address);
+```
+
+### getOmnichainVaultMesh
+
+Read Solana OVault mesh metadata for a creator coin.
+
+
+```solidity
+function getOmnichainVaultMesh(address _token) external view returns (OmnichainVaultMeshConfig memory);
+```
+
+### isSolanaDepositEligible
+
+Returns true when this creator coin is currently eligible for Solana deposit routing.
+
+
+```solidity
+function isSolanaDepositEligible(address _token) external view returns (bool);
+```
+
+### getSolanaAssetMint
+
+Returns configured Solana asset mint for a creator coin.
+
+
+```solidity
+function getSolanaAssetMint(address _token) external view returns (bytes32);
 ```
 
 ### setRemoteOFTPeer
@@ -638,6 +674,20 @@ event RemoteOFTPeerBytes32Set(address indexed creatorCoin, uint32 indexed chainE
 event RemoteOFTPeerBytes32Removed(address indexed creatorCoin, uint32 indexed chainEid);
 ```
 
+### OmnichainVaultMeshConfigured
+
+```solidity
+event OmnichainVaultMeshConfigured(
+    address indexed creatorCoin,
+    uint32 indexed solanaEid,
+    address hubComposer,
+    address assetMeshToken,
+    address shareMeshToken,
+    bytes32 solanaAssetMint,
+    bool enabled
+);
+```
+
 ### ChainRegistered
 
 ```solidity
@@ -737,6 +787,21 @@ struct LzConfig {
     uint64 confirmations;
     bool isConfigured;
     bool useCustomOApp;
+}
+```
+
+### OmnichainVaultMeshConfig
+Per-creator Solana OVault mesh configuration.
+
+
+```solidity
+struct OmnichainVaultMeshConfig {
+    uint32 solanaEid;
+    address hubComposer;
+    address assetMeshToken;
+    address shareMeshToken;
+    bytes32 solanaAssetMint;
+    bool enabled;
 }
 ```
 

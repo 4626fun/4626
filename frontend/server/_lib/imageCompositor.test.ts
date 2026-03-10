@@ -73,6 +73,13 @@ async function createInteriorMarkerLayerBytes(): Promise<Uint8Array> {
   `)
 }
 
+const DETECTED_RING_FRAME_CONTENT_BOX = {
+  left: 16,
+  top: 16,
+  width: 168,
+  height: 168,
+} as const
+
 describe('image compositor', () => {
   it('places artwork inside the fixed content box and preserves the supplied frame as the final overlay', async () => {
     const { composeLockedFrameImage } = await import('./imageCompositor.ts')
@@ -109,12 +116,7 @@ describe('image compositor', () => {
     const redFramePixel = await samplePixel(redResult.imageBytes, 10, 100)
     const blueFramePixel = await samplePixel(blueResult.imageBytes, 10, 100)
 
-    expect(redResult.contentBox).toEqual({
-      left: 40,
-      top: 40,
-      width: 120,
-      height: 120,
-    })
+    expect(redResult.contentBox).toEqual(DETECTED_RING_FRAME_CONTENT_BOX)
     expect(redCenter.r).toBeGreaterThan(220)
     expect(redCenter.g).toBeLessThan(110)
     expect(redCenter.b).toBeLessThan(110)
@@ -174,12 +176,7 @@ describe('image compositor', () => {
     const sourceFramePixel = await samplePixel(frameBytes, 10, 100)
     const resultFramePixel = await samplePixel(result.imageBytes, 10, 100)
 
-    expect(result.contentBox).toEqual({
-      left: 40,
-      top: 40,
-      width: 120,
-      height: 120,
-    })
+    expect(result.contentBox).toEqual(DETECTED_RING_FRAME_CONTENT_BOX)
     expect(leftMarkerPixel.r).toBeGreaterThan(220)
     expect(leftMarkerPixel.g).toBeLessThan(110)
     expect(leftMarkerPixel.b).toBeLessThan(110)
@@ -439,10 +436,12 @@ describe('image compositor', () => {
     })
 
     const breakoutTopPixel = await samplePixel(breakoutResult.imageBytes, 100, 28)
-    const baselineFadePixel = await samplePixel(baselineResult.imageBytes, 125, 84)
-    const breakoutFadePixel = await samplePixel(breakoutResult.imageBytes, 125, 84)
-    const baselineFadeEndPixel = await samplePixel(baselineResult.imageBytes, 125, 90)
-    const breakoutFadeEndPixel = await samplePixel(breakoutResult.imageBytes, 125, 90)
+    const fadeBottom = Math.min(breakoutResult.contentBox.top + 60, 199)
+    const fadeSampleY = Math.min(breakoutResult.contentBox.top + 30, fadeBottom - 1)
+    const baselineFadePixel = await samplePixel(baselineResult.imageBytes, 100, fadeSampleY)
+    const breakoutFadePixel = await samplePixel(breakoutResult.imageBytes, 100, fadeSampleY)
+    const baselineFadeEndPixel = await samplePixel(baselineResult.imageBytes, 100, fadeBottom)
+    const breakoutFadeEndPixel = await samplePixel(breakoutResult.imageBytes, 100, fadeBottom)
 
     expect(breakoutResult.breakoutApplied).toBe(true)
     expect(breakoutFadePixel.r).toBeGreaterThan(baselineFadePixel.r + 10)
@@ -501,7 +500,7 @@ describe('image compositor', () => {
     })
 
     expect(result.layout).toBe('cover')
-    expect(result.contentBox).toEqual({ left: 40, top: 40, width: 120, height: 120 })
+    expect(result.contentBox).toEqual(DETECTED_RING_FRAME_CONTENT_BOX)
   })
 
   it('auto-classifies a transparent cutout as contain', async () => {

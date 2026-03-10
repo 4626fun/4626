@@ -1,5 +1,5 @@
 # CreatorRegistry
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/core/CreatorRegistry.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/core/CreatorRegistry.sol)
 
 **Inherits:**
 [ICreatorRegistry](/contracts/governance/VaultGaugeVoting.sol/interface.ICreatorRegistry.md), Ownable
@@ -168,6 +168,15 @@ Reverse lookup: remote bytes32 peer → creator coin
 
 ```solidity
 mapping(bytes32 => address) public remoteOFTBytes32ToToken
+```
+
+
+### omnichainVaultMeshConfigs
+Per-creator Solana OVault mesh metadata.
+
+
+```solidity
+mapping(address => OmnichainVaultMeshConfig) private omnichainVaultMeshConfigs
 ```
 
 
@@ -404,6 +413,20 @@ Only the registry owner or the creator themselves can set this.
 
 ```solidity
 function setCanonicalWallet(address _token, address _wallet) external override;
+```
+
+### setOmnichainVaultMesh
+
+Configure Solana OVault mesh metadata for a creator coin.
+
+Enabled configs must be fully populated.
+
+
+```solidity
+function setOmnichainVaultMesh(address _token, OmnichainVaultMeshConfig calldata _cfg)
+    external
+    override
+    onlyAuthorizedOrOwner;
 ```
 
 ### setCreatorPool
@@ -699,6 +722,27 @@ function getTokenForCanonicalWallet(address _wallet) external view override retu
 |----|----|-----------|
 |`<none>`|`address`|The creator coin address (address(0) if not found)|
 
+
+### getOmnichainVaultMesh
+
+
+```solidity
+function getOmnichainVaultMesh(address _token) external view override returns (OmnichainVaultMeshConfig memory);
+```
+
+### isSolanaDepositEligible
+
+
+```solidity
+function isSolanaDepositEligible(address _token) external view override returns (bool);
+```
+
+### getSolanaAssetMint
+
+
+```solidity
+function getSolanaAssetMint(address _token) external view override returns (bytes32);
+```
 
 ### registerChain
 

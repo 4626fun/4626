@@ -1,223 +1,213 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { isAddress } from 'viem'
 
 import {
   associateImageProjectToVault,
+  autoProvisionProjectAssets,
   createImageGenerationProject,
-  enqueueImageGeneration,
-  enqueueImageRefine,
-  getImageGenerationJob,
-  getImageGenerationProject,
-  uploadImageGenerationAsset,
+  directComposeProject,
+  getVaultImage,
 } from '@/lib/imageGenerationApi'
 
 type Props = {
   vaultAddress: string
+  creatorCoinAddress: string
   tokenSymbol?: string
 }
 
-type JobStatus = 'idle' | 'pending' | 'processing' | 'completed' | 'failed'
+type Phase = 'idle' | 'checking' | 'fetching' | 'compositing' | 'saving' | 'done' | 'error'
 
-function latestOutputUrl(project: Awaited<ReturnType<typeof getImageGenerationProject>> | null): string | null {
-  if (!project?.assets?.length) return null
-  return project.assets.find((a) => a.role === 'output')?.blobUrl ?? null
+const PHASE_LABEL: Record<Phase, string> = {
+  idle: '',
+  checking: 'Checking for existing vault icon…',
+  fetching: 'Fetching creator coin image…',
+  compositing: 'Compositing vault icon…',
+  saving: 'Saving vault icon…',
+  done: '',
+  error: '',
 }
 
-export function VaultImageGenerator({ vaultAddress, tokenSymbol }: Props) {
-  const defaultInstruction = tokenSymbol
-    ? `Create a premium vault token icon for $${tokenSymbol}. Place the subject inside the branded frame. Modern, elegant, high contrast.`
-    : 'Create a premium vault token icon. Place the subject inside the branded frame. Modern, elegant, high contrast.'
-
-  const [instruction, setInstruction] = useState(defaultInstruction)
-  const [refineInstruction, setRefineInstruction] = useState('')
-  const [frameFile, setFrameFile] = useState<File | null>(null)
-  const [subjectFile, setSubjectFile] = useState<File | null>(null)
-  const [projectId, setProjectId] = useState<string | null>(null)
-  const [jobId, setJobId] = useState<string | null>(null)
-  const [jobStatus, setJobStatus] = useState<JobStatus>('idle')
+export function VaultImageGenerator({ vaultAddress, creatorCoinAddress, tokenSymbol }: Props) {
+  const [phase, setPhase] = useState<Phase>('idle')
   const [outputUrl, setOutputUrl] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+
+  // Tracks whether a generation is currently running to prevent concurrent calls
+  // (e.g. double-click on Regenerate or React StrictMode remount in dev).
+  const runningRef = useRef(false)
+  // Allows in-flight async work to detect component unmount and bail out of
+  // setState calls, preventing React's "update on unmounted component" warning.
+  const mountedRef = useRef(true)
+
+  const safeSetPhase = (value: Phase) => {
+    if (mountedRef.current) setPhase(value)
+  }
+
+  const safeSetOutputUrl = (value: string | null) => {
+    if (mountedRef.current) setOutputUrl(value)
+  }
+
+  const safeSetError = (value: string | null) => {
+    if (mountedRef.current) setError(value)
+  }
+
+  const runGeneration = async () => {
+    if (runningRef.current) return
+    runningRef.current = true
+
+    try {
+      safeSetPhase('fetching')
+      safeSetError(null)
+
+      const project = await createImageGenerationProject({
+        instruction: tokenSymbol ? `Vault icon for $${tokenSymbol}` : 'Vault icon',
+        stylePreset: 'modern_elegant',
+        brandContext: ['creator coin', 'ERC-4626 vault icon'],
+      })
+
+      await autoProvisionProjectAssets({ projectId: project.id, creatorCoinAddress })
+
+      safeSetPhase('compositing')
+      const { outputBlobUrl } = await directComposeProject(project.id)
+      safeSetOutputUrl(outputBlobUrl)
+
+      safeSetPhase('saving')
+      await associateImageProjectToVault({ projectId: project.id, vaultAddress })
+
+      safeSetPhase('done')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      safeSetError(message)
+      safeSetPhase('error')
+    } finally {
+      runningRef.current = false
+    }
+  }
 
   useEffect(() => {
-    if (!jobId || !projectId) return
-    let cancelled = false
+    mountedRef.current = true
 
-    const poll = async () => {
+    // Skip if the coin address hasn't resolved yet — parent will re-render once
+    // the address is known, triggering this effect again.
+    if (!creatorCoinAddress || !isAddress(creatorCoinAddress)) return
+    if (!vaultAddress || !isAddress(vaultAddress)) return
+
+    void (async () => {
+      safeSetPhase('checking')
       try {
-        const job = await getImageGenerationJob(jobId)
-        if (cancelled) return
-        setJobStatus(job.status as JobStatus)
-        if (job.status === 'completed' || job.status === 'failed') {
-          const project = await getImageGenerationProject(projectId)
-          if (cancelled) return
-          setOutputUrl(latestOutputUrl(project))
-          if (job.status === 'failed') setError(job.latestError ?? 'Generation failed')
+        const existing = await getVaultImage(vaultAddress)
+        if (!mountedRef.current) return
+
+        if (existing) {
+          safeSetOutputUrl(existing.outputBlobUrl)
+          safeSetPhase('done')
           return
         }
-        window.setTimeout(() => { void poll() }, 1500)
+
+        await runGeneration()
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+        const message = err instanceof Error ? err.message : String(err)
+        safeSetError(message)
+        safeSetPhase('error')
       }
+    })()
+
+    return () => {
+      mountedRef.current = false
     }
+    // vaultAddress and creatorCoinAddress are stable after deploy — deps are
+    // intentionally limited to avoid re-triggering on unrelated parent renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaultAddress, creatorCoinAddress])
 
-    void poll()
-    return () => { cancelled = true }
-  }, [jobId, projectId])
-
-  const canGenerate = Boolean(frameFile && subjectFile && instruction.trim()) && !busy
-  const canRefine = Boolean(projectId && refineInstruction.trim()) && !busy && jobStatus === 'completed'
-  const canSave = Boolean(projectId && outputUrl && !saved) && !busy && jobStatus === 'completed'
-
-  const statusLabel = useMemo(() => {
-    switch (jobStatus) {
-      case 'pending': return 'Queued…'
-      case 'processing': return 'Generating…'
-      case 'completed': return 'Done'
-      case 'failed': return 'Failed'
-      default: return null
-    }
-  }, [jobStatus])
-
-  const handleGenerate = async () => {
-    if (!frameFile || !subjectFile) return
-    setBusy(true)
-    setError(null)
+  const handleRegenerate = () => {
     setOutputUrl(null)
-    setSaved(false)
-    try {
-      const project = await createImageGenerationProject({
-        instruction: instruction.trim(),
-        stylePreset: 'modern_elegant',
-        brandContext: ['creator coin', 'ERC-4626 vault icon', 'token icon'],
-      })
-      setProjectId(project.id)
-      await uploadImageGenerationAsset({ projectId: project.id, role: 'frame', file: frameFile })
-      await uploadImageGenerationAsset({ projectId: project.id, role: 'subject', file: subjectFile })
-      const job = await enqueueImageGeneration(project.id)
-      setJobId(job.id)
-      setJobStatus(job.status as JobStatus)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
+    setError(null)
+    void runGeneration()
   }
 
-  const handleRefine = async () => {
-    if (!projectId || !refineInstruction.trim()) return
-    setBusy(true)
-    setError(null)
-    setSaved(false)
-    try {
-      const job = await enqueueImageRefine({ projectId, refineInstruction: refineInstruction.trim() })
-      setJobId(job.id)
-      setJobStatus(job.status as JobStatus)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const busy = phase === 'checking' || phase === 'fetching' || phase === 'compositing' || phase === 'saving'
 
-  const handleSave = async () => {
-    if (!projectId) return
-    setBusy(true)
-    setError(null)
-    try {
-      await associateImageProjectToVault({ projectId, vaultAddress })
-      setSaved(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+  // The stable canonical image URL that protocols like Uniswap will resolve via
+  // the on-chain contractURI(). Always points to api.4626.fun regardless of the
+  // underlying Supabase storage URL.
+  const canonicalImageUrl = isAddress(vaultAddress)
+    ? `https://api.4626.fun/v1/token/${vaultAddress}/image`
+    : null
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-2 cursor-pointer">
-          <div className="text-sm font-medium text-zinc-100">Frame reference</div>
-          <div className="text-xs text-zinc-500">Your vault border / frame template</div>
-          <input type="file" accept="image/*" className="sr-only" onChange={(e) => setFrameFile(e.target.files?.[0] ?? null)} />
-          <div className="text-xs text-zinc-400 truncate">{frameFile?.name ?? 'Click to upload'}</div>
-        </label>
-
-        <label className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-2 cursor-pointer">
-          <div className="text-sm font-medium text-zinc-100">Subject reference</div>
-          <div className="text-xs text-zinc-500">Your mascot, photo, or logo</div>
-          <input type="file" accept="image/*" className="sr-only" onChange={(e) => setSubjectFile(e.target.files?.[0] ?? null)} />
-          <div className="text-xs text-zinc-400 truncate">{subjectFile?.name ?? 'Click to upload'}</div>
-        </label>
-      </div>
-
-      <label className="block space-y-1.5">
-        <div className="text-xs font-medium text-zinc-400">Instruction</div>
-        <textarea
-          value={instruction}
-          onChange={(e) => setInstruction(e.target.value)}
-          rows={3}
-          className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-100 resize-none"
-        />
-      </label>
-
-      <div className="flex items-center justify-between gap-4">
-        {statusLabel ? (
-          <span className="text-xs text-zinc-500">{statusLabel}</span>
-        ) : (
-          <span />
-        )}
-        <button
-          type="button"
-          onClick={() => void handleGenerate()}
-          disabled={!canGenerate}
-          className="inline-flex items-center justify-center rounded-lg border border-brand-primary/40 bg-brand-primary/10 px-4 py-2 text-sm text-zinc-100 disabled:opacity-40"
-        >
-          {busy && jobStatus === 'idle' ? 'Starting…' : 'Generate'}
-        </button>
-      </div>
+      {busy ? (
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+          <svg
+            className="h-4 w-4 animate-spin shrink-0 text-brand-primary"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <span className="text-sm text-zinc-300">{PHASE_LABEL[phase]}</span>
+        </div>
+      ) : null}
 
       {outputUrl ? (
         <div className="space-y-4">
           <div className="rounded-2xl border border-white/10 overflow-hidden aspect-square max-w-xs mx-auto bg-black/20">
-            <img src={outputUrl} alt="Generated vault icon" className="w-full h-full object-contain" />
+            <img src={outputUrl} alt="Vault icon" className="w-full h-full object-contain" />
           </div>
 
-          <label className="block space-y-1.5">
-            <div className="text-xs font-medium text-zinc-400">Refine (optional)</div>
-            <textarea
-              value={refineInstruction}
-              onChange={(e) => setRefineInstruction(e.target.value)}
-              rows={2}
-              placeholder="Make the glow subtler. Center the subject more."
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-100 resize-none"
-            />
-          </label>
+          <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 space-y-1">
+            <div className="text-xs font-medium text-zinc-400">Permanent image URL</div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate text-xs text-zinc-300 font-mono">
+                {canonicalImageUrl}
+              </code>
+              {canonicalImageUrl ? (
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard.writeText(canonicalImageUrl)}
+                  className="shrink-0 rounded border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-zinc-400 hover:text-zinc-200"
+                >
+                  Copy
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs text-zinc-600">
+              Embedded in your vault's on-chain <code className="text-zinc-500">contractURI()</code> — readable by Uniswap, DEXs, and wallets.
+            </p>
+          </div>
 
-          <div className="flex items-center gap-3 justify-end">
+          <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => void handleRefine()}
-              disabled={!canRefine}
-              className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-300 disabled:opacity-40"
+              onClick={handleRegenerate}
+              disabled={busy}
+              className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
             >
-              Refine
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={!canSave}
-              className="inline-flex items-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-sm text-emerald-200 disabled:opacity-40"
-            >
-              {saved ? '✓ Saved as vault icon' : 'Save as vault icon'}
+              Regenerate
             </button>
           </div>
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {error}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={busy}
+              className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-300 disabled:opacity-40"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   )
