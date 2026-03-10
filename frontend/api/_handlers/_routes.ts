@@ -139,6 +139,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/session/bootstrapSwap': () => import('./deploy/session/_bootstrapSwap.js'),
   'deploy/session/continue': () => import('./deploy/session/_continue.js'),
   'deploy/session/create': () => import('./deploy/session/_create.js'),
+  'deploy/session/dry-run': () => import('./deploy/session/_dryRun.js'),
   'deploy/session/start': () => import('./deploy/session/_start.js'),
   'deploy/session/status': () => import('./deploy/session/_status.js'),
   'deploy/config': () => import('./deploy/_config.js'),

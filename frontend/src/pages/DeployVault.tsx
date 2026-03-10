@@ -33,6 +33,7 @@ import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/Deploymen
 import { VaultImageGenerator } from '@/components/VaultImageGenerator'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { apiFetch } from '@/lib/apiBase'
 import { logger } from '@/lib/logger'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
@@ -467,6 +468,13 @@ async function waitForPhase1CoreState(params: {
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
+type DeployRuntimeConfigResponse = {
+  creatorVaultBatcher: Address | null
+  deploymentVersion: string
+  allowApiContractOverrides: boolean
+  deployMode: string
+  serverContinue: boolean
+}
 type ServerDeployResponse = {
   userOpHash: string
   addresses: {
@@ -492,6 +500,23 @@ type DeploySessionCreateRequest = {
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
   version: string
+}
+type DeploySessionDryRunPhase = {
+  name: 'phase1' | 'phase2Core' | 'phase2Finalize' | 'phase3' | 'phase4'
+  status: 'passed' | 'failed'
+  callCount: number
+}
+type DeploySessionDryRunFailure = {
+  phase: DeploySessionDryRunPhase['name']
+  callIndex: number
+  to: Address
+  error: string
+}
+type DeploySessionDryRunResponse = {
+  ok: boolean
+  forkMode: string
+  phases: DeploySessionDryRunPhase[]
+  failure?: DeploySessionDryRunFailure
 }
 type DeployPlanExport = {
   generatedAt: string
@@ -783,12 +808,19 @@ function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; in
 }
 
 async function fetchAdminAuth(): Promise<AdminAuthResponse> {
-  const { apiFetch } = await import('@/lib/apiBase')
   const res = await apiFetch('/api/auth/admin', { method: 'GET', headers: { Accept: 'application/json' } })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<AdminAuthResponse> | null
   if (!res.ok || !json) return null
   if (!json.success) return null
   return (json.data ?? null) as AdminAuthResponse
+}
+
+async function fetchDeployRuntimeConfig(): Promise<DeployRuntimeConfigResponse | null> {
+  const res = await apiFetch('/api/deploy/config', { method: 'GET', headers: { Accept: 'application/json' } })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<DeployRuntimeConfigResponse> | null
+  if (!res.ok || !json) return null
+  if (!json.success) return null
+  return (json.data ?? null) as DeployRuntimeConfigResponse
 }
 
 // Use the canonical EntryPoint v0.6 from the ERC-4337 module
@@ -1843,6 +1875,9 @@ function DeployVaultBatcher({
   }
 
   const [busy, setBusy] = useState(false)
+  const [dryRunBusy, setDryRunBusy] = useState(false)
+  const [dryRunResult, setDryRunResult] = useState<DeploySessionDryRunResponse | null>(null)
+  const [dryRunError, setDryRunError] = useState<string | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -3063,6 +3098,7 @@ function DeployVaultBatcher({
     if (!planOnly) {
       setBusy(true)
       setError(null)
+      setDryRunError(null)
       setExportStatus(null)
       setTxId(null)
       setPhase('idle')
@@ -3071,8 +3107,23 @@ function DeployVaultBatcher({
     }
 
     try {
+      const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
       await ensurePaymasterSession()
       if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
+      const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? getAddress(runtimeConfig.creatorVaultBatcher) : null
+      if (runtimeBatcher && runtimeBatcher.toLowerCase() !== batcherAddress.toLowerCase()) {
+        throw new Error(
+          `Deploy page is stale after a local restart. Client batcher ${batcherAddress} does not match server batcher ${runtimeBatcher}. Hard refresh the page and try again.`,
+        )
+      }
+      const hasDeploymentVersionOverride =
+        typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
+      const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
+      if (!hasDeploymentVersionOverride && runtimeDeploymentVersion && runtimeDeploymentVersion !== deploymentVersion) {
+        throw new Error(
+          `Deploy page is stale after a local restart. Client deployment version ${deploymentVersion} does not match server deployment version ${runtimeDeploymentVersion}. Hard refresh the page and try again.`,
+        )
+      }
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
@@ -5094,7 +5145,7 @@ function DeployVaultBatcher({
   }
 
   const exportPlan = async () => {
-    if (busy || exportBusy) return
+    if (busy || exportBusy || dryRunBusy) return
     setExportBusy(true)
     setExportStatus(null)
     setError(null)
@@ -5118,6 +5169,46 @@ function DeployVaultBatcher({
       setError(formatDeployError(e))
     } finally {
       setExportBusy(false)
+    }
+  }
+
+  const runDryRun = async () => {
+    if (busy || exportBusy || dryRunBusy) return
+    setDryRunBusy(true)
+    setDryRunResult(null)
+    setDryRunError(null)
+    setError(null)
+    try {
+      const plan = await submit({ planOnly: true })
+      if (!plan) throw new Error('Could not prepare deployment plan.')
+
+      let attemptedReauth = false
+      while (true) {
+        const res = await fetch('/api/deploy/session/dry-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(plan.sessionCreateRequest),
+        })
+        const json = (await res.json().catch(() => null)) as ApiEnvelope<DeploySessionDryRunResponse> | null
+        if (res.ok && json?.success && json.data) {
+          setDryRunResult(json.data)
+          return
+        }
+        const errMsg = String(json?.error || 'Dry-run failed')
+        const lower = errMsg.toLowerCase()
+        const shouldRetryAuth =
+          lower.includes('not authenticated') || lower.includes('no_session') || lower.includes('deploy ownership mismatch')
+        if (!attemptedReauth && shouldRetryAuth) {
+          attemptedReauth = true
+          await ensurePaymasterSession()
+          continue
+        }
+        throw new Error(errMsg)
+      }
+    } catch (e) {
+      setDryRunError(formatDeployError(e))
+    } finally {
+      setDryRunBusy(false)
     }
   }
 
@@ -5304,16 +5395,57 @@ function DeployVaultBatcher({
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={busy || exportBusy || expectedQuery.isLoading || !expected}
-              onClick={() => void exportPlan()}
-            >
-              {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
+                onClick={() => void exportPlan()}
+              >
+                {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
+                onClick={() => void runDryRun()}
+              >
+                {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
+              </button>
+            </div>
             {exportStatus ? <div className="text-[11px] text-zinc-500">{exportStatus}</div> : null}
           </div>
+          {dryRunError ? <div className="mt-2 text-[11px] text-amber-300/80">{dryRunError}</div> : null}
+          {dryRunResult ? (
+            <div className="mt-3 rounded-lg border border-white/5 bg-black/20 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[10px] font-medium text-zinc-500">Dry run</div>
+                <div className={dryRunResult.ok ? 'text-[11px] text-green-400/80' : 'text-[11px] text-amber-300/80'}>
+                  {dryRunResult.ok ? `Pass on ${dryRunResult.forkMode} fork` : `Fail on ${dryRunResult.forkMode} fork`}
+                </div>
+              </div>
+              <div className="space-y-1 text-[11px]">
+                {dryRunResult.phases.map((phaseEntry) => (
+                  <div key={phaseEntry.name} className="flex items-center justify-between gap-3">
+                    <div className="text-zinc-400">{phaseEntry.name}</div>
+                    <div className={phaseEntry.status === 'passed' ? 'text-green-400/80' : 'text-amber-300/80'}>
+                      {phaseEntry.status === 'passed'
+                        ? `passed (${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'})`
+                        : `failed after ${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {dryRunResult.failure ? (
+                <div className="text-[11px] text-zinc-400 leading-relaxed">
+                  First failure: <span className="text-zinc-200">{dryRunResult.failure.phase}</span> call{' '}
+                  <span className="font-mono text-zinc-200">{dryRunResult.failure.callIndex + 1}</span> to{' '}
+                  <span className="font-mono text-zinc-200">{shortAddress(dryRunResult.failure.to)}</span>.
+                  <div className="mt-1 text-amber-300/80">{dryRunResult.failure.error}</div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </details>
 

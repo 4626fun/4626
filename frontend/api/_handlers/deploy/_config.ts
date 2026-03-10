@@ -2,13 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
-import { getSessionAddress, isAdminAddress } from '../../../server/_lib/session.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 type DeployConfigResponse = {
-  admin: `0x${string}`
   creatorVaultBatcher: `0x${string}` | null
+  deploymentVersion: string
   allowApiContractOverrides: boolean
   deployMode: string
   serverContinue: boolean
@@ -28,22 +27,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const admin = getSessionAddress(req)
-  if (!admin) {
-    return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
-  }
-  if (!isAdminAddress(admin)) {
-    return res.status(403).json({ success: false, error: 'Admin only' } satisfies ApiEnvelope<never>)
-  }
-
   const contracts = getApiContracts()
   const deployMode = String(process.env.VITE_DEPLOY_MODE ?? process.env.DEPLOY_MODE ?? 'default')
     .trim()
     .toLowerCase() || 'default'
+  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').trim()
 
   const data: DeployConfigResponse = {
-    admin,
     creatorVaultBatcher: contracts.creatorVaultBatcher ?? null,
+    deploymentVersion,
     allowApiContractOverrides: envBool('ALLOW_API_CONTRACT_OVERRIDES'),
     deployMode,
     serverContinue: envBool('VITE_DEPLOY_USE_SERVER_CONTINUE'),

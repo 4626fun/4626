@@ -4,8 +4,10 @@ declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_LOCAL_ORIGINS = new Set<string>([
   'http://localhost:5173',
+  'http://localhost:5174', // deploy dry-run dev server
   'http://localhost:3000',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
   'http://127.0.0.1:3000',
 ])
 
