@@ -293,6 +293,148 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
               { name: 'initialSqrtPriceX96', type: 'uint160' },
               { name: 'charmVaultName', type: 'string' },
               { name: 'charmVaultSymbol', type: 'string' },
+              { name: 'ajnaVaultName', type: 'string' },
+              { name: 'ajnaVaultSymbol', type: 'string' },
+              { name: 'charmWeightBps', type: 'uint256' },
+              { name: 'ajnaWeightBps', type: 'uint256' },
+              { name: 'solanaWeightBps', type: 'uint256' },
+              { name: 'ajnaBufferRatioBps', type: 'uint256' },
+              { name: 'ajnaMinBucketIndex', type: 'uint256' },
+              { name: 'ajnaKeeper', type: 'address' },
+              { name: 'solanaKeeper', type: 'address' },
+              { name: 'solanaMaxNavAge', type: 'uint64' },
+              { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
+              { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
+              { name: 'solanaBridgeAddress', type: 'address' },
+              { name: 'enableAutoAllocate', type: 'bool' },
+            ],
+          },
+          {
+            name: 'codeIds',
+            type: 'tuple',
+            components: [
+              { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
+              { name: 'creatorCharmStrategy', type: 'bytes32' },
+              { name: 'ajnaVaultAuth', type: 'bytes32' },
+              { name: 'ajnaVault', type: 'bytes32' },
+              { name: 'erc4626StrategyAdapter', type: 'bytes32' },
+              { name: 'solanaStrategy', type: 'bytes32' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    mockGetLogs.mockResolvedValue([{ args: { vault } }])
+
+    const phase3Data = encodeFunctionData({
+      abi: BATCHER_ABI,
+      functionName: 'deployPhase3Strategies',
+      args: [
+        {
+          creatorToken,
+          owner: sender,
+          vault,
+          version: 'v1',
+          initialSqrtPriceX96: 1n,
+          charmVaultName: 'Charm',
+          charmVaultSymbol: 'CHARM',
+          ajnaVaultName: 'Ajna Inner Vault',
+          ajnaVaultSymbol: 'aCRT',
+          charmWeightBps: 3_000n,
+          ajnaWeightBps: 3_000n,
+          solanaWeightBps: 3_000n,
+          ajnaBufferRatioBps: 1_000n,
+          ajnaMinBucketIndex: 4_156n,
+          ajnaKeeper: sender,
+          solanaKeeper: sender,
+          solanaMaxNavAge: 86_400n,
+          solanaMaxNavDeltaBpsPerUpdate: 500,
+          solanaMinBaseLiquidityBps: 100,
+          solanaBridgeAddress: sender,
+          enableAutoAllocate: false,
+        },
+        {
+          charmAlphaVaultDeploy: ZERO_BYTES32,
+          creatorCharmStrategy: ZERO_BYTES32,
+          ajnaVaultAuth: ZERO_BYTES32,
+          ajnaVault: ZERO_BYTES32,
+          erc4626StrategyAdapter: ZERO_BYTES32,
+          solanaStrategy: ZERO_BYTES32,
+        },
+      ],
+    })
+
+    expect(phase3Data.slice(0, 10).toLowerCase()).toBe('0x35a75a09')
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [creatorVaultBatcher, 0n, phase3Data],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = responseBody?.error?.message ?? ''
+
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(1)
+  })
+
+  it('rejects legacy direct-Ajna deployPhase3Strategies selector', async () => {
+    const LEGACY_BATCHER_ABI = [
+      {
+        type: 'function',
+        name: 'deployPhase3Strategies',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'creatorToken', type: 'address' },
+              { name: 'owner', type: 'address' },
+              { name: 'vault', type: 'address' },
+              { name: 'version', type: 'string' },
+              { name: 'initialSqrtPriceX96', type: 'uint160' },
+              { name: 'charmVaultName', type: 'string' },
+              { name: 'charmVaultSymbol', type: 'string' },
               { name: 'charmWeightBps', type: 'uint256' },
               { name: 'ajnaWeightBps', type: 'uint256' },
               { name: 'solanaWeightBps', type: 'uint256' },
@@ -333,10 +475,8 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       },
     ] as const
 
-    mockGetLogs.mockResolvedValue([{ args: { vault } }])
-
     const phase3Data = encodeFunctionData({
-      abi: BATCHER_ABI,
+      abi: LEGACY_BATCHER_ABI,
       functionName: 'deployPhase3Strategies',
       args: [
         {
@@ -351,7 +491,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           ajnaWeightBps: 3_000n,
           solanaWeightBps: 3_000n,
           solanaKeeper: sender,
-          solanaMaxNavAge: 86_400,
+          solanaMaxNavAge: 86_400n,
           solanaMaxNavDeltaBpsPerUpdate: 500,
           solanaMinBaseLiquidityBps: 100,
           solanaBridgeAddress: sender,
@@ -399,7 +539,8 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = responseBody?.error?.message ?? ''
 
-    expect(errMsg).not.toMatch(/request denied/i)
-    expect((globalThis.fetch as any).mock.calls.length).toBe(1)
+    expect(errMsg).toMatch(/request denied/i)
+    expect(errMsg).toMatch(/batcher_selector_not_allowed/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(0)
   })
 })

@@ -33,6 +33,8 @@ declare const process: { env: Record<string, string | undefined>; cwd(): string 
 
 const ETHEREUM_IDENTIFIER_KIND = 0
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const AJNA_MIN_BUCKET_INDEX_MIN = 0n
+const AJNA_MIN_BUCKET_INDEX_MAX = 7388n
 
 type XmtpActionType =
   | 'xmtp.group.add_member'
@@ -67,20 +69,23 @@ const ACTION_ALIASES: Record<string, SupportedActionType> = {
   charmRebalance: 'strategy.charm.rebalance',
 }
 
-const AJNA_STRATEGY_ADMIN_ABI = [
+const AJNA_VAULT_AUTH_ADMIN_ABI = [
   {
     type: 'function',
-    name: 'moveToBucket',
+    name: 'setMinBucketIndex',
     stateMutability: 'nonpayable',
-    inputs: [{ name: 'newIndex', type: 'uint256' }, { name: 'lpAmount', type: 'uint256' }],
+    inputs: [{ name: 'nextMinBucketIndex', type: 'uint256' }],
     outputs: [],
   },
+] as const
+
+const AJNA_VAULT_AUTH_VIEW_ABI = [
   {
     type: 'function',
-    name: 'setBucketIndex',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: '_index', type: 'uint256' }],
-    outputs: [],
+    name: 'admin',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
   },
 ] as const
 
@@ -531,6 +536,15 @@ function parseUintLikeFromAction(action: Record<string, unknown>, key: string): 
   throw new KeeprQueueError(`missing_${key}`, false)
 }
 
+function assertAjnaMinBucketIndex(value: bigint, label: string): void {
+  if (value < AJNA_MIN_BUCKET_INDEX_MIN || value > AJNA_MIN_BUCKET_INDEX_MAX) {
+    throw new KeeprQueueError(
+      `${label} must be between ${AJNA_MIN_BUCKET_INDEX_MIN.toString()} and ${AJNA_MIN_BUCKET_INDEX_MAX.toString()}`,
+      false,
+    )
+  }
+}
+
 function isLikelyRetryableRpcError(message: string): boolean {
   const m = message.toLowerCase()
   return (
@@ -726,30 +740,50 @@ async function executeStrategyAction(
   const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
 
   if (actionType === 'strategy.ajna.rebucket') {
-    const strategyAddress = normalizeAddress(action.strategyAddress, 'strategyAddress')
     const targetBucket = parseUintLikeFromAction(action, 'targetBucket')
-    const methodRaw = String(action.method ?? 'moveToBucket').trim()
-    const method = methodRaw === 'setBucketIndex' ? 'setBucketIndex' : methodRaw === 'moveToBucket' ? 'moveToBucket' : null
-    if (!method) throw new KeeprQueueError('invalid_method', false)
-
-    const txHash =
-      method === 'moveToBucket'
-        ? await walletClient.writeContract({
-            address: strategyAddress,
-            abi: AJNA_STRATEGY_ADMIN_ABI as unknown as Abi,
-            functionName: 'moveToBucket',
-            args: [targetBucket, 0n],
-            chain: base,
-            account,
-          })
-        : await walletClient.writeContract({
-            address: strategyAddress,
-            abi: AJNA_STRATEGY_ADMIN_ABI as unknown as Abi,
-            functionName: 'setBucketIndex',
-            args: [targetBucket],
-            chain: base,
-            account,
-          })
+    assertAjnaMinBucketIndex(targetBucket, 'targetBucket')
+    const methodRaw = typeof action.method === 'string' ? action.method.trim() : ''
+    if (methodRaw && methodRaw !== 'setMinBucketIndex') {
+      throw new KeeprQueueError('invalid_method', false)
+    }
+    const authAddress = normalizeAddress(action.authAddress ?? action.targetAddress, 'authAddress')
+    const strategyAddress =
+      action.strategyAddress == null ? null : normalizeAddress(action.strategyAddress, 'strategyAddress')
+    const keeperAddress = normalizeAddress(account.address, 'keeperAddress')
+    let authAdminRaw: unknown
+    try {
+      authAdminRaw = await publicClient.readContract({
+        address: authAddress,
+        abi: AJNA_VAULT_AUTH_VIEW_ABI,
+        functionName: 'admin',
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new KeeprQueueError(`ajna_auth_admin_read_failed:${message}`, isLikelyRetryableRpcError(message))
+    }
+    if (!isAddressLike(authAdminRaw)) {
+      throw new KeeprQueueError('ajna_auth_admin_unreadable', false)
+    }
+    const authAdmin = normalizeAddress(authAdminRaw, 'authAdmin')
+    if (authAdmin !== keeperAddress) {
+      logger.warn('[keepr/xmtp-queue] keeper cannot rebucket Ajna auth directly', {
+        authAddress,
+        authAdmin,
+        keeperAddress,
+      })
+      throw new KeeprQueueError(
+        `ajna_auth_admin_mismatch:keeper=${keeperAddress}:admin=${authAdmin}`,
+        false,
+      )
+    }
+    const txHash = await walletClient.writeContract({
+      address: authAddress,
+      abi: AJNA_VAULT_AUTH_ADMIN_ABI as unknown as Abi,
+      functionName: 'setMinBucketIndex',
+      args: [targetBucket],
+      chain: base,
+      account,
+    })
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
     if (receipt.status !== 'success') {
@@ -758,7 +792,9 @@ async function executeStrategyAction(
     return {
       txHash,
       strategyAddress,
-      method,
+      authAddress,
+      targetAddress: authAddress,
+      method: 'setMinBucketIndex',
       targetBucket: targetBucket.toString(),
     }
   }

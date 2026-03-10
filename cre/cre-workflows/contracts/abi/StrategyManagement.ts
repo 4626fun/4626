@@ -67,17 +67,51 @@ export const OracleStrategyViewABI = [
   },
 ] as const
 
-export const AjnaStrategyViewABI = [
+export const AjnaAdapterViewABI = [
   {
     type: "function",
-    name: "ajnaPool",
+    name: "ERC4626_VAULT",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address" }],
   },
   {
     type: "function",
-    name: "bucketIndex",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const
+
+export const AjnaInnerVaultViewABI = [
+  {
+    type: "function",
+    name: "AJNA_POOL",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "AUTH",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const
+
+export const AjnaAuthViewABI = [
+  {
+    type: "function",
+    name: "admin",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "minBucketIndex",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint256" }],

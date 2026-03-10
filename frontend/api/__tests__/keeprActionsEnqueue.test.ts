@@ -49,7 +49,7 @@ describe('keepr/actions/enqueue', () => {
     expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
   })
 
-  it('enqueues a valid deduped action', async () => {
+  it('enqueues a valid nested Ajna rebucket action', async () => {
     enqueueKeeprActionMock.mockResolvedValue({ id: 42 })
 
     const req = createMockReq({
@@ -59,10 +59,10 @@ describe('keepr/actions/enqueue', () => {
         vaultAddress: '0x00000000000000000000000000000000000000bb',
         groupId: 'group-1',
         actionType: 'strategy.ajna.rebucket',
-        dedupeKey: 'vault:0x...:strategy:0x...:action:strategy.ajna.rebucket:band:1234',
+        dedupeKey: 'vault:0x...:auth:0x...:action:strategy.ajna.rebucket:band:1234',
         action: {
           action: 'strategy.ajna.rebucket',
-          strategyAddress: '0x00000000000000000000000000000000000000cc',
+          authAddress: '0x00000000000000000000000000000000000000cc',
           targetBucket: 1234,
         },
       },
@@ -77,10 +77,10 @@ describe('keepr/actions/enqueue', () => {
       vaultAddress: '0x00000000000000000000000000000000000000bb',
       groupId: 'group-1',
       actionType: 'strategy.ajna.rebucket',
-      dedupeKey: 'vault:0x...:strategy:0x...:action:strategy.ajna.rebucket:band:1234',
+      dedupeKey: 'vault:0x...:auth:0x...:action:strategy.ajna.rebucket:band:1234',
       action: {
         action: 'strategy.ajna.rebucket',
-        strategyAddress: '0x00000000000000000000000000000000000000cc',
+        authAddress: '0x00000000000000000000000000000000000000cc',
         targetBucket: 1234,
       },
     })

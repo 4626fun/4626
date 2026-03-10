@@ -119,7 +119,7 @@ describe('keepr/actions/execute', () => {
     expect(executeKeeprActionMock).toHaveBeenCalled()
   })
 
-  it('executes strategy rebucket action payload successfully', async () => {
+  it('executes nested Ajna rebucket action payload successfully', async () => {
     executeKeeprActionMock.mockResolvedValue({
       success: true,
       retryable: false,
@@ -137,9 +137,8 @@ describe('keepr/actions/execute', () => {
         actionType: 'strategy.ajna.rebucket',
         action: {
           action: 'strategy.ajna.rebucket',
-          strategyAddress: '0x00000000000000000000000000000000000000cc',
+          authAddress: '0x00000000000000000000000000000000000000cc',
           targetBucket: 1200,
-          method: 'moveToBucket',
         },
       },
     })
@@ -156,9 +155,8 @@ describe('keepr/actions/execute', () => {
       actionType: 'strategy.ajna.rebucket',
       action: {
         action: 'strategy.ajna.rebucket',
-        strategyAddress: '0x00000000000000000000000000000000000000cc',
+        authAddress: '0x00000000000000000000000000000000000000cc',
         targetBucket: 1200,
-        method: 'moveToBucket',
       },
     })
   })

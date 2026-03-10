@@ -6,9 +6,9 @@ import "../../interfaces/uniswap/IUniswapV3Factory.sol";
 import "../../interfaces/uniswap/IUniswapV3Pool.sol";
 import {
     ICreatorCharmStrategyFactory,
-    IAjnaStrategyFactory,
+    IAjnaERC4626StrategyFactory,
     CreatorCharmStrategyFactory,
-    AjnaStrategyFactory
+    AjnaERC4626StrategyFactory
 } from "./StrategyDeploymentFactories.sol";
 
 /**
@@ -64,13 +64,15 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
 
     constructor() {
         creatorCharmStrategyFactory = address(new CreatorCharmStrategyFactory());
-        ajnaStrategyFactory = address(new AjnaStrategyFactory());
+        ajnaStrategyFactory = address(new AjnaERC4626StrategyFactory());
     }
 
     struct DeploymentResult {
         address charmVault;
         address charmStrategy;
         address creatorCharmStrategy;
+        address ajnaVaultAuth;
+        address ajnaVault;
         address ajnaStrategy;
         address v3Pool;
     }
@@ -171,8 +173,22 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         // STEP 5: Deploy Ajna Strategy (if factory provided)
         // ═══════════════════════════════════════════════════════════
         if (_ajnaFactory != address(0)) {
-            result.ajnaStrategy = IAjnaStrategyFactory(ajnaStrategyFactory)
-                .deploy(creatorVault, underlyingToken, _ajnaFactory, quoteToken, owner);
+            string memory ajnaVaultName = string.concat("Ajna ", vaultName);
+            string memory ajnaVaultSymbol = string.concat("A-", vaultSymbol);
+            (result.ajnaStrategy, result.ajnaVault, result.ajnaVaultAuth) = IAjnaERC4626StrategyFactory(
+                ajnaStrategyFactory
+            ).deploy(
+                creatorVault,
+                underlyingToken,
+                _ajnaFactory,
+                quoteToken,
+                owner,
+                ajnaVaultName,
+                ajnaVaultSymbol,
+                1_000,
+                4_156,
+                owner
+            );
         }
 
         emit StrategiesDeployed(msg.sender, underlyingToken, result);

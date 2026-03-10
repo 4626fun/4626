@@ -7,7 +7,9 @@ export { ERC20ABI } from "./ERC20"
 export {
   VaultStrategyViewABI,
   OracleStrategyViewABI,
-  AjnaStrategyViewABI,
+  AjnaAdapterViewABI,
+  AjnaInnerVaultViewABI,
+  AjnaAuthViewABI,
   AjnaPoolViewABI,
   CharmStrategyViewABI,
   CharmVaultViewABI,

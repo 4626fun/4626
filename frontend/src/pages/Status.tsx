@@ -57,9 +57,14 @@ type VaultFixContext = {
   oracleV3Pool?: string | null
   v3PoolAddress?: string | null
   v3ObservationCardinalityNext?: string | null
-  ajnaStrategyAddress?: string | null
-  ajnaStrategyOwner?: string | null
-  ajnaBucketIndex?: string | null
+  ajnaAdapterAddress?: string | null
+  ajnaAdapterOwner?: string | null
+  ajnaInnerVaultAddress?: string | null
+  ajnaAuthAddress?: string | null
+  ajnaAuthAdmin?: string | null
+  ajnaBufferRatioBps?: string | null
+  ajnaMinBucketIndex?: string | null
+  ajnaPaused?: boolean | null
   ajnaSuggestedBucketIndex?: string | null
 }
 
@@ -220,12 +225,12 @@ const ORACLE_ADMIN_ABI = [
   },
 ] as const
 
-const AJNA_ADMIN_ABI = [
+const AJNA_AUTH_ADMIN_ABI = [
   {
     type: 'function',
-    name: 'setBucketIndex',
+    name: 'setMinBucketIndex',
     stateMutability: 'nonpayable',
-    inputs: [{ name: '_index', type: 'uint256' }],
+    inputs: [{ name: 'nextMinBucketIndex', type: 'uint256' }],
     outputs: [],
   },
 ] as const
@@ -361,19 +366,26 @@ export function Status() {
     typeof ctx.v3ObservationCardinalityNext === 'string' && /^\d+$/.test(ctx.v3ObservationCardinalityNext)
       ? Number(ctx.v3ObservationCardinalityNext)
       : null
-  const ajnaStrategy = typeof ctx.ajnaStrategyAddress === 'string' && isAddressLike(ctx.ajnaStrategyAddress) ? ctx.ajnaStrategyAddress : null
-  const ajnaOwner = typeof ctx.ajnaStrategyOwner === 'string' && isAddressLike(ctx.ajnaStrategyOwner) ? ctx.ajnaStrategyOwner : null
-  const ajnaBucket =
-    typeof ctx.ajnaBucketIndex === 'string' && /^\d+$/.test(ctx.ajnaBucketIndex) ? BigInt(ctx.ajnaBucketIndex) : null
+  const ajnaInnerVault = typeof ctx.ajnaInnerVaultAddress === 'string' && isAddressLike(ctx.ajnaInnerVaultAddress) ? ctx.ajnaInnerVaultAddress : null
+  const ajnaAuth = typeof ctx.ajnaAuthAddress === 'string' && isAddressLike(ctx.ajnaAuthAddress) ? ctx.ajnaAuthAddress : null
+  const ajnaAuthAdmin = typeof ctx.ajnaAuthAdmin === 'string' && isAddressLike(ctx.ajnaAuthAdmin) ? ctx.ajnaAuthAdmin : null
+  const ajnaBufferRatioBps =
+    typeof ctx.ajnaBufferRatioBps === 'string' && /^\d+$/.test(ctx.ajnaBufferRatioBps) ? BigInt(ctx.ajnaBufferRatioBps) : null
+  const ajnaMinBucket =
+    typeof ctx.ajnaMinBucketIndex === 'string' && /^\d+$/.test(ctx.ajnaMinBucketIndex) ? BigInt(ctx.ajnaMinBucketIndex) : null
+  const ajnaPaused = typeof ctx.ajnaPaused === 'boolean' ? ctx.ajnaPaused : null
   const ajnaSuggestedBucket =
     typeof ctx.ajnaSuggestedBucketIndex === 'string' && /^\d+$/.test(ctx.ajnaSuggestedBucketIndex)
       ? BigInt(ctx.ajnaSuggestedBucketIndex)
       : null
+  const ajnaConfigOwner = ajnaAuthAdmin
+  const ajnaConfiguredBucket = ajnaMinBucket
 
   const canFixShare = !!address && !!shareOwner && address.toLowerCase() === shareOwner.toLowerCase()
   const canFixVault = !!address && !!vaultOwner && address.toLowerCase() === vaultOwner.toLowerCase()
   const canFixOracle = !!address && !!oracleOwner && address.toLowerCase() === oracleOwner.toLowerCase()
-  const canFixAjna = !!address && !!ajnaOwner && address.toLowerCase() === ajnaOwner.toLowerCase()
+  const canFixAjna =
+    !!address && !!ajnaAuth && !!ajnaConfigOwner && address.toLowerCase() === ajnaConfigOwner.toLowerCase()
   const isBase = (chain?.id ?? base.id) === base.id
 
   const fixActions = useMemo(() => {
@@ -529,25 +541,24 @@ export function Status() {
     }
 
     if (
-      ajnaStrategy &&
+      ajnaAuth &&
       ajnaSuggestedBucket !== null &&
       ajnaSuggestedBucket !== undefined &&
-      (ajnaBucket === null || ajnaBucket === undefined || ajnaBucket !== ajnaSuggestedBucket)
+      (ajnaConfiguredBucket === null || ajnaConfiguredBucket === undefined || ajnaConfiguredBucket !== ajnaSuggestedBucket)
     ) {
       actions.push({
         id: 'fix-ajna-bucket',
-        title: 'Set Ajna bucket (suggested)',
-        description:
-          'Sets AjnaStrategy.bucketIndex using the CREATOR/USDC V3 tick suggestion. Works best before the strategy has deposited liquidity.',
-        requiredOwner: ajnaOwner,
+        title: 'Set Ajna min bucket (suggested)',
+        description: `Sets AjnaVaultAuth.minBucketIndex so the nested Ajna ERC-4626 vault only routes liquidity into buckets at or above the suggested floor.${ajnaInnerVault ? ` Inner vault: ${ajnaInnerVault}.` : ''}${ajnaBufferRatioBps !== null ? ` Buffer ratio: ${ajnaBufferRatioBps.toString()} bps.` : ''}${ajnaPaused === true ? ' Vault is currently paused.' : ''}`,
+        requiredOwner: ajnaConfigOwner,
         canRun: !!isConnected && isBase && canFixAjna,
         onRun: async () => {
           setFixError(null)
           setFixingId('fix-ajna-bucket')
           const hash = await writeContractAsync({
-            address: ajnaStrategy as `0x${string}`,
-            abi: AJNA_ADMIN_ABI,
-            functionName: 'setBucketIndex',
+            address: ajnaAuth as `0x${string}`,
+            abi: AJNA_AUTH_ADMIN_ABI,
+            functionName: 'setMinBucketIndex',
             args: [ajnaSuggestedBucket],
             chainId: base.id,
           })
@@ -580,9 +591,12 @@ export function Status() {
 
     return actions
   }, [
-    ajnaBucket,
-    ajnaOwner,
-    ajnaStrategy,
+    ajnaBufferRatioBps,
+    ajnaConfiguredBucket,
+    ajnaInnerVault,
+    ajnaAuth,
+    ajnaConfigOwner,
+    ajnaPaused,
     ajnaSuggestedBucket,
     canFixAjna,
     canFixOracle,
@@ -724,7 +738,7 @@ export function Status() {
               <div className="pt-4 border-t border-zinc-900/50 space-y-3">
                 <div className="flex items-center justify-between gap-4">
                   <div className="label">Fixes</div>
-                  <div className="text-[10px] text-zinc-600">Creator-only</div>
+                  <div className="text-[10px] text-zinc-600">Owner-gated</div>
                 </div>
 
                 {!isBase ? (

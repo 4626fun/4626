@@ -118,10 +118,20 @@ const CREATOR_CHARM_STRATEGY_VIEW_ABI = [
   { type: 'function', name: 'charmVault', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
-const AJNA_STRATEGY_VIEW_ABI = [
-  { type: 'function', name: 'ajnaPool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'ajnaFactory', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+const ERC4626_STRATEGY_ADAPTER_VIEW_ABI = [
+  { type: 'function', name: 'ERC4626_VAULT', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const AJNA_INNER_VAULT_VIEW_ABI = [
+  { type: 'function', name: 'AJNA_POOL', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'AUTH', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const AJNA_AUTH_VIEW_ABI = [
+  { type: 'function', name: 'admin', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'bufferRatio', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'minBucketIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'paused', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
 ] as const
 
 const SOLANA_BRIDGE_STRATEGY_VIEW_ABI = [
@@ -134,8 +144,8 @@ const STRATEGY_VIEW_ABI = [
   { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
-const AJNA_STRATEGY_BUCKET_ABI = [
-  { type: 'function', name: 'bucketIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+const AJNA_POOL_VIEW_ABI = [
+  { type: 'function', name: 'collateralAddress', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
 const ORACLE_V3_VIEW_ABI = [
@@ -445,9 +455,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
-    let ajnaStrategyAddress: `0x${string}` | null = null
-    let ajnaStrategyOwner: `0x${string}` | null = null
-    let ajnaBucketIndex: bigint | null = null
+    let ajnaAdapterAddress: `0x${string}` | null = null
+    let ajnaAdapterOwner: `0x${string}` | null = null
+    let ajnaInnerVaultAddress: `0x${string}` | null = null
+    let ajnaAuthAddress: `0x${string}` | null = null
+    let ajnaAuthAdmin: `0x${string}` | null = null
+    let ajnaBufferRatioBps: bigint | null = null
+    let ajnaMinBucketIndex: bigint | null = null
+    let ajnaPaused: boolean | null = null
     let ajnaCollateralToken: `0x${string}` | null = null
     let solanaStrategyAddress: `0x${string}` | null = null
     let solanaStrategyOwner: `0x${string}` | null = null
@@ -459,10 +474,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       stratCalls.push({ address: s, abi: STRATEGY_VIEW_ABI, functionName: 'isActive' })
       stratCalls.push({ address: s, abi: STRATEGY_VIEW_ABI, functionName: 'asset' })
       stratCalls.push({ address: s, abi: CREATOR_CHARM_STRATEGY_VIEW_ABI, functionName: 'charmVault' })
-      stratCalls.push({ address: s, abi: AJNA_STRATEGY_VIEW_ABI, functionName: 'ajnaPool' })
-      stratCalls.push({ address: s, abi: AJNA_STRATEGY_VIEW_ABI, functionName: 'collateralToken' })
-      stratCalls.push({ address: s, abi: AJNA_STRATEGY_VIEW_ABI, functionName: 'ajnaFactory' })
-      stratCalls.push({ address: s, abi: AJNA_STRATEGY_BUCKET_ABI, functionName: 'bucketIndex' })
       stratCalls.push({ address: s, abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI, functionName: 'bridgeAdapter' })
       stratCalls.push({ address: s, abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI, functionName: 'solanaDestination' })
       stratCalls.push({ address: s, abi: OWNABLE_VIEW_ABI, functionName: 'owner' })
@@ -477,7 +488,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         details: 'Rate limited while reading strategy details. Try again.',
       })
     } else {
-      const stride = 10
+      const stride = 6
       for (let i = 0; i < strategies.length; i++) {
         const s = strategies[i]
         const w = weights[i] ?? 0n
@@ -486,35 +497,88 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const isActive = pickResult<boolean>(stratRes[base + 0])
         const asset = pickResult<`0x${string}`>(stratRes[base + 1])
         const charmVault = pickResult<`0x${string}`>(stratRes[base + 2])
-        const ajnaPool = pickResult<`0x${string}`>(stratRes[base + 3])
-        const collateral = pickResult<`0x${string}`>(stratRes[base + 4])
-        const ajnaFactory = pickResult<`0x${string}`>(stratRes[base + 5])
-        const bucketIndex = pickResult<bigint>(stratRes[base + 6])
-        const bridgeAdapter = pickResult<`0x${string}`>(stratRes[base + 7])
-        const solanaDestination = pickResult<`0x${string}`>(stratRes[base + 8])
-        const stratOwner = pickResult<`0x${string}`>(stratRes[base + 9])
+        const bridgeAdapter = pickResult<`0x${string}`>(stratRes[base + 3])
+        const solanaDestination = pickResult<`0x${string}`>(stratRes[base + 4])
+        const stratOwner = pickResult<`0x${string}`>(stratRes[base + 5])
+        let nestedAjnaInnerVault: `0x${string}` | null = null
+        let nestedAjnaAuth: `0x${string}` | null = null
+        let nestedAjnaAdmin: `0x${string}` | null = null
+        let nestedAjnaBufferRatio: bigint | null = null
+        let nestedAjnaMinBucket: bigint | null = null
+        let nestedAjnaPaused: boolean | null = null
+        let nestedAjnaCollateral: `0x${string}` | null = null
+        let effectiveAjnaPool: `0x${string}` | null = null
+
+        const adapterRes = await safeMulticall(client, [
+          { address: s, abi: ERC4626_STRATEGY_ADAPTER_VIEW_ABI, functionName: 'ERC4626_VAULT' },
+        ])
+        const adapterVault = pickResult<`0x${string}`>(adapterRes[0])
+
+        if (addrOk(adapterVault)) {
+          nestedAjnaInnerVault = adapterVault ?? null
+
+          const innerRes = await safeMulticall(client, [
+            { address: adapterVault as `0x${string}`, abi: AJNA_INNER_VAULT_VIEW_ABI, functionName: 'AJNA_POOL' },
+            { address: adapterVault as `0x${string}`, abi: AJNA_INNER_VAULT_VIEW_ABI, functionName: 'AUTH' },
+          ])
+          effectiveAjnaPool = pickResult<`0x${string}`>(innerRes[0])
+          nestedAjnaAuth = pickResult<`0x${string}`>(innerRes[1])
+
+          if (addrOk(effectiveAjnaPool)) {
+            const poolRes = await safeMulticall(client, [
+              { address: effectiveAjnaPool as `0x${string}`, abi: AJNA_POOL_VIEW_ABI, functionName: 'collateralAddress' },
+            ])
+            nestedAjnaCollateral = pickResult<`0x${string}`>(poolRes[0])
+          }
+
+          if (addrOk(nestedAjnaAuth)) {
+            const authRes = await safeMulticall(client, [
+              { address: nestedAjnaAuth as `0x${string}`, abi: AJNA_AUTH_VIEW_ABI, functionName: 'admin' },
+              { address: nestedAjnaAuth as `0x${string}`, abi: AJNA_AUTH_VIEW_ABI, functionName: 'bufferRatio' },
+              { address: nestedAjnaAuth as `0x${string}`, abi: AJNA_AUTH_VIEW_ABI, functionName: 'minBucketIndex' },
+              { address: nestedAjnaAuth as `0x${string}`, abi: AJNA_AUTH_VIEW_ABI, functionName: 'paused' },
+            ])
+            nestedAjnaAdmin = pickResult<`0x${string}`>(authRes[0])
+            nestedAjnaBufferRatio = pickResult<bigint>(authRes[1])
+            nestedAjnaMinBucket = pickResult<bigint>(authRes[2])
+            nestedAjnaPaused = pickResult<boolean>(authRes[3])
+          }
+        }
         const hasSolanaRoute =
           addrOk(bridgeAdapter) || (typeof solanaDestination === 'string' && solanaDestination.toLowerCase() !== ZERO_BYTES32)
+        const isNestedAjna = Boolean(nestedAjnaInnerVault && addrOk(effectiveAjnaPool))
 
         const flavor = addrOk(charmVault)
           ? 'Charm LP (CreatorCharmStrategy)'
-          : addrOk(ajnaPool)
-            ? 'Ajna lending (AjnaStrategy)'
+          : isNestedAjna
+            ? 'Ajna lending (adapter-backed inner vault)'
             : hasSolanaRoute
               ? 'Solana bridge (SolanaBridgeStrategy)'
             : `Strategy #${i + 1}`
 
         const assetOk = asset && isAddress(asset) ? asset.toLowerCase() === creatorToken.toLowerCase() : null
         const status: CheckStatus =
-          isActive === false ? 'warn' : assetOk === false ? 'fail' : typeof isActive !== 'boolean' || assetOk === null ? 'warn' : 'pass'
+          assetOk === false
+            ? 'fail'
+            : isActive === false || nestedAjnaPaused === true
+              ? 'warn'
+              : typeof isActive !== 'boolean' || assetOk === null
+                ? 'warn'
+                : 'pass'
 
         const extras: string[] = [`${s} · weight ${w.toString()}`]
         if (asset) extras.push(`asset=${asset}`)
         if (charmVault) extras.push(`charmVault=${charmVault}`)
-        if (ajnaPool) extras.push(`ajnaPool=${ajnaPool}`)
-        if (collateral) extras.push(`collateral=${collateral}`)
-        if (ajnaFactory) extras.push(`factory=${ajnaFactory}`)
-        if (bucketIndex !== null && bucketIndex !== undefined) extras.push(`bucket=${bucketIndex.toString()}`)
+        if (isNestedAjna) {
+          if (effectiveAjnaPool) extras.push(`ajnaPool=${effectiveAjnaPool}`)
+          if (nestedAjnaCollateral) extras.push(`collateral=${nestedAjnaCollateral}`)
+          if (nestedAjnaInnerVault) extras.push(`innerVault=${nestedAjnaInnerVault}`)
+          if (nestedAjnaAuth) extras.push(`auth=${nestedAjnaAuth}`)
+          if (nestedAjnaAdmin) extras.push(`authAdmin=${nestedAjnaAdmin}`)
+          if (nestedAjnaBufferRatio !== null && nestedAjnaBufferRatio !== undefined) extras.push(`bufferRatio=${nestedAjnaBufferRatio.toString()}`)
+          if (nestedAjnaMinBucket !== null && nestedAjnaMinBucket !== undefined) extras.push(`minBucket=${nestedAjnaMinBucket.toString()}`)
+          if (typeof nestedAjnaPaused === 'boolean') extras.push(`paused=${String(nestedAjnaPaused)}`)
+        }
         if (bridgeAdapter) extras.push(`bridgeAdapter=${bridgeAdapter}`)
         if (solanaDestination) extras.push(`solanaDestination=${solanaDestination}`)
         if (stratOwner) extras.push(`owner=${stratOwner}`)
@@ -527,12 +591,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           href: basescanAddressHref(s),
         })
 
-        // Capture Ajna strategy context for pricing + fix actions.
-        if (!ajnaStrategyAddress && addrOk(ajnaPool)) {
-          ajnaStrategyAddress = s
-          ajnaStrategyOwner = stratOwner
-          ajnaBucketIndex = bucketIndex ?? null
-          ajnaCollateralToken = collateral ?? null
+        // Capture nested Ajna adapter context for pricing + fix actions.
+        if (!ajnaAdapterAddress && isNestedAjna) {
+          ajnaAdapterAddress = s
+          ajnaAdapterOwner = stratOwner
+          ajnaInnerVaultAddress = nestedAjnaInnerVault
+          ajnaAuthAddress = nestedAjnaAuth
+          ajnaAuthAdmin = nestedAjnaAdmin
+          ajnaBufferRatioBps = nestedAjnaBufferRatio
+          ajnaMinBucketIndex = nestedAjnaMinBucket
+          ajnaPaused = nestedAjnaPaused
+          ajnaCollateralToken = nestedAjnaCollateral ?? null
         }
         if (!solanaStrategyAddress && hasSolanaRoute) {
           solanaStrategyAddress = s
@@ -760,22 +829,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Compare Ajna bucket to suggested (best-effort)
-    if (
-      suggestedAjnaBucket !== null &&
-      suggestedAjnaBucket !== undefined &&
-      ajnaBucketIndex !== null &&
-      ajnaBucketIndex !== undefined &&
-      addrOk(ajnaStrategyAddress)
-    ) {
-      const ok = ajnaBucketIndex === BigInt(suggestedAjnaBucket)
-      pricingChecks.push({
-        id: 'ajna-bucket-match',
-        label: 'Ajna bucket matches suggestion',
-        status: ok ? 'pass' : 'warn',
-        details: `current=${ajnaBucketIndex.toString()} · suggested=${suggestedAjnaBucket} · ltv=${(AJNA_BUCKET_TARGET_LTV_BPS / 100).toFixed(2)}%${ajnaCollateralToken ? ` · collateral=${ajnaCollateralToken}` : ''}`,
-        href: basescanAddressHref(ajnaStrategyAddress),
-      })
+    const ajnaConfiguredBucket = ajnaMinBucketIndex
+
+    // Compare Ajna bucket/min-bucket to suggested (best-effort)
+    const ajnaHrefTarget = ajnaAuthAddress ?? ajnaAdapterAddress
+    if (suggestedAjnaBucket !== null && suggestedAjnaBucket !== undefined && addrOk(ajnaHrefTarget)) {
+      if (ajnaConfiguredBucket === null || ajnaConfiguredBucket === undefined) {
+        pricingChecks.push({
+          id: 'ajna-bucket-match',
+          label: 'Ajna min bucket configured',
+          status: 'warn',
+          details: `No min bucket configured yet · suggested=${suggestedAjnaBucket}`,
+          href: basescanAddressHref(ajnaHrefTarget),
+        })
+      } else {
+        const ok = ajnaConfiguredBucket === BigInt(suggestedAjnaBucket)
+        pricingChecks.push({
+          id: 'ajna-bucket-match',
+          label: 'Ajna min bucket matches suggestion',
+          status: ok ? 'pass' : 'warn',
+          details: `current=${ajnaConfiguredBucket.toString()} · suggested=${suggestedAjnaBucket} · ltv=${(AJNA_BUCKET_TARGET_LTV_BPS / 100).toFixed(2)}%${ajnaCollateralToken ? ` · collateral=${ajnaCollateralToken}` : ''}`,
+          href: basescanAddressHref(ajnaHrefTarget),
+        })
+      }
     }
 
     // Core and wiring sections
@@ -916,9 +992,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           v3ObservationCardinalityNext: v3ObservationCardinalityNext == null ? null : String(v3ObservationCardinalityNext),
           v3SpotUsdPerCreator: v3SpotUsdPerCreator == null ? null : String(v3SpotUsdPerCreator),
           v3TwapUsdPerCreator: v3TwapUsdPerCreator == null ? null : String(v3TwapUsdPerCreator),
-          ajnaStrategyAddress,
-          ajnaStrategyOwner,
-          ajnaBucketIndex: ajnaBucketIndex == null ? null : ajnaBucketIndex.toString(),
+          ajnaAdapterAddress,
+          ajnaAdapterOwner,
+          ajnaInnerVaultAddress,
+          ajnaAuthAddress,
+          ajnaAuthAdmin,
+          ajnaBufferRatioBps: ajnaBufferRatioBps == null ? null : ajnaBufferRatioBps.toString(),
+          ajnaMinBucketIndex: ajnaMinBucketIndex == null ? null : ajnaMinBucketIndex.toString(),
+          ajnaPaused,
           ajnaSuggestedBucketIndex: suggestedAjnaBucket == null ? null : String(suggestedAjnaBucket),
           solanaStrategyAddress,
           solanaStrategyOwner,

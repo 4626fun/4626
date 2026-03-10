@@ -10,12 +10,42 @@ title: Verification
 
 Before launching, ensure the vault has yield strategies configured (management-only):
 
-- Deploy strategies via `/admin/deploy-strategies` (uses `StrategyDeploymentBatcher`)
+- Deploy strategies via the phased deployment flow / `DeploymentBatcher`
 - Set weights:
   - Charm (AKITA/USDC): **6900**
   - Ajna: **2139**
 - Set idle reserve:
   - `minimumTotalIdle = 4,805,000 * 1e18` (9.61% of the 50M launch deposit)
+
+### Canonical Ajna Verification (Current Deploy Path)
+
+The Ajna sleeve is the nested adapter-backed bundle:
+
+- `ERC4626StrategyAdapter`
+- `AjnaERC4626Vault`
+- `AjnaVaultAuth`
+
+Verify the nested shape instead:
+
+1. `CreatorOVault` strategy list contains an `ERC4626StrategyAdapter`
+2. `ERC4626StrategyAdapter.ERC4626_VAULT()` returns the inner `AjnaERC4626Vault`
+3. `AjnaERC4626Vault.AUTH()` returns `AjnaVaultAuth`
+4. `AjnaVaultAuth` exposes the expected:
+   - `admin`
+   - `bufferRatio`
+   - `minBucketIndex`
+   - `paused`
+
+Recommended operator check:
+
+- Open `/status?vault=<vault>` and confirm the Ajna section reports:
+  - adapter-backed inner vault
+  - inner vault address
+  - auth address/admin
+  - buffer ratio
+  - current or suggested bucket floor
+
+If `/status` does not show the adapter-backed inner vault shape, treat that deployment as misconfigured.
 
 ### On-chain Checks
 
@@ -24,6 +54,17 @@ vault.getStrategyCount()           -> 2
 vault.strategyWeights(charmStrategy) -> 6900
 vault.strategyWeights(ajnaStrategy)  -> 2139
 vault.minimumTotalIdle()           -> 4_805_000e18
+```
+
+For the canonical nested Ajna path, also read:
+
+```solidity
+adapter.ERC4626_VAULT()            -> innerAjnaVault
+innerAjnaVault.AUTH()              -> ajnaVaultAuth
+innerAjnaVault.AJNA_POOL()         -> ajnaPool
+ajnaVaultAuth.bufferRatio()        -> expected bps
+ajnaVaultAuth.minBucketIndex()     -> expected bucket floor
+ajnaVaultAuth.paused()             -> false
 ```
 
 ---

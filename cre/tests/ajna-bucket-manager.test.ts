@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bucketPriceChangeBps,
   clampBucketIndex,
+  clampMinBucketIndex,
   computeSteppedBucket,
   deriveAjnaBucketFromV3Tick,
   pickBestLiquidityBucket,
@@ -13,6 +14,12 @@ describe('ajna bucket manager helpers', () => {
     expect(clampBucketIndex(0)).toBe(1);
     expect(clampBucketIndex(9_999)).toBe(7_388);
     expect(clampBucketIndex(4_156)).toBe(4_156);
+  });
+
+  it('preserves zero for min-bucket floor bounds', () => {
+    expect(clampMinBucketIndex(0)).toBe(0);
+    expect(clampMinBucketIndex(9_999)).toBe(7_388);
+    expect(clampMinBucketIndex(4_156)).toBe(4_156);
   });
 
   it('does not move when delta is under threshold', () => {

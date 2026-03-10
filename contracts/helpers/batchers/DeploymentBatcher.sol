@@ -10,6 +10,7 @@ import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol"
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
+import {IAjnaPoolFactory} from "../../interfaces/IAjnaPool.sol";
 import {IBaseSolanaBridge} from "../../interfaces/IBaseSolanaBridge.sol";
 import {CreatorLinearVesting} from "../../utilities/vesting/CreatorLinearVesting.sol";
 
@@ -102,6 +103,17 @@ interface ICreatorCharmStrategy {
 interface ICreatorOVaultStrategyManager {
     function addStrategy(address strategy, uint256 weight) external;
     function setAutoAllocate(bool autoAllocate) external;
+}
+
+interface IAjnaVaultAuthConfigurator {
+    function setBufferRatio(uint256 bufferRatioBps) external;
+    function setMinBucketIndex(uint256 minBucketIndex) external;
+    function setKeeper(address keeper, bool isKeeper) external;
+    function setAdmin(address admin) external;
+}
+
+interface IERC4626StrategyAdapterAdmin {
+    function setIdleBufferBps(uint256 newBps) external;
 }
 
 /**
@@ -252,7 +264,9 @@ contract DeploymentBatcher is ReentrancyGuard {
     struct StrategyCodeIds {
         bytes32 charmAlphaVaultDeploy;
         bytes32 creatorCharmStrategy;
-        bytes32 ajnaStrategy;
+        bytes32 ajnaVaultAuth;
+        bytes32 ajnaVault;
+        bytes32 erc4626StrategyAdapter;
         bytes32 solanaStrategy;
     }
 
@@ -266,9 +280,14 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint160 initialSqrtPriceX96;
         string charmVaultName;
         string charmVaultSymbol;
+        string ajnaVaultName;
+        string ajnaVaultSymbol;
         uint256 charmWeightBps;
         uint256 ajnaWeightBps;
         uint256 solanaWeightBps;
+        uint256 ajnaBufferRatioBps;
+        uint256 ajnaMinBucketIndex;
+        address ajnaKeeper;
         address solanaKeeper;
         uint64 solanaMaxNavAge;
         uint16 solanaMaxNavDeltaBpsPerUpdate;
@@ -281,6 +300,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         address v3Pool;
         address charmVault;
         address charmStrategy;
+        address ajnaVaultAuth;
+        address ajnaVault;
         address ajnaStrategy;
         address solanaStrategy;
     }
@@ -403,6 +424,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         address v3Pool,
         address charmVault,
         address charmStrategy,
+        address ajnaVaultAuth,
+        address ajnaVault,
         address ajnaStrategy,
         address solanaStrategy,
         uint256 charmWeightBps,
@@ -1001,7 +1024,8 @@ contract DeploymentBatcher is ReentrancyGuard {
 
         if (
             codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)
-                || codeIds.ajnaStrategy == bytes32(0) || codeIds.solanaStrategy == bytes32(0)
+                || codeIds.ajnaVaultAuth == bytes32(0) || codeIds.ajnaVault == bytes32(0)
+                || codeIds.erc4626StrategyAdapter == bytes32(0) || codeIds.solanaStrategy == bytes32(0)
         ) {
             revert InvalidCodeId();
         }
@@ -1059,12 +1083,44 @@ contract DeploymentBatcher is ReentrancyGuard {
         IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
 
         // ───────────────────────────────
-        // 4) Deploy Ajna strategy + transfer ownership
+        // 4) Deploy nested Ajna stack (auth + inner ERC4626 vault + adapter)
         // ───────────────────────────────
-        bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategy");
-        bytes memory ajnaArgs = abi.encode(params.vault, params.creatorToken, ajnaFactory, usdc, address(this));
-        out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.ajnaStrategy, ajnaArgs);
+        bytes32 subsetHash = IAjnaPoolFactory(ajnaFactory).ERC20_NON_SUBSET_HASH();
+        address ajnaPool = IAjnaPoolFactory(ajnaFactory).deployedPools(subsetHash, usdc, params.creatorToken);
+        if (ajnaPool == address(0)) {
+            uint256 ajnaInterestRate = 5e16; // 5% APR default
+            uint256 minRate = IAjnaPoolFactory(ajnaFactory).MIN_RATE();
+            uint256 maxRate = IAjnaPoolFactory(ajnaFactory).MAX_RATE();
+            if (ajnaInterestRate < minRate) ajnaInterestRate = minRate;
+            if (ajnaInterestRate > maxRate) ajnaInterestRate = maxRate;
+            ajnaPool = IAjnaPoolFactory(ajnaFactory).deployPool(usdc, params.creatorToken, ajnaInterestRate);
+        }
+
+        bytes32 ajnaAuthSalt = _saltFor(baseSalt, "ajnaVaultAuth");
+        bytes memory ajnaAuthArgs = abi.encode(address(this));
+        out.ajnaVaultAuth = create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, ajnaAuthArgs);
+
+        if (params.ajnaBufferRatioBps != 0) {
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setBufferRatio(params.ajnaBufferRatioBps);
+        }
+        if (params.ajnaMinBucketIndex != 0) {
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setMinBucketIndex(params.ajnaMinBucketIndex);
+        }
+        if (params.ajnaKeeper != address(0)) {
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(params.ajnaKeeper, true);
+        }
+
+        bytes32 ajnaVaultSalt = _saltFor(baseSalt, "ajnaVault");
+        bytes memory ajnaVaultArgs =
+            abi.encode(ajnaPool, params.creatorToken, params.ajnaVaultName, params.ajnaVaultSymbol, out.ajnaVaultAuth);
+        out.ajnaVault = create2Deployer.deploy(ajnaVaultSalt, codeIds.ajnaVault, ajnaVaultArgs);
+
+        bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategyAdapter");
+        bytes memory ajnaArgs = abi.encode(params.vault, out.ajnaVault, address(this));
+        out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.erc4626StrategyAdapter, ajnaArgs);
+        IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
         IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
+        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(protocolTreasury);
 
         // ───────────────────────────────
         // 4b) Deploy Solana strategy + transfer ownership
@@ -1100,6 +1156,8 @@ contract DeploymentBatcher is ReentrancyGuard {
             out.v3Pool,
             out.charmVault,
             out.charmStrategy,
+            out.ajnaVaultAuth,
+            out.ajnaVault,
             out.ajnaStrategy,
             out.solanaStrategy,
             params.charmWeightBps,

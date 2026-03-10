@@ -127,9 +127,35 @@ Optional keeper setup (same script):
 Phase 3 now uses a three-strategy accounting model on `CreatorOVault`:
 
 - Charm strategy: `30%` (`3_000` bps)
-- Ajna strategy: `30%` (`3_000` bps)
+- Ajna strategy sleeve: `30%` (`3_000` bps)
 - SolanaStrategy: `30%` (`3_000` bps)
 - Idle reserve: `10%` (`1_000` bps via `setMinimumTotalIdle`)
+
+Canonical Ajna phase-3 deployment is now a nested bundle:
+
+- `ERC4626StrategyAdapter` is the strategy registered on `CreatorOVault`
+- the adapter points to `AjnaERC4626Vault`
+- the inner vault is governed by `AjnaVaultAuth` for admin/keeper/pause/buffer/min-bucket policy
+
+Phase-3 bytecode/code-id inputs therefore include the Ajna bundle pieces rather than the old direct strategy:
+
+- `ajnaVaultAuth`
+- `ajnaVault`
+- `erc4626StrategyAdapter`
+
+Important phase-3 Ajna params:
+
+- `ajnaVaultName`
+- `ajnaBufferRatioBps`
+- `ajnaMinBucketIndex`
+- `ajnaKeeper`
+
+Post-deploy expectations for the canonical Ajna sleeve:
+
+- `CreatorOVault` stores the adapter address in its strategy list
+- `ERC4626StrategyAdapter.ERC4626_VAULT()` resolves to the inner Ajna vault
+- `AjnaERC4626Vault.AUTH()` resolves to `AjnaVaultAuth`
+- adapter `idleBufferBps` is typically set to `0` so buffering is owned by the inner Ajna vault policy rather than duplicated across layers
 
 `SolanaStrategy` is a Base-side strategy adapter with keeper-reported remote NAV:
 
@@ -155,6 +181,7 @@ Acceptance checks:
 - deploy-session path advances:
   - `created -> phase1_sent -> phase1_finalize_sent -> phase2_core_sent -> phase2_sent -> phase3_sent -> completed`
 - `/deploy` shows no bytecode infra blocker and no `deployment batcher not configured`
+- `/status?vault=0x...` shows Ajna as an adapter-backed inner vault and surfaces auth/min-bucket/buffer metadata
 
 ### Important: Zora cross-app is read-only here
 

@@ -2,7 +2,9 @@ import { HTTPClient, type Runtime, type NodeRuntime, bytesToHex, consensusIdenti
 import { decodeFunctionResult, zeroAddress } from "viem"
 import {
   AjnaPoolViewABI,
-  AjnaStrategyViewABI,
+  AjnaAdapterViewABI,
+  AjnaAuthViewABI,
+  AjnaInnerVaultViewABI,
   OracleStrategyViewABI,
   VaultStrategyViewABI,
 } from "../contracts/abi"
@@ -44,9 +46,11 @@ export type AjnaManualPayload = {
   targetBucket?: number
 }
 
-type AjnaStrategyContext = {
+type AjnaAdapterContext = {
   strategyAddress: `0x${string}`
   ajnaPool: `0x${string}`
+  authAddress: `0x${string}`
+  authAdmin: `0x${string}`
   currentBucket: number
 }
 
@@ -201,8 +205,8 @@ function readAjnaStrategiesForVault(
   runtime: Runtime<AjnaManagerConfig>,
   evmClient: ReturnType<typeof createEvmClientForChain>,
   vaultAddress: `0x${string}`,
-): AjnaStrategyContext[] {
-  const out: AjnaStrategyContext[] = []
+): AjnaAdapterContext[] {
+  const out: AjnaAdapterContext[] = []
   for (let i = 0; i < runtime.config.maxStrategiesPerVault; i += 1) {
     let strategyAddress: `0x${string}`
     try {
@@ -256,30 +260,65 @@ function readAjnaStrategiesForVault(
     if (strategyWeight === 0n) continue
 
     try {
-      const ajnaPool = decodeAddress(
-        AjnaStrategyViewABI,
-        "ajnaPool",
+      const innerVault = decodeAddress(
+        AjnaAdapterViewABI,
+        "ERC4626_VAULT",
         readContractBytes(runtime, evmClient, {
           address: strategyAddress,
-          abi: AjnaStrategyViewABI,
-          functionName: "ajnaPool",
+          abi: AjnaAdapterViewABI,
+          functionName: "ERC4626_VAULT",
+        }),
+      )
+      if (innerVault.toLowerCase() === zeroAddress.toLowerCase()) continue
+
+      const ajnaPool = decodeAddress(
+        AjnaInnerVaultViewABI,
+        "AJNA_POOL",
+        readContractBytes(runtime, evmClient, {
+          address: innerVault,
+          abi: AjnaInnerVaultViewABI,
+          functionName: "AJNA_POOL",
         }),
       )
       if (ajnaPool.toLowerCase() === zeroAddress.toLowerCase()) continue
 
-      const currentBucket = decodeNumber(
-        AjnaStrategyViewABI,
-        "bucketIndex",
+      const authAddress = decodeAddress(
+        AjnaInnerVaultViewABI,
+        "AUTH",
         readContractBytes(runtime, evmClient, {
-          address: strategyAddress,
-          abi: AjnaStrategyViewABI,
-          functionName: "bucketIndex",
+          address: innerVault,
+          abi: AjnaInnerVaultViewABI,
+          functionName: "AUTH",
+        }),
+      )
+      if (authAddress.toLowerCase() === zeroAddress.toLowerCase()) continue
+
+      const authAdmin = decodeAddress(
+        AjnaAuthViewABI,
+        "admin",
+        readContractBytes(runtime, evmClient, {
+          address: authAddress,
+          abi: AjnaAuthViewABI,
+          functionName: "admin",
+        }),
+      )
+      if (authAdmin.toLowerCase() === zeroAddress.toLowerCase()) continue
+
+      const currentBucket = decodeNumber(
+        AjnaAuthViewABI,
+        "minBucketIndex",
+        readContractBytes(runtime, evmClient, {
+          address: authAddress,
+          abi: AjnaAuthViewABI,
+          functionName: "minBucketIndex",
         }),
       )
 
       out.push({
         strategyAddress,
         ajnaPool,
+        authAddress,
+        authAdmin,
         currentBucket,
       })
     } catch (error) {
@@ -385,10 +424,10 @@ export function evaluateAndEnqueueAjnaActions(
         }
 
         const forcedTargetBucket = normalizeOptionalInteger(manual.targetBucket) ?? 1
-        if (forcedTargetBucket < 1) {
+        if (forcedTargetBucket < 0) {
           skippedActions += 1
           runtime.log(
-            `Skipping forced Ajna enqueue for ${vault.vaultAddress}: targetBucket must be >= 1`,
+            `Skipping forced Ajna enqueue for ${vault.vaultAddress}: targetBucket must be >= 0`,
           )
           continue
         }
@@ -412,12 +451,13 @@ export function evaluateAndEnqueueAjnaActions(
           forced: true,
           vaultAddress: vault.vaultAddress,
           strategyAddress: forcedStrategyAddress,
+          authAddress: forcedStrategy.authAddress,
           oracleAddress: vault.oracleAddress,
           currentBucket: forcedStrategy.currentBucket,
           suggestedBucket: forcedTargetBucket,
           steppedBucket: forcedTargetBucket,
           targetBucket: forcedTargetBucket,
-          method: "setBucketIndex",
+          method: "setMinBucketIndex",
           timestamp: runtime.now().toISOString(),
         } satisfies Record<string, unknown>
 
@@ -427,7 +467,7 @@ export function evaluateAndEnqueueAjnaActions(
               vaultAddress: vault.vaultAddress,
               groupId: vault.groupId,
               actionType,
-              dedupeKey: `force:${strategyDedupeKey(vault.vaultAddress, forcedStrategyAddress, forcedTargetBucket)}`,
+              dedupeKey: `force:${strategyDedupeKey(vault.vaultAddress, forcedStrategy.authAddress, forcedTargetBucket)}`,
               action: actionPayload,
             }),
           consensusIdenticalAggregation(),
@@ -480,20 +520,7 @@ export function evaluateAndEnqueueAjnaActions(
             continue
           }
 
-          const lenderInfoData = readContractBytes(runtime, evmClient, {
-            address: strategy.ajnaPool,
-            abi: AjnaPoolViewABI,
-            functionName: "lenderInfo",
-            args: [BigInt(strategy.currentBucket), strategy.strategyAddress],
-          })
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const lenderInfo = decodeFunctionResult({
-            abi: AjnaPoolViewABI,
-            functionName: "lenderInfo",
-            data: bytesToHex(lenderInfoData),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any) as [bigint, bigint]
-          const method = lenderInfo[0] > 0n ? "moveToBucket" : "setBucketIndex"
+          const method = "setMinBucketIndex"
 
           const actionType = "strategy.ajna.rebucket"
           const actionPayload = {
@@ -501,6 +528,7 @@ export function evaluateAndEnqueueAjnaActions(
             actionType,
             vaultAddress: vault.vaultAddress,
             strategyAddress: strategy.strategyAddress,
+            authAddress: strategy.authAddress,
             oracleAddress: vault.oracleAddress,
             currentBucket: strategy.currentBucket,
             suggestedBucket,
@@ -517,7 +545,7 @@ export function evaluateAndEnqueueAjnaActions(
                 vaultAddress: vault.vaultAddress,
                 groupId: vault.groupId,
                 actionType,
-                dedupeKey: strategyDedupeKey(vault.vaultAddress, strategy.strategyAddress, targetBucket),
+              dedupeKey: strategyDedupeKey(vault.vaultAddress, strategy.authAddress, targetBucket),
                 action: actionPayload,
               }),
             consensusIdenticalAggregation(),

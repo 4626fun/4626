@@ -32,7 +32,6 @@ import {
   computeSteppedBucket,
   pickLiquidityAwareTarget,
   readAjnaStrategiesForVault,
-  readCurrentBucketLenderInfo,
   readOracleSuggestedBucket,
 } from './ajna-bucket-manager.action.js';
 import {
@@ -358,33 +357,10 @@ async function evaluateAjnaForVault(params: {
       continue;
     }
 
-    if (strategy.owner.toLowerCase() !== keeperAddress.toLowerCase()) {
+    if (strategy.authAdmin.toLowerCase() !== keeperAddress.toLowerCase()) {
       logDecision({
         event: 'ajna.skip',
-        reason: 'keeper_not_strategy_owner',
-        pool: watched.poolAddress,
-        vault: watched.vaultAddress,
-        strategy: strategy.strategyAddress,
-        computedDeviationBps: deviationBps,
-      });
-      continue;
-    }
-
-    const lenderInfo = await readCurrentBucketLenderInfo({
-      ajnaPool: strategy.ajnaPool,
-      bucketIndex: strategy.currentBucket,
-      lender: strategy.strategyAddress,
-    }).catch(() => ({ lpBalance: 0n, depositTime: 0n }));
-
-    const secondsSinceDeposit =
-      lenderInfo.depositTime > 0n && blockNow > lenderInfo.depositTime
-        ? Number(blockNow - lenderInfo.depositTime)
-        : Number.MAX_SAFE_INTEGER;
-
-    if (lenderInfo.lpBalance > 0n && secondsSinceDeposit < cfg.ajna.cooldownSeconds) {
-      logDecision({
-        event: 'ajna.skip',
-        reason: 'onchain_deposit_cooldown',
+        reason: 'keeper_not_auth_admin',
         pool: watched.poolAddress,
         vault: watched.vaultAddress,
         strategy: strategy.strategyAddress,
@@ -396,7 +372,7 @@ async function evaluateAjnaForVault(params: {
     const actionType = 'strategy.ajna.rebucket';
     const cooldownKey = makeCooldownKey({
       vaultAddress: watched.vaultAddress,
-      strategyAddressOrPool: strategy.strategyAddress,
+      strategyAddressOrPool: strategy.authAddress,
       actionType,
     });
     if (
@@ -434,10 +410,10 @@ async function evaluateAjnaForVault(params: {
       continue;
     }
 
-    const method = lenderInfo.lpBalance > 0n ? 'moveToBucket' : 'setBucketIndex';
+    const method = 'setMinBucketIndex';
     const dedupeKey = makeDedupeKey({
       vaultAddress: watched.vaultAddress,
-      strategyAddressOrPool: strategy.strategyAddress,
+      strategyAddressOrPool: strategy.authAddress,
       actionType,
       band: String(targetBucket),
     });
@@ -446,6 +422,7 @@ async function evaluateAjnaForVault(params: {
       actionType,
       vaultAddress: watched.vaultAddress,
       strategyAddress: strategy.strategyAddress,
+      authAddress: strategy.authAddress,
       oracleAddress: watched.oracleAddress,
       v3Pool: watched.poolAddress,
       triggerTick: null,
