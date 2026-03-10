@@ -78,6 +78,22 @@ describe('wallet mapping + sync', () => {
     expect(classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000c1')
   })
 
+  it('tracks the active owner wallet separately from the canonical smart wallet', () => {
+    const user = {
+      id: 'did:privy:owner-split',
+      wallet: { type: 'wallet', address: '0x00000000000000000000000000000000000000b1', walletClientType: 'metamask' },
+      linkedAccounts: [
+        { type: 'wallet', address: '0x00000000000000000000000000000000000000b1', walletClientType: 'metamask' },
+        { type: 'smart_wallet', address: '0x00000000000000000000000000000000000000b2', walletClientType: 'coinbase_smart_wallet' },
+      ],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.activeOwnerWallet?.address).toBe('0x00000000000000000000000000000000000000b1')
+    expect(classified.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000b2')
+    expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000b2')
+  })
+
   it('detects Rabby as provider for external EOAs', () => {
     const user = {
       id: 'did:privy:rabby',
@@ -115,6 +131,7 @@ describe('wallet mapping + sync', () => {
     const result = await syncUserWallets(db as any, user as any)
 
     expect(result.profileId).toBe(101)
+    expect(result.activeOwnerWallet?.address).toBe('0x00000000000000000000000000000000000000d1')
     expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000d2')
     expect(result.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000d1')
     expect(result.connectedWallets.length).toBe(2)

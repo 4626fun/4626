@@ -11,6 +11,7 @@ const createAmoeAttestationMock = vi.fn()
 const getAmoeCreditSnapshotMock = vi.fn()
 const consumeAmoeCreditsForEntryMock = vi.fn()
 const claimDailyTwitterCheckinMock = vi.fn()
+const resolveAuthorizedWalletProfileMock = vi.fn()
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardMock,
@@ -18,6 +19,10 @@ vi.mock('../../server/_lib/agentApiGuard.js', () => ({
 
 vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: () => ({ lotteryManager: '0x77705A2f173dd52F28300447506Dc35086c34626' }),
+}))
+
+vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  resolveAuthorizedWalletProfile: resolveAuthorizedWalletProfileMock,
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -52,6 +57,7 @@ describe('AMOE nonce handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     issueAmoeNonceMock.mockResolvedValue({
       nonce: '0x1111111111111111111111111111111111111111111111111111111111111111',
       issuedAt: '2026-03-01T00:00:00.000Z',
@@ -95,12 +101,82 @@ describe('AMOE nonce handler', () => {
     expect(issueAmoeNonceMock).toHaveBeenCalledTimes(1)
     expect(getAmoeCreditSnapshotMock).toHaveBeenCalledTimes(1)
   })
+
+  it('canonicalizes an authenticated active owner wallet to the canonical CSW', async () => {
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
+    const req = createMockReq({
+      method: 'GET',
+      query: {
+        wallet: '0x0000000000000000000000000000000000000Aa1',
+        creatorCoin: '0x0000000000000000000000000000000000001001',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(issueAmoeNonceMock).toHaveBeenCalledWith({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      creatorCoin: '0x0000000000000000000000000000000000001001',
+    })
+    expect(getAmoeCreditSnapshotMock).toHaveBeenCalledWith({
+      wallet: '0x000000000000000000000000000000000000cafe',
+    })
+    expect(buildAmoeEntryMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wallet: '0x000000000000000000000000000000000000cafe',
+      }),
+    )
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.wallet).toBe('0x000000000000000000000000000000000000cafe')
+  })
+
+  it('rejects wallet queries outside the authenticated canonical identity', async () => {
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
+    const req = createMockReq({
+      method: 'GET',
+      query: {
+        wallet: '0x0000000000000000000000000000000000000Bb2',
+        creatorCoin: '0x0000000000000000000000000000000000001001',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(issueAmoeNonceMock).not.toHaveBeenCalled()
+    expect(getAmoeCreditSnapshotMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('AMOE credits handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     getAmoeCreditSnapshotMock.mockResolvedValue({
       wallet: '0x000000000000000000000000000000000000cafe',
       credits: 77,
@@ -130,6 +206,58 @@ describe('AMOE credits handler', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.credits).toBe(77)
     expect(getAmoeCreditSnapshotMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('canonicalizes credits lookups for an authenticated active owner wallet', async () => {
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeCredits')
+    const req = createMockReq({
+      method: 'GET',
+      query: { wallet: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(getAmoeCreditSnapshotMock).toHaveBeenCalledWith({
+      wallet: '0x000000000000000000000000000000000000cafe',
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('rejects credit lookups outside the authenticated canonical identity', async () => {
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeCredits')
+    const req = createMockReq({
+      method: 'GET',
+      query: { wallet: '0x0000000000000000000000000000000000000Bb2' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(getAmoeCreditSnapshotMock).not.toHaveBeenCalled()
   })
 })
 
@@ -217,6 +345,7 @@ describe('AMOE daily Twitter checkin handler', () => {
       ip: '127.0.0.1',
       auth: { type: 'session', address: '0x000000000000000000000000000000000000cafe' },
     })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     claimDailyTwitterCheckinMock.mockResolvedValue({
       wallet: '0x000000000000000000000000000000000000cafe',
       awarded: true,
@@ -245,5 +374,29 @@ describe('AMOE daily Twitter checkin handler', () => {
     expect(res.body?.data?.awardedCredits).toBe(1)
     expect(res.body?.data?.creditsPerEntry).toBe(100)
     expect(claimDailyTwitterCheckinMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('claims credits for the canonical CSW when the session principal is the active owner wallet', async () => {
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
+    const req = createMockReq({ method: 'POST', body: {} })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(claimDailyTwitterCheckinMock).toHaveBeenCalledWith({
+      wallet: '0x000000000000000000000000000000000000cafe',
+    })
+    expect(res.statusCode).toBe(200)
   })
 })

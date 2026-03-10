@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../../server/auth/_shared.js'
 import { getDb } from '../../../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../../../server/_lib/requestPrincipal.js'
+import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../../../server/_lib/waitlistSchema.js'
 import { enqueueSolanaSweepJob } from '../../../../../server/_lib/solanaSweepJobs.js'
 import { resolveCanonicalSolanaWalletByProfileId } from '../../../../../server/_lib/canonicalSolanaResolver.js'
@@ -68,22 +68,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   await ensureWaitlistSchema(db as any)
 
+  const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
+  if (!authorizedPrincipal) {
+    return res.status(404).json({ success: false, error: 'Profile not found' } satisfies ApiEnvelope<never>)
+  }
+
   const profileResult = await db.sql`
     SELECT p.id, p.operational_solana_wallet
     FROM profiles p
-    WHERE LOWER(p.primary_wallet) = ${principalAddress}
-       OR LOWER(p.embedded_wallet) = ${principalAddress}
-       OR LOWER(p.csw_address) = ${principalAddress}
-       OR LOWER(p.base_sub_account) = ${principalAddress}
-       OR LOWER(p.primary_smart_wallet) = ${principalAddress}
-       OR LOWER(p.primary_embedded_eoa) = ${principalAddress}
-       OR EXISTS (
-         SELECT 1
-         FROM profile_wallets pw
-         WHERE pw.profile_id = p.id
-           AND LOWER(pw.address) = ${principalAddress}
-       )
-    ORDER BY p.updated_at DESC NULLS LAST
+    WHERE p.id = ${authorizedPrincipal.profileId}
     LIMIT 1;
   `
   const profileRow = profileResult?.rows?.[0] as any

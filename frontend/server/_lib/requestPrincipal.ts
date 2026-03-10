@@ -2,10 +2,19 @@ import type { VercelRequest } from '@vercel/node'
 
 import { readSessionFromRequest } from '../auth/_shared.js'
 import { readSiwaAgentFromRequest } from '../auth/_siwa.js'
+import { resolveAuthorizedWalletProfile } from './canonicalWalletResolver.js'
 
 export type RequestPrincipal = {
   source: 'session' | 'siwa'
   address: string
+}
+
+export type AuthorizedRequestPrincipal = RequestPrincipal & {
+  authSource: 'session' | 'siwa'
+  profileId: number
+  canonicalSmartWalletAddress: string | null
+  activeOwnerWalletAddress: string | null
+  signerRole: 'canonical_smart_wallet' | 'active_owner_wallet'
 }
 
 type ReadPrincipalOptions = {
@@ -36,4 +45,27 @@ export function readRequestPrincipal(req: VercelRequest, opts: ReadPrincipalOpti
 
 export function readRequestPrincipalAddress(req: VercelRequest, opts: ReadPrincipalOptions = {}): string {
   return readRequestPrincipal(req, opts)?.address ?? ''
+}
+
+export async function resolveAuthorizedRequestPrincipal(
+  req: VercelRequest,
+  opts: ReadPrincipalOptions = {},
+): Promise<AuthorizedRequestPrincipal | null> {
+  const principal = readRequestPrincipal(req, opts)
+  if (!principal) return null
+
+  const authority = await resolveAuthorizedWalletProfile(principal.address)
+  if (!authority) return null
+
+  return {
+    ...principal,
+    authSource: principal.source,
+    profileId: authority.profileId,
+    canonicalSmartWalletAddress: authority.canonicalSmartWalletAddress,
+    activeOwnerWalletAddress: authority.activeOwnerWalletAddress,
+    signerRole:
+      authority.canonicalSmartWalletAddress === principal.address
+        ? 'canonical_smart_wallet'
+        : 'active_owner_wallet',
+  }
 }

@@ -1,6 +1,6 @@
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type PointsType = 'total' | 'invite' | 'agent'
@@ -196,25 +196,14 @@ export default async function handler(req: any, res: any) {
 
   const leaderboard: LeaderboardRow[] = Array.isArray(rows?.rows) ? rows.rows.map((raw: any) => toLeaderboardRow(raw)) : []
 
-  const principalAddress = readRequestPrincipalAddress(req)
+  const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
   let me: LeaderboardRow | null = null
-  if (principalAddress) {
+  if (authorizedPrincipal) {
     const meProfile = await db.sql`
       SELECT
         COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key
       FROM profiles
-      WHERE
-        LOWER(primary_wallet) = ${principalAddress}
-        OR LOWER(embedded_wallet) = ${principalAddress}
-        OR LOWER(csw_address) = ${principalAddress}
-        OR LOWER(base_sub_account) = ${principalAddress}
-        OR EXISTS (
-          SELECT 1
-          FROM profile_wallets pw
-          WHERE pw.profile_id = profiles.id
-            AND LOWER(pw.address) = ${principalAddress}
-        )
-      ORDER BY updated_at DESC NULLS LAST, id ASC
+      WHERE id = ${authorizedPrincipal.profileId}
       LIMIT 1;
     `
     const walletKey = typeof meProfile?.rows?.[0]?.wallet_key === 'string' ? String(meProfile.rows[0].wallet_key).trim() : ''

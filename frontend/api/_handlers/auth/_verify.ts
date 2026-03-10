@@ -262,7 +262,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await ensureWaitlistSchema(db as any)
-    await upsertProfileByWallet(db as any, { primaryWallet: verified.address })
+    const verifiedCanonicalCsw =
+      cswOwnership?.verified === true ? cswOwnership.cswAddress.toLowerCase() : null
+    await upsertProfileByWallet(db as any, {
+      primaryWallet: verified.address,
+      cswAddress: verifiedCanonicalCsw,
+      baseSubAccount: verifiedCanonicalCsw,
+    })
   } catch {
     // best-effort: auth should succeed even if DB is unavailable
   }

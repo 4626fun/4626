@@ -10,6 +10,13 @@ const { getDbMock, ensureWaitlistSchemaMock, upsertProfileByWalletMock } = vi.ho
   upsertProfileByWalletMock: vi.fn(async () => {}),
 }))
 
+const { createPublicClientMock, httpMock } = vi.hoisted(() => ({
+  createPublicClientMock: vi.fn(() => ({
+    readContract: vi.fn(async () => true),
+  })),
+  httpMock: vi.fn(() => ({ transport: 'http' })),
+}))
+
 vi.mock('../../server/_lib/postgres.js', () => ({
   getDb: getDbMock,
 }))
@@ -21,6 +28,23 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
 vi.mock('../../server/_lib/profileSync.js', () => ({
   upsertProfileByWallet: upsertProfileByWalletMock,
 }))
+
+vi.mock('viem', async () => {
+  const actual = await vi.importActual<any>('viem')
+  return {
+    ...actual,
+    createPublicClient: createPublicClientMock,
+    http: httpMock,
+  }
+})
+
+vi.mock('viem/chains', async () => {
+  const actual = await vi.importActual<any>('viem/chains')
+  return {
+    ...actual,
+    base: {},
+  }
+})
 
 import nonceHandler from '../_handlers/auth/_nonce.ts'
 import verifyHandler from '../_handlers/auth/_verify.ts'
@@ -257,5 +281,43 @@ describe('siwe auth hardening', () => {
 
     expect(res.statusCode).toBe(503)
     expect(res.body?.error).toBe('Auth service unavailable')
+  })
+
+  it('persists canonical CSW when SIWE owner verification proves ownership', async () => {
+    const db = createNonceDb()
+    getDbMock.mockResolvedValue(db)
+
+    const nonce = 'nonce-csw-owner'
+    db.rows.set(nonce, { expiresAtMs: Date.now() + 15 * 60 * 1000, consumedAtMs: null })
+
+    const cswAddress = '0x000000000000000000000000000000000000cAFe'
+    const message = makeSiweMessage({
+      domain: '4626.fun',
+      address: account.address,
+      uri: 'https://4626.fun',
+      chainId: 8453,
+      nonce,
+      issuedAt: new Date().toISOString(),
+    })
+    const signature = await account.signMessage({ message })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: `cv_auth_nonce=${nonce}` },
+      body: { message, signature, nonceToken: makeNonceToken({ nonce }), cswAddress },
+    })
+    const res = createMockRes()
+
+    await verifyHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(upsertProfileByWalletMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        primaryWallet: account.address.toLowerCase(),
+        cswAddress: cswAddress.toLowerCase(),
+        baseSubAccount: cswAddress.toLowerCase(),
+      }),
+    )
   })
 })

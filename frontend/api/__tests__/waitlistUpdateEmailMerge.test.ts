@@ -10,6 +10,7 @@ const {
   checkRateLimitMock,
   rateLimitKeyMock,
   getClientIpMock,
+  isAuthorizedWalletForProfileMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -17,6 +18,7 @@ const {
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   rateLimitKeyMock: vi.fn(() => 'rl-key'),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
+  isAuthorizedWalletForProfileMock: vi.fn(async (_params?: any) => true),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -36,6 +38,10 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
 
 vi.mock('../../server/_lib/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
+}))
+
+vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  isAuthorizedWalletForProfile: isAuthorizedWalletForProfileMock,
 }))
 
 vi.mock('../../server/_lib/rateLimit.js', () => ({
@@ -58,10 +64,10 @@ function createDb(options: DbOptions) {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
 
       // Ownership check helper query.
-      if (text.includes('from profiles p') && text.includes('where p.email =') && text.includes('profile_wallets pw')) {
+      if (text.includes('from profiles p') && text.includes('where p.email =')) {
         const email = String(values[0] ?? '').toLowerCase()
         if (email === currentEmail) return { rows: [{ id: 267, email: currentEmail }] }
-        if (email === newEmail && options.ownTargetEmail) return { rows: [{ id: 1, email: newEmail }] }
+        if (email === newEmail) return { rows: [{ id: 1, email: newEmail }] }
         return { rows: [] }
       }
 
@@ -104,6 +110,7 @@ describe('waitlist/update-email merge-on-conflict', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue(createDb({ ownTargetEmail: true }))
+    isAuthorizedWalletForProfileMock.mockImplementation(async ({ profileId }: { profileId: number }) => profileId === 267 || profileId === 1)
   })
 
   it('merges synthetic profile into existing owned profile when target email is already taken', async () => {
@@ -134,6 +141,7 @@ describe('waitlist/update-email merge-on-conflict', () => {
 
   it('returns 409 when target email exists but is not owned by caller', async () => {
     getDbMock.mockResolvedValueOnce(createDb({ ownTargetEmail: false }))
+    isAuthorizedWalletForProfileMock.mockImplementation(async ({ profileId }: { profileId: number }) => profileId === 267)
 
     const req = createMockReq({
       method: 'POST',
