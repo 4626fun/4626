@@ -281,7 +281,7 @@ export async function createImageGenerationProject(input: {
 
   const result = await db.sql`
     INSERT INTO image_generation_projects (
-      id, owner_address, status, instruction, style_preset, brand_context_json
+      id, owner_address, status, instruction, style_preset, brand_context_json, creator_address
     ) VALUES (
       ${projectId},
       ${ownerAddress},

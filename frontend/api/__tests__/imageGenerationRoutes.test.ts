@@ -35,6 +35,7 @@ const {
   getImageGenerationProjectMock: vi.fn(async () => ({
     id: 'proj_123',
     ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+    creatorAddress: null,
     status: 'draft',
     assets: [],
     attempts: [],
@@ -343,6 +344,7 @@ describe('POST /api/image/projects/associate-vault', () => {
     getImageGenerationProjectMock.mockResolvedValueOnce({
       id: 'proj_123',
       ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      creatorAddress: null,
       status: 'completed',
       assets: [],
       attempts: [],
@@ -372,6 +374,7 @@ describe('POST /api/image/projects/associate-vault', () => {
     getImageGenerationProjectMock.mockResolvedValueOnce({
       id: 'proj_123',
       ownerAddress: '0x2222222222222222222222222222222222222222',
+      creatorAddress: null,
       status: 'completed',
       assets: [],
       attempts: [],

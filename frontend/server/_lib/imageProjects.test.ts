@@ -28,6 +28,9 @@ function createImageDb() {
       if (text.includes('alter table image_generation_projects')) return { rows: [] }
 
       if (text.includes('insert into image_generation_projects')) {
+        if (!text.includes('creator_address')) {
+          throw new Error('image_generation_projects INSERT must include creator_address column')
+        }
         const row = {
           id: String(values[0]),
           owner_address: values[1] == null ? null : String(values[1]),
@@ -38,7 +41,7 @@ function createImageDb() {
           last_response_id: null,
           latest_error: null,
           vault_address: null,
-          creator_address: values[4] == null ? null : String(values[4]),
+          creator_address: values[5] == null ? null : String(values[5]),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -162,6 +165,7 @@ describe('image project storage', () => {
     const { createImageGenerationProject } = await import('./imageProjects.ts')
     const project = await createImageGenerationProject({
       ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      creatorAddress: '0xB05CF01231CF2FF99499682E64D3780D57C80FDD',
       instruction: 'Put the dog in the square.',
       stylePreset: 'modern_elegant',
       brandContext: ['creator coin', 'vault icon'],
@@ -171,6 +175,7 @@ describe('image project storage', () => {
     expect(project.instruction).toBe('Put the dog in the square.')
     expect(project.stylePreset).toBe('modern_elegant')
     expect(project.brandContext).toEqual(['creator coin', 'vault icon'])
+    expect(project.creatorAddress).toBe('0xb05cf01231cf2ff99499682e64d3780d57c80fdd')
   })
 
   it('uploads reference assets through Supabase storage', async () => {
