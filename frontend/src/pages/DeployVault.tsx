@@ -25,6 +25,7 @@ import { ChevronDown } from 'lucide-react'
 import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
 import { LaunchCoinCard } from '@/components/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
@@ -5532,17 +5533,8 @@ function DeployVaultMain() {
   // This is NOT the same as “Zora global wallet”, which only works when apps are configured for shared wallets.
   const privyEmbeddedEoaWallet = useMemo(() => {
     const ws = Array.isArray(wallets) ? (wallets as any[]) : []
-    return (
-      ws.find((w) => {
-        const t = walletClientTypeOf(w)
-        if (!(t === 'privy' || t.includes('privy') || t.includes('embedded'))) return false
-        const raw = typeof (w as any)?.address === 'string' ? String((w as any).address) : ''
-        if (!raw || !isAddress(raw)) return false
-        if (privySmartWalletAddress && raw.toLowerCase() === privySmartWalletAddress.toLowerCase()) return false
-        return true
-      }) ?? null
-    )
-  }, [privySmartWalletAddress, walletClientTypeOf, wallets])
+    return pickPrivyEmbeddedEoaWallet(ws, privySmartWalletAddress)
+  }, [privySmartWalletAddress, wallets])
   const privyEmbeddedEoaAddress = useMemo(() => {
     try {
       const raw = typeof (privyEmbeddedEoaWallet as any)?.address === 'string' ? String((privyEmbeddedEoaWallet as any).address) : ''
@@ -5552,6 +5544,10 @@ function DeployVaultMain() {
     }
     return privyCrossAppEmbeddedEoaAddress
   }, [privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaWallet])
+  const privyEmbeddedEoaWalletId = useMemo(() => {
+    const raw = typeof (privyEmbeddedEoaWallet as any)?.id === 'string' ? String((privyEmbeddedEoaWallet as any).id).trim() : ''
+    return raw || null
+  }, [privyEmbeddedEoaWallet])
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
     if (!walletAny) return false
@@ -7312,6 +7308,9 @@ function DeployVaultMain() {
               deployment={justCompletedDeployment}
               tokenSymbol={underlyingSymbolUpper || undefined}
               shareSymbol={derivedShareSymbol || undefined}
+              canonicalCswAddress={canonicalIdentityIsContract ? (canonicalIdentityAddress as Address) : null}
+              embeddedEoaAddress={privyEmbeddedEoaAddress}
+              privyWalletId={privyEmbeddedEoaWalletId}
             />
           ) : trackerDeploymentIsComplete && trackerDeployment ? (
             <AlreadyDeployedBanner

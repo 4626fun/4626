@@ -1,13 +1,24 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useWallets } from '@privy-io/react-auth'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { Bot, CheckCircle, Copy, ExternalLink, Link2, Shield, Loader2, AlertTriangle, Wallet, Zap } from 'lucide-react'
 import { encodeFunctionData, getAddress } from 'viem'
 
+import {
+  AjnaAutomationOptInCard,
+  type AjnaAutomationPayload,
+  type AjnaAutomationStatus,
+} from '@/components/DeploymentSuccess'
+import { getDeploymentsForOwner } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import { getAppBaseUrl } from '@/lib/host'
+import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
+
+export { AjnaAutomationOptInCard } from '@/components/DeploymentSuccess'
+export { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -121,6 +132,109 @@ async function publishAgentProfile(): Promise<PublishData> {
   return json.data
 }
 
+async function getAjnaAutomationStatus(vaultAddress: string): Promise<AjnaAutomationStatus | null> {
+  const params = new URLSearchParams({ vaultAddress })
+  const res = await apiFetch(`/api/keepr/vault/automation?${params.toString()}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<AjnaAutomationStatus | null> | null
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.error ?? 'Failed to load Ajna automation status')
+  }
+  return json.data ?? null
+}
+
+async function enableAjnaAutomation(payload: AjnaAutomationPayload): Promise<AjnaAutomationStatus> {
+  const res = await apiFetch('/api/keepr/vault/automation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<AjnaAutomationStatus> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error ?? 'Failed to enable Ajna automation')
+  }
+  return json.data
+}
+
+async function revokeAjnaAutomation(vaultAddress: string): Promise<AjnaAutomationStatus> {
+  const res = await apiFetch('/api/keepr/vault/automation', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vaultAddress }),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<AjnaAutomationStatus> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error ?? 'Failed to revoke Ajna automation')
+  }
+  return json.data
+}
+
+function getPrivyWalletId(wallet: unknown): string | null {
+  const raw = typeof (wallet as { id?: unknown } | null)?.id === 'string'
+    ? String((wallet as { id: string }).id).trim()
+    : ''
+  return raw || null
+}
+
+type AjnaAutomationMutationSnapshot<TVariables> = {
+  data?: AjnaAutomationStatus | null
+  error?: unknown
+  variables?: TVariables
+}
+
+function normalizeAjnaVaultCandidate(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  return isAddressLike(raw) ? raw.toLowerCase() : null
+}
+
+function getAjnaMutationVaultAddress(variables: AjnaAutomationPayload | string | undefined): string | null {
+  if (typeof variables === 'string') return normalizeAjnaVaultCandidate(variables)
+  return normalizeAjnaVaultCandidate(variables?.vaultAddress)
+}
+
+function getAjnaErrorMessage(error: unknown): string | null {
+  return error instanceof Error ? error.message : null
+}
+
+export function selectAjnaAutomationViewState(input: {
+  normalizedVaultAddress: string | null
+  queryStatus: AjnaAutomationStatus | null | undefined
+  queryError?: unknown
+  enableMutation: AjnaAutomationMutationSnapshot<AjnaAutomationPayload>
+  revokeMutation: AjnaAutomationMutationSnapshot<string>
+}): {
+  status: AjnaAutomationStatus | null
+  errorMessage: string | null
+  statusUnavailable: boolean
+} {
+  const currentVaultAddress = normalizeAjnaVaultCandidate(input.normalizedVaultAddress)
+  if (!currentVaultAddress) {
+    return { status: null, errorMessage: null, statusUnavailable: false }
+  }
+
+  const matchesStatus = (status: AjnaAutomationStatus | null | undefined): boolean =>
+    normalizeAjnaVaultCandidate(status?.vaultAddress ?? null) === currentVaultAddress
+
+  const matchesMutation = (variables: AjnaAutomationPayload | string | undefined): boolean =>
+    getAjnaMutationVaultAddress(variables) === currentVaultAddress
+
+  const status = matchesStatus(input.queryStatus) ? input.queryStatus ?? null : null
+  const mutationErrorMessage =
+    (matchesMutation(input.enableMutation.variables) ? getAjnaErrorMessage(input.enableMutation.error) : null) ??
+    (matchesMutation(input.revokeMutation.variables) ? getAjnaErrorMessage(input.revokeMutation.error) : null) ??
+    null
+  const queryErrorMessage = getAjnaErrorMessage(input.queryError)
+  const statusUnavailable = status === null && queryErrorMessage !== null
+
+  return {
+    status,
+    errorMessage: mutationErrorMessage ?? (statusUnavailable ? queryErrorMessage : null),
+    statusUnavailable,
+  }
+}
+
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
@@ -177,6 +291,7 @@ const CSW_ABI = [
 export function AdminAgentSetup() {
   const { address } = useAccount()
   const { authAddress } = useSiweAuth()
+  const { wallets: privyWallets } = useWallets()
   const queryClient = useQueryClient()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
@@ -215,6 +330,24 @@ export function AdminAgentSetup() {
     }
     return null
   }, [waitlistMeQuery.data])
+
+  const privyEmbeddedEoaWallet = useMemo(() => {
+    const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
+    return pickPrivyEmbeddedEoaWallet(wallets, canonicalCswAddress)
+  }, [canonicalCswAddress, privyWallets])
+
+  const privyEmbeddedEoaAddress = useMemo(() => {
+    const rawAddress = typeof (privyEmbeddedEoaWallet as any)?.address === 'string'
+      ? String((privyEmbeddedEoaWallet as any).address).trim()
+      : ''
+    if (!isAddressLike(rawAddress)) return null
+    return rawAddress.toLowerCase()
+  }, [privyEmbeddedEoaWallet])
+
+  const privyEmbeddedEoaWalletId = useMemo(
+    () => getPrivyWalletId(privyEmbeddedEoaWallet),
+    [privyEmbeddedEoaWallet],
+  )
 
   const zoraHandoffHref = useMemo(() => {
     const returnPath = '/admin/agent-setup?from=zora&gate=agent'
@@ -346,6 +479,7 @@ export function AdminAgentSetup() {
   // -----------------------------------------------------------------------
   // Vault link form state
   // -----------------------------------------------------------------------
+  const [ajnaVaultAddress, setAjnaVaultAddress] = useState('')
   const [vaultAddress, setVaultAddress] = useState('')
   const [groupId, setGroupId] = useState('')
   const [lensGroupAddress, setLensGroupAddress] = useState('')
@@ -360,6 +494,27 @@ export function AdminAgentSetup() {
     const raw = lensGroupAddress.trim()
     return raw.length === 0 || isAddressLike(raw)
   }, [lensGroupAddress])
+
+  const hydratedAjnaVaultAddress = useMemo(() => {
+    if (!canonicalCswAddress) return ''
+
+    const latestDeployment = getDeploymentsForOwner(canonicalCswAddress as `0x${string}`)
+      .filter((record) => isAddressLike(record.contracts.vault))
+      .sort((a, b) => b.deployedAt - a.deployedAt)[0]
+
+    return latestDeployment?.contracts.vault?.toLowerCase() ?? ''
+  }, [canonicalCswAddress])
+
+  const effectiveAjnaVaultAddress = useMemo(() => {
+    const raw = ajnaVaultAddress.trim()
+    if (raw.length > 0) return raw
+    return hydratedAjnaVaultAddress
+  }, [ajnaVaultAddress, hydratedAjnaVaultAddress])
+
+  const normalizedAjnaVaultAddress = useMemo(() => {
+    const raw = effectiveAjnaVaultAddress.trim()
+    return isAddressLike(raw) ? raw.toLowerCase() : null
+  }, [effectiveAjnaVaultAddress])
 
   const vaultFormValid = useMemo(() => {
     return (
@@ -419,10 +574,74 @@ export function AdminAgentSetup() {
       if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Failed to link vault')
       return json.data!
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setAjnaVaultAddress(String(data.vaultAddress).toLowerCase())
       void queryClient.invalidateQueries({ queryKey: ['admin', 'agent'] })
     },
   })
+
+  const ajnaAutomationQuery = useQuery({
+    queryKey: ['admin', 'ajna-automation', normalizedAjnaVaultAddress],
+    queryFn: async (): Promise<AjnaAutomationStatus | null> => {
+      if (!normalizedAjnaVaultAddress) return null
+      return getAjnaAutomationStatus(normalizedAjnaVaultAddress)
+    },
+    enabled: Boolean(normalizedAjnaVaultAddress),
+    staleTime: 15_000,
+  })
+
+  const ajnaAutomationEnableMutation = useMutation({
+    mutationFn: async (payload: AjnaAutomationPayload): Promise<AjnaAutomationStatus> => enableAjnaAutomation(payload),
+    onSuccess: (data) => {
+      const normalizedVaultAddress = normalizeAjnaVaultCandidate(data.vaultAddress)
+      if (normalizedVaultAddress) {
+        queryClient.setQueryData(['admin', 'ajna-automation', normalizedVaultAddress], {
+          ...data,
+          vaultAddress: normalizedVaultAddress,
+        })
+        setAjnaVaultAddress(normalizedVaultAddress)
+      } else {
+        setAjnaVaultAddress(data.vaultAddress)
+      }
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'ajna-automation'] })
+    },
+  })
+
+  const ajnaAutomationRevokeMutation = useMutation({
+    mutationFn: async (vaultAddress: string): Promise<AjnaAutomationStatus> => revokeAjnaAutomation(vaultAddress),
+    onSuccess: (data) => {
+      const normalizedVaultAddress = normalizeAjnaVaultCandidate(data.vaultAddress)
+      if (normalizedVaultAddress) {
+        queryClient.setQueryData(['admin', 'ajna-automation', normalizedVaultAddress], {
+          ...data,
+          vaultAddress: normalizedVaultAddress,
+        })
+        setAjnaVaultAddress(normalizedVaultAddress)
+      } else {
+        setAjnaVaultAddress(data.vaultAddress)
+      }
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'ajna-automation'] })
+    },
+  })
+
+  const ajnaAutomationViewState = selectAjnaAutomationViewState({
+    normalizedVaultAddress: normalizedAjnaVaultAddress,
+    queryStatus: ajnaAutomationQuery.data,
+    queryError: ajnaAutomationQuery.error,
+    enableMutation: {
+      data: ajnaAutomationEnableMutation.data,
+      error: ajnaAutomationEnableMutation.error,
+      variables: ajnaAutomationEnableMutation.variables,
+    },
+    revokeMutation: {
+      data: ajnaAutomationRevokeMutation.data,
+      error: ajnaAutomationRevokeMutation.error,
+      variables: ajnaAutomationRevokeMutation.variables,
+    },
+  })
+  const ajnaAutomationStatus = ajnaAutomationViewState.status
+  const ajnaAutomationError = ajnaAutomationViewState.errorMessage
+  const ajnaAutomationStatusUnavailable = ajnaAutomationViewState.statusUnavailable
 
 
 
@@ -552,6 +771,26 @@ export function AdminAgentSetup() {
           In short: <span className="text-zinc-200">CSW is identity</span>, <span className="text-zinc-200">ERC-4337/paymaster is execution</span>, <span className="text-zinc-200">SIWA is auth</span>, <span className="text-zinc-200">ERC-8004 + Lens/Grove are discoverability/reputation</span>, <span className="text-zinc-200">XMTP is communication</span>, and <span className="text-zinc-200">ElizaOS/skills are automation</span>.
         </div>
       </div>
+
+      <AjnaAutomationOptInCard
+        vaultAddress={effectiveAjnaVaultAddress}
+        canonicalCswAddress={canonicalCswAddress}
+        embeddedEoaAddress={privyEmbeddedEoaAddress}
+        privyWalletId={privyEmbeddedEoaWalletId}
+        status={ajnaAutomationStatus}
+        statusUnavailable={ajnaAutomationStatusUnavailable}
+        isSubmitting={ajnaAutomationEnableMutation.isPending}
+        isRevoking={ajnaAutomationRevokeMutation.isPending}
+        isStatusLoading={ajnaAutomationQuery.isLoading}
+        errorMessage={ajnaAutomationError}
+        onVaultAddressChange={setAjnaVaultAddress}
+        onEnable={(payload) => {
+          void ajnaAutomationEnableMutation.mutateAsync(payload)
+        }}
+        onRevoke={(nextVaultAddress) => {
+          void ajnaAutomationRevokeMutation.mutateAsync(nextVaultAddress)
+        }}
+      />
 
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 space-y-3">
         <div className="flex items-center justify-between gap-3">

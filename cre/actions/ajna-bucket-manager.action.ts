@@ -26,9 +26,12 @@ import {
   ORACLE_ABI,
 } from '../config.js';
 import {
-  getKeeperAddress,
   readContract,
+  normalizeWriteExecutionContext,
+  resolveCanonicalAjnaExecutionContext,
   writeContract,
+  type CanonicalAjnaAutomationConfig,
+  type WriteExecutionContext,
   type WriteResult,
 } from '../utils/onchain.js';
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
@@ -155,6 +158,17 @@ export interface BatchAjnaBucketResult {
   errors: number;
   results: BucketMoveResult[];
 }
+
+type VaultAutomationAwareConfig = VaultConfig & {
+  automation?: CanonicalAjnaAutomationConfig | null;
+};
+
+type ResolvedAjnaVault = {
+  vaultAddress: `0x${string}`;
+  oracleAddress: `0x${string}`;
+  executionContext: WriteExecutionContext | null;
+  source: 'feed' | 'single';
+};
 
 function parsePositiveIntEnv(key: string, fallback: number): number {
   const raw = process.env[key];
@@ -488,16 +502,47 @@ export async function pickLiquidityAwareTarget(params: {
   });
 }
 
-function resolveSingleVaultMode(): { vaultAddress: `0x${string}`; oracleAddress: `0x${string}` } | null {
+function getVaultExecutionContext(vault: VaultAutomationAwareConfig): WriteExecutionContext | null {
+  return resolveCanonicalAjnaExecutionContext(vault.automation);
+}
+
+function resolveSingleVaultEnvExecutionContext(): WriteExecutionContext | null {
+  const privyWalletId = String(process.env.AJNA_BUCKET_PRIVY_WALLET_ID ?? '').trim();
+  const hasExplicitContext =
+    Boolean(asAddress(process.env.AJNA_BUCKET_CANONICAL_CSW_ADDRESS)) ||
+    Boolean(asAddress(process.env.AJNA_BUCKET_EMBEDDED_EOA_ADDRESS)) ||
+    Boolean(privyWalletId) ||
+    Boolean(process.env.AJNA_BUCKET_CSW_VERSION);
+
+  if (!hasExplicitContext) return null;
+
+  try {
+    return normalizeWriteExecutionContext({
+      smartWallet: asAddress(process.env.AJNA_BUCKET_CANONICAL_CSW_ADDRESS) ?? undefined,
+      ownerAddress: asAddress(process.env.AJNA_BUCKET_EMBEDDED_EOA_ADDRESS) ?? undefined,
+      privyWalletId: privyWalletId || undefined,
+      version: process.env.AJNA_BUCKET_CSW_VERSION === '1.1' ? '1.1' : '1',
+    });
+  } catch {
+    return null;
+  }
+}
+
+function resolveSingleVaultMode(): ResolvedAjnaVault | null {
   const vaultAddress =
     asAddress(process.env.AJNA_BUCKET_VAULT_ADDRESS) ?? asAddress(process.env.VAULT_ADDRESS);
   const oracleAddress =
     asAddress(process.env.AJNA_BUCKET_ORACLE_ADDRESS) ?? asAddress(process.env.ORACLE_ADDRESS);
   if (!vaultAddress || !oracleAddress) return null;
-  return { vaultAddress, oracleAddress };
+  return {
+    vaultAddress,
+    oracleAddress,
+    executionContext: resolveSingleVaultEnvExecutionContext(),
+    source: 'single',
+  };
 }
 
-async function resolveVaults(): Promise<Array<{ vaultAddress: `0x${string}`; oracleAddress: `0x${string}` }>> {
+async function resolveVaults(): Promise<ResolvedAjnaVault[]> {
   const single = resolveSingleVaultMode();
   if (single) return [single];
 
@@ -505,19 +550,26 @@ async function resolveVaults(): Promise<Array<{ vaultAddress: `0x${string}`; ora
   const candidates = filterVaultsForWorkflow(allVaults, 'ajna-bucket-manager');
   return candidates
     .map((v: VaultConfig) => {
+      const vault = v as VaultAutomationAwareConfig;
       const vaultAddress = asAddress(v.vaultAddress);
       const oracleAddress = asAddress(v.oracleAddress);
       if (!vaultAddress || !oracleAddress) return null;
-      return { vaultAddress, oracleAddress };
+      if (vault.automation?.automationEnabled !== true) return null;
+      const executionContext = getVaultExecutionContext(vault);
+      return {
+        vaultAddress,
+        oracleAddress,
+        executionContext,
+        source: 'feed' as const,
+      };
     })
-    .filter((v): v is { vaultAddress: `0x${string}`; oracleAddress: `0x${string}` } => Boolean(v));
+    .filter((v): v is ResolvedAjnaVault => Boolean(v));
 }
 
 export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult> {
   const cfg = buildRuntimeConfig();
-  const keeperAddress = getKeeperAddress();
 
-  let vaults: Array<{ vaultAddress: `0x${string}`; oracleAddress: `0x${string}` }> = [];
+  let vaults: ResolvedAjnaVault[] = [];
   try {
     vaults = await resolveVaults();
   } catch (err) {
@@ -541,6 +593,23 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
   }
 
   for (const vault of vaults) {
+    if (!vault.executionContext) {
+      batch.processed += 1;
+      batch.errors += 1;
+      batch.results.push({
+        vaultAddress: vault.vaultAddress,
+        strategyAddress: ZERO_ADDRESS as `0x${string}`,
+        oracleAddress: vault.oracleAddress,
+        currentBucket: 0,
+        suggestedBucket: 0,
+        steppedBucket: 0,
+        targetBucket: 0,
+        moved: false,
+        error: `canonical_sender_required:${vault.source}`,
+      });
+      continue;
+    }
+
     const suggestedBucket = await readOracleSuggestedBucket({
       oracleAddress: vault.oracleAddress,
       twapDuration: cfg.twapDuration,
@@ -636,9 +705,11 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
         continue;
       }
 
-      if (strategy.authAdmin.toLowerCase() !== keeperAddress.toLowerCase()) {
+      if (
+        strategy.authAdmin.toLowerCase() !== vault.executionContext.smartWallet.toLowerCase()
+      ) {
         batch.processed += 1;
-        batch.skipped += 1;
+        batch.errors += 1;
         batch.results.push({
           vaultAddress: vault.vaultAddress,
           strategyAddress: strategy.strategyAddress,
@@ -648,7 +719,7 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
           steppedBucket: step.steppedBucket,
           targetBucket,
           moved: false,
-          skippedReason: 'keeper_not_auth_admin',
+          error: 'canonical_sender_required:auth_admin_mismatch',
         });
         continue;
       }
@@ -659,6 +730,7 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
         abi: AJNA_AUTH_ADMIN_ABI,
         functionName: 'setMinBucketIndex',
         args: [BigInt(targetBucket)],
+        executionContext: vault.executionContext,
       });
 
       batch.processed += 1;

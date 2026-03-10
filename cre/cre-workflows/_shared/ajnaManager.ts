@@ -21,6 +21,10 @@ import {
 } from "./strategyQueue"
 import { createEvmClientForChain, readContractBytes, resolveChainId } from "./evm"
 import { selectRotatingItems } from "./rotation"
+import {
+  resolveCanonicalAjnaExecutionContext,
+  type WriteExecutionContext,
+} from "../../utils/onchain.js"
 
 export type AjnaManagerConfig = {
   apiBaseUrl: string
@@ -120,6 +124,55 @@ function normalizeVaultAddress(value?: string): `0x${string}` | null {
 function normalizeOptionalInteger(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null
   return Math.trunc(value)
+}
+
+export function getAjnaVaultExecutionContext(
+  vault: Pick<ActiveVaultConfig, "automation">,
+): WriteExecutionContext | null {
+  return resolveCanonicalAjnaExecutionContext(vault.automation)
+}
+
+function hasEnabledAjnaAutomation(vault: Pick<ActiveVaultConfig, "automation">): boolean {
+  return vault.automation?.automationEnabled === true
+}
+
+type AjnaRebucketActionPayloadParams = {
+  vaultAddress: `0x${string}`
+  strategyAddress: `0x${string}`
+  authAddress: `0x${string}`
+  oracleAddress: `0x${string}`
+  currentBucket: number
+  suggestedBucket: number
+  steppedBucket: number
+  targetBucket: number
+  timestamp: string
+  executionContext: WriteExecutionContext
+  computedDeviationBps?: number
+  forced?: boolean
+}
+
+export function buildAjnaRebucketActionPayload(params: AjnaRebucketActionPayloadParams) {
+  const actionType = "strategy.ajna.rebucket"
+
+  return {
+    action: actionType,
+    actionType,
+    ...(params.forced ? { forced: true } : {}),
+    vaultAddress: params.vaultAddress,
+    strategyAddress: params.strategyAddress,
+    authAddress: params.authAddress,
+    oracleAddress: params.oracleAddress,
+    currentBucket: params.currentBucket,
+    suggestedBucket: params.suggestedBucket,
+    steppedBucket: params.steppedBucket,
+    targetBucket: params.targetBucket,
+    method: "setMinBucketIndex",
+    ...(params.computedDeviationBps !== undefined
+      ? { computedDeviationBps: params.computedDeviationBps }
+      : {}),
+    executionContext: params.executionContext,
+    timestamp: params.timestamp,
+  } satisfies Record<string, unknown>
 }
 
 function strategyDedupeKey(
@@ -389,6 +442,7 @@ export function evaluateAndEnqueueAjnaActions(
   const eligibleVaults = allVaults
     .filter((vault) => Boolean(vault.oracleAddress) && Boolean(vault.groupId))
     .filter((vault) => (manualVault ? vault.vaultAddress.toLowerCase() === manualVault : true))
+    .filter((vault) => (manualVault ? true : hasEnabledAjnaAutomation(vault)))
     .sort((a, b) => a.vaultAddress.localeCompare(b.vaultAddress))
 
   const selectedVaults = selectRotatingItems<ActiveVaultConfig>(eligibleVaults, {
@@ -402,7 +456,15 @@ export function evaluateAndEnqueueAjnaActions(
   let skippedActions = 0
 
   for (const vault of selectedVaults) {
+    const executionContext = getAjnaVaultExecutionContext(vault)
     if (!vault.oracleAddress) continue
+    if (!executionContext) {
+      errors.push(`${vault.vaultAddress}:canonical_sender_required:missing_execution_context`)
+      runtime.log(
+        `Skipping Ajna evaluation for ${vault.vaultAddress}: canonical sender required (missing execution context)`,
+      )
+      continue
+    }
 
     try {
       if (manual.forceEnqueue && !canForceEnqueue) {
@@ -444,11 +506,16 @@ export function evaluateAndEnqueueAjnaActions(
           continue
         }
 
+        if (forcedStrategy.authAdmin.toLowerCase() !== executionContext.smartWallet.toLowerCase()) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Ajna enqueue for ${vault.vaultAddress}: canonical sender required (auth admin mismatch)`,
+          )
+          continue
+        }
+
         const actionType = "strategy.ajna.rebucket"
-        const actionPayload = {
-          action: actionType,
-          actionType,
-          forced: true,
+        const actionPayload = buildAjnaRebucketActionPayload({
           vaultAddress: vault.vaultAddress,
           strategyAddress: forcedStrategyAddress,
           authAddress: forcedStrategy.authAddress,
@@ -457,9 +524,10 @@ export function evaluateAndEnqueueAjnaActions(
           suggestedBucket: forcedTargetBucket,
           steppedBucket: forcedTargetBucket,
           targetBucket: forcedTargetBucket,
-          method: "setMinBucketIndex",
           timestamp: runtime.now().toISOString(),
-        } satisfies Record<string, unknown>
+          executionContext,
+          forced: true,
+        })
 
         const actionId = runtime.runInNodeMode(
           (nr: NodeRuntime<AjnaManagerConfig>) =>
@@ -520,12 +588,16 @@ export function evaluateAndEnqueueAjnaActions(
             continue
           }
 
-          const method = "setMinBucketIndex"
+          if (strategy.authAdmin.toLowerCase() !== executionContext.smartWallet.toLowerCase()) {
+            skippedActions += 1
+            runtime.log(
+              `Skipping Ajna strategy ${strategy.strategyAddress} for vault ${vault.vaultAddress}: canonical sender required (auth admin mismatch)`,
+            )
+            continue
+          }
 
           const actionType = "strategy.ajna.rebucket"
-          const actionPayload = {
-            action: actionType,
-            actionType,
+          const actionPayload = buildAjnaRebucketActionPayload({
             vaultAddress: vault.vaultAddress,
             strategyAddress: strategy.strategyAddress,
             authAddress: strategy.authAddress,
@@ -534,10 +606,10 @@ export function evaluateAndEnqueueAjnaActions(
             suggestedBucket,
             steppedBucket: step.steppedBucket,
             targetBucket,
-            method,
             computedDeviationBps: deviationBps,
             timestamp: runtime.now().toISOString(),
-          } satisfies Record<string, unknown>
+            executionContext,
+          })
 
           const actionId = runtime.runInNodeMode(
             (nr: NodeRuntime<AjnaManagerConfig>) =>

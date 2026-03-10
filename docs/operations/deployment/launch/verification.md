@@ -47,6 +47,19 @@ Recommended operator check:
 
 If `/status` does not show the adapter-backed inner vault shape, treat that deployment as misconfigured.
 
+### Canonical Ajna Automation Verification (Opt-In)
+
+If the creator enabled Ajna automation, verify the sender model as well:
+
+1. The vault's Ajna automation status is enabled from the creator-owned UI flow (`DeploymentSuccess` or `Admin Agent Setup`).
+2. The allowed scope is exactly `ajna_min_bucket_only`.
+3. `AjnaVaultAuth.admin()` equals the creator's canonical Coinbase Smart Wallet, not a protocol keeper wallet.
+4. Protected CRE vault reads expose the canonical sender context for that vault, while public reads expose only safe status fields.
+5. Disabling or revoking automation causes future Ajna actions to hard-stop with canonical-sender errors rather than falling back to a shared keeper wallet.
+
+This is intentionally different from the XMTP server-signer flow. XMTP signer
+availability does not authorize Ajna execution for a vault.
+
 ### On-chain Checks
 
 ```

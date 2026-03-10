@@ -276,11 +276,17 @@ Chainlink DON
             └── HTTPClient → POST /cre/keeper/alert (on failure)
 ```
 
-The CRE workflows use an **HTTP bridge pattern**: on-chain reads happen
-directly via `EVMClient`, but writes are delegated to Vercel API endpoints
-that execute transactions using the keeper wallet. This is because CRE's
-native write model uses a report-and-forwarder pattern requiring consumer
-contracts implementing `IReceiver.onReport()`, which is planned for Phase 4.
+The CRE stack now has two write models:
+
+- most workflows still use the existing **HTTP bridge pattern**, where on-chain
+  reads happen directly via `EVMClient` and writes are delegated to Vercel API
+  endpoints that execute transactions with the shared keeper wallet
+- canonical Ajna automation is different: opted-in vaults carry a per-vault
+  signer context, and Ajna writes execute from the creator's canonical Coinbase
+  Smart Wallet using that creator's Privy embedded EOA as the signer bridge
+
+There is **no** fallback from canonical Ajna execution to the shared protocol
+keeper wallet when the per-vault context is missing, revoked, or invalid.
 
 ## Setup
 
@@ -296,7 +302,7 @@ Required:
 - `KEEPR_API_BASE_URL` — Your deployment (e.g. `https://4626.fun/api`)
 - `KEEPR_API_KEY` — API key for CRE-to-Vercel auth
 
-Optional (ERC-4337 smart wallet mode):
+Optional (ERC-4337 smart wallet mode for shared/global keeper workflows):
 - `CRE_ERC4337_ENABLED=true`
 - `CRE_ERC4337_SMART_WALLET` — canonical smart wallet address (UserOp sender)
 - `CRE_ERC4337_BUNDLER_URL` — bundler endpoint (CDP or compatible)
@@ -312,9 +318,17 @@ Optional (alerting):
 
 Optional (Ajna bucket manager):
 - `AJNA_BUCKET_VAULT_ADDRESS` / `AJNA_BUCKET_ORACLE_ADDRESS` — explicit single-vault targeting for Ajna bucket workflow
+- `AJNA_BUCKET_CANONICAL_CSW_ADDRESS` / `AJNA_BUCKET_EMBEDDED_EOA_ADDRESS` / `AJNA_BUCKET_PRIVY_WALLET_ID` — explicit canonical sender context for manual/single-vault Ajna runs
+- `AJNA_BUCKET_CSW_VERSION` — optional Coinbase Smart Wallet version override for single-vault Ajna runs (`1` or `1.1`)
 - `AJNA_BUCKET_TWAP_DURATION`, `AJNA_BUCKET_TARGET_LTV_BPS`, `AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS`
 - `AJNA_BUCKET_MOVE_THRESHOLD`, `AJNA_BUCKET_MAX_STEP`
 - `AJNA_BUCKET_MOVE_COOLDOWN_SECONDS`, `AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS`
+
+Canonical Ajna notes:
+- creator opt-in is per vault and currently scoped to `ajna_min_bucket_only`
+- sender is the creator's canonical CSW, not the protocol keeper wallet
+- signer bridge is the creator's Privy embedded EOA, not the XMTP server signer
+- if canonical context cannot be proven, Ajna actions hard-stop with `canonical_sender_required:*`
 
 Optional (Charm rebalance manager):
 - `CHARM_REBALANCE_VAULT_ADDRESS` / `CHARM_REBALANCE_ORACLE_ADDRESS` — explicit single-vault targeting for Charm workflow
@@ -357,9 +371,18 @@ If ERC-4337 is enabled, `KEEPER_ADDRESS` must be the smart wallet
 
 Auction settlement is permissionless — no auth needed.
 
+Ajna exception: canonical Ajna automation does **not** use this shared keeper
+authorization. For opted-in vaults, `AjnaVaultAuth.admin()` must remain the
+creator's canonical CSW, and Ajna actions fail closed if that relationship no
+longer holds.
+
 ### 4. Fund the Keeper
 
 Send **0.1 ETH** to the keeper wallet on Base.
+
+This funds the shared keeper path for non-Ajna workflows. Canonical Ajna
+automation instead uses the creator's CSW/embedded-EOA path and does not
+fallback to the funded shared keeper.
 
 ## Running
 
@@ -561,15 +584,21 @@ For local simulation, add these to `cre/cre-workflows/.env`.
 
 ### HTTP Bridge Pattern
 
-CRE workflows cannot directly write to contracts (CRE uses a report-and-forwarder
-model). Instead, the workflows delegate writes to Vercel API endpoints:
+Most CRE workflows cannot directly write to contracts (CRE uses a
+report-and-forwarder model). Instead, those workflows delegate writes to
+Vercel API endpoints:
 
 ```
 CRE Workflow → HTTPClient.sendRequest(POST /cre/keeper/tend) → Vercel API → viem writeContract → Base
 ```
 
-The bridge endpoints authenticate with `KEEPR_API_KEY` and use the keeper wallet
-(`KEEPR_PRIVATE_KEY`) to submit transactions.
+The bridge endpoints authenticate with `KEEPR_API_KEY` and use the shared
+keeper wallet (`KEEPR_PRIVATE_KEY`) to submit transactions.
+
+Canonical Ajna automation is the current exception: Ajna bucket management can
+execute directly from CRE using the vault's stored canonical sender context, or
+enqueue canonical-only actions through the protected queue path. It does not
+reuse the XMTP server-signer flow and does not downgrade to the shared keeper.
 
 **Phase 4 (Future)**: Deploy `VaultKeeperReceiver` and `AuctionSettlementReceiver`
 Solidity contracts implementing `IReceiver.onReport()` to enable native CRE writes

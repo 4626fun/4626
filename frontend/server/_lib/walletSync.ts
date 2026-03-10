@@ -137,7 +137,7 @@ async function findExistingProfile(db: Db, privyUserId: string | null, wallets: 
   return null
 }
 
-type PersistedIdentity = {
+export type PersistedIdentity = {
   primaryWallet: string | null
   canonicalSmartWallet: string | null
   canonicalSolanaWallet: string | null
@@ -146,7 +146,7 @@ type PersistedIdentity = {
   preprovZoraHandle: string | null
 }
 
-async function readPersistedIdentity(db: Db, profileId: number): Promise<PersistedIdentity | null> {
+export async function readPersistedIdentity(db: Db, profileId: number): Promise<PersistedIdentity | null> {
   const canonicalWalletResult = await db.sql`
     SELECT address
     FROM profile_wallets

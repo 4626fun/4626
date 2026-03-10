@@ -157,6 +157,24 @@ Post-deploy expectations for the canonical Ajna sleeve:
 - `AjnaERC4626Vault.AUTH()` resolves to `AjnaVaultAuth`
 - adapter `idleBufferBps` is typically set to `0` so buffering is owned by the inner Ajna vault policy rather than duplicated across layers
 
+### Canonical Ajna automation (post-launch)
+
+Ajna automation is now an explicit, per-vault creator opt-in:
+
+- sender: the creator's canonical Coinbase Smart Wallet
+- signer bridge: the creator's Privy embedded EOA
+- initial scope: `ajna_min_bucket_only`
+- revoke behavior: disabling automation removes the canonical sender context for future Ajna actions instead of falling back to any protocol keeper wallet
+
+Operationally this is separate from the existing XMTP/group-agent signer path.
+Do not assume the XMTP server signer can manage Ajna for a creator vault.
+
+After launch:
+
+1. Open the success screen or `Admin Agent Setup`.
+2. Enable Ajna automation for the vault from the creator's own canonical wallet context.
+3. Verify the stored status shows the vault as opted in before expecting CRE Ajna actions to run.
+
 `SolanaStrategy` is a Base-side strategy adapter with keeper-reported remote NAV:
 
 - `solanaMaxNavAge` bounds how old reported NAV can be before valuation is ignored.

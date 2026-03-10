@@ -26,7 +26,14 @@ import {
 } from '../config.js';
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 import { fetchActiveVaults } from '../utils/registry.js';
-import { getBlockTimestamp, getKeeperAddress, getPublicClient, readContract } from '../utils/onchain.js';
+import {
+  getKeeperAddress,
+  getPublicClient,
+  readContract,
+  resolveCanonicalAjnaExecutionContext,
+  type CanonicalAjnaAutomationConfig,
+  type WriteExecutionContext,
+} from '../utils/onchain.js';
 import {
   bucketPriceChangeBps,
   computeSteppedBucket,
@@ -108,11 +115,16 @@ interface PoolWatchContext {
   vaultAddress: `0x${string}`;
   oracleAddress: `0x${string}`;
   groupId: string;
+  automation?: CanonicalAjnaAutomationConfig | null;
 }
 
 interface EnqueueResult {
   id: number;
 }
+
+type VaultAutomationAwareConfig = {
+  automation?: CanonicalAjnaAutomationConfig | null;
+};
 
 function parsePositiveIntEnv(key: string, fallback: number): number {
   const raw = process.env[key];
@@ -201,6 +213,61 @@ export function makeDedupeKey(params: {
   return `vault:${params.vaultAddress.toLowerCase()}:strategy:${params.strategyAddressOrPool.toLowerCase()}:action:${params.actionType}:band:${params.band}`;
 }
 
+export function resolveAjnaWatchedVaultExecutionContext(
+  watched: Pick<PoolWatchContext, 'automation'>,
+): WriteExecutionContext | null {
+  return resolveCanonicalAjnaExecutionContext(watched.automation);
+}
+
+export function getAjnaCanonicalEnqueueError(params: {
+  watched: Pick<PoolWatchContext, 'automation'>;
+  authAdmin: Address;
+}): string | null {
+  const executionContext = resolveAjnaWatchedVaultExecutionContext(params.watched);
+  if (!executionContext) {
+    return 'canonical_sender_required:missing_execution_context';
+  }
+  if (params.authAdmin.toLowerCase() !== executionContext.smartWallet.toLowerCase()) {
+    return 'canonical_sender_required:auth_admin_mismatch';
+  }
+  return null;
+}
+
+export function buildAjnaEnqueueAction(params: {
+  watched: PoolWatchContext;
+  strategyAddress: `0x${string}`;
+  authAddress: `0x${string}`;
+  currentBucket: number;
+  suggestedBucket: number;
+  steppedBucket: number;
+  targetBucket: number;
+  deviationBps: number;
+  nowSeconds: number;
+  executionContext: WriteExecutionContext;
+}): Record<string, unknown> {
+  const actionType = 'strategy.ajna.rebucket';
+
+  return {
+    action: actionType,
+    actionType,
+    vaultAddress: params.watched.vaultAddress,
+    strategyAddress: params.strategyAddress,
+    authAddress: params.authAddress,
+    oracleAddress: params.watched.oracleAddress,
+    v3Pool: params.watched.poolAddress,
+    triggerTick: null,
+    referenceTick: null,
+    currentBucket: params.currentBucket,
+    suggestedBucket: params.suggestedBucket,
+    steppedBucket: params.steppedBucket,
+    targetBucket: params.targetBucket,
+    method: 'setMinBucketIndex',
+    computedDeviationBps: params.deviationBps,
+    executionContext: params.executionContext,
+    timestamp: new Date(params.nowSeconds * 1000).toISOString(),
+  } satisfies Record<string, unknown>;
+}
+
 async function enqueueAction(params: {
   cfg: ListenerConfig;
   vaultAddress: `0x${string}`;
@@ -244,6 +311,7 @@ async function resolvePoolContexts(): Promise<Map<`0x${string}`, PoolWatchContex
   const out = new Map<`0x${string}`, PoolWatchContext[]>();
 
   for (const v of candidates) {
+    const vault = v as typeof v & VaultAutomationAwareConfig;
     const vaultAddress = asAddress(v.vaultAddress);
     const oracleAddress = asAddress(v.oracleAddress);
     if (!vaultAddress || !oracleAddress || !v.groupId) continue;
@@ -271,6 +339,7 @@ async function resolvePoolContexts(): Promise<Map<`0x${string}`, PoolWatchContex
       vaultAddress,
       oracleAddress,
       groupId: v.groupId,
+      automation: vault.automation ?? null,
     });
     out.set(poolAddress, existing);
   }
@@ -287,10 +356,20 @@ async function evaluateAjnaForVault(params: {
   state: StrategyEventState;
   watched: PoolWatchContext;
   nowSeconds: number;
-  keeperAddress: Address;
   scheduleStateSave: () => void;
 }): Promise<number> {
-  const { cfg, state, watched, nowSeconds, keeperAddress, scheduleStateSave } = params;
+  const { cfg, state, watched, nowSeconds, scheduleStateSave } = params;
+  const executionContext = resolveAjnaWatchedVaultExecutionContext(watched);
+  if (!executionContext) {
+    logDecision({
+      event: 'ajna.skip',
+      reason: 'canonical_sender_required:missing_execution_context',
+      pool: watched.poolAddress,
+      vault: watched.vaultAddress,
+    });
+    return 0;
+  }
+
   const suggestedBucket = await readOracleSuggestedBucket({
     oracleAddress: watched.oracleAddress,
     twapDuration: cfg.ajna.twapDuration,
@@ -301,7 +380,6 @@ async function evaluateAjnaForVault(params: {
   const strategies = await readAjnaStrategiesForVault(watched.vaultAddress).catch(() => []);
   if (strategies.length === 0) return 0;
 
-  const blockNow = await getBlockTimestamp().catch(() => 0n);
   let enqueued = 0;
 
   for (const strategy of strategies) {
@@ -357,10 +435,14 @@ async function evaluateAjnaForVault(params: {
       continue;
     }
 
-    if (strategy.authAdmin.toLowerCase() !== keeperAddress.toLowerCase()) {
+    const canonicalEnqueueError = getAjnaCanonicalEnqueueError({
+      watched,
+      authAdmin: strategy.authAdmin,
+    });
+    if (canonicalEnqueueError) {
       logDecision({
         event: 'ajna.skip',
-        reason: 'keeper_not_auth_admin',
+        reason: canonicalEnqueueError,
         pool: watched.poolAddress,
         vault: watched.vaultAddress,
         strategy: strategy.strategyAddress,
@@ -410,31 +492,24 @@ async function evaluateAjnaForVault(params: {
       continue;
     }
 
-    const method = 'setMinBucketIndex';
     const dedupeKey = makeDedupeKey({
       vaultAddress: watched.vaultAddress,
       strategyAddressOrPool: strategy.authAddress,
       actionType,
       band: String(targetBucket),
     });
-    const action = {
-      action: actionType,
-      actionType,
-      vaultAddress: watched.vaultAddress,
+    const action = buildAjnaEnqueueAction({
+      watched,
       strategyAddress: strategy.strategyAddress,
       authAddress: strategy.authAddress,
-      oracleAddress: watched.oracleAddress,
-      v3Pool: watched.poolAddress,
-      triggerTick: null,
-      referenceTick: null,
       currentBucket: strategy.currentBucket,
       suggestedBucket,
       steppedBucket: step.steppedBucket,
       targetBucket,
-      method,
-      computedDeviationBps: deviationBps,
-      timestamp: new Date(nowSeconds * 1000).toISOString(),
-    } satisfies Record<string, unknown>;
+      deviationBps,
+      nowSeconds,
+      executionContext,
+    });
 
     const enqueuedResult = await enqueueAction({
       cfg,
@@ -647,7 +722,6 @@ async function evaluatePool(params: {
       state,
       watched,
       nowSeconds,
-      keeperAddress,
       scheduleStateSave,
     }).catch((err) => {
       logDecision({

@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { getKeeprVaultAutomationByVaultAddress } from '../../../../server/_lib/keeprAutomation.js'
+import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { enqueueKeeprAction } from '../../../../server/_lib/keeprRegistry.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -17,8 +19,40 @@ type EnqueueResponse = {
   id: number
 }
 
+const AJNA_AUTOMATION_SCOPE = 'ajna_min_bucket_only'
+const AJNA_ACTION_TYPES = new Set([
+  'strategy.ajna.rebucket',
+  'ajna_rebucket',
+  'ajnaRebucket',
+])
+
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function isAjnaRebucketAction(actionType: string | null): boolean {
+  return actionType !== null && AJNA_ACTION_TYPES.has(actionType)
+}
+
+function getAjnaAutomationPrecheckError(
+  row: Awaited<ReturnType<typeof getKeeprVaultAutomationByVaultAddress>>,
+): string | null {
+  if (
+    !row?.canonicalCswAddress ||
+    !isAddressLike(row.canonicalCswAddress) ||
+    !row?.embeddedEoaAddress ||
+    !isAddressLike(row.embeddedEoaAddress) ||
+    !row?.privyWalletId
+  ) {
+    return 'Ajna automation is not enabled for this vault'
+  }
+  if (!row.automationEnabled || row.revokedAt) {
+    return 'Ajna automation is disabled for this vault'
+  }
+  if (row.automationScope !== AJNA_AUTOMATION_SCOPE) {
+    return 'Ajna automation scope is invalid for this vault'
+  }
+  return null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -65,6 +99,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    if (isAjnaRebucketAction(actionType)) {
+      const automation = await getKeeprVaultAutomationByVaultAddress(vaultAddressRaw as `0x${string}`)
+      if (!automation) {
+        const db = isDbConfigured() ? await getDb() : null
+        if (!db) {
+          return res.status(503).json({
+            success: false,
+            error: 'Ajna automation backend unavailable',
+          } satisfies ApiEnvelope<never>)
+        }
+      }
+      const precheckError = getAjnaAutomationPrecheckError(automation)
+      if (precheckError) {
+        return res.status(409).json({ success: false, error: precheckError } satisfies ApiEnvelope<never>)
+      }
+    }
+
     const { id } = await enqueueKeeprAction({
       vaultAddress: vaultAddressRaw,
       groupId,

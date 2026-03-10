@@ -3,12 +3,48 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 import handler from '../_handlers/keepr/actions/_enqueue.ts'
 
-const { enqueueKeeprActionMock } = vi.hoisted(() => ({
+function buildAutomationRow(overrides: Record<string, unknown> = {}) {
+  return {
+    vaultAddress: '0x00000000000000000000000000000000000000bb',
+    profileId: 42,
+    canonicalCswAddress: '0x00000000000000000000000000000000000000cc',
+    embeddedEoaAddress: '0x00000000000000000000000000000000000000dd',
+    privyWalletId: 'wallet-ajna-owner',
+    authorizationSource: 'owner_session',
+    automationEnabled: true,
+    automationScope: 'ajna_min_bucket_only',
+    lastOwnerCheckAt: '2026-03-10T11:00:00.000Z',
+    revokedAt: null,
+    metadata: {},
+    createdAt: '2026-03-10T10:00:00.000Z',
+    updatedAt: '2026-03-10T11:00:00.000Z',
+    ...overrides,
+  }
+}
+
+const {
+  enqueueKeeprActionMock,
+  getKeeprVaultAutomationByVaultAddressMock,
+  getDbMock,
+  isDbConfiguredMock,
+} = vi.hoisted(() => ({
   enqueueKeeprActionMock: vi.fn(),
+  getKeeprVaultAutomationByVaultAddressMock: vi.fn(),
+  getDbMock: vi.fn(),
+  isDbConfiguredMock: vi.fn(() => true),
 }))
 
 vi.mock('../../server/_lib/keeprRegistry.js', () => ({
   enqueueKeeprAction: enqueueKeeprActionMock,
+}))
+
+vi.mock('../../server/_lib/keeprAutomation.js', () => ({
+  getKeeprVaultAutomationByVaultAddress: getKeeprVaultAutomationByVaultAddressMock,
+}))
+
+vi.mock('../../server/_lib/postgres.js', () => ({
+  getDb: getDbMock,
+  isDbConfigured: isDbConfiguredMock,
 }))
 
 describe('keepr/actions/enqueue', () => {
@@ -17,6 +53,9 @@ describe('keepr/actions/enqueue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({ KEEPR_API_KEY: 'test-keepr-key' })
+    getKeeprVaultAutomationByVaultAddressMock.mockResolvedValue(buildAutomationRow())
+    getDbMock.mockResolvedValue({ sql: vi.fn() })
+    isDbConfiguredMock.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -49,6 +88,150 @@ describe('keepr/actions/enqueue', () => {
     expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    'strategy.ajna.rebucket',
+    'ajna_rebucket',
+    'ajnaRebucket',
+  ])('rejects Ajna actions when canonical automation context is missing for %s', async (actionType) => {
+    getKeeprVaultAutomationByVaultAddressMock.mockResolvedValueOnce(null)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-keepr-key' },
+      body: {
+        vaultAddress: '0x00000000000000000000000000000000000000bb',
+        groupId: 'group-1',
+        actionType,
+        action: {
+          action: actionType,
+          authAddress: '0x00000000000000000000000000000000000000cc',
+          targetBucket: 1234,
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe('Ajna automation is not enabled for this vault')
+    expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+  })
+
+  it('returns availability error when automation lookup is null because the DB handle is unavailable', async () => {
+    getKeeprVaultAutomationByVaultAddressMock.mockResolvedValueOnce(null)
+    getDbMock.mockResolvedValueOnce(null)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-keepr-key' },
+      body: {
+        vaultAddress: '0x00000000000000000000000000000000000000bb',
+        groupId: 'group-1',
+        actionType: 'strategy.ajna.rebucket',
+        action: {
+          action: 'strategy.ajna.rebucket',
+          authAddress: '0x00000000000000000000000000000000000000cc',
+          targetBucket: 1234,
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(503)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe('Ajna automation backend unavailable')
+    expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects Ajna actions when the embedded signer context is missing', async () => {
+    getKeeprVaultAutomationByVaultAddressMock.mockResolvedValueOnce(
+      buildAutomationRow({ embeddedEoaAddress: null }),
+    )
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-keepr-key' },
+      body: {
+        vaultAddress: '0x00000000000000000000000000000000000000bb',
+        groupId: 'group-1',
+        actionType: 'strategy.ajna.rebucket',
+        action: {
+          action: 'strategy.ajna.rebucket',
+          authAddress: '0x00000000000000000000000000000000000000cc',
+          targetBucket: 1234,
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe('Ajna automation is not enabled for this vault')
+    expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['canonical CSW', buildAutomationRow({ canonicalCswAddress: 'not-an-address' })],
+    ['embedded EOA', buildAutomationRow({ embeddedEoaAddress: 'not-an-address' })],
+  ])('rejects Ajna actions when the stored %s address is malformed', async (_label, row) => {
+    getKeeprVaultAutomationByVaultAddressMock.mockResolvedValueOnce(row)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-keepr-key' },
+      body: {
+        vaultAddress: '0x00000000000000000000000000000000000000bb',
+        groupId: 'group-1',
+        actionType: 'strategy.ajna.rebucket',
+        action: {
+          action: 'strategy.ajna.rebucket',
+          authAddress: '0x00000000000000000000000000000000000000cc',
+          targetBucket: 1234,
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe('Ajna automation is not enabled for this vault')
+    expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['disabled', buildAutomationRow({ automationEnabled: false }), 'Ajna automation is disabled for this vault'],
+    ['revoked', buildAutomationRow({ revokedAt: '2026-03-10T12:00:00.000Z' }), 'Ajna automation is disabled for this vault'],
+    ['wrong scope', buildAutomationRow({ automationScope: 'vault' }), 'Ajna automation scope is invalid for this vault'],
+  ])('rejects Ajna actions when automation context is %s', async (_label, row, expectedError) => {
+    getKeeprVaultAutomationByVaultAddressMock.mockResolvedValueOnce(row)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-keepr-key' },
+      body: {
+        vaultAddress: '0x00000000000000000000000000000000000000bb',
+        groupId: 'group-1',
+        actionType: 'strategy.ajna.rebucket',
+        action: {
+          action: 'strategy.ajna.rebucket',
+          authAddress: '0x00000000000000000000000000000000000000cc',
+          targetBucket: 1234,
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe(expectedError)
+    expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+  })
+
   it('enqueues a valid nested Ajna rebucket action', async () => {
     enqueueKeeprActionMock.mockResolvedValue({ id: 42 })
 
@@ -73,6 +256,9 @@ describe('keepr/actions/enqueue', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.id).toBe(42)
+    expect(getKeeprVaultAutomationByVaultAddressMock).toHaveBeenCalledWith(
+      '0x00000000000000000000000000000000000000bb',
+    )
     expect(enqueueKeeprActionMock).toHaveBeenCalledWith({
       vaultAddress: '0x00000000000000000000000000000000000000bb',
       groupId: 'group-1',

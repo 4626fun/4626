@@ -82,6 +82,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'keepr/join': () => import('./keepr/_join.js'),
   'keepr/joinStatus': () => import('./keepr/_joinStatus.js'),
   'keepr/nonce': () => import('./keepr/_nonce.js'),
+  'keepr/vault/automation': () => import('./keepr/vault/_automation.js'),
   'keepr/vault/upsert': () => import('./keepr/vault/_upsert.js'),
   'keepr/actions/enqueue': () => import('./keepr/actions/_enqueue.js'),
   'keepr/actions/pending': () => import('./keepr/actions/_pending.js'),

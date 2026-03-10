@@ -76,6 +76,79 @@ type Erc4337Config = {
   version: '1' | '1.1';
 };
 
+export const AJNA_AUTOMATION_SCOPE = 'ajna_min_bucket_only';
+
+export interface CanonicalAjnaAutomationConfig {
+  automationEnabled: boolean;
+  automationScope?: string;
+  canonicalCswAddress?: Address | null;
+  embeddedEoaAddress?: Address | null;
+  privyWalletId?: string | null;
+}
+
+export interface WriteExecutionContext {
+  smartWallet: Address;
+  ownerAddress: Address;
+  privyWalletId: string;
+  version?: '1' | '1.1';
+}
+
+function resolveExecutionContextVersion(version?: '1' | '1.1'): '1' | '1.1' {
+  return version === '1.1' ? '1.1' : '1';
+}
+
+export function normalizeWriteExecutionContext(
+  executionContext?: Partial<WriteExecutionContext>,
+): WriteExecutionContext | null {
+  if (executionContext === undefined) return null;
+
+  const smartWalletRaw = executionContext?.smartWallet;
+  const ownerAddressRaw = executionContext?.ownerAddress;
+  const privyWalletId = String(executionContext?.privyWalletId ?? '').trim();
+
+  if (!smartWalletRaw || !ownerAddressRaw || !privyWalletId) {
+    throw new Error('execution_context_incomplete');
+  }
+  if (!isAddress(smartWalletRaw)) {
+    throw new Error(`Invalid executionContext.smartWallet address: ${smartWalletRaw}`);
+  }
+  if (!isAddress(ownerAddressRaw)) {
+    throw new Error(`Invalid executionContext.ownerAddress address: ${ownerAddressRaw}`);
+  }
+
+  return {
+    smartWallet: getAddress(smartWalletRaw),
+    ownerAddress: getAddress(ownerAddressRaw),
+    privyWalletId,
+    version: resolveExecutionContextVersion(executionContext?.version),
+  };
+}
+
+export function resolveCanonicalAjnaExecutionContext(
+  automation?: CanonicalAjnaAutomationConfig | null,
+): WriteExecutionContext | null {
+  if (!automation?.automationEnabled) return null;
+  if (automation.automationScope !== AJNA_AUTOMATION_SCOPE) return null;
+
+  const canonicalCswAddress = automation.canonicalCswAddress ?? null;
+  const embeddedEoaAddress = automation.embeddedEoaAddress ?? null;
+  const privyWalletId = String(automation.privyWalletId ?? '').trim();
+
+  if (!canonicalCswAddress || !embeddedEoaAddress || !privyWalletId) {
+    return null;
+  }
+  if (!isAddress(canonicalCswAddress) || !isAddress(embeddedEoaAddress)) {
+    return null;
+  }
+
+  return {
+    smartWallet: getAddress(canonicalCswAddress),
+    ownerAddress: getAddress(embeddedEoaAddress),
+    privyWalletId,
+    version: '1',
+  };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _erc4337Config: Erc4337Config | null | undefined = undefined;
 
@@ -159,15 +232,18 @@ function getErc4337OwnerAccountFromPrivateKey() {
 /**
  * Return the ERC-4337 owner account backed by a Privy wallet API signer.
  */
-function getErc4337OwnerAccountFromPrivy(): {
+function getErc4337OwnerAccountFromPrivy(params?: {
+  walletId?: string;
+  ownerAddress?: Address;
+}): {
   account: ReturnType<typeof toAccount>;
   address: Address;
 } {
-  const walletId = (process.env.CRE_ERC4337_PRIVY_WALLET_ID ?? '').trim();
+  const walletId = (params?.walletId ?? process.env.CRE_ERC4337_PRIVY_WALLET_ID ?? '').trim();
   if (!walletId) {
     throw new Error('CRE_ERC4337_PRIVY_WALLET_ID missing');
   }
-  const ownerRaw = (process.env.CRE_ERC4337_OWNER ?? '').trim();
+  const ownerRaw = String(params?.ownerAddress ?? process.env.CRE_ERC4337_OWNER ?? '').trim();
   if (!ownerRaw) {
     throw new Error('CRE_ERC4337_OWNER required when using CRE_ERC4337_PRIVY_WALLET_ID');
   }
@@ -211,7 +287,30 @@ function getErc4337OwnerAccountFromPrivy(): {
 /**
  * Resolve ERC-4337 configuration from env. Returns null when disabled.
  */
-function getErc4337Config(): Erc4337Config | null {
+function getErc4337Config(
+  executionContext?: Partial<WriteExecutionContext>,
+): Erc4337Config | null {
+  const resolvedExecutionContext = normalizeWriteExecutionContext(executionContext);
+  if (resolvedExecutionContext) {
+    const bundlerUrl = requireEnv('CRE_ERC4337_BUNDLER_URL');
+    const paymasterUrl =
+      (process.env.CRE_ERC4337_PAYMASTER_URL ?? '').trim() || bundlerUrl;
+    const privyOwner = getErc4337OwnerAccountFromPrivy({
+      walletId: resolvedExecutionContext.privyWalletId,
+      ownerAddress: resolvedExecutionContext.ownerAddress,
+    });
+
+    return {
+      smartWallet: resolvedExecutionContext.smartWallet,
+      bundlerUrl,
+      paymasterUrl,
+      ownerAccount: privyOwner.account,
+      ownerAddress: privyOwner.address,
+      signerType: 'privy-wallet',
+      version: resolveExecutionContextVersion(resolvedExecutionContext.version),
+    };
+  }
+
   if (_erc4337Config !== undefined) return _erc4337Config;
   if (!isErc4337Enabled()) {
     _erc4337Config = null;
@@ -390,8 +489,9 @@ async function sendErc4337UserOperation(params: {
   address: Address;
   data: Hex;
   value?: bigint;
+  erc4337: Erc4337Config | null;
 }): Promise<WriteResult> {
-  const erc4337 = getErc4337Config();
+  const erc4337 = params.erc4337;
   if (!erc4337) {
     throw new Error('ERC-4337 not enabled (set CRE_ERC4337_ENABLED=true).');
   }
@@ -500,59 +600,63 @@ export async function writeContract(params: {
   functionName: string;
   args?: readonly unknown[];
   value?: bigint;
+  executionContext?: Partial<WriteExecutionContext>;
 }): Promise<WriteResult> {
   const publicClient = getPublicClient();
-  const erc4337 = getErc4337Config();
+  try {
+    // In dry-run mode, simulate the transaction
+    if (isDryRun()) {
+      try {
+        const executionContext = normalizeWriteExecutionContext(params.executionContext);
+        const account =
+          executionContext?.smartWallet ??
+          getErc4337Config()?.smartWallet ??
+          getKeeperEoaAddress();
 
-  // In dry-run mode, simulate the transaction
-  if (isDryRun()) {
-    try {
-      const account = erc4337 ? erc4337.smartWallet : getKeeperEoaAddress();
+        await publicClient.simulateContract({
+          address: params.address,
+          abi: params.abi as Abi,
+          functionName: params.functionName,
+          args: params.args,
+          value: params.value,
+          account,
+        });
 
-      await publicClient.simulateContract({
-        address: params.address,
+        console.log(`[DRY RUN] ✓ ${params.functionName}() would succeed`);
+        return {
+          txHash: '0xdryrun' as `0x${string}`,
+          success: true,
+          simulated: true,
+        };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.log(`[DRY RUN] ✗ ${params.functionName}() would fail: ${message}`);
+        return {
+          txHash: '0xdryrun' as `0x${string}`,
+          success: false,
+          error: message,
+          simulated: true,
+        };
+      }
+    }
+
+    const erc4337 = getErc4337Config(params.executionContext);
+    if (erc4337) {
+      const data = encodeFunctionData({
         abi: params.abi as Abi,
         functionName: params.functionName,
         args: params.args,
-        value: params.value,
-        account,
       });
-
-      console.log(`[DRY RUN] ✓ ${params.functionName}() would succeed`);
-      return {
-        txHash: '0xdryrun' as `0x${string}`,
-        success: true,
-        simulated: true,
-      };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.log(`[DRY RUN] ✗ ${params.functionName}() would fail: ${message}`);
-      return {
-        txHash: '0xdryrun' as `0x${string}`,
-        success: false,
-        error: message,
-        simulated: true,
-      };
+      return await sendErc4337UserOperation({
+        address: params.address,
+        data,
+        value: params.value,
+        erc4337,
+      });
     }
-  }
 
-  if (erc4337) {
-    const data = encodeFunctionData({
-      abi: params.abi as Abi,
-      functionName: params.functionName,
-      args: params.args,
-    });
-    return await sendErc4337UserOperation({
-      address: params.address,
-      data,
-      value: params.value,
-    });
-  }
-
-  // Normal execution: send real transaction
-  const wallet = getWalletClient();
-
-  try {
+    // Normal execution: send real transaction
+    const wallet = getWalletClient();
     const txHash = await wallet.writeContract({
       address: params.address,
       abi: params.abi as Abi,
