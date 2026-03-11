@@ -1,7 +1,7 @@
 // Basenames integration using OnchainKit
 // Docs: https://docs.base.org/base-account/basenames/basenames-onchainkit-tutorial
 
-import { createPublicClient, fallback, http, toCoinType } from 'viem'
+import { createPublicClient, fallback, getAddress, http, isAddress, toCoinType } from 'viem'
 import { base, baseSepolia, mainnet } from 'viem/chains'
 import { normalize } from 'viem/ens'
 import { logger } from './logger'
@@ -66,6 +66,50 @@ export async function getBasename(
   }
 }
 
+function normalizeBasenameInput(input: string): string | null {
+  const raw = input.trim().toLowerCase()
+  if (!raw) return null
+  const withoutAt = raw.startsWith('@') ? raw.slice(1).trim() : raw
+  if (!withoutAt) return null
+  if (withoutAt.endsWith('.base.eth')) return withoutAt
+  if (withoutAt.includes('.')) return null
+  if (!/^[a-z0-9-]{1,255}$/.test(withoutAt)) return null
+  return `${withoutAt}.base.eth`
+}
+
+/**
+ * Resolve a Basename handle (or full basename) to an EVM address.
+ * Accepts:
+ * - "akita"
+ * - "@akita"
+ * - "akita.base.eth"
+ * - "0x..." (passes through normalized checksum)
+ */
+export async function resolveBasenameAddress(
+  input: string,
+  chainId: number = base.id,
+): Promise<string | null> {
+  try {
+    const raw = input.trim()
+    if (!raw) return null
+    if (isAddress(raw)) return getAddress(raw)
+
+    const basename = normalizeBasenameInput(raw)
+    if (!basename) return null
+
+    const client = createMainnetReadClient()
+    const resolved = await client.getEnsAddress({
+      name: normalize(basename),
+      coinType: toCoinType(chainId === baseSepolia.id ? baseSepolia.id : base.id),
+      gatewayUrls: ['https://ccip.ens.xyz'],
+    })
+    return resolved ? getAddress(resolved) : null
+  } catch (error) {
+    logger.error('Failed to resolve Basename address', error)
+    return null
+  }
+}
+
 /**
  * Get Basename with full profile info
  */
@@ -108,6 +152,48 @@ export async function getBasenameProfile(
     }
   } catch (error) {
     logger.error('Failed to fetch Basename profile', error)
+    return { name: null }
+  }
+}
+
+/**
+ * Get Basename profile info directly from a basename handle.
+ * Accepts "akita", "@akita", or "akita.base.eth".
+ */
+export async function getBasenameProfileByName(
+  input: string,
+): Promise<BasenameInfo> {
+  try {
+    const basename = normalizeBasenameInput(input)
+    if (!basename) return { name: null }
+
+    const client = createMainnetReadClient()
+
+    const [avatar, displayName, description, twitter, github, discord, email, url] =
+      await Promise.all([
+        client.getEnsAvatar({ name: normalize(basename) }).catch(() => null),
+        client.getEnsText({ name: normalize(basename), key: 'name' }).catch(() => null),
+        client.getEnsText({ name: normalize(basename), key: 'description' }).catch(() => null),
+        client.getEnsText({ name: normalize(basename), key: 'com.twitter' }).catch(() => null),
+        client.getEnsText({ name: normalize(basename), key: 'com.github' }).catch(() => null),
+        client.getEnsText({ name: normalize(basename), key: 'com.discord' }).catch(() => null),
+        client.getEnsText({ name: normalize(basename), key: 'email' }).catch(() => null),
+        client.getEnsText({ name: normalize(basename), key: 'url' }).catch(() => null),
+      ])
+
+    return {
+      name: basename,
+      avatar,
+      displayName,
+      description,
+      twitter,
+      github,
+      discord,
+      email,
+      url,
+    }
+  } catch (error) {
+    logger.error('Failed to fetch Basename profile by name', error)
     return { name: null }
   }
 }

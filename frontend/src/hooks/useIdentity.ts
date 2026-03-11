@@ -26,6 +26,8 @@ export type IdentityResult = {
   lensOwnerAddress: string | null
   ensName: string | null
   basename: string | null
+  basenameDisplayName: string | null
+  basenameAvatar: string | null
 }
 
 type IdentityCacheEntry = Omit<IdentityResult, 'loading'>
@@ -234,6 +236,8 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
     lensOwnerAddress: null,
     ensName: null,
     basename: null,
+    basenameDisplayName: null,
+    basenameAvatar: null,
   }
   if (!address || !/^0x[a-fA-F0-9]{40}$/i.test(address)) return fallback
 
@@ -275,6 +279,8 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
         lensOwnerAddress: lens?.ownerAddress ?? null,
         ensName,
         basename,
+        basenameDisplayName: basenameDisplayName ?? null,
+        basenameAvatar,
       }
       identityCache.set(address.toLowerCase(), result)
       return result
@@ -299,6 +305,8 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
         lensOwnerAddress: lens.ownerAddress,
         ensName,
         basename,
+        basenameDisplayName: basenameDisplayName ?? null,
+        basenameAvatar,
       }
       identityCache.set(address.toLowerCase(), result)
       return result
@@ -320,6 +328,8 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
         lensOwnerAddress: null,
         ensName,
         basename,
+        basenameDisplayName: basenameDisplayName ?? null,
+        basenameAvatar,
       }
       identityCache.set(address.toLowerCase(), result)
       return result
@@ -338,6 +348,8 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
         lensOwnerAddress: null,
         ensName: null,
         basename,
+        basenameDisplayName: basenameDisplayName ?? null,
+        basenameAvatar,
       }
       identityCache.set(address.toLowerCase(), result)
       return result
@@ -370,6 +382,8 @@ export function useIdentity(address: string | null | undefined): {
   lensOwnerAddress: string | null
   ensName: string | null
   basename: string | null
+  basenameDisplayName: string | null
+  basenameAvatar: string | null
 } {
   const normalizedAddress = address?.toLowerCase() ?? null
   const cached = normalizedAddress ? identityCache.get(normalizedAddress) ?? null : null
@@ -386,6 +400,8 @@ export function useIdentity(address: string | null | undefined): {
         lensOwnerAddress: null,
         ensName: null,
         basename: null,
+        basenameDisplayName: null,
+        basenameAvatar: null,
       }
     : {
         displayName: '?',
@@ -399,6 +415,8 @@ export function useIdentity(address: string | null | undefined): {
         lensOwnerAddress: null,
         ensName: null,
         basename: null,
+        basenameDisplayName: null,
+        basenameAvatar: null,
       }
 
   const [resolvedAsync, setResolvedAsync] = useState<{ address: string; entry: IdentityCacheEntry } | null>(null)

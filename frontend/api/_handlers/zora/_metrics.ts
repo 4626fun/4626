@@ -33,9 +33,14 @@ type MetricsResponse = {
 }
 
 const METRICS_CACHE_TTL_MS = 5 * 60 * 1000
+const STALE_REFRESH_BACKOFF_MS = 60 * 1000
+const STALE_REFRESH_ERROR_LOG_THROTTLE_MS = 60 * 1000
 
 let metricsCache: { payload: MetricsResponse; cachedAt: number } | null = null
 let refreshPromise: Promise<MetricsResponse> | null = null
+let staleRefreshBlockedUntilMs = 0
+let lastRefreshErrorSignature: string | null = null
+let lastRefreshErrorLoggedAtMs = 0
 
 function parseScope(v: string | null): MetricsScope {
   return v === 'creators' ? 'creators' : 'creators'
@@ -59,6 +64,35 @@ function parseSyncStatus(v: unknown): SyncStatus {
   const s = typeof v === 'string' ? v : ''
   if (s === 'running' || s === 'error') return s
   return 'idle'
+}
+
+function errorSignature(err: unknown): string {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return `${code}:${msg}`
+}
+
+function shouldLogRefreshError(signature: string, now: number): boolean {
+  if (!signature) return true
+  if (signature !== lastRefreshErrorSignature) {
+    lastRefreshErrorSignature = signature
+    lastRefreshErrorLoggedAtMs = now
+    return true
+  }
+  if (now - lastRefreshErrorLoggedAtMs >= STALE_REFRESH_ERROR_LOG_THROTTLE_MS) {
+    lastRefreshErrorLoggedAtMs = now
+    return true
+  }
+  return false
+}
+
+function noteRefreshFailure(err: unknown): void {
+  const now = Date.now()
+  staleRefreshBlockedUntilMs = now + STALE_REFRESH_BACKOFF_MS
+  const signature = errorSignature(err)
+  if (shouldLogRefreshError(signature, now)) {
+    console.error('[zora/metrics] background refresh failed', err)
+  }
 }
 
 async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResponse> {
@@ -191,9 +225,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (refreshPromise) return refreshPromise
     refreshPromise = computeCanonicalMetrics(scope)
       .then((payload) => {
-      metricsCache = { payload, cachedAt: Date.now() }
-      return payload
-    })
+        staleRefreshBlockedUntilMs = 0
+        metricsCache = { payload, cachedAt: Date.now() }
+        return payload
+      })
       .finally(() => {
         refreshPromise = null
       })
@@ -201,14 +236,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const refresh = startRefresh()
+    const allowRefreshAttempt = !cached || now >= staleRefreshBlockedUntilMs
+    const refresh = allowRefreshAttempt ? startRefresh() : null
     if (cached) {
+      if (refresh) {
+        // Refresh in background while serving stale cache; explicitly catch
+        // to avoid unhandled rejections on transient DB failures.
+        void refresh.catch((err) => {
+          noteRefreshFailure(err)
+        })
+      }
       // Serve stale cache while canonical refresh runs in background.
       setCache(res, 30)
       return res.status(200).json({ success: true, data: cached.payload })
     }
 
-    const fresh = await refresh
+    const fresh = await (refresh ?? startRefresh())
     setCache(res, 60)
     return res.status(200).json({ success: true, data: fresh })
   } catch (e: any) {
@@ -216,6 +259,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       setCache(res, 15)
       return res.status(200).json({ success: true, data: cached.payload })
     }
+    noteRefreshFailure(e)
     const status = typeof e?.status === 'number' ? e.status : 500
     return res.status(status).json({
       success: false,

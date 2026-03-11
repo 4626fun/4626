@@ -185,15 +185,18 @@ export function ChatWindow({
       : null
   const dmIdentity = useIdentity(dmPeerAddress)
   const agentIdentity = getAgentIdentity(dmPeerAddress)
+  const basenamePreferredName = dmIdentity.basenameDisplayName ?? dmIdentity.basename
   const headerName =
     conversationType === 'dm' && dmPeerAddress
-      ? (agentIdentity?.name ?? dmIdentity.displayName)
+      ? (agentIdentity?.name ?? basenamePreferredName ?? dmIdentity.displayName)
       : conversationName
   const headerSubline =
     conversationType === 'dm' && dmPeerAddress
       ? (agentIdentity ? '4626 assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
       : null
-  const headerAvatar = conversationType === 'dm' ? (agentIdentity?.avatar ?? dmIdentity.avatar) : (conversationImageUrl ?? null)
+  const headerAvatar = conversationType === 'dm'
+    ? (agentIdentity?.avatar ?? dmIdentity.basenameAvatar ?? dmIdentity.avatar ?? conversationImageUrl ?? null)
+    : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
   const lensBadge = conversationType === 'dm' && dmPeerAddress && dmIdentity.lensHandle
     ? `Lens @${dmIdentity.lensHandle}`
