@@ -53,7 +53,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "9"
+          version: "10.15.1"
 
       - name: Typecheck CRE workflows
         run: bash cre/cre-workflows/scripts/typecheck-workflows.sh
@@ -90,11 +90,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install gitleaks
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/zricethezav/gitleaks/master/install.sh | sh -s -- -b "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
       - name: Gitleaks secret scan (changed commit range)
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -103,6 +98,8 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          go install github.com/zricethezav/gitleaks/v8@v8.30.0
+          gitleaks_bin="$(go env GOPATH)/bin/gitleaks"
           if [[ "$EVENT_NAME" == "pull_request" && -n "${BASE_SHA:-}" ]]; then
             range="${BASE_SHA}..${HEAD_SHA}"
           elif [[ -n "${BEFORE_SHA:-}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
@@ -113,8 +110,8 @@ jobs:
 
           if [[ -n "$range" ]]; then
             echo "[gitleaks] scanning commit range: $range"
-            gitleaks detect --no-banner --redact --log-opts "$range" --exit-code 1
+            "$gitleaks_bin" detect --no-banner --redact --log-opts "$range" --exit-code 1
           else
             echo "[gitleaks] scanning repository snapshot (no commit range metadata available)"
-            gitleaks detect --no-banner --redact --exit-code 1
+            "$gitleaks_bin" detect --no-banner --redact --exit-code 1
           fi
