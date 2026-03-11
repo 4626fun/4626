@@ -511,7 +511,7 @@ async function sendErc4337UserOperation(params: {
   const account = await toCoinbaseSmartAccount({
     client: publicClient as any,
     address: erc4337.smartWallet,
-    owners: [erc4337.ownerAccount],
+    owners: [erc4337.ownerAccount as any],
     ownerIndex,
     version: erc4337.version,
   });

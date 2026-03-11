@@ -90,7 +90,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Gitleaks secret scan
-        uses: gitleaks/gitleaks-action@v2
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/zricethezav/gitleaks/master/install.sh | sh -s -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Gitleaks secret scan (changed commit range)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" && -n "${BASE_SHA:-}" ]]; then
+            range="${BASE_SHA}..${HEAD_SHA}"
+          elif [[ -n "${BEFORE_SHA:-}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+            range="${BEFORE_SHA}..${HEAD_SHA}"
+          else
+            range=""
+          fi
+
+          if [[ -n "$range" ]]; then
+            echo "[gitleaks] scanning commit range: $range"
+            gitleaks detect --no-banner --redact --log-opts "$range" --exit-code 1
+          else
+            echo "[gitleaks] scanning repository snapshot (no commit range metadata available)"
+            gitleaks detect --no-banner --redact --exit-code 1
+          fi
