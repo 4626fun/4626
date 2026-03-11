@@ -34,10 +34,10 @@ import {
 } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { hasContractBytecode } from '../../../../src/wallet/canonicalWalletPolicy'
 
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 // JSON comes over the wire, so `value` may be a string/number.
-type Call = { to: Address; value?: bigint | number | string; data: Hex }
+export type Call = { to: Address; value?: bigint | number | string; data: Hex }
 
 type SolanaOvaultRequest = {
   enabled?: boolean
@@ -48,7 +48,7 @@ type SolanaOvaultRequest = {
   mintCompatibilityHints?: unknown
 }
 
-type CreateDeploySessionRequest = {
+export type CreateDeploySessionRequest = {
   smartWallet: Address
   creatorToken: Address
   ownerAddress: Address
@@ -75,6 +75,32 @@ type CreateDeploySessionResponse = {
   sessionSignerAddress: Address
   sessionSignerWalletId?: string
   expiresAt: string
+}
+
+export class DeploySessionRequestError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'DeploySessionRequestError'
+    this.status = status
+  }
+}
+
+export type ValidatedDeploySessionRequest = {
+  sessionAddress: Address
+  smartWallet: Address
+  creatorToken: Address
+  ownerAddress: Address
+  authType: 'session' | 'siwa'
+  phase1Calls: Call[]
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+  phase3Calls: Call[]
+  phase4Calls: Call[]
+  solanaOvault: Record<string, unknown> | null
+  hasPhase2Finalize: boolean
+  version: string
 }
 
 type OwnershipCheck = {
@@ -884,6 +910,181 @@ async function checkCanonicalWalletOwnership(params: {
   return { ok: true }
 }
 
+export async function validateDeploySessionRequest(params: {
+  req: VercelRequest
+  authAddress: Address
+  authType: 'session' | 'siwa'
+  body: CreateDeploySessionRequest
+  requireCalls: boolean
+}): Promise<ValidatedDeploySessionRequest> {
+  const sessionAddress = getAddress(params.authAddress as Address)
+  const smartWalletRaw = typeof params.body.smartWallet === 'string' ? params.body.smartWallet.trim() : ''
+  const creatorTokenRaw = typeof params.body.creatorToken === 'string' ? params.body.creatorToken.trim() : ''
+  const ownerAddressRaw = typeof params.body.ownerAddress === 'string' ? params.body.ownerAddress.trim() : ''
+
+  if (!isAddress(smartWalletRaw) || !isAddress(creatorTokenRaw) || !isAddress(ownerAddressRaw)) {
+    throw new DeploySessionRequestError(400, 'Invalid addresses')
+  }
+
+  const smartWallet = getAddress(smartWalletRaw as Address)
+  const creatorToken = getAddress(creatorTokenRaw as Address)
+  const ownerAddress = getAddress(ownerAddressRaw as Address)
+
+  if (ownerAddress.toLowerCase() !== smartWallet.toLowerCase()) {
+    throw new DeploySessionRequestError(400, 'ownerAddress must match smartWallet (canonical deploy sender)')
+  }
+
+  const origin = getCanonicalOrigin(params.req)
+  const infra = await checkDeployInfraReady(origin)
+  if (!infra.ok) {
+    throw new DeploySessionRequestError(503, infra.error || 'Deploy infrastructure unavailable')
+  }
+
+  const ownership = await checkCanonicalWalletOwnership({
+    smartWallet,
+    ownerAddress,
+    sessionAddress,
+  })
+  if (!ownership.ok) {
+    throw new DeploySessionRequestError(
+      403,
+      ownership.reason ? `Deploy ownership mismatch: ${ownership.reason}` : 'Deploy ownership mismatch',
+    )
+  }
+
+  const allowlistCheck = await checkCreatorAllowlist({
+    sessionAddress,
+    smartWallet,
+    creatorToken,
+  })
+  if (!allowlistCheck.allowed) {
+    console.warn('[deploy/session/create] creator_access_denied', {
+      sessionAddress: sessionAddress.toLowerCase(),
+      smartWallet: smartWallet.toLowerCase(),
+      creatorToken: creatorToken.toLowerCase(),
+      checkedAddresses: allowlistCheck.checkedAddresses,
+    })
+    const checked = allowlistCheck.checkedAddresses.length > 0 ? allowlistCheck.checkedAddresses.join(', ') : 'none'
+    throw new DeploySessionRequestError(
+      403,
+      `Creator access required. Active session wallet ${sessionAddress} is not approved for this deploy. ` +
+        `Checked addresses: ${checked}. Sign out/in with your approved wallet, or ask admin to approve your session wallet/canonical smart wallet.`,
+    )
+  }
+
+  const phase1Calls = Array.isArray(params.body.phase1Calls) ? params.body.phase1Calls : []
+  const phase2CoreCallsRaw = Array.isArray(params.body.phase2CoreCalls) ? params.body.phase2CoreCalls : []
+  const phase2FinalizeCallsRaw = Array.isArray(params.body.phase2FinalizeCalls) ? params.body.phase2FinalizeCalls : []
+  const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
+    phase2CoreCalls: phase2CoreCallsRaw,
+    phase2FinalizeCalls: phase2FinalizeCallsRaw,
+  })
+  const phase3Calls = Array.isArray(params.body.phase3Calls) ? params.body.phase3Calls : []
+  const phase4Calls = Array.isArray(params.body.phase4Calls) ? params.body.phase4Calls : []
+  const solanaOvault = normalizeSolanaOvaultConfig(params.body.solanaOvault)
+  const hasPhase2Finalize = phase2FinalizeCalls.length > 0
+  const version = String(params.body.version ?? '').trim()
+
+  if (params.requireCalls) {
+    const allSubmittedCalls = [
+      ...phase1Calls,
+      ...phase2CoreCalls,
+      ...phase2FinalizeCalls,
+      ...phase3Calls,
+      ...phase4Calls,
+    ]
+
+    const nonIndexedCharmPool = await findNonIndexedCharmPool(allSubmittedCalls)
+    if (nonIndexedCharmPool) {
+      throw new DeploySessionRequestError(400, charmPoolNotIndexedError(nonIndexedCharmPool))
+    }
+
+    if (allSubmittedCalls.length > 0) {
+      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const readClient = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 12_000 }),
+      })
+      const contractOwnerToAdd = await findContractOwnerAdditions({
+        smartWallet,
+        calls: allSubmittedCalls,
+        getBytecode: async (address) => (await readClient.getBytecode({ address })) as Hex | null | undefined,
+      })
+      if (contractOwnerToAdd) {
+        throw new DeploySessionRequestError(
+          400,
+          `Only EOA owners can be added to the canonical smart wallet (blocked contract owner: ${contractOwnerToAdd}).`,
+        )
+      }
+    }
+
+    const hasAnyWork =
+      phase1Calls.length > 0 ||
+      phase2CoreCalls.length > 0 ||
+      phase2FinalizeCalls.length > 0 ||
+      phase3Calls.length > 0 ||
+      phase4Calls.length > 0
+    if (!hasAnyWork) {
+      throw new DeploySessionRequestError(400, 'Missing deploy calls')
+    }
+
+    if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {
+      throw new DeploySessionRequestError(400, 'Missing phase2 finalize calls')
+    }
+
+    if (phase4Calls.length > 0 && !hasPhase2Finalize) {
+      if (!version) {
+        throw new DeploySessionRequestError(400, 'version is required when phase4Calls are present')
+      }
+      const batcherAddress = getAddress(phase4Calls[0]!.to)
+      const baseSalt = deriveBaseSalt({ creatorToken, owner: ownerAddress, chainId: 8453, version })
+      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const readClient = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 12_000 }),
+      })
+      try {
+        const pending = (await readClient.readContract({
+          address: batcherAddress,
+          abi: CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
+          functionName: 'pendingAuctions',
+          args: [baseSalt],
+        })) as unknown
+        const pendingAny = pending as any
+        const pendingAmount = BigInt(pendingAny?.amount ?? pendingAny?.[2] ?? 0n)
+        if (pendingAmount <= 0n) {
+          throw new DeploySessionRequestError(
+            409,
+            `phase4 precheck failed: no pending deferred auction for deployment version ${version}`,
+          )
+        }
+      } catch (error) {
+        if (error instanceof DeploySessionRequestError) throw error
+        throw new DeploySessionRequestError(
+          409,
+          `phase4 precheck failed: could not validate pending deferred auction for deployment version ${version}`,
+        )
+      }
+    }
+  }
+
+  return {
+    sessionAddress,
+    smartWallet,
+    creatorToken,
+    ownerAddress,
+    authType: params.authType,
+    phase1Calls,
+    phase2CoreCalls,
+    phase2FinalizeCalls,
+    phase3Calls,
+    phase4Calls,
+    solanaOvault,
+    hasPhase2Finalize,
+    version,
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -917,66 +1118,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const sessionAddress = getAddress(auth.address as Address)
-    const smartWalletRaw = typeof body.smartWallet === 'string' ? body.smartWallet.trim() : ''
-    const creatorTokenRaw = typeof body.creatorToken === 'string' ? body.creatorToken.trim() : ''
-    const ownerAddressRaw = typeof body.ownerAddress === 'string' ? body.ownerAddress.trim() : ''
-
-    if (!isAddress(smartWalletRaw) || !isAddress(creatorTokenRaw) || !isAddress(ownerAddressRaw)) {
-      return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
-    }
-    const smartWallet = getAddress(smartWalletRaw as Address)
-    const creatorToken = getAddress(creatorTokenRaw as Address)
-    const ownerAddress = getAddress(ownerAddressRaw as Address)
-    if (ownerAddress.toLowerCase() !== smartWallet.toLowerCase()) {
-      return res.status(400).json({
-        success: false,
-        error: 'ownerAddress must match smartWallet (canonical deploy sender)',
-      } satisfies ApiEnvelope<null>)
-    }
-
-    const origin = getCanonicalOrigin(req)
-    const infra = await checkDeployInfraReady(origin)
-    if (!infra.ok) {
-      return res.status(503).json({ success: false, error: infra.error || 'Deploy infrastructure unavailable' } satisfies ApiEnvelope<null>)
-    }
-
-    // Ownership is validated below against canonical profile linkage.
-    // Do not hard-require sessionAddress===owner/smartWallet here because
-    // embedded EOAs and other linked wallets are valid operators.
-    const ownership = await checkCanonicalWalletOwnership({
-      smartWallet,
-      ownerAddress,
-      sessionAddress,
-    })
-    if (!ownership.ok) {
-      return res.status(403).json({
-        success: false,
-        error: ownership.reason ? `Deploy ownership mismatch: ${ownership.reason}` : 'Deploy ownership mismatch',
-      } satisfies ApiEnvelope<null>)
-    }
-
-    // Check creator access before creating session.
-    const allowlistCheck = await checkCreatorAllowlist({
+    const {
       sessionAddress,
       smartWallet,
       creatorToken,
+      ownerAddress,
+      authType,
+      phase1Calls,
+      phase2CoreCalls,
+      phase2FinalizeCalls,
+      phase3Calls,
+      phase4Calls,
+      solanaOvault,
+      hasPhase2Finalize,
+      version,
+    } = await validateDeploySessionRequest({
+      req,
+      authAddress: getAddress(auth.address as Address),
+      authType: auth.type,
+      body,
+      requireCalls: !preflightOnly,
     })
-    if (!allowlistCheck.allowed) {
-      console.warn('[deploy/session/create] creator_access_denied', {
-        sessionAddress: sessionAddress.toLowerCase(),
-        smartWallet: smartWallet.toLowerCase(),
-        creatorToken: creatorToken.toLowerCase(),
-        checkedAddresses: allowlistCheck.checkedAddresses,
-      })
-      const checked = allowlistCheck.checkedAddresses.length > 0 ? allowlistCheck.checkedAddresses.join(', ') : 'none'
-      return res.status(403).json({
-        success: false,
-        error:
-          `Creator access required. Active session wallet ${sessionAddress} is not approved for this deploy. ` +
-          `Checked addresses: ${checked}. Sign out/in with your approved wallet, or ask admin to approve your session wallet/canonical smart wallet.`,
-      } satisfies ApiEnvelope<null>)
-    }
 
     if (preflightOnly) {
       return res.status(200).json({
@@ -986,7 +1148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           authAddress: sessionAddress,
           smartWallet,
           ownerAddress,
-          authType: auth.type,
+          authType,
         },
       } satisfies ApiEnvelope<{
         ready: boolean
@@ -995,109 +1157,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ownerAddress: Address
         authType: 'session' | 'siwa'
       }>)
-    }
-
-    const phase1Calls = Array.isArray(body.phase1Calls) ? body.phase1Calls : []
-    const phase2CoreCallsRaw = Array.isArray(body.phase2CoreCalls) ? body.phase2CoreCalls : []
-    const phase2FinalizeCallsRaw = Array.isArray(body.phase2FinalizeCalls) ? body.phase2FinalizeCalls : []
-    const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
-      phase2CoreCalls: phase2CoreCallsRaw,
-      phase2FinalizeCalls: phase2FinalizeCallsRaw,
-    })
-    const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
-    const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
-    const solanaOvault = normalizeSolanaOvaultConfig(body.solanaOvault)
-    const hasPhase2Finalize = phase2FinalizeCalls.length > 0
-
-    const allSubmittedCalls = [
-      ...phase1Calls,
-      ...phase2CoreCalls,
-      ...phase2FinalizeCalls,
-      ...phase3Calls,
-      ...phase4Calls,
-    ]
-    const nonIndexedCharmPool = await findNonIndexedCharmPool(allSubmittedCalls)
-    if (nonIndexedCharmPool) {
-      return res.status(400).json({
-        success: false,
-        error: charmPoolNotIndexedError(nonIndexedCharmPool),
-      } satisfies ApiEnvelope<null>)
-    }
-
-    if (allSubmittedCalls.length > 0) {
-      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
-      const readClient = createPublicClient({
-        chain: base,
-        transport: http(rpc, { timeout: 12_000 }),
-      })
-      const contractOwnerToAdd = await findContractOwnerAdditions({
-        smartWallet,
-        calls: allSubmittedCalls,
-        getBytecode: async (address) => (await readClient.getBytecode({ address })) as Hex | null | undefined,
-      })
-      if (contractOwnerToAdd) {
-        return res.status(400).json({
-          success: false,
-          error: `Only EOA owners can be added to the canonical smart wallet (blocked contract owner: ${contractOwnerToAdd}).`,
-        } satisfies ApiEnvelope<null>)
-      }
-    }
-
-    const hasAnyWork =
-      phase1Calls.length > 0 ||
-      phase2CoreCalls.length > 0 ||
-      phase2FinalizeCalls.length > 0 ||
-      phase3Calls.length > 0 ||
-      phase4Calls.length > 0
-    if (!hasAnyWork) {
-      return res.status(400).json({ success: false, error: 'Missing deploy calls' } satisfies ApiEnvelope<null>)
-    }
-    if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing phase2 finalize calls',
-      } satisfies ApiEnvelope<null>)
-    }
-
-    // Phase-4 safety: when launching deferred auction without a same-session phase2 finalize,
-    // require pending state to already exist for this deployment namespace.
-    const hasSameSessionPhase2Finalize = phase2FinalizeCalls.length > 0
-    if (phase4Calls.length > 0 && !hasSameSessionPhase2Finalize) {
-      const version = String(body.version ?? '').trim()
-      if (!version) {
-        return res.status(400).json({
-          success: false,
-          error: 'version is required when phase4Calls are present',
-        } satisfies ApiEnvelope<null>)
-      }
-      const batcherAddress = getAddress(phase4Calls[0]!.to)
-      const baseSalt = deriveBaseSalt({ creatorToken, owner: ownerAddress, chainId: 8453, version })
-      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
-      const readClient = createPublicClient({
-        chain: base,
-        transport: http(rpc, { timeout: 12_000 }),
-      })
-      try {
-        const pending = (await readClient.readContract({
-          address: batcherAddress,
-          abi: CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
-          functionName: 'pendingAuctions',
-          args: [baseSalt],
-        })) as unknown
-        const pendingAny = pending as any
-        const pendingAmount = BigInt(pendingAny?.amount ?? pendingAny?.[2] ?? 0n)
-        if (pendingAmount <= 0n) {
-          return res.status(409).json({
-            success: false,
-            error: `phase4 precheck failed: no pending deferred auction for deployment version ${version}`,
-          } satisfies ApiEnvelope<null>)
-        }
-      } catch {
-        return res.status(409).json({
-          success: false,
-          error: `phase4 precheck failed: could not validate pending deferred auction for deployment version ${version}`,
-        } satisfies ApiEnvelope<null>)
-      }
     }
 
     const deployToken = randomDeployToken()
@@ -1235,7 +1294,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           hasPhase4: phase4Calls.length > 0,
           hasOvaultMesh: Boolean(solanaOvault?.enabled) && (phase3Calls.length > 0 || phase4Calls.length > 0),
         },
-        version: String(body.version ?? ''),
+        version,
         phase1Calls,
         phase2CoreCalls,
         phase2FinalizeCalls,
@@ -1255,6 +1314,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     return res.status(200).json({ success: true, data: out } satisfies ApiEnvelope<CreateDeploySessionResponse>)
   } catch (e: any) {
+    if (e instanceof DeploySessionRequestError) {
+      return res.status(e.status).json({ success: false, error: e.message } satisfies ApiEnvelope<null>)
+    }
     console.error('deploy/session/create error', e?.message ? String(e.message) : e)
     return res.status(500).json({ success: false, error: 'create_failed' } satisfies ApiEnvelope<null>)
   }

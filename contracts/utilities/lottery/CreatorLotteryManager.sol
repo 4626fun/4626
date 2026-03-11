@@ -223,6 +223,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address user;
         address creatorCoin; // Which creator coin this entry is for
         uint256 amountUSD;
+        uint256 effectiveWinChancePPM;
         VRFType vrfType;
         uint32 sourceChainEid; // 0 = local (hub), non-zero = remote chain lottery entry
         EntrySource entrySource;
@@ -661,7 +662,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
         delete vrfRequests[requestId];
 
-        uint256 winChancePPM = calculateWinChance(request.amountUSD);
+        uint256 winChancePPM = request.effectiveWinChancePPM;
         uint256 randomResult = randomWords[0] % 1_000_000;
 
         if (randomResult < winChancePPM) {
@@ -946,8 +947,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin,
         address buyer,
         uint256 swapValueUSD,
-        uint256,
-        /* winChancePPM */
+        uint256 winChancePPM,
         uint32 sourceChainEid,
         EntrySource entrySource
     ) internal returns (uint256) {
@@ -958,6 +958,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 user: buyer,
                 creatorCoin: creatorCoin,
                 amountUSD: swapValueUSD,
+                effectiveWinChancePPM: winChancePPM,
                 vrfType: VRFType.LOCAL,
                 sourceChainEid: sourceChainEid,
                 entrySource: entrySource
@@ -983,8 +984,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin,
         address buyer,
         uint256 swapValueUSD,
-        uint256,
-        /* winChancePPM */
+        uint256 winChancePPM,
         uint32 sourceChainEid,
         bytes32 originSender,
         uint256 callerFeeValue,
@@ -1073,6 +1073,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                     user: buyer,
                     creatorCoin: creatorCoin,
                     amountUSD: swapValueUSD,
+                    effectiveWinChancePPM: winChancePPM,
                     vrfType: VRFType.CROSS_CHAIN,
                     sourceChainEid: sourceChainEid,
                     entrySource: entrySource

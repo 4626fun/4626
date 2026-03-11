@@ -18,6 +18,9 @@
     "api/keepr/actions/execute.ts": {
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node}"
+    },
+    "api/[...path].ts": {
+      "maxDuration": 60
     }
   },
   "crons": [

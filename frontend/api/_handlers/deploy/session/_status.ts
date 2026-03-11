@@ -486,7 +486,14 @@ const AJNA_INNER_VAULT_VIEW_ABI = [
   },
 ] as const
 
-const SOLANA_BRIDGE_STRATEGY_VIEW_ABI = [
+const SOLANA_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'bridgeAddress',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
   {
     type: 'function',
     name: 'bridgeAdapter',
@@ -1031,14 +1038,25 @@ async function readNestedAjnaDetails(params: {
   }
 }
 
-async function readSolanaBridgeAdapterAddress(params: {
+async function readSolanaBridgeAddress(params: {
   publicClient: any
   strategy: Address
 }): Promise<Address | null> {
+  const bridgeAddressRaw = await params.publicClient
+    .readContract({
+      address: params.strategy,
+      abi: SOLANA_STRATEGY_VIEW_ABI,
+      functionName: 'bridgeAddress',
+    })
+    .catch(() => null)
+  const bridgeAddress = normalizeAddress(bridgeAddressRaw)
+  if (bridgeAddress) return bridgeAddress
+
+  // Backward-compatibility for older strategy variants that still exposed `bridgeAdapter()`.
   const adapterRaw = await params.publicClient
     .readContract({
       address: params.strategy,
-      abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI,
+      abi: SOLANA_STRATEGY_VIEW_ABI,
       functionName: 'bridgeAdapter',
     })
     .catch(() => null)
@@ -1107,7 +1125,7 @@ async function verifyPhase3PostState(params: {
       ...entry,
       charmVault: await readCharmVaultAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
       ajna: await readNestedAjnaDetails({ publicClient: params.publicClient, strategy: entry.strategy }),
-      bridgeAdapter: await readSolanaBridgeAdapterAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
+      bridgeAddress: await readSolanaBridgeAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
     })),
   )
   const charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
@@ -1130,7 +1148,10 @@ async function verifyPhase3PostState(params: {
 
   let ajna: (typeof strategyDetails)[number] | undefined
   if (info.ajnaWeightBps > 0n) {
-    ajna = remaining.find((entry) => Boolean(entry.ajna.ajnaPool))
+    ajna =
+      remaining.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
+      remaining.find((entry) => !entry.bridgeAddress) ??
+      remaining[0]
     if (!ajna) {
       throw new Error('phase3 verification failed: ajna strategy not registered on vault')
     }
@@ -1158,7 +1179,7 @@ async function verifyPhase3PostState(params: {
       (entry) => !ajna || entry.strategy.toLowerCase() !== ajna.strategy.toLowerCase(),
     )
     const solana =
-      remainingAfterAjna.find((entry) => Boolean(entry.bridgeAdapter)) ??
+      remainingAfterAjna.find((entry) => Boolean(entry.bridgeAddress)) ??
       (remainingAfterAjna.length === 1 ? remainingAfterAjna[0] : undefined)
     if (!solana) {
       throw new Error('phase3 verification failed: solana strategy not registered on vault')

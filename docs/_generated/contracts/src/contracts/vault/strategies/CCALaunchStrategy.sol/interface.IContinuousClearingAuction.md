@@ -1,5 +1,5 @@
 # IContinuousClearingAuction
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/strategies/CCALaunchStrategy.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/strategies/CCALaunchStrategy.sol)
 
 **Title:**
 IContinuousClearingAuction
@@ -79,5 +79,12 @@ function currencyRaised() external view returns (uint256);
 
 ```solidity
 function totalSupply() external view returns (uint128);
+```
+
+### onTokensReceived
+
+
+```solidity
+function onTokensReceived() external;
 ```
 

@@ -1030,6 +1030,18 @@ function jsonRpcError(id: JsonRpcId, code: number, message: string) {
   return { jsonrpc: '2.0', id: id ?? null, error: { code, message } }
 }
 
+function jsonRpcResult(id: JsonRpcId, result: unknown) {
+  return { jsonrpc: '2.0', id: id ?? null, result }
+}
+
+function getFirstRequestId(requests: JsonRpcRequest[]): JsonRpcId {
+  return (requests[0] as any)?.id ?? null
+}
+
+function isSupportedEntryPointsProbe(requests: JsonRpcRequest[]): boolean {
+  return requests.length === 1 && requests[0]?.method === 'eth_supportedEntryPoints'
+}
+
 function getCdpEndpoint(): string | null {
   const v =
     (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
@@ -1901,7 +1913,7 @@ async function validateInnerCalls(params: {
       // Find the deploy session so we can bind the session owner address.
       const ds =
         params.deploySessionOwner && isAddress(params.deploySessionOwner)
-          ? ({ sessionOwner: params.deploySessionOwner } as any)
+          ? ({ sessionSigner: params.deploySessionOwner } as const)
           : await getActiveDeploySessionForSender({
               sessionAddress: params.sessionAddress,
               smartWallet: params.sender,
@@ -1911,8 +1923,12 @@ async function validateInnerCalls(params: {
       if (!ds?.sessionSigner || !isAddress(ds.sessionSigner)) throw new Error('deploy_session_missing')
 
       if (decodedSelf.functionName === 'addOwnerAddress') {
+        const sessionSigner = getAddress(ds.sessionSigner as Address)
         const ownerArg = getAddress(decodedSelf.args[0] as Address)
-        if (ownerArg !== getAddress(ds.sessionSigner as Address)) throw new Error('deploy_session_owner_mismatch')
+        if (ownerArg !== sessionSigner) throw new Error('deploy_session_owner_mismatch')
+        const client = await getBaseClient()
+        const ownerCode = await client.getBytecode({ address: sessionSigner })
+        if (ownerCode && ownerCode !== '0x') throw new Error('contract_owner_not_allowed')
         continue
       }
       if (decodedSelf.functionName === 'removeOwnerAtIndex') {
@@ -2190,7 +2206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32000, 'Server misconfigured: AUTH_SESSION_SECRET is not set'))
   }
 
-  const body = await readJsonBody<unknown>(req)
+  const body = await readJsonBody<unknown>(req).catch(() => null)
   if (!body) {
     return res.status(200).json(jsonRpcError(null, -32600, 'Invalid JSON body'))
   }
@@ -2210,12 +2226,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Require an authenticated principal for any sponsorship-related method.
-  // - Primary: session (cookie or Authorization bearer token) or SIWA receipt.
-  // - Secondary: deploy-session token (server-driven completion after one user signature).
-  const principalAddress = readRequestPrincipalAddress(req, { lowercase: false })
-
   try {
+    // Require an authenticated principal for any sponsorship-related method.
+    // - Primary: session (cookie or Authorization bearer token) or SIWA receipt.
+    // - Secondary: deploy-session token (server-driven completion after one user signature).
+    const principalAddress = readRequestPrincipalAddress(req, { lowercase: false })
+
     // Validate sponsorship requests (UserOperations only).
     for (const r of requests) {
       const method = r.method as string
@@ -2403,6 +2419,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Forward to CDP if validation passed.
+  const supportedEntryPointsProbe = isSupportedEntryPointsProbe(requests)
+  const firstRequestId = getFirstRequestId(requests)
   try {
     const upstream = await fetch(cdpEndpoint, {
       method: 'POST',
@@ -2454,13 +2472,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (upstream.status < 200 || upstream.status >= 300) {
-      return res.status(200).json(jsonRpcError(null, -32000, `Upstream paymaster request failed (HTTP ${upstream.status})`))
+      return res.status(200).json(jsonRpcError(firstRequestId, -32000, `Upstream paymaster request failed (HTTP ${upstream.status})`))
     }
 
-    return res.status(502).json(jsonRpcError(null, -32000, 'Upstream paymaster returned a non-JSON response'))
+    if (supportedEntryPointsProbe) {
+      return res.status(200).json(jsonRpcResult(firstRequestId, [ENTRYPOINT_V06]))
+    }
+
+    return res.status(200).json(jsonRpcError(firstRequestId, -32000, 'Upstream paymaster returned a non-JSON response'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Upstream request failed'
     logger.error('[paymaster-proxy] upstream error', { msg })
-    return res.status(502).json(jsonRpcError(null, -32000, msg))
+    if (supportedEntryPointsProbe) {
+      return res.status(200).json(jsonRpcResult(firstRequestId, [ENTRYPOINT_V06]))
+    }
+    return res.status(200).json(jsonRpcError(firstRequestId, -32000, msg))
   }
 }

@@ -9,6 +9,19 @@ export function setCors(req: VercelRequest, res: VercelResponse) {
   setCorsAllowlist(req, res)
 }
 
+/**
+ * Wildcard CORS for fully public, read-only endpoints (token image, token metadata).
+ * These carry no credentials and must be fetchable from any origin — including
+ * Uniswap, DEX aggregators, wallets, and token metadata indexers.
+ *
+ * Do NOT use this for authenticated or mutation endpoints.
+ */
+export function setPublicCors(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+}
+
 export function handleOptions(req: VercelRequest, res: VercelResponse): boolean {
   if (req.method === 'OPTIONS') {
     setCors(req, res)

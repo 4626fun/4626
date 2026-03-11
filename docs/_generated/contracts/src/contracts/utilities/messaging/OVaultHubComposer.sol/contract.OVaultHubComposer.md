@@ -1,8 +1,8 @@
 # OVaultHubComposer
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/utilities/messaging/OVaultHubComposer.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/utilities/messaging/OVaultHubComposer.sol)
 
 **Inherits:**
-ILayerZeroComposer, Ownable, ReentrancyGuard
+ILayerZeroComposer, [ICreatorOVaultComposer](/contracts/interfaces/ovault/ICreatorOVaultComposer.sol/interface.ICreatorOVaultComposer.md), Ownable, ReentrancyGuard
 
 **Title:**
 OVaultHubComposer
@@ -44,6 +44,13 @@ address public immutable endpoint
 ```
 
 
+### creatorMeshes
+
+```solidity
+mapping(address => CreatorMesh) internal creatorMeshes
+```
+
+
 ### allowedComposeSenders
 
 ```solidity
@@ -64,6 +71,47 @@ constructor(address _registry, address _owner) Ownable(_owner);
 
 ```solidity
 function setAllowedComposeSender(address sender, bool allowed) external onlyOwner;
+```
+
+### configureCreatorMesh
+
+
+```solidity
+function configureCreatorMesh(
+    address creatorToken,
+    address vault,
+    address assetMeshToken,
+    address shareMeshToken,
+    uint32 solanaEid,
+    bytes32 solanaAssetPeer,
+    bytes32 solanaSharePeer
+) external override onlyOwner;
+```
+
+### pauseCreatorMesh
+
+
+```solidity
+function pauseCreatorMesh(address creatorToken, bool paused) external override onlyOwner;
+```
+
+### creatorMesh
+
+
+```solidity
+function creatorMesh(address creatorToken)
+    external
+    view
+    override
+    returns (
+        address vault,
+        address assetMeshToken,
+        address shareMeshToken,
+        uint32 solanaEid,
+        bytes32 solanaAssetPeer,
+        bytes32 solanaSharePeer,
+        bool paused
+    );
 ```
 
 ### lzCompose
@@ -114,11 +162,44 @@ function _composeRedeem(
 function _validateCreatorBindings(address creatorToken, address wrapper) internal view returns (address shareOft);
 ```
 
+### _enforceMeshInvariants
+
+
+```solidity
+function _enforceMeshInvariants(
+    uint8 action,
+    address creatorToken,
+    address sourceOft,
+    uint32 srcEid,
+    bytes32 composeFrom
+) internal view;
+```
+
 ## Events
 ### ComposeSenderAllowed
 
 ```solidity
 event ComposeSenderAllowed(address indexed sender, bool allowed);
+```
+
+### CreatorMeshConfigured
+
+```solidity
+event CreatorMeshConfigured(
+    address indexed creatorToken,
+    address indexed vault,
+    address assetMeshToken,
+    address shareMeshToken,
+    uint32 solanaEid,
+    bytes32 solanaAssetPeer,
+    bytes32 solanaSharePeer
+);
+```
+
+### CreatorMeshPaused
+
+```solidity
+event CreatorMeshPaused(address indexed creatorToken, bool paused);
 ```
 
 ### DepositComposed
@@ -214,6 +295,42 @@ error WrapperCreatorTokenMismatch(address expected, address actual);
 error WrapperShareOftMismatch(address expected, address actual);
 ```
 
+### CreatorMeshPausedError
+
+```solidity
+error CreatorMeshPausedError(address creatorToken);
+```
+
+### CreatorMeshVaultMismatch
+
+```solidity
+error CreatorMeshVaultMismatch(address expected, address actual);
+```
+
+### CreatorMeshAssetTokenMismatch
+
+```solidity
+error CreatorMeshAssetTokenMismatch(address expected, address actual);
+```
+
+### CreatorMeshShareTokenMismatch
+
+```solidity
+error CreatorMeshShareTokenMismatch(address expected, address actual);
+```
+
+### CreatorMeshSrcEidMismatch
+
+```solidity
+error CreatorMeshSrcEidMismatch(uint32 expected, uint32 actual);
+```
+
+### CreatorMeshPeerMismatch
+
+```solidity
+error CreatorMeshPeerMismatch(bytes32 expected, bytes32 actual);
+```
+
 ### InsufficientComposerBalance
 
 ```solidity
@@ -236,5 +353,20 @@ error OutputMintInvariantFailed(address token, uint256 beforeBalance, uint256 af
 
 ```solidity
 error ResidualBalanceInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance);
+```
+
+## Structs
+### CreatorMesh
+
+```solidity
+struct CreatorMesh {
+    address vault;
+    address assetMeshToken;
+    address shareMeshToken;
+    uint32 solanaEid;
+    bytes32 solanaAssetPeer;
+    bytes32 solanaSharePeer;
+    bool paused;
+}
 ```
 

@@ -139,6 +139,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/session/bootstrapSwap': () => import('./deploy/session/_bootstrapSwap.js'),
   'deploy/session/continue': () => import('./deploy/session/_continue.js'),
   'deploy/session/create': () => import('./deploy/session/_create.js'),
+  'deploy/session/dry-run': () => import('./deploy/session/_dryRun.js'),
   'deploy/session/start': () => import('./deploy/session/_start.js'),
   'deploy/session/status': () => import('./deploy/session/_status.js'),
   'deploy/config': () => import('./deploy/_config.js'),
@@ -166,6 +167,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'image/jobs/status': () => import('./image/_jobs-status.js'),
   'image/projects/get': () => import('./image/_projects-get.js'),
   'image/projects/associate-vault': () => import('./image/_associate-vault.js'),
+  'image/projects/auto-assets': () => import('./image/_auto-assets.js'),
+  'image/projects/direct-compose': () => import('./image/_direct-compose.js'),
+  'image/projects/vault-image': () => import('./image/_vault-image-get.js'),
 
   'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),
   'onchain/coinMarketRewardsCurrency': () => import('./onchain/_coinMarketRewardsCurrency.js'),

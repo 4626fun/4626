@@ -1048,8 +1048,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @notice ERC-7572 contract-level metadata URI
      * @dev ERC-7572 is contract-level metadata for fungible tokens (not ERC-721 tokenURI).
      *      If `_contractURI` is explicitly set, return it as-is for backward compatibility.
-     *      Otherwise, return a fully on-chain JSON data URI that points image fields at the
-     *      canonical off-chain renderer used by the token metadata API.
+     *      Otherwise, return the canonical HTTPS metadata endpoint for this token so that
+     *      Uniswap, DEX aggregators, and wallets can fetch the JSON over HTTP and display
+     *      the token image. A `data:application/json;base64,...` default was the previous
+     *      behaviour but many indexers treat contractURI as a URL to fetch and silently skip
+     *      `data:` schemes, leaving the token with no image in their UIs.
      *
      * @return URI string for contract metadata.
      */
@@ -1069,9 +1072,22 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         emit ContractURIUpdated();
     }
 
+    /**
+     * @dev Returns the canonical HTTPS metadata endpoint for this token.
+     *      The endpoint responds with ERC-7572-compliant JSON containing the
+     *      `image` field pointing at the AI-generated vault icon (or the
+     *      auto-composited fallback), allowing any client that can make an
+     *      HTTP GET request to display the correct token image.
+     */
     function _buildOnchainContractURI() internal view returns (string memory) {
-        string memory json = _buildContractMetadataJson();
-        return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));
+        return string(
+            abi.encodePacked(
+                "https://api.4626.fun/v1/token/",
+                Strings.toHexString(address(this)),
+                "/metadata?chain=",
+                Strings.toString(block.chainid)
+            )
+        );
     }
 
     function _buildContractMetadataJson() internal view returns (string memory) {

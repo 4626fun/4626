@@ -15,6 +15,7 @@ export type ImageGenerationAssetRole = 'frame' | 'subject' | 'output'
 
 export type ImageGenerationProject = {
   id: string
+  ownerAddress: string | null
   status: ImageGenerationProjectStatus
   instruction: string
   stylePreset: string | null
@@ -22,6 +23,7 @@ export type ImageGenerationProject = {
   lastResponseId: string | null
   latestError: string | null
   vaultAddress: string | null
+  creatorAddress: string | null
   createdAt: string
   updatedAt: string
 }
@@ -56,6 +58,7 @@ export type ImageGenerationAttempt = {
 
 export type ImageGenerationProjectSnapshot = {
   id: string
+  ownerAddress: string | null
   status: ImageGenerationProjectStatus
   instruction: string
   stylePreset: string | null
@@ -63,6 +66,7 @@ export type ImageGenerationProjectSnapshot = {
   lastResponseId: string | null
   latestError: string | null
   vaultAddress: string | null
+  creatorAddress: string | null
   createdAt: string
   updatedAt: string
   assets: ImageGenerationAsset[]
@@ -80,6 +84,7 @@ export async function ensureImageGenerationSchema() {
   await db.sql`
     CREATE TABLE IF NOT EXISTS image_generation_projects (
       id TEXT PRIMARY KEY,
+      owner_address TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
       instruction TEXT NOT NULL DEFAULT '',
       style_preset TEXT,
@@ -94,13 +99,29 @@ export async function ensureImageGenerationSchema() {
 
   await db.sql`
     ALTER TABLE image_generation_projects
+      ADD COLUMN IF NOT EXISTS owner_address TEXT;
+  `
+
+  await db.sql`
+    ALTER TABLE image_generation_projects
       ADD COLUMN IF NOT EXISTS vault_address TEXT;
+  `
+
+  await db.sql`
+    ALTER TABLE image_generation_projects
+      ADD COLUMN IF NOT EXISTS creator_address TEXT;
   `
 
   await db.sql`
     CREATE INDEX IF NOT EXISTS image_generation_projects_vault_address_idx
       ON image_generation_projects (vault_address)
       WHERE vault_address IS NOT NULL;
+  `
+
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS image_generation_projects_creator_address_idx
+      ON image_generation_projects (creator_address)
+      WHERE creator_address IS NOT NULL;
   `
 
   await db.sql`
@@ -192,6 +213,7 @@ function safeFilename(value: string | null | undefined): string {
 function rowToProject(row: any): ImageGenerationProject {
   return {
     id: String(row.id),
+    ownerAddress: row.owner_address == null ? null : String(row.owner_address),
     status: String(row.status) as ImageGenerationProjectStatus,
     instruction: String(row.instruction ?? ''),
     stylePreset: row.style_preset == null ? null : String(row.style_preset),
@@ -199,6 +221,7 @@ function rowToProject(row: any): ImageGenerationProject {
     lastResponseId: row.last_response_id == null ? null : String(row.last_response_id),
     latestError: row.latest_error == null ? null : String(row.latest_error),
     vaultAddress: row.vault_address == null ? null : String(row.vault_address),
+    creatorAddress: row.creator_address == null ? null : String(row.creator_address),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   }
@@ -239,28 +262,34 @@ function rowToAttempt(row: any): ImageGenerationAttempt {
 }
 
 export async function createImageGenerationProject(input: {
+  ownerAddress: string
   instruction?: string
   stylePreset?: string | null
   brandContext?: string[]
+  creatorAddress?: string | null
 }): Promise<ImageGenerationProject> {
   await ensureImageGenerationSchema()
   const db = await getDb()
   if (!db) throw new Error('Image generation database unavailable')
 
   const projectId = `imgproj_${randomUUID()}`
+  const ownerAddress = String(input.ownerAddress).toLowerCase()
   const instruction = String(input.instruction ?? '').trim()
   const stylePreset = input.stylePreset ? String(input.stylePreset).trim() : null
   const brandContext = parseBrandContext(input.brandContext)
+  const creatorAddress = input.creatorAddress ? input.creatorAddress.toLowerCase() : null
 
   const result = await db.sql`
     INSERT INTO image_generation_projects (
-      id, status, instruction, style_preset, brand_context_json
+      id, owner_address, status, instruction, style_preset, brand_context_json
     ) VALUES (
       ${projectId},
+      ${ownerAddress},
       'draft',
       ${instruction},
       ${stylePreset},
-      ${JSON.stringify(brandContext)}::jsonb
+      ${JSON.stringify(brandContext)}::jsonb,
+      ${creatorAddress}
     )
     RETURNING *;
   `

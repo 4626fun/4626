@@ -23,7 +23,6 @@ type ContinueRequest = { sessionId: string }
 const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
-const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867'
 const SOLANA_RESERVE_PERCENT_BPS = 3_000n
 const BPS_DENOMINATOR = 10_000n
 const SESSION_EXPIRED_RESTART_REQUIRED = 'session_expired_restart_required'
@@ -233,91 +232,6 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_STRATEGY_ADMIN_ABI = [
-  {
-    type: 'function',
-    name: 'deployToStrategies',
-    stateMutability: 'nonpayable',
-    inputs: [],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'updateStrategyWeight',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'strategy', type: 'address' },
-      { name: 'newWeight', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setMinimumTotalIdle',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
-    outputs: [],
-  },
-] as const
-
-const CREATOR_VAULT_STRATEGY_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'strategyList',
-    stateMutability: 'view',
-    inputs: [{ name: 'index', type: 'uint256' }],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'strategyWeights',
-    stateMutability: 'view',
-    inputs: [{ name: 'strategy', type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'totalStrategyWeight',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'minimumTotalIdle',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'asset',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-] as const
-
-const CREATOR_CHARM_STRATEGY_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'charmVault',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-] as const
-
-const ERC20_BALANCE_OF_ABI = [
-  {
-    type: 'function',
-    name: 'balanceOf',
-    stateMutability: 'view',
-    inputs: [{ type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-  },
-] as const
-
 function parseBigIntLike(value: unknown): bigint | null {
   if (typeof value === 'bigint') return value >= 0n ? value : null
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
@@ -380,234 +294,6 @@ function extractFinalizePhase2Info(data: Hex): {
     }
   }
   return null
-}
-
-function getSelector(data: Hex): string {
-  const v = String(data || '')
-  return v.length >= 10 ? v.slice(0, 10).toLowerCase() : ''
-}
-
-function stripPhase3DeployToStrategiesCall(
-  calls: Array<{ to: Address; value: bigint; data: Hex }>,
-  vault: Address | null,
-): Array<{ to: Address; value: bigint; data: Hex }> {
-  if (!vault) return calls
-  const vaultLc = vault.toLowerCase()
-  return calls.filter((call) => {
-    if (call.to.toLowerCase() !== vaultLc) return true
-    return getSelector(call.data) !== SELECTOR_VAULT_DEPLOY_TO_STRATEGIES
-  })
-}
-
-async function readVaultStrategiesWithWeights(params: {
-  publicClient: any
-  vault: Address
-  maxScan?: number
-}): Promise<Array<{ strategy: Address; weight: bigint }>> {
-  const maxScan = Number.isFinite(Number(params.maxScan)) && Number(params.maxScan) > 0 ? Number(params.maxScan) : 8
-  const out: Array<{ strategy: Address; weight: bigint }> = []
-  const seen = new Set<string>()
-  for (let i = 0; i < maxScan; i += 1) {
-    const strategyRaw = await params.publicClient
-      .readContract({
-        address: params.vault,
-        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
-        functionName: 'strategyList',
-        args: [BigInt(i)],
-      })
-      .catch(() => null)
-    if (typeof strategyRaw !== 'string' || !isAddress(strategyRaw)) break
-    const strategy = getAddress(strategyRaw as Address)
-    if (strategy.toLowerCase() === ZERO_ADDRESS.toLowerCase()) break
-    const key = strategy.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    const weightRaw = await params.publicClient
-      .readContract({
-        address: params.vault,
-        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
-        functionName: 'strategyWeights',
-        args: [strategy],
-      })
-      .catch(() => 0n)
-    const weight = parseBigIntLike(weightRaw) ?? 0n
-    out.push({ strategy, weight })
-  }
-  return out
-}
-
-async function readCharmVaultAddress(params: {
-  publicClient: any
-  strategy: Address
-}): Promise<Address | null> {
-  const charmVaultRaw = await params.publicClient
-    .readContract({
-      address: params.strategy,
-      abi: CREATOR_CHARM_STRATEGY_VIEW_ABI,
-      functionName: 'charmVault',
-    })
-    .catch(() => null)
-  if (typeof charmVaultRaw !== 'string' || !isAddress(charmVaultRaw)) return null
-  const charmVault = getAddress(charmVaultRaw as Address)
-  return charmVault.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : charmVault
-}
-
-async function buildPhase4StrategyDeploymentCalls(params: {
-  publicClient: any
-  vault: Address
-}): Promise<Array<{ to: Address; value: bigint; data: Hex }>> {
-  const strategies = await readVaultStrategiesWithWeights({
-    publicClient: params.publicClient,
-    vault: params.vault,
-    maxScan: 8,
-  })
-  if (strategies.length === 0) return []
-
-  const withCharmProbe = await Promise.all(
-    strategies.map(async (entry) => ({
-      ...entry,
-      charmVault: await readCharmVaultAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
-    })),
-  )
-
-  const hasWeightedStrategies = withCharmProbe.some((entry) => entry.weight > 0n)
-  if (!hasWeightedStrategies) return []
-
-  const charm = withCharmProbe.find((entry) => entry.weight > 0n && Boolean(entry.charmVault))
-  if (!charm) {
-    return [
-      {
-        to: params.vault,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-          functionName: 'deployToStrategies',
-          args: [],
-        }),
-      },
-    ]
-  }
-
-  const [totalWeightRaw, minIdleRaw, assetRaw] = await Promise.all([
-    params.publicClient
-      .readContract({
-        address: params.vault,
-        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
-        functionName: 'totalStrategyWeight',
-      })
-      .catch(() => null),
-    params.publicClient
-      .readContract({
-        address: params.vault,
-        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
-        functionName: 'minimumTotalIdle',
-      })
-      .catch(() => null),
-    params.publicClient
-      .readContract({
-        address: params.vault,
-        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
-        functionName: 'asset',
-      })
-      .catch(() => null),
-  ])
-  const totalWeight = parseBigIntLike(totalWeightRaw) ?? 0n
-  const charmWeight = charm.weight
-  const minIdle = parseBigIntLike(minIdleRaw) ?? 0n
-
-  if (totalWeight > 0n && charmWeight > 0n && typeof assetRaw === 'string' && isAddress(assetRaw)) {
-    const asset = getAddress(assetRaw as Address)
-    const idleRaw = await params.publicClient
-      .readContract({
-        address: asset,
-        abi: ERC20_BALANCE_OF_ABI,
-        functionName: 'balanceOf',
-        args: [params.vault],
-      })
-      .catch(() => null)
-    const idleBalance = parseBigIntLike(idleRaw) ?? 0n
-    const deployable = idleBalance > minIdle ? idleBalance - minIdle : 0n
-    const charmReserved = deployable > 0n ? (deployable * charmWeight) / totalWeight : 0n
-    const tempMinIdle = minIdle + charmReserved
-
-    return [
-      {
-        to: params.vault,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-          functionName: 'updateStrategyWeight',
-          args: [charm.strategy, 0n],
-        }),
-      },
-      {
-        to: params.vault,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-          functionName: 'setMinimumTotalIdle',
-          args: [tempMinIdle],
-        }),
-      },
-      {
-        to: params.vault,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-          functionName: 'deployToStrategies',
-          args: [],
-        }),
-      },
-      {
-        to: params.vault,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-          functionName: 'setMinimumTotalIdle',
-          args: [minIdle],
-        }),
-      },
-      {
-        to: params.vault,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-          functionName: 'updateStrategyWeight',
-          args: [charm.strategy, charm.weight],
-        }),
-      },
-    ]
-  }
-
-  return [
-    {
-      to: params.vault,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-        functionName: 'updateStrategyWeight',
-        args: [charm.strategy, 0n],
-      }),
-    },
-    {
-      to: params.vault,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-        functionName: 'deployToStrategies',
-        args: [],
-      }),
-    },
-    {
-      to: params.vault,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
-        functionName: 'updateStrategyWeight',
-        args: [charm.strategy, charm.weight],
-      }),
-    },
-  ]
 }
 
 async function hasRuntimeCode(publicClient: any, address: Address | null): Promise<boolean> {
@@ -1018,13 +704,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
     const hasPhase2Finalize = expectedStages.hasPhase2Finalize === true || rawPhase2FinalizeCalls.length > 0
     const phase2FinalizeCalls = normalizeCalls(rawPhase2FinalizeCalls)
-    const phase2FinalizeInfo = phase2FinalizeCalls.length > 0 ? extractFinalizePhase2Info(phase2FinalizeCalls[0]!.data) : null
-    const expectedVaultFromFinalize = phase2FinalizeInfo?.vault ?? null
     const rawPhase3Calls = Array.isArray(payload.phase3Calls) ? payload.phase3Calls : []
     const rawPhase4Calls = Array.isArray(payload.phase4Calls) ? payload.phase4Calls : []
     const hasPhase3 = expectedStages.hasPhase3 === true || rawPhase3Calls.length > 0
     const hasPhase4 = expectedStages.hasPhase4 === true || rawPhase4Calls.length > 0
-    const phase3Calls = stripPhase3DeployToStrategiesCall(normalizeCalls(rawPhase3Calls), expectedVaultFromFinalize)
+    const phase3Calls = normalizeCalls(rawPhase3Calls)
     const phase4Calls = normalizeCalls(rawPhase4Calls)
     if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
     if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
@@ -1233,16 +917,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return runAfterPhase2(fromStep)
     }
 
-    const buildPhase4CallsWithStrategyDeploy = async (): Promise<Array<{ to: Address; value: bigint; data: Hex }>> => {
-      if (!hasPhase3 || !expectedVaultFromFinalize) return phase4Calls
-      const strategyCalls = await buildPhase4StrategyDeploymentCalls({
-        publicClient,
-        vault: expectedVaultFromFinalize,
-      })
-      if (strategyCalls.length === 0) return phase4Calls
-      return [...strategyCalls, ...phase4Calls]
-    }
-
     // Kick off whichever stage is next based on persisted step.
     // Note: we intentionally key off the persisted step (not call-array emptiness), because
     // the payload contains *all* calls for the full deploy.
@@ -1310,8 +984,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (started) return started
     }
     if (rec.step === 'phase3_confirmed' && hasPhase4) {
-      const phase4CallsWithStrategyDeploy = await buildPhase4CallsWithStrategyDeploy()
-      return await sendStage('phase4_sent', phase4CallsWithStrategyDeploy, true)
+      return await sendStage('phase4_sent', phase4Calls, true)
     }
     if (rec.step === 'phase3_confirmed' && !hasPhase4) {
       return await completeFrom('phase3_confirmed')

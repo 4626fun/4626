@@ -9,7 +9,7 @@ import {
   handleOptions,
   requireServerKey,
   setCache,
-  setCors,
+  setPublicCors,
 } from '../../../server/zora/_shared.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 
@@ -28,7 +28,8 @@ declare const process: { env: Record<string, string | undefined> }
  * Response: ERC-7572 compliant JSON
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCors(req, res)
+  setPublicCors(res)
+  if (req.method === 'OPTIONS') { res.status(200).end(); return }
   if (handleOptions(req, res)) return
 
   if (req.method !== 'GET') {
@@ -42,12 +43,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const chainId = getNumberQuery(req, 'chain') ?? DEFAULT_CHAIN_ID
 
+  // Default to the canonical API host so image URLs in metadata JSON are always
+  // valid, even if the API_HOST env var is missing from the deployment config.
+  const apiHost = process.env.API_HOST ?? 'api.4626.fun'
+
   try {
     const metadata = await buildShareTokenMetadata({
       address: address as Address,
       chainId,
       rpcUrl: process.env.BASE_RPC_URL,
-      apiHost: process.env.API_HOST,
+      apiHost,
       appHost: process.env.APP_HOST,
       zoraKey: requireServerKey(),
     })

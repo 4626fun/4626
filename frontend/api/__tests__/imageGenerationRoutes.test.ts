@@ -8,12 +8,14 @@ const {
   enqueueImageGenerationJobMock,
   getImageGenerationJobMock,
   getImageGenerationProjectMock,
+  setImageProjectVaultAddressMock,
   processImageGenerationJobMock,
   getSessionAddressMock,
   isAdminAddressMock,
 } = vi.hoisted(() => ({
   createImageGenerationProjectMock: vi.fn(async () => ({
     id: 'proj_123',
+    ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
     status: 'draft',
   })),
   attachImageGenerationAssetMock: vi.fn(async () => ({
@@ -27,15 +29,18 @@ const {
   })),
   getImageGenerationJobMock: vi.fn(async () => ({
     id: 'job_123',
+    projectId: 'proj_123',
     status: 'pending',
   })),
   getImageGenerationProjectMock: vi.fn(async () => ({
     id: 'proj_123',
+    ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
     status: 'draft',
     assets: [],
     attempts: [],
     latestJob: null,
   })),
+  setImageProjectVaultAddressMock: vi.fn(async () => {}),
   processImageGenerationJobMock: vi.fn(async () => ({ id: 'job_123', status: 'pending' })),
   getSessionAddressMock: vi.fn<() => string | null>(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
   isAdminAddressMock: vi.fn(() => true),
@@ -50,6 +55,7 @@ vi.mock('../../server/_lib/imageProjects.js', () => ({
   createImageGenerationProject: createImageGenerationProjectMock,
   attachImageGenerationAsset: attachImageGenerationAssetMock,
   getImageGenerationProject: getImageGenerationProjectMock,
+  setImageProjectVaultAddress: setImageProjectVaultAddressMock,
 }))
 
 vi.mock('../../server/_lib/imageGenerationJobs.js', () => ({
@@ -83,6 +89,7 @@ describe('image generation route registration', () => {
     await expect(getApiHandler('image/projects/refine')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('image/jobs/status')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('image/projects/get')).resolves.toBeTypeOf('function')
+    await expect(getApiHandler('image/projects/associate-vault')).resolves.toBeTypeOf('function')
   })
 })
 
@@ -105,7 +112,7 @@ describe('image generation auth gate', () => {
     expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
   })
 
-  it('returns 403 when caller is not an admin', async () => {
+  it('allows non-admin signed-in callers', async () => {
     getSessionAddressMock.mockReturnValue('0x1111111111111111111111111111111111111111')
     isAdminAddressMock.mockReturnValue(false)
     const mod = await import('../_handlers/image/_projects-create.ts')
@@ -119,9 +126,10 @@ describe('image generation auth gate', () => {
 
     await handler(req, res)
 
-    expect(res.statusCode).toBe(403)
-    expect(res.body).toEqual({ success: false, error: 'Admin only' })
-    expect(createImageGenerationProjectMock).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(createImageGenerationProjectMock).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAddress: '0x1111111111111111111111111111111111111111' }),
+    )
   })
 })
 
@@ -144,9 +152,11 @@ describe('POST /api/image/projects/create', () => {
 
     expect(res.statusCode).toBe(200)
     expect(createImageGenerationProjectMock).toHaveBeenCalledWith({
+      ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
       instruction: 'Put the dog inside the blue square.',
       stylePreset: 'modern_elegant',
       brandContext: ['creator coin', 'ERC-4626 vault'],
+      creatorAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
     })
     expect(res.body).toEqual({
       success: true,
@@ -325,5 +335,62 @@ describe('image generation job endpoints', () => {
     expect(res.statusCode).toBe(200)
     expect(getImageGenerationProjectMock).toHaveBeenCalledWith('proj_123')
     expect(res.body?.data?.project?.id).toBe('proj_123')
+  })
+})
+
+describe('POST /api/image/projects/associate-vault', () => {
+  it('associates completed project for the owner', async () => {
+    getImageGenerationProjectMock.mockResolvedValueOnce({
+      id: 'proj_123',
+      ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      status: 'completed',
+      assets: [],
+      attempts: [],
+      latestJob: null,
+    })
+    const mod = await import('../_handlers/image/_associate-vault.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        projectId: 'proj_123',
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(setImageProjectVaultAddressMock).toHaveBeenCalledWith(
+      'proj_123',
+      '0x1111111111111111111111111111111111111111',
+    )
+  })
+
+  it('rejects associating a project owned by a different wallet', async () => {
+    getImageGenerationProjectMock.mockResolvedValueOnce({
+      id: 'proj_123',
+      ownerAddress: '0x2222222222222222222222222222222222222222',
+      status: 'completed',
+      assets: [],
+      attempts: [],
+      latestJob: null,
+    })
+    const mod = await import('../_handlers/image/_associate-vault.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        projectId: 'proj_123',
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(404)
+    expect(setImageProjectVaultAddressMock).not.toHaveBeenCalled()
   })
 })

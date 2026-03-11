@@ -1,14 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { enqueueImageGenerationJob, getImageGenerationJob } from '../../../server/_lib/imageGenerationJobs.js'
+import { getImageGenerationProject } from '../../../server/_lib/imageProjects.js'
 import { processImageGenerationJob } from '../../../server/_lib/imageGenerationRunner.js'
-import { parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
+import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 type Body = {
   projectId?: string
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApiAuthenticated(req, res)) return
+  const actor = getImageApiActor(req)
+  if (!actor) {
+    return res.status(401).json({ success: false, error: 'Sign in required' })
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
@@ -18,6 +23,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const projectId = parseRequiredString(body.projectId)
   if (!projectId) {
     return res.status(400).json({ success: false, error: 'projectId is required' })
+  }
+
+  const project = await getImageGenerationProject(projectId)
+  if (!project || project.ownerAddress !== actor) {
+    return res.status(404).json({ success: false, error: 'Project not found' })
   }
 
   const job = await enqueueImageGenerationJob({

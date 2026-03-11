@@ -4,18 +4,27 @@ title: Verification
 
 # AKITA Vault Launch Verification (Base)
 
+## Canonical Path
+
+Use the frontend `/deploy` deploy-session flow for production launches.
+
+- It is the canonical path for the phased `DeploymentBatcher` flow.
+- It is the only path that is expected to complete with Charm, Ajna, and `SolanaStrategy` together.
+- It runs the Solana route / OVault preflight before phase 3.
+
+`/admin/deploy-strategies` is now a legacy two-strategy helper backed by `StrategyDeploymentBatcher`. It deploys only Charm + Ajna and leaves the remainder idle on Base, so it is not equivalent to the canonical launch flow.
+
 ## Phase 0: Pre-launch (Required)
 
-### Strategy Configuration (Admin)
+### Strategy Configuration (Canonical `/deploy`)
 
-Before launching, ensure the vault has yield strategies configured (management-only):
+Before launching, verify the deploy session completed through phase 3:
 
-- Deploy strategies via the phased deployment flow / `DeploymentBatcher`
-- Set weights:
-  - Charm (AKITA/USDC): **6900**
-  - Ajna: **2139**
-- Set idle reserve:
-  - `minimumTotalIdle = 4,805,000 * 1e18` (9.61% of the 50M launch deposit)
+- Charm strategy: **3000 bps**
+- Ajna strategy: **3000 bps**
+- `SolanaStrategy`: **3000 bps**
+- Idle reserve: **1000 bps** (10% of the launch deposit via `setMinimumTotalIdle`)
+- Solana preflight succeeded before phase 3 started
 
 ### Canonical Ajna Verification (Current Deploy Path)
 
@@ -63,10 +72,11 @@ availability does not authorize Ajna execution for a vault.
 ### On-chain Checks
 
 ```
-vault.getStrategyCount()           -> 2
-vault.strategyWeights(charmStrategy) -> 6900
-vault.strategyWeights(ajnaStrategy)  -> 2139
-vault.minimumTotalIdle()           -> 4_805_000e18
+vault.getStrategyCount()                -> 3
+vault.strategyWeights(charmStrategy)    -> 3000
+vault.strategyWeights(ajnaStrategy)     -> 3000
+vault.strategyWeights(solanaStrategy)   -> 3000
+vault.minimumTotalIdle()                -> launchDeposit * 10%
 ```
 
 For the canonical nested Ajna path, also read:
@@ -90,13 +100,12 @@ Users launch via the frontend AA flow, which now prefers Permit2 for the deposit
 
 ### Preferred deploy path
 
-1. Sign a Permit2 `PermitTransferFrom` payload for the creator token
-2. `DeploymentBatcher.finalizePhase2WithPermit2(...)`:
-   - Pulls the creator-token deposit with Permit2 signature transfer
-   - Deposits through the wrapper (minting wrapped share tokens)
-   - Defers the 50% auction allocation on the batcher
-   - Sends the remaining 50% to creator vesting
-   - Transfers final ownership to the protocol / creator destinations
+1. `/deploy` creates the deploy session and persists phase 1, phase 2, phase 3, and phase 4 call bundles.
+2. The user installs the temporary session owner on the canonical smart wallet.
+3. Phase 2 finalize uses Permit2 when available, otherwise approval + `finalizePhase2(...)`.
+4. After phase 2 confirms, the server performs Solana preflight and registration.
+5. Phase 3 deploys Charm, Ajna, and `SolanaStrategy`, sets the idle reserve, and calls `vault.deployToStrategies()`.
+6. Phase 4 launches the deferred auction.
 
 ### Fallback path
 
@@ -107,7 +116,15 @@ If Permit2 signing is unavailable, the frontend falls back to:
 
 ### Strategy Deployment Timing
 
-Activation does not call `vault.deployToStrategies()`. Yield deployment happens when a keeper/owner/management calls `vault.deployToStrategies()` (or `vault.tend()`).
+The canonical deploy-session path now includes `vault.deployToStrategies()` during phase 3. A separate post-launch `deployToStrategies()` call is only relevant for legacy/manual operator flows.
+
+### Legacy admin helper
+
+If you intentionally use `/admin/deploy-strategies`, treat it as a manual Charm + Ajna utility only:
+
+- It does **not** deploy `SolanaStrategy`.
+- It does **not** run Solana route / OVault preflight.
+- It should not be used as evidence that the production launch flow is fully configured.
 
 ---
 

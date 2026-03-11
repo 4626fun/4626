@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { createImageGenerationProject } from '../../../server/_lib/imageProjects.js'
-import { prepareImageApiAuthenticated, readBody } from './_shared.js'
+import { getImageApiActor, prepareImageApiAuthenticated, readBody } from './_shared.js'
 
 type Body = {
   instruction?: string
@@ -11,6 +11,10 @@ type Body = {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApiAuthenticated(req, res)) return
+  const actor = getImageApiActor(req)
+  if (!actor) {
+    return res.status(401).json({ success: false, error: 'Sign in required' })
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
@@ -18,9 +22,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = await readBody<Body>(req)
   const project = await createImageGenerationProject({
+    ownerAddress: actor,
     instruction: body.instruction,
     stylePreset: body.stylePreset ?? null,
     brandContext: body.brandContext ?? [],
+    creatorAddress: actor,
   })
 
   return res.status(200).json({

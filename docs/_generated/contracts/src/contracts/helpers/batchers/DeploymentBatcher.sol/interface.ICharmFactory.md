@@ -1,5 +1,5 @@
 # ICharmFactory
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/batchers/DeploymentBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/helpers/batchers/DeploymentBatcher.sol)
 
 Charm Finance Alpha Vault Factory
 
@@ -12,16 +12,28 @@ Vaults created via this factory appear on alpha.charm.fi UI
 
 
 ```solidity
-function createVault(
-    address pool,
-    address manager,
-    uint256 maxTotalSupply,
-    int24 baseThreshold,
-    int24 limitThreshold,
-    uint24 fullRangeWeight,
-    uint32 period,
-    string memory name,
-    string memory symbol
-) external returns (address vault);
+function createVault(VaultParams calldata params) external returns (address vault);
+```
+
+## Structs
+### VaultParams
+
+```solidity
+struct VaultParams {
+    address pool;
+    address manager;
+    uint24 managerFee;
+    address rebalanceDelegate;
+    uint256 maxTotalSupply;
+    int24 baseThreshold;
+    int24 limitThreshold;
+    uint24 fullRangeWeight;
+    uint32 period;
+    int24 minTickMove;
+    int24 maxTwapDeviation;
+    uint32 twapDuration;
+    string name;
+    string symbol;
+}
 ```
 

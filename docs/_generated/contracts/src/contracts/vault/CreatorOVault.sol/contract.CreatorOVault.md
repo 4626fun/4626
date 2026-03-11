@@ -1,5 +1,5 @@
 # CreatorOVault
-[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/CreatorOVault.sol)
+[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/CreatorOVault.sol)
 
 **Inherits:**
 ERC4626, Ownable, ReentrancyGuard, EIP712
@@ -327,6 +327,24 @@ Total assets at last report
 
 ```solidity
 uint256 public totalAssetsAtLastReport
+```
+
+
+### trustedPpsCheckpoint
+Trusted price-per-share checkpoint (1e18) refreshed on `report()`
+
+
+```solidity
+uint256 public trustedPpsCheckpoint
+```
+
+
+### trustedPpsMaxDeviationBps
+Maximum allowed deviation from trusted PPS for deposit/mint gating
+
+
+```solidity
+uint256 public trustedPpsMaxDeviationBps = 1_000
 ```
 
 
@@ -1101,16 +1119,16 @@ Enforces that the vault's own balance decreases by exactly `amount`.
 function _pushCreatorCoinExact(address to, uint256 amount) internal returns (uint256 spent);
 ```
 
-### _depositIntoStrategyExact
+### _depositIntoStrategyMeasured
 
-Deploy creator coin into a strategy with strict accounting checks.
+Deploy creator coin into a strategy using measured vault outflow.
 
-Requires both vault-side token debit and strategy reported `deposited`
-amount to exactly equal `amount`.
+Uses vault-side balance delta (`spent`) as canonical accounting input so
+fee-on-transfer / partial-spend strategy internals do not revert keeper deploys.
 
 
 ```solidity
-function _depositIntoStrategyExact(address strategy, uint256 amount) internal returns (uint256 deposited);
+function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 deposited);
 ```
 
 ### _withdrawFromStrategyMeasured
@@ -1695,6 +1713,17 @@ function setFlashLoanProtection(
 |`_largeWithdrawalDelayBlocks`|`uint256`|Extra blocks for large withdrawal queue|
 
 
+### setTrustedPpsDeviationBps
+
+Configure the trusted PPS circuit-breaker for deposit/mint.
+
+Deposits/mints are blocked when live PPS deviates too far from `trustedPpsCheckpoint`.
+
+
+```solidity
+function setTrustedPpsDeviationBps(uint256) external onlyOwner;
+```
+
 ### syncBalances
 
 
@@ -1847,6 +1876,12 @@ event UpdatePerformanceFeeRecipient(address indexed newRecipient);
 
 ```solidity
 event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
+```
+
+### UpdateTrustedPpsDeviationBps
+
+```solidity
+event UpdateTrustedPpsDeviationBps(uint256 newTrustedPpsDeviationBps);
 ```
 
 ### BalancesSynced
@@ -2118,6 +2153,12 @@ Price change exceeds safety bounds
 
 ```solidity
 error PriceChangeExceedsLimit(uint256 priceBefore, uint256 priceAfter, uint256 maxChangeBps);
+```
+
+### TrustedPpsDeviationExceeded
+
+```solidity
+error TrustedPpsDeviationExceeded(uint256 checkpointPps, uint256 currentPps, uint256 maxDeviationBps);
 ```
 
 ### InflationAttackDetected
