@@ -17,6 +17,7 @@ const {
   syncUserWalletsMock: vi.fn(async () => ({
     profileId: 1,
     canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
+    activeOwnerWallet: { address: '0x00000000000000000000000000000000000000bb', provider: 'privy', walletType: 'embedded_eoa' },
     embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
     connectedWallets: [],
     primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
@@ -85,6 +86,35 @@ describe('auth privy wallet sync', () => {
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
+  it('writes the active owner wallet separately from the canonical smart wallet in legacy fallback mode', async () => {
+    syncUserWalletsMock.mockResolvedValueOnce({
+      profileId: 1,
+      canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
+      activeOwnerWallet: { address: '0x00000000000000000000000000000000000000bb', provider: 'privy', walletType: 'embedded_eoa' },
+      embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
+      connectedWallets: [],
+      primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(upsertProfileByWalletMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        primaryWallet: '0x00000000000000000000000000000000000000bb',
+        embeddedWallet: '0x00000000000000000000000000000000000000bb',
+        cswAddress: '0x00000000000000000000000000000000000000aa',
+        baseSubAccount: '0x00000000000000000000000000000000000000aa',
+      }),
+    )
+  })
+
   it('prefers synced canonical wallet over raw Privy smart wallet for session address', async () => {
     getUserByIdMock.mockResolvedValueOnce({
       id: 'did:privy:test-user',
@@ -93,6 +123,7 @@ describe('auth privy wallet sync', () => {
     syncUserWalletsMock.mockResolvedValueOnce({
       profileId: 1,
       canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
+      activeOwnerWallet: { address: '0x00000000000000000000000000000000000000bb', provider: 'privy', walletType: 'embedded_eoa' },
       embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
       connectedWallets: [],
       primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
@@ -196,6 +227,7 @@ describe('auth privy wallet sync', () => {
     syncUserWalletsMock.mockResolvedValueOnce({
       profileId: 1,
       canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000cc', provider: 'coinbase_wallet' },
+      activeOwnerWallet: { address: '0x00000000000000000000000000000000000000bb', provider: 'privy', walletType: 'embedded_eoa' },
       embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
       connectedWallets: [],
       primaryWalletAddress: '0x00000000000000000000000000000000000000cc',

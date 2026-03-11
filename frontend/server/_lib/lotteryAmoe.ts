@@ -39,6 +39,25 @@ const eip1271Abi = [
   },
 ] as const
 
+const EIP1271_MAGICVALUE = '0x1626ba7e'
+
+const coinbaseSmartWalletOwnersAbi = [
+  {
+    type: 'function',
+    name: 'ownerCount',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'nextOwnerIndex',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
 const lotteryAmoeAbi = [
   {
     type: 'function',
@@ -425,12 +444,27 @@ export async function issueAmoeNonce(params: { wallet: `0x${string}`; creatorCoi
   return { nonce, issuedAt, expiresAt }
 }
 
+function encodeSignatureWrapper(ownerIndex: number, signatureData: `0x${string}`, encodeAbiParameters: any): `0x${string}` {
+  return encodeAbiParameters(
+    [
+      {
+        type: 'tuple' as const,
+        components: [
+          { name: 'ownerIndex', type: 'uint256' as const },
+          { name: 'signatureData', type: 'bytes' as const },
+        ],
+      },
+    ],
+    [{ ownerIndex: BigInt(ownerIndex), signatureData }],
+  )
+}
+
 async function verifyWalletMessageSignature(params: {
   wallet: `0x${string}`
   message: string
   signature: `0x${string}`
 }): Promise<boolean> {
-  const { verifyMessage, createPublicClient, hashMessage, http } = await import('viem')
+  const { verifyMessage, createPublicClient, hashMessage, http, encodeAbiParameters } = await import('viem')
   const { base } = await import('viem/chains')
 
   try {
@@ -452,14 +486,53 @@ async function verifyWalletMessageSignature(params: {
         transport: http(url, { timeout: 12_000 }),
       })
       const code = await client.getBytecode({ address: params.wallet })
-      if (!code || code === '0x') return false
-      const magic = await client.readContract({
-        address: params.wallet,
-        abi: eip1271Abi,
-        functionName: 'isValidSignature',
-        args: [digest, params.signature],
-      })
-      if (String(magic).toLowerCase() === '0x1626ba7e') return true
+      if (!code || code === '0x') continue
+
+      let scanLimit = 16
+      try {
+        const ownerCountRaw = (await client.readContract({
+          address: params.wallet,
+          abi: coinbaseSmartWalletOwnersAbi,
+          functionName: 'ownerCount',
+          args: [],
+        })) as bigint
+        let upperBound = Number(ownerCountRaw)
+        if (!Number.isFinite(upperBound) || upperBound < 0) upperBound = 0
+        try {
+          const nextOwnerIndexRaw = (await client.readContract({
+            address: params.wallet,
+            abi: coinbaseSmartWalletOwnersAbi,
+            functionName: 'nextOwnerIndex',
+            args: [],
+          })) as bigint
+          const nextOwnerIndex = Number(nextOwnerIndexRaw)
+          if (Number.isFinite(nextOwnerIndex) && nextOwnerIndex > 0) upperBound = nextOwnerIndex
+        } catch {
+          // ignore and keep ownerCount bound
+        }
+        scanLimit = Math.min(Math.max(upperBound, 1), 128)
+      } catch {
+        // ignore and keep default scan limit
+      }
+
+      const candidateSignatures: `0x${string}`[] = [params.signature]
+      for (let i = 0; i < scanLimit; i += 1) {
+        candidateSignatures.push(encodeSignatureWrapper(i, params.signature, encodeAbiParameters))
+      }
+
+      for (const candidateSignature of candidateSignatures) {
+        try {
+          const magic = await client.readContract({
+            address: params.wallet,
+            abi: eip1271Abi,
+            functionName: 'isValidSignature',
+            args: [digest, candidateSignature],
+          })
+          if (String(magic).toLowerCase() === EIP1271_MAGICVALUE) return true
+        } catch {
+          continue
+        }
+      }
     } catch {
       continue
     }

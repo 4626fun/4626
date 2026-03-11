@@ -94,8 +94,30 @@ vi.mock('viem/chains', () => ({
 
 function createDb() {
   return {
-    sql: vi.fn(async (strings: TemplateStringsArray) => {
+    sql: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('select p.id') && text.includes('from profiles p') && text.includes('lower(canonical.address)')) {
+        const input = typeof values[0] === 'string' ? values[0].toLowerCase() : ''
+        if (input === '0x00000000000000000000000000000000000000aa') {
+          return { rows: [{ id: 1 }] }
+        }
+        return { rows: [] }
+      }
+      if (text.includes('from profiles p') && text.includes('where p.id =')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              primary_embedded_eoa: null,
+              primary_smart_wallet: '0x00000000000000000000000000000000000000aa',
+              csw_address: '0x00000000000000000000000000000000000000aa',
+              base_sub_account: '0x00000000000000000000000000000000000000aa',
+              canonical_wallet: '0x00000000000000000000000000000000000000aa',
+            },
+          ],
+        }
+      }
       if (text.includes('select address from allowlist')) return { rows: [] }
       if (text.includes('insert into allowlist')) return { rows: [] }
       return { rows: [] }
@@ -152,5 +174,13 @@ describe('v1/creators/quickstart auth parity', () => {
     await handler(req as any, res as any)
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
+  })
+
+  it('returns 403 when session principal is not a current canonical or active owner wallet', async () => {
+    readSessionFromRequestMock.mockReturnValue({ address: '0x00000000000000000000000000000000000000bb' } as any)
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+    expect(res.statusCode).toBe(403)
   })
 })

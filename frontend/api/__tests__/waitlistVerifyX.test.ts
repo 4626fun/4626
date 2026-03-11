@@ -13,6 +13,7 @@ const {
   getClientIpMock,
   verifyAuthTokenMock,
   getUserByIdMock,
+  isAuthorizedWalletForProfileMock,
 } = vi.hoisted(() => ({
   readSessionFromRequestMock: vi.fn(),
   readSiwaAgentFromRequestMock: vi.fn(),
@@ -23,6 +24,7 @@ const {
   getClientIpMock: vi.fn(() => '127.0.0.1'),
   verifyAuthTokenMock: vi.fn(),
   getUserByIdMock: vi.fn(),
+  isAuthorizedWalletForProfileMock: vi.fn(async () => true),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -43,6 +45,10 @@ vi.mock('../../server/_lib/postgres.js', () => ({
 
 vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
+}))
+
+vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  isAuthorizedWalletForProfile: isAuthorizedWalletForProfileMock,
 }))
 
 vi.mock('../../server/_lib/waitlistPoints.js', () => ({
@@ -122,6 +128,7 @@ describe('waitlist/verify-x', () => {
 
     verifyAuthTokenMock.mockResolvedValue({ userId: 'did:privy:123' } as any)
     getUserByIdMock.mockResolvedValue({ twitter: { subject: '111', username: 'wenakita' } } as any)
+    isAuthorizedWalletForProfileMock.mockResolvedValue(true)
 
     getDbMock.mockResolvedValue(
       createDb({

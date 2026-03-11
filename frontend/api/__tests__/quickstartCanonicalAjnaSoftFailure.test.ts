@@ -12,6 +12,7 @@ const {
   getDbMock,
   isDbConfiguredMock,
   resolvePersistedWalletIdentityMock,
+  resolveAuthorizedWalletProfileMock,
 } = vi.hoisted(() => ({
   readSessionFromRequestMock: vi.fn(),
   readSiwaAgentFromRequestMock: vi.fn(),
@@ -19,6 +20,7 @@ const {
   getDbMock: vi.fn(),
   isDbConfiguredMock: vi.fn(() => true),
   resolvePersistedWalletIdentityMock: vi.fn(),
+  resolveAuthorizedWalletProfileMock: vi.fn(),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -40,6 +42,7 @@ vi.mock('../../server/_lib/postgres.js', () => ({
 
 vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
   resolvePersistedWalletIdentity: resolvePersistedWalletIdentityMock,
+  resolveAuthorizedWalletProfile: resolveAuthorizedWalletProfileMock,
 }))
 
 vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
@@ -81,6 +84,11 @@ describe('v1/creators/quickstart canonical Ajna hinting', () => {
     readSiwaAgentFromRequestMock.mockReturnValue(null)
     readJsonBodyMock.mockResolvedValue({})
     resolvePersistedWalletIdentityMock.mockRejectedValue(new Error('persisted lookup failed'))
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 1,
+      canonicalSmartWalletAddress: CREATOR_ADDRESS,
+      activeOwnerWalletAddress: null,
+    })
     restoreEnv = applyEnv({
       ZORA_SERVER_API_KEY: undefined,
       NEYNAR_API_KEY: undefined,

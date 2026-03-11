@@ -25,7 +25,7 @@ import {
 } from '../../../../server/auth/_shared.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { resolvePersistedWalletIdentity } from '../../../../server/_lib/canonicalWalletResolver.js'
-import { readRequestPrincipalAddress } from '../../../../server/_lib/requestPrincipal.js'
+import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
 import { resolveCoinParties, isAddressLike } from '../../../../server/_lib/coinParties.js'
@@ -229,13 +229,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const enableAutomation = body.enableAutomation === true
 
   // Require authenticated session or SIWA
-  const creatorAddress = readRequestPrincipalAddress(req)
-  if (!creatorAddress || !isAddressLike(creatorAddress)) {
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress || !isAddressLike(principalAddress)) {
     return res.status(401).json({
       success: false,
       error: 'Authentication required (session or SIWA receipt)',
     } satisfies ApiEnvelope<never>)
   }
+
+  const principal = await resolveAuthorizedRequestPrincipal(req)
+  if (!principal?.canonicalSmartWalletAddress || !isAddressLike(principal.canonicalSmartWalletAddress)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Current session is not authorized for a canonical creator smart wallet',
+    } satisfies ApiEnvelope<never>)
+  }
+  const creatorAddress = principal.canonicalSmartWalletAddress
 
   if (!isDbConfigured()) {
     return res.status(503).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)

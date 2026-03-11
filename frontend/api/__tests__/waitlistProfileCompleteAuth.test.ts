@@ -74,7 +74,7 @@ function createDb() {
   }
 }
 
-function createDbLinkedWalletFallback() {
+function createDbHistoricalLinkedWallet() {
   return {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
@@ -87,7 +87,7 @@ function createDbLinkedWalletFallback() {
         return { rows: [{ id: 1, csw_address: '0xab6d5c10b03300326cd7fab7267ae192842967b5' }] }
       }
       if (text.includes('from profile_wallets')) {
-        // Principal is linked to the profile via canonical wallet mapping.
+        // Principal is only a historical linked wallet, not current authority.
         return { rows: [{ exists: 1 }] }
       }
       if (text.includes('update profiles') && text.includes('where id')) {
@@ -138,13 +138,14 @@ describe('waitlist/profile-complete auth parity', () => {
     expect(res.body?.success).toBe(true)
   })
 
-  it('accepts principals linked via profile_wallets fallback', async () => {
-    getDbMock.mockResolvedValue(createDbLinkedWalletFallback())
+  it('rejects principals that are only historical linked wallets', async () => {
+    getDbMock.mockResolvedValue(createDbHistoricalLinkedWallet())
     readSessionFromRequestMock.mockReturnValue({ address: '0x00000000000000000000000000000000000000aa' } as any)
     const req = createMockReq({ method: 'POST', body: { email: 'user@example.com' } })
     const res = createMockRes()
     await handler(req as any, res as any)
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.success).toBe(true)
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toMatch(/not authorized/i)
   })
 })

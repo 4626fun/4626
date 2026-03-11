@@ -179,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             try {
               await upsertProfileByWallet(db as any, {
                 email: privyEmail,
-                primaryWallet: syncResult.primaryWalletAddress ?? sessionAddress,
+                primaryWallet: syncResult.activeOwnerWallet?.address ?? syncResult.primaryWalletAddress ?? sessionAddress,
                 embeddedWallet: syncResult.embeddedEoa?.address ?? null,
                 embeddedWalletChain: syncResult.embeddedEoa?.chainType ?? null,
                 embeddedWalletClientType: syncResult.embeddedEoa?.clientType ?? null,

@@ -57,6 +57,21 @@ function createDb() {
   return {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from profiles p') && text.includes('canonical.address as canonical_wallet')) {
+        return {
+          rows: [
+            {
+              id: 7,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              primary_embedded_eoa: null,
+              primary_smart_wallet: null,
+              csw_address: null,
+              base_sub_account: null,
+              canonical_wallet: null,
+            },
+          ],
+        }
+      }
       if (text.includes('from profiles') && text.includes('where email')) {
         return {
           rows: [
@@ -91,6 +106,64 @@ function createDb() {
       }
       if (text.includes('from profile_wallets')) {
         return { rows: [] }
+      }
+      if (text.includes('sum(amount)')) {
+        return { rows: [{ total: 120 }] }
+      }
+      if (text.includes('from points') && text.includes('order by created_at desc')) {
+        return {
+          rows: [
+            {
+              source: 'waitlist_signup',
+              source_id: 'email:owner@example.com',
+              amount: 100,
+              created_at: '2026-03-03T00:00:00.000Z',
+            },
+          ],
+        }
+      }
+      return { rows: [] }
+    }),
+  }
+}
+
+function createDbHistoricalLinkedWallet() {
+  return {
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from profiles p') && text.includes('canonical.address as canonical_wallet')) {
+        return {
+          rows: [
+            {
+              id: 7,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              primary_embedded_eoa: null,
+              primary_smart_wallet: null,
+              csw_address: null,
+              base_sub_account: null,
+              canonical_wallet: null,
+            },
+          ],
+        }
+      }
+      if (text.includes('from profiles') && text.includes('where email')) {
+        return {
+          rows: [
+            {
+              id: 7,
+              referral_code: 'C7',
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              embedded_wallet: null,
+              primary_embedded_eoa: null,
+              csw_address: null,
+              primary_smart_wallet: null,
+              base_sub_account: null,
+            },
+          ],
+        }
+      }
+      if (text.includes('from profile_wallets')) {
+        return { rows: [{ exists: 1 }] }
       }
       if (text.includes('sum(amount)')) {
         return { rows: [{ total: 120 }] }
@@ -160,5 +233,20 @@ describe('waitlist/ledger ownership hardening', () => {
     expect(res.body?.data?.signupId).toBe(7)
     expect(res.body?.data?.totalPoints).toBe(120)
     expect(Array.isArray(res.body?.data?.entries)).toBe(true)
+  })
+
+  it('returns null when caller is only a historical linked wallet', async () => {
+    getDbMock.mockResolvedValue(createDbHistoricalLinkedWallet() as any)
+    readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000bb')
+    const req = createMockReq({
+      method: 'GET',
+      query: { email: 'owner@example.com' },
+    })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data).toBeNull()
   })
 })
