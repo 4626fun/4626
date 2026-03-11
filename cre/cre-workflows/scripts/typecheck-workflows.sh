@@ -9,6 +9,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
+pnpm -C "$repo_root/cre" install --frozen-lockfile
 pnpm -C "$workflows_root" install --ignore-scripts --lockfile=false
 
 for cfg in "$workflows_root"/*/tsconfig.json; do
