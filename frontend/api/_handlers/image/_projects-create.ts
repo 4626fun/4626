@@ -20,7 +20,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const actor = getImageApiActor(req)
   const body = await readBody<Body>(req)
   const project = await createImageGenerationProject({
     ownerAddress: actor,
