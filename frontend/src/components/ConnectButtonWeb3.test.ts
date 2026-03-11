@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveConnectButtonState, deriveWalletIdentityPresentation } from './ConnectButtonWeb3'
+import {
+  deriveConnectButtonState,
+  deriveWalletIdentityPresentation,
+  shouldAllowExternalWalletButtons,
+} from './ConnectButtonWeb3'
 
 describe('deriveConnectButtonState', () => {
   it('stays in hydrating mode until the session has finished loading', () => {
@@ -45,6 +49,24 @@ describe('deriveConnectButtonState', () => {
         sessionAddress: null,
       }),
     ).toBe('signed-out')
+  })
+})
+
+describe('shouldAllowExternalWalletButtons', () => {
+  it('keeps external wallet options visible when a safe connector remains', () => {
+    expect(
+      shouldAllowExternalWalletButtons({
+        filteredConnectorCount: 1,
+      }),
+    ).toBe(true)
+  })
+
+  it('hides external wallet options when no safe connectors remain', () => {
+    expect(
+      shouldAllowExternalWalletButtons({
+        filteredConnectorCount: 0,
+      }),
+    ).toBe(false)
   })
 })
 

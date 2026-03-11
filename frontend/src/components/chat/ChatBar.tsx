@@ -68,16 +68,17 @@ function ConversationItem({
 
   const identity = useIdentity(convo.type === 'dm' ? peerAddress : null)
   const agentIdentity = convo.type === 'dm' ? getAgentIdentity(peerAddress) : null
+  const basenamePreferredName = identity.basenameDisplayName ?? identity.basename
   const displayName =
     convo.type === 'dm' && peerAddress
-      ? (agentIdentity?.name ?? identity.displayName)
+      ? (agentIdentity?.name ?? basenamePreferredName ?? identity.displayName)
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress
       ? (agentIdentity ? '4626 assistant' : (identity.secondary ?? truncateAddress(peerAddress)))
       : null
   const avatar = convo.type === 'dm'
-    ? (agentIdentity?.avatar ?? identity.avatar)
+    ? (agentIdentity?.avatar ?? identity.basenameAvatar ?? identity.avatar ?? convo.imageUrl ?? null)
     : (convo.imageUrl ?? null)
   const subtitle = convo.lastMessageText
     ? (displaySecondary ? `${displaySecondary} · ${convo.lastMessageText}` : convo.lastMessageText)

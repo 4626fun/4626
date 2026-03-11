@@ -79,6 +79,11 @@ export type SendChatMessageOptions = {
   replyToId?: string | null
 }
 
+export type StartDmOptions = {
+  nameHint?: string | null
+  imageUrl?: string | null
+}
+
 type XmtpContextValue = {
   status: XmtpStatus
   error: string | null
@@ -96,7 +101,7 @@ type XmtpContextValue = {
     text: string,
     options?: SendChatMessageOptions,
   ) => Promise<ChatMessage>
-  startDm: (peerAddress: `0x${string}`) => Promise<string | null>
+  startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
@@ -1841,7 +1846,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ------- start DM -------
-  const startDm = useCallback(async (peerAddress: `0x${string}`): Promise<string | null> => {
+  const startDm = useCallback(async (
+    peerAddress: `0x${string}`,
+    options?: StartDmOptions,
+  ): Promise<string | null> => {
     const client = clientRef.current
     if (!client) return null
     try {
@@ -1850,9 +1858,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         identifierKind: IdentifierKind.Ethereum,
       })
       const summary = await buildConvoSummary(dm as any)
+      const summaryWithHints: ChatConversation = {
+        ...summary,
+        name: options?.nameHint?.trim() || summary.name,
+        imageUrl: options?.imageUrl?.trim() || summary.imageUrl,
+      }
       setConversations((prev) => {
-        if (prev.find((c) => c.id === summary.id)) return prev
-        const next = [summary, ...prev]
+        if (prev.find((c) => c.id === summaryWithHints.id)) return prev
+        const next = [summaryWithHints, ...prev]
         conversationsRef.current = next
         return next
       })

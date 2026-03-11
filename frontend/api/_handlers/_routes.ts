@@ -181,6 +181,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'revert-finance': () => import('./_revert-finance.js'),
 
   'social/farcaster': () => import('./social/_farcaster.js'),
+  'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
   'social/twitter': () => import('./social/_twitter.js'),
 

@@ -26,6 +26,16 @@ export function deriveConnectButtonState(input: ConnectButtonStateInput): 'hydra
   return 'signed-out'
 }
 
+type ExternalWalletButtonsInput = {
+  filteredConnectorCount: number
+}
+
+export function shouldAllowExternalWalletButtons(input: ExternalWalletButtonsInput): boolean {
+  // Collision states can still safely offer external wallets as long as
+  // injected connectors were filtered out first (e.g. keep Coinbase visible).
+  return input.filteredConnectorCount > 0
+}
+
 type WalletIdentityPresentationInput = {
   address: string
   basename: string | null
@@ -159,8 +169,9 @@ export function ConnectButtonWeb3() {
       return !id.includes('injected')
     })
   }, [connectors, shouldHideInjectedConnector])
-  const allowExternalWalletButtons =
-    !prefersPrivyWalletLogin || (!hasMultipleInjectedProviders && !lockedEthereumProviderGlobal)
+  const allowExternalWalletButtons = shouldAllowExternalWalletButtons({
+    filteredConnectorCount: filteredConnectors.length,
+  })
   const sessionAddress = auth.authAddress ?? null
   const buttonState = deriveConnectButtonState({
     sessionHydrated: auth.sessionHydrated,

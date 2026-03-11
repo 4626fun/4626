@@ -15,11 +15,16 @@
  * └──────────────────────────────────────────┘
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useLogin } from '@privy-io/react-auth'
 import { MessageSquare, X } from 'lucide-react'
 import { XmtpChatProvider, type ChatConversation, useXmtp } from '@/lib/xmtp/provider'
+import {
+  getBasenameAutocompleteCandidate,
+  resolveDmRecipient,
+  type DmRecipientResolution,
+} from '@/lib/xmtp/socialIdentity'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
 import { getChatCommandById } from './commandCenter'
@@ -103,8 +108,12 @@ function ChatWidgetInner() {
   const [newDmAddress, setNewDmAddress] = useState('')
   const [newDmError, setNewDmError] = useState('')
   const [newDmLoading, setNewDmLoading] = useState(false)
+  const [newDmPreview, setNewDmPreview] = useState<DmRecipientResolution | null>(null)
+  const [newDmPreviewQuery, setNewDmPreviewQuery] = useState('')
+  const [newDmPreviewLoading, setNewDmPreviewLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [pendingDeepLinkIntent, setPendingDeepLinkIntent] = useState<PendingDeepLinkIntent | null>(null)
+  const newDmPreviewCacheRef = useRef<Map<string, DmRecipientResolution | null>>(new Map())
 
   const maybeConnectMessaging = useCallback(() => {
     if (status === 'idle' || status === 'error') {
@@ -245,25 +254,77 @@ function ChatWidgetInner() {
     setShowNewDm(true)
     setNewDmAddress('')
     setNewDmError('')
+    setNewDmPreview(null)
+    setNewDmPreviewQuery('')
+    setNewDmPreviewLoading(false)
   }, [])
 
-  const handleStartDm = useCallback(async () => {
-    const addr = newDmAddress.trim()
-    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-      setNewDmError('Enter a valid Ethereum address')
+  useEffect(() => {
+    if (!showNewDm) return
+    const input = newDmAddress.trim()
+    if (!input) {
+      setNewDmPreview(null)
+      setNewDmPreviewQuery('')
+      setNewDmPreviewLoading(false)
       return
     }
+
+    const cacheKey = input.toLowerCase()
+    const cached = newDmPreviewCacheRef.current.get(cacheKey)
+    if (cached !== undefined) {
+      setNewDmPreview(cached)
+      setNewDmPreviewQuery(input)
+      setNewDmPreviewLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setNewDmPreviewLoading(true)
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        const resolved = await resolveDmRecipient(input)
+        newDmPreviewCacheRef.current.set(cacheKey, resolved)
+        if (cancelled) return
+        setNewDmPreview(resolved)
+        setNewDmPreviewQuery(input)
+        setNewDmPreviewLoading(false)
+      })()
+    }, 220)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [newDmAddress, showNewDm])
+
+  const handleStartDm = useCallback(async () => {
+    const input = newDmAddress.trim()
+    const inputKey = input.toLowerCase()
+    const previewForInput =
+      newDmPreviewQuery.trim().toLowerCase() === inputKey
+        ? newDmPreview
+        : newDmPreviewCacheRef.current.get(inputKey) ?? null
+    const resolved = previewForInput ?? await resolveDmRecipient(input)
+    if (!resolved) {
+      setNewDmError('Enter a valid Ethereum address or Basename (for example, akita)')
+      return
+    }
+    newDmPreviewCacheRef.current.set(inputKey, resolved)
     setNewDmError('')
     setNewDmLoading(true)
     try {
-      const convoId = await startDm(addr as `0x${string}`)
+      const convoId = await startDm(resolved.address, {
+        nameHint: resolved.basenameHint,
+        imageUrl: resolved.avatarUrl,
+      })
       if (convoId) {
         setShowNewDm(false)
         handleOpenChat({
           id: convoId,
           type: 'dm',
-          name: `${addr.slice(0, 6)}…${addr.slice(-4)}`,
-          peerAddress: addr,
+          name: resolved.basenameHint || `${resolved.address.slice(0, 6)}…${resolved.address.slice(-4)}`,
+          peerAddress: resolved.address,
+          imageUrl: resolved.avatarUrl ?? undefined,
           unreadCount: 0,
         })
       } else {
@@ -274,10 +335,18 @@ function ChatWidgetInner() {
     } finally {
       setNewDmLoading(false)
     }
-  }, [newDmAddress, startDm, handleOpenChat])
+  }, [newDmAddress, newDmPreview, newDmPreviewQuery, startDm, handleOpenChat])
 
   const activeMobileWindow = openWindows[openWindows.length - 1]
   const showMobileBar = barExpanded && !activeMobileWindow
+  const basenameAutocomplete = getBasenameAutocompleteCandidate(newDmAddress)
+  const showBasenameAutocomplete = Boolean(
+    basenameAutocomplete && basenameAutocomplete !== newDmAddress.trim().toLowerCase(),
+  )
+  const activeDmPreview =
+    newDmPreviewQuery.trim().toLowerCase() === newDmAddress.trim().toLowerCase()
+      ? newDmPreview
+      : null
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -393,16 +462,55 @@ function ChatWidgetInner() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Recipient address</label>
+              <label className="text-xs text-zinc-400">Recipient address or Basename</label>
               <input
                 type="text"
                 value={newDmAddress}
-                onChange={(e) => setNewDmAddress(e.target.value)}
+                onChange={(e) => {
+                  setNewDmAddress(e.target.value)
+                  if (newDmError) setNewDmError('')
+                }}
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleStartDm() }}
-                placeholder="0x…"
+                placeholder="0x... or akita"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-primary/40 font-mono"
                 autoFocus
               />
+              {showBasenameAutocomplete && basenameAutocomplete && (
+                <button
+                  type="button"
+                  onClick={() => setNewDmAddress(basenameAutocomplete)}
+                  className="text-xs text-brand-primary hover:text-brand-primary/80 transition-colors"
+                >
+                  Use {basenameAutocomplete}
+                </button>
+              )}
+              {newDmAddress.trim() && newDmPreviewLoading && !newDmError && (
+                <div className="text-xs text-zinc-500">Resolving recipient…</div>
+              )}
+              {newDmAddress.trim() && !newDmPreviewLoading && activeDmPreview && !newDmError && (
+                <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                  <div className="text-[11px] text-zinc-400">Recipient</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {activeDmPreview.avatarUrl ? (
+                      <img
+                        src={activeDmPreview.avatarUrl}
+                        alt=""
+                        className="w-6 h-6 rounded-full object-cover border border-white/10"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-white/10 border border-white/10" />
+                    )}
+                    <div className="text-xs text-zinc-200">
+                      {activeDmPreview.basenameHint
+                        ? `${activeDmPreview.basenameHint}.base.eth`
+                        : 'Wallet address'}
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-mono text-zinc-400">
+                    {activeDmPreview.address.slice(0, 6)}…{activeDmPreview.address.slice(-4)}
+                  </div>
+                </div>
+              )}
               {newDmError && (
                 <div className="text-xs text-red-400">{newDmError}</div>
               )}
