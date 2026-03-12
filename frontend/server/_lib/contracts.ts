@@ -81,7 +81,10 @@ export function getApiContracts(): ApiContracts {
       BASE_DEFAULTS.universalCreate2DeployerFromStore,
     ),
     vaultActivationBatcher: pickAddressProdSafe('VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher)!,
-    creatorVaultBatcher: pickAddressProdSafe('CREATOR_VAULT_BATCHER', BASE_DEFAULTS.creatorVaultBatcher),
+    creatorVaultBatcher: pickAddressProdSafe(
+      'CREATOR_VAULT_BATCHER',
+      pickAddressProdSafe('CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ?? BASE_DEFAULTS.creatorVaultBatcher,
+    ),
     protocolTreasury: pickAddress('PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
     vaultGaugeVoting: pickAddressProdSafe('VAULT_GAUGE_VOTING'),
     voterRewardsDistributor: pickAddressProdSafe('VOTER_REWARDS_DISTRIBUTOR'),

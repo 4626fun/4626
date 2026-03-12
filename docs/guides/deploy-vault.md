@@ -155,6 +155,7 @@ Post-deploy expectations for the canonical Ajna sleeve:
 - `CreatorOVault` stores the adapter address in its strategy list
 - `ERC4626StrategyAdapter.ERC4626_VAULT()` resolves to the inner Ajna vault
 - `AjnaERC4626Vault.AUTH()` resolves to `AjnaVaultAuth`
+- on the auto-handoff batcher release, phase-3 sets `AjnaVaultAuth.admin = params.owner` (creator canonical CSW) by default
 - adapter `idleBufferBps` is typically set to `0` so buffering is owned by the inner Ajna vault policy rather than duplicated across layers
 
 ### Canonical Ajna automation (post-launch)
@@ -174,6 +175,12 @@ After launch:
 1. Open the success screen or `Admin Agent Setup`.
 2. Enable Ajna automation for the vault from the creator's own canonical wallet context.
 3. Verify the stored status shows the vault as opted in before expecting CRE Ajna actions to run.
+
+Legacy vault note:
+
+- if `AjnaVaultAuth.admin` is not the creator canonical CSW, run the one-time Safe backfill script:
+  - `pnpm -C frontend exec tsx scripts/ops/ajna-admin-backfill-safe.ts --origin https://4626.fun --only-enabled`
+  - re-run with `--propose --safe-address <SAFE> --safe-owner-pk <PK>` to submit Safe tx proposals
 
 `SolanaStrategy` is a Base-side strategy adapter with keeper-reported remote NAV:
 
