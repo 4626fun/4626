@@ -31,7 +31,7 @@ import { getChatCommandById } from './commandCenter'
 
 const MAX_OPEN_WINDOWS = 3
 const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
-const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'Keepr').trim() || 'Keepr'
+const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
 
 type PendingDeepLinkIntent = {
   actionId: string
@@ -48,6 +48,40 @@ type OpenWindow = {
   imageUrl?: string
   minimized: boolean
   seedCommandId?: string | null
+}
+
+export function rekeyOpenWindows(
+  windows: OpenWindow[],
+  oldConversationId: string,
+  newConversationId: string,
+): OpenWindow[] {
+  const oldId = oldConversationId.trim()
+  const newId = newConversationId.trim()
+  if (!oldId || !newId || oldId === newId) return windows
+  if (!windows.some((windowItem) => windowItem.id === oldId)) return windows
+
+  const remapped = windows.map((windowItem) =>
+    windowItem.id === oldId
+      ? { ...windowItem, id: newId, minimized: false }
+      : windowItem,
+  )
+
+  const deduped: OpenWindow[] = []
+  for (const windowItem of remapped) {
+    const existingIndex = deduped.findIndex((candidate) => candidate.id === windowItem.id)
+    if (existingIndex === -1) {
+      deduped.push(windowItem)
+      continue
+    }
+    const existing = deduped[existingIndex]
+    deduped[existingIndex] = {
+      ...existing,
+      ...windowItem,
+      minimized: false,
+      seedCommandId: windowItem.seedCommandId ?? existing.seedCommandId ?? null,
+    }
+  }
+  return deduped
 }
 
 function ConnectToChatPrompt() {
@@ -250,6 +284,10 @@ function ChatWidgetInner() {
     setOpenWindows((prev) => prev.filter((w) => w.id !== id))
   }, [])
 
+  const handleConversationRekey = useCallback((oldConversationId: string, newConversationId: string) => {
+    setOpenWindows((prev) => rekeyOpenWindows(prev, oldConversationId, newConversationId))
+  }, [])
+
   const handleNewDm = useCallback(() => {
     setShowNewDm(true)
     setNewDmAddress('')
@@ -388,6 +426,7 @@ function ChatWidgetInner() {
               seedCommandId={activeMobileWindow.seedCommandId ?? null}
               onSeedConsumed={() => handleSeedConsumed(activeMobileWindow.id)}
               onMinimize={() => handleMinimize(activeMobileWindow.id)}
+              onConversationRekey={handleConversationRekey}
               onClose={() => handleClose(activeMobileWindow.id)}
             />
           </div>
@@ -424,6 +463,7 @@ function ChatWidgetInner() {
               seedCommandId={win.seedCommandId ?? null}
               onSeedConsumed={() => handleSeedConsumed(win.id)}
               onMinimize={() => handleMinimize(win.id)}
+              onConversationRekey={handleConversationRekey}
               onClose={() => handleClose(win.id)}
             />
           </div>

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useMiniAppContext } from '@/hooks/useMiniAppContext'
-import { getBasenameName } from '@/lib/xmtp/socialIdentity'
+import { getBasenameProfile } from '@/lib/basename-api'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 
 type ConnectButtonStateInput = {
@@ -39,6 +39,7 @@ export function shouldAllowExternalWalletButtons(input: ExternalWalletButtonsInp
 type WalletIdentityPresentationInput = {
   address: string
   basename: string | null
+  basenameAvatar: string | null
   miniUsername: string | null
   miniAvatarUrl: string | null
 }
@@ -77,7 +78,7 @@ export function deriveWalletIdentityPresentation(input: WalletIdentityPresentati
     return {
       primaryLabel: basename,
       secondaryLabel: shortAddress,
-      avatarUrl: null,
+      avatarUrl: input.basenameAvatar,
       avatarFallback: basename.charAt(0).toUpperCase(),
     }
   }
@@ -183,12 +184,13 @@ export function ConnectButtonWeb3() {
   const identityAddress = buttonState === 'connected-wallet' ? address ?? null : buttonState === 'session-restored' ? sessionAddress : null
   const basenameEnabled = Boolean(identityAddress) && !(mini.isMiniApp === true && mini.username)
   const basenameQuery = useQuery({
-    queryKey: ['basename', identityAddress ?? 'none'],
-    queryFn: async () => await getBasenameName(identityAddress as string),
+    queryKey: ['basename-profile', identityAddress ?? 'none'],
+    queryFn: async () => await getBasenameProfile(identityAddress as string),
     enabled: basenameEnabled,
     staleTime: 1000 * 60 * 10,
   })
-  const basename = basenameEnabled ? basenameQuery.data ?? null : null
+  const basename = basenameEnabled ? basenameQuery.data?.name ?? null : null
+  const basenameAvatar = basenameEnabled ? basenameQuery.data?.avatar ?? null : null
 
   if (buttonState === 'hydrating') {
     return (
@@ -208,6 +210,7 @@ export function ConnectButtonWeb3() {
     const presentation = deriveWalletIdentityPresentation({
       address,
       basename,
+      basenameAvatar,
       miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
       miniAvatarUrl: mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : null,
     })
@@ -303,6 +306,7 @@ export function ConnectButtonWeb3() {
     const presentation = deriveWalletIdentityPresentation({
       address: sessionAddress,
       basename,
+      basenameAvatar,
       miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
       miniAvatarUrl: mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : null,
     })

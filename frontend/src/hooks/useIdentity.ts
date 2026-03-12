@@ -84,6 +84,14 @@ type LensUser = {
   ownerAddress: string | null
 }
 
+export function pickIdentityAvatar(params: {
+  basenameAvatar: string | null
+  farcasterAvatar?: string | null
+  lensAvatar?: string | null
+}): string | null {
+  return params.basenameAvatar ?? params.farcasterAvatar ?? params.lensAvatar ?? null
+}
+
 async function fetchFarcasterUser(address: string): Promise<FarcasterUser | null> {
   // Prefer our server-side resolver so we don't require a client-exposed Neynar key.
   // This also allows environments like desktop web to resolve avatars consistently.
@@ -269,7 +277,11 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
       ])
       const result: IdentityCacheEntry = {
         displayName: farcaster.displayName,
-        avatar: farcaster.avatar ?? lens?.avatar ?? basenameAvatar,
+        avatar: pickIdentityAvatar({
+          basenameAvatar,
+          farcasterAvatar: farcaster.avatar,
+          lensAvatar: lens?.avatar ?? null,
+        }),
         source: 'farcaster',
         secondary,
         farcasterHandle: farcaster.username,
@@ -290,7 +302,10 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
       const lensHandle = lens.handle ? `@${lens.handle}` : null
       const result: IdentityCacheEntry = {
         displayName: lens.displayName,
-        avatar: lens.avatar ?? basenameAvatar,
+        avatar: pickIdentityAvatar({
+          basenameAvatar,
+          lensAvatar: lens.avatar,
+        }),
         source: 'lens',
         secondary: compactUnique([
           lensHandle && lc(lensHandle) !== lc(lens.displayName) ? lensHandle : null,

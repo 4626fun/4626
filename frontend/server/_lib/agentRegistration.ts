@@ -44,8 +44,8 @@ const fallbackRegistration: RegistrationFile = {
     },
     {
       name: 'agentWallet',
-      endpoint: 'https://basescan.org/address/0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
-      account: 'eip155:8453:0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+      endpoint: 'eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      account: 'eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5',
     },
     { name: 'api', endpoint: 'https://4626.fun/api/v1/spec.json', version: '1.0.0' },
     { name: 'feedback', endpoint: 'https://4626.fun/api/v1/agents/feedback', version: '2.0' },
@@ -267,8 +267,10 @@ function normalizeService(service: RegistrationService, origin: string): Registr
 
   const accountRef = parseCaip10Account(endpointRaw)
   if (accountRef) {
-    normalized.endpoint = addressExplorerUrl(accountRef.chainId, accountRef.address)
-    normalized.account = `eip155:${accountRef.chainId}:${accountRef.address.toLowerCase()}`
+    const caip10 = `eip155:${accountRef.chainId}:${accountRef.address.toLowerCase()}`
+    normalized.endpoint = caip10
+    normalized.account = caip10
+    normalized.explorer = addressExplorerUrl(accountRef.chainId, accountRef.address)
     return normalized
   }
 
@@ -381,8 +383,8 @@ export function buildAgentRegistration(origin: string): {
 
   if (cswAddress && isAddressLike(cswAddress)) {
     const xmtpEndpoint = `https://xmtp.chat/dm/${cswAddress}`
-    const walletEndpoint = addressExplorerUrl(registryConfig.chainId, cswAddress)
     const walletAccount = `eip155:${registryConfig.chainId}:${cswAddress.toLowerCase()}`
+    const walletExplorer = addressExplorerUrl(registryConfig.chainId, cswAddress)
 
     // Upsert XMTP service
     const xmtpIdx = services.findIndex((s) => s.name === 'XMTP')
@@ -398,7 +400,12 @@ export function buildAgentRegistration(origin: string): {
 
     // Upsert agentWallet service
     const walletIdx = services.findIndex((s) => s.name === 'agentWallet')
-    const walletService: RegistrationService = { name: 'agentWallet', endpoint: walletEndpoint, account: walletAccount }
+    const walletService: RegistrationService = {
+      name: 'agentWallet',
+      endpoint: walletAccount,
+      account: walletAccount,
+      explorer: walletExplorer,
+    }
     if (walletIdx >= 0) services[walletIdx] = walletService
     else services.splice(services.findIndex((s) => s.name === 'XMTP') + 1, 0, walletService)
   }

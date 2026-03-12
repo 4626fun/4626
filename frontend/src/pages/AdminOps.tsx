@@ -9,9 +9,11 @@ import {
   erc20Abi,
   formatUnits,
   getAddress,
+  hexToString,
   isAddress,
   parseAbiItem,
   parseUnits,
+  stringToHex,
   type Address,
   type Hex,
 } from 'viem'
@@ -49,6 +51,11 @@ function isContentAddressedAgentUri(uri: string): boolean {
     u.startsWith('data:') ||
     u.startsWith('ar://')
   )
+}
+
+function isStrictContentAddressedAgentUri(uri: string): boolean {
+  const u = uri.trim().toLowerCase()
+  return u.startsWith('ipfs://') || u.startsWith('data:') || u.startsWith('ar://')
 }
 
 function toRegistrationDataUri(payload: unknown): string {
@@ -540,6 +547,12 @@ function summarizeErrorReason(error: unknown): string {
 function toFriendlyTxError(error: unknown): string {
   const msg = summarizeErrorReason(error)
   const lower = msg.toLowerCase()
+  if (lower.includes('reserved key')) {
+    return (
+      'Identity Registry reserves the `agentWallet` metadata key. ' +
+      'Use `setAgentWallet()` for authoritative wallet binding and keep the off-chain registration `agentWallet` service in CAIP-10 format.'
+    )
+  }
   if (lower.includes('bind requires a canonical csw signature')) {
     return (
       'Bind requires a canonical CSW signature, but no canonical CSW signer is available in this session. ' +
@@ -724,6 +737,7 @@ function AgentRegistration() {
     status: 'idle',
   })
   const [walletBindTxState, setWalletBindTxState] = useState<TxState>({ status: 'idle' })
+  const [walletMetadataTxState, setWalletMetadataTxState] = useState<TxState>({ status: 'idle' })
   const [onChainAgentWallet, setOnChainAgentWallet] = useState<string | null>(null)
 
   const connectedAddress = useMemo(() => {
@@ -746,6 +760,7 @@ function AgentRegistration() {
   }, [privyWallets])
 
   const canonicalCswAddress = useMemo(() => getAddress(CANONICAL_SMART_WALLET), [])
+  const expectedAgentWalletCaip = useMemo(() => `eip155:${base.id}:${canonicalCswAddress.toLowerCase()}`, [canonicalCswAddress])
   const isCanonical = connectedAddress?.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase()
   const privySmartWalletAddress = useMemo(() => {
     try {
@@ -763,6 +778,7 @@ function AgentRegistration() {
     if (!onChainAgentWallet) return false
     return onChainAgentWallet.toLowerCase() === canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, onChainAgentWallet])
+  const usingStrictAgentUri = useMemo(() => isStrictContentAddressedAgentUri(agentUri), [agentUri])
 
   const canonicalOwnerQuery = useReadContract({
     address: CANONICAL_SMART_WALLET as Address,
@@ -874,10 +890,9 @@ function AgentRegistration() {
       const grove = payload?.data?.grove
       const lensUri = grove?.lensUri ? String(grove.lensUri) : undefined
       const gatewayUrl = grove?.gatewayUrl ? String(grove.gatewayUrl) : undefined
-      // Prefer HTTPS gateway URL for broad validator compatibility.
+      // Keep strict content-addressed URI as default; gateway is opt-in.
       setLensPublishResult({ lensUri, gatewayUrl })
       if (gatewayUrl) {
-        setAgentUri(gatewayUrl)
         setLensPublishState({ status: 'success' })
       } else {
         setLensPublishState({
@@ -957,7 +972,7 @@ function AgentRegistration() {
       if (!isContentAddressedAgentUri(trimmedUri)) {
         throw new Error(
           'Agent URI must use a supported scheme (https://, http://, ipfs://, ar://, or data:). ' +
-            'If using Lens, paste gatewayUrl instead of lens://.',
+            'Strict no-warning mode prefers data:, ipfs://, or ar://. If using Lens, paste gatewayUrl instead of lens://.',
         )
       }
 
@@ -1061,7 +1076,7 @@ function AgentRegistration() {
       if (!isContentAddressedAgentUri(trimmedUri)) {
         throw new Error(
           'Agent URI must use a supported scheme (https://, http://, ipfs://, ar://, or data:). ' +
-            'If using Lens, paste gatewayUrl instead of lens://.',
+            'Strict no-warning mode prefers data:, ipfs://, or ar://. If using Lens, paste gatewayUrl instead of lens://.',
         )
       }
       const rawId = agentIdInput.trim()
@@ -1207,6 +1222,48 @@ function AgentRegistration() {
     chainId: base.id,
     query: { enabled: !!publicClient && /^\d+$/.test(agentIdInput.trim()) },
   })
+
+  const agentWalletMetadataQuery = useReadContract({
+    address: ERC8004_IDENTITY_REGISTRY as Address,
+    abi: ERC8004_IDENTITY_REGISTRY_ABI,
+    functionName: 'getMetadata',
+    args: [agentIdInput.trim() ? BigInt(agentIdInput.trim()) : 0n, 'agentWallet'],
+    chainId: base.id,
+    query: { enabled: !!publicClient && /^\d+$/.test(agentIdInput.trim()) },
+  })
+
+  const decodedAgentWalletMetadata = useMemo(() => {
+    const raw = agentWalletMetadataQuery.data
+    if (typeof raw !== 'string') {
+      return { kind: 'unknown' as const, rawHex: null, value: null }
+    }
+    const rawHex = raw as Hex
+    if (rawHex === '0x') return { kind: 'empty' as const, rawHex, value: '' }
+
+    if (/^0x[a-fA-F0-9]{40}$/.test(rawHex) && isAddress(rawHex)) {
+      return { kind: 'address' as const, rawHex, value: getAddress(rawHex) }
+    }
+
+    try {
+      const decoded = hexToString(rawHex)
+      const cleaned = decoded.replace(/\u0000+$/g, '').trim()
+      if (cleaned) {
+        if (/^eip155:\d+:0x[a-fA-F0-9]{40}$/.test(cleaned)) {
+          return { kind: 'caip10' as const, rawHex, value: cleaned.toLowerCase() }
+        }
+        return { kind: 'text' as const, rawHex, value: cleaned }
+      }
+    } catch {
+      // Fall through to hex representation.
+    }
+
+    return { kind: 'hex' as const, rawHex, value: rawHex }
+  }, [agentWalletMetadataQuery.data])
+
+  const agentWalletMetadataMatchesExpected = useMemo(() => {
+    if (decodedAgentWalletMetadata.kind !== 'caip10') return false
+    return decodedAgentWalletMetadata.value === expectedAgentWalletCaip
+  }, [decodedAgentWalletMetadata, expectedAgentWalletCaip])
 
   useEffect(() => {
     const raw = agentWalletQuery.data
@@ -1366,6 +1423,97 @@ function AgentRegistration() {
     }
   }
 
+  async function syncAgentWalletMetadataCaip() {
+    if (!publicClient) return
+    setWalletMetadataTxState({ status: 'pending', error: undefined, hash: undefined })
+    try {
+      if (!isBase) throw new Error('Please switch to Base network.')
+      const rawId = agentIdInput.trim()
+      if (!/^\d+$/.test(rawId)) throw new Error('Agent ID must be a non-negative integer.')
+      const agentId = BigInt(rawId)
+      const metadataValue = stringToHex(expectedAgentWalletCaip) as Hex
+      const registryAddress = ERC8004_IDENTITY_REGISTRY as Address
+
+      if (isCanonical) {
+        if (!walletClient) throw new Error('Connect the canonical smart wallet to continue.')
+        const hash = await (walletClient as any).writeContract({
+          account: (walletClient as any).account,
+          chain: base as any,
+          address: registryAddress,
+          abi: ERC8004_IDENTITY_REGISTRY_ABI,
+          functionName: 'setMetadata',
+          args: [agentId, 'agentWallet', metadataValue],
+        })
+        setWalletMetadataTxState({ status: 'pending', hash })
+        await (publicClient as any).waitForTransactionReceipt({ hash })
+        setWalletMetadataTxState({ status: 'success', hash })
+        void agentWalletMetadataQuery.refetch()
+        return
+      }
+
+      if (embeddedIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
+        const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!embeddedProvider?.request) throw new Error('Privy embedded wallet provider not available')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) throw new Error('Sign in required for gas sponsorship.')
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: ERC8004_IDENTITY_REGISTRY_ABI as any,
+          functionName: 'setMetadata' as any,
+          args: [agentId, 'agentWallet', metadataValue],
+        })
+        const result = await sendEmbeddedOwnerSmartWalletCall({
+          publicClient: publicClient as any,
+          embeddedProvider,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: embeddedPrivyEoaAddress as Address,
+          calls: [{ to: registryAddress, data }],
+        })
+        setWalletMetadataTxState({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        setWalletMetadataTxState({ status: 'success', hash: result.transactionHash })
+        void agentWalletMetadataQuery.refetch()
+        return
+      }
+
+      if (connectedIsCanonicalOwner && connectedAddress) {
+        if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) throw new Error('Sign in required for gas sponsorship.')
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: ERC8004_IDENTITY_REGISTRY_ABI as any,
+          functionName: 'setMetadata' as any,
+          args: [agentId, 'agentWallet', metadataValue],
+        })
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: connectedAddress as Address,
+          calls: [{ to: registryAddress, data }],
+          version: '1',
+          userOpSignMode: 'auto',
+          allowEoaSignMessageFallback: false,
+          skipPaymaster: false,
+        })
+        setWalletMetadataTxState({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        setWalletMetadataTxState({ status: 'success', hash: result.transactionHash })
+        void agentWalletMetadataQuery.refetch()
+        return
+      }
+
+      throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
+    } catch (e: any) {
+      setWalletMetadataTxState({ status: 'error', error: toFriendlyTxError(e) })
+    }
+  }
+
   return (
     <section id="agent-registration" className="cinematic-section">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -1424,15 +1572,20 @@ function AgentRegistration() {
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
-                <span>Default publishes to Lens Grove and uses HTTPS gateway URL. Fallbacks: data:, ipfs://, ar://.</span>
+                <span>Strict mode keeps a content-addressed URI (data:, ipfs://, ar://) by default. HTTPS gateway URLs are optional fallback.</span>
                 <button
                   type="button"
                   onClick={() => void buildContentAddressedUri()}
                   className="text-zinc-300 hover:text-white transition-colors"
                 >
-                  Use data URI (fallback)
+                  Build strict data URI
                 </button>
               </div>
+              {agentUri.trim() && !usingStrictAgentUri ? (
+                <div className="text-xs text-amber-300/90">
+                  Current URI is not strict content-addressed. 8004scan may flag this (`IA040`) even though it remains valid.
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void publishAgentRegistrationToLens()}
@@ -1452,14 +1605,25 @@ function AgentRegistration() {
                 </div>
               ) : null}
               {lensPublishResult?.gatewayUrl ? (
-                <a
-                  className="text-xs text-brand-accent hover:text-brand-primary"
-                  href={lensPublishResult.gatewayUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View Grove gateway
-                </a>
+                <div className="space-y-1">
+                  <a
+                    className="text-xs text-brand-accent hover:text-brand-primary"
+                    href={lensPublishResult.gatewayUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View Grove gateway
+                  </a>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setAgentUri(lensPublishResult.gatewayUrl ?? '')}
+                      className="text-xs text-zinc-300 hover:text-white transition-colors"
+                    >
+                      Use gateway URL anyway (mutable)
+                    </button>
+                  </div>
+                </div>
               ) : null}
               <Link className="text-xs text-brand-accent hover:text-brand-primary" to="/agents/uri-service">
                 Agent URI service docs
@@ -1566,6 +1730,54 @@ function AgentRegistration() {
                     : 'Bind CSW as agentWallet'}
               </button>
               <TxMeta state={walletBindTxState} />
+            </div>
+
+            <div className="border-t border-white/5 pt-6 space-y-3">
+              <h4 className="text-sm font-medium text-zinc-300">Agent Wallet Metadata (legacy CAIP sync)</h4>
+              <p className="text-xs text-zinc-500">
+                Reads <code className="text-zinc-400">getMetadata(agentId, "agentWallet")</code> and optionally attempts a
+                CAIP-10 write via <code className="text-zinc-400">setMetadata</code>. Modern ERC-8004 registries may reserve
+                this key and reject writes.
+              </p>
+              <div className="text-xs text-zinc-500">
+                Expected CAIP-10: <span className="font-mono text-zinc-300">{expectedAgentWalletCaip}</span>
+              </div>
+              {agentWalletMetadataQuery.isFetched ? (
+                <div className="text-xs text-zinc-500 space-y-1">
+                  <div>
+                    On-chain metadata (hex):{' '}
+                    <span className="font-mono text-zinc-300">
+                      {decodedAgentWalletMetadata.rawHex ?? '0x'}
+                    </span>
+                  </div>
+                  <div>
+                    Decoded:{' '}
+                    <span className="font-mono text-zinc-300">
+                      {decodedAgentWalletMetadata.value || '(empty)'}
+                    </span>{' '}
+                    <span className="text-zinc-400">[{decodedAgentWalletMetadata.kind}]</span>
+                  </div>
+                  {agentWalletMetadataMatchesExpected ? (
+                    <div className="text-emerald-400/90">Metadata already matches expected CAIP-10 value.</div>
+                  ) : null}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void syncAgentWalletMetadataCaip()}
+                disabled={
+                  walletMetadataTxState.status === 'pending' ||
+                  !isConnected ||
+                  (!isCanonical && !canSubmitViaOwner) ||
+                  !/^\d+$/.test(agentIdInput.trim())
+                }
+                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {walletMetadataTxState.status === 'pending'
+                  ? 'Syncing metadata…'
+                  : 'Sync agentWallet metadata to CAIP-10'}
+              </button>
+              <TxMeta state={walletMetadataTxState} />
             </div>
           </div>
         </div>

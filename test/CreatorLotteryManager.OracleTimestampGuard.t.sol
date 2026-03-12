@@ -99,7 +99,7 @@ contract CreatorLotteryManagerOracleTimestampGuardTest is Test {
     function test_ProcessSwapLottery_SkipsWhenOracleTimestampInFuture() public {
         // This should never revert; timestamp anomalies should just skip the entry.
         vm.prank(authorizedSwap);
-        uint256 entryId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
+        uint256 entryId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
 
         assertEq(entryId, 0);
     }

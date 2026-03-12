@@ -519,6 +519,10 @@ type DeploySessionDryRunResponse = {
   phases: DeploySessionDryRunPhase[]
   failure?: DeploySessionDryRunFailure
 }
+
+function isLocalForkRpcUrl(rpcUrl: string): boolean {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(rpcUrl.trim())
+}
 type DeployPlanExport = {
   generatedAt: string
   chainId: number
@@ -1903,6 +1907,10 @@ function DeployVaultBatcher({
     tx3?: Hex
     tx4?: Hex
   }>({})
+  const dryRunLocalForkRpc = useMemo(
+    () => isLocalForkRpcUrl(String(import.meta.env.VITE_BASE_RPC ?? '')),
+    [],
+  )
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
   const lastPolledStepRef = useRef<string>('')
   const useServerContinue = useMemo(() => {
@@ -5424,14 +5432,21 @@ function DeployVaultBatcher({
               >
                 {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
               </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
-                onClick={() => void runDryRun()}
-              >
-                {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
-              </button>
+              {dryRunLocalForkRpc ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
+                  onClick={() => void runDryRun()}
+                >
+                  {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
+                </button>
+              ) : (
+                <div className="text-[11px] text-zinc-500">
+                  Dry-run is local-fork-only. Start local mode with{' '}
+                  <span className="font-mono text-zinc-300">pnpm -C frontend dev:deploy-dry-run</span>.
+                </div>
+              )}
             </div>
             {exportStatus ? <div className="text-[11px] text-zinc-500">{exportStatus}</div> : null}
           </div>
@@ -6842,18 +6857,34 @@ function DeployVaultMain() {
     queryFn: async () => {
       const batcher = creatorVaultBatcherAddress as Address
 
-      const [bytecodeStore, create2Deployer] = (await Promise.all([
-        publicClient!.readContract({
-          address: batcher,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'bytecodeStore',
-        }),
-        publicClient!.readContract({
-          address: batcher,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'create2Deployer',
-        }),
-      ])) as [Address, Address]
+      const batcherCode = await publicClient!.getBytecode({ address: batcher })
+      if (!batcherCode || batcherCode === '0x') {
+        const chainId = publicClient?.chain?.id
+        throw new Error(
+          `Deployment batcher has no code at ${batcher} on chain ${chainId ?? 'unknown'}. Switch to Base (8453) or update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.`,
+        )
+      }
+
+      let bytecodeStore: Address
+      let create2Deployer: Address
+      try {
+        ;[bytecodeStore, create2Deployer] = (await Promise.all([
+          publicClient!.readContract({
+            address: batcher,
+            abi: CREATOR_VAULT_BATCHER_ABI,
+            functionName: 'bytecodeStore',
+          }),
+          publicClient!.readContract({
+            address: batcher,
+            abi: CREATOR_VAULT_BATCHER_ABI,
+            functionName: 'create2Deployer',
+          }),
+        ])) as [Address, Address]
+      } catch {
+        throw new Error(
+          `Configured batcher at ${batcher} does not expose expected phased deploy interface (bytecodeStore/create2Deployer). Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.`,
+        )
+      }
 
       const deployerStore = (await publicClient!.readContract({
         address: create2Deployer,

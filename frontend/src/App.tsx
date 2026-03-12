@@ -105,6 +105,7 @@ function buildAdminBypassSet(): Set<string> {
   const seed: string[] = [
     '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
     '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
+    '0xab6d5c10b03300326cd7fab7267ae192842967b5',
   ]
   const raw = (import.meta.env.VITE_ADMIN_BYPASS_ADDRESSES as string | undefined) ?? ''
   const fromEnv = raw

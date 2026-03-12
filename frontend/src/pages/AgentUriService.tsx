@@ -32,7 +32,7 @@ export function AgentUriService() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
       <PageMeta
         title="Agent URI Service"
-        description="Publish the 4626 ERC-8004 registration to Lens Grove and get validator-compatible agentURI outputs."
+        description="Publish the 4626 ERC-8004 registration to Lens Grove and generate strict content-addressed agentURI outputs."
         canonicalPath="/agents/uri-service"
       />
 
@@ -41,8 +41,11 @@ export function AgentUriService() {
         <h1 className="text-2xl sm:text-3xl text-zinc-100 font-semibold tracking-tight">Agent URI service</h1>
         <p className="text-sm text-zinc-500 max-w-prose">
           This service builds the 4626 ERC-8004 registration from the deployed config and publishes it to Lens
-          Grove. Use the returned <span className="font-mono text-zinc-300">gatewayUrl</span> as your{" "}
-          <span className="font-mono text-zinc-300">agentURI</span> for broad validator compatibility.
+          Grove. Prefer a strict content-addressed <span className="font-mono text-zinc-300">agentURI</span>{" "}
+          (<span className="font-mono text-zinc-300">data:</span>,{" "}
+          <span className="font-mono text-zinc-300">ipfs://</span>,{" "}
+          <span className="font-mono text-zinc-300">ar://</span>) for clean 8004scan validation. The returned{" "}
+          <span className="font-mono text-zinc-300">gatewayUrl</span> is an optional compatibility fallback.
         </p>
       </header>
 
@@ -93,9 +96,12 @@ export function AgentUriService() {
 {responseExample}
         </pre>
         <div className="text-xs text-zinc-600">
-          Use <span className="font-mono text-zinc-300">gatewayUrl</span> for on-chain{" "}
-          <span className="font-mono text-zinc-300">agentURI</span>. Some validators reject{" "}
-          <span className="font-mono text-zinc-300">lens://</span> directly.
+          For strict mode, use <span className="font-mono text-zinc-300">data:</span>,{" "}
+          <span className="font-mono text-zinc-300">ipfs://</span>, or{" "}
+          <span className="font-mono text-zinc-300">ar://</span> as on-chain{" "}
+          <span className="font-mono text-zinc-300">agentURI</span>. If needed, use{" "}
+          <span className="font-mono text-zinc-300">gatewayUrl</span> instead of{" "}
+          <span className="font-mono text-zinc-300">lens://</span>.
         </div>
       </section>
 

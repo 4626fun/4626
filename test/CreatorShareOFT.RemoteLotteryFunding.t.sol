@@ -39,6 +39,18 @@ contract MockRemoteLotteryManager {
         lastAmountIn = amountIn;
         return calls;
     }
+
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256)
+        external
+        payable
+        returns (uint256)
+    {
+        calls++;
+        lastBuyer = buyer;
+        lastTokenIn = tokenIn;
+        lastAmountIn = amountIn;
+        return calls;
+    }
 }
 
 contract MockRemoteGaugeController {

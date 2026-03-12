@@ -17,8 +17,8 @@
     },
     {
       "name": "agentWallet",
-      "endpoint": "https://basescan.org/address/0xAb6d5C10b03300326CD7fAb7267Ae192842967b5",
-      "account": "eip155:8453:0xAb6d5C10b03300326CD7fAb7267Ae192842967b5"
+      "endpoint": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5",
+      "account": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5"
     },
     {
       "name": "api",

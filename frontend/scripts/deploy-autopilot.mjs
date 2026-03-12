@@ -8,7 +8,7 @@ import { base } from 'viem/chains'
 
 const DEFAULT_ORIGIN = process.env.APP_ORIGIN || process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
 const DEFAULT_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-const DEFAULT_BATCHER = '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753'
+const DEFAULT_BATCHER = '0xDe221474068e0e8bD1A08C2F9b4E540Ed0837e36'
 const DEFAULT_STORE = '0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c'
 const DEFAULT_DEPLOYER = '0x0243F14771054c890E5Ef5D467D0137a20B2d94B'
 

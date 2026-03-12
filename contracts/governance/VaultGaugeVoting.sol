@@ -126,7 +126,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
      */
     uint256 public minCreatorsForBudget = 5;
     uint256 public maxCreatorsForBudget = 100;
-    uint256 public minTotalGaugeProbabilityBps = 100; // 1.00%
+    uint256 public minTotalGaugeProbabilityBps = 1; // 0.01%
     uint256 public maxTotalGaugeProbabilityBps = 300; // 3.00%
 
     /// @notice Optional multiplier for future TVL-based scaling (10000 = 1.0x)

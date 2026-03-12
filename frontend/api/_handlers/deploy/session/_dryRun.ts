@@ -60,6 +60,12 @@ const FORK_RPC_MODES: ForkRpcMode[] = [
 ]
 
 const FORK_BALANCE_HEX = '0x56bc75e2d63100000'
+const LOCAL_FORK_ONLY_ERROR =
+  'Deploy dry-run is local-fork-only. Start local dry-run with `pnpm -C frontend dev:deploy-dry-run` and ensure BASE_RPC_URL points to localhost/127.0.0.1.'
+
+function isLocalForkRpcUrl(rpcUrl: string): boolean {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(rpcUrl.trim())
+}
 
 function callValueToBigInt(value: Call['value']): bigint {
   if (typeof value === 'bigint') return value
@@ -95,7 +101,8 @@ async function enableForkImpersonation(params: {
     }
   }
 
-  throw new Error(
+  throw new DeploySessionRequestError(
+    400,
     `Deploy dry-run requires an Anvil or Hardhat fork RPC with impersonation enabled. ${formatDryRunError(lastError)}`,
   )
 }
@@ -179,7 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Dev-only bypass: when DEPLOY_DRY_RUN_DEV_BYPASS=1 and BASE_RPC_URL is localhost (fork),
   // allow unauthenticated dry-run. Pass X-Deploy-Dry-Run-Dev: <ownerAddress> header.
   const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
-  const isLocalFork = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(rpc)
+  const isLocalFork = isLocalForkRpcUrl(rpc)
   const devBypassHeaderRaw = req.headers['x-deploy-dry-run-dev']
   const devBypassHeader = typeof devBypassHeaderRaw === 'string' ? devBypassHeaderRaw.trim() : ''
   const devBypassEnabled =
@@ -209,7 +216,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         requireCalls: true,
       })
 
-    const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+    if (!isLocalFork) {
+      throw new DeploySessionRequestError(400, LOCAL_FORK_ONLY_ERROR)
+    }
+
     const publicClient = createPublicClient({
       chain: base,
       transport: http(rpc, { timeout: 12_000 }),

@@ -17,7 +17,7 @@ import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeContro
  * @notice Minimal interface for the hub-only lottery manager.
  */
 interface ICreatorLotteryManager {
-    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn)
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256 buyerCurrentShareBalance)
         external
         payable
         returns (uint256 entryId);
@@ -655,7 +655,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
 
             // Register lottery entry on Base.
             // tokenIn MUST be the ShareOFT (not creatorCoin).
-            ICreatorLotteryManager(lotteryManager).processSwapLottery(buyerTwin, entry.shareOFT, amount18);
+            ICreatorLotteryManager(lotteryManager).processSwapLottery(buyerTwin, entry.shareOFT, amount18, 0);
 
             emit SolanaLotteryEntryRelayed(
                 msg.sender, entry.buyerSolanaPubkey, entry.shareOFT, entry.amountSolanaUnits, amount18, buyerTwin

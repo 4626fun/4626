@@ -91,6 +91,18 @@ contract MockLotteryManager {
         lastAmount = amountIn;
         return calls;
     }
+
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256)
+        external
+        payable
+        returns (uint256)
+    {
+        calls += 1;
+        lastBuyer = buyer;
+        lastToken = tokenIn;
+        lastAmount = amountIn;
+        return calls;
+    }
 }
 
 contract SolanaBridgeAdapterEdgeCasesTest is Test {
