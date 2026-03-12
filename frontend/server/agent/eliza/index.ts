@@ -849,6 +849,18 @@ async function handleMessage(
     }
   }
 
+  const senderWallet =
+    typeof msg.senderAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(msg.senderAddress)
+      ? msg.senderAddress.toLowerCase()
+      : null
+  if (senderWallet) {
+    vaultContext +=
+      '\n[wallet_context]\n' +
+      `primary_sender_wallet=${senderWallet}\n` +
+      'When the user says "my wallet", "my balance", or "my portfolio", default to this wallet unless they provide another address.\n' +
+      '[/wallet_context]\n'
+  }
+
   try {
     const llm = await withRetry({
       operation: 'llm_generate_response',

@@ -448,6 +448,33 @@ function formatMetaMessages(error: unknown): string | null {
   return limited.join(' | ') + (messages.length > limited.length ? ' | ...' : '')
 }
 
+const TRANSIENT_USER_OP_RETRY_DELAYS_MS = [250, 750, 1500] as const
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTransientUserOpSubmissionError(error: unknown): boolean {
+  if (isUserRejection(error)) return false
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  const code = (error as any)?.code
+  if (code === -32016 || code === -32011 || code === 429) return true
+  return (
+    lc.includes('429') ||
+    lc.includes('too many requests') ||
+    lc.includes('over rate limit') ||
+    lc.includes('rate limit') ||
+    lc.includes('resource not available') ||
+    lc.includes('temporarily unavailable') ||
+    lc.includes('no backend is currently healthy') ||
+    lc.includes('gateway timeout') ||
+    lc.includes('request timeout') ||
+    lc.includes('network error') ||
+    lc.includes('failed to fetch')
+  )
+}
+
 function debugSignature(context: string, signature: Hex, source?: string | null) {
   if (!AA_DEBUG) return
   logger.debug(`[ERC-4337] ${context} signature`, {
@@ -1544,7 +1571,33 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     for (let i = 0; i < uniqueVerificationGasLimits.length; i++) {
       const limit = uniqueVerificationGasLimits[i]
       try {
-        userOpHash = await sendWithVerificationGasLimit(limit, usePaymaster)
+        let sent = false
+        const maxTransientAttempts = 1 + TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
+        for (let transientAttempt = 0; transientAttempt < maxTransientAttempts; transientAttempt += 1) {
+          try {
+            userOpHash = await sendWithVerificationGasLimit(limit, usePaymaster)
+            sent = true
+            break
+          } catch (e: unknown) {
+            lastError = e
+            const hasNextTransientAttempt = transientAttempt < TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
+            if (!hasNextTransientAttempt || !isTransientUserOpSubmissionError(e)) {
+              break
+            }
+            const retryInMs = TRANSIENT_USER_OP_RETRY_DELAYS_MS[transientAttempt] ?? 0
+            if (AA_DEBUG) {
+              logger.debug('[ERC-4337] retrying transient UserOp submission error', {
+                attempt: transientAttempt + 1,
+                retryInMs,
+                usePaymaster,
+                verificationGasLimit: String(limit),
+                error: e instanceof Error ? e.message : String(e ?? ''),
+              })
+            }
+            await delay(retryInMs)
+          }
+        }
+        if (!sent) throw lastError ?? new Error('UserOp submission failed')
         lastError = null
         return
       } catch (e: unknown) {
@@ -1572,7 +1625,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
     // If the paymaster rejects (policy/availability), allow a non-sponsored fallback.
     // This is required for non-deploy flows (e.g. legacy withdrawals) that the paymaster denies.
-    if (isPaymasterPolicyError(error)) return false
+    if (isPaymasterPolicyError(error)) return hasPrefundBalance
     if (!allowPaymasterFallback && (isPaymasterStakeError(error) || isPaymasterUnavailableError(error))) return false
     if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true

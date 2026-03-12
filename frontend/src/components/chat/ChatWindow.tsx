@@ -460,10 +460,17 @@ export function ChatWindow({
           (Boolean(dmPeerAddress && isEvmAddress(dmPeerAddress)) || Boolean(peerInboxId?.trim()))
         ) {
           try {
-            const recoveredConversationId =
-              dmPeerAddress && isEvmAddress(dmPeerAddress)
-                ? await startDm(dmPeerAddress)
-                : await startDmByInbox(String(peerInboxId ?? '').trim())
+            let recoveredConversationId: string | null = null
+            if (dmPeerAddress && isEvmAddress(dmPeerAddress)) {
+              const recoveredDm = await startDm(dmPeerAddress)
+              if (recoveredDm.ok) {
+                recoveredConversationId = recoveredDm.conversationId
+              } else {
+                reason = recoveredDm.message || reason
+              }
+            } else {
+              recoveredConversationId = await startDmByInbox(String(peerInboxId ?? '').trim())
+            }
             if (recoveredConversationId) {
               if (recoveredConversationId !== conversationId) {
                 onConversationRekey?.(conversationId, recoveredConversationId)

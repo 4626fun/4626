@@ -6,8 +6,9 @@ type JsonRpcRequest = { jsonrpc?: string; id?: unknown; method?: unknown; params
 
 const DEFAULT_CHAIN_RPCS = {
   base: [
-    'https://base-mainnet.public.blastapi.io',
     'https://base.llamarpc.com',
+    'https://base-mainnet.public.blastapi.io',
+    'https://base.meowrpc.com',
     'https://mainnet.base.org',
   ],
   mainnet: [
@@ -35,7 +36,7 @@ const DEFAULT_CHAIN_RPCS = {
 type RpcChain = keyof typeof DEFAULT_CHAIN_RPCS
 
 const CHAIN_ENV_KEYS: Record<RpcChain, string[]> = {
-  base: ['BASE_RPC_URL'],
+  base: ['BASE_READ_RPC_URL', 'BASE_LOGS_RPC_URL', 'BASE_RPC_URL'],
   mainnet: ['ETH_RPC_URL', 'ETHEREUM_RPC_URL'],
   arbitrum: ['ARBITRUM_RPC_URL'],
   optimism: ['OPTIMISM_RPC_URL'],
@@ -53,6 +54,8 @@ const EXPECTED_CHAIN_ID_HEX: Record<RpcChain, string> = {
 const RETRYABLE_STATUS = new Set([429])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
+const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
+const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -137,6 +140,15 @@ async function readRpcChainId(url: string): Promise<string | null> {
   }
 }
 
+async function readRpcChainIdCached(url: string): Promise<string | null> {
+  const now = Date.now()
+  const cached = rpcChainIdCache.get(url)
+  if (cached && cached.expiresAt > now) return cached.value
+  const value = await readRpcChainId(url)
+  rpcChainIdCache.set(url, { value, expiresAt: now + RPC_CHAIN_ID_CACHE_TTL_MS })
+  return value
+}
+
 function isValidRpcBody(body: unknown): body is JsonRpcRequest | JsonRpcRequest[] {
   if (!body) return false
   if (Array.isArray(body)) return body.length > 0
@@ -169,7 +181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   for (const rpc of rpcUrls) {
     if (envRpcUrls.has(rpc) && expectedChainId) {
-      const actualChainId = await readRpcChainId(rpc)
+      const actualChainId = await readRpcChainIdCached(rpc)
       if (actualChainId && actualChainId !== expectedChainId) {
         lastStatus = 502
         lastError = `RPC chain mismatch for ${rpc}: expected ${expectedChainId}, got ${actualChainId}`

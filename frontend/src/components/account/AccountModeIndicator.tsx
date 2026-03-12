@@ -10,10 +10,22 @@ function shortAddress(value: string | undefined): string {
   return `${value.slice(0, 6)}…${value.slice(-4)}`
 }
 
-function formatAtomic(status: 'supported' | 'ready' | 'unsupported' | 'unknown'): string {
-  if (status === 'supported' || status === 'ready') return '✓'
-  if (status === 'unsupported') return '—'
-  return '?'
+function formatPaymasterBadge(available: boolean): string {
+  return available ? 'Paymaster on' : 'Paymaster off'
+}
+
+function formatAtomicBadge(status: 'supported' | 'ready' | 'unsupported' | 'unknown'): {
+  label: string
+  active: boolean
+  pending: boolean
+} {
+  if (status === 'supported' || status === 'ready') {
+    return { label: 'Bundling on', active: true, pending: false }
+  }
+  if (status === 'unsupported') {
+    return { label: 'Bundling off', active: false, pending: false }
+  }
+  return { label: 'Bundling ...', active: false, pending: true }
 }
 
 function modeButtonTitle(params: {
@@ -60,6 +72,7 @@ export function AccountModeIndicator() {
   const smartWalletAddress =
     account.cswAddress ||
     (account.activeAccountType === 'SMART_WALLET' ? account.activeAccount || undefined : undefined)
+  const atomicBadge = formatAtomicBadge(account.capabilities.atomicStatus)
 
   const handleModeClick = useCallback(
     async (mode: 'EOA' | 'SMART_WALLET') => {
@@ -141,17 +154,19 @@ export function AccountModeIndicator() {
             }`}
             title="Paymaster"
           >
-            {account.uiFlags.paymasterAvailable ? '✓' : '—'}
+            {formatPaymasterBadge(account.uiFlags.paymasterAvailable)}
           </span>
           <span
             className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
-              account.capabilities.atomicStatus === 'supported' || account.capabilities.atomicStatus === 'ready'
+              atomicBadge.active
                 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
-                : 'border-white/10 bg-white/5 text-zinc-400'
+                : atomicBadge.pending
+                  ? 'border-amber-400/20 bg-amber-500/10 text-amber-200'
+                  : 'border-white/10 bg-white/5 text-zinc-400'
             }`}
             title="Bundling"
           >
-            {formatAtomic(account.capabilities.atomicStatus)}
+            {atomicBadge.label}
           </span>
 
           {showModeToggle ? (

@@ -25,6 +25,7 @@ import {
   resolveDmRecipient,
   type DmRecipientResolution,
 } from '@/lib/xmtp/socialIdentity'
+import { resolveDmRoute } from './dmRouting'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
 import { getChatCommandById } from './commandCenter'
@@ -35,10 +36,19 @@ const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '')
 const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
 const DM_PREVIEW_LOOKUP_DEBOUNCE_MS = 450
 
+function isEvmAddress(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function normalizeEvmAddress(value: string | null | undefined): `0x${string}` | null {
+  const raw = String(value ?? '').trim()
+  return isEvmAddress(raw) ? (raw.toLowerCase() as `0x${string}`) : null
+}
+
 function shouldResolveDmPreviewInput(input: string): boolean {
   const trimmed = input.trim()
   if (!trimmed) return false
-  if (/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return true
+  if (isEvmAddress(trimmed)) return true
 
   const basenameCandidate = getBasenameAutocompleteCandidate(trimmed)
   if (!basenameCandidate) return false
@@ -104,14 +114,15 @@ function ConnectToChatPrompt() {
 }
 
 function ChatWidgetInner() {
-  const { isConnected } = useAccount()
-  const { startDm, connect, status } = useXmtp()
+  const { isConnected, address } = useAccount()
+  const { startDm, connect, status, identityAddress } = useXmtp()
 
   const [barExpanded, setBarExpanded] = useState(false)
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([])
   const [showNewDm, setShowNewDm] = useState(false)
   const [newDmAddress, setNewDmAddress] = useState('')
   const [newDmError, setNewDmError] = useState('')
+  const [newDmNotice, setNewDmNotice] = useState('')
   const [newDmLoading, setNewDmLoading] = useState(false)
   const [newDmPreview, setNewDmPreview] = useState<DmRecipientResolution | null>(null)
   const [newDmPreviewQuery, setNewDmPreviewQuery] = useState('')
@@ -220,13 +231,23 @@ function ChatWidgetInner() {
 
     let cancelled = false
     void (async () => {
-      const convoId = await startDm(pendingDeepLinkIntent.peerAddress as `0x${string}`)
-      if (cancelled || !convoId) return
+      let targetPeerAddress = pendingDeepLinkIntent.peerAddress as `0x${string}`
+      let dmResult = await startDm(targetPeerAddress)
+      if (!dmResult.ok && dmResult.reason === 'self_recipient') {
+        const agentAddress = normalizeEvmAddress(AGENT_XMTP_ADDRESS)
+        if (agentAddress && agentAddress !== targetPeerAddress) {
+          targetPeerAddress = agentAddress
+          dmResult = await startDm(agentAddress, { nameHint: AGENT_DISPLAY_NAME })
+        }
+      }
+      if (cancelled || !dmResult.ok) return
       handleOpenChat({
-        id: convoId,
+        id: dmResult.conversationId,
         type: 'dm',
-        name: pendingDeepLinkIntent.peerName,
-        peerAddress: pendingDeepLinkIntent.peerAddress,
+        name: targetPeerAddress === AGENT_XMTP_ADDRESS
+          ? AGENT_DISPLAY_NAME
+          : pendingDeepLinkIntent.peerName,
+        peerAddress: targetPeerAddress,
         unreadCount: 0,
         seedCommandId: pendingDeepLinkIntent.actionId,
       } as ChatConversation)
@@ -263,6 +284,7 @@ function ChatWidgetInner() {
     setShowNewDm(true)
     setNewDmAddress('')
     setNewDmError('')
+    setNewDmNotice('')
     setNewDmPreview(null)
     setNewDmPreviewQuery('')
     setNewDmPreviewLoading(false)
@@ -327,31 +349,57 @@ function ChatWidgetInner() {
     }
     newDmPreviewCacheRef.current.set(inputKey, resolved)
     setNewDmError('')
+    setNewDmNotice('')
     setNewDmLoading(true)
     try {
-      const convoId = await startDm(resolved.address, {
-        nameHint: resolved.basenameHint,
-        imageUrl: resolved.avatarUrl,
+      const agentAddress = normalizeEvmAddress(AGENT_XMTP_ADDRESS)
+      const routeDecision = resolveDmRoute({
+        recipient: resolved,
+        identityAddress,
+        connectedAddress: address,
+        agentAddress: AGENT_XMTP_ADDRESS,
+        agentDisplayName: AGENT_DISPLAY_NAME,
       })
-      if (convoId) {
+      let destination = routeDecision.recipient
+      if (routeDecision.notice) setNewDmNotice(routeDecision.notice)
+
+      let dmResult = await startDm(destination.address, {
+        nameHint: destination.basenameHint,
+        imageUrl: destination.avatarUrl,
+      })
+
+      if (!dmResult.ok && dmResult.reason === 'self_recipient' && agentAddress) {
+        setNewDmNotice('Use Akita to chat about your wallet. Opening Akita instead.')
+        destination = {
+          ...destination,
+          address: agentAddress,
+          basenameHint: AGENT_DISPLAY_NAME,
+        }
+        dmResult = await startDm(agentAddress, {
+          nameHint: AGENT_DISPLAY_NAME,
+          imageUrl: destination.avatarUrl,
+        })
+      }
+
+      if (dmResult.ok) {
         setShowNewDm(false)
         handleOpenChat({
-          id: convoId,
+          id: dmResult.conversationId,
           type: 'dm',
-          name: resolved.basenameHint || `${resolved.address.slice(0, 6)}…${resolved.address.slice(-4)}`,
-          peerAddress: resolved.address,
-          imageUrl: resolved.avatarUrl ?? undefined,
+          name: destination.basenameHint || `${destination.address.slice(0, 6)}…${destination.address.slice(-4)}`,
+          peerAddress: destination.address,
+          imageUrl: destination.avatarUrl ?? undefined,
           unreadCount: 0,
         })
       } else {
-        setNewDmError('Could not start conversation')
+        setNewDmError(dmResult.message || 'Could not start conversation')
       }
     } catch (e) {
       setNewDmError(e instanceof Error ? e.message : 'Failed to start DM')
     } finally {
       setNewDmLoading(false)
     }
-  }, [newDmAddress, newDmPreview, newDmPreviewQuery, startDm, handleOpenChat])
+  }, [newDmAddress, newDmPreview, newDmPreviewQuery, startDm, handleOpenChat, identityAddress, address])
 
   const activeMobileWindow = openWindows[openWindows.length - 1]
   const showMobileBar = barExpanded && !activeMobileWindow
@@ -487,6 +535,7 @@ function ChatWidgetInner() {
                 onChange={(e) => {
                   setNewDmAddress(e.target.value)
                   if (newDmError) setNewDmError('')
+                  if (newDmNotice) setNewDmNotice('')
                 }}
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleStartDm() }}
                 placeholder="0x... or akita"
@@ -531,6 +580,9 @@ function ChatWidgetInner() {
               )}
               {newDmError && (
                 <div className="text-xs text-red-400">{newDmError}</div>
+              )}
+              {!newDmError && newDmNotice && (
+                <div className="text-xs text-zinc-400">{newDmNotice}</div>
               )}
             </div>
 

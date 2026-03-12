@@ -28,6 +28,28 @@ function parseAddressFromText(text: string): string | null {
   return match ? match[0] : null
 }
 
+function normalizeAddress(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null
+  return raw.toLowerCase()
+}
+
+function resolveSenderAddress(message: Memory): string | null {
+  const metadata = message.content?.metadata as Record<string, unknown> | undefined
+  return normalizeAddress(metadata?.senderAddress)
+}
+
+function resolveSingleAddressTarget(params: {
+  optionsAddress: unknown
+  message: Memory
+}): string | null {
+  const fromOptions = normalizeAddress(params.optionsAddress)
+  if (fromOptions) return fromOptions
+  const fromText = normalizeAddress(parseAddressFromText(params.message.content?.text ?? ''))
+  if (fromText) return fromText
+  return resolveSenderAddress(params.message)
+}
+
 // ---------------------------------------------------------------------------
 // Formatters (human-readable summaries for chat)
 // ---------------------------------------------------------------------------
@@ -198,11 +220,14 @@ const walletIntelAction: Action = {
     options?: Record<string, unknown>,
     callback?: HandlerCallback,
   ) => {
-    const fromOptions = typeof options?.address === 'string' ? options.address : null
-    const fromText = parseAddressFromText(message.content?.text ?? '')
-    const address = fromOptions ?? fromText
+    const address = resolveSingleAddressTarget({
+      optionsAddress: options?.address,
+      message,
+    })
     if (!address) {
-      await callback?.({ text: 'Usage: `/intel <address>`\nProvide a wallet address to investigate.' } as Content)
+      await callback?.({
+        text: 'Usage: `/intel <address>`\nIf omitted, defaults to your wallet when available.',
+      } as Content)
       return
     }
 
@@ -241,11 +266,14 @@ const funderTraceAction: Action = {
     options?: Record<string, unknown>,
     callback?: HandlerCallback,
   ) => {
-    const fromOptions = typeof options?.address === 'string' ? options.address : null
-    const fromText = parseAddressFromText(message.content?.text ?? '')
-    const address = fromOptions ?? fromText
+    const address = resolveSingleAddressTarget({
+      optionsAddress: options?.address,
+      message,
+    })
     if (!address) {
-      await callback?.({ text: 'Usage: `/funder <address>`\nProvide a wallet address to trace its funding chain.' } as Content)
+      await callback?.({
+        text: 'Usage: `/funder <address>`\nIf omitted, defaults to your wallet when available.',
+      } as Content)
       return
     }
 
@@ -282,11 +310,14 @@ const portfolioAction: Action = {
     options?: Record<string, unknown>,
     callback?: HandlerCallback,
   ) => {
-    const fromOptions = typeof options?.address === 'string' ? options.address : null
-    const fromText = parseAddressFromText(message.content?.text ?? '')
-    const address = fromOptions ?? fromText
+    const address = resolveSingleAddressTarget({
+      optionsAddress: options?.address,
+      message,
+    })
     if (!address) {
-      await callback?.({ text: 'Usage: `/portfolio <address>`\nProvide a wallet address to check its portfolio.' } as Content)
+      await callback?.({
+        text: 'Usage: `/portfolio <address>`\nIf omitted, defaults to your wallet when available.',
+      } as Content)
       return
     }
 
@@ -324,9 +355,17 @@ const entityLabelsAction: Action = {
     callback?: HandlerCallback,
   ) => {
     const text = message.content?.text ?? ''
-    const addresses = text.match(/0x[a-fA-F0-9]{40}/g) ?? []
+    const addressesFromText = text.match(/0x[a-fA-F0-9]{40}/g) ?? []
+    const senderAddress = resolveSenderAddress(message)
+    const addresses = addressesFromText.length > 0
+      ? addressesFromText.map((address) => address.toLowerCase())
+      : senderAddress
+        ? [senderAddress]
+        : []
     if (addresses.length === 0) {
-      await callback?.({ text: 'Usage: `/labels <address> [address2] ...`\nProvide one or more wallet addresses to identify.' } as Content)
+      await callback?.({
+        text: 'Usage: `/labels <address> [address2] ...`\nIf omitted, defaults to your wallet when available.',
+      } as Content)
       return
     }
 

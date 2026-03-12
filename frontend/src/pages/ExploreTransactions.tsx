@@ -41,6 +41,12 @@ function formatChange(delta: string | undefined): { positive: boolean } {
   return { positive: num >= 0 }
 }
 
+function toTimestamp(value: string | undefined): number {
+  if (!value) return 0
+  const ms = Date.parse(value)
+  return Number.isFinite(ms) ? ms : 0
+}
+
 function ActivityRow({ coin }: { coin: ZoraCoin }) {
   const change = formatChange(coin.marketCapDelta24h)
   const isBuy = change.positive // Use price change as proxy for buy/sell indication
@@ -121,8 +127,8 @@ function ActivityTableHeader() {
     <div className="hidden sm:grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-800 bg-zinc-900/50">
       <span>Type</span>
       <span>Token</span>
-      <span>Volume (24h)</span>
-      <span>Time</span>
+      <span className="text-center">Volume (24h)</span>
+      <span className="text-center">Time</span>
       <span>Creator</span>
       <span></span>
     </div>
@@ -199,7 +205,7 @@ export function ExploreTransactions() {
         }
       }
     }
-    return items
+    return [...items].sort((a, b) => toTimestamp(b.createdAt) - toTimestamp(a.createdAt))
   }, [data])
 
   // Filter based on search query

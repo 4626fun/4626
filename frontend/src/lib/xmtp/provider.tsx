@@ -17,6 +17,7 @@ import {
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
+import { shouldBlockSelfDm } from '@/lib/xmtp/dmGuard'
 import { getBasenameName } from '@/lib/xmtp/socialIdentity'
 import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from '@/lib/xmtp/identityResolver'
 import { useAccountContext } from '@/wallet/accountContext'
@@ -85,9 +86,16 @@ export type StartDmOptions = {
   imageUrl?: string | null
 }
 
+export type StartDmFailureReason = 'not_connected' | 'self_recipient' | 'create_failed'
+
+export type StartDmResult =
+  | { ok: true; conversationId: string }
+  | { ok: false; reason: StartDmFailureReason; message: string }
+
 type XmtpContextValue = {
   status: XmtpStatus
   error: string | null
+  identityAddress: string | null
   inboxId: string | null
   /** InboxId extracted from a 10/10 installations error (if present). */
   installationLimitInboxId: string | null
@@ -102,7 +110,7 @@ type XmtpContextValue = {
     text: string,
     options?: SendChatMessageOptions,
   ) => Promise<ChatMessage>
-  startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<string | null>
+  startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<StartDmResult>
   startDmByInbox: (peerInboxId: string, options?: StartDmOptions) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
@@ -222,6 +230,7 @@ const noop = () => {}
 const XmtpContext = createContext<XmtpContextValue>({
   status: 'idle',
   error: null,
+  identityAddress: null,
   inboxId: null,
   installationLimitInboxId: null,
   connect: async () => {},
@@ -240,7 +249,11 @@ const XmtpContext = createContext<XmtpContextValue>({
     sentAt: new Date(),
     isSelf: true,
   }),
-  startDm: async () => null,
+  startDm: async () => ({
+    ok: false,
+    reason: 'not_connected',
+    message: 'Messaging client not connected.',
+  }),
   startDmByInbox: async () => null,
   subscribeToMessages: () => noop,
   resolveInboxAddress: async () => null,
@@ -747,6 +760,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
   const [status, setStatus] = useState<XmtpStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [identityAddress, setIdentityAddress] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [inboxId, setInboxId] = useState<string | null>(null)
   const [installationLimitInboxId, setInstallationLimitInboxId] = useState<string | null>(null)
@@ -764,6 +778,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     Map<string, { identityAddress: string; isCanonicalSmartWallet: boolean }>
   >(new Map())
   const cswOwnerIndexCache = useRef<Map<string, number | null>>(new Map())
+  const identityAddressRef = useRef<string | null>(null)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -780,8 +795,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       void cleanup()
       setStatus('idle')
       setError(null)
+      setIdentityAddress(null)
       setConversations([])
       conversationsRef.current = []
+      identityAddressRef.current = null
       setInboxId(null)
       setInstallationLimitInboxId(null)
     }
@@ -799,6 +816,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       try { clientRef.current?.close() } catch {}
       clientRef.current = null
       conversationsRef.current = []
+      identityAddressRef.current = null
   }
 
   // ------- resolve address → display name (Basename / truncated) -------
@@ -1077,6 +1095,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setInstallationLimitInboxId(null)
       const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
       xmtpIdentityAddress = resolved.identityAddress
+      const normalizedIdentity = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
+      identityAddressRef.current = normalizedIdentity
+      if (mountedRef.current) setIdentityAddress(normalizedIdentity)
       xmtpDebug('[xmtp] Using identity for connect:', xmtpIdentityAddress)
 
       const identifier = {
@@ -1609,6 +1630,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
+        setIdentityAddress(null)
+        identityAddressRef.current = null
         if (isInstallationLimitError(msg)) {
           setInstallationLimitInboxId(extractInstallationLimitInboxId(msg))
           // Disable auto-connect so the 10/10 error doesn't fire on every page load.
@@ -1809,8 +1832,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     void cleanup()
     setStatus('idle')
     setError(null)
+    setIdentityAddress(null)
     setConversations([])
     conversationsRef.current = []
+    identityAddressRef.current = null
     setInboxId(null)
   }, [])
 
@@ -1904,9 +1929,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const startDm = useCallback(async (
     peerAddress: `0x${string}`,
     options?: StartDmOptions,
-  ): Promise<string | null> => {
+  ): Promise<StartDmResult> => {
+    if (shouldBlockSelfDm({ peerAddress, identityAddress: identityAddressRef.current })) {
+      return {
+        ok: false,
+        reason: 'self_recipient',
+        message: 'Use Akita to chat about your wallet.',
+      }
+    }
+
     const client = clientRef.current
-    if (!client) return null
+    if (!client) {
+      return {
+        ok: false,
+        reason: 'not_connected',
+        message: 'Messaging client not connected.',
+      }
+    }
     try {
       await client.conversations.sync().catch(() => undefined)
       const dm = await client.conversations.createDmWithIdentifier({
@@ -1924,10 +1963,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         conversationsRef.current = next
         return next
       })
-      return dm.id
+      return { ok: true, conversationId: dm.id }
     } catch (e) {
       console.error('[xmtp] startDm error:', e)
-      return null
+      return {
+        ok: false,
+        reason: 'create_failed',
+        message: e instanceof Error && e.message ? e.message : 'Could not start conversation',
+      }
     }
   }, [buildConvoSummary])
 
@@ -2003,6 +2046,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       value={{
         status,
         error,
+        identityAddress,
         inboxId,
         installationLimitInboxId,
         connect,
