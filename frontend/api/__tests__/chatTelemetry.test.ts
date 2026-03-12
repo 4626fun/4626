@@ -58,4 +58,44 @@ describe('POST /api/v1/chat/telemetry', () => {
       payload: { extra: 'value' },
     })
   })
+
+  it('passes through userop telemetry payload fields', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        event: 'xmtp_userop_submission_batch',
+        source: 'coinbaseErc4337',
+        sampleCount: 8,
+        p95Ms: 2134,
+        timeoutCount: 1,
+        paymasterUsage: {
+          sponsored: 6,
+          selfFunded: 1,
+          fallbackToSelfFunded: 1,
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(trackChatCommandCenterEventMock).toHaveBeenCalledWith({
+      event: 'xmtp_userop_submission_batch',
+      conversationId: null,
+      conversationType: null,
+      commandId: null,
+      source: 'coinbaseErc4337',
+      payload: {
+        sampleCount: 8,
+        p95Ms: 2134,
+        timeoutCount: 1,
+        paymasterUsage: {
+          sponsored: 6,
+          selfFunded: 1,
+          fallbackToSelfFunded: 1,
+        },
+      },
+    })
+  })
 })

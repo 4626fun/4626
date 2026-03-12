@@ -87,7 +87,7 @@ export function deriveWalletIdentityPresentation(input: WalletIdentityPresentati
   return {
     primaryLabel: shortAddress,
     secondaryLabel: 'Base account',
-    avatarUrl: null,
+    avatarUrl: input.miniAvatarUrl ?? input.basenameAvatar,
     avatarFallback: shortAddress.charAt(0).toUpperCase(),
   }
 }

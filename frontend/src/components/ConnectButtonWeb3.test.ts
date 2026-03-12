@@ -121,4 +121,21 @@ describe('deriveWalletIdentityPresentation', () => {
       avatarFallback: '0',
     })
   })
+
+  it('keeps a resolved avatar when only the raw address label is available', () => {
+    expect(
+      deriveWalletIdentityPresentation({
+        address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        basename: null,
+        basenameAvatar: 'https://example.com/resolved-avatar.png',
+        miniUsername: null,
+        miniAvatarUrl: null,
+      }),
+    ).toEqual({
+      primaryLabel: '0xab6d...67b5',
+      secondaryLabel: 'Base account',
+      avatarUrl: 'https://example.com/resolved-avatar.png',
+      avatarFallback: '0',
+    })
+  })
 })
