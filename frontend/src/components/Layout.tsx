@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { ArrowLeftRight, Droplets, LayoutDashboard, Mail, ShieldCheck, Wallet } from 'lucide-react'
+import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
 import { AccountModeIndicator } from './account/AccountModeIndicator'
@@ -17,8 +17,8 @@ type MobileNavItem = {
 
 const navItems: MobileNavItem[] = [
   { path: '/swap', icon: ArrowLeftRight, label: 'Trade', activePrefixes: ['/swap'] },
-  { path: '/explore/creators', icon: LayoutDashboard, label: 'Explore', activePrefixes: ['/explore'] },
-  { path: '/deploy', icon: Droplets, label: 'Vault', activePrefixes: ['/deploy', '/status', '/vault'] },
+  { path: '/explore/creators', icon: Vault, label: 'Explore', activePrefixes: ['/explore'] },
+  { path: '/deploy', icon: Search, label: 'Vault', activePrefixes: ['/deploy', '/status', '/vault'] },
   { path: '/portfolio', icon: Wallet, label: 'Portfolio', activePrefixes: ['/portfolio'] },
 ]
 

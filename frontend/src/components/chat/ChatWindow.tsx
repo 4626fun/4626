@@ -117,6 +117,10 @@ type PreflightResult = {
   guardCategory?: string
 }
 
+const DESKTOP_CHAT_WINDOW_WIDTH = 350
+const DESKTOP_CHAT_WINDOW_HEIGHT = 520
+const DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT = 44
+
 function baseAllowedGuard(): CommandGuardResult {
   return {
     allowed: true,
@@ -124,6 +128,16 @@ function baseAllowedGuard(): CommandGuardResult {
     guardCategory: null,
     checking: false,
   }
+}
+
+export function resolveCommandCenterVisibility(params: {
+  isMobile: boolean
+  showCommandCenter: boolean
+  desktopCommandsOpen: boolean
+}): boolean {
+  if (!params.showCommandCenter) return false
+  if (params.isMobile) return true
+  return params.desktopCommandsOpen
 }
 
 /** Inline sender label that resolves inboxId → address → display name */
@@ -182,6 +196,7 @@ export function ChatWindow({
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null)
   const [commandHint, setCommandHint] = useState<string | null>(null)
   const [commandGuards, setCommandGuards] = useState<Record<string, CommandGuardResult>>({})
+  const [desktopCommandsOpen, setDesktopCommandsOpen] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -498,6 +513,11 @@ export function ChatWindow({
 
   const isMobile = variant === 'mobile'
   const showCommandCenter = conversationType === 'dm' && Boolean(agentIdentity)
+  const showCommandCenterPanel = resolveCommandCenterVisibility({
+    isMobile,
+    showCommandCenter,
+    desktopCommandsOpen,
+  })
   const quickActions = useMemo(() => listQuickChatCommands(), [])
   const allCommands = useMemo(() => listAllChatCommands(), [])
   const categoryActions = useMemo(
@@ -512,6 +532,37 @@ export function ChatWindow({
     () => listChatFollowUps(lastCommandId),
     [lastCommandId],
   )
+
+  useEffect(() => {
+    if (isMobile || !showCommandCenter) {
+      setDesktopCommandsOpen(false)
+    }
+  }, [isMobile, showCommandCenter])
+
+  useEffect(() => {
+    if (isMobile || !showCommandCenter) return
+    if (pendingCommand) {
+      setDesktopCommandsOpen(true)
+    }
+  }, [isMobile, pendingCommand, showCommandCenter])
+
+  useEffect(() => {
+    if (isMobile || !showCommandCenter) return
+    if (input.trim().startsWith('/')) {
+      setDesktopCommandsOpen(true)
+    }
+  }, [input, isMobile, showCommandCenter])
+
+  useEffect(() => {
+    if (isMobile || !desktopCommandsOpen) return
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setDesktopCommandsOpen(false)
+      inputRef.current?.focus()
+    }
+    window.addEventListener('keydown', handleWindowKeyDown)
+    return () => window.removeEventListener('keydown', handleWindowKeyDown)
+  }, [desktopCommandsOpen, isMobile])
 
   const messageById = useMemo(
     () => new Map(messages.map((msg) => [msg.id, msg])),
@@ -779,7 +830,14 @@ export function ChatWindow({
       className={`flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl ${
         isMobile ? 'h-full w-full rounded-none' : 'rounded-t-xl'
       }`}
-      style={isMobile ? undefined : { width: 320, height: minimized ? 40 : 420 }}
+      style={
+        isMobile
+          ? undefined
+          : {
+              width: DESKTOP_CHAT_WINDOW_WIDTH,
+              height: minimized ? DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT : DESKTOP_CHAT_WINDOW_HEIGHT,
+            }
+      }
     >
       {/* Header */}
       {isMobile ? (
@@ -849,6 +907,23 @@ export function ChatWindow({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {showCommandCenter ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDesktopCommandsOpen((prev) => !prev)
+                }}
+                className={`rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
+                  desktopCommandsOpen
+                    ? 'border-cyan-400/35 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20'
+                    : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'
+                }`}
+                aria-label={desktopCommandsOpen ? 'Back to chat' : 'Open commands'}
+              >
+                {desktopCommandsOpen ? 'Back' : 'Commands'}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onMinimize() }}
@@ -971,8 +1046,24 @@ export function ChatWindow({
             )}
           </div>
 
-          {showCommandCenter && (
-            <div className="border-t border-white/10 bg-zinc-900/75 px-3 py-2 space-y-2 shrink-0">
+          {showCommandCenterPanel && (
+            <div className="border-t border-white/10 bg-zinc-900/75 px-3 py-2 shrink-0">
+              {!isMobile && (
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">Command Center</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDesktopCommandsOpen(false)
+                      inputRef.current?.focus()
+                    }}
+                    className="rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 transition-colors hover:bg-white/10"
+                  >
+                    Back to chat
+                  </button>
+                </div>
+              )}
+              <div className={isMobile ? 'space-y-2' : 'max-h-56 overflow-y-auto pr-1 space-y-2'}>
               {slashSuggestions.length > 0 && (
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500 mb-1.5">Slash Suggestions</div>
@@ -1128,6 +1219,7 @@ export function ChatWindow({
                   </div>
                 </div>
               )}
+              </div>
             </div>
           )}
 

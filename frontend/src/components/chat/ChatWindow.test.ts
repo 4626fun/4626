@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldAttemptInactiveDmRecovery } from './ChatWindow'
+import { resolveCommandCenterVisibility, shouldAttemptInactiveDmRecovery } from './ChatWindow'
 
 describe('shouldAttemptInactiveDmRecovery', () => {
   it('returns true for DM inactive-group errors with a peer address', () => {
@@ -54,6 +54,46 @@ describe('shouldAttemptInactiveDmRecovery', () => {
         conversationType: 'dm',
         dmPeerAddress: '0x1111111111111111111111111111111111111111',
         dmPeerInboxId: null,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('resolveCommandCenterVisibility', () => {
+  it('shows command center on mobile when available', () => {
+    expect(
+      resolveCommandCenterVisibility({
+        isMobile: true,
+        showCommandCenter: true,
+        desktopCommandsOpen: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('shows command center on desktop only when open', () => {
+    expect(
+      resolveCommandCenterVisibility({
+        isMobile: false,
+        showCommandCenter: true,
+        desktopCommandsOpen: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      resolveCommandCenterVisibility({
+        isMobile: false,
+        showCommandCenter: true,
+        desktopCommandsOpen: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('hides command center when unavailable regardless of device', () => {
+    expect(
+      resolveCommandCenterVisibility({
+        isMobile: true,
+        showCommandCenter: false,
+        desktopCommandsOpen: true,
       }),
     ).toBe(false)
   })

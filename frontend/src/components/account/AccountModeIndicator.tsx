@@ -37,6 +37,7 @@ export function AccountModeIndicator() {
     Boolean(account.cswAddress && account.signerAddress)
 
   const desiredMode = account.activeAccountType === 'SMART_WALLET' ? 'SMART_WALLET' : 'EOA'
+  const smartWalletConnected = account.activeAccountType === 'SMART_WALLET' || account.signerType === 'SMART_WALLET'
 
   return (
     <div className="border-b border-vault-border/60 bg-black/45">
@@ -129,7 +130,17 @@ export function AccountModeIndicator() {
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                Smart Wallet
+                <span className="inline-flex items-center gap-1">
+                  {smartWalletConnected ? (
+                    <WalletProviderIcon
+                      provider="coinbase"
+                      walletType="smart_wallet"
+                      isCanonicalSmartWallet
+                      size={12}
+                    />
+                  ) : null}
+                  Smart Wallet
+                </span>
               </button>
             </div>
           ) : null}
