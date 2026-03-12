@@ -5,8 +5,8 @@
 This rollout ships:
 - coverage-based ve boost in `CreatorLotteryManager`
 - remote payload v2 (`buyerCurrentShareBalance`) in `CreatorShareOFT`
-- ve boost saturation fix in `ve4626BoostManager`
-- gauge floor default update (`minTotalGaugeProbabilityBps = 1`) in `VaultGaugeVoting`
+- one-lock global-share boost in `ve4626BoostManager` (coverage uses creator-share value only)
+- fixed-budget gauge voting in `VaultGaugeVoting` (`69,420` PPM total, `35,000` PPM per-vault cap)
 
 ## Breaking Interface Note
 
@@ -48,9 +48,7 @@ All callers must use the 4-arg selector before cutover.
    - `SolanaBridgeAdapter.setLotteryManager(...)`
    - `CreatorLotteryManager.setBoostManager(newBoostManager)`
    - `CreatorLotteryManager.setVaultGaugeVoting(activeVaultGaugeVoting)`
-5. Set gauge budget floor live (if not redeploying voting):
-   - `setGaugeProbabilityBudgetParams(minCreators, maxCreators, 1, maxBudgetBps)`
-6. Verify onchain reads:
+5. Verify onchain reads:
    - `lotteryManager.boostManager()`
    - `lotteryManager.vaultGaugeVoting()`
    - `registry.getLotteryManager(chainId)`

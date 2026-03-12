@@ -367,7 +367,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
     }
 
     function test_VrfCallback_UsesStoredVoteDirectedGaugeBoost() public {
-        uint256 tradeAmount = 5000 ether;
+        uint256 tradeAmount = 1 ether;
         vaultGaugeVoting.setGaugeBoostPPM(vault, 10_000);
 
         vm.prank(authorizedSwap);
@@ -376,7 +376,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
-        assertGt(effectiveWinChancePPM, baseWinChance + 1, "request should include vote-directed gauge boost");
+        assertEq(effectiveWinChancePPM, baseWinChance + 10_000, "request should include full flat gauge boost");
 
         vaultGaugeVoting.setGaugeBoostPPM(vault, 0);
 
@@ -388,6 +388,18 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
 
         assertEq(gauge.payCount(), 1, "vote-directed gauge boost should settle as a win");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
+    }
+
+    function test_SetLotteryConfig_Allows200kCapAndRejectsAbove() public {
+        vm.prank(owner);
+        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 200_000, 10_500);
+
+        (,,,, uint256 maxWinChance,) = lotteryManager.lotteryConfig();
+        assertEq(maxWinChance, 200_000, "expected max win chance updated to new cap");
+
+        vm.prank(owner);
+        vm.expectRevert(CreatorLotteryManager.InvalidAmount.selector);
+        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 200_001, 10_500);
     }
 
 }

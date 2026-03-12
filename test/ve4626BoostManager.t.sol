@@ -74,4 +74,21 @@ contract Ve4626BoostManagerMathTest is Test {
         assertEq(boost, manager.maxBoost());
         assertEq(boost, 25_000);
     }
+
+    function testCoverage_UsesCreatorShareUsdOnly() public view {
+        uint256 coverage =
+            manager.getCoverageBps(user, address(0), address(0), address(0), 250_000_000, 1_000_000_000);
+        assertEq(coverage, 2_500); // 25%
+    }
+
+    function testCoverage_CapsAtFullCoverage() public view {
+        uint256 coverage =
+            manager.getCoverageBps(user, address(0), address(0), address(0), 2_000_000_000, 1_000_000_000);
+        assertEq(coverage, 10_000); // 100%
+    }
+
+    function testCoverage_ZeroWhenMissingInputs() public view {
+        assertEq(manager.getCoverageBps(user, address(0), address(0), address(0), 0, 1_000_000), 0);
+        assertEq(manager.getCoverageBps(user, address(0), address(0), address(0), 1_000_000, 0), 0);
+    }
 }

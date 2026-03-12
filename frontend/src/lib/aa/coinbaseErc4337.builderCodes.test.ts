@@ -58,4 +58,14 @@ describe('applyBuilderDataSuffixToCalls', () => {
     expect(result[0].data).toBe(baseData)
     expect(payloadEndsWithDataSuffix(result[0].data as Hex, dataSuffix as Hex)).toBe(false)
   })
+
+  it('never appends suffix to Universal Router non-canonical calldata', () => {
+    expect(dataSuffix).toBeDefined()
+    const universalRouterTarget = '0x6ff5693b99212da76ad316178a184ab56d299b43' as Address
+    const nonCanonicalData = '0x12345678deadbeef' as Hex
+    const universalRouterCall = [{ to: universalRouterTarget, value: 0n, data: nonCanonicalData }]
+    const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
+    expect(result[0].data).toBe(nonCanonicalData)
+    expect(payloadEndsWithDataSuffix(result[0].data as Hex, dataSuffix as Hex)).toBe(false)
+  })
 })

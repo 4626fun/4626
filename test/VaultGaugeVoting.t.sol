@@ -413,7 +413,7 @@ contract VaultGaugeVotingTest is Test {
         vm.warp(genesis + WEEK + 1);
         voting.checkpoint();
 
-        uint256 epoch0Weight = voting.getHistoricalVaultWeight(0, vault1);
+        uint256 epoch0Weight = voting.getVaultWeightAtEpoch(0, vault1);
         assertTrue(epoch0Weight > 0);
     }
 
@@ -514,52 +514,17 @@ contract VaultGaugeVotingTest is Test {
     // GAUGE PROBABILITY BUDGET TESTS
     // ================================
 
-    function testTotalGaugeProbabilityBps_MinAtSmallCreatorCount() public view {
-        // Default setup has 3 whitelisted vaults → <= 5 creators → min budget
-        assertEq(voting.getTotalGaugeProbabilityBps(), 1);
-        assertEq(voting.getTotalGaugeProbabilityPPM(), 100);
+    function testTotalGaugeProbabilityBudget_IsFixed() public view {
+        assertEq(voting.getTotalGaugeProbabilityBps(), 694);
+        assertEq(voting.getTotalGaugeProbabilityPPM(), 69_420);
     }
 
-    function testTotalGaugeProbabilityBps_AtFiveCreatorsIs1() public {
-        // Add 2 more vaults to reach 5 whitelisted
+    function testTotalGaugeProbabilityBudget_DoesNotDependOnVaultCount() public {
         voting.setVaultWhitelist(makeAddr("vault4"), true);
         voting.setVaultWhitelist(makeAddr("vault5"), true);
-
         assertEq(voting.whitelistedVaultCount(), 5);
-        assertEq(voting.getTotalGaugeProbabilityBps(), 1);
-    }
-
-    function testTotalGaugeProbabilityBps_AtHundredCreatorsIs300() public {
-        // Expand whitelist to 100 vaults total
-        uint256 current = voting.whitelistedVaultCount();
-        for (uint256 i = current; i < 100; i++) {
-            voting.setVaultWhitelist(makeAddr(string(abi.encodePacked("v", i))), true);
-        }
-
-        assertEq(voting.whitelistedVaultCount(), 100);
-        assertEq(voting.getTotalGaugeProbabilityBps(), 300);
-        assertEq(voting.getTotalGaugeProbabilityPPM(), 30_000);
-    }
-
-    function testTotalGaugeProbabilityBps_InterpolatesBetween5And100() public {
-        // Target 52 whitelisted vaults
-        uint256 target = 52;
-        uint256 current = voting.whitelistedVaultCount();
-        for (uint256 i = current; i < target; i++) {
-            voting.setVaultWhitelist(makeAddr(string(abi.encodePacked("vx", i))), true);
-        }
-        assertEq(voting.whitelistedVaultCount(), target);
-
-        // Expected: 1 + (52-5) * 299 / 95 = 148 (integer math)
-        uint256 minCreators = 5;
-        uint256 maxCreators = 100;
-        uint256 minBudget = 1;
-        uint256 maxBudget = 300;
-        uint256 rangeCreators = maxCreators - minCreators; // 95
-        uint256 rangeBudget = maxBudget - minBudget; // 299
-        uint256 expected = minBudget + ((target - minCreators) * rangeBudget) / rangeCreators;
-
-        assertEq(voting.getTotalGaugeProbabilityBps(), expected);
+        assertEq(voting.getTotalGaugeProbabilityBps(), 694);
+        assertEq(voting.getTotalGaugeProbabilityPPM(), 69_420);
     }
 
     function testVaultGaugeProbabilityBoost_NoVotesEqualSplit() public {
@@ -568,10 +533,10 @@ contract VaultGaugeVotingTest is Test {
         voting.setVaultWhitelist(makeAddr("vault5"), true);
         assertEq(voting.whitelistedVaultCount(), 5);
 
-        // No votes cast → equal split of 100 PPM across 5 vaults = 20 PPM
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 20);
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault2), 20);
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault3), 20);
+        // No votes cast -> equal split of 69,420 PPM across 5 vaults = 13,884 PPM
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 13_884);
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault2), 13_884);
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault3), 13_884);
     }
 
     function testVaultGaugeProbabilityBoost_WithVotesProportional() public {
@@ -585,27 +550,18 @@ contract VaultGaugeVotingTest is Test {
 
         _vote(alice, vault1, 100);
 
-        // Budget is 100 PPM at 5 creators. All votes go to vault1.
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 100);
+        // All votes go to vault1, but capped by MAX_PER_VAULT_PPM = 35,000.
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 35_000);
         assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault2), 0);
         assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault3), 0);
     }
 
-    function testGaugeProbabilityTvlMultiplierScalesAndClamps() public {
-        // With 3 creators → base budget is min 1 bps
-        assertEq(voting.getTotalGaugeProbabilityBps(), 1);
+    function testVaultGaugeProbabilityBoost_EqualSplitStillCapped() public {
+        voting.setVaultWhitelist(vault2, false);
+        voting.setVaultWhitelist(vault3, false);
 
-        // 2x multiplier → 2 bps (still within max 300)
-        voting.setGaugeProbabilityTvlMultiplierBps(20_000);
-        assertEq(voting.getTotalGaugeProbabilityBps(), 2);
-
-        // Move to 100 creators (base 300 bps); 2x would exceed max but should clamp
-        uint256 current = voting.whitelistedVaultCount();
-        for (uint256 i = current; i < 100; i++) {
-            voting.setVaultWhitelist(makeAddr(string(abi.encodePacked("vv", i))), true);
-        }
-        assertEq(voting.whitelistedVaultCount(), 100);
-        assertEq(voting.getTotalGaugeProbabilityBps(), 300);
+        assertEq(voting.whitelistedVaultCount(), 1);
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 35_000);
     }
 
     // ================================

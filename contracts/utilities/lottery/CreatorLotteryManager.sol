@@ -379,7 +379,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             rewardPercentage: 6900, // 69% of jackpot
             isActive: true,
             baseWinChance: 40, // 0.004%
-            maxWinChance: 40000, // 4%
+            maxWinChance: 150_000, // 15%
             usdMultiplierBps: 10500 // 1.05x
         });
 
@@ -467,13 +467,16 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             return 0;
         }
 
+        // Convert buyer's held share balance to USD (1e6) for coverage math.
+        (uint256 buyerCurrentShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, tokenIn, buyerCurrentShareBalance);
+
         // Get vault for this creator coin (for ve(3,3) vault weighting)
         address vault = registry.getVaultForToken(creatorCoin);
 
         // Calculate win probability with ve(3,3) boosts
         uint256 baseWinChance = calculateWinChance(swapValueUSD);
         uint256 boostedWinChance =
-            _applyBoost(buyer, creatorCoin, tokenIn, buyerCurrentShareBalance, vault, swapValueUSD, baseWinChance);
+            _applyBoost(buyer, creatorCoin, tokenIn, buyerCurrentShareBalanceUSD, vault, swapValueUSD, baseWinChance);
 
         // Request VRF
         if (useLocalVRF && address(localVRFConsumer) != address(0)) {
@@ -675,11 +678,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     /**
      * @notice Apply ve(3,3) boosts to base win probability
-     * @dev Coverage model:
-     *      coveredUsd = min(swapUsd, creatorShareBalanceUsd, veLockedUsd)
-     *      coverageBps = coveredUsd / swapUsd
-     *      - personal multiplier boost and lock-duration additive are scaled by coverageBps
-     *      - vote-directed vault gauge boost stays independent (still swap-size scaled)
+     * @dev Personal ve4626 boosts stay coverage-scaled (full 2.5x only up to covered value).
+     *      Vault gauge boost is flat additive and applies full voted PPM to every trade.
      */
     function _applyBoost(
         address user,
@@ -721,13 +721,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             } catch {}
         }
 
-        // STEP 2: Add vault gauge boost (vote-directed probability budget)
-        // The gauge returns a bounded PPM boost for this vault. We scale it by swap size so
-        // tiny swaps don't fully capture the weekly budget (anti-spam).
+        // STEP 2: Add vault gauge boost (flat additive vote-directed budget).
         if (address(vaultGaugeVoting) != address(0) && vault != address(0)) {
             try vaultGaugeVoting.getVaultGaugeProbabilityBoostPPM(vault) returns (uint256 gaugeBoostPPM) {
                 if (gaugeBoostPPM > 0) {
-                    boostedWinChance += _scaleGaugeBoostBySwapSize(gaugeBoostPPM, swapAmountUSD);
+                    boostedWinChance += gaugeBoostPPM;
                 }
             } catch {}
         }
@@ -736,19 +734,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (boostedWinChance > lotteryConfig.maxWinChance) {
             boostedWinChance = lotteryConfig.maxWinChance;
         }
-    }
-
-    function _scaleGaugeBoostBySwapSize(uint256 gaugeBoostPPM, uint256 swapAmountUSD) internal view returns (uint256) {
-        // Mirror the same linear scaling region used by calculateWinChance()
-        uint256 minSwap = lotteryConfig.minSwapAmount;
-        if (swapAmountUSD <= minSwap) return 0;
-
-        uint256 scaledAmount = swapAmountUSD - minSwap;
-        uint256 maxScale = 9_999_000_000; // $9,999 above minSwap ($1), 6 decimals
-        if (scaledAmount >= maxScale) return gaugeBoostPPM;
-
-        // Linear ramp from 0 → full boost up to a $10,000 swap size (given default minSwap = $1).
-        return (gaugeBoostPPM * scaledAmount) / maxScale;
     }
 
     /**
@@ -852,13 +837,16 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (swapValueUSD < lotteryConfig.minSwapAmount) return;
         if (!lotteryConfig.isActive) return;
 
+        // Convert buyer's held share balance to USD (1e6) for coverage math.
+        (uint256 buyerCurrentShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, tokenIn, buyerCurrentShareBalance);
+
         // Get vault for this creator coin (for ve(3,3) vault weighting)
         address vault = registry.getVaultForToken(creatorCoin);
 
         // Calculate win probability with ve(3,3) boosts
         uint256 baseWinChance = calculateWinChance(swapValueUSD);
         uint256 boostedWinChance = _applyBoost(
-            buyer, creatorCoin, tokenIn, buyerCurrentShareBalance, vault, swapValueUSD, baseWinChance
+            buyer, creatorCoin, tokenIn, buyerCurrentShareBalanceUSD, vault, swapValueUSD, baseWinChance
         );
 
         // Request VRF with sourceChainEid so we can send callback on win
@@ -1424,7 +1412,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     ) external onlyOwner {
         if (_minSwap < MIN_SWAP_USD || _minSwap > MAX_SWAP_USD) revert InvalidAmount();
         if (_rewardPercentage > BASIS_POINTS) revert InvalidAmount();
-        if (_maxWinChance > 100_000) revert InvalidAmount();
+        if (_maxWinChance > 200_000) revert InvalidAmount();
         if (_baseWinChance > _maxWinChance) revert InvalidAmount();
         if (_usdMultiplierBps < 10000 || _usdMultiplierBps > 15000) revert InvalidAmount();
 

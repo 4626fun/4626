@@ -70,15 +70,17 @@ export function applyBuilderDataSuffixToCalls(
 
       if (isCanonical) {
         if (AA_DEBUG) logger.info('[Builder] Preserving canonical Universal Router calldata (no suffix)')
-        return {
-          ...c,
-          data: cleanedData,
-        }
+      } else if (AA_DEBUG) {
+        logger.warn('[Builder] Universal Router calldata is non-canonical; preserving without suffix mutation', {
+          target: c.to,
+          cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
+        })
       }
 
+      // Never append builder suffix to Universal Router calls.
       return {
         ...c,
-        data: appendBuilderSuffixToHex(cleanedData ?? c.data, { chainId, dataSuffix }),
+        data: cleanedData ?? c.data,
       }
     }
 

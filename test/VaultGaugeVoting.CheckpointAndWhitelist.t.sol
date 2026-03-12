@@ -141,7 +141,7 @@ contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
         voting.vote(vaults, weights);
     }
 
-    function test_setVaultWhitelist_revertsForUnregisteredVault_whenRegistryWhitelistEnabled() public {
+    function test_setVaultWhitelist_allowsUnregisteredButVaultRemainsIneligible_whenRegistryWhitelistEnabled() public {
         MockRegistry registry = new MockRegistry();
         voting.setRegistry(address(registry));
         voting.setUseRegistryWhitelist(true);
@@ -149,8 +149,20 @@ contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
         address unregisteredVault = makeAddr("unregisteredVault");
         registry.setRegistered(unregisteredVault, false);
 
-        vm.expectRevert("Vault not registered");
         voting.setVaultWhitelist(unregisteredVault, true);
+
+        assertEq(voting.canReceiveVotes(unregisteredVault), false);
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(unregisteredVault), 0);
+
+        _warpToEpoch(0, 1);
+        address[] memory vaults = new address[](1);
+        uint256[] memory weights = new uint256[](1);
+        vaults[0] = unregisteredVault;
+        weights[0] = 100;
+
+        vm.prank(voter);
+        vm.expectRevert(abi.encodeWithSelector(VaultGaugeVoting.VaultNotWhitelisted.selector, unregisteredVault));
+        voting.vote(vaults, weights);
     }
 }
 
