@@ -31,6 +31,10 @@ const basenameByAddressCache = new Map<string, CacheEntry<string | null>>()
 const basenameAddressByInputCache = new Map<string, CacheEntry<string | null>>()
 const basenameProfileByAddressCache = new Map<string, CacheEntry<BasenameInfo>>()
 const basenameProfileByNameCache = new Map<string, CacheEntry<BasenameInfo>>()
+const pendingBasenameByAddress = new Map<string, Promise<string | null>>()
+const pendingBasenameAddressByInput = new Map<string, Promise<string | null>>()
+const pendingBasenameProfileByAddress = new Map<string, Promise<BasenameInfo>>()
+const pendingBasenameProfileByName = new Map<string, Promise<BasenameInfo>>()
 
 function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | undefined {
   const entry = cache.get(key)
@@ -71,6 +75,16 @@ function errorMessage(error: unknown): string {
   return String(error ?? '').toLowerCase()
 }
 
+function isBasenameDebugLoggingEnabled(): boolean {
+  if (import.meta.env.VITE_DEBUG_BASENAME_LOOKUPS === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem('cv:debug:basename') === 'true'
+  } catch {
+    return false
+  }
+}
+
 export function isExpectedBasenameLookupError(error: unknown): boolean {
   const msg = errorMessage(error)
   if (!msg) return false
@@ -90,6 +104,7 @@ export function isExpectedBasenameLookupError(error: unknown): boolean {
 
 function logBasenameLookupError(message: string, error: unknown): void {
   if (isExpectedBasenameLookupError(error)) {
+    if (!isBasenameDebugLoggingEnabled()) return
     logger.debug(`${message} (expected miss): ${errorMessage(error)}`)
     return
   }
@@ -122,29 +137,37 @@ export async function getBasename(
   const cached = readCache(basenameByAddressCache, key)
   if (cached !== undefined) return cached
 
-  try {
-    // Basenames are resolved via ENSIP-19 reverse resolution on Ethereum mainnet,
-    // using Base chain coinType + CCIP gateways.
-    //
-    // This works in browsers without requiring Base L2 ENS universal resolver config.
-    const client = createMainnetReadClient()
+  const pending = pendingBasenameByAddress.get(key)
+  if (pending) return pending
 
-    const name = await client.getEnsName({
-      address: address as `0x${string}`,
-      coinType: toCoinType(chainId === baseSepolia.id ? baseSepolia.id : base.id),
-      gatewayUrls: [...ENS_GATEWAY_URLS],
-    })
+  const request = (async () => {
+    try {
+      // Basenames are resolved via ENSIP-19 reverse resolution on Ethereum mainnet,
+      // using Base chain coinType + CCIP gateways.
+      //
+      // This works in browsers without requiring Base L2 ENS universal resolver config.
+      const client = createMainnetReadClient()
 
-    if (!name) return writeCache(basenameByAddressCache, key, null)
-    // Guardrail: ENSIP-19 can resolve non-Basenames depending on user config.
-    // For 4626 identity UI, only treat *.base.eth as a Basename.
-    if (!name.toLowerCase().endsWith('.base.eth')) return writeCache(basenameByAddressCache, key, null)
-    return writeCache(basenameByAddressCache, key, name)
-  } catch (error) {
-    logBasenameLookupError('Failed to fetch Basename', error)
-    writeCache(basenameByAddressCache, key, null)
-    return null
-  }
+      const name = await client.getEnsName({
+        address: address as `0x${string}`,
+        coinType: toCoinType(chainId === baseSepolia.id ? baseSepolia.id : base.id),
+        gatewayUrls: [...ENS_GATEWAY_URLS],
+      })
+
+      if (!name) return writeCache(basenameByAddressCache, key, null)
+      // Guardrail: ENSIP-19 can resolve non-Basenames depending on user config.
+      // For 4626 identity UI, only treat *.base.eth as a Basename.
+      if (!name.toLowerCase().endsWith('.base.eth')) return writeCache(basenameByAddressCache, key, null)
+      return writeCache(basenameByAddressCache, key, name)
+    } catch (error) {
+      logBasenameLookupError('Failed to fetch Basename', error)
+      writeCache(basenameByAddressCache, key, null)
+      return null
+    }
+  })()
+  pendingBasenameByAddress.set(key, request)
+  request.finally(() => pendingBasenameByAddress.delete(key))
+  return request
 }
 
 function normalizeBasenameInput(input: string): string | null {
@@ -174,26 +197,34 @@ export async function resolveBasenameAddress(
   const cached = readCache(basenameAddressByInputCache, inputKey)
   if (cached !== undefined) return cached
 
-  try {
-    const raw = input.trim()
-    if (!raw) return null
-    if (isAddress(raw)) return getAddress(raw)
+  const pending = pendingBasenameAddressByInput.get(inputKey)
+  if (pending) return pending
 
-    const basename = normalizeBasenameInput(raw)
-    if (!basename) return writeCache(basenameAddressByInputCache, inputKey, null)
+  const request = (async () => {
+    try {
+      const raw = input.trim()
+      if (!raw) return null
+      if (isAddress(raw)) return getAddress(raw)
 
-    const client = createMainnetReadClient()
-    const resolved = await client.getEnsAddress({
-      name: normalize(basename),
-      coinType: toCoinType(chainId === baseSepolia.id ? baseSepolia.id : base.id),
-      gatewayUrls: [...ENS_GATEWAY_URLS],
-    })
-    return writeCache(basenameAddressByInputCache, inputKey, resolved ? getAddress(resolved) : null)
-  } catch (error) {
-    logBasenameLookupError('Failed to resolve Basename address', error)
-    writeCache(basenameAddressByInputCache, inputKey, null)
-    return null
-  }
+      const basename = normalizeBasenameInput(raw)
+      if (!basename) return writeCache(basenameAddressByInputCache, inputKey, null)
+
+      const client = createMainnetReadClient()
+      const resolved = await client.getEnsAddress({
+        name: normalize(basename),
+        coinType: toCoinType(chainId === baseSepolia.id ? baseSepolia.id : base.id),
+        gatewayUrls: [...ENS_GATEWAY_URLS],
+      })
+      return writeCache(basenameAddressByInputCache, inputKey, resolved ? getAddress(resolved) : null)
+    } catch (error) {
+      logBasenameLookupError('Failed to resolve Basename address', error)
+      writeCache(basenameAddressByInputCache, inputKey, null)
+      return null
+    }
+  })()
+  pendingBasenameAddressByInput.set(inputKey, request)
+  request.finally(() => pendingBasenameAddressByInput.delete(inputKey))
+  return request
 }
 
 /**
@@ -207,45 +238,53 @@ export async function getBasenameProfile(
   const cached = readCache(basenameProfileByAddressCache, key)
   if (cached !== undefined) return cloneBasenameInfo(cached)
 
-  try {
-    const name = await getBasename(address, chainId)
-    
-    if (!name) {
+  const pending = pendingBasenameProfileByAddress.get(key)
+  if (pending) return pending.then(cloneBasenameInfo)
+
+  const request = (async () => {
+    try {
+      const name = await getBasename(address, chainId)
+
+      if (!name) {
+        return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, { name: null }))
+      }
+
+      const client = createMainnetReadClient()
+      const normalizedName = normalize(name)
+
+      // Fetch ENS text records in parallel
+      const [avatar, displayName, description, twitter, github, discord, email, url] =
+        await Promise.all([
+          client.getEnsAvatar({ name: normalizedName, gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'name', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'description', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'com.twitter', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'com.github', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'com.discord', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'email', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'url', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+        ])
+
+      const profile: BasenameInfo = {
+        name,
+        avatar,
+        displayName,
+        description,
+        twitter,
+        github,
+        discord,
+        email,
+        url,
+      }
+      return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, profile))
+    } catch (error) {
+      logBasenameLookupError('Failed to fetch Basename profile', error)
       return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, { name: null }))
     }
-
-    const client = createMainnetReadClient()
-    const normalizedName = normalize(name)
-
-    // Fetch ENS text records in parallel
-    const [avatar, displayName, description, twitter, github, discord, email, url] = 
-      await Promise.all([
-        client.getEnsAvatar({ name: normalizedName, gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'name', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'description', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'com.twitter', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'com.github', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'com.discord', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'email', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'url', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-      ])
-
-    const profile: BasenameInfo = {
-      name,
-      avatar,
-      displayName,
-      description,
-      twitter,
-      github,
-      discord,
-      email,
-      url,
-    }
-    return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, profile))
-  } catch (error) {
-    logBasenameLookupError('Failed to fetch Basename profile', error)
-    return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, { name: null }))
-  }
+  })()
+  pendingBasenameProfileByAddress.set(key, request)
+  request.finally(() => pendingBasenameProfileByAddress.delete(key))
+  return request
 }
 
 /**
@@ -261,38 +300,46 @@ export async function getBasenameProfileByName(
   const cached = readCache(basenameProfileByNameCache, key)
   if (cached !== undefined) return cloneBasenameInfo(cached)
 
-  try {
-    const client = createMainnetReadClient()
-    const normalizedName = normalize(basename)
+  const pending = pendingBasenameProfileByName.get(key)
+  if (pending) return pending.then(cloneBasenameInfo)
 
-    const [avatar, displayName, description, twitter, github, discord, email, url] =
-      await Promise.all([
-        client.getEnsAvatar({ name: normalizedName, gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'name', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'description', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'com.twitter', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'com.github', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'com.discord', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'email', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-        client.getEnsText({ name: normalizedName, key: 'url', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
-      ])
+  const request = (async () => {
+    try {
+      const client = createMainnetReadClient()
+      const normalizedName = normalize(basename)
 
-    const profile: BasenameInfo = {
-      name: basename,
-      avatar,
-      displayName,
-      description,
-      twitter,
-      github,
-      discord,
-      email,
-      url,
+      const [avatar, displayName, description, twitter, github, discord, email, url] =
+        await Promise.all([
+          client.getEnsAvatar({ name: normalizedName, gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'name', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'description', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'com.twitter', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'com.github', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'com.discord', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'email', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          client.getEnsText({ name: normalizedName, key: 'url', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+        ])
+
+      const profile: BasenameInfo = {
+        name: basename,
+        avatar,
+        displayName,
+        description,
+        twitter,
+        github,
+        discord,
+        email,
+        url,
+      }
+      return cloneBasenameInfo(writeCache(basenameProfileByNameCache, key, profile))
+    } catch (error) {
+      logBasenameLookupError('Failed to fetch Basename profile by name', error)
+      return cloneBasenameInfo(writeCache(basenameProfileByNameCache, key, { name: null }))
     }
-    return cloneBasenameInfo(writeCache(basenameProfileByNameCache, key, profile))
-  } catch (error) {
-    logBasenameLookupError('Failed to fetch Basename profile by name', error)
-    return cloneBasenameInfo(writeCache(basenameProfileByNameCache, key, { name: null }))
-  }
+  })()
+  pendingBasenameProfileByName.set(key, request)
+  request.finally(() => pendingBasenameProfileByName.delete(key))
+  return request
 }
 
 /**

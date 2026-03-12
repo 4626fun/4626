@@ -30,6 +30,7 @@ import {
   searchChatCommands,
   getChatCommandById,
 } from './commandCenter'
+import { resolveCommandCenterVisibility, shouldAttemptInactiveDmRecovery } from './chatWindowState'
 
 type Props = {
   conversationId: string
@@ -49,19 +50,6 @@ type Props = {
 
 function isEvmAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
-}
-
-export function shouldAttemptInactiveDmRecovery(params: {
-  reason: string
-  conversationType: 'dm' | 'group'
-  dmPeerAddress: string | null
-  dmPeerInboxId: string | null
-}): boolean {
-  if (params.conversationType !== 'dm') return false
-  const hasPeerAddress = Boolean(params.dmPeerAddress && isEvmAddress(params.dmPeerAddress))
-  const hasPeerInboxId = Boolean(params.dmPeerInboxId?.trim())
-  if (!hasPeerAddress && !hasPeerInboxId) return false
-  return /group is inactive/i.test(params.reason)
 }
 
 function formatTimestamp(date: Date): string {
@@ -130,16 +118,6 @@ function baseAllowedGuard(): CommandGuardResult {
   }
 }
 
-export function resolveCommandCenterVisibility(params: {
-  isMobile: boolean
-  showCommandCenter: boolean
-  desktopCommandsOpen: boolean
-}): boolean {
-  if (!params.showCommandCenter) return false
-  if (params.isMobile) return true
-  return params.desktopCommandsOpen
-}
-
 /** Inline sender label that resolves inboxId → address → display name */
 function SenderLabel({ inboxId }: { inboxId: string }) {
   const { resolveInboxAddress } = useXmtp()
@@ -205,6 +183,7 @@ export function ChatWindow({
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const resolvingPeerInboxIdRef = useRef<string | null>(null)
   const localMessageSeqRef = useRef(0)
   const trackedShownButtonsRef = useRef<Set<string>>(new Set())
   const pendingCompletionRef = useRef<{ commandId: string; source: string } | null>(null)
@@ -214,17 +193,26 @@ export function ChatWindow({
     if (peerAddress) return
     if (!peerInboxId) return
     let cancelled = false
+    if (resolvedPeer?.inboxId === peerInboxId) return
+    if (resolvingPeerInboxIdRef.current === peerInboxId) return
+    resolvingPeerInboxIdRef.current = peerInboxId
     resolveInboxAddress(peerInboxId)
       .then((addr) => {
         if (cancelled) return
+        const normalizedAddr = typeof addr === 'string' ? addr.toLowerCase() : null
         setResolvedPeer((prev) => {
-          if (prev?.inboxId === peerInboxId && prev.address === addr) return prev
-          return { inboxId: peerInboxId, address: addr }
+          if (prev?.inboxId === peerInboxId && prev.address === normalizedAddr) return prev
+          return { inboxId: peerInboxId, address: normalizedAddr }
         })
       })
       .catch(() => undefined)
+      .finally(() => {
+        if (resolvingPeerInboxIdRef.current === peerInboxId) {
+          resolvingPeerInboxIdRef.current = null
+        }
+      })
     return () => { cancelled = true }
-  }, [conversationType, peerInboxId, peerAddress, resolveInboxAddress])
+  }, [conversationType, peerInboxId, peerAddress, resolveInboxAddress, resolvedPeer?.inboxId])
 
   const dmPeerAddress =
     conversationType === 'dm'

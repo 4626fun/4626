@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveCommandCenterVisibility, shouldAttemptInactiveDmRecovery } from './ChatWindow'
+import { resolveCommandCenterVisibility, shouldAttemptInactiveDmRecovery } from './chatWindowState'
 
 describe('shouldAttemptInactiveDmRecovery', () => {
   it('returns true for DM inactive-group errors with a peer address', () => {

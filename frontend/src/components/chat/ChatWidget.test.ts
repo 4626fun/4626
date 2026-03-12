@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { rekeyOpenWindows } from './ChatWidget'
+import { rekeyOpenWindows } from './chatWidgetState'
 
 describe('rekeyOpenWindows', () => {
   const sample = [

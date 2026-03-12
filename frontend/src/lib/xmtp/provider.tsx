@@ -28,6 +28,7 @@ import {
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
   Client,
+  LogLevel,
   Opfs,
   toSafeSigner,
   type Signer,
@@ -563,6 +564,23 @@ function isOpfsAccessHandleError(message: string): boolean {
   return m.includes('createsyncaccesshandle') || m.includes('nomodificationallowederror')
 }
 
+function isXmtpVerboseLoggingEnabled(): boolean {
+  if (import.meta.env.VITE_XMTP_DEBUG === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem('cv:debug:xmtp') === 'true'
+  } catch {
+    return false
+  }
+}
+
+const XMTP_VERBOSE_LOGS = isXmtpVerboseLoggingEnabled()
+
+function xmtpDebug(...args: unknown[]): void {
+  if (!XMTP_VERBOSE_LOGS) return
+  console.log(...args)
+}
+
 /**
  * Auto-revoke the single oldest XMTP installation to free exactly 1 slot.
  *
@@ -574,7 +592,7 @@ async function autoRevokeOldestInstallation(
   signer: Signer,
   inboxId: string,
 ): Promise<void> {
-  console.log('[xmtp] Fetching installations for inbox', inboxId)
+  xmtpDebug('[xmtp] Fetching installations for inbox', inboxId)
   const states = await (Client as any).fetchInboxStates(
     [inboxId],
     XMTP_ENV as any,
@@ -607,7 +625,7 @@ async function autoRevokeOldestInstallation(
   })
   const toRevoke = [sorted[0].bytes]
 
-  console.log(
+  xmtpDebug(
     `[xmtp] Revoking 1 oldest of ${installs.length} installation(s) (256-update budget)…`,
   )
   await (Client as any).revokeInstallations(
@@ -616,7 +634,7 @@ async function autoRevokeOldestInstallation(
     toRevoke,
     XMTP_ENV as any,
   )
-  console.log('[xmtp] Auto-revocation complete — freed 1 slot')
+  xmtpDebug('[xmtp] Auto-revocation complete — freed 1 slot')
 }
 
 // ---------------------------------------------------------------------------
@@ -636,11 +654,11 @@ async function requestPersistentStorage(): Promise<void> {
   try {
     const alreadyPersisted = await navigator.storage.persisted()
     if (alreadyPersisted) {
-      console.log('[xmtp] Storage is already persistent')
+      xmtpDebug('[xmtp] Storage is already persistent')
       return
     }
     const granted = await navigator.storage.persist()
-    console.log(`[xmtp] Persistent storage ${granted ? 'granted' : 'denied'}`)
+    xmtpDebug(`[xmtp] Persistent storage ${granted ? 'granted' : 'denied'}`)
   } catch (err) {
     console.warn('[xmtp] navigator.storage.persist() failed (non-fatal):', err)
   }
@@ -661,7 +679,7 @@ async function hasOpfsDatabase(): Promise<boolean> {
       const found = files.some(
         (f) => f.startsWith(prefix) && f.endsWith('.db3'),
       )
-      console.log(
+      xmtpDebug(
         `[xmtp] OPFS files: ${files.length} total, DB present: ${found}`,
         files.filter((f) => f.endsWith('.db3')),
       )
@@ -1059,7 +1077,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setInstallationLimitInboxId(null)
       const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
       xmtpIdentityAddress = resolved.identityAddress
-      console.log('[xmtp] Using identity for connect:', xmtpIdentityAddress)
+      xmtpDebug('[xmtp] Using identity for connect:', xmtpIdentityAddress)
 
       const identifier = {
         identifier: xmtpIdentityAddress as `0x${string}`,
@@ -1068,6 +1086,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const baseOptions = {
         env: XMTP_ENV as any,
         appVersion: XMTP_APP_VERSION,
+        loggingLevel: XMTP_VERBOSE_LOGS ? LogLevel.Info : LogLevel.Warn,
+        structuredLogging: XMTP_VERBOSE_LOGS,
+        performanceLogging: false,
       }
 
       type SignerSelection = {
@@ -1144,7 +1165,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
                 primaryType: 'CoinbaseSmartWalletMessage' as const,
                 message: { hash: msgHash },
               })
-              console.log('[xmtp] CSW EIP-712 replaySafeHash signed; wrapping with ownerIndex', idx)
+              xmtpDebug('[xmtp] CSW EIP-712 replaySafeHash signed; wrapping with ownerIndex', idx)
               return wrapCswSignature(idx, hexToBytes(typedSig))
             } catch (e) {
               console.warn('[xmtp] signTypedData failed; falling back to personal_sign wrapping', e)
@@ -1262,7 +1283,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
                 identifier: agentAddr as `0x${string}`,
                 identifierKind: IdentifierKind.Ethereum,
               })
-              console.log('[xmtp] Created DM with agent (no message sent)', agentAddr)
+              xmtpDebug('[xmtp] Created DM with agent (no message sent)', agentAddr)
               // Add to conversation list so it appears immediately
               const summary = await buildConvoSummary(dm as any)
               if (mountedRef.current) {
@@ -1310,19 +1331,19 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
         // Attempt 1: try with the stored encryption key
         try {
-          console.log('[xmtp] OPFS database found — attempting Client.build restore…')
+          xmtpDebug('[xmtp] OPFS database found — attempting Client.build restore…')
           buildClient = await Client.build(identifier, {
             ...baseOptions,
             dbEncryptionKey: encKeyBytes,
           })
           if (buildClient?.inboxId) {
             buildSucceeded = true
-            console.log(
+            xmtpDebug(
               '[xmtp] Client.build succeeded — reusing installation',
               buildClient.installationId,
             )
           } else {
-            console.log('[xmtp] Client.build returned no inboxId')
+            xmtpDebug('[xmtp] Client.build returned no inboxId')
             try { buildClient?.close() } catch {}
             buildClient = null
           }
@@ -1344,13 +1365,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         // different one) if the key in localStorage drifted.
         if (!buildSucceeded) {
           try {
-            console.log('[xmtp] Retrying Client.build without dbEncryptionKey…')
+            xmtpDebug('[xmtp] Retrying Client.build without dbEncryptionKey…')
             buildClient = await Client.build(identifier, { ...baseOptions })
             if (buildClient?.inboxId) {
               buildSucceeded = true
               restoreFailureMessage = null
               restoreFailureKind = null
-              console.log(
+              xmtpDebug(
                 '[xmtp] Client.build succeeded (no key) — reusing installation',
                 buildClient.installationId,
               )
@@ -1403,7 +1424,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           return
         }
       } else {
-        console.log('[xmtp] No OPFS database found — first use, will create new installation')
+        xmtpDebug('[xmtp] No OPFS database found — first use, will create new installation')
       }
 
       // ── Phase 1b: Client.build succeeded — set up conversations ──
@@ -1425,7 +1446,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             // Critical anti-churn path: register the restored installation in-place.
             // Do NOT fall through to Client.create here — that would burn a new
             // installation each retry and quickly hit 10/10.
-            console.log(
+            xmtpDebug(
               '[xmtp] Uninitialized identity on restored installation — attempting in-place register (no new installation)…',
             )
             try {
@@ -1478,7 +1499,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
                     for (const f of files) {
                       if (f.endsWith('.db3')) {
                         const ok = await opfs.deleteFile(f)
-                        console.log(`[xmtp] Deleted stale OPFS file: ${f} (${ok})`)
+                        xmtpDebug(`[xmtp] Deleted stale OPFS file: ${f} (${ok})`)
                       }
                     }
                   } finally { opfs.close() }
@@ -1499,7 +1520,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           } else {
             // Transient error (network timeout, server error, etc.).
             // Retry once — do NOT fall through to Client.create.
-            console.log('[xmtp] Retrying setupConversations once…')
+            xmtpDebug('[xmtp] Retrying setupConversations once…')
             try {
               await setupConversations(buildClient)
               return // retry succeeded
@@ -1520,7 +1541,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       if (signer.type === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
       else writeStoredSignerType(xmtpIdentityAddress, 'EOA')
 
-      console.log('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
+      xmtpDebug('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
 
       // Helper: attempt Client.create, auto-revoking stale installations on 10/10.
       const tryCreate = async (activeSigner: Signer, dbKey: Uint8Array): Promise<Client> => {
@@ -1534,7 +1555,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           const limitInboxId = extractInstallationLimitInboxId(errMsg)
           if (!limitInboxId) throw createErr
 
-          console.log('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
+          xmtpDebug('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
           setStatus('connecting')
           await autoRevokeOldestInstallation(activeSigner, limitInboxId)
           return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })

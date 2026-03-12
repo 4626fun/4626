@@ -2,10 +2,11 @@ import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import { useMemo, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useIdentity } from '@/hooks/useIdentity'
 import { useMiniAppContext } from '@/hooks/useMiniAppContext'
-import { getBasenameProfile } from '@/lib/basename-api'
+import { getAgentIdentity } from '@/components/chat/agentIdentity'
+import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 
 type ConnectButtonStateInput = {
@@ -150,18 +151,9 @@ export function ConnectButtonWeb3() {
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
 
-  const hasMultipleInjectedProviders =
-    typeof window !== 'undefined' &&
-    Array.isArray((window as any)?.ethereum?.providers) &&
-    ((window as any).ethereum.providers as any[]).length > 1
-  const lockedEthereumProviderGlobal =
-    typeof window !== 'undefined' &&
-    (() => {
-      const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
-      if (!descriptor) return false
-      return typeof descriptor.get === 'function' && typeof descriptor.set !== 'function'
-    })()
-  const shouldHideInjectedConnector = hasMultipleInjectedProviders || lockedEthereumProviderGlobal
+  const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
+  const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
+  const shouldHideInjectedConnector = providerCollision.shouldDisableInjectedConnector
 
   const filteredConnectors = useMemo(() => {
     if (!shouldHideInjectedConnector) return connectors
@@ -182,15 +174,12 @@ export function ConnectButtonWeb3() {
   })
 
   const identityAddress = buttonState === 'connected-wallet' ? address ?? null : buttonState === 'session-restored' ? sessionAddress : null
-  const basenameEnabled = Boolean(identityAddress) && !(mini.isMiniApp === true && mini.username)
-  const basenameQuery = useQuery({
-    queryKey: ['basename-profile', identityAddress ?? 'none'],
-    queryFn: async () => await getBasenameProfile(identityAddress as string),
-    enabled: basenameEnabled,
-    staleTime: 1000 * 60 * 10,
-  })
-  const basename = basenameEnabled ? basenameQuery.data?.name ?? null : null
-  const basenameAvatar = basenameEnabled ? basenameQuery.data?.avatar ?? null : null
+  const shouldResolveIdentity = Boolean(identityAddress) && !(mini.isMiniApp === true && mini.username)
+  const sharedIdentity = useIdentity(shouldResolveIdentity ? identityAddress : null)
+  const basename = shouldResolveIdentity ? sharedIdentity.basename : null
+  const basenameAvatar = shouldResolveIdentity ? sharedIdentity.basenameAvatar : null
+  const sharedAgentIdentity = getAgentIdentity(identityAddress)
+  const unifiedAvatar = sharedAgentIdentity?.avatar ?? sharedIdentity.avatar ?? basenameAvatar
 
   if (buttonState === 'hydrating') {
     return (
@@ -210,9 +199,10 @@ export function ConnectButtonWeb3() {
     const presentation = deriveWalletIdentityPresentation({
       address,
       basename,
-      basenameAvatar,
+      basenameAvatar: unifiedAvatar,
       miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
-      miniAvatarUrl: mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : null,
+      miniAvatarUrl:
+        mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : unifiedAvatar,
     })
 
     return (
@@ -306,9 +296,10 @@ export function ConnectButtonWeb3() {
     const presentation = deriveWalletIdentityPresentation({
       address: sessionAddress,
       basename,
-      basenameAvatar,
+      basenameAvatar: unifiedAvatar,
       miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
-      miniAvatarUrl: mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : null,
+      miniAvatarUrl:
+        mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : unifiedAvatar,
     })
 
     return (

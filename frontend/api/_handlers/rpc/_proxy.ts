@@ -42,6 +42,14 @@ const CHAIN_ENV_KEYS: Record<RpcChain, string[]> = {
   polygon: ['POLYGON_RPC_URL'],
 }
 
+const EXPECTED_CHAIN_ID_HEX: Record<RpcChain, string> = {
+  base: '0x2105',
+  mainnet: '0x1',
+  arbitrum: '0xa4b1',
+  optimism: '0xa',
+  polygon: '0x89',
+}
+
 const RETRYABLE_STATUS = new Set([429])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
@@ -98,6 +106,37 @@ function getRpcUrls(chain: RpcChain): string[] {
   return Array.from(new Set(urls))
 }
 
+function normalizeChainIdHex(raw: string): string | null {
+  const value = String(raw ?? '').trim()
+  if (!value) return null
+  try {
+    return `0x${BigInt(value).toString(16)}`
+  } catch {
+    return null
+  }
+}
+
+async function readRpcChainId(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_chainId',
+        params: [],
+      }),
+    })
+    if (!response.ok) return null
+    const json = (await response.json().catch(() => null)) as { result?: unknown } | null
+    if (!json || typeof json.result !== 'string') return null
+    return normalizeChainIdHex(json.result)
+  } catch {
+    return null
+  }
+}
+
 function isValidRpcBody(body: unknown): body is JsonRpcRequest | JsonRpcRequest[] {
   if (!body) return false
   if (Array.isArray(body)) return body.length > 0
@@ -123,10 +162,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payload = body
   const chain = resolveRpcChain(req)
   const rpcUrls = getRpcUrls(chain)
+  const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
+  const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
   let lastStatus = 502
   let lastError: string | null = null
 
   for (const rpc of rpcUrls) {
+    if (envRpcUrls.has(rpc) && expectedChainId) {
+      const actualChainId = await readRpcChainId(rpc)
+      if (actualChainId && actualChainId !== expectedChainId) {
+        lastStatus = 502
+        lastError = `RPC chain mismatch for ${rpc}: expected ${expectedChainId}, got ${actualChainId}`
+        continue
+      }
+    }
+
     for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_RPC; attempt++) {
       if (attempt > 0) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 250

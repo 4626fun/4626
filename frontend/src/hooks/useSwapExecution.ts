@@ -309,6 +309,7 @@ export function useSwapExecution(params: {
       embeddedWalletSource: params.privyDebug?.embeddedWalletSource ?? null,
     },
   })
+  const txDebugSnapshotRef = useRef<string>('')
   const quoteRunRef = useRef(0)
   const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
     const normalized = normalizeUniswapError(value)
@@ -374,49 +375,38 @@ export function useSwapExecution(params: {
       embeddedWalletAddress: params.privyDebug?.embeddedWalletAddress ?? null,
       embeddedWalletSource: params.privyDebug?.embeddedWalletSource ?? null,
     } as const
-
-    setTxDebug((prev) => {
-      const unchanged =
-        prev.enabled === true &&
-        prev.chainId === nextChainId &&
-        prev.selectedAddress === nextSelectedAddress &&
-        prev.executionAddress === nextExecutionAddress &&
-        prev.canonicalAddress === nextCanonicalAddress &&
-        prev.signerAddress === nextSignerAddress &&
-        prev.signerType === nextSignerType &&
-        prev.connectorId === nextConnectorId &&
-        prev.connectorName === nextConnectorName &&
-        prev.capabilities.paymasterService === nextCapabilities.paymasterService &&
-        prev.capabilities.atomicStatus === nextCapabilities.atomicStatus &&
-        prev.capabilities.supports5792 === nextCapabilities.supports5792 &&
-        prev.canonicalSigner.required === nextCanonicalSigner.required &&
-        prev.canonicalSigner.ready === nextCanonicalSigner.ready &&
-        prev.canonicalSigner.code === nextCanonicalSigner.code &&
-        prev.canonicalSigner.reason === nextCanonicalSigner.reason &&
-        prev.privy.clientStatus === nextPrivy.clientStatus &&
-        prev.privy.ready === nextPrivy.ready &&
-        prev.privy.authenticated === nextPrivy.authenticated &&
-        prev.privy.embeddedWalletAddress === nextPrivy.embeddedWalletAddress &&
-        prev.privy.embeddedWalletSource === nextPrivy.embeddedWalletSource
-
-      if (unchanged) return prev
-
-      return {
-        ...prev,
-        enabled: true,
-        chainId: nextChainId,
-        selectedAddress: nextSelectedAddress,
-        executionAddress: nextExecutionAddress,
-        canonicalAddress: nextCanonicalAddress,
-        signerAddress: nextSignerAddress,
-        signerType: nextSignerType,
-        connectorId: nextConnectorId,
-        connectorName: nextConnectorName,
-        capabilities: nextCapabilities,
-        canonicalSigner: nextCanonicalSigner,
-        privy: nextPrivy,
-      }
+    const nextSnapshot = JSON.stringify({
+      enabled: true,
+      chainId: nextChainId,
+      selectedAddress: nextSelectedAddress,
+      executionAddress: nextExecutionAddress,
+      canonicalAddress: nextCanonicalAddress,
+      signerAddress: nextSignerAddress,
+      signerType: nextSignerType,
+      connectorId: nextConnectorId,
+      connectorName: nextConnectorName,
+      capabilities: nextCapabilities,
+      canonicalSigner: nextCanonicalSigner,
+      privy: nextPrivy,
     })
+    if (txDebugSnapshotRef.current === nextSnapshot) return
+    txDebugSnapshotRef.current = nextSnapshot
+
+    setTxDebug((prev) => ({
+      ...prev,
+      enabled: true,
+      chainId: nextChainId,
+      selectedAddress: nextSelectedAddress,
+      executionAddress: nextExecutionAddress,
+      canonicalAddress: nextCanonicalAddress,
+      signerAddress: nextSignerAddress,
+      signerType: nextSignerType,
+      connectorId: nextConnectorId,
+      connectorName: nextConnectorName,
+      capabilities: nextCapabilities,
+      canonicalSigner: nextCanonicalSigner,
+      privy: nextPrivy,
+    }))
   }, [
     swapDebugEnabled,
     swapChainId,

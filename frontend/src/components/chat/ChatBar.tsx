@@ -5,7 +5,7 @@
  * When expanded: a panel listing all conversations.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
@@ -50,6 +50,7 @@ function ConversationItem({
 }) {
   const { resolveInboxAddress } = useXmtp()
   const [resolvedPeer, setResolvedPeer] = useState<{ inboxId: string; address: string | null } | null>(null)
+  const resolvingInboxIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (convo.type !== 'dm') return
@@ -57,17 +58,26 @@ function ConversationItem({
     if (!convo.peerInboxId) return
     let cancelled = false
     const inboxId = convo.peerInboxId
+    if (resolvedPeer?.inboxId === inboxId) return
+    if (resolvingInboxIdRef.current === inboxId) return
+    resolvingInboxIdRef.current = inboxId
     resolveInboxAddress(inboxId)
       .then((addr) => {
         if (cancelled) return
+        const normalizedAddr = typeof addr === 'string' ? addr.toLowerCase() : null
         setResolvedPeer((prev) => {
-          if (prev?.inboxId === inboxId && prev.address === addr) return prev
-          return { inboxId, address: addr }
+          if (prev?.inboxId === inboxId && prev.address === normalizedAddr) return prev
+          return { inboxId, address: normalizedAddr }
         })
       })
       .catch(() => undefined)
+      .finally(() => {
+        if (resolvingInboxIdRef.current === inboxId) {
+          resolvingInboxIdRef.current = null
+        }
+      })
     return () => { cancelled = true }
-  }, [convo.type, convo.peerAddress, convo.peerInboxId, resolveInboxAddress])
+  }, [convo.type, convo.peerAddress, convo.peerInboxId, resolveInboxAddress, resolvedPeer?.inboxId])
 
   const peerAddress =
     convo.peerAddress ??

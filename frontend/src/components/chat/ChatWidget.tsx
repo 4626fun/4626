@@ -28,60 +28,31 @@ import {
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
 import { getChatCommandById } from './commandCenter'
+import { rekeyOpenWindows, type OpenWindow } from './chatWidgetState'
 
 const MAX_OPEN_WINDOWS = 3
 const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
 const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
+const DM_PREVIEW_LOOKUP_DEBOUNCE_MS = 450
+
+function shouldResolveDmPreviewInput(input: string): boolean {
+  const trimmed = input.trim()
+  if (!trimmed) return false
+  if (/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return true
+
+  const basenameCandidate = getBasenameAutocompleteCandidate(trimmed)
+  if (!basenameCandidate) return false
+
+  const withoutAt = trimmed.startsWith('@') ? trimmed.slice(1).trim() : trimmed
+  if (!withoutAt) return false
+  if (withoutAt.toLowerCase().endsWith('.base.eth')) return true
+  return withoutAt.length >= 3
+}
 
 type PendingDeepLinkIntent = {
   actionId: string
   peerAddress: string
   peerName: string
-}
-
-type OpenWindow = {
-  id: string
-  name: string
-  type: 'dm' | 'group'
-  peerInboxId?: string
-  peerAddress?: string
-  imageUrl?: string
-  minimized: boolean
-  seedCommandId?: string | null
-}
-
-export function rekeyOpenWindows(
-  windows: OpenWindow[],
-  oldConversationId: string,
-  newConversationId: string,
-): OpenWindow[] {
-  const oldId = oldConversationId.trim()
-  const newId = newConversationId.trim()
-  if (!oldId || !newId || oldId === newId) return windows
-  if (!windows.some((windowItem) => windowItem.id === oldId)) return windows
-
-  const remapped = windows.map((windowItem) =>
-    windowItem.id === oldId
-      ? { ...windowItem, id: newId, minimized: false }
-      : windowItem,
-  )
-
-  const deduped: OpenWindow[] = []
-  for (const windowItem of remapped) {
-    const existingIndex = deduped.findIndex((candidate) => candidate.id === windowItem.id)
-    if (existingIndex === -1) {
-      deduped.push(windowItem)
-      continue
-    }
-    const existing = deduped[existingIndex]
-    deduped[existingIndex] = {
-      ...existing,
-      ...windowItem,
-      minimized: false,
-      seedCommandId: windowItem.seedCommandId ?? existing.seedCommandId ?? null,
-    }
-  }
-  return deduped
 }
 
 function ConnectToChatPrompt() {
@@ -300,7 +271,7 @@ function ChatWidgetInner() {
   useEffect(() => {
     if (!showNewDm) return
     const input = newDmAddress.trim()
-    if (!input) {
+    if (!shouldResolveDmPreviewInput(input)) {
       setNewDmPreview(null)
       setNewDmPreviewQuery('')
       setNewDmPreviewLoading(false)
@@ -320,14 +291,21 @@ function ChatWidgetInner() {
     setNewDmPreviewLoading(true)
     const timeoutId = window.setTimeout(() => {
       void (async () => {
-        const resolved = await resolveDmRecipient(input)
-        newDmPreviewCacheRef.current.set(cacheKey, resolved)
-        if (cancelled) return
-        setNewDmPreview(resolved)
-        setNewDmPreviewQuery(input)
-        setNewDmPreviewLoading(false)
+        try {
+          const resolved = await resolveDmRecipient(input)
+          newDmPreviewCacheRef.current.set(cacheKey, resolved)
+          if (cancelled) return
+          setNewDmPreview(resolved)
+        } catch {
+          if (cancelled) return
+          setNewDmPreview(null)
+        } finally {
+          if (cancelled) return
+          setNewDmPreviewQuery(input)
+          setNewDmPreviewLoading(false)
+        }
       })()
-    }, 220)
+    }, DM_PREVIEW_LOOKUP_DEBOUNCE_MS)
 
     return () => {
       cancelled = true
