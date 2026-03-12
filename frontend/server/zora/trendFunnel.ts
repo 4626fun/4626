@@ -95,6 +95,19 @@ function normalizeTargetToken(raw: string | undefined): `0x${string}` | null {
   return getAddress(value).toLowerCase() as `0x${string}`
 }
 
+function buildTrendFunnelIdempotencyKey(params: {
+  groupId: string
+  tickerHash: string
+  amountInWei: bigint
+  targetToken: `0x${string}`
+}): string {
+  const group = String(params.groupId ?? '').trim().toLowerCase() || 'unknown'
+  const tickerHash = String(params.tickerHash ?? '').trim().toLowerCase() || 'unknown'
+  const amount = params.amountInWei.toString()
+  const target = String(params.targetToken).toLowerCase()
+  return `trend-funnel:${group}:${tickerHash}:${amount}:${target}`
+}
+
 function withDefaultRouteability(reason = 'not_run'): TrendRouteabilityResult {
   return {
     passed: false,
@@ -323,7 +336,12 @@ export async function runTrendFunnel(params: {
           chain_id: BASE_CHAIN_ID,
         },
       },
-      idempotencyKey: `trend-funnel:${params.groupId}:${params.tickerHash}:${Date.now()}`,
+      idempotencyKey: buildTrendFunnelIdempotencyKey({
+        groupId: params.groupId,
+        tickerHash: params.tickerHash,
+        amountInWei: boundedNotional,
+        targetToken: config.targetToken,
+      }),
       teeContext: {
         action: 'zora_trend_funnel',
         actorAddress: wallet.address,
