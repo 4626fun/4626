@@ -15,6 +15,10 @@ export function clampBucketIndex(index: number): number {
   return Math.max(MIN_BUCKET_INDEX, Math.min(MAX_BUCKET_INDEX, Math.floor(index)))
 }
 
+export function clampMinBucketIndex(index: number): number {
+  return Math.max(0, Math.min(MAX_BUCKET_INDEX, Math.floor(index)))
+}
+
 export function tickToAjnaBucket(tick: number): number {
   const q = floorDiv(tick, 50)
   return clampBucketIndex(4156 - q)
@@ -72,8 +76,8 @@ export function bucketPriceChangeBps(params: {
   currentBucket: number
   suggestedBucket: number
 }): number {
-  const current = clampBucketIndex(params.currentBucket)
-  const suggested = clampBucketIndex(params.suggestedBucket)
+  const current = clampMinBucketIndex(params.currentBucket)
+  const suggested = clampMinBucketIndex(params.suggestedBucket)
   const delta = Math.abs(suggested - current)
   if (delta === 0) return 0
 
@@ -95,8 +99,8 @@ export function computeSteppedBucket(params: {
   rawDelta: number
   steppedBucket: number
 } {
-  const current = clampBucketIndex(params.currentBucket)
-  const suggested = clampBucketIndex(params.suggestedBucket)
+  const current = clampMinBucketIndex(params.currentBucket)
+  const suggested = clampMinBucketIndex(params.suggestedBucket)
   const rawDelta = suggested - current
   const absDelta = Math.abs(rawDelta)
   if (absDelta < params.moveThreshold) {
@@ -108,7 +112,7 @@ export function computeSteppedBucket(params: {
   return {
     shouldMove: true,
     rawDelta,
-    steppedBucket: clampBucketIndex(current + step),
+    steppedBucket: clampMinBucketIndex(current + step),
   }
 }
 

@@ -24,7 +24,8 @@ import {
   setNoStore,
 } from '../../../../server/auth/_shared.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../../server/_lib/requestPrincipal.js'
+import { resolvePersistedWalletIdentity } from '../../../../server/_lib/canonicalWalletResolver.js'
+import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
 import { resolveCoinParties, isAddressLike } from '../../../../server/_lib/coinParties.js'
@@ -60,6 +61,13 @@ type QuickstartResult = {
 
   // Access
   allowlisted: boolean
+
+  // Canonical Ajna automation
+  canonicalAjnaAutomation: {
+    available: boolean
+    cswAddress: string | null
+    embeddedEoaAddress: string | null
+  }
 
   // What the user still needs to do
   pendingActions: string[]
@@ -221,13 +229,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const enableAutomation = body.enableAutomation === true
 
   // Require authenticated session or SIWA
-  const creatorAddress = readRequestPrincipalAddress(req)
-  if (!creatorAddress || !isAddressLike(creatorAddress)) {
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress || !isAddressLike(principalAddress)) {
     return res.status(401).json({
       success: false,
       error: 'Authentication required (session or SIWA receipt)',
     } satisfies ApiEnvelope<never>)
   }
+
+  const principal = await resolveAuthorizedRequestPrincipal(req)
+  if (!principal?.canonicalSmartWalletAddress || !isAddressLike(principal.canonicalSmartWalletAddress)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Current session is not authorized for a canonical creator smart wallet',
+    } satisfies ApiEnvelope<never>)
+  }
+  const creatorAddress = principal.canonicalSmartWalletAddress
 
   if (!isDbConfigured()) {
     return res.status(503).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
@@ -243,10 +260,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ------------------------------------------------------------------
     // 1. Resolve identities in parallel
     // ------------------------------------------------------------------
-    const [zoraProfile, farcaster] = await Promise.all([
+    const persistedWalletIdentityPromise = resolvePersistedWalletIdentity(creatorAddress).catch((error) => {
+      logger.warn('[quickstart] Persisted wallet identity lookup failed', {
+        creatorAddress,
+        error,
+      })
+      return null
+    })
+
+    const [zoraProfile, farcaster, persistedWalletIdentity] = await Promise.all([
       resolveZoraProfile(creatorAddress),
       resolveFarcaster(creatorAddress),
+      persistedWalletIdentityPromise,
     ])
+
+    const canonicalAjnaAutomation = {
+      available: Boolean(persistedWalletIdentity?.canonicalSmartWallet && persistedWalletIdentity?.embeddedEoa),
+      cswAddress: persistedWalletIdentity?.canonicalSmartWallet ?? null,
+      embeddedEoaAddress: persistedWalletIdentity?.embeddedEoa ?? null,
+    }
 
     // ------------------------------------------------------------------
     // 2. Auto-detect creator coin
@@ -352,8 +384,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         logger.warn('[quickstart] Agent creation failed', err)
         pendingActions.push('enable_agent')
       }
-    } else {
-      pendingActions.push('automation_opt_in_available')
+    } else if (canonicalAjnaAutomation.available) {
+      pendingActions.push('canonical_ajna_automation_opt_in_available')
     }
 
     // ------------------------------------------------------------------
@@ -422,6 +454,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ownerAdded,
       vaultConfigCreated,
       allowlisted,
+      canonicalAjnaAutomation,
       pendingActions,
     }
 

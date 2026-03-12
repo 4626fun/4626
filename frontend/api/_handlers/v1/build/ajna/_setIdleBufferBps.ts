@@ -4,7 +4,7 @@ import { encodeFunctionData, type Address } from 'viem'
 import { handleOptions, readJsonBody } from '../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
 import type { BuildTxResponse } from '../_types.js'
-import { CREATOR_AJNA_STRATEGY_OWNER_ABI } from './_abi.js'
+import { ERC4626_STRATEGY_ADAPTER_OWNER_ABI } from './_abi.js'
 import { assertBps, requireAddress, setBuildCors, toBigIntStrict } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     assertBps(idleBufferBps, 'idleBufferBps')
 
     const data = encodeFunctionData({
-      abi: CREATOR_AJNA_STRATEGY_OWNER_ABI,
+      abi: ERC4626_STRATEGY_ADAPTER_OWNER_ABI,
       functionName: 'setIdleBufferBps',
       args: [idleBufferBps],
     })
@@ -33,9 +33,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy as Address,
       data,
       value: '0',
-      description: 'AjnaStrategy (owner): set idle buffer bps.',
+      description: 'ERC4626StrategyAdapter (owner): set Ajna idle buffer bps.',
       warnings: [
         'Owner-only onchain action. This API only builds calldata; it does not execute.',
+        'Canonical nested Ajna deployments should target the ERC4626StrategyAdapter address here.',
         'idleBufferBps is clamped onchain to basis points range [0, 10000].',
       ],
     }

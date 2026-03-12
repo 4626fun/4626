@@ -11,7 +11,7 @@ contract MockOwnableTransfer {
         owner = msg.sender;
     }
 
-    function transferOwnership(address newOwner) external {
+    function transferOwnership(address newOwner) external virtual {
         owner = newOwner;
     }
 }
@@ -24,14 +24,46 @@ contract MockCharmStrategy is MockOwnableTransfer {
     }
 }
 
+contract MockAjnaVaultAuth {
+    address public admin;
+
+    function setBufferRatio(uint256) external {}
+
+    function setMinBucketIndex(uint256) external {}
+
+    function setKeeper(address, bool) external {}
+
+    function setAdmin(address nextAdmin) external {
+        admin = nextAdmin;
+    }
+}
+
+contract MockAjnaAdapter is MockOwnableTransfer {
+    uint256 public idleBufferBps;
+
+    function setIdleBufferBps(uint256 newBps) external {
+        idleBufferBps = newBps;
+    }
+}
+
 contract MockCreate2Deployer {
     bytes32 internal immutable charmCodeId;
-    bytes32 internal immutable ajnaCodeId;
+    bytes32 internal immutable ajnaAuthCodeId;
+    bytes32 internal immutable ajnaVaultCodeId;
+    bytes32 internal immutable ajnaAdapterCodeId;
     bytes32 internal immutable solanaCodeId;
 
-    constructor(bytes32 charmCodeId_, bytes32 ajnaCodeId_, bytes32 solanaCodeId_) {
+    constructor(
+        bytes32 charmCodeId_,
+        bytes32 ajnaAuthCodeId_,
+        bytes32 ajnaVaultCodeId_,
+        bytes32 ajnaAdapterCodeId_,
+        bytes32 solanaCodeId_
+    ) {
         charmCodeId = charmCodeId_;
-        ajnaCodeId = ajnaCodeId_;
+        ajnaAuthCodeId = ajnaAuthCodeId_;
+        ajnaVaultCodeId = ajnaVaultCodeId_;
+        ajnaAdapterCodeId = ajnaAdapterCodeId_;
         solanaCodeId = solanaCodeId_;
     }
 
@@ -39,7 +71,16 @@ contract MockCreate2Deployer {
         if (codeId == charmCodeId) {
             return address(new MockCharmStrategy());
         }
-        if (codeId == ajnaCodeId || codeId == solanaCodeId) {
+        if (codeId == ajnaAuthCodeId) {
+            return address(new MockAjnaVaultAuth());
+        }
+        if (codeId == ajnaVaultCodeId) {
+            return address(uint160(uint256(keccak256("ajnaVault"))));
+        }
+        if (codeId == ajnaAdapterCodeId) {
+            return address(new MockAjnaAdapter());
+        }
+        if (codeId == solanaCodeId) {
             return address(new MockOwnableTransfer());
         }
         revert("unknown codeId");
@@ -66,6 +107,34 @@ contract MockUniswapV3Factory {
     }
 }
 
+contract MockAjnaPoolFactory {
+    address internal immutable existingPool;
+
+    constructor(address pool_) {
+        existingPool = pool_;
+    }
+
+    function ERC20_NON_SUBSET_HASH() external pure returns (bytes32) {
+        return bytes32(uint256(1));
+    }
+
+    function deployedPools(bytes32, address, address) external view returns (address) {
+        return existingPool;
+    }
+
+    function deployPool(address, address, uint256) external view returns (address) {
+        return existingPool;
+    }
+
+    function MIN_RATE() external pure returns (uint256) {
+        return 1e16;
+    }
+
+    function MAX_RATE() external pure returns (uint256) {
+        return 1e17;
+    }
+}
+
 contract MockVaultStrategyManager {
     mapping(address => uint256) public addedWeights;
     bool public autoAllocate;
@@ -85,7 +154,9 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
 
     bytes32 internal constant CHARM_ALPHA_VAULT_DEPLOY_CODE_ID = keccak256("charm-alpha-vault-deploy");
     bytes32 internal constant CREATOR_CHARM_STRATEGY_CODE_ID = keccak256("creator-charm-strategy");
-    bytes32 internal constant AJNA_STRATEGY_CODE_ID = keccak256("ajna-strategy");
+    bytes32 internal constant AJNA_AUTH_CODE_ID = keccak256("ajna-auth");
+    bytes32 internal constant AJNA_VAULT_CODE_ID = keccak256("ajna-vault");
+    bytes32 internal constant AJNA_ADAPTER_CODE_ID = keccak256("ajna-adapter");
     bytes32 internal constant SOLANA_STRATEGY_CODE_ID = keccak256("solana-strategy");
 
     address internal immutable ownerAddr = makeAddr("owner");
@@ -97,8 +168,13 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
 
     function setUp() public {
         vault = new MockVaultStrategyManager();
-        create2Deployer =
-            new MockCreate2Deployer(CREATOR_CHARM_STRATEGY_CODE_ID, AJNA_STRATEGY_CODE_ID, SOLANA_STRATEGY_CODE_ID);
+        create2Deployer = new MockCreate2Deployer(
+            CREATOR_CHARM_STRATEGY_CODE_ID,
+            AJNA_AUTH_CODE_ID,
+            AJNA_VAULT_CODE_ID,
+            AJNA_ADAPTER_CODE_ID,
+            SOLANA_STRATEGY_CODE_ID
+        );
 
         batcher = new DeploymentBatcher(
             makeAddr("registry"),
@@ -114,7 +190,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             makeAddr("usdc"),
             address(new MockUniswapV3Factory(makeAddr("v3Pool"))),
             makeAddr("uniswapRouter"),
-            makeAddr("ajnaFactory"),
+            address(new MockAjnaPoolFactory(makeAddr("ajnaPool"))),
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
             makeAddr("vaultAdminModule")
@@ -125,7 +201,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         );
     }
 
-    function test_deployPhase3Strategies_setsAjnaOwnerToProtocolTreasury() external {
+    function test_deployPhase3Strategies_setsNestedAjnaOwnerAndAuthToProtocolTreasury() external {
         DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
             creatorToken: makeAddr("creatorToken"),
             owner: ownerAddr,
@@ -134,9 +210,14 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             initialSqrtPriceX96: 0,
             charmVaultName: "Charm Vault",
             charmVaultSymbol: "CHV",
+            ajnaVaultName: "Ajna Inner Vault",
+            ajnaVaultSymbol: "AIV",
             charmWeightBps: 7000,
             ajnaWeightBps: 2000,
             solanaWeightBps: 1000,
+            ajnaBufferRatioBps: 1_500,
+            ajnaMinBucketIndex: 4_156,
+            ajnaKeeper: makeAddr("ajnaKeeper"),
             solanaKeeper: makeAddr("solanaKeeper"),
             solanaMaxNavAge: 3600,
             solanaMaxNavDeltaBpsPerUpdate: 500,
@@ -147,16 +228,18 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
             creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
-            ajnaStrategy: AJNA_STRATEGY_CODE_ID,
+            ajnaVaultAuth: AJNA_AUTH_CODE_ID,
+            ajnaVault: AJNA_VAULT_CODE_ID,
+            erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
             solanaStrategy: SOLANA_STRATEGY_CODE_ID
         });
 
         vm.prank(ownerAddr);
         DeploymentBatcher.Phase3Result memory out = batcher.deployPhase3Strategies(params, codeIds);
 
-        assertEq(
-            MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna owner should remain protocol treasury"
-        );
+        assertEq(MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna adapter owner should be treasury");
+        assertEq(MockAjnaVaultAuth(out.ajnaVaultAuth).admin(), protocolTreasury, "ajna auth admin should be treasury");
+        assertEq(MockAjnaAdapter(out.ajnaStrategy).idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "charm owner remains treasury");
         assertEq(vault.addedWeights(out.charmStrategy), params.charmWeightBps, "charm strategy should be registered");
         assertEq(vault.addedWeights(out.ajnaStrategy), params.ajnaWeightBps, "ajna strategy should be registered");

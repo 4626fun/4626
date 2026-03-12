@@ -521,9 +521,14 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'initialSqrtPriceX96', type: 'uint160' },
           { name: 'charmVaultName', type: 'string' },
           { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'ajnaVaultName', type: 'string' },
+          { name: 'ajnaVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'ajnaBufferRatioBps', type: 'uint256' },
+          { name: 'ajnaMinBucketIndex', type: 'uint256' },
+          { name: 'ajnaKeeper', type: 'address' },
           { name: 'solanaKeeper', type: 'address' },
           { name: 'solanaMaxNavAge', type: 'uint64' },
           { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
@@ -538,7 +543,9 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
         components: [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
           { name: 'creatorCharmStrategy', type: 'bytes32' },
-          { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'ajnaVaultAuth', type: 'bytes32' },
+          { name: 'ajnaVault', type: 'bytes32' },
+          { name: 'erc4626StrategyAdapter', type: 'bytes32' },
           { name: 'solanaStrategy', type: 'bytes32' },
         ],
       },
@@ -601,7 +608,7 @@ const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
 const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0xab56c176'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
-const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x1d39c22c'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x35a75a09'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 

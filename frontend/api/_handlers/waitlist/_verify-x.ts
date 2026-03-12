@@ -1,4 +1,5 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
@@ -253,11 +254,12 @@ export default async function handler(req: any, res: any) {
     return res.status(404).json({ success: false, error: 'Waitlist entry not found' } satisfies ApiEnvelope<never>)
   }
 
-  const ownsProfile =
-    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === principalAddress) ||
-    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === principalAddress) ||
-    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === principalAddress)
-  if (!ownsProfile) {
+  const authorized = await isAuthorizedWalletForProfile({
+    db: db as any,
+    profileId: signupId,
+    address: principalAddress,
+  })
+  if (!authorized) {
     return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
   }
   const profilePrivyUserId = typeof row?.privy_user_id === 'string' ? String(row.privy_user_id) : ''

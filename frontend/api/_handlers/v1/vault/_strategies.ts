@@ -56,12 +56,25 @@ const STRATEGY_BASE_ABI = [
   { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
-const AJNA_ABI = [
-  { type: 'function', name: 'ajnaPool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'ajnaFactory', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'bucketIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+const ERC4626_STRATEGY_ADAPTER_ABI = [
+  { type: 'function', name: 'ERC4626_VAULT', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'idleBufferBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const
+
+const AJNA_INNER_VAULT_ABI = [
+  { type: 'function', name: 'AJNA_POOL', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'AUTH', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const AJNA_POOL_ABI = [
+  { type: 'function', name: 'collateralAddress', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const AJNA_AUTH_ABI = [
+  { type: 'function', name: 'admin', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'bufferRatio', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'minBucketIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'paused', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
 ] as const
 
 const CHARM_ABI = [
@@ -88,10 +101,14 @@ type StrategyInfo = {
   kind: 'ajna' | 'charm' | 'solana' | 'unknown'
   ajna?: {
     pool: `0x${string}` | null
-    factory: `0x${string}` | null
     collateralToken: `0x${string}` | null
-    bucketIndex: string | null
     idleBufferBps: string | null
+    innerVault: `0x${string}` | null
+    auth: `0x${string}` | null
+    authAdmin: `0x${string}` | null
+    bufferRatioBps: string | null
+    minBucketIndex: string | null
+    paused: boolean | null
   }
   charm?: {
     charmVault: `0x${string}` | null
@@ -155,12 +172,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           { address: s, abi: STRATEGY_BASE_ABI, functionName: 'isActive' },
           { address: s, abi: STRATEGY_BASE_ABI, functionName: 'owner' },
           { address: s, abi: STRATEGY_BASE_ABI, functionName: 'asset' },
-          // Ajna probes
-          { address: s, abi: AJNA_ABI, functionName: 'ajnaPool' },
-          { address: s, abi: AJNA_ABI, functionName: 'ajnaFactory' },
-          { address: s, abi: AJNA_ABI, functionName: 'collateralToken' },
-          { address: s, abi: AJNA_ABI, functionName: 'bucketIndex' },
-          { address: s, abi: AJNA_ABI, functionName: 'idleBufferBps' },
           // Charm probes
           { address: s, abi: CHARM_ABI, functionName: 'charmVault' },
           { address: s, abi: CHARM_ABI, functionName: 'swapPool' },
@@ -181,12 +192,82 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const owner = pick<`0x${string}`>(1)
       const asset = pick<`0x${string}`>(2)
 
-      const ajnaPool = pick<`0x${string}`>(3)
-      const charmVault = pick<`0x${string}`>(8)
-      const bridgeAdapter = pick<`0x${string}`>(15)
-      const solanaDestination = pick<`0x${string}`>(16)
+      const charmVault = pick<`0x${string}`>(3)
+      const bridgeAdapter = pick<`0x${string}`>(10)
+      const solanaDestination = pick<`0x${string}`>(11)
       const hasSolanaConfig =
         isAddressLike(String(bridgeAdapter ?? '')) || (typeof solanaDestination === 'string' && isBytes32Like(solanaDestination) && !/^0x0{64}$/i.test(solanaDestination))
+
+      let ajnaPool: `0x${string}` | null = null
+      let ajnaCollateralToken: `0x${string}` | null = null
+      let ajnaIdleBufferBps: string | null = null
+      let ajnaInnerVault: `0x${string}` | null = null
+      let ajnaAuth: `0x${string}` | null = null
+      let ajnaAuthAdmin: `0x${string}` | null = null
+      let ajnaBufferRatioBps: string | null = null
+      let ajnaMinBucketIndex: string | null = null
+      let ajnaPaused: boolean | null = null
+
+      const adapterCalls = await client.multicall({
+        allowFailure: true,
+        contracts: [
+          { address: s, abi: ERC4626_STRATEGY_ADAPTER_ABI, functionName: 'ERC4626_VAULT' },
+          { address: s, abi: ERC4626_STRATEGY_ADAPTER_ABI, functionName: 'idleBufferBps' },
+        ],
+      })
+      const adapterVault = adapterCalls[0]?.status === 'success' ? ((adapterCalls[0] as any).result as `0x${string}`) : null
+      const adapterIdleBuffer = adapterCalls[1]?.status === 'success' ? ((adapterCalls[1] as any).result as bigint) : null
+
+      if (adapterVault && isAddressLike(adapterVault)) {
+        ajnaInnerVault = adapterVault
+        ajnaIdleBufferBps =
+          adapterIdleBuffer === null || adapterIdleBuffer === undefined ? null : BigInt(adapterIdleBuffer as any).toString()
+
+        const innerCalls = await client.multicall({
+          allowFailure: true,
+          contracts: [
+            { address: adapterVault, abi: AJNA_INNER_VAULT_ABI, functionName: 'AJNA_POOL' },
+            { address: adapterVault, abi: AJNA_INNER_VAULT_ABI, functionName: 'AUTH' },
+          ],
+        })
+        const nestedAjnaPool = innerCalls[0]?.status === 'success' ? ((innerCalls[0] as any).result as `0x${string}`) : null
+        const nestedAjnaAuth = innerCalls[1]?.status === 'success' ? ((innerCalls[1] as any).result as `0x${string}`) : null
+
+        if (nestedAjnaPool && isAddressLike(nestedAjnaPool)) {
+          ajnaPool = nestedAjnaPool
+          const poolCalls = await client.multicall({
+            allowFailure: true,
+            contracts: [{ address: nestedAjnaPool, abi: AJNA_POOL_ABI, functionName: 'collateralAddress' }],
+          })
+          const collateralAddress =
+            poolCalls[0]?.status === 'success' ? ((poolCalls[0] as any).result as `0x${string}`) : null
+          ajnaCollateralToken =
+            collateralAddress && isAddressLike(collateralAddress) ? (collateralAddress as `0x${string}`) : null
+        }
+
+        ajnaAuth = nestedAjnaAuth && isAddressLike(nestedAjnaAuth) ? nestedAjnaAuth : null
+
+        if (ajnaAuth) {
+          const authCalls = await client.multicall({
+            allowFailure: true,
+            contracts: [
+              { address: ajnaAuth, abi: AJNA_AUTH_ABI, functionName: 'admin' },
+              { address: ajnaAuth, abi: AJNA_AUTH_ABI, functionName: 'bufferRatio' },
+              { address: ajnaAuth, abi: AJNA_AUTH_ABI, functionName: 'minBucketIndex' },
+              { address: ajnaAuth, abi: AJNA_AUTH_ABI, functionName: 'paused' },
+            ],
+          })
+          const authAdmin = authCalls[0]?.status === 'success' ? ((authCalls[0] as any).result as `0x${string}`) : null
+          const bufferRatio = authCalls[1]?.status === 'success' ? ((authCalls[1] as any).result as bigint) : null
+          const minBucket = authCalls[2]?.status === 'success' ? ((authCalls[2] as any).result as bigint) : null
+          const paused = authCalls[3]?.status === 'success' ? ((authCalls[3] as any).result as boolean) : null
+
+          ajnaAuthAdmin = authAdmin && isAddressLike(authAdmin) ? authAdmin : null
+          ajnaBufferRatioBps = bufferRatio === null || bufferRatio === undefined ? null : BigInt(bufferRatio as any).toString()
+          ajnaMinBucketIndex = minBucket === null || minBucket === undefined ? null : BigInt(minBucket as any).toString()
+          ajnaPaused = typeof paused === 'boolean' ? paused : null
+        }
+      }
 
       const kind: StrategyInfo['kind'] = isAddressLike(String(ajnaPool ?? ''))
         ? 'ajna'
@@ -208,22 +289,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (kind === 'ajna') {
         info.ajna = {
           pool: ajnaPool && isAddressLike(ajnaPool) ? (ajnaPool as any) : null,
-          factory: (() => {
-            const v = pick<`0x${string}`>(4)
-            return v && isAddressLike(v) ? (v as any) : null
-          })(),
-          collateralToken: (() => {
-            const v = pick<`0x${string}`>(5)
-            return v && isAddressLike(v) ? (v as any) : null
-          })(),
-          bucketIndex: (() => {
-            const v = pick<bigint>(6)
-            return v === null || v === undefined ? null : BigInt(v as any).toString()
-          })(),
-          idleBufferBps: (() => {
-            const v = pick<bigint>(7)
-            return v === null || v === undefined ? null : BigInt(v as any).toString()
-          })(),
+          collateralToken: ajnaCollateralToken,
+          idleBufferBps: ajnaIdleBufferBps,
+          innerVault: ajnaInnerVault,
+          auth: ajnaAuth,
+          authAdmin: ajnaAuthAdmin,
+          bufferRatioBps: ajnaBufferRatioBps,
+          minBucketIndex: ajnaMinBucketIndex,
+          paused: ajnaPaused,
         }
       }
 
@@ -231,27 +304,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         info.charm = {
           charmVault: charmVault && isAddressLike(charmVault) ? (charmVault as any) : null,
           swapPool: (() => {
-            const v = pick<`0x${string}`>(9)
+            const v = pick<`0x${string}`>(4)
             return v && isAddressLike(v) ? (v as any) : null
           })(),
           swapPoolFee: (() => {
-            const v = pick<number>(10)
+            const v = pick<number>(5)
             return v === null || v === undefined ? null : String(v)
           })(),
           swapSlippageBps: (() => {
-            const v = pick<bigint>(11)
+            const v = pick<bigint>(6)
             return v === null || v === undefined ? null : BigInt(v as any).toString()
           })(),
           depositSlippageBps: (() => {
-            const v = pick<bigint>(12)
+            const v = pick<bigint>(7)
             return v === null || v === undefined ? null : BigInt(v as any).toString()
           })(),
           maxSwapPercent: (() => {
-            const v = pick<bigint>(13)
+            const v = pick<bigint>(8)
             return v === null || v === undefined ? null : BigInt(v as any).toString()
           })(),
           autoFeeTier: (() => {
-            const v = pick<boolean>(14)
+            const v = pick<boolean>(9)
             return typeof v === 'boolean' ? v : null
           })(),
         }

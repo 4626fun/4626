@@ -8,11 +8,13 @@ const {
   ensureWaitlistSchemaMock,
   readRequestPrincipalAddressMock,
   awardWaitlistPointsMock,
+  isAuthorizedWalletForProfileMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   readRequestPrincipalAddressMock: vi.fn(() => '0x00000000000000000000000000000000000000aa'),
   awardWaitlistPointsMock: vi.fn(async () => {}),
+  isAuthorizedWalletForProfileMock: vi.fn(async () => true),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -28,6 +30,10 @@ vi.mock('../../server/_lib/postgres.js', () => ({
 
 vi.mock('../../server/_lib/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
+}))
+
+vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  isAuthorizedWalletForProfile: isAuthorizedWalletForProfileMock,
 }))
 
 vi.mock('../../server/_lib/waitlistSchema.js', () => ({
@@ -64,6 +70,7 @@ describe('waitlist/task-claim hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue(createDb() as any)
+    isAuthorizedWalletForProfileMock.mockResolvedValue(true)
   })
 
   it('rejects non-bonus tasks and requires verifier endpoints', async () => {

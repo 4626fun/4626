@@ -344,9 +344,19 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
           { name: 'initialSqrtPriceX96', type: 'uint160' },
           { name: 'charmVaultName', type: 'string' },
           { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'ajnaVaultName', type: 'string' },
+          { name: 'ajnaVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'ajnaBufferRatioBps', type: 'uint256' },
+          { name: 'ajnaMinBucketIndex', type: 'uint256' },
+          { name: 'ajnaKeeper', type: 'address' },
+          { name: 'solanaKeeper', type: 'address' },
+          { name: 'solanaMaxNavAge', type: 'uint64' },
+          { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
+          { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
+          { name: 'solanaBridgeAddress', type: 'address' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -356,42 +366,10 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
         components: [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
           { name: 'creatorCharmStrategy', type: 'bytes32' },
-          { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'ajnaVaultAuth', type: 'bytes32' },
+          { name: 'ajnaVault', type: 'bytes32' },
+          { name: 'erc4626StrategyAdapter', type: 'bytes32' },
           { name: 'solanaStrategy', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-  // Legacy phase-3 signature (no Solana strategy fields) for older sessions.
-  {
-    type: 'function',
-    name: 'deployPhase3Strategies',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'initialSqrtPriceX96', type: 'uint160' },
-          { name: 'charmVaultName', type: 'string' },
-          { name: 'charmVaultSymbol', type: 'string' },
-          { name: 'charmWeightBps', type: 'uint256' },
-          { name: 'ajnaWeightBps', type: 'uint256' },
-          { name: 'enableAutoAllocate', type: 'bool' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-          { name: 'creatorCharmStrategy', type: 'bytes32' },
-          { name: 'ajnaStrategy', type: 'bytes32' },
         ],
       },
     ],
@@ -481,10 +459,27 @@ const CREATOR_CHARM_STRATEGY_VIEW_ABI = [
   },
 ] as const
 
-const AJNA_STRATEGY_VIEW_ABI = [
+const ERC4626_STRATEGY_ADAPTER_VIEW_ABI = [
   {
     type: 'function',
-    name: 'ajnaPool',
+    name: 'ERC4626_VAULT',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const AJNA_INNER_VAULT_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'AJNA_POOL',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'AUTH',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'address' }],
@@ -1003,18 +998,44 @@ async function readCharmVaultAddress(params: {
   return normalizeAddress(charmVaultRaw)
 }
 
-async function readAjnaPoolAddress(params: {
+async function readNestedAjnaDetails(params: {
   publicClient: any
   strategy: Address
-}): Promise<Address | null> {
-  const ajnaPoolRaw = await params.publicClient
+}): Promise<{ ajnaPool: Address | null; innerVault: Address | null; auth: Address | null }> {
+  const innerVaultRaw = await params.publicClient
     .readContract({
       address: params.strategy,
-      abi: AJNA_STRATEGY_VIEW_ABI,
-      functionName: 'ajnaPool',
+      abi: ERC4626_STRATEGY_ADAPTER_VIEW_ABI,
+      functionName: 'ERC4626_VAULT',
     })
     .catch(() => null)
-  return normalizeAddress(ajnaPoolRaw)
+  const innerVault = normalizeAddress(innerVaultRaw)
+  if (!innerVault) {
+    return { ajnaPool: null, innerVault: null, auth: null }
+  }
+
+  const [innerAjnaPoolRaw, authRaw] = await Promise.all([
+    params.publicClient
+      .readContract({
+        address: innerVault,
+        abi: AJNA_INNER_VAULT_VIEW_ABI,
+        functionName: 'AJNA_POOL',
+      })
+      .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: innerVault,
+        abi: AJNA_INNER_VAULT_VIEW_ABI,
+        functionName: 'AUTH',
+      })
+      .catch(() => null),
+  ])
+
+  return {
+    ajnaPool: normalizeAddress(innerAjnaPoolRaw),
+    innerVault,
+    auth: normalizeAddress(authRaw),
+  }
 }
 
 async function readSolanaBridgeAddress(params: {
@@ -1103,7 +1124,7 @@ async function verifyPhase3PostState(params: {
     strategies.map(async (entry) => ({
       ...entry,
       charmVault: await readCharmVaultAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
-      ajnaPool: await readAjnaPoolAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
+      ajna: await readNestedAjnaDetails({ publicClient: params.publicClient, strategy: entry.strategy }),
       bridgeAddress: await readSolanaBridgeAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
     })),
   )
@@ -1128,11 +1149,14 @@ async function verifyPhase3PostState(params: {
   let ajna: (typeof strategyDetails)[number] | undefined
   if (info.ajnaWeightBps > 0n) {
     ajna =
-      remaining.find((entry) => Boolean(entry.ajnaPool)) ??
+      remaining.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
       remaining.find((entry) => !entry.bridgeAddress) ??
       remaining[0]
     if (!ajna) {
       throw new Error('phase3 verification failed: ajna strategy not registered on vault')
+    }
+    if (!ajna.ajna.innerVault || !ajna.ajna.auth) {
+      throw new Error('phase3 verification failed: nested ajna adapter is missing inner vault wiring')
     }
     if (ajna.weight < info.ajnaWeightBps) {
       throw new Error(
@@ -1141,6 +1165,12 @@ async function verifyPhase3PostState(params: {
     }
     if (!(await hasRuntimeCode(params.publicClient, ajna.strategy))) {
       throw new Error(`phase3 verification failed: ajna strategy code missing at ${ajna.strategy}`)
+    }
+    if (ajna.ajna.innerVault && !(await hasRuntimeCode(params.publicClient, ajna.ajna.innerVault))) {
+      throw new Error(`phase3 verification failed: ajna inner vault code missing at ${ajna.ajna.innerVault}`)
+    }
+    if (ajna.ajna.auth && !(await hasRuntimeCode(params.publicClient, ajna.ajna.auth))) {
+      throw new Error(`phase3 verification failed: ajna auth code missing at ${ajna.ajna.auth}`)
     }
   }
 

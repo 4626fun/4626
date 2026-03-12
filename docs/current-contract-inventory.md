@@ -76,6 +76,29 @@ From `deployments/base/contracts/**/*.json`:
 2. Runtime app paths now resolve `ccaStrategy` from batcher events / registry-derived resolution and do not require factory reads.
 3. Remaining `CreatorOVaultFactory` references are legacy scripts/docs and optional historical manifests.
 
+## Canonical Ajna Strategy Inventory
+
+The canonical phase-3 Ajna sleeve is now a bundle, not a single direct strategy contract:
+
+1. `ERC4626StrategyAdapter`
+2. `AjnaERC4626Vault`
+3. `AjnaVaultAuth`
+4. `AjnaVaultBuffer` (owned by the inner vault)
+
+Operationally:
+
+- `CreatorOVault` should register the adapter address as the Ajna strategy
+- `ERC4626StrategyAdapter.ERC4626_VAULT()` should resolve to `AjnaERC4626Vault`
+- `AjnaERC4626Vault.AUTH()` should resolve to `AjnaVaultAuth`
+
+Bytecode-store / deployer inventories for the phased deploy path should therefore include:
+
+- `AjnaVaultAuth`
+- `AjnaERC4626Vault`
+- `ERC4626StrategyAdapter`
+
+The old direct Ajna contract path has been removed from the repo. Contract inventories and generated docs should only reference the nested adapter-backed Ajna bundle.
+
 ## Recommended Canonical Source
 
 For deploy-path correctness, treat live phased deployer immutables as canonical until you rotate to a new deployer address, then update:

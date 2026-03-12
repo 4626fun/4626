@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address } from 'viem'
 import { createPublicClient, http, isAddress } from 'viem'
-import { base } from 'viem/chains'
 
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -76,7 +75,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
     const client = createPublicClient({
-      chain: base,
       transport: http(rpcUrl),
     })
 

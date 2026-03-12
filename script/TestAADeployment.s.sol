@@ -5,8 +5,8 @@ import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
 import "../contracts/helpers/batchers/VaultActivationBatcher.sol";
+import "../contracts/vault/strategies/ERC4626StrategyAdapter.sol";
 import "../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
-import "../contracts/vault/strategies/AjnaStrategy.sol";
 
 /// @notice Minimal interface for Charm vault queries
 interface ICharmVaultInfo {
@@ -53,7 +53,7 @@ contract TestAADeployment is Script, Test {
         console.log("   2. Deploys Charm Alpha Vault");
         console.log("   3. Deploys Charm Alpha Strategy");
         console.log("   4. Deploys Creator Charm Strategy");
-        console.log("   5. Deploys Ajna Strategy");
+        console.log("   5. Deploys Ajna Strategy Adapter");
         console.log("");
 
         // Initial price: $0.0001 per AKITA
@@ -77,7 +77,7 @@ contract TestAADeployment is Script, Test {
             console.log("   - Charm Vault:", result.charmVault);
             console.log("   - Charm Strategy:", result.charmStrategy);
             console.log("   - Creator Charm Strategy:", result.creatorCharmStrategy);
-            console.log("   - Ajna Strategy:", result.ajnaStrategy);
+            console.log("   - Ajna Strategy Adapter:", result.ajnaStrategy);
             console.log("");
 
             // ═══════════════════════════════════════════════════════════
@@ -124,11 +124,11 @@ contract TestAADeployment is Script, Test {
             require(charmStrategyVault == CREATOR_VAULT, "Wrong vault");
             console.log("   Creator Charm Strategy configured");
 
-            // Check Ajna Strategy (if deployed)
+            // Check nested Ajna adapter strategy (if deployed)
             if (result.ajnaStrategy != address(0)) {
-                address ajnaStrategyVault = AjnaStrategy(result.ajnaStrategy).vault();
+                address ajnaStrategyVault = ERC4626StrategyAdapter(result.ajnaStrategy).vault();
                 require(ajnaStrategyVault == CREATOR_VAULT, "Wrong vault in Ajna");
-                console.log("   Ajna Strategy configured");
+                console.log("   Ajna Strategy Adapter configured");
             }
 
             console.log("");

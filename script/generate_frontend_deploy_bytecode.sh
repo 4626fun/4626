@@ -50,7 +50,9 @@ printf "  CreatorOracle: '0x' + '%s',\n" "$(bytecode CreatorOracle)" >>"$OUT_FIL
 printf "  PayoutRouter: '0x' + '%s',\n" "$(bytecode PayoutRouter)" >>"$OUT_FILE"
 printf "  VaultShareBurnStream: '0x' + '%s',\n" "$(bytecode VaultShareBurnStream)" >>"$OUT_FILE"
 printf "  CreatorCharmStrategy: '0x' + '%s',\n" "$(bytecode CreatorCharmStrategy)" >>"$OUT_FILE"
-printf "  AjnaStrategy: '0x' + '%s',\n" "$(bytecode AjnaStrategy)" >>"$OUT_FILE"
+printf "  AjnaVaultAuth: '0x' + '%s',\n" "$(bytecode AjnaVaultAuth)" >>"$OUT_FILE"
+printf "  AjnaERC4626Vault: '0x' + '%s',\n" "$(bytecode AjnaERC4626Vault)" >>"$OUT_FILE"
+printf "  ERC4626StrategyAdapter: '0x' + '%s',\n" "$(bytecode ERC4626StrategyAdapter)" >>"$OUT_FILE"
 printf "  SolanaStrategy: '0x' + '%s',\n" "$(bytecode SolanaStrategy)" >>"$OUT_FILE"
 
 cat >>"$OUT_FILE" <<'EOF'

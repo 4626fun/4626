@@ -43,6 +43,22 @@ function createPositionDb(params: { id: string | number; email: string }) {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
 
+      if (text.includes('from profiles p') && text.includes('canonical.address as canonical_wallet')) {
+        return {
+          rows: [
+            {
+              id: params.id,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              primary_embedded_eoa: null,
+              primary_smart_wallet: null,
+              csw_address: null,
+              base_sub_account: null,
+              canonical_wallet: null,
+            },
+          ],
+        }
+      }
+
       if (text.includes('from profiles') && text.includes('where email')) {
         return {
           rows: [
@@ -84,6 +100,82 @@ function createPositionDb(params: { id: string | number; email: string }) {
             },
           ],
         }
+      }
+
+      if (text.includes('from points')) {
+        return {
+          rows: [{ total: 150, invite: 50, signup: 100, tasks: 0, csw: 0, social: 0, bonus: 0 }],
+        }
+      }
+
+      if (text.includes('from referral_conversions') && text.includes('qualified_at is not null')) {
+        return { rows: [{ c: 2 }] }
+      }
+
+      if (text.includes('from referral_conversions') && text.includes('not (status = \'csw_linked\'')) {
+        return { rows: [{ c: 1 }] }
+      }
+
+      if (text.includes('count(*)::int as c') && text.includes('from profiles')) {
+        return { rows: [{ c: 8 }] }
+      }
+
+      if (text.includes('rank_invite')) {
+        return { rows: [{ rank_invite: 3 }] }
+      }
+
+      if (text.includes('rank_total')) {
+        return { rows: [{ rank_total: 4 }] }
+      }
+
+      return { rows: [] }
+    }),
+  }
+}
+
+function createPositionDbHistoricalLinkedWallet(params: { id: string | number; email: string }) {
+  return {
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+
+      if (text.includes('from profiles p') && text.includes('canonical.address as canonical_wallet')) {
+        return {
+          rows: [
+            {
+              id: params.id,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              primary_embedded_eoa: null,
+              primary_smart_wallet: null,
+              csw_address: null,
+              base_sub_account: null,
+              canonical_wallet: null,
+            },
+          ],
+        }
+      }
+
+      if (text.includes('from profiles') && text.includes('where email')) {
+        return {
+          rows: [
+            {
+              id: params.id,
+              email: params.email,
+              referral_code: 'AKITA',
+              profile_completed_at: '2026-02-25T00:00:00.000Z',
+              border_tier: 1,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              embedded_wallet: null,
+              primary_embedded_eoa: null,
+              csw_address: null,
+              primary_smart_wallet: null,
+              base_sub_account: null,
+            },
+          ],
+        }
+      }
+
+      if (text.includes('from profile_wallets')) {
+        return { rows: [{ exists: 1 }] }
       }
 
       if (text.includes('from points')) {
@@ -184,6 +276,22 @@ describe('waitlist/position', () => {
   it('returns null for email lookup when caller is not authorized', async () => {
     readRequestPrincipalAddressMock.mockReturnValueOnce('')
     getDbMock.mockResolvedValue(createPositionDb({ id: '7', email: 'wallet-owner@proton.me' }) as any)
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { email: 'wallet-owner@proton.me' },
+    })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data).toBeNull()
+  })
+
+  it('returns null when caller is only a historical linked wallet', async () => {
+    readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000bb')
+    getDbMock.mockResolvedValue(createPositionDbHistoricalLinkedWallet({ id: '7', email: 'wallet-owner@proton.me' }) as any)
 
     const req = createMockReq({
       method: 'GET',

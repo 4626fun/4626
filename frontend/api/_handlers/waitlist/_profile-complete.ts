@@ -1,4 +1,5 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
@@ -83,29 +84,21 @@ export default async function handler(req: any, res: any) {
     `
     const existingRow = exists?.rows?.[0]
     if (existingRow?.id) {
-      // Principal wallet didn't match legacy profile columns.
-      // First, allow any wallet already linked to the same profile via profile_wallets.
       const existingId = Number(existingRow.id)
-      try {
-        const linkedWallet = await db.sql`
-          SELECT 1
-          FROM profile_wallets
-          WHERE profile_id = ${existingId}
-            AND LOWER(address) = ${principalAddress}
-          LIMIT 1;
+      const authorized = await isAuthorizedWalletForProfile({
+        db: db as any,
+        profileId: existingId,
+        address: principalAddress,
+      })
+      if (authorized) {
+        const authorizedUpdate = await db.sql`
+          UPDATE profiles
+          SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
+          WHERE id = ${existingId}
+          RETURNING id, profile_completed_at;
         `
-        if (linkedWallet?.rows?.[0]) {
-          const linkedUpdate = await db.sql`
-            UPDATE profiles
-            SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
-            WHERE id = ${existingId}
-            RETURNING id, profile_completed_at;
-          `
-          signupId = existingId
-          profileCompleted = Boolean(linkedUpdate?.rows?.[0]?.profile_completed_at)
-        }
-      } catch {
-        // `profile_wallets` may be unavailable on older schemas. Continue to CSW-owner fallback.
+        signupId = existingId
+        profileCompleted = Boolean(authorizedUpdate?.rows?.[0]?.profile_completed_at)
       }
 
       // Final fallback: check if principal wallet is an owner of the profile's linked CSW.

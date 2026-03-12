@@ -33,7 +33,8 @@ This guide covers how to build on and contribute to 4626.
       BaseCreatorStrategy.sol
       CCALaunchStrategy.sol
       CreatorCharmStrategy.sol
-      AjnaStrategy.sol
+      ERC4626StrategyAdapter.sol
+      ajna4626/
       SolanaStrategy.sol
     factories/                    # Deployment factories
       CreatorOVaultFactory.sol

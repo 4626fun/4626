@@ -1,4 +1,5 @@
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { normalizeReferralCode } from '../../../server/_lib/referrals.js'
 import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
@@ -116,28 +117,12 @@ export default async function handler(req: any, res: any) {
   if (!principalAddress || !isValidEvmAddress(principalAddress)) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistLedgerResponse | null>)
   }
-  const principal = principalAddress.toLowerCase()
-  const ownsByInlineField =
-    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === principal) ||
-    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === principal) ||
-    (typeof row?.primary_embedded_eoa === 'string' && row.primary_embedded_eoa.toLowerCase() === principal) ||
-    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === principal) ||
-    (typeof row?.primary_smart_wallet === 'string' && row.primary_smart_wallet.toLowerCase() === principal) ||
-    (typeof row?.base_sub_account === 'string' && row.base_sub_account.toLowerCase() === principal)
-
-  let ownsByMappedWallet = false
-  if (!ownsByInlineField) {
-    const ownedQ = await db.sql`
-      SELECT 1
-      FROM profile_wallets
-      WHERE profile_id = ${signupId}
-        AND LOWER(address) = ${principal}
-      LIMIT 1;
-    `
-    ownsByMappedWallet = Boolean(ownedQ?.rows?.[0])
-  }
-
-  if (!ownsByInlineField && !ownsByMappedWallet) {
+  const authorized = await isAuthorizedWalletForProfile({
+    db: db as any,
+    profileId: signupId,
+    address: principalAddress,
+  })
+  if (!authorized) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistLedgerResponse | null>)
   }
 

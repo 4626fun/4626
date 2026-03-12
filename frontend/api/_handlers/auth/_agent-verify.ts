@@ -102,6 +102,8 @@ type FallbackVerifyResult =
     }
   | { valid: false; code: SIWAErrorCode; error: string }
 
+type SiwaVerifyResult = Awaited<ReturnType<typeof verifySIWA>> | FallbackVerifyResult
+
 async function verifyCanonicalOwnerSiwaFallback(params: {
   parsed: ParsedSiwaMessage
   message: string
@@ -284,7 +286,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return true
   }
 
-  let result: Awaited<ReturnType<typeof verifySIWA>> | FallbackVerifyResult = await verifySIWA(
+  let result: SiwaVerifyResult = await verifySIWA(
     message,
     signature,
     parsed.domain,

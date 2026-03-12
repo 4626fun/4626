@@ -224,6 +224,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin; // Which creator coin this entry is for
         uint256 amountUSD;
         uint256 effectiveWinChancePPM;
+        uint16 rewardPercentageBps;
+        address callbackProvider;
         VRFType vrfType;
         uint32 sourceChainEid; // 0 = local (hub), non-zero = remote chain lottery entry
         EntrySource entrySource;
@@ -338,6 +340,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     event WinnerCallbackSent(
         uint32 indexed dstEid, address indexed winner, address indexed creatorCoin, uint256 totalSharesPaid
     );
+    event WinnerCallbackFailed(
+        uint32 indexed dstEid, address indexed winner, address indexed creatorCoin, uint256 totalSharesPaid
+    );
     event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
     event CallbackGasLimitUpdated(uint128 newGasLimit);
     event VRFConsumerUpdated(address indexed consumer);
@@ -385,6 +390,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     error NoVaultConfigured(address token);
     error NoGaugeConfigured(address token);
     error NoPendingVrfResult(uint256 requestId);
+    error InvalidVrfCallback();
     error AmoeDisabled();
     error AmoeExpired();
     error AmoeNonceUsed();
@@ -614,7 +620,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @notice Local VRF callback
      */
     function receiveRandomWords(uint256 requestId, uint256[] memory randomWords) external nonReentrant {
-        if (msg.sender != address(localVRFConsumer)) revert Unauthorized();
+        VRFRequest memory request = vrfRequests[requestId];
+        if (request.user == address(0)) {
+            if (msg.sender != address(localVRFConsumer)) revert Unauthorized();
+        } else if (request.vrfType != VRFType.LOCAL || request.callbackProvider != msg.sender) {
+            revert InvalidVrfCallback();
+        }
         _processVRFResult(requestId, randomWords);
     }
 
@@ -622,7 +633,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @notice Cross-chain VRF callback
      */
     function receiveRandomWords(uint256[] memory randomWords, uint256 sequence) external nonReentrant {
-        if (msg.sender != address(vrfIntegrator)) revert Unauthorized();
+        VRFRequest memory request = vrfRequests[sequence];
+        if (request.user == address(0)) {
+            if (msg.sender != address(vrfIntegrator)) revert Unauthorized();
+        } else if (request.vrfType != VRFType.CROSS_CHAIN || request.callbackProvider != msg.sender) {
+            revert InvalidVrfCallback();
+        }
         _processVRFResult(sequence, randomWords);
     }
 
@@ -666,8 +682,14 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 randomResult = randomWords[0] % 1_000_000;
 
         if (randomResult < winChancePPM) {
-            uint256 reward =
-                _processWin(request.creatorCoin, request.user, request.amountUSD, requestId, request.sourceChainEid);
+            uint256 reward = _processWin(
+                request.creatorCoin,
+                request.user,
+                request.amountUSD,
+                requestId,
+                request.rewardPercentageBps,
+                request.sourceChainEid
+            );
             emit LotteryResultProcessed(request.creatorCoin, request.user, request.amountUSD, true, reward, requestId);
         } else {
             emit LotteryResultProcessed(request.creatorCoin, request.user, request.amountUSD, false, 0, requestId);
@@ -839,6 +861,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address user,
         uint256 swapAmountUSD,
         uint256 requestId,
+        uint16 rewardBps,
         uint32 sourceChainEid
     ) internal returns (uint256) {
         totalWinners++;
@@ -846,15 +869,28 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         emit LotteryWinner(creatorCoin, user, swapAmountUSD, 0, requestId);
 
         // All wins are paid from hub vaults
-        uint256 localPayout = _payoutLocalJackpot(creatorCoin, user, uint16(lotteryConfig.rewardPercentage));
+        uint256 localPayout = _payoutLocalJackpot(creatorCoin, user, rewardBps);
 
         // If the trade originated on a remote chain, send a winner callback
         // so the user gets notified on the chain they traded on
         if (sourceChainEid != 0) {
-            _sendWinnerCallback(sourceChainEid, user, creatorCoin, localPayout);
+            try this.sendWinnerCallbackFromSelf(sourceChainEid, user, creatorCoin, localPayout) {}
+            catch {
+                emit WinnerCallbackFailed(sourceChainEid, user, creatorCoin, localPayout);
+            }
         }
 
         return localPayout;
+    }
+
+    /**
+     * @dev External wrapper so winner callback delivery can be caught as best-effort from settlement.
+     */
+    function sendWinnerCallbackFromSelf(uint32 dstEid, address winner, address creatorCoin, uint256 totalSharesPaid)
+        external
+    {
+        if (msg.sender != address(this)) revert Unauthorized();
+        _sendWinnerCallback(dstEid, winner, creatorCoin, totalSharesPaid);
     }
 
     // ================================
@@ -959,6 +995,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 creatorCoin: creatorCoin,
                 amountUSD: swapValueUSD,
                 effectiveWinChancePPM: winChancePPM,
+                rewardPercentageBps: uint16(lotteryConfig.rewardPercentage),
+                callbackProvider: address(localVRFConsumer),
                 vrfType: VRFType.LOCAL,
                 sourceChainEid: sourceChainEid,
                 entrySource: entrySource
@@ -1074,6 +1112,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                     creatorCoin: creatorCoin,
                     amountUSD: swapValueUSD,
                     effectiveWinChancePPM: winChancePPM,
+                    rewardPercentageBps: uint16(lotteryConfig.rewardPercentage),
+                    callbackProvider: address(vrfIntegrator),
                     vrfType: VRFType.CROSS_CHAIN,
                     sourceChainEid: sourceChainEid,
                     entrySource: entrySource

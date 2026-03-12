@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
 
@@ -25,34 +25,16 @@ function getPrivyServerAuth(): { appId: string; appSecret: string } | null {
   return { appId, appSecret }
 }
 
-async function resolvePrivyUserIdForSession(db: any, address: string): Promise<string | null> {
-  const byWalletGraph = await db.sql`
-    SELECT p.privy_user_id
-    FROM profile_wallets pw
-    JOIN profiles p ON p.id = pw.profile_id
-    WHERE LOWER(pw.address) = ${address}
-      AND p.privy_user_id IS NOT NULL
-    LIMIT 1;
-  `
-  const fromGraph = byWalletGraph.rows?.[0]?.privy_user_id
-  if (typeof fromGraph === 'string' && fromGraph.trim()) return fromGraph.trim()
-
-  const byLegacy = await db.sql`
+async function resolvePrivyUserIdForProfile(db: any, profileId: number): Promise<string | null> {
+  const result = await db.sql`
     SELECT privy_user_id
     FROM profiles
-    WHERE privy_user_id IS NOT NULL
-      AND (
-        LOWER(primary_wallet) = ${address}
-        OR LOWER(embedded_wallet) = ${address}
-        OR LOWER(csw_address) = ${address}
-        OR LOWER(base_sub_account) = ${address}
-        OR LOWER(primary_smart_wallet) = ${address}
-        OR LOWER(primary_embedded_eoa) = ${address}
-      )
+    WHERE id = ${profileId}
+      AND privy_user_id IS NOT NULL
     LIMIT 1;
   `
-  const fromLegacy = byLegacy.rows?.[0]?.privy_user_id
-  if (typeof fromLegacy === 'string' && fromLegacy.trim()) return fromLegacy.trim()
+  const privyUserId = result.rows?.[0]?.privy_user_id
+  if (typeof privyUserId === 'string' && privyUserId.trim()) return privyUserId.trim()
 
   return null
 }
@@ -83,7 +65,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await ensureWaitlistSchema(db as any)
-    const privyUserId = await resolvePrivyUserIdForSession(db as any, principalAddress)
+    const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
+    if (!authorizedPrincipal) {
+      return res.status(403).json({
+        success: false,
+        error: 'Current session is not authorized for an active wallet profile',
+      } satisfies ApiEnvelope<never>)
+    }
+
+    const privyUserId = await resolvePrivyUserIdForProfile(db as any, authorizedPrincipal.profileId)
     if (!privyUserId) {
       return res.status(409).json({
         success: false,

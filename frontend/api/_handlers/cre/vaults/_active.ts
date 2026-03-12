@@ -7,8 +7,17 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { listKeeprVaultAutomationByVaultAddresses } from '../../../../server/_lib/keeprAutomation.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
+
+export interface VaultAutomationConfig {
+  automationEnabled: boolean
+  automationScope?: string
+  canonicalCswAddress?: `0x${string}` | null
+  embeddedEoaAddress?: `0x${string}` | null
+  privyWalletId?: string | null
+}
 
 export interface VaultConfig {
   vaultAddress: `0x${string}`
@@ -22,6 +31,7 @@ export interface VaultConfig {
   groupId: string
   graduatedAt?: string | null
   settledAt?: string | null
+  automation: VaultAutomationConfig
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -114,19 +124,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
     }
 
+    const automationRows = await listKeeprVaultAutomationByVaultAddresses(
+      result.rows.map((row: any) => String(row.vault_address).toLowerCase() as `0x${string}`),
+    )
+    const automationByVault = new Map(automationRows.map((row) => [row.vaultAddress, row]))
+
     const vaults: VaultConfig[] = result.rows.map((row: any) => {
       const configJson = typeof row.config_json === 'string'
         ? JSON.parse(row.config_json)
         : row.config_json ?? {}
       const contracts = configJson.contracts ?? {}
+      const vaultAddress = String(row.vault_address).toLowerCase() as `0x${string}`
+      const automation = automationByVault.get(vaultAddress)
 
       return {
-        vaultAddress: row.vault_address as `0x${string}`,
+        vaultAddress,
         chainId: Number(row.chain_id),
         creatorCoinAddress: row.creator_coin_address as `0x${string}`,
         groupId: String(row.group_id),
         graduatedAt: row.graduated_at ? new Date(row.graduated_at).toISOString() : null,
         settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : null,
+        automation: automation
+          ? {
+              automationEnabled: automation.automationEnabled,
+              ...(automation.automationScope ? { automationScope: automation.automationScope } : {}),
+              canonicalCswAddress: automation.canonicalCswAddress ?? null,
+              embeddedEoaAddress: automation.embeddedEoaAddress ?? null,
+              privyWalletId: automation.privyWalletId ?? null,
+            }
+          : {
+              automationEnabled: false,
+            },
         ...(contracts.ccaStrategy ? { ccaStrategyAddress: contracts.ccaStrategy } : {}),
         ...(contracts.oracle ? { oracleAddress: contracts.oracle } : {}),
         ...(contracts.vrfHub ? { vrfHubAddress: contracts.vrfHub } : {}),

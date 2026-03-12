@@ -50,10 +50,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: "9"
+      - name: Enable pnpm via Corepack
+        run: corepack enable
 
       - name: Typecheck CRE workflows
         run: bash cre/cre-workflows/scripts/typecheck-workflows.sh
@@ -90,7 +88,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Gitleaks secret scan
-        uses: gitleaks/gitleaks-action@v2
+      - name: Gitleaks secret scan (changed commit range)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          go install github.com/zricethezav/gitleaks/v8@v8.30.0
+          gitleaks_bin="$(go env GOPATH)/bin/gitleaks"
+          if [[ "$EVENT_NAME" == "pull_request" && -n "${BASE_SHA:-}" ]]; then
+            range="${BASE_SHA}..${HEAD_SHA}"
+          elif [[ -n "${BEFORE_SHA:-}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+            range="${BEFORE_SHA}..${HEAD_SHA}"
+          else
+            range=""
+          fi
+
+          if [[ -n "$range" ]]; then
+            echo "[gitleaks] scanning commit range: $range"
+            "$gitleaks_bin" detect --no-banner --redact --log-opts "$range" --exit-code 1
+          else
+            echo "[gitleaks] scanning repository snapshot (no commit range metadata available)"
+            "$gitleaks_bin" detect --no-banner --redact --exit-code 1
+          fi

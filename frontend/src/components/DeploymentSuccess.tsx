@@ -1,14 +1,16 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import type { Address } from 'viem'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
 import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles } from 'lucide-react'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
+import { apiFetch } from '@/lib/apiBase'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',
@@ -83,6 +85,190 @@ interface NextStep {
   }
 }
 
+export type AjnaAutomationPayload = {
+  vaultAddress: string
+  cswAddress: string
+  embeddedEoaAddress: string
+  privyWalletId: string
+}
+
+export type AjnaAutomationStatus = {
+  vaultAddress: string
+  automationEnabled: boolean
+  automationScope?: string | null
+  canonicalCswAddress?: string | null
+  embeddedEoaAddress?: string | null
+  privyWalletId?: string | null
+  lastOwnerCheckAt?: string | null
+  revokedAt?: string | null
+  updatedAt?: string | null
+}
+
+export type AjnaAutomationOptInCardProps = {
+  vaultAddress: string
+  canonicalCswAddress: string | null | undefined
+  embeddedEoaAddress: string | null | undefined
+  privyWalletId: string | null | undefined
+  status: AjnaAutomationStatus | null
+  statusUnavailable?: boolean
+  isSubmitting: boolean
+  isRevoking: boolean
+  isStatusLoading?: boolean
+  showVaultInput?: boolean
+  errorMessage?: string | null
+  onEnable: (payload: AjnaAutomationPayload) => void
+  onRevoke: (vaultAddress: string) => void
+  onVaultAddressChange?: (value: string) => void
+}
+
+function isAddressLike(value: string | null | undefined): value is `0x${string}` {
+  return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.trim())
+}
+
+function DebugRow({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">{label}</div>
+      <div className="mt-1 break-all font-mono text-[11px] text-zinc-200">{value && value.trim() ? value : '—'}</div>
+    </div>
+  )
+}
+
+export function AjnaAutomationOptInCard({
+  vaultAddress,
+  canonicalCswAddress,
+  embeddedEoaAddress,
+  privyWalletId,
+  status,
+  statusUnavailable = false,
+  isSubmitting,
+  isRevoking,
+  isStatusLoading = false,
+  showVaultInput = true,
+  errorMessage,
+  onEnable,
+  onRevoke,
+  onVaultAddressChange,
+}: AjnaAutomationOptInCardProps) {
+  const normalizedVaultAddress = vaultAddress.trim()
+  const hasVaultAddress = isAddressLike(normalizedVaultAddress)
+  const hasWalletContext =
+    isAddressLike(canonicalCswAddress ?? null) &&
+    isAddressLike(embeddedEoaAddress ?? null) &&
+    typeof privyWalletId === 'string' &&
+    privyWalletId.trim().length > 0
+  const canEnable = hasVaultAddress && hasWalletContext
+  const isEnabled = status?.automationEnabled === true && !status?.revokedAt
+  const statusLabel = statusUnavailable ? 'Status unavailable' : isEnabled ? 'Enabled' : 'Off by default'
+  const effectiveCanonicalCsw = status?.canonicalCswAddress ?? canonicalCswAddress ?? null
+  const effectiveEmbeddedEoa = status?.embeddedEoaAddress ?? embeddedEoaAddress ?? null
+  const effectivePrivyWalletLinked =
+    typeof (status?.privyWalletId ?? privyWalletId) === 'string' &&
+    String(status?.privyWalletId ?? privyWalletId).trim().length > 0
+
+  return (
+    <div
+      data-testid="ajna-automation-panel"
+      className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5 space-y-4"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-300">Ajna Automation</div>
+          <div className="mt-1 text-sm text-white">
+            {statusUnavailable
+              ? 'Ajna automation status unavailable'
+              : isEnabled
+                ? 'Ajna automation is enabled'
+                : 'Opt in to Ajna automation'}
+          </div>
+          <p className="mt-1 max-w-2xl text-[12px] text-zinc-300">
+            Authorize canonical Ajna automation with your creator-owned Coinbase Smart Wallet, connected embedded Privy EOA,
+            and its linked Privy wallet.
+          </p>
+        </div>
+        <span className="inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-200">
+          {statusLabel}
+        </span>
+      </div>
+
+      {showVaultInput ? (
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-zinc-500 mb-1.5">
+            Vault Address For Ajna Automation
+          </label>
+          <input
+            aria-label="Ajna vault address"
+            type="text"
+            value={vaultAddress}
+            onChange={(event) => onVaultAddressChange?.(event.target.value)}
+            placeholder="0x..."
+            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 font-mono text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/30"
+          />
+        </div>
+      ) : (
+        <DebugRow label="Vault" value={normalizedVaultAddress} />
+      )}
+
+      {isStatusLoading ? (
+        <div className="text-[11px] text-zinc-400">Checking current Ajna automation status…</div>
+      ) : null}
+
+      {!hasWalletContext ? (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+          Connect your canonical CSW plus the embedded Privy EOA that can sign for it before opting in.
+        </div>
+      ) : null}
+
+      {errorMessage ? (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">{errorMessage}</div>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <DebugRow label="Canonical CSW" value={effectiveCanonicalCsw} />
+        <DebugRow label="Embedded EOA" value={effectiveEmbeddedEoa} />
+        <DebugRow label="Privy Wallet" value={effectivePrivyWalletLinked ? 'On file' : null} />
+        <DebugRow label="Automation Scope" value={status?.automationScope ?? 'ajna_min_bucket_only'} />
+      </div>
+
+      {status?.lastOwnerCheckAt ? <DebugRow label="Last Owner Check" value={status.lastOwnerCheckAt} /> : null}
+      {status?.updatedAt ? <DebugRow label="Last Updated" value={status.updatedAt} /> : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        {isEnabled ? (
+          <button
+            type="button"
+            aria-label="Revoke Ajna automation"
+            onClick={() => onRevoke(normalizedVaultAddress)}
+            disabled={isRevoking || !hasVaultAddress}
+            className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-200 hover:bg-red-500/20 disabled:opacity-60"
+          >
+            {isRevoking ? 'Revoking…' : 'Revoke automation'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Enable Ajna automation"
+            onClick={() => {
+              if (!canEnable) return
+              onEnable({
+                vaultAddress: normalizedVaultAddress,
+                cswAddress: canonicalCswAddress!,
+                embeddedEoaAddress: embeddedEoaAddress!,
+                privyWalletId: privyWalletId!.trim(),
+              })
+            }}
+            disabled={!canEnable || isSubmitting}
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-60"
+          >
+            {isSubmitting ? 'Enabling…' : 'Enable Ajna automation'}
+          </button>
+        )}
+        <div className="text-[11px] text-zinc-400">This authorization stays tied to your own wallet context and can be revoked at any time.</div>
+      </div>
+    </div>
+  )
+}
+
 export interface DeploymentSuccessProps {
   /** The deployment record */
   deployment: DeploymentRecord | null
@@ -92,10 +278,23 @@ export interface DeploymentSuccessProps {
   shareSymbol?: string
   /** Callback when user wants to view another deployment */
   onNewDeploy?: () => void
+  /** Canonical CSW used for Ajna automation consent */
+  canonicalCswAddress?: Address | string | null
+  /** Connected embedded EOA wallet address */
+  embeddedEoaAddress?: Address | string | null
+  /** Connected embedded EOA Privy wallet ID */
+  privyWalletId?: string | null
 }
 
-export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccessProps) {
+export function DeploymentSuccess({
+  deployment,
+  shareSymbol,
+  canonicalCswAddress,
+  embeddedEoaAddress,
+  privyWalletId,
+}: DeploymentSuccessProps) {
   const publicClient = usePublicClient({ chainId: 8453 })
+  const [ajnaAutomationStatus, setAjnaAutomationStatus] = useState<AjnaAutomationStatus | null>(null)
   const auctionStatusQuery = useQuery({
     queryKey: ['deploymentSuccess', 'auctionStatus', deployment?.contracts.ccaStrategy],
     enabled: !!deployment?.contracts.ccaStrategy && !!publicClient,
@@ -113,6 +312,42 @@ export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccess
         isActive: Boolean(status?.[1] ?? false),
         isGraduated: Boolean(status?.[2] ?? false),
       }
+    },
+  })
+
+  const ajnaAutomationEnableMutation = useMutation({
+    mutationFn: async (payload: AjnaAutomationPayload): Promise<AjnaAutomationStatus> => {
+      const res = await apiFetch('/api/keepr/vault/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<AjnaAutomationStatus> | null
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(json?.error ?? 'Failed to enable Ajna automation')
+      }
+      return json.data
+    },
+    onSuccess: (data) => {
+      setAjnaAutomationStatus(data)
+    },
+  })
+
+  const ajnaAutomationRevokeMutation = useMutation({
+    mutationFn: async (vaultAddress: string): Promise<AjnaAutomationStatus> => {
+      const res = await apiFetch('/api/keepr/vault/automation', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vaultAddress }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<AjnaAutomationStatus> | null
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(json?.error ?? 'Failed to revoke Ajna automation')
+      }
+      return json.data
+    },
+    onSuccess: (data) => {
+      setAjnaAutomationStatus(data)
     },
   })
 
@@ -211,6 +446,30 @@ export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccess
           </div>
         )}
       </div>
+
+      {deployment.contracts.vault ? (
+        <AjnaAutomationOptInCard
+          vaultAddress={deployment.contracts.vault}
+          canonicalCswAddress={canonicalCswAddress ?? null}
+          embeddedEoaAddress={embeddedEoaAddress ?? null}
+          privyWalletId={privyWalletId ?? null}
+          status={ajnaAutomationStatus}
+          isSubmitting={ajnaAutomationEnableMutation.isPending}
+          isRevoking={ajnaAutomationRevokeMutation.isPending}
+          showVaultInput={false}
+          errorMessage={
+            ((ajnaAutomationEnableMutation.error as Error | null)?.message ??
+              (ajnaAutomationRevokeMutation.error as Error | null)?.message ??
+              null)
+          }
+          onEnable={(payload) => {
+            void ajnaAutomationEnableMutation.mutateAsync(payload)
+          }}
+          onRevoke={(vaultAddress) => {
+            void ajnaAutomationRevokeMutation.mutateAsync(vaultAddress)
+          }}
+        />
+      ) : null}
 
       {/* Deployed Contracts */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 overflow-hidden">

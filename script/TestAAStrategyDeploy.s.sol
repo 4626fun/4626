@@ -5,7 +5,6 @@ import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
 import "../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
-import "../contracts/vault/strategies/AjnaStrategy.sol";
 
 /**
  * @title TestAAStrategyDeploy
@@ -67,7 +66,7 @@ contract TestAAStrategyDeploy is Script, Test {
             console.log("   - Charm Vault:          ", result.charmVault);
             console.log("   - Charm Strategy:       ", result.charmStrategy);
             console.log("   - Creator Charm V2:     ", result.creatorCharmStrategy);
-            console.log("   - Ajna Strategy:        ", result.ajnaStrategy);
+            console.log("   - Ajna Strategy Adapter:", result.ajnaStrategy);
             console.log("");
 
             // Verify CreatorCharmStrategy is correct type

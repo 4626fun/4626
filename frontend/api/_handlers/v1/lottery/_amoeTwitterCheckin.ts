@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions } from '../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import { resolveAmoeWallet } from '../../../server/_lib/amoeWalletResolver.js'
 import { checkDurableRateLimit } from '../../../server/_lib/durableRateLimit.js'
 import { getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { claimDailyTwitterCheckin } from '../../../server/_lib/lotteryAmoe.js'
@@ -29,8 +30,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Authentication required' })
   }
 
+  const resolvedWallet = await resolveAmoeWallet({
+    authAddress: wallet,
+  })
+  if (!resolvedWallet.ok) {
+    const status = resolvedWallet.error === 'wallet_authority_mismatch' ? 403 : 400
+    return res.status(status).json({
+      success: false,
+      error: resolvedWallet.error,
+    })
+  }
+  const effectiveWallet = resolvedWallet.value.wallet
+
   const ip = getClientIp(req as any)
-  const rl = await checkDurableRateLimit(rateLimitKey('amoe', 'twitter-checkin', ip, wallet.toLowerCase()), {
+  const rl = await checkDurableRateLimit(rateLimitKey('amoe', 'twitter-checkin', ip, effectiveWallet), {
     windowMs: 60_000,
     maxRequests: 6,
   })
@@ -41,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const result = await claimDailyTwitterCheckin({ wallet: wallet.toLowerCase() as `0x${string}` })
+    const result = await claimDailyTwitterCheckin({ wallet: effectiveWallet })
     return res.status(200).json({
       success: true,
       data: result,

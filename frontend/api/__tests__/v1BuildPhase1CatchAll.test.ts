@@ -14,8 +14,7 @@ const ENABLED_BUILD_ROUTES = [
   'v1/build/ajna/repay',
   'v1/build/ajna/addCollateral',
   'v1/build/ajna/removeCollateral',
-  'v1/build/ajna/setBucketIndex',
-  'v1/build/ajna/moveToBucket',
+  'v1/build/ajna/setMinBucketIndex',
   'v1/build/ajna/setIdleBufferBps',
   'v1/build/charm/setCharmVault',
   'v1/build/charm/setSwapPool',
@@ -29,6 +28,11 @@ const ENABLED_BUILD_ROUTES = [
   'v1/build/charm/ownerEmergencyWithdrawFromCharm',
   'v1/build/charm/vault/rebalance',
   'v1/build/charm/vault/setStrategy',
+] as const
+
+const REMOVED_DIRECT_AJNA_ROUTES = [
+  'v1/build/ajna/setBucketIndex',
+  'v1/build/ajna/moveToBucket',
 ] as const
 
 describe('v1 enabled build routes (catch-all)', () => {
@@ -50,6 +54,25 @@ describe('v1 enabled build routes (catch-all)', () => {
       // which proves route registration in _routes.ts is active.
       expect(res.statusCode).toBe(405)
       expect(res.body).toEqual({ success: false, error: 'Method not allowed' })
+    }
+  })
+
+  it('returns 404 for removed direct Ajna build endpoints', async () => {
+    const mod = await import('../[...path].ts')
+    const handler = mod.default
+
+    for (const route of REMOVED_DIRECT_AJNA_ROUTES) {
+      const req = createMockReq({
+        method: 'GET',
+        query: { path: route },
+        url: `/api/${route}`,
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(404)
+      expect(res.body).toEqual({ success: false, error: 'Not found' })
     }
   })
 })

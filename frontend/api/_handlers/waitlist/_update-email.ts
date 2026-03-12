@@ -1,4 +1,5 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
@@ -53,26 +54,18 @@ async function findOwnedProfileByEmail(params: {
     SELECT p.id, p.email
     FROM profiles p
     WHERE p.email = ${email}
-      AND (
-        LOWER(p.primary_wallet) = ${principalAddress}
-        OR LOWER(p.embedded_wallet) = ${principalAddress}
-        OR LOWER(p.csw_address) = ${principalAddress}
-        OR LOWER(p.base_sub_account) = ${principalAddress}
-        OR LOWER(p.primary_smart_wallet) = ${principalAddress}
-        OR LOWER(p.primary_embedded_eoa) = ${principalAddress}
-        OR EXISTS (
-          SELECT 1
-          FROM profile_wallets pw
-          WHERE pw.profile_id = p.id
-            AND LOWER(pw.address) = ${principalAddress}
-        )
-      )
     LIMIT 1;
   `
   const row = q?.rows?.[0] as { id?: unknown; email?: unknown } | undefined
   if (!row?.id) return null
   const id = typeof row.id === 'number' ? row.id : Number(row.id)
   if (!Number.isFinite(id) || id <= 0) return null
+  const authorized = await isAuthorizedWalletForProfile({
+    db,
+    profileId: id,
+    address: principalAddress,
+  })
+  if (!authorized) return null
   return { id, email: typeof row.email === 'string' ? row.email : email }
 }
 
@@ -91,12 +84,6 @@ async function findOwnedProfileByPrincipal(params: {
       OR LOWER(p.base_sub_account) = ${principalAddress}
       OR LOWER(p.primary_smart_wallet) = ${principalAddress}
       OR LOWER(p.primary_embedded_eoa) = ${principalAddress}
-      OR EXISTS (
-        SELECT 1
-        FROM profile_wallets pw
-        WHERE pw.profile_id = p.id
-          AND LOWER(pw.address) = ${principalAddress}
-      )
     )
     ORDER BY
       CASE WHEN p.email IS NULL THEN 2 WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' OR LOWER(p.email) LIKE '%@wallet.4626.fun' THEN 1 ELSE 0 END ASC,

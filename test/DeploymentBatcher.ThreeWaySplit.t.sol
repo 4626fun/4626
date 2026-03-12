@@ -39,9 +39,14 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             initialSqrtPriceX96: 0,
             charmVaultName: "Charm Vault",
             charmVaultSymbol: "CHRM",
+            ajnaVaultName: "Ajna Inner Vault",
+            ajnaVaultSymbol: "AIV",
             charmWeightBps: 7_000,
             ajnaWeightBps: 2_000,
             solanaWeightBps: 1_100,
+            ajnaBufferRatioBps: 1_000,
+            ajnaMinBucketIndex: 4_156,
+            ajnaKeeper: makeAddr("ajnaKeeper"),
             solanaKeeper: makeAddr("solanaKeeper"),
             solanaMaxNavAge: 3600,
             solanaMaxNavDeltaBpsPerUpdate: 500,
@@ -53,8 +58,10 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: bytes32(uint256(1)),
             creatorCharmStrategy: bytes32(uint256(2)),
-            ajnaStrategy: bytes32(uint256(3)),
-            solanaStrategy: bytes32(uint256(4))
+            ajnaVaultAuth: bytes32(uint256(3)),
+            ajnaVault: bytes32(uint256(4)),
+            erc4626StrategyAdapter: bytes32(uint256(5)),
+            solanaStrategy: bytes32(uint256(6))
         });
 
         vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);

@@ -875,10 +875,17 @@ function AgentRegistration() {
       const lensUri = grove?.lensUri ? String(grove.lensUri) : undefined
       const gatewayUrl = grove?.gatewayUrl ? String(grove.gatewayUrl) : undefined
       // Prefer HTTPS gateway URL for broad validator compatibility.
-      if (gatewayUrl) setAgentUri(gatewayUrl)
-      else if (lensUri) setAgentUri(lensUri)
       setLensPublishResult({ lensUri, gatewayUrl })
-      setLensPublishState({ status: 'success' })
+      if (gatewayUrl) {
+        setAgentUri(gatewayUrl)
+        setLensPublishState({ status: 'success' })
+      } else {
+        setLensPublishState({
+          status: 'error',
+          error:
+            'Lens returned a lens:// URI without a gateway URL. Keep using a validator-safe agent URI (https://, http://, ipfs://, ar://, or data:) and do not write lens:// on-chain.',
+        })
+      }
     } catch (e: any) {
       const msg = String(e?.message || 'Failed to publish registration.')
       setLensPublishState({ status: 'error', error: msg })

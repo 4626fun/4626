@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions } from '../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import { resolveAmoeWallet } from '../../../server/_lib/amoeWalletResolver.js'
 import { getAmoeCreditSnapshot } from '../../../server/_lib/lotteryAmoe.js'
 
 function setPublicCors(res: VercelResponse) {
@@ -31,8 +32,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Missing or invalid wallet' })
   }
 
+  const resolvedWallet = await resolveAmoeWallet({
+    requestedWallet: walletRaw,
+    authAddress: g.auth?.address ?? null,
+  })
+  if (!resolvedWallet.ok) {
+    const status = resolvedWallet.error === 'wallet_authority_mismatch' ? 403 : 400
+    return res.status(status).json({
+      success: false,
+      error: resolvedWallet.error,
+    })
+  }
+
   try {
-    const snapshot = await getAmoeCreditSnapshot({ wallet: walletRaw.toLowerCase() as `0x${string}` })
+    const snapshot = await getAmoeCreditSnapshot({ wallet: resolvedWallet.value.wallet })
     return res.status(200).json({ success: true, data: snapshot })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'amoe_credit_snapshot_failed'

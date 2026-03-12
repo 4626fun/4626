@@ -9,7 +9,7 @@
  *   2. Compare with strategy current bucket
  *   3. Apply threshold/max-step guardrails
  *   4. Bias target using nearby bucket liquidity
- *   5. Execute moveToBucket/setBucketIndex when needed
+ *   5. Execute setMinBucketIndex when needed
  */
 
 import { executeAjnaBucketManager } from '../actions/ajna-bucket-manager.action.js';

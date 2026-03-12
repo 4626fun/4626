@@ -117,6 +117,8 @@ scripts/
 !frontend/scripts/**
 !cre/scripts/
 !cre/scripts/**
+!cre/cre-workflows/scripts/
+!cre/cre-workflows/scripts/**
 !scripts/solana/
 !scripts/solana/**
 scripts/solana/vanity-pool/available/*.json
@@ -129,29 +131,9 @@ scripts/solana/vanity-pool/*.lock
 !script/DeployInfrastructure.s.sol
 !script/deploy-with-aa.ts
 !script/deploy.sh
-# Ignore most local tests by default, but allow targeted regression tests.
-test/**
-!test/CreatorOVault.ValuationGuard.t.sol
-!test/CreatorOVault.WithdrawDelay.t.sol
-!test/CreatorOVault.WithdrawDelayTransferGriefing.t.sol
-!test/CreatorOVaultWrapper.ShareOFTValidation.t.sol
-!test/vault/
-!test/vault/strategies/
-!test/vault/CreatorCharmStrategyOracle.t.sol
-!test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol
-!test/vault/CreatorLotteryManager.VrfSponsorshipHardening.t.sol
-!test/vault/strategies/SolanaStrategy.Valuation.t.sol
-!test/vault/strategies/SolanaStrategy.Flows.t.sol
-!test/DeploymentBatcher.ThreeWaySplit.t.sol
-!test/DeploymentBatcher.SolanaStrategyPhase3.t.sol
-!test/CreatorOracle.LayerZeroReceiveAuth.t.sol
-!test/CreatorOracle.TwapSafety.t.sol
-!test/CreatorOracle.BroadcastCreatorPrice.t.sol
-!test/CreatorLotteryManager.OracleTimestampGuard.t.sol
-!test/CCALaunchStrategy.LaunchHandshake.t.sol
-!test/ve4626.LockTokenRestriction.t.sol
-!test/CreatorShareOFT.ContractURI.t.sol
-!test/DeploymentBatcher.Phase3Ownership.t.sol
+# Track tests by default; keep only local scratch tests out of repo.
+test/local/**
+test/tmp/**
 telegram-bot/
 relayer/
 monitoring/

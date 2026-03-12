@@ -45,6 +45,10 @@ export type KeeprConfigV1 = {
   /** Optional contract addresses for CRE automation workflows */
   contracts?: {
     ccaStrategy?: `0x${string}`
+    ajnaAdapter?: `0x${string}`
+    ajnaInnerVault?: `0x${string}`
+    ajnaAuth?: `0x${string}`
+    ajnaPool?: `0x${string}`
     oracle?: `0x${string}`
     vrfHub?: `0x${string}`
   }
