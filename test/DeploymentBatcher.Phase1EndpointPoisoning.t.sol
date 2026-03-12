@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
 
@@ -314,5 +315,61 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
         assertEq(cfg.hubComposer, address(0x2001));
         assertEq(cfg.solanaEid, 30168);
         assertTrue(cfg.enabled);
+    }
+
+    function _phase2Params() internal pure returns (DeploymentBatcher.Phase2Params memory params) {
+        params = DeploymentBatcher.Phase2Params({
+            creatorToken: address(0),
+            owner: address(0),
+            creatorTreasury: address(0),
+            payoutRecipient: address(0),
+            vault: address(0),
+            wrapper: address(0),
+            shareOFT: address(0),
+            shareSymbol: "",
+            version: "",
+            depositAmount: 0,
+            requiredRaise: 0,
+            floorPriceQ96: 0,
+            auctionSteps: ""
+        });
+    }
+
+    function _codeIds() internal pure returns (DeploymentBatcher.CodeIds memory codeIds) {
+        codeIds = DeploymentBatcher.CodeIds({
+            vault: bytes32(0),
+            wrapper: bytes32(0),
+            shareOFT: bytes32(0),
+            gauge: bytes32(0),
+            cca: bytes32(0),
+            oracle: bytes32(0),
+            oftBootstrap: bytes32(0)
+        });
+    }
+
+    function test_LegacyOneShotPhase2_Disabled_NoPermit() public {
+        vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
+        batcher.deployPhase2AndLaunch(_phase2Params(), _codeIds());
+    }
+
+    function test_LegacyOneShotPhase2_Disabled_Permit() public {
+        DeploymentBatcher.PermitData memory permit = DeploymentBatcher.PermitData({
+            deadline: 0,
+            v: 0,
+            r: bytes32(0),
+            s: bytes32(0)
+        });
+        vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
+        batcher.deployPhase2AndLaunchWithPermit(_phase2Params(), _codeIds(), permit);
+    }
+
+    function test_LegacyOneShotPhase2_Disabled_Permit2() public {
+        ISignatureTransfer.PermitTransferFrom memory permit2 = ISignatureTransfer.PermitTransferFrom({
+            permitted: ISignatureTransfer.TokenPermissions({token: address(0), amount: 0}),
+            nonce: 0,
+            deadline: 0
+        });
+        vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
+        batcher.deployPhase2AndLaunchWithPermit2(_phase2Params(), _codeIds(), permit2, "");
     }
 }

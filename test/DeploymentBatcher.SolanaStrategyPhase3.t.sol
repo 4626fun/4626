@@ -284,7 +284,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(ajnaAuth.bufferRatio(), 1_500, "ajna buffer ratio mismatch");
         assertEq(ajnaAuth.minBucketIndex(), 4_156, "ajna min bucket mismatch");
         assertTrue(ajnaAuth.keepers(ajnaKeeper), "ajna keeper should be configured");
-        assertEq(ajnaAuth.admin(), protocolTreasury, "ajna auth admin should transfer to treasury");
+        assertEq(ajnaAuth.admin(), address(this), "ajna auth admin should transfer to creator owner");
     }
 
     function test_deployPhase3Strategies_revertsWhenAjnaCodeIdsMissing() public {

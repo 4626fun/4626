@@ -201,7 +201,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         );
     }
 
-    function test_deployPhase3Strategies_setsNestedAjnaOwnerAndAuthToProtocolTreasury() external {
+    function test_deployPhase3Strategies_setsNestedAjnaOwnerToTreasuryAndAuthToCreatorOwner() external {
         DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
             creatorToken: makeAddr("creatorToken"),
             owner: ownerAddr,
@@ -238,7 +238,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         DeploymentBatcher.Phase3Result memory out = batcher.deployPhase3Strategies(params, codeIds);
 
         assertEq(MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna adapter owner should be treasury");
-        assertEq(MockAjnaVaultAuth(out.ajnaVaultAuth).admin(), protocolTreasury, "ajna auth admin should be treasury");
+        assertEq(MockAjnaVaultAuth(out.ajnaVaultAuth).admin(), ownerAddr, "ajna auth admin should be creator owner");
         assertEq(MockAjnaAdapter(out.ajnaStrategy).idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "charm owner remains treasury");
         assertEq(vault.addedWeights(out.charmStrategy), params.charmWeightBps, "charm strategy should be registered");

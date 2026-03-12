@@ -359,6 +359,56 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     expect(mocks.sendPrivyCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
   })
 
+  it('fails closed when Ajna auth admin cannot be decoded as an address', async () => {
+    mocks.readContract.mockImplementationOnce(async ({ functionName }: { functionName: string }) => {
+      if (functionName === 'admin') return '0xownerbytes'
+      throw new Error(`Unexpected readContract call: ${functionName}`)
+    })
+
+    const result = await executeKeeprAction({
+      id: 14,
+      vaultAddress: VAULT,
+      groupId: 'group-1',
+      actionType: 'strategy.ajna.rebucket',
+      action: {
+        action: 'strategy.ajna.rebucket',
+        authAddress: AUTH,
+        targetBucket: 1200,
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.retryable).toBe(false)
+    expect(result.error).toBe('ajna_auth_admin_unreadable')
+    expect(mocks.resolvePrivyCoinbaseSmartWalletOwnerContext).not.toHaveBeenCalled()
+    expect(mocks.sendPrivyCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
+  })
+
+  it('keeps Ajna auth admin RPC read failures retryable when the transport is flaky', async () => {
+    mocks.readContract.mockImplementationOnce(async ({ functionName }: { functionName: string }) => {
+      if (functionName === 'admin') throw new Error('RPC timeout while reading admin')
+      throw new Error(`Unexpected readContract call: ${functionName}`)
+    })
+
+    const result = await executeKeeprAction({
+      id: 15,
+      vaultAddress: VAULT,
+      groupId: 'group-1',
+      actionType: 'strategy.ajna.rebucket',
+      action: {
+        action: 'strategy.ajna.rebucket',
+        authAddress: AUTH,
+        targetBucket: 1200,
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.retryable).toBe(true)
+    expect(result.error).toContain('ajna_auth_admin_read_failed:')
+    expect(mocks.resolvePrivyCoinbaseSmartWalletOwnerContext).not.toHaveBeenCalled()
+    expect(mocks.sendPrivyCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
+  })
+
   it('fails closed when owner revalidation fails before sending the UserOp', async () => {
     mocks.resolvePrivyCoinbaseSmartWalletOwnerContext.mockRejectedValueOnce(new Error('stored_owner_mismatch'))
 

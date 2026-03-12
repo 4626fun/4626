@@ -5,14 +5,14 @@ Scope: 4626 deploy stack and related infra used by this repo.
 
 ## Sources
 
-1. Live onchain batcher (phased deployer): `0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753`
+1. Live onchain batcher (phased deployer): `0xDe221474068e0e8bD1A08C2F9b4E540Ed0837e36`
 2. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 3. Deployment manifests: `deployments/base/contracts/**/*.json`
 4. Local env snapshot: `.env`
 
 ## Live Onchain (Authoritative For Current Deploy Path)
 
-Queried from the deployment batcher at `0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753`:
+Queried from the deployment batcher at `0xDe221474068e0e8bD1A08C2F9b4E540Ed0837e36`:
 
 | Contract / Field | Address |
 |---|---|
@@ -44,7 +44,7 @@ From `frontend/src/config/contracts.defaults.ts`:
 | `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
 | `vrfConsumer` | `0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304` |
 | `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
-| `creatorVaultBatcher` | `0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753` |
+| `creatorVaultBatcher` | `0xDe221474068e0e8bD1A08C2F9b4E540Ed0837e36` |
 | `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
 | `universalBytecodeStore` | `0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c` |
 | `universalCreate2DeployerFromStore` | `0x0243F14771054c890E5Ef5D467D0137a20B2d94B` |
@@ -67,7 +67,7 @@ From `deployments/base/contracts/**/*.json`:
 ## Current Drift (Needs Canonical Decision)
 
 1. Deployment manifests are historical and still include older infra addresses (`0xA02A...`, `0xDb65...`, `0xCDf4...`).
-2. Live phased deployer has Solana routing enabled (`solanaBridgeAdapter` + `solanaDestination` are set).
+2. Live phased deployer Solana routing must be configured via Safe (`setSolanaConfig`) after each new batcher rotation.
 3. Legacy `CreatorOVaultFactory` remains in manifests/scripts but is not used in phased deploy runtime.
 
 ## Usage Notes

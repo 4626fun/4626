@@ -44,7 +44,13 @@ export const CONTRACTS = {
   // Phase 1/2 (AA): Vault activation batcher (approve + deposit + wrap + launch auction)
   vaultActivationBatcher: envAddress('VITE_VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher),
   // Phased deploy orchestrator (Phases 1–3): deterministic deploy+launch across multiple txs on Base.
-  creatorVaultBatcher: envAddress('VITE_CREATOR_VAULT_BATCHER', BASE_DEFAULTS.creatorVaultBatcher),
+  // Optional env alias kept for staged cutovers / emergency overrides.
+  // Primary default remains BASE_DEFAULTS.creatorVaultBatcher.
+  creatorVaultBatcher: envAddress(
+    'VITE_CREATOR_VAULT_BATCHER',
+    envAddress('VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ??
+      BASE_DEFAULTS.creatorVaultBatcher,
+  ),
 
   // Protocol treasury / multisig (receives protocol fee slice from GaugeController)
   protocolTreasury: envAddress('VITE_PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
