@@ -56,9 +56,16 @@ function ConversationItem({
     if (convo.peerAddress) return
     if (!convo.peerInboxId) return
     let cancelled = false
-    resolveInboxAddress(convo.peerInboxId).then((addr) => {
-      if (!cancelled) setResolvedPeer({ inboxId: convo.peerInboxId!, address: addr })
-    })
+    const inboxId = convo.peerInboxId
+    resolveInboxAddress(inboxId)
+      .then((addr) => {
+        if (cancelled) return
+        setResolvedPeer((prev) => {
+          if (prev?.inboxId === inboxId && prev.address === addr) return prev
+          return { inboxId, address: addr }
+        })
+      })
+      .catch(() => undefined)
     return () => { cancelled = true }
   }, [convo.type, convo.peerAddress, convo.peerInboxId, resolveInboxAddress])
 
@@ -92,6 +99,7 @@ function ConversationItem({
         ...convo,
         name: displayName,
         peerAddress: peerAddress ?? convo.peerAddress,
+        imageUrl: avatar ?? convo.imageUrl,
       })}
       className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
     >

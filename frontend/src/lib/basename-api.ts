@@ -90,7 +90,7 @@ export function isExpectedBasenameLookupError(error: unknown): boolean {
 
 function logBasenameLookupError(message: string, error: unknown): void {
   if (isExpectedBasenameLookupError(error)) {
-    logger.debug(`${message} (expected miss)`, error)
+    logger.debug(`${message} (expected miss): ${errorMessage(error)}`)
     return
   }
   logger.error(message, error)

@@ -324,7 +324,17 @@ export function useSwapExecution(params: {
     [swapPolicy, params.executionAddress],
   )
   const diagnosticsEnabled = swapPolicy.diagnosticsEnabled || canary7702Eligible
-  const normalizedCapabilities = params.capabilities ?? EMPTY_CAPABILITIES
+  const normalizedPaymasterService = Boolean(params.capabilities?.paymasterService)
+  const normalizedAtomicStatus = params.capabilities?.atomicStatus ?? 'unknown'
+  const normalizedSupports5792 = Boolean(params.capabilities?.supports5792)
+  const normalizedCapabilities = useMemo<AccountCapabilities>(
+    () => ({
+      paymasterService: normalizedPaymasterService,
+      atomicStatus: normalizedAtomicStatus,
+      supports5792: normalizedSupports5792,
+    }),
+    [normalizedAtomicStatus, normalizedPaymasterService, normalizedSupports5792],
+  )
   const canonicalPolicyApplies = useMemo(
     () =>
       shouldApplyCanonicalEnforcement({
@@ -337,33 +347,76 @@ export function useSwapExecution(params: {
 
   useEffect(() => {
     if (!swapDebugEnabled) return
-    setTxDebug((prev) => ({
-      ...prev,
-      enabled: true,
-      chainId: Number(swapChainId),
-      selectedAddress: params.address ?? null,
-      executionAddress: params.executionAddress ?? null,
-      canonicalAddress: params.canonicalAddress ?? null,
-      signerAddress: params.signerAddress ?? null,
-      signerType: params.signerType ?? null,
-      connectorId: params.connectorId ?? null,
-      connectorName: params.connectorName ?? null,
-      capabilities: normalizedCapabilities,
-      canonicalSigner: {
-        required: Boolean(params.canonicalSignerDebug?.required),
-        ready: Boolean(params.canonicalSignerDebug?.ready),
-        code: params.canonicalSignerDebug?.code ?? null,
-        reason: params.canonicalSignerDebug?.reason ?? null,
-      },
-      privy: {
-        clientStatus: params.privyDebug?.clientStatus ?? null,
-        ready: Boolean(params.privyDebug?.ready),
-        authenticated:
-          typeof params.privyDebug?.authenticated === 'boolean' ? params.privyDebug.authenticated : null,
-        embeddedWalletAddress: params.privyDebug?.embeddedWalletAddress ?? null,
-        embeddedWalletSource: params.privyDebug?.embeddedWalletSource ?? null,
-      },
-    }))
+    const nextChainId = Number(swapChainId)
+    const nextSelectedAddress = params.address ?? null
+    const nextExecutionAddress = params.executionAddress ?? null
+    const nextCanonicalAddress = params.canonicalAddress ?? null
+    const nextSignerAddress = params.signerAddress ?? null
+    const nextSignerType = params.signerType ?? null
+    const nextConnectorId = params.connectorId ?? null
+    const nextConnectorName = params.connectorName ?? null
+    const nextCapabilities = {
+      paymasterService: normalizedPaymasterService,
+      atomicStatus: normalizedAtomicStatus,
+      supports5792: normalizedSupports5792,
+    } as const
+    const nextCanonicalSigner = {
+      required: Boolean(params.canonicalSignerDebug?.required),
+      ready: Boolean(params.canonicalSignerDebug?.ready),
+      code: params.canonicalSignerDebug?.code ?? null,
+      reason: params.canonicalSignerDebug?.reason ?? null,
+    } as const
+    const nextPrivy = {
+      clientStatus: params.privyDebug?.clientStatus ?? null,
+      ready: Boolean(params.privyDebug?.ready),
+      authenticated:
+        typeof params.privyDebug?.authenticated === 'boolean' ? params.privyDebug.authenticated : null,
+      embeddedWalletAddress: params.privyDebug?.embeddedWalletAddress ?? null,
+      embeddedWalletSource: params.privyDebug?.embeddedWalletSource ?? null,
+    } as const
+
+    setTxDebug((prev) => {
+      const unchanged =
+        prev.enabled === true &&
+        prev.chainId === nextChainId &&
+        prev.selectedAddress === nextSelectedAddress &&
+        prev.executionAddress === nextExecutionAddress &&
+        prev.canonicalAddress === nextCanonicalAddress &&
+        prev.signerAddress === nextSignerAddress &&
+        prev.signerType === nextSignerType &&
+        prev.connectorId === nextConnectorId &&
+        prev.connectorName === nextConnectorName &&
+        prev.capabilities.paymasterService === nextCapabilities.paymasterService &&
+        prev.capabilities.atomicStatus === nextCapabilities.atomicStatus &&
+        prev.capabilities.supports5792 === nextCapabilities.supports5792 &&
+        prev.canonicalSigner.required === nextCanonicalSigner.required &&
+        prev.canonicalSigner.ready === nextCanonicalSigner.ready &&
+        prev.canonicalSigner.code === nextCanonicalSigner.code &&
+        prev.canonicalSigner.reason === nextCanonicalSigner.reason &&
+        prev.privy.clientStatus === nextPrivy.clientStatus &&
+        prev.privy.ready === nextPrivy.ready &&
+        prev.privy.authenticated === nextPrivy.authenticated &&
+        prev.privy.embeddedWalletAddress === nextPrivy.embeddedWalletAddress &&
+        prev.privy.embeddedWalletSource === nextPrivy.embeddedWalletSource
+
+      if (unchanged) return prev
+
+      return {
+        ...prev,
+        enabled: true,
+        chainId: nextChainId,
+        selectedAddress: nextSelectedAddress,
+        executionAddress: nextExecutionAddress,
+        canonicalAddress: nextCanonicalAddress,
+        signerAddress: nextSignerAddress,
+        signerType: nextSignerType,
+        connectorId: nextConnectorId,
+        connectorName: nextConnectorName,
+        capabilities: nextCapabilities,
+        canonicalSigner: nextCanonicalSigner,
+        privy: nextPrivy,
+      }
+    })
   }, [
     swapDebugEnabled,
     swapChainId,
@@ -383,7 +436,9 @@ export function useSwapExecution(params: {
     params.privyDebug?.authenticated,
     params.privyDebug?.embeddedWalletAddress,
     params.privyDebug?.embeddedWalletSource,
-    normalizedCapabilities,
+    normalizedPaymasterService,
+    normalizedAtomicStatus,
+    normalizedSupports5792,
   ])
 
   const updateAttemptDebug = useCallback((attempt: SwapTxAttemptDebug) => {

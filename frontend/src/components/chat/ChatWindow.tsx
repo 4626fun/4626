@@ -147,9 +147,12 @@ function SenderLabel({ inboxId }: { inboxId: string }) {
 
   useEffect(() => {
     let cancelled = false
-    resolveInboxAddress(inboxId).then((addr) => {
-      if (!cancelled) setAddress(addr)
-    })
+    resolveInboxAddress(inboxId)
+      .then((addr) => {
+        if (cancelled) return
+        setAddress((prev) => (prev === addr ? prev : addr))
+      })
+      .catch(() => undefined)
     return () => { cancelled = true }
   }, [inboxId, resolveInboxAddress])
 
@@ -197,6 +200,8 @@ export function ChatWindow({
   const [commandHint, setCommandHint] = useState<string | null>(null)
   const [commandGuards, setCommandGuards] = useState<Record<string, CommandGuardResult>>({})
   const [desktopCommandsOpen, setDesktopCommandsOpen] = useState(false)
+  const [peerAddressCopied, setPeerAddressCopied] = useState(false)
+  const [peerAddressHovered, setPeerAddressHovered] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -209,9 +214,15 @@ export function ChatWindow({
     if (peerAddress) return
     if (!peerInboxId) return
     let cancelled = false
-    resolveInboxAddress(peerInboxId).then((addr) => {
-      if (!cancelled) setResolvedPeer({ inboxId: peerInboxId, address: addr })
-    })
+    resolveInboxAddress(peerInboxId)
+      .then((addr) => {
+        if (cancelled) return
+        setResolvedPeer((prev) => {
+          if (prev?.inboxId === peerInboxId && prev.address === addr) return prev
+          return { inboxId: peerInboxId, address: addr }
+        })
+      })
+      .catch(() => undefined)
     return () => { cancelled = true }
   }, [conversationType, peerInboxId, peerAddress, resolveInboxAddress])
 
@@ -230,8 +241,10 @@ export function ChatWindow({
     conversationType === 'dm' && dmPeerAddress
       ? (agentIdentity ? '4626 assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
       : null
+  const copyablePeerAddress = conversationType === 'dm' ? dmPeerAddress : null
+  const peerProfileHref = copyablePeerAddress ? `/portfolio/${copyablePeerAddress}` : null
   const headerAvatar = conversationType === 'dm'
-    ? (agentIdentity?.avatar ?? dmIdentity.avatar ?? conversationImageUrl ?? null)
+    ? (conversationImageUrl ?? agentIdentity?.avatar ?? dmIdentity.avatar ?? null)
     : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
   const lensBadge = conversationType === 'dm' && dmPeerAddress && dmIdentity.lensHandle
@@ -245,6 +258,34 @@ export function ChatWindow({
     const trimmed = raw.trim().toLowerCase()
     return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed : ''
   }, [accountContext.activeAccount, accountContext.activeAccountType, address])
+
+  const handleCopyPeerAddress = useCallback(async () => {
+    if (!copyablePeerAddress) return
+    if (typeof navigator === 'undefined') return
+    if (!navigator.clipboard?.writeText) return
+    try {
+      await navigator.clipboard.writeText(copyablePeerAddress)
+      setPeerAddressCopied(true)
+    } catch {
+      // ignore clipboard copy failures
+    }
+  }, [copyablePeerAddress])
+
+  const handleOpenPeerProfile = useCallback(
+    (event?: { stopPropagation?: () => void }) => {
+      event?.stopPropagation?.()
+      if (!peerProfileHref) return
+      if (typeof window === 'undefined') return
+      window.open(peerProfileHref, '_blank', 'noopener,noreferrer')
+    },
+    [peerProfileHref],
+  )
+
+  useEffect(() => {
+    if (!peerAddressCopied) return
+    const timer = window.setTimeout(() => setPeerAddressCopied(false), 1200)
+    return () => window.clearTimeout(timer)
+  }, [peerAddressCopied])
 
   // Load initial messages
   useEffect(() => {
@@ -851,13 +892,29 @@ export function ChatWindow({
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0">
-              {headerAvatar ? (
-                <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                headerInitials
-              )}
-            </div>
+            {peerProfileHref ? (
+              <button
+                type="button"
+                onClick={() => handleOpenPeerProfile()}
+                className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0 ring-1 ring-transparent hover:ring-white/25 transition-colors"
+                aria-label="Open profile"
+                title="Open profile"
+              >
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </button>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0">
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </div>
+            )}
             <div className="min-w-0 text-left">
               <div className="text-sm font-semibold text-zinc-100 truncate">
                 {headerName}
@@ -865,6 +922,25 @@ export function ChatWindow({
               {headerSubline && (
                 <div className="text-[10px] text-zinc-500 truncate">
                   {headerSubline}
+                </div>
+              )}
+              {copyablePeerAddress && (
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyPeerAddress()}
+                    onMouseEnter={() => setPeerAddressHovered(true)}
+                    onMouseLeave={() => setPeerAddressHovered(false)}
+                    onFocus={() => setPeerAddressHovered(true)}
+                    onBlur={() => setPeerAddressHovered(false)}
+                    className="font-mono text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                    title={`Copy address ${copyablePeerAddress}`}
+                  >
+                    {peerAddressHovered ? copyablePeerAddress : truncateAddress(copyablePeerAddress)}
+                  </button>
+                  {peerAddressCopied ? (
+                    <span className="text-[9px] text-emerald-300/90">Copied</span>
+                  ) : null}
                 </div>
               )}
               {lensBadge && (
@@ -889,17 +965,55 @@ export function ChatWindow({
           onClick={onMinimize}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0">
-              {headerAvatar ? (
-                <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                headerInitials
-              )}
-            </div>
+            {peerProfileHref ? (
+              <button
+                type="button"
+                onClick={(event) => handleOpenPeerProfile(event)}
+                className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0 ring-1 ring-transparent hover:ring-white/25 transition-colors"
+                aria-label="Open profile"
+                title="Open profile"
+              >
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </button>
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0">
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </div>
+            )}
             <div className="min-w-0">
               <div className="text-sm text-zinc-200 font-medium truncate">{headerName}</div>
               {headerSubline && (
                 <div className="text-[10px] text-zinc-500 truncate">{headerSubline}</div>
+              )}
+              {copyablePeerAddress && (
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void handleCopyPeerAddress()
+                    }}
+                    onMouseEnter={() => setPeerAddressHovered(true)}
+                    onMouseLeave={() => setPeerAddressHovered(false)}
+                    onFocus={() => setPeerAddressHovered(true)}
+                    onBlur={() => setPeerAddressHovered(false)}
+                    className="font-mono text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                    title={`Copy address ${copyablePeerAddress}`}
+                  >
+                    {peerAddressHovered ? copyablePeerAddress : truncateAddress(copyablePeerAddress)}
+                  </button>
+                  {peerAddressCopied ? (
+                    <span className="text-[9px] text-emerald-300/90">Copied</span>
+                  ) : null}
+                </div>
               )}
               {lensBadge && (
                 <div className="text-[9px] text-cyan-200 truncate">{lensBadge}</div>
