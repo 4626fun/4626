@@ -21,6 +21,7 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 }
 
 const PAGE_SIZE = 20
+const SEARCH_AUTO_FETCH_MAX_PAGES = 30
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 
@@ -164,18 +165,22 @@ export function ExploreCreators() {
   const filteredCoins = useMemo(() => {
     if (!searchQuery.trim()) return allCoins
     const query = searchQuery.toLowerCase()
+    const queryWithoutAt = query.startsWith('@') ? query.slice(1) : query
     return allCoins.filter((coin) => {
       const name = (coin.name || '').toLowerCase()
       const symbol = (coin.symbol || '').toLowerCase()
       const address = (coin.address || '').toLowerCase()
       const payout = (coin.payoutRecipientAddress || '').toLowerCase()
       const creator = (coin.creatorAddress || '').toLowerCase()
+      const creatorHandle = (coin.creatorProfile?.handle || '').toLowerCase()
       return (
         name.includes(query) ||
         symbol.includes(query) ||
         address.includes(query) ||
         payout.includes(query) ||
-        creator.includes(query)
+        creator.includes(query) ||
+        creatorHandle.includes(query) ||
+        creatorHandle.includes(queryWithoutAt)
       )
     })
   }, [allCoins, searchQuery])
@@ -279,6 +284,14 @@ export function ExploreCreators() {
     !isLoading &&
     !isError &&
     ((creatorsTotalDisplay ?? 0) > 0 || syncStatus === 'running' || syncStatus === 'error')
+  const shouldAutoFetchForSearch =
+    searchQuery.trim().length > 0 &&
+    filteredCoins.length === 0 &&
+    !isLoading &&
+    !isError &&
+    hasNextPage === true &&
+    !isFetchingNextPage &&
+    (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
 
   // Handle infinite scroll
   const handleScroll = useCallback(() => {
@@ -296,6 +309,14 @@ export function ExploreCreators() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
+
+  useEffect(() => {
+    if (!shouldAutoFetchForSearch) return
+    const timer = window.setTimeout(() => {
+      fetchNextPage().catch(() => undefined)
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [fetchNextPage, shouldAutoFetchForSearch])
 
   const updateHorizontalControls = useCallback((el: HTMLElement | null) => {
     if (!el) return
@@ -558,6 +579,11 @@ export function ExploreCreators() {
                   <p className="mt-2 text-xs text-zinc-600">
                     Global stats are available, but the ranked creator rows have not finished loading yet.
                   </p>
+                </div>
+              ) : searchQuery.trim().length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400">Searching more creators...</p>
+                  <p className="mt-2 text-xs text-zinc-600">Scanning additional pages for matches.</p>
                 </div>
               ) : filteredCoins.length === 0 ? (
                 // Empty state
