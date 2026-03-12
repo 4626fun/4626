@@ -467,8 +467,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             return 0;
         }
 
-        // Convert buyer's held share balance to USD (1e6) for coverage math.
-        (uint256 buyerCurrentShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, tokenIn, buyerCurrentShareBalance);
+        // Convert raw held share balance to USD (1e6) for coverage math.
+        uint256 creatorShareBalanceUSD = 0;
+        if (buyerCurrentShareBalance > 0) {
+            (creatorShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, tokenIn, buyerCurrentShareBalance);
+        }
 
         // Get vault for this creator coin (for ve(3,3) vault weighting)
         address vault = registry.getVaultForToken(creatorCoin);
@@ -476,7 +479,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         // Calculate win probability with ve(3,3) boosts
         uint256 baseWinChance = calculateWinChance(swapValueUSD);
         uint256 boostedWinChance =
-            _applyBoost(buyer, creatorCoin, tokenIn, buyerCurrentShareBalanceUSD, vault, swapValueUSD, baseWinChance);
+            _applyBoost(buyer, creatorCoin, tokenIn, creatorShareBalanceUSD, vault, swapValueUSD, baseWinChance);
 
         // Request VRF
         if (useLocalVRF && address(localVRFConsumer) != address(0)) {
@@ -837,8 +840,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (swapValueUSD < lotteryConfig.minSwapAmount) return;
         if (!lotteryConfig.isActive) return;
 
-        // Convert buyer's held share balance to USD (1e6) for coverage math.
-        (uint256 buyerCurrentShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, tokenIn, buyerCurrentShareBalance);
+        // Convert raw held share balance to USD (1e6) for coverage math.
+        uint256 creatorShareBalanceUSD = 0;
+        if (buyerCurrentShareBalance > 0) {
+            (creatorShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, tokenIn, buyerCurrentShareBalance);
+        }
 
         // Get vault for this creator coin (for ve(3,3) vault weighting)
         address vault = registry.getVaultForToken(creatorCoin);
@@ -846,7 +852,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         // Calculate win probability with ve(3,3) boosts
         uint256 baseWinChance = calculateWinChance(swapValueUSD);
         uint256 boostedWinChance = _applyBoost(
-            buyer, creatorCoin, tokenIn, buyerCurrentShareBalanceUSD, vault, swapValueUSD, baseWinChance
+            buyer, creatorCoin, tokenIn, creatorShareBalanceUSD, vault, swapValueUSD, baseWinChance
         );
 
         // Request VRF with sourceChainEid so we can send callback on win

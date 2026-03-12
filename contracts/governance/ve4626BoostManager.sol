@@ -107,20 +107,19 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Coverage is based only on held creator shares (no ve lock matching)
-     * @dev `creatorShareBalanceAmount` is expected to be the creator share value in USD (1e6 precision).
+     * @notice Coverage is now purely based on held creator shares in USD
+     * @dev No ve lock matching, no per-creator lock required - one ve4626 lock only
      */
     function getCoverageBps(
         address /*user*/,
         address /*registry*/,
         address /*creatorCoin*/,
         address /*shareBalanceToken*/,
-        uint256 creatorShareBalanceAmount,
+        uint256 creatorShareBalanceUSD,
         uint256 swapAmountUSD
     ) external pure returns (uint256 coverageBps) {
-        if (swapAmountUSD == 0 || creatorShareBalanceAmount == 0) return 0;
+        if (swapAmountUSD == 0 || creatorShareBalanceUSD == 0) return 0;
 
-        uint256 creatorShareBalanceUSD = creatorShareBalanceAmount;
         uint256 coveredUsd = Math.min(creatorShareBalanceUSD, swapAmountUSD);
         coverageBps = Math.mulDiv(coveredUsd, BOOST_PRECISION, swapAmountUSD);
         if (coverageBps > BOOST_PRECISION) coverageBps = BOOST_PRECISION;

@@ -1,5 +1,14 @@
 import type { Address, Hex } from 'viem'
-import { decodeAbiParameters, encodeAbiParameters, getAddress, hashTypedData, http, isAddress } from 'viem'
+import {
+  decodeAbiParameters,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  hashTypedData,
+  http,
+  isAddress,
+} from 'viem'
 import { toAccount } from 'viem/accounts'
 import {
   createBundlerClient,
@@ -27,6 +36,19 @@ const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a02
 const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
 const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
 const UNIVERSAL_ROUTER_BASE_LEGACY = getAddress('0x2626664c2603336e57b271c5c0b26f421741e481').toLowerCase()
+const UNISWAP_UNIVERSAL_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
 
 function isUniversalRouterTarget(to: Address): boolean {
   const target = String(to).toLowerCase()
@@ -43,6 +65,27 @@ function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | un
   return `0x${payload.slice(0, payload.length - suffix.length)}` as Hex
 }
 
+function canonicalizeUniversalRouterExecuteCalldata(data: Hex | undefined): Hex | undefined {
+  if (!data || data === '0x') return data
+  if (!data.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)) return data
+
+  try {
+    const decoded = decodeFunctionData({
+      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
+      data,
+    })
+    if (decoded.functionName !== 'execute') return data
+    return encodeFunctionData({
+      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: decoded.args,
+    })
+  } catch {
+    // If decode fails, preserve original payload rather than mutating semantics.
+    return data
+  }
+}
+
 export function applyBuilderDataSuffixToCalls(
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
   chainId: number,
@@ -53,7 +96,7 @@ export function applyBuilderDataSuffixToCalls(
   return calls.map((c) => {
     if (isUniversalRouterTarget(c.to)) {
       const cleanedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
-      const candidateData = cleanedData ?? c.data
+      const candidateData = canonicalizeUniversalRouterExecuteCalldata(cleanedData ?? c.data)
       const isCanonical =
         !!candidateData &&
         candidateData !== '0x' &&
