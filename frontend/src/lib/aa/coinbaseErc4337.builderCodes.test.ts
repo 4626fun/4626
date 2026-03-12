@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Address, Hex } from 'viem'
+import { encodeFunctionData } from 'viem'
 
 import { appendDataSuffixToHex, resolveDataSuffix, payloadEndsWithDataSuffix } from '../baseBuilderCodes'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337'
@@ -12,6 +13,19 @@ describe('applyBuilderDataSuffixToCalls', () => {
     DEV: false,
     PROD: false,
   })
+  const universalRouterExecuteAbi = [
+    {
+      type: 'function',
+      name: 'execute',
+      stateMutability: 'payable',
+      inputs: [
+        { name: 'commands', type: 'bytes' },
+        { name: 'inputs', type: 'bytes[]' },
+        { name: 'deadline', type: 'uint256' },
+      ],
+      outputs: [],
+    },
+  ] as const
 
   it('appends suffix for Base mainnet userOp calls', () => {
     expect(dataSuffix).toBeDefined()
@@ -66,6 +80,21 @@ describe('applyBuilderDataSuffixToCalls', () => {
     const universalRouterCall = [{ to: universalRouterTarget, value: 0n, data: nonCanonicalData }]
     const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
     expect(result[0].data).toBe(nonCanonicalData)
+    expect(payloadEndsWithDataSuffix(result[0].data as Hex, dataSuffix as Hex)).toBe(false)
+  })
+
+  it('returns canonicalized Universal Router execute calldata when input has trailing bytes', () => {
+    expect(dataSuffix).toBeDefined()
+    const universalRouterTarget = '0x6ff5693b99212da76ad316178a184ab56d299b43' as Address
+    const canonicalData = encodeFunctionData({
+      abi: universalRouterExecuteAbi,
+      functionName: 'execute',
+      args: ['0x00', ['0x1234'], 123n],
+    }) as Hex
+    const trailingByteVariant = `${canonicalData}00` as Hex
+    const universalRouterCall = [{ to: universalRouterTarget, value: 0n, data: trailingByteVariant }]
+    const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
+    expect(result[0].data).toBe(canonicalData)
     expect(payloadEndsWithDataSuffix(result[0].data as Hex, dataSuffix as Hex)).toBe(false)
   })
 })

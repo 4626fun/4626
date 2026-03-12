@@ -123,7 +123,7 @@ export function applyBuilderDataSuffixToCalls(
       // Never append builder suffix to Universal Router calls.
       return {
         ...c,
-        data: cleanedData ?? c.data,
+        data: candidateData ?? cleanedData ?? c.data,
       }
     }
 
