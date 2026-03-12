@@ -1,0 +1,50 @@
+name: Eliza Runtime Guardrails
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/server/agent/eliza/**'
+      - 'frontend/server/_lib/privyWalletApi.ts'
+      - 'frontend/server/_lib/teeAttestationGate.ts'
+      - 'frontend/server/keepr/sendCommand.ts'
+      - 'frontend/api/_handlers/v1/agents/identity/_verification.ts'
+      - 'frontend/.env.example'
+      - 'railway.toml'
+      - '.railwayignore'
+      - '.github/workflows/eliza-runtime-guardrails.yml'
+  workflow_dispatch:
+
+jobs:
+  eliza-runtime-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: Verify Railway readiness probe is strict
+        run: rg 'healthcheckPath\\s*=\\s*\"/readyz\"' railway.toml
+
+      - name: Verify runtime env contract is documented
+        run: |
+          rg 'AGENT_RUNTIME_ROLE=' frontend/.env.example
+          rg 'AGENT_CONSUME_XMTP=' frontend/.env.example
+          rg 'TEE_ENFORCEMENT_ENABLED' frontend/.env.example
+
+      - name: Run Eliza runtime unit guardrails
+        run: |
+          pnpm --dir frontend exec vitest run \
+            server/agent/eliza/__tests__/runtimeBridge.test.ts \
+            server/agent/eliza/__tests__/llm.test.ts \
+            server/_lib/__tests__/teeAttestationGate.test.ts

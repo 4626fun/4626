@@ -127,3 +127,14 @@ Symptoms: repeated new installations, approaching 10/10 installation limit, or d
 - Trigger a plain `/ai` question and confirm non-empty response (or explicit budget/rate-limit message).
 - Confirm Farcaster mention webhook route is reachable (`/api/farcaster/mention`) when enabled.
 
+## Optional Telemetry And Channels
+
+- Telemetry:
+  - Set `ELIZA_TELEMETRY_ENABLED=true` to emit structured runtime/LLM/action events.
+  - Optional webhook sink: `ELIZA_TELEMETRY_WEBHOOK_URL`.
+- Feature-flagged channel context plugins:
+  - `ELIZA_CHANNEL_TELEGRAM_ENABLED=true`
+  - `ELIZA_CHANNEL_DISCORD_ENABLED=true`
+  - `ELIZA_CHANNEL_TWITTER_ENABLED=true`
+  - Keep channel bot tokens server-side only.
+

@@ -53,7 +53,12 @@ import { zoraPlugin } from './plugins/zora/index.js'
 import { uniswapPlugin } from './plugins/uniswap/index.js'
 import { knowledgePlugin } from './plugins/knowledge/index.js'
 import { bankrPlugin } from './plugins/bankr/index.js'
+import { telegramPlugin } from './plugins/telegram/index.js'
+import { discordPlugin } from './plugins/discord/index.js'
+import { twitterPlugin } from './plugins/twitter/index.js'
 import { creatorVaultCharacter, resolveCharacterRuntimeConfig } from './character.js'
+import { keeprTraderCharacter } from './characters/keepr-trader.character.js'
+import { keeprSocialCharacter } from './characters/keepr-social.character.js'
 import { XmtpService } from './plugins/xmtp/service.js'
 import { createRuntimeBridge } from './runtimeBridge.js'
 import { getElizaLlmService } from './llm.js'
@@ -70,6 +75,7 @@ import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agentRegistrationPublisher.js'
 import { formatNumberedCommandFallback, formatWelcomeNumberedOptions } from '../../_lib/chatCommandFallback.js'
 import { createCorrelationLogger, logger } from '../../_lib/logger.js'
+import { emitTelemetryEvent } from '../../_lib/telemetry.js'
 import {
   TARGET_CANONICAL_CSW_ADDRESS,
   isTargetCanonicalCsw,
@@ -381,7 +387,7 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
-const plugins = [
+const corePlugins = [
   keeprPlugin,
   zoraPlugin,
   uniswapPlugin,
@@ -392,6 +398,18 @@ const plugins = [
   crePlugin,
   knowledgePlugin,
 ]
+
+function channelFlagEnabled(envKey: string): boolean {
+  return parseEnvBoolean(process.env[envKey], false)
+}
+
+const channelPlugins = [
+  ...(channelFlagEnabled('ELIZA_CHANNEL_TELEGRAM_ENABLED') ? [telegramPlugin] : []),
+  ...(channelFlagEnabled('ELIZA_CHANNEL_DISCORD_ENABLED') ? [discordPlugin] : []),
+  ...(channelFlagEnabled('ELIZA_CHANNEL_TWITTER_ENABLED') ? [twitterPlugin] : []),
+]
+
+const plugins = [...corePlugins, ...channelPlugins]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
 
 type AgentSwarmRole = 'general' | 'trader' | 'social' | 'knowledge'
@@ -469,6 +487,36 @@ function resolveSwarmProfile(agentKey: string): { role: AgentSwarmRole; capabili
   return { role, capabilities }
 }
 
+function roleCharacter(role: AgentSwarmRole): {
+  name: string
+  description: string
+  system: string
+  settingsModel?: string
+} {
+  if (role === 'trader') {
+    return {
+      name: keeprTraderCharacter.name,
+      description: keeprTraderCharacter.description ?? creatorVaultCharacter.description,
+      system: keeprTraderCharacter.system ?? characterRuntimeConfig.systemPrompt,
+      settingsModel: String((keeprTraderCharacter as any)?.settings?.model ?? '').trim() || undefined,
+    }
+  }
+  if (role === 'social') {
+    return {
+      name: keeprSocialCharacter.name,
+      description: keeprSocialCharacter.description ?? creatorVaultCharacter.description,
+      system: keeprSocialCharacter.system ?? characterRuntimeConfig.systemPrompt,
+      settingsModel: String((keeprSocialCharacter as any)?.settings?.model ?? '').trim() || undefined,
+    }
+  }
+  return {
+    name: creatorVaultCharacter.name,
+    description: creatorVaultCharacter.description,
+    system: characterRuntimeConfig.systemPrompt,
+    settingsModel: characterRuntimeConfig.preferredModel,
+  }
+}
+
 export {
   keeprPlugin,
   zoraPlugin,
@@ -479,6 +527,9 @@ export {
   reputationPlugin,
   crePlugin,
   knowledgePlugin,
+  telegramPlugin,
+  discordPlugin,
+  twitterPlugin,
 }
 
 // ---------------------------------------------------------------------------
@@ -965,15 +1016,26 @@ async function acquireRuntimeLeaseOrExit(): Promise<void> {
 
 function initializeRuntimeBridge(agentKey: string): ReturnType<typeof createRuntimeBridge> {
   const swarm = resolveSwarmProfile(agentKey)
+  const profileCharacter = roleCharacter(swarm.role)
+  const envSystemPrompt = String(process.env.ELIZA_CHARACTER_SYSTEM_PROMPT ?? '').trim()
+  const envPreferredModel = String(process.env.ELIZA_CHARACTER_MODEL ?? '').trim()
+  const preferredModel =
+    envPreferredModel ||
+    profileCharacter.settingsModel ||
+    characterRuntimeConfig.preferredModel
+  const settings: Record<string, string> = {
+    ...characterRuntimeConfig.settings,
+    CHARACTER_NAME: profileCharacter.name,
+    CHARACTER_DESCRIPTION: profileCharacter.description,
+    CHARACTER_MODEL: preferredModel ?? '',
+  }
   return createRuntimeBridge({
     agentKey,
     plugins,
-    settings: {
-      ...characterRuntimeConfig.settings,
-    },
+    settings,
     character: {
-      systemPrompt: characterRuntimeConfig.systemPrompt,
-      preferredModel: characterRuntimeConfig.preferredModel,
+      systemPrompt: envSystemPrompt || profileCharacter.system || characterRuntimeConfig.systemPrompt,
+      preferredModel: preferredModel || undefined,
     },
     swarm,
   })
@@ -1005,6 +1067,12 @@ async function handleMessage(
   const { correlationId, logger: reqLogger } = createCorrelationLogger('msg', {
     agentKey: ctx.agentKey,
     conversationId: msg.conversationId,
+  })
+  void emitTelemetryEvent('eliza_message_received', {
+    agentKey: ctx.agentKey,
+    conversationId: msg.conversationId,
+    correlationId,
+    length: text.length,
   })
   const isKeeprStatusCommand = /^\/?keepr\s+status\b/i.test(text)
   if (isKeeprStatusCommand) {
@@ -1107,6 +1175,15 @@ async function handleMessage(
           reason: candidate.reason,
           retriesUsed: actionRetryBudget,
         })
+        void emitTelemetryEvent('eliza_action_executed', {
+          action: actionName,
+          score: candidate.score,
+          reason: candidate.reason,
+          retriesUsed: actionRetryBudget,
+          agentKey: ctx.agentKey,
+          conversationId: msg.conversationId,
+          correlationId,
+        })
         if (isKeeprStatusCommand) {
           reqLogger.info('[eliza/vertical] keepr_status reply', {
             correlationId,
@@ -1124,6 +1201,16 @@ async function handleMessage(
         reason: candidate.reason,
         error: agentError.message,
         code: agentError.code,
+      })
+      void emitTelemetryEvent('eliza_action_failed', {
+        action: actionName,
+        score: candidate.score,
+        reason: candidate.reason,
+        error: agentError.message,
+        code: agentError.code,
+        agentKey: ctx.agentKey,
+        conversationId: msg.conversationId,
+        correlationId,
       })
       if (isKeeprStatusCommand) {
         reqLogger.warn('[eliza/vertical] keepr_status action failed', {
@@ -1487,6 +1574,11 @@ async function shutdown() {
   if (shuttingDown) return
   shuttingDown = true
   logger.info('[eliza] Shutting down...')
+  void emitTelemetryEvent('runtime_shutdown', {
+    runtimeRole: AGENT_RUNTIME_ROLE,
+    consumeXmtp: AGENT_CONSUME_XMTP,
+    agentsRunning: runningAgents.size,
+  })
 
   const stops = [...runningAgents.values()].map(async (r) => {
     try {
@@ -1778,6 +1870,12 @@ async function main() {
 
   // Start health check server FIRST so Railway healthcheck passes during boot
   startHealthServer()
+  void emitTelemetryEvent('runtime_boot', {
+    runtimeRole: AGENT_RUNTIME_ROLE,
+    consumeXmtp: AGENT_CONSUME_XMTP,
+    runtimeLockRequired: AGENT_RUNTIME_LOCK_REQUIRED,
+    xmtpEnv: XMTP_ENV,
+  })
 
   latestEnvValidation = validateStartupEnv()
   if (latestEnvValidation.warnings.length > 0) {
@@ -2008,6 +2106,11 @@ async function main() {
   }
 
   agentBooted = true
+  void emitTelemetryEvent('runtime_ready', {
+    runtimeRole: AGENT_RUNTIME_ROLE,
+    consumeXmtp: AGENT_CONSUME_XMTP,
+    agentsRunning: runningAgents.size,
+  })
   logger.info('[eliza] Runtime ready. Press Ctrl+C to stop.')
 }
 

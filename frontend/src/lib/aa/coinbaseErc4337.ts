@@ -24,16 +24,13 @@ import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/baseBu
 
 const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
 const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
-const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c'
+const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
 const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
 const UNIVERSAL_ROUTER_BASE_LEGACY = getAddress('0x2626664c2603336e57b271c5c0b26f421741e481').toLowerCase()
 
-function shouldPreserveCanonicalCallData(call: { to: Address; data?: Hex }): boolean {
-  const target = String(call.to).toLowerCase()
-  if (target !== UNIVERSAL_ROUTER_BASE_CURRENT && target !== UNIVERSAL_ROUTER_BASE_LEGACY) return false
-  const data = call.data
-  if (!data || data === '0x') return false
-  return data.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+function isUniversalRouterTarget(to: Address): boolean {
+  const target = String(to).toLowerCase()
+  return target === UNIVERSAL_ROUTER_BASE_CURRENT || target === UNIVERSAL_ROUTER_BASE_LEGACY
 }
 
 function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | undefined): Hex | undefined {
@@ -52,22 +49,39 @@ export function applyBuilderDataSuffixToCalls(
   dataSuffix: Hex | undefined = DATA_SUFFIX,
 ): Array<{ to: Address; value?: bigint; data?: Hex }> {
   if (!dataSuffix || !isBaseChain(chainId)) return calls
+
   return calls.map((c) => {
-    if (shouldPreserveCanonicalCallData(c)) {
-      const strippedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
-      if (AA_DEBUG && strippedData !== c.data) {
-        logger.debug('[ERC-4337] Removed builder suffix from canonical Universal Router calldata', {
+    if (isUniversalRouterTarget(c.to)) {
+      const cleanedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
+      const candidateData = cleanedData ?? c.data
+      const isCanonical =
+        !!candidateData &&
+        candidateData !== '0x' &&
+        candidateData.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+
+      if (AA_DEBUG) {
+        logger.debug('[Builder] Universal Router call detected', {
           target: c.to,
-          selector: String(c.data ?? '').slice(0, 10),
+          originalDataPrefix: String(c.data ?? '').slice(0, 30),
+          cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
+          willPreserveCanonical: isCanonical,
         })
       }
+
+      if (isCanonical) {
+        if (AA_DEBUG) logger.info('[Builder] Preserving canonical Universal Router calldata (no suffix)')
+        return {
+          ...c,
+          data: cleanedData,
+        }
+      }
+
       return {
         ...c,
-        // Keep Universal Router `execute(...)` calldata canonical for paymaster policy checks.
-        // Also strip an already-appended suffix to protect against upstream/double mutation.
-        data: strippedData,
+        data: appendBuilderSuffixToHex(cleanedData ?? c.data, { chainId, dataSuffix }),
       }
     }
+
     return {
       ...c,
       data: appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),

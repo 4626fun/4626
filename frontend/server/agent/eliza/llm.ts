@@ -1,6 +1,7 @@
 import { AgentError } from './_errors.js'
 import { DailyBudgetGuard, parsePositiveNumber } from './_rateLimit.js'
 import { logger } from '../../_lib/logger.js'
+import { emitTelemetryEvent } from '../../_lib/telemetry.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -427,6 +428,13 @@ class ElizaLlmService {
         this.budgetGuard.record(params.agentKey, { inputTokens, outputTokens, estimatedUsd })
         this.markProviderSuccess(provider)
         attempts.push({ provider: provider.name, model: selectedModel, ok: true })
+        void emitTelemetryEvent('llm_provider_success', {
+          provider: provider.name,
+          model: selectedModel,
+          correlationId: params.correlationId,
+          agentKey: params.agentKey,
+          attempts: attempts.length,
+        })
         return {
           text,
           provider: provider.name,
@@ -442,8 +450,25 @@ class ElizaLlmService {
           correlationId: params.correlationId,
           error: message,
         })
+        void emitTelemetryEvent('llm_provider_failure', {
+          provider: provider.name,
+          model: selectedModel,
+          correlationId: params.correlationId,
+          agentKey: params.agentKey,
+          error: message,
+          attempts: attempts.length,
+        })
       }
     }
+    void emitTelemetryEvent('llm_provider_exhausted', {
+      correlationId: params.correlationId,
+      agentKey: params.agentKey,
+      attempts: attempts.map((attempt) => ({
+        provider: attempt.provider,
+        model: attempt.model ?? null,
+        ok: attempt.ok,
+      })),
+    })
     return { text: null, provider: null, attempts }
   }
 
