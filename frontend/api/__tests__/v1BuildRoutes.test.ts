@@ -16,8 +16,7 @@ describe('v1 build route registration', () => {
       'v1/build/ajna/repay',
       'v1/build/ajna/addCollateral',
       'v1/build/ajna/removeCollateral',
-      'v1/build/ajna/setBucketIndex',
-      'v1/build/ajna/moveToBucket',
+      'v1/build/ajna/setMinBucketIndex',
       'v1/build/ajna/setIdleBufferBps',
       'v1/build/charm/setCharmVault',
       'v1/build/charm/setSwapPool',
@@ -41,6 +40,8 @@ describe('v1 build route registration', () => {
 
   it('leaves non-enabled build endpoints unresolved', async () => {
     const futureRoutes = [
+      'v1/build/ajna/setBucketIndex',
+      'v1/build/ajna/moveToBucket',
       'v1/build/charm/notImplementedYet',
       'v1/build/ajna/notImplementedYet',
       'v1/build/future/unknown',

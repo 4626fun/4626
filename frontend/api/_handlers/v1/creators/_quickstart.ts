@@ -24,6 +24,7 @@ import {
   setNoStore,
 } from '../../../../server/auth/_shared.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
+import { resolvePersistedWalletIdentity } from '../../../../server/_lib/canonicalWalletResolver.js'
 import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
@@ -60,6 +61,13 @@ type QuickstartResult = {
 
   // Access
   allowlisted: boolean
+
+  // Canonical Ajna automation
+  canonicalAjnaAutomation: {
+    available: boolean
+    cswAddress: string | null
+    embeddedEoaAddress: string | null
+  }
 
   // What the user still needs to do
   pendingActions: string[]
@@ -252,10 +260,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ------------------------------------------------------------------
     // 1. Resolve identities in parallel
     // ------------------------------------------------------------------
-    const [zoraProfile, farcaster] = await Promise.all([
+    const persistedWalletIdentityPromise = resolvePersistedWalletIdentity(creatorAddress).catch((error) => {
+      logger.warn('[quickstart] Persisted wallet identity lookup failed', {
+        creatorAddress,
+        error,
+      })
+      return null
+    })
+
+    const [zoraProfile, farcaster, persistedWalletIdentity] = await Promise.all([
       resolveZoraProfile(creatorAddress),
       resolveFarcaster(creatorAddress),
+      persistedWalletIdentityPromise,
     ])
+
+    const canonicalAjnaAutomation = {
+      available: Boolean(persistedWalletIdentity?.canonicalSmartWallet && persistedWalletIdentity?.embeddedEoa),
+      cswAddress: persistedWalletIdentity?.canonicalSmartWallet ?? null,
+      embeddedEoaAddress: persistedWalletIdentity?.embeddedEoa ?? null,
+    }
 
     // ------------------------------------------------------------------
     // 2. Auto-detect creator coin
@@ -361,8 +384,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         logger.warn('[quickstart] Agent creation failed', err)
         pendingActions.push('enable_agent')
       }
-    } else {
-      pendingActions.push('automation_opt_in_available')
+    } else if (canonicalAjnaAutomation.available) {
+      pendingActions.push('canonical_ajna_automation_opt_in_available')
     }
 
     // ------------------------------------------------------------------
@@ -431,6 +454,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ownerAdded,
       vaultConfigCreated,
       allowlisted,
+      canonicalAjnaAutomation,
       pendingActions,
     }
 

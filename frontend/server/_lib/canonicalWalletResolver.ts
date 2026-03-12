@@ -1,5 +1,6 @@
 import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 import { getDb, isDbConfigured } from './postgres.js'
+import { readPersistedIdentity } from './walletSync.js'
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -7,6 +8,28 @@ function normalizeLower(value: unknown): string {
 
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  const normalized = typeof value === 'string' ? value.trim() : ''
+  return normalized ? normalized : null
+}
+
+function normalizeAddress(value: unknown): string | null {
+  const normalized = normalizeLower(value)
+  return normalized && isAddressLike(normalized) ? normalized : null
+}
+
+type ProfileMatch = {
+  id: number
+  privyUserId: string | null
+}
+
+export type PersistedWalletIdentity = {
+  profileId: number
+  canonicalSmartWallet: string | null
+  embeddedEoa: string | null
+  privyUserId: string | null
 }
 
 export type ProfileWalletAuthority = {
@@ -33,7 +56,10 @@ function deriveCanonicalSmartWallet(row: ProfileWalletAuthorityRow): string | nu
   return fallback && isAddressLike(fallback) ? fallback : null
 }
 
-function deriveActiveOwnerWallet(row: ProfileWalletAuthorityRow, canonicalSmartWalletAddress: string | null): string | null {
+function deriveActiveOwnerWallet(
+  row: ProfileWalletAuthorityRow,
+  canonicalSmartWalletAddress: string | null,
+): string | null {
   const embedded = normalizeLower(row.primary_embedded_eoa)
   if (embedded && isAddressLike(embedded)) return embedded
 
@@ -43,7 +69,10 @@ function deriveActiveOwnerWallet(row: ProfileWalletAuthorityRow, canonicalSmartW
   return primary
 }
 
-async function readProfileWalletAuthorityRow(db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }, profileId: number): Promise<ProfileWalletAuthorityRow | null> {
+async function readProfileWalletAuthorityRow(
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> },
+  profileId: number,
+): Promise<ProfileWalletAuthorityRow | null> {
   const result = await db.sql`
     SELECT
       p.id,
@@ -129,6 +158,7 @@ export async function resolveAuthorizedWalletProfile(address: string): Promise<P
       LIMIT 1
     ) canonical ON true
     WHERE LOWER(p.primary_wallet) = ${input}
+       OR LOWER(p.embedded_wallet) = ${input}
        OR LOWER(p.primary_embedded_eoa) = ${input}
        OR LOWER(p.primary_smart_wallet) = ${input}
        OR LOWER(p.csw_address) = ${input}
@@ -137,11 +167,12 @@ export async function resolveAuthorizedWalletProfile(address: string): Promise<P
     LIMIT 1;
   `
 
-  const profileId = typeof profileResult.rows?.[0]?.id === 'number'
-    ? Number(profileResult.rows?.[0]?.id)
-    : profileResult.rows?.[0]?.id
+  const profileId =
+    typeof profileResult.rows?.[0]?.id === 'number'
       ? Number(profileResult.rows?.[0]?.id)
-      : NaN
+      : profileResult.rows?.[0]?.id
+        ? Number(profileResult.rows?.[0]?.id)
+        : NaN
   if (!Number.isFinite(profileId)) return null
 
   const authority = await readProfileWalletAuthority({
@@ -155,6 +186,83 @@ export async function resolveAuthorizedWalletProfile(address: string): Promise<P
   }
 
   return null
+}
+
+async function findProfilesForAddress(
+  db: Awaited<ReturnType<typeof getDb>>,
+  input: string,
+): Promise<ProfileMatch[]> {
+  if (!db) return []
+
+  const profileResult = await db.sql`
+    SELECT id, privy_user_id
+    FROM profiles
+    WHERE LOWER(primary_wallet) = ${input}
+       OR LOWER(embedded_wallet) = ${input}
+       OR LOWER(primary_embedded_eoa) = ${input}
+       OR LOWER(primary_smart_wallet) = ${input}
+       OR LOWER(csw_address) = ${input}
+       OR LOWER(base_sub_account) = ${input}
+       OR id IN (
+         SELECT profile_id
+         FROM profile_wallets
+         WHERE LOWER(address) = ${input}
+       )
+    LIMIT 2;
+  `
+
+  return (profileResult.rows ?? [])
+    .map((row) => {
+      const id = Number(row?.id ?? 0)
+      if (!Number.isFinite(id) || id <= 0) return null
+      return {
+        id,
+        privyUserId: normalizeOptionalString(row?.privy_user_id),
+      } satisfies ProfileMatch
+    })
+    .filter((row): row is ProfileMatch => row !== null)
+}
+
+async function resolvePersistedIdentityForKnownAddress(address: string): Promise<PersistedWalletIdentity | null> {
+  const input = normalizeLower(address)
+  if (!input || !isAddressLike(input)) return null
+  if (!isDbConfigured()) return null
+
+  const db = await getDb()
+  if (!db) return null
+
+  await ensureCanonicalWalletsSchema(db as any)
+
+  const profiles = await findProfilesForAddress(db, input)
+  if (profiles.length !== 1) return null
+
+  const profile = profiles[0]
+  const persisted = await readPersistedIdentity(db as any, profile.id)
+  return {
+    profileId: profile.id,
+    canonicalSmartWallet: normalizeAddress(persisted?.canonicalSmartWallet),
+    embeddedEoa: normalizeAddress(persisted?.embeddedEoa),
+    privyUserId: profile.privyUserId,
+  }
+}
+
+export async function resolvePersistedWalletIdentity(address: string): Promise<PersistedWalletIdentity | null> {
+  const input = normalizeLower(address)
+  if (!input || !isAddressLike(input)) return null
+
+  const identity = await resolvePersistedIdentityForKnownAddress(input)
+  if (!identity) return null
+
+  const canonical = normalizeAddress(identity.canonicalSmartWallet)
+  const embedded = normalizeAddress(identity.embeddedEoa)
+  if (!canonical || !embedded) return null
+  if (input !== canonical && input !== embedded) return null
+
+  return {
+    ...identity,
+    canonicalSmartWallet: canonical,
+    embeddedEoa: embedded,
+  }
 }
 
 export async function resolveCanonicalSmartWalletAddress(address: string): Promise<string | null> {
@@ -190,9 +298,8 @@ export async function resolveCanonicalSmartWalletAddress(address: string): Promi
       AND is_canonical_smart_wallet = true
     LIMIT 1;
   `
-  const canonical = normalizeLower(canonicalResult.rows?.[0]?.address)
-  if (canonical && isAddressLike(canonical)) return canonical
+  const canonical = normalizeAddress(canonicalResult.rows?.[0]?.address)
+  if (canonical) return canonical
 
-  const fallback = normalizeLower(profile.primary_smart_wallet || profile.csw_address)
-  return fallback && isAddressLike(fallback) ? fallback : null
+  return normalizeAddress(profile.primary_smart_wallet || profile.csw_address)
 }

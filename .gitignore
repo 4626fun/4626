@@ -117,6 +117,8 @@ scripts/
 !frontend/scripts/**
 !cre/scripts/
 !cre/scripts/**
+!cre/cre-workflows/scripts/
+!cre/cre-workflows/scripts/**
 !scripts/solana/
 !scripts/solana/**
 scripts/solana/vanity-pool/available/*.json

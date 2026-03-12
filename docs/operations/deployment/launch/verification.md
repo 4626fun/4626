@@ -26,6 +26,49 @@ Before launching, verify the deploy session completed through phase 3:
 - Idle reserve: **1000 bps** (10% of the launch deposit via `setMinimumTotalIdle`)
 - Solana preflight succeeded before phase 3 started
 
+### Canonical Ajna Verification (Current Deploy Path)
+
+The Ajna sleeve is the nested adapter-backed bundle:
+
+- `ERC4626StrategyAdapter`
+- `AjnaERC4626Vault`
+- `AjnaVaultAuth`
+
+Verify the nested shape instead:
+
+1. `CreatorOVault` strategy list contains an `ERC4626StrategyAdapter`
+2. `ERC4626StrategyAdapter.ERC4626_VAULT()` returns the inner `AjnaERC4626Vault`
+3. `AjnaERC4626Vault.AUTH()` returns `AjnaVaultAuth`
+4. `AjnaVaultAuth` exposes the expected:
+   - `admin`
+   - `bufferRatio`
+   - `minBucketIndex`
+   - `paused`
+
+Recommended operator check:
+
+- Open `/status?vault=<vault>` and confirm the Ajna section reports:
+  - adapter-backed inner vault
+  - inner vault address
+  - auth address/admin
+  - buffer ratio
+  - current or suggested bucket floor
+
+If `/status` does not show the adapter-backed inner vault shape, treat that deployment as misconfigured.
+
+### Canonical Ajna Automation Verification (Opt-In)
+
+If the creator enabled Ajna automation, verify the sender model as well:
+
+1. The vault's Ajna automation status is enabled from the creator-owned UI flow (`DeploymentSuccess` or `Admin Agent Setup`).
+2. The allowed scope is exactly `ajna_min_bucket_only`.
+3. `AjnaVaultAuth.admin()` equals the creator's canonical Coinbase Smart Wallet, not a protocol keeper wallet.
+4. Protected CRE vault reads expose the canonical sender context for that vault, while public reads expose only safe status fields.
+5. Disabling or revoking automation causes future Ajna actions to hard-stop with canonical-sender errors rather than falling back to a shared keeper wallet.
+
+This is intentionally different from the XMTP server-signer flow. XMTP signer
+availability does not authorize Ajna execution for a vault.
+
 ### On-chain Checks
 
 ```
@@ -34,6 +77,17 @@ vault.strategyWeights(charmStrategy)    -> 3000
 vault.strategyWeights(ajnaStrategy)     -> 3000
 vault.strategyWeights(solanaStrategy)   -> 3000
 vault.minimumTotalIdle()                -> launchDeposit * 10%
+```
+
+For the canonical nested Ajna path, also read:
+
+```solidity
+adapter.ERC4626_VAULT()            -> innerAjnaVault
+innerAjnaVault.AUTH()              -> ajnaVaultAuth
+innerAjnaVault.AJNA_POOL()         -> ajnaPool
+ajnaVaultAuth.bufferRatio()        -> expected bps
+ajnaVaultAuth.minBucketIndex()     -> expected bucket floor
+ajnaVaultAuth.paused()             -> false
 ```
 
 ---

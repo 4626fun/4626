@@ -151,7 +151,23 @@ contract SeedUniversalBytecodeStore is Script {
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
-                store, vm.getCode("out/AjnaStrategy.sol/AjnaStrategy.json"), "AjnaStrategy", supportsChunking
+                store, vm.getCode("out/AjnaVaultAuth.sol/AjnaVaultAuth.json"), "AjnaVaultAuth", supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/AjnaERC4626Vault.sol/AjnaERC4626Vault.json"),
+                "AjnaERC4626Vault",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/ERC4626StrategyAdapter.sol/ERC4626StrategyAdapter.json"),
+                "ERC4626StrategyAdapter",
+                supportsChunking
             );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {

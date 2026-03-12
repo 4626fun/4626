@@ -56,6 +56,102 @@ export async function ensureKeeprSchema(): Promise<void> {
     }
 
     await db.sql`
+      CREATE TABLE IF NOT EXISTS keepr_vault_automation (
+        vault_address TEXT PRIMARY KEY,
+        profile_id BIGINT NOT NULL,
+        canonical_csw_address TEXT NOT NULL,
+        embedded_eoa_address TEXT,
+        privy_wallet_id TEXT,
+        authorization_source TEXT NOT NULL,
+        automation_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        automation_scope TEXT NOT NULL,
+        last_owner_check_at TIMESTAMPTZ,
+        revoked_at TIMESTAMPTZ,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+
+    // Back-compat: add columns before creating indexes that depend on them.
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS profile_id BIGINT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS canonical_csw_address TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS embedded_eoa_address TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS privy_wallet_id TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS authorization_source TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS automation_enabled BOOLEAN NOT NULL DEFAULT TRUE;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS automation_scope TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS last_owner_check_at TIMESTAMPTZ;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`
+        CREATE INDEX IF NOT EXISTS keepr_vault_automation_profile_idx
+        ON keepr_vault_automation (profile_id, created_at DESC);
+      `
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`
+        CREATE INDEX IF NOT EXISTS keepr_vault_automation_enabled_idx
+        ON keepr_vault_automation (automation_enabled, updated_at DESC);
+      `
+    } catch {
+      // ignore
+    }
+
+    await db.sql`
       CREATE TABLE IF NOT EXISTS keepr_nonces (
         nonce TEXT PRIMARY KEY,
         purpose TEXT NOT NULL,

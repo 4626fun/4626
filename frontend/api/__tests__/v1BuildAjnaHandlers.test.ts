@@ -3,10 +3,9 @@ import { encodeFunctionData } from 'viem'
 
 import addCollateralHandler from '../_handlers/v1/build/ajna/_addCollateral.ts'
 import borrowHandler from '../_handlers/v1/build/ajna/_borrow.ts'
-import moveToBucketHandler from '../_handlers/v1/build/ajna/_moveToBucket.ts'
 import removeCollateralHandler from '../_handlers/v1/build/ajna/_removeCollateral.ts'
 import repayHandler from '../_handlers/v1/build/ajna/_repay.ts'
-import setBucketIndexHandler from '../_handlers/v1/build/ajna/_setBucketIndex.ts'
+import setMinBucketIndexHandler from '../_handlers/v1/build/ajna/_setMinBucketIndex.ts'
 import setIdleBufferBpsHandler from '../_handlers/v1/build/ajna/_setIdleBufferBps.ts'
 import { createMockReq, createMockRes } from './helpers'
 
@@ -29,6 +28,7 @@ const POOL = '0x1111111111111111111111111111111111111111'
 const BORROWER = '0x2222222222222222222222222222222222222222'
 const RECEIVER = '0x3333333333333333333333333333333333333333'
 const STRATEGY = '0x4444444444444444444444444444444444444444'
+const AUTH = '0x5555555555555555555555555555555555555555'
 
 const AJNA_POOL_ABI = [
   {
@@ -58,9 +58,11 @@ const AJNA_POOL_ABI = [
   },
 ] as const
 
-const AJNA_STRATEGY_OWNER_ABI = [
-  { type: 'function', name: 'setBucketIndex', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
-  { type: 'function', name: 'moveToBucket', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }, { type: 'uint256' }], outputs: [] },
+const AJNA_AUTH_ADMIN_ABI = [
+  { type: 'function', name: 'setMinBucketIndex', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
+] as const
+
+const AJNA_ADAPTER_OWNER_ABI = [
   { type: 'function', name: 'setIdleBufferBps', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
 ] as const
 
@@ -106,8 +108,7 @@ describe('v1 build Ajna handlers', () => {
         handler: removeCollateralHandler,
         body: { pool: POOL, borrower: BORROWER, collateralAmountToPull: '1', collateralReceiver: RECEIVER, limitIndex: '100' },
       },
-      { handler: setBucketIndexHandler, body: { strategy: STRATEGY, newBucketIndex: '100' } },
-      { handler: moveToBucketHandler, body: { strategy: STRATEGY, newBucketIndex: '100', maxAmountLp: '1' } },
+      { handler: setMinBucketIndexHandler, body: { auth: AUTH, minBucketIndex: '100' } },
       { handler: setIdleBufferBpsHandler, body: { strategy: STRATEGY, idleBufferBps: '1000' } },
     ] as const
 
@@ -218,57 +219,42 @@ describe('v1 build Ajna handlers', () => {
     expect(removeRes.body?.data?.data).toBe(expectedRemove)
   })
 
-  it('builds setBucketIndex calldata and enforces bucket bounds', async () => {
+  it('builds setMinBucketIndex calldata for nested Ajna auth, allows 0 sentinel, rejects decimals, and rejects 7389', async () => {
     const goodReq = createMockReq({
       method: 'POST',
-      body: { strategy: STRATEGY, newBucketIndex: '7388' },
+      body: { auth: AUTH, minBucketIndex: '0' },
     })
     const goodRes = createMockRes()
-    await setBucketIndexHandler(goodReq, goodRes)
+    await setMinBucketIndexHandler(goodReq, goodRes)
     expect(goodRes.statusCode).toBe(200)
     const expected = encodeFunctionData({
-      abi: AJNA_STRATEGY_OWNER_ABI,
-      functionName: 'setBucketIndex',
-      args: [7388n],
+      abi: AJNA_AUTH_ADMIN_ABI,
+      functionName: 'setMinBucketIndex',
+      args: [0n],
     })
+    expect(goodRes.body?.data?.to).toBe(AUTH)
     expect(goodRes.body?.data?.data).toBe(expected)
 
     const badReq = createMockReq({
       method: 'POST',
-      body: { strategy: STRATEGY, newBucketIndex: '7389' },
+      body: { auth: AUTH, minBucketIndex: '7389' },
     })
     const badRes = createMockRes()
-    await setBucketIndexHandler(badReq, badRes)
+    await setMinBucketIndexHandler(badReq, badRes)
     expect(badRes.statusCode).toBe(400)
-    expect(String(badRes.body?.error ?? '')).toContain('newBucketIndex must be between')
+    expect(String(badRes.body?.error ?? '')).toContain('minBucketIndex must be between 0 and 7388')
+
+    const decimalReq = createMockReq({
+      method: 'POST',
+      body: { auth: AUTH, minBucketIndex: 0.9 },
+    })
+    const decimalRes = createMockRes()
+    await setMinBucketIndexHandler(decimalReq, decimalRes)
+    expect(decimalRes.statusCode).toBe(400)
+    expect(String(decimalRes.body?.error ?? '')).toContain('Invalid minBucketIndex')
   })
 
-  it('builds moveToBucket calldata and validates maxAmountLp', async () => {
-    const goodReq = createMockReq({
-      method: 'POST',
-      body: { strategy: STRATEGY, newBucketIndex: '123', maxAmountLp: '456' },
-    })
-    const goodRes = createMockRes()
-    await moveToBucketHandler(goodReq, goodRes)
-    expect(goodRes.statusCode).toBe(200)
-    const expected = encodeFunctionData({
-      abi: AJNA_STRATEGY_OWNER_ABI,
-      functionName: 'moveToBucket',
-      args: [123n, 456n],
-    })
-    expect(goodRes.body?.data?.data).toBe(expected)
-
-    const badReq = createMockReq({
-      method: 'POST',
-      body: { strategy: STRATEGY, newBucketIndex: '123', maxAmountLp: '0' },
-    })
-    const badRes = createMockRes()
-    await moveToBucketHandler(badReq, badRes)
-    expect(badRes.statusCode).toBe(400)
-    expect(String(badRes.body?.error ?? '')).toContain('maxAmountLp must be > 0')
-  })
-
-  it('builds setIdleBufferBps calldata and validates bps range', async () => {
+  it('builds setIdleBufferBps calldata for the nested Ajna adapter and validates bps range', async () => {
     const goodReq = createMockReq({
       method: 'POST',
       body: { strategy: STRATEGY, idleBufferBps: '10000' },
@@ -277,11 +263,16 @@ describe('v1 build Ajna handlers', () => {
     await setIdleBufferBpsHandler(goodReq, goodRes)
     expect(goodRes.statusCode).toBe(200)
     const expected = encodeFunctionData({
-      abi: AJNA_STRATEGY_OWNER_ABI,
+      abi: AJNA_ADAPTER_OWNER_ABI,
       functionName: 'setIdleBufferBps',
       args: [10000n],
     })
+    expect(goodRes.body?.data?.to).toBe(STRATEGY)
     expect(goodRes.body?.data?.data).toBe(expected)
+    expect(
+      Array.isArray(goodRes.body?.data?.warnings) &&
+        goodRes.body.data.warnings.some((warning: string) => /legacy direct ajnastrategy/i.test(warning)),
+    ).toBe(false)
 
     const badReq = createMockReq({
       method: 'POST',

@@ -25,6 +25,7 @@ import { ChevronDown } from 'lucide-react'
 import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
 import { LaunchCoinCard } from '@/components/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
@@ -1520,9 +1521,14 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'initialSqrtPriceX96', type: 'uint160' },
           { name: 'charmVaultName', type: 'string' },
           { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'ajnaVaultName', type: 'string' },
+          { name: 'ajnaVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'ajnaBufferRatioBps', type: 'uint256' },
+          { name: 'ajnaMinBucketIndex', type: 'uint256' },
+          { name: 'ajnaKeeper', type: 'address' },
           { name: 'solanaKeeper', type: 'address' },
           { name: 'solanaMaxNavAge', type: 'uint64' },
           { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
@@ -1537,7 +1543,9 @@ const CREATOR_VAULT_BATCHER_ABI = [
         components: [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
           { name: 'creatorCharmStrategy', type: 'bytes32' },
-          { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'ajnaVaultAuth', type: 'bytes32' },
+          { name: 'ajnaVault', type: 'bytes32' },
+          { name: 'erc4626StrategyAdapter', type: 'bytes32' },
           { name: 'solanaStrategy', type: 'bytes32' },
         ],
       },
@@ -1550,6 +1558,8 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'v3Pool', type: 'address' },
           { name: 'charmVault', type: 'address' },
           { name: 'charmStrategy', type: 'address' },
+          { name: 'ajnaVaultAuth', type: 'address' },
+          { name: 'ajnaVault', type: 'address' },
           { name: 'ajnaStrategy', type: 'address' },
           { name: 'solanaStrategy', type: 'address' },
         ],
@@ -2699,7 +2709,9 @@ function DeployVaultBatcher({
       // Contract ABI still requires this field and only checks for non-zero.
       charmAlphaVaultDeploy: keccak256(toBytes('charm-factory-sentinel-v1')),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
-      ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
+      ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
+      ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
+      erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
       solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex),
     } as const
   }, [])
@@ -3527,7 +3539,7 @@ function DeployVaultBatcher({
           solanaIxs: [],
         } as const
 
-        // Phase 3 (strategies): Charm CREATOR/USDC + Ajna + SolanaStrategy
+        // Phase 3 (strategies): Charm CREATOR/USDC + nested Ajna + SolanaStrategy
         const charmWeightBps = DEFAULT_CHARM_WEIGHT_BPS
         const ajnaWeightBps = DEFAULT_AJNA_WEIGHT_BPS
         const solanaWeightBps = DEFAULT_SOLANA_WEIGHT_BPS
@@ -3547,6 +3559,9 @@ function DeployVaultBatcher({
           configuredSolanaKeeper && isAddress(String(configuredSolanaKeeper))
             ? getAddress(configuredSolanaKeeper as Address)
             : owner
+        const ajnaKeeper = solanaKeeper
+        const ajnaBufferRatioBps = 1_000n
+        const ajnaMinBucketIndex = 4_156n
         const charmLabel = (depositSymbol || '').toLowerCase()
 
         // If the CREATOR/USDC v3 pool doesn't exist yet, `deployPhase3Strategies` needs a non-zero
@@ -3667,9 +3682,14 @@ function DeployVaultBatcher({
           initialSqrtPriceX96: marketV3InitialSqrtPriceX96 ?? fallbackV3InitialSqrtPriceX96,
           charmVaultName: charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC',
           charmVaultSymbol: charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC',
+          ajnaVaultName: charmLabel ? `Ajna 4626: ${charmLabel}/USDC` : 'Ajna 4626: CREATOR/USDC',
+          ajnaVaultSymbol: charmLabel ? `AJ-${charmLabel}-USDC` : 'AJ-CREATOR-USDC',
           charmWeightBps,
           ajnaWeightBps,
           solanaWeightBps,
+          ajnaBufferRatioBps,
+          ajnaMinBucketIndex,
+          ajnaKeeper,
           solanaKeeper,
           solanaMaxNavAge: DEFAULT_SOLANA_MAX_NAV_AGE,
           solanaMaxNavDeltaBpsPerUpdate: DEFAULT_SOLANA_MAX_NAV_DELTA_BPS,
@@ -5645,17 +5665,8 @@ function DeployVaultMain() {
   // This is NOT the same as “Zora global wallet”, which only works when apps are configured for shared wallets.
   const privyEmbeddedEoaWallet = useMemo(() => {
     const ws = Array.isArray(wallets) ? (wallets as any[]) : []
-    return (
-      ws.find((w) => {
-        const t = walletClientTypeOf(w)
-        if (!(t === 'privy' || t.includes('privy') || t.includes('embedded'))) return false
-        const raw = typeof (w as any)?.address === 'string' ? String((w as any).address) : ''
-        if (!raw || !isAddress(raw)) return false
-        if (privySmartWalletAddress && raw.toLowerCase() === privySmartWalletAddress.toLowerCase()) return false
-        return true
-      }) ?? null
-    )
-  }, [privySmartWalletAddress, walletClientTypeOf, wallets])
+    return pickPrivyEmbeddedEoaWallet(ws, privySmartWalletAddress)
+  }, [privySmartWalletAddress, wallets])
   const privyEmbeddedEoaAddress = useMemo(() => {
     try {
       const raw = typeof (privyEmbeddedEoaWallet as any)?.address === 'string' ? String((privyEmbeddedEoaWallet as any).address) : ''
@@ -5665,6 +5676,10 @@ function DeployVaultMain() {
     }
     return privyCrossAppEmbeddedEoaAddress
   }, [privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaWallet])
+  const privyEmbeddedEoaWalletId = useMemo(() => {
+    const raw = typeof (privyEmbeddedEoaWallet as any)?.id === 'string' ? String((privyEmbeddedEoaWallet as any).id).trim() : ''
+    return raw || null
+  }, [privyEmbeddedEoaWallet])
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
     if (!walletAny) return false
@@ -6794,7 +6809,9 @@ function DeployVaultMain() {
       payoutRouter: keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex),
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
-      ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
+      ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
+      ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
+      erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
       solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex),
     } as const
   }, [])
@@ -6814,7 +6831,9 @@ function DeployVaultMain() {
       deployCodeIds.payoutRouter,
       deployCodeIds.vaultShareBurnStream,
       deployCodeIds.creatorCharmStrategy,
-      deployCodeIds.ajnaStrategy,
+      deployCodeIds.ajnaVaultAuth,
+      deployCodeIds.ajnaVault,
+      deployCodeIds.erc4626StrategyAdapter,
       deployCodeIds.solanaStrategy,
     ],
     enabled: Boolean(publicClient && creatorVaultBatcherAddress),
@@ -6874,7 +6893,13 @@ function DeployVaultMain() {
         { key: 'payoutRouter', label: 'PayoutRouter', codeId: deployCodeIds.payoutRouter },
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
         { key: 'creatorCharmStrategy', label: 'CreatorCharmStrategy', codeId: deployCodeIds.creatorCharmStrategy },
-        { key: 'ajnaStrategy', label: 'AjnaStrategy', codeId: deployCodeIds.ajnaStrategy },
+        { key: 'ajnaVaultAuth', label: 'AjnaVaultAuth', codeId: deployCodeIds.ajnaVaultAuth },
+        { key: 'ajnaVault', label: 'AjnaERC4626Vault', codeId: deployCodeIds.ajnaVault },
+        {
+          key: 'erc4626StrategyAdapter',
+          label: 'ERC4626StrategyAdapter',
+          codeId: deployCodeIds.erc4626StrategyAdapter,
+        },
         { key: 'solanaStrategy', label: 'SolanaStrategy', codeId: deployCodeIds.solanaStrategy },
       ] as const
 
@@ -7415,6 +7440,9 @@ function DeployVaultMain() {
               deployment={justCompletedDeployment}
               tokenSymbol={underlyingSymbolUpper || undefined}
               shareSymbol={derivedShareSymbol || undefined}
+              canonicalCswAddress={canonicalIdentityIsContract ? (canonicalIdentityAddress as Address) : null}
+              embeddedEoaAddress={privyEmbeddedEoaAddress}
+              privyWalletId={privyEmbeddedEoaWalletId}
             />
           ) : trackerDeploymentIsComplete && trackerDeployment ? (
             <AlreadyDeployedBanner

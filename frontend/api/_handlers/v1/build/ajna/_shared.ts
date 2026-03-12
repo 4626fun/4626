@@ -2,12 +2,16 @@ import { isAddress, type Address } from 'viem'
 
 export const AJNA_BUCKET_INDEX_MIN = 1n
 export const AJNA_BUCKET_INDEX_MAX = 7388n
+export const AJNA_MIN_BUCKET_INDEX_MIN = 0n
 export const MAX_BPS = 10_000n
 
 export function toBigIntStrict(v: any, label: string): bigint {
   try {
     if (typeof v === 'bigint') return v
-    if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.floor(v))
+    if (typeof v === 'number') {
+      if (!Number.isFinite(v) || !Number.isInteger(v)) throw new Error('invalid')
+      return BigInt(v)
+    }
     if (typeof v === 'string') {
       const s = v.trim().toLowerCase()
       if (!s) throw new Error('empty')
@@ -41,6 +45,12 @@ export function assertNonNegative(value: bigint, label: string) {
 export function assertBucketIndex(value: bigint, label: string) {
   if (value < AJNA_BUCKET_INDEX_MIN || value > AJNA_BUCKET_INDEX_MAX) {
     throw new Error(`${label} must be between ${AJNA_BUCKET_INDEX_MIN.toString()} and ${AJNA_BUCKET_INDEX_MAX.toString()}`)
+  }
+}
+
+export function assertMinBucketIndex(value: bigint, label: string) {
+  if (value < AJNA_MIN_BUCKET_INDEX_MIN || value > AJNA_BUCKET_INDEX_MAX) {
+    throw new Error(`${label} must be between ${AJNA_MIN_BUCKET_INDEX_MIN.toString()} and ${AJNA_BUCKET_INDEX_MAX.toString()}`)
   }
 }
 

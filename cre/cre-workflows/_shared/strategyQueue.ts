@@ -5,11 +5,20 @@ export type StrategyWorkflowConfig = ApiRuntimeConfig & {
   chainId?: number
 }
 
+export type ActiveVaultAutomationConfig = {
+  automationEnabled: boolean
+  automationScope?: string
+  canonicalCswAddress?: `0x${string}`
+  embeddedEoaAddress?: `0x${string}`
+  privyWalletId?: string
+}
+
 export type ActiveVaultConfig = {
   vaultAddress: `0x${string}`
   chainId: number
   groupId: string
   oracleAddress?: `0x${string}`
+  automation?: ActiveVaultAutomationConfig
 }
 
 type ActiveVaultResponse = {
@@ -31,6 +40,15 @@ type VaultRecord = {
   chainId?: unknown
   groupId?: unknown
   oracleAddress?: unknown
+  automation?: unknown
+}
+
+type VaultAutomationRecord = {
+  automationEnabled?: unknown
+  automationScope?: unknown
+  canonicalCswAddress?: unknown
+  embeddedEoaAddress?: unknown
+  privyWalletId?: unknown
 }
 
 function toOptionalHexAddress(value: unknown): `0x${string}` | undefined {
@@ -38,6 +56,38 @@ function toOptionalHexAddress(value: unknown): `0x${string}` | undefined {
     return undefined
   }
   return value as `0x${string}`
+}
+
+function sanitizeActiveVaultAutomation(value: unknown): ActiveVaultAutomationConfig | undefined {
+  if (!value || typeof value !== "object") return undefined
+
+  const record = value as VaultAutomationRecord
+  const automationScope =
+    typeof record.automationScope === "string" && record.automationScope.trim().length > 0
+      ? record.automationScope.trim()
+      : undefined
+  const canonicalCswAddress = toOptionalHexAddress(record.canonicalCswAddress)
+  const embeddedEoaAddress = toOptionalHexAddress(record.embeddedEoaAddress)
+  const privyWalletId =
+    typeof record.privyWalletId === "string" && record.privyWalletId.trim().length > 0
+      ? record.privyWalletId.trim()
+      : undefined
+  const hasAutomationFields =
+    typeof record.automationEnabled === "boolean" ||
+    Boolean(automationScope) ||
+    Boolean(canonicalCswAddress) ||
+    Boolean(embeddedEoaAddress) ||
+    Boolean(privyWalletId)
+
+  if (!hasAutomationFields) return undefined
+
+  return {
+    automationEnabled: record.automationEnabled === true,
+    ...(automationScope ? { automationScope } : {}),
+    ...(canonicalCswAddress ? { canonicalCswAddress } : {}),
+    ...(embeddedEoaAddress ? { embeddedEoaAddress } : {}),
+    ...(privyWalletId ? { privyWalletId } : {}),
+  }
 }
 
 function sanitizeActiveVaults(vaults: unknown): ActiveVaultConfig[] {
@@ -50,6 +100,7 @@ function sanitizeActiveVaults(vaults: unknown): ActiveVaultConfig[] {
     const chainId = typeof record.chainId === "number" ? record.chainId : Number(record.chainId)
     const groupId = typeof record.groupId === "string" ? record.groupId : ""
     const oracleAddress = toOptionalHexAddress(record.oracleAddress)
+    const automation = sanitizeActiveVaultAutomation(record.automation)
 
     if (!vaultAddress || !Number.isFinite(chainId) || !groupId) continue
 
@@ -61,6 +112,10 @@ function sanitizeActiveVaults(vaults: unknown): ActiveVaultConfig[] {
 
     if (oracleAddress) {
       normalized.oracleAddress = oracleAddress
+    }
+
+    if (automation) {
+      normalized.automation = automation
     }
 
     sanitized.push(normalized)

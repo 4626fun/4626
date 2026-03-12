@@ -70,9 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/build/ajna/repay': { post: { summary: 'Build Ajna ERC20Pool repayDebt calldata', responses: { '200': { description: 'OK' } } } },
       '/v1/build/ajna/addCollateral': { post: { summary: 'Build Ajna pledge collateral calldata', responses: { '200': { description: 'OK' } } } },
       '/v1/build/ajna/removeCollateral': { post: { summary: 'Build Ajna pull collateral calldata', responses: { '200': { description: 'OK' } } } },
-      '/v1/build/ajna/setBucketIndex': { post: { summary: 'Build AjnaStrategy setBucketIndex calldata (owner)', responses: { '200': { description: 'OK' } } } },
-      '/v1/build/ajna/moveToBucket': { post: { summary: 'Build AjnaStrategy moveToBucket calldata (owner)', responses: { '200': { description: 'OK' } } } },
-      '/v1/build/ajna/setIdleBufferBps': { post: { summary: 'Build AjnaStrategy setIdleBufferBps calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/setMinBucketIndex': { post: { summary: 'Build AjnaVaultAuth setMinBucketIndex calldata (admin, canonical nested path)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/setIdleBufferBps': { post: { summary: 'Build ERC4626StrategyAdapter setIdleBufferBps calldata (owner, canonical nested path)', responses: { '200': { description: 'OK' } } } },
 
       '/v1/build/charm/setCharmVault': { post: { summary: 'Build CreatorCharmStrategy setCharmVault calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/charm/setSwapPool': { post: { summary: 'Build CreatorCharmStrategy setSwapPool calldata (owner)', responses: { '200': { description: 'OK' } } } },

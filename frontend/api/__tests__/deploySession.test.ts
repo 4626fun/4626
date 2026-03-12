@@ -1697,7 +1697,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
-  it('status advances phase3_sent when strategy post-check succeeds', async () => {
+  it('status advances phase3_sent when nested Ajna strategy post-check succeeds', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: JSON.stringify({
@@ -1709,14 +1709,18 @@ describe('deploy session optimistic concurrency', () => {
     }
     const viem = await import('viem')
     const charmStrategy = '0x8000000000000000000000000000000000000008'
-    const ajnaStrategy = '0x9000000000000000000000000000000000000009'
+    const ajnaAdapter = '0x9000000000000000000000000000000000000009'
+    const ajnaInnerVault = '0x9100000000000000000000000000000000000009'
+    const ajnaAuth = '0x9200000000000000000000000000000000000009'
+    const ajnaPool = '0x9300000000000000000000000000000000000009'
     const charmVault = '0xa00000000000000000000000000000000000000a'
     const v3Factory = '0xb00000000000000000000000000000000000000b'
     const usdc = '0xc00000000000000000000000000000000000000c'
     const v3Pool = '0xd00000000000000000000000000000000000000d'
     const vault = '0x3000000000000000000000000000000000000003'
-    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+    ;(viem.decodeFunctionData as any).mockImplementation(({ abi, data }: { abi: unknown; data: string }) => {
       if (String(data) === '0xphase3deploy') {
+        expect(JSON.stringify(abi)).not.toContain('ajnaStrategy')
         return {
           functionName: 'deployPhase3Strategies',
           args: [
@@ -1724,9 +1728,16 @@ describe('deploy session optimistic concurrency', () => {
               creatorToken: '0x1000000000000000000000000000000000000001',
               owner: '0x2000000000000000000000000000000000000002',
               vault,
-              version: 'v1.4.3',
+              version: 'v1.4.8',
+              charmVaultName: 'Charm Vault',
+              charmVaultSymbol: 'CHARM',
+              ajnaVaultName: 'Ajna Vault',
+              ajnaVaultSymbol: 'AJNA',
               charmWeightBps: 3000n,
               ajnaWeightBps: 3000n,
+              solanaWeightBps: 0n,
+              ajnaBufferRatioBps: 1000n,
+              ajnaMinBucketIndex: 1200n,
             },
           ],
         }
@@ -1761,15 +1772,24 @@ describe('deploy session optimistic concurrency', () => {
         switch (functionName) {
           case 'strategyList':
             if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
-            if (Number(args?.[0] ?? 0n) === 1) return ajnaStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaAdapter
             return '0xownerbytes'
           case 'strategyWeights':
             if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
-            if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return 3000n
             return 0n
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
             throw new Error('not_charm_strategy')
+          case 'ERC4626_VAULT':
+            if (String(address ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return ajnaInnerVault
+            throw new Error('not_ajna_adapter')
+          case 'AJNA_POOL':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_inner_vault')
+          case 'AUTH':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
+            throw new Error('not_ajna_inner_vault')
           case 'uniswapV3Factory':
             return v3Factory
           case 'usdc':
@@ -1784,7 +1804,10 @@ describe('deploy session optimistic concurrency', () => {
         const withCode = new Set([
           vault.toLowerCase(),
           charmStrategy.toLowerCase(),
-          ajnaStrategy.toLowerCase(),
+          ajnaAdapter.toLowerCase(),
+          ajnaInnerVault.toLowerCase(),
+          ajnaAuth.toLowerCase(),
+          ajnaPool.toLowerCase(),
           charmVault.toLowerCase(),
           v3Pool.toLowerCase(),
         ])
@@ -1819,7 +1842,9 @@ describe('deploy session optimistic concurrency', () => {
     }
     const viem = await import('viem')
     const charmStrategy = '0x8100000000000000000000000000000000000008'
-    const ajnaStrategy = '0x9100000000000000000000000000000000000009'
+    const ajnaAdapter = '0x9100000000000000000000000000000000000009'
+    const ajnaInnerVault = '0x9200000000000000000000000000000000000009'
+    const ajnaAuth = '0x9300000000000000000000000000000000000009'
     const solanaStrategy = '0xa10000000000000000000000000000000000000a'
     const charmVault = '0xb10000000000000000000000000000000000000b'
     const ajnaPool = '0xc10000000000000000000000000000000000000c'
@@ -1828,8 +1853,9 @@ describe('deploy session optimistic concurrency', () => {
     const usdc = '0xf10000000000000000000000000000000000000f'
     const v3Pool = '0x1110000000000000000000000000000000000011'
     const vault = '0x3000000000000000000000000000000000000003'
-    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+    ;(viem.decodeFunctionData as any).mockImplementation(({ abi, data }: { abi: unknown; data: string }) => {
       if (String(data) === '0xphase3deployv2') {
+        expect(JSON.stringify(abi)).not.toContain('ajnaStrategy')
         return {
           functionName: 'deployPhase3Strategies',
           args: [
@@ -1875,20 +1901,26 @@ describe('deploy session optimistic concurrency', () => {
         switch (functionName) {
           case 'strategyList':
             if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
-            if (Number(args?.[0] ?? 0n) === 1) return ajnaStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaAdapter
             if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
             return '0xownerbytes'
           case 'strategyWeights':
             if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
-            if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return 3000n
             if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
             return 0n
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
             throw new Error('not_charm_strategy')
-          case 'ajnaPool':
-            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaPool
-            throw new Error('not_ajna_strategy')
+          case 'ERC4626_VAULT':
+            if (String(address ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return ajnaInnerVault
+            throw new Error('not_ajna_adapter')
+          case 'AJNA_POOL':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_inner_vault')
+          case 'AUTH':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
+            throw new Error('not_ajna_inner_vault')
           case 'bridgeAdapter':
             if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAdapter
             throw new Error('not_solana_strategy')
@@ -1906,7 +1938,9 @@ describe('deploy session optimistic concurrency', () => {
         const withCode = new Set([
           vault.toLowerCase(),
           charmStrategy.toLowerCase(),
-          ajnaStrategy.toLowerCase(),
+          ajnaAdapter.toLowerCase(),
+          ajnaInnerVault.toLowerCase(),
+          ajnaAuth.toLowerCase(),
           solanaStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),

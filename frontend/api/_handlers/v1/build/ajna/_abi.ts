@@ -27,9 +27,11 @@ export const AJNA_ERC20_POOL_ABI = [
   },
 ] as const
 
-export const CREATOR_AJNA_STRATEGY_OWNER_ABI = [
-  { type: 'function', name: 'setBucketIndex', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
-  { type: 'function', name: 'moveToBucket', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }, { type: 'uint256' }], outputs: [] },
+export const ERC4626_STRATEGY_ADAPTER_OWNER_ABI = [
   { type: 'function', name: 'setIdleBufferBps', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
+] as const
+
+export const AJNA_VAULT_AUTH_ADMIN_ABI = [
+  { type: 'function', name: 'setMinBucketIndex', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
 ] as const
 

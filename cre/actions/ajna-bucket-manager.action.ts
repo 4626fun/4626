@@ -8,17 +8,16 @@
  *
  * Flow per vault:
  *  1) Read oracle suggested bucket from V3 TWAP.
- *  2) Read Ajna strategy current bucket.
+ *  2) Read nested Ajna auth current min bucket.
  *  3) Apply threshold + max-step guardrails.
  *  4) Scan nearby buckets for quote liquidity and pick best local bucket.
- *  5) If keeper owns strategy and cooldown allows, call moveToBucket/setBucketIndex.
+ *  5) If keeper is auth admin, call setMinBucketIndex.
  */
 
 import { getAddress, isAddress } from 'viem';
 import {
   AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS,
   AJNA_BUCKET_MAX_STEP,
-  AJNA_BUCKET_MOVE_COOLDOWN_SECONDS,
   AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS,
   AJNA_BUCKET_MOVE_THRESHOLD,
   AJNA_BUCKET_TARGET_LTV_BPS,
@@ -27,10 +26,12 @@ import {
   ORACLE_ABI,
 } from '../config.js';
 import {
-  getBlockTimestamp,
-  getKeeperAddress,
   readContract,
+  normalizeWriteExecutionContext,
+  resolveCanonicalAjnaExecutionContext,
   writeContract,
+  type CanonicalAjnaAutomationConfig,
+  type WriteExecutionContext,
   type WriteResult,
 } from '../utils/onchain.js';
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
@@ -62,25 +63,32 @@ const VAULT_STRATEGY_VIEW_ABI = [
   },
 ] as const;
 
-const AJNA_STRATEGY_VIEW_ABI = [
-  { type: 'function', name: 'ajnaPool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'bucketIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+const AJNA_ADAPTER_VIEW_ABI = [
+  { type: 'function', name: 'ERC4626_VAULT', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const;
 
-const AJNA_STRATEGY_ADMIN_ABI = [
+const AJNA_INNER_VAULT_VIEW_ABI = [
+  { type: 'function', name: 'AJNA_POOL', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'AUTH', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const;
+
+const AJNA_AUTH_VIEW_ABI = [
+  { type: 'function', name: 'admin', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   {
     type: 'function',
-    name: 'moveToBucket',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'newIndex', type: 'uint256' }, { name: 'lpAmount', type: 'uint256' }],
-    outputs: [],
+    name: 'minBucketIndex',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
   },
+] as const;
+
+const AJNA_AUTH_ADMIN_ABI = [
   {
     type: 'function',
-    name: 'setBucketIndex',
+    name: 'setMinBucketIndex',
     stateMutability: 'nonpayable',
-    inputs: [{ name: '_index', type: 'uint256' }],
+    inputs: [{ name: 'nextMinBucketIndex', type: 'uint256' }],
     outputs: [],
   },
 ] as const;
@@ -114,15 +122,15 @@ interface RuntimeConfig {
   priceChangeTriggerBps: number;
   moveThreshold: number;
   maxStep: number;
-  cooldownSeconds: number;
   searchRadius: number;
 }
 
-export interface AjnaStrategyContext {
+export interface AjnaAdapterContext {
   strategyAddress: `0x${string}`;
   ajnaPool: `0x${string}`;
+  authAddress: `0x${string}`;
   currentBucket: number;
-  owner: `0x${string}`;
+  authAdmin: `0x${string}`;
   weight: bigint;
 }
 
@@ -135,7 +143,7 @@ export interface BucketMoveResult {
   steppedBucket: number;
   targetBucket: number;
   moved: boolean;
-  method?: 'moveToBucket' | 'setBucketIndex';
+  method?: 'setMinBucketIndex';
   txHash?: `0x${string}`;
   skippedReason?: string;
   error?: string;
@@ -150,6 +158,17 @@ export interface BatchAjnaBucketResult {
   errors: number;
   results: BucketMoveResult[];
 }
+
+type VaultAutomationAwareConfig = VaultConfig & {
+  automation?: CanonicalAjnaAutomationConfig | null;
+};
+
+type ResolvedAjnaVault = {
+  vaultAddress: `0x${string}`;
+  oracleAddress: `0x${string}`;
+  executionContext: WriteExecutionContext | null;
+  source: 'feed' | 'single';
+};
 
 function parsePositiveIntEnv(key: string, fallback: number): number {
   const raw = process.env[key];
@@ -175,10 +194,6 @@ function buildRuntimeConfig(): RuntimeConfig {
     ),
     moveThreshold: parsePositiveIntEnv('AJNA_BUCKET_MOVE_THRESHOLD', AJNA_BUCKET_MOVE_THRESHOLD),
     maxStep: parsePositiveIntEnv('AJNA_BUCKET_MAX_STEP', AJNA_BUCKET_MAX_STEP),
-    cooldownSeconds: parsePositiveIntEnv(
-      'AJNA_BUCKET_MOVE_COOLDOWN_SECONDS',
-      AJNA_BUCKET_MOVE_COOLDOWN_SECONDS,
-    ),
     searchRadius: parsePositiveIntEnv(
       'AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS',
       AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS,
@@ -193,6 +208,10 @@ function asAddress(value: unknown): `0x${string}` | null {
 
 export function clampBucketIndex(index: number): number {
   return Math.max(MIN_BUCKET_INDEX, Math.min(MAX_BUCKET_INDEX, Math.floor(index)));
+}
+
+export function clampMinBucketIndex(index: number): number {
+  return Math.max(0, Math.min(MAX_BUCKET_INDEX, Math.floor(index)));
 }
 
 function floorDiv(a: number, b: number): number {
@@ -215,8 +234,8 @@ export function bucketPriceChangeBps(params: {
   currentBucket: number;
   suggestedBucket: number;
 }): number {
-  const current = clampBucketIndex(params.currentBucket);
-  const suggested = clampBucketIndex(params.suggestedBucket);
+  const current = clampMinBucketIndex(params.currentBucket);
+  const suggested = clampMinBucketIndex(params.suggestedBucket);
   const delta = Math.abs(suggested - current);
   if (delta === 0) return 0;
 
@@ -272,8 +291,8 @@ export function computeSteppedBucket(params: {
   rawDelta: number;
   steppedBucket: number;
 } {
-  const current = clampBucketIndex(params.currentBucket);
-  const suggested = clampBucketIndex(params.suggestedBucket);
+  const current = clampMinBucketIndex(params.currentBucket);
+  const suggested = clampMinBucketIndex(params.suggestedBucket);
   const rawDelta = suggested - current;
   const absDelta = Math.abs(rawDelta);
   if (absDelta < params.moveThreshold) {
@@ -318,8 +337,8 @@ export function pickBestLiquidityBucket(params: {
 
 export async function readAjnaStrategiesForVault(
   vaultAddress: `0x${string}`,
-): Promise<AjnaStrategyContext[]> {
-  const out: AjnaStrategyContext[] = [];
+): Promise<AjnaAdapterContext[]> {
+  const out: AjnaAdapterContext[] = [];
   const seen = new Set<string>();
 
   for (let i = 0; i < MAX_STRATEGIES; i += 1) {
@@ -344,32 +363,52 @@ export async function readAjnaStrategiesForVault(
     }).catch(() => 0n);
     if (weight === 0n) continue;
 
-    const ajnaPoolRaw = await readContract<unknown>({
+    const adapterVaultRaw = await readContract<unknown>({
       address: strategyAddress,
-      abi: AJNA_STRATEGY_VIEW_ABI,
-      functionName: 'ajnaPool',
+      abi: AJNA_ADAPTER_VIEW_ABI,
+      functionName: 'ERC4626_VAULT',
     }).catch(() => null);
-    const ajnaPool = asAddress(ajnaPoolRaw);
-    if (!ajnaPool || ajnaPool.toLowerCase() === ZERO_ADDRESS.toLowerCase()) continue;
+    const adapterVault = asAddress(adapterVaultRaw);
+    if (!adapterVault || adapterVault.toLowerCase() === ZERO_ADDRESS.toLowerCase()) continue;
 
-    const bucketRaw = await readContract<bigint>({
-      address: strategyAddress,
-      abi: AJNA_STRATEGY_VIEW_ABI,
-      functionName: 'bucketIndex',
-    }).catch(() => 0n);
-    const ownerRaw = await readContract<unknown>({
-      address: strategyAddress,
-      abi: AJNA_STRATEGY_VIEW_ABI,
-      functionName: 'owner',
-    }).catch(() => null);
-    const owner = asAddress(ownerRaw);
-    if (!owner) continue;
+    const [ajnaPoolRaw, authRaw] = await Promise.all([
+      readContract<unknown>({
+        address: adapterVault,
+        abi: AJNA_INNER_VAULT_VIEW_ABI,
+        functionName: 'AJNA_POOL',
+      }).catch(() => null),
+      readContract<unknown>({
+        address: adapterVault,
+        abi: AJNA_INNER_VAULT_VIEW_ABI,
+        functionName: 'AUTH',
+      }).catch(() => null),
+    ]);
+    const ajnaPool = asAddress(ajnaPoolRaw);
+    const authAddress = asAddress(authRaw);
+    if (!ajnaPool || ajnaPool.toLowerCase() === ZERO_ADDRESS.toLowerCase()) continue;
+    if (!authAddress || authAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) continue;
+
+    const [authAdminRaw, minBucketRaw] = await Promise.all([
+      readContract<unknown>({
+        address: authAddress,
+        abi: AJNA_AUTH_VIEW_ABI,
+        functionName: 'admin',
+      }).catch(() => null),
+      readContract<bigint>({
+        address: authAddress,
+        abi: AJNA_AUTH_VIEW_ABI,
+        functionName: 'minBucketIndex',
+      }).catch(() => 0n),
+    ]);
+    const authAdmin = asAddress(authAdminRaw);
+    if (!authAdmin) continue;
 
     out.push({
       strategyAddress,
       ajnaPool,
-      currentBucket: clampBucketIndex(Number(bucketRaw)),
-      owner,
+      authAddress,
+      currentBucket: clampMinBucketIndex(Number(minBucketRaw)),
+      authAdmin,
       weight,
     });
   }
@@ -434,21 +473,6 @@ export async function readOracleSuggestedBucket(params: {
   });
 }
 
-export async function readCurrentBucketLenderInfo(params: {
-  ajnaPool: `0x${string}`;
-  bucketIndex: number;
-  lender: `0x${string}`;
-}): Promise<{ lpBalance: bigint; depositTime: bigint }> {
-  const data = await readContract<[bigint, bigint]>({
-    address: params.ajnaPool,
-    abi: AJNA_POOL_VIEW_ABI,
-    functionName: 'lenderInfo',
-    args: [BigInt(params.bucketIndex), params.lender],
-  }).catch(() => null);
-  if (!data) return { lpBalance: 0n, depositTime: 0n };
-  return { lpBalance: data[0] ?? 0n, depositTime: data[1] ?? 0n };
-}
-
 export async function pickLiquidityAwareTarget(params: {
   ajnaPool: `0x${string}`;
   steppedBucket: number;
@@ -478,16 +502,47 @@ export async function pickLiquidityAwareTarget(params: {
   });
 }
 
-function resolveSingleVaultMode(): { vaultAddress: `0x${string}`; oracleAddress: `0x${string}` } | null {
+function getVaultExecutionContext(vault: VaultAutomationAwareConfig): WriteExecutionContext | null {
+  return resolveCanonicalAjnaExecutionContext(vault.automation);
+}
+
+function resolveSingleVaultEnvExecutionContext(): WriteExecutionContext | null {
+  const privyWalletId = String(process.env.AJNA_BUCKET_PRIVY_WALLET_ID ?? '').trim();
+  const hasExplicitContext =
+    Boolean(asAddress(process.env.AJNA_BUCKET_CANONICAL_CSW_ADDRESS)) ||
+    Boolean(asAddress(process.env.AJNA_BUCKET_EMBEDDED_EOA_ADDRESS)) ||
+    Boolean(privyWalletId) ||
+    Boolean(process.env.AJNA_BUCKET_CSW_VERSION);
+
+  if (!hasExplicitContext) return null;
+
+  try {
+    return normalizeWriteExecutionContext({
+      smartWallet: asAddress(process.env.AJNA_BUCKET_CANONICAL_CSW_ADDRESS) ?? undefined,
+      ownerAddress: asAddress(process.env.AJNA_BUCKET_EMBEDDED_EOA_ADDRESS) ?? undefined,
+      privyWalletId: privyWalletId || undefined,
+      version: process.env.AJNA_BUCKET_CSW_VERSION === '1.1' ? '1.1' : '1',
+    });
+  } catch {
+    return null;
+  }
+}
+
+function resolveSingleVaultMode(): ResolvedAjnaVault | null {
   const vaultAddress =
     asAddress(process.env.AJNA_BUCKET_VAULT_ADDRESS) ?? asAddress(process.env.VAULT_ADDRESS);
   const oracleAddress =
     asAddress(process.env.AJNA_BUCKET_ORACLE_ADDRESS) ?? asAddress(process.env.ORACLE_ADDRESS);
   if (!vaultAddress || !oracleAddress) return null;
-  return { vaultAddress, oracleAddress };
+  return {
+    vaultAddress,
+    oracleAddress,
+    executionContext: resolveSingleVaultEnvExecutionContext(),
+    source: 'single',
+  };
 }
 
-async function resolveVaults(): Promise<Array<{ vaultAddress: `0x${string}`; oracleAddress: `0x${string}` }>> {
+async function resolveVaults(): Promise<ResolvedAjnaVault[]> {
   const single = resolveSingleVaultMode();
   if (single) return [single];
 
@@ -495,20 +550,26 @@ async function resolveVaults(): Promise<Array<{ vaultAddress: `0x${string}`; ora
   const candidates = filterVaultsForWorkflow(allVaults, 'ajna-bucket-manager');
   return candidates
     .map((v: VaultConfig) => {
+      const vault = v as VaultAutomationAwareConfig;
       const vaultAddress = asAddress(v.vaultAddress);
       const oracleAddress = asAddress(v.oracleAddress);
       if (!vaultAddress || !oracleAddress) return null;
-      return { vaultAddress, oracleAddress };
+      if (vault.automation?.automationEnabled !== true) return null;
+      const executionContext = getVaultExecutionContext(vault);
+      return {
+        vaultAddress,
+        oracleAddress,
+        executionContext,
+        source: 'feed' as const,
+      };
     })
-    .filter((v): v is { vaultAddress: `0x${string}`; oracleAddress: `0x${string}` } => Boolean(v));
+    .filter((v): v is ResolvedAjnaVault => Boolean(v));
 }
 
 export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult> {
   const cfg = buildRuntimeConfig();
-  const keeperAddress = getKeeperAddress();
-  const now = await getBlockTimestamp();
 
-  let vaults: Array<{ vaultAddress: `0x${string}`; oracleAddress: `0x${string}` }> = [];
+  let vaults: ResolvedAjnaVault[] = [];
   try {
     vaults = await resolveVaults();
   } catch (err) {
@@ -532,6 +593,23 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
   }
 
   for (const vault of vaults) {
+    if (!vault.executionContext) {
+      batch.processed += 1;
+      batch.errors += 1;
+      batch.results.push({
+        vaultAddress: vault.vaultAddress,
+        strategyAddress: ZERO_ADDRESS as `0x${string}`,
+        oracleAddress: vault.oracleAddress,
+        currentBucket: 0,
+        suggestedBucket: 0,
+        steppedBucket: 0,
+        targetBucket: 0,
+        moved: false,
+        error: `canonical_sender_required:${vault.source}`,
+      });
+      continue;
+    }
+
     const suggestedBucket = await readOracleSuggestedBucket({
       oracleAddress: vault.oracleAddress,
       twapDuration: cfg.twapDuration,
@@ -627,9 +705,11 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
         continue;
       }
 
-      if (strategy.owner.toLowerCase() !== keeperAddress.toLowerCase()) {
+      if (
+        strategy.authAdmin.toLowerCase() !== vault.executionContext.smartWallet.toLowerCase()
+      ) {
         batch.processed += 1;
-        batch.skipped += 1;
+        batch.errors += 1;
         batch.results.push({
           vaultAddress: vault.vaultAddress,
           strategyAddress: strategy.strategyAddress,
@@ -639,52 +719,19 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
           steppedBucket: step.steppedBucket,
           targetBucket,
           moved: false,
-          skippedReason: 'keeper_not_strategy_owner',
+          error: 'canonical_sender_required:auth_admin_mismatch',
         });
         continue;
       }
+      const method: 'setMinBucketIndex' = 'setMinBucketIndex';
 
-      const lenderInfo = await readCurrentBucketLenderInfo({
-        ajnaPool: strategy.ajnaPool,
-        bucketIndex: strategy.currentBucket,
-        lender: strategy.strategyAddress,
+      const write: WriteResult = await writeContract({
+        address: strategy.authAddress,
+        abi: AJNA_AUTH_ADMIN_ABI,
+        functionName: 'setMinBucketIndex',
+        args: [BigInt(targetBucket)],
+        executionContext: vault.executionContext,
       });
-
-      const secondsSinceLastDeposit = lenderInfo.depositTime > 0n ? Number(now - lenderInfo.depositTime) : Number.MAX_SAFE_INTEGER;
-      if (lenderInfo.lpBalance > 0n && secondsSinceLastDeposit < cfg.cooldownSeconds) {
-        batch.processed += 1;
-        batch.skipped += 1;
-        batch.results.push({
-          vaultAddress: vault.vaultAddress,
-          strategyAddress: strategy.strategyAddress,
-          oracleAddress: vault.oracleAddress,
-          currentBucket: strategy.currentBucket,
-          suggestedBucket,
-          steppedBucket: step.steppedBucket,
-          targetBucket,
-          moved: false,
-          skippedReason: 'cooldown_active',
-        });
-        continue;
-      }
-
-      const method: 'moveToBucket' | 'setBucketIndex' =
-        lenderInfo.lpBalance > 0n ? 'moveToBucket' : 'setBucketIndex';
-
-      const write: WriteResult =
-        method === 'moveToBucket'
-          ? await writeContract({
-              address: strategy.strategyAddress,
-              abi: AJNA_STRATEGY_ADMIN_ABI,
-              functionName: 'moveToBucket',
-              args: [BigInt(targetBucket), 0n],
-            })
-          : await writeContract({
-              address: strategy.strategyAddress,
-              abi: AJNA_STRATEGY_ADMIN_ABI,
-              functionName: 'setBucketIndex',
-              args: [BigInt(targetBucket)],
-            });
 
       batch.processed += 1;
       if (write.success) {
