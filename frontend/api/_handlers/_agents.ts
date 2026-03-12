@@ -36,6 +36,18 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function resolveAgentAddress(): `0x${string}` | null {
+  const candidates = [
+    (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim(),
+    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
+    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
+  ]
+  for (const raw of candidates) {
+    if (isAddressLike(raw)) return raw.toLowerCase() as `0x${string}`
+  }
+  return null
+}
+
 function parseSupportedTrust(raw: string | undefined): string[] {
   if (!raw) return ['reputation', 'crypto-economic', 'tee-attestation']
   const entries = raw
@@ -88,8 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'agents', kind: 'read' })
   if (!g.ok) return
 
-  const addr = (process.env.XMTP_AGENT_ADDRESS ?? '').trim()
-  const agentAddress = isAddressLike(addr) ? (addr.toLowerCase() as `0x${string}`) : null
+  const agentAddress = resolveAgentAddress()
 
   const agents = agentAddress
     ? [

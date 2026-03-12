@@ -23,6 +23,7 @@ import type {
 
 import { handleKeeprCommand } from '../../../../keepr/commands.js'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
+import { assertTeeAttestationOrThrow } from '../../../../_lib/teeAttestationGate.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,25 @@ function isKeeprCommand(text: string): boolean {
 function isKeeprStatusCommand(text: string): boolean {
   const t = text.trim().toLowerCase()
   return t === '/keepr status' || t === 'keepr status'
+}
+
+function isPrivilegedKeeprCommand(text: string): boolean {
+  const t = text.trim().toLowerCase()
+  if (t.startsWith('/send') || t.startsWith('send ')) return true
+  if (t.startsWith('/coin') || t.startsWith('coin ')) return true
+  if (t.startsWith('/cre') || t.startsWith('cre ')) {
+    return (
+      t.includes(' tend') ||
+      t.includes(' report') ||
+      t.includes(' settle') ||
+      t.includes(' flush-fees') ||
+      t.includes(' relay-entries') ||
+      t.includes(' relay-winners') ||
+      t.includes(' queue') ||
+      t.includes(' graduate')
+    )
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +131,24 @@ const keeprCommandAction: Action = {
     const text = (message.content?.text ?? '').trim()
 
     try {
+      if (isPrivilegedKeeprCommand(text)) {
+        try {
+          await assertTeeAttestationOrThrow({
+            action: 'keepr_command:privileged',
+            actorAddress: senderAddress,
+            metadata: {
+              conversationId,
+              commandPreview: text.slice(0, 96),
+            },
+          })
+        } catch (error) {
+          await callback?.({
+            text: 'Command denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+          } as Content)
+          return
+        }
+      }
+
       const result = await handleKeeprCommand({
         groupId: conversationId,
         senderWallet: senderAddress as `0x${string}`,

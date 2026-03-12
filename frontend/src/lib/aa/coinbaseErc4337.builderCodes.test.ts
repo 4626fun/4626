@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Address, Hex } from 'viem'
 
-import { resolveDataSuffix, payloadEndsWithDataSuffix } from '../baseBuilderCodes'
+import { appendDataSuffixToHex, resolveDataSuffix, payloadEndsWithDataSuffix } from '../baseBuilderCodes'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337'
 
 describe('applyBuilderDataSuffixToCalls', () => {
@@ -41,9 +41,21 @@ describe('applyBuilderDataSuffixToCalls', () => {
 
   it('preserves canonical Universal Router execute calldata without suffix mutation', () => {
     expect(dataSuffix).toBeDefined()
-    const universalRouterCall = [{ to: target, value: 0n, data: '0x3593564c11223344' as Hex }]
+    const universalRouterTarget = '0x6ff5693b99212da76ad316178a184ab56d299b43' as Address
+    const universalRouterCall = [{ to: universalRouterTarget, value: 0n, data: '0x3593564c11223344' as Hex }]
     const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
     expect(result[0].data).toBe(universalRouterCall[0].data)
+    expect(payloadEndsWithDataSuffix(result[0].data as Hex, dataSuffix as Hex)).toBe(false)
+  })
+
+  it('strips existing suffix from canonical Universal Router execute calldata', () => {
+    expect(dataSuffix).toBeDefined()
+    const universalRouterTarget = '0x6ff5693b99212da76ad316178a184ab56d299b43' as Address
+    const baseData = '0x3593564c11223344' as Hex
+    const alreadySuffixed = appendDataSuffixToHex(baseData, dataSuffix as Hex)
+    const universalRouterCall = [{ to: universalRouterTarget, value: 0n, data: alreadySuffixed }]
+    const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
+    expect(result[0].data).toBe(baseData)
     expect(payloadEndsWithDataSuffix(result[0].data as Hex, dataSuffix as Hex)).toBe(false)
   })
 })

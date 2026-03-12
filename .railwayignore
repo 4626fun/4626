@@ -20,7 +20,6 @@
 /contracts/
 /script/
 /test/
-/patches/
 
 # Node modules (rebuilt inside Docker)
 **/node_modules/

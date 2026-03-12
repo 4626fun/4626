@@ -10,7 +10,7 @@ This runbook covers deploy, rollback, and on-call triage for the long-lived Eliz
 ## Scope
 
 - Service: Eliza runtime container (`frontend/Dockerfile.agent`)
-- Platform: Railway (`railway.toml`) or Docker with persistent volume
+- Platform: Eliza Cloud primary + Railway fallback (or Docker with persistent volume)
 - Health endpoints:
   - Liveness: `/healthz` (boot is allowed)
   - Readiness: `/readyz` (must be fully ready)
@@ -21,6 +21,18 @@ Before shipping, verify these values are configured:
 
 - `XMTP_DB_DIRECTORY` points to a persistent mounted path (Railway volume: `/data/.xmtp-data`)
 - `XMTP_DB_ENCRYPTION_KEY` is set and stable across restarts
+- Runtime role is explicit:
+  - Primary: `AGENT_RUNTIME_ROLE=primary` and `AGENT_CONSUME_XMTP=true`
+  - Standby: `AGENT_RUNTIME_ROLE=standby` and `AGENT_CONSUME_XMTP=false`
+- Optional split-brain guard (recommended when primary/fallback share one DB):
+  - `AGENT_RUNTIME_LOCK_REQUIRED=true`
+  - `AGENT_RUNTIME_LOCK_KEY=xmtp-primary-runtime-lock`
+  - `AGENT_RUNTIME_LOCK_HEARTBEAT_MS=10000`
+  - `AGENT_RUNTIME_LOCK_STALE_MS=30000`
+- Hard TEE gate for privileged signing/actions (if enabled):
+  - `TEE_ENFORCEMENT_ENABLED=true`
+  - `ERC8004_VALIDATION_REGISTRY` + `ERC8004_AGENT_ID` set
+  - `TEE_VALIDATOR_ADDRESSES` includes trusted validators
 - One runtime mode is configured:
   - Multi-agent: `DATABASE_URL` + `XMTP_AGENT_KEY_ENCRYPTION_KEY`
   - Single CSW: `XMTP_AGENT_CSW_ADDRESS` + `XMTP_AGENT_PRIVY_WALLET_ID`
@@ -33,11 +45,39 @@ Before shipping, verify these values are configured:
 1. Confirm config and image source:
    - `railway.toml` uses `frontend/Dockerfile.agent`
    - persistent volume is mounted at `/data/.xmtp-data`
+   - `healthcheckPath` is `/readyz` (strict readiness gate)
 2. Deploy (`railway up` or UI deploy).
 3. Watch startup logs until runtime mode and plugin/action counts print.
 4. Validate liveness and readiness:
    - `GET /healthz` should return `200`
    - `GET /readyz` should return `200` and `status: "ok"`
+
+## Deploy Procedure (Eliza Cloud Primary)
+
+1. Deploy with primary runtime env:
+   - `AGENT_RUNTIME_ROLE=primary`
+   - `AGENT_CONSUME_XMTP=true`
+2. Keep Railway running as standby with:
+   - `AGENT_RUNTIME_ROLE=standby`
+   - `AGENT_CONSUME_XMTP=false`
+3. Confirm both report healthy:
+   - Cloud `/readyz` returns `status: "ok"`
+   - Railway `/readyz` returns `status: "standby"`
+4. Confirm only Cloud consumes XMTP traffic.
+
+## Failover / Rollback (Cloud <-> Railway)
+
+1. Promote standby:
+   - Set Railway `AGENT_CONSUME_XMTP=true`
+   - Set Railway `AGENT_RUNTIME_ROLE=primary`
+2. Demote previous primary:
+   - Set Cloud `AGENT_CONSUME_XMTP=false`
+   - Set Cloud `AGENT_RUNTIME_ROLE=standby`
+3. Validate on promoted instance:
+   - `/readyz` is `200`
+   - `runtime.consumeXmtp=true`
+   - `/keepr status` succeeds in XMTP chat
+4. Rollback uses the exact reverse env switch.
 
 ## Go / No-Go Gates
 
@@ -47,6 +87,8 @@ Ship only if all pass:
 - `dependencies.xmtp.ready` is `true`
 - `dependencies.queueWorker.running` is `true` in multi-agent mode
 - `dependencies.queueWorker.stats.staleProcessing` is `0`
+- `runtime.role` and `runtime.consumeXmtp` match the intended primary/standby state
+- If TEE gate is enabled, `teeAttestation.passed` is `true` from `/api/v1/agents/identity/verification`
 - `/keepr status` succeeds end-to-end in XMTP chat for a known configured vault
 
 ## Rollback Procedure

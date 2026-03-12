@@ -3,6 +3,7 @@ import { encodeFunctionData, parseUnits, isAddress, getAddress } from 'viem'
 
 import { logger } from '../_lib/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
+import { assertTeeAttestationOrThrow } from '../_lib/teeAttestationGate.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from './commands.js'
 
@@ -188,6 +189,28 @@ export async function handleSendCommand(params: {
     return { ok: false, response: `Limit exceeded: ${limitsCheck.reason}` }
   }
 
+  try {
+    await assertTeeAttestationOrThrow({
+      action: 'keepr.send.transfer',
+      actorAddress: params.senderWallet,
+      metadata: {
+        groupId: params.groupId,
+        vaultAddress: params.vault.vaultAddress,
+        token: parsed.token,
+      },
+    })
+  } catch (err) {
+    logger.warn('[send] TEE attestation gate denied send command', {
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      response: 'Transfer denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+    }
+  }
+
   // Look up agent wallet (Privy-managed, for onchain tx)
   // For CSW agents, the "agent wallet" IS the CSW — we use the Privy server
   // wallet to sign transactions that execute on the CSW.
@@ -221,6 +244,15 @@ export async function handleSendCommand(params: {
           },
         },
         idempotencyKey: `send:${params.groupId}:${Date.now()}`,
+        teeContext: {
+          action: 'keepr.send.transfer',
+          actorAddress: params.senderWallet,
+          metadata: {
+            groupId: params.groupId,
+            vaultAddress: params.vault.vaultAddress,
+            token: parsed.token,
+          },
+        },
       })
       txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
     } else {
@@ -243,6 +275,15 @@ export async function handleSendCommand(params: {
           },
         },
         idempotencyKey: `send:${params.groupId}:${Date.now()}`,
+        teeContext: {
+          action: 'keepr.send.transfer',
+          actorAddress: params.senderWallet,
+          metadata: {
+            groupId: params.groupId,
+            vaultAddress: params.vault.vaultAddress,
+            token: parsed.token,
+          },
+        },
       })
       txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
     }

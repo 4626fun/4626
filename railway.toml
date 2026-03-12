@@ -13,8 +13,9 @@ dockerfilePath = "frontend/Dockerfile.agent"
 # Number of replicas (only 1 — XMTP agent is stateful with local DB)
 numReplicas = 1
 
-# Health check: agent exposes a tiny HTTP server on $PORT
-healthcheckPath = "/healthz"
+# Health check: use strict readiness to avoid routing
+# traffic before the runtime has fully initialized.
+healthcheckPath = "/readyz"
 healthcheckTimeout = 120
 
 # Restart on failure

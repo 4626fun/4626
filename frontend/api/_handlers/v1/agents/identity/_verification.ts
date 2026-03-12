@@ -8,6 +8,7 @@ import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.j
 import { buildAgentRegistration, type RegistrationFile } from '../../../../../server/_lib/agentRegistration.js'
 import { IDENTITY_REGISTRY_ABI } from '../../../../../server/_lib/erc8004.js'
 import { getCanonicalOrigin } from '../../../../../server/_lib/origin.js'
+import { getTeeAttestationStatus } from '../../../../../server/_lib/teeAttestationGate.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -264,6 +265,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     canonicalCsw && onchain.agentWallet && canonicalCsw.toLowerCase() === onchain.agentWallet.toLowerCase(),
   )
   const agentRegistered = Boolean(onchain.ownerAddress || onchain.tokenUri)
+  const teeAttestation = await getTeeAttestationStatus().catch(() => ({
+    enabled: false,
+    passed: false,
+    reason: 'tee_attestation_lookup_failed',
+    source: 'validation-registry' as const,
+    tag: 'tee-attestation',
+    registryAddress: null,
+    validatorAddresses: [],
+    validationCount: 0,
+    averageResponse: 0,
+    checkedAtMs: Date.now(),
+  }))
 
   setCache(res, 30)
   return res.status(200).json({
@@ -278,6 +291,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tokenUri: onchain.tokenUri,
       agentRegistered,
       walletBoundToCanonical,
+      teeAttestation,
       links: {
         registry: `${explorer}/address/${ref.registryAddress}`,
         token: `${explorer}/token/${ref.registryAddress}?a=${agentId}`,

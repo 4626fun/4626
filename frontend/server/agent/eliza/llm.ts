@@ -9,13 +9,18 @@ export type LlmProvider = {
   envKey: string
   apiUrl: string
   model: string
-  transformBody?: (messages: Array<{ role: string; content: string }>, maxTokens: number) => unknown
+  transformBody?: (
+    messages: Array<{ role: string; content: string }>,
+    maxTokens: number,
+    selectedModel: string,
+  ) => unknown
   extractContent?: (json: any) => string | null
   estimateUsdPer1kTokens: number
 }
 
 type ProviderAttempt = {
   provider: string
+  model?: string
   ok: boolean
   error?: string
 }
@@ -60,9 +65,9 @@ const PROVIDERS: LlmProvider[] = [
     name: 'Anthropic',
     envKey: 'ANTHROPIC_API_KEY',
     apiUrl: 'https://api.anthropic.com/v1/messages',
-    model: 'claude-3-5-haiku-20241022',
-    transformBody: (messages, maxTokens) => ({
-      model: 'claude-3-5-haiku-20241022',
+    model: 'claude-3-5-sonnet-20241022',
+    transformBody: (messages, maxTokens, selectedModel) => ({
+      model: selectedModel,
       max_tokens: maxTokens,
       system: messages.find((m) => m.role === 'system')?.content ?? '',
       messages: messages.filter((m) => m.role !== 'system'),
@@ -103,6 +108,67 @@ function parsePriority(raw: string | undefined): string[] {
   return requested
 }
 
+function parseBool(raw: string | undefined, fallback: boolean): boolean {
+  const normalized = String(raw ?? '').trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
+function resolveProviderModelOverride(provider: LlmProvider): string | null {
+  const envKey = `ELIZA_${provider.name.toUpperCase()}_MODEL`
+  const model = String(process.env[envKey] ?? '').trim()
+  return model || null
+}
+
+function preferredModelCompatible(provider: LlmProvider, model: string | undefined): boolean {
+  const normalized = String(model ?? '').trim().toLowerCase()
+  if (!normalized) return false
+  if (provider.name === 'Anthropic') return normalized.startsWith('claude-')
+  if (provider.name === 'OpenAI') return normalized.startsWith('gpt-') || normalized.startsWith('o')
+  if (provider.name === 'Groq') {
+    return (
+      normalized.includes('llama') ||
+      normalized.includes('mixtral') ||
+      normalized.includes('gemma') ||
+      normalized.includes('qwen') ||
+      normalized.includes('deepseek')
+    )
+  }
+  // OpenRouter is intentionally model-agnostic.
+  return true
+}
+
+function resolveModelForProvider(provider: LlmProvider, preferredModel?: string): string {
+  const override = resolveProviderModelOverride(provider)
+  if (override) return override
+  if (preferredModelCompatible(provider, preferredModel)) return String(preferredModel).trim()
+  return provider.model
+}
+
+function messageLooksComplex(userMessage: string, thresholdChars: number): boolean {
+  const text = userMessage.trim().toLowerCase()
+  if (!text) return false
+  if (text.length >= thresholdChars) return true
+  const complexSignals = [
+    'rebalance',
+    'strategy',
+    'portfolio',
+    'funder',
+    'solana',
+    'auction',
+    'liquidity',
+    'governance',
+    'risk',
+    'cross-chain',
+    'analyze',
+    'trade-off',
+    'what should',
+  ]
+  return complexSignals.some((signal) => text.includes(signal))
+}
+
 function toHeaders(provider: LlmProvider, apiKey: string): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (provider.name === 'Anthropic') {
@@ -118,11 +184,11 @@ function toRequestBody(
   provider: LlmProvider,
   messages: Array<{ role: string; content: string }>,
   maxTokens: number,
-  preferredModel?: string,
+  selectedModel: string,
 ): unknown {
-  if (provider.transformBody) return provider.transformBody(messages, maxTokens)
+  if (provider.transformBody) return provider.transformBody(messages, maxTokens, selectedModel)
   return {
-    model: preferredModel || provider.model,
+    model: selectedModel,
     messages,
     max_tokens: maxTokens,
     temperature: 0.7,
@@ -137,6 +203,9 @@ class ElizaLlmService {
   private readonly maxOutputTokens: number
   private readonly circuitFailureThreshold: number
   private readonly circuitOpenMs: number
+  private readonly intentRoutingEnabled: boolean
+  private readonly complexInputChars: number
+  private readonly complexProviderPriority: string[]
   private readonly budgetGuard: DailyBudgetGuard
   private readonly circuits = new Map<string, ProviderCircuitState>()
 
@@ -148,6 +217,11 @@ class ElizaLlmService {
     this.maxOutputTokens = Math.floor(parsePositiveNumber(process.env.ELIZA_LLM_MAX_OUTPUT_TOKENS, 512))
     this.circuitFailureThreshold = Math.floor(parsePositiveNumber(process.env.ELIZA_PROVIDER_CIRCUIT_FAILS, 3))
     this.circuitOpenMs = Math.floor(parsePositiveNumber(process.env.ELIZA_PROVIDER_CIRCUIT_OPEN_MS, 60_000))
+    this.intentRoutingEnabled = parseBool(process.env.ELIZA_LLM_INTENT_ROUTING, true)
+    this.complexInputChars = Math.floor(parsePositiveNumber(process.env.ELIZA_LLM_COMPLEX_INPUT_CHARS, 700))
+    this.complexProviderPriority = parsePriority(
+      process.env.ELIZA_LLM_COMPLEX_PROVIDER_PRIORITY ?? 'Anthropic,OpenAI,Groq,OpenRouter',
+    )
     const tokenBudget = Number(String(process.env.ELIZA_DAILY_LLM_TOKEN_BUDGET ?? '').trim())
     const usdBudget = Number(String(process.env.ELIZA_DAILY_LLM_USD_BUDGET ?? '').trim())
     this.budgetGuard = new DailyBudgetGuard(
@@ -167,6 +241,22 @@ class ElizaLlmService {
       if (provider) ordered.push(provider)
     }
     for (const provider of available) {
+      if (!ordered.includes(provider)) ordered.push(provider)
+    }
+    return ordered
+  }
+
+  private providersForMessage(userMessage: string): LlmProvider[] {
+    const providers = this.getAvailableProviders()
+    if (!this.intentRoutingEnabled) return providers
+    if (!messageLooksComplex(userMessage, this.complexInputChars)) return providers
+    const byName = new Map(providers.map((provider) => [provider.name.toLowerCase(), provider]))
+    const ordered: LlmProvider[] = []
+    for (const name of this.complexProviderPriority) {
+      const provider = byName.get(name.toLowerCase())
+      if (provider) ordered.push(provider)
+    }
+    for (const provider of providers) {
       if (!ordered.includes(provider)) ordered.push(provider)
     }
     return ordered
@@ -280,7 +370,7 @@ class ElizaLlmService {
   }
 
   async generateResponse(params: GenerateParams): Promise<LlmGenerateResult> {
-    const providers = this.getAvailableProviders()
+    const providers = this.providersForMessage(params.userMessage)
     if (providers.length === 0) {
       return { text: null, provider: null, attempts: [] }
     }
@@ -313,7 +403,8 @@ class ElizaLlmService {
       const apiKey = String(process.env[provider.envKey] ?? '').trim()
       if (!apiKey) continue
 
-      const body = toRequestBody(provider, messages, this.maxOutputTokens, params.preferredModel)
+      const selectedModel = resolveModelForProvider(provider, params.preferredModel)
+      const body = toRequestBody(provider, messages, this.maxOutputTokens, selectedModel)
       try {
         const text = await this.requestWithRetry({
           provider,
@@ -335,7 +426,7 @@ class ElizaLlmService {
         }
         this.budgetGuard.record(params.agentKey, { inputTokens, outputTokens, estimatedUsd })
         this.markProviderSuccess(provider)
-        attempts.push({ provider: provider.name, ok: true })
+        attempts.push({ provider: provider.name, model: selectedModel, ok: true })
         return {
           text,
           provider: provider.name,
@@ -344,9 +435,10 @@ class ElizaLlmService {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         this.markProviderFailure(provider, message)
-        attempts.push({ provider: provider.name, ok: false, error: message })
+        attempts.push({ provider: provider.name, model: selectedModel, ok: false, error: message })
         logger.warn('[eliza/llm] provider attempt failed', {
           provider: provider.name,
+          model: selectedModel,
           correlationId: params.correlationId,
           error: message,
         })

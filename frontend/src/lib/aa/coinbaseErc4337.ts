@@ -25,10 +25,25 @@ import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/baseBu
 const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
 const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
 const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c'
+const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
+const UNIVERSAL_ROUTER_BASE_LEGACY = getAddress('0x2626664c2603336e57b271c5c0b26f421741e481').toLowerCase()
 
-function shouldPreserveCanonicalCallData(data: Hex | undefined): boolean {
+function shouldPreserveCanonicalCallData(call: { to: Address; data?: Hex }): boolean {
+  const target = String(call.to).toLowerCase()
+  if (target !== UNIVERSAL_ROUTER_BASE_CURRENT && target !== UNIVERSAL_ROUTER_BASE_LEGACY) return false
+  const data = call.data
   if (!data || data === '0x') return false
   return data.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+}
+
+function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | undefined): Hex | undefined {
+  if (!data || data === '0x' || !dataSuffix) return data
+  const payload = data.slice(2)
+  const suffix = dataSuffix.slice(2)
+  if (!suffix) return data
+  if (payload.length <= suffix.length) return data
+  if (!payload.toLowerCase().endsWith(suffix.toLowerCase())) return data
+  return `0x${payload.slice(0, payload.length - suffix.length)}` as Hex
 }
 
 export function applyBuilderDataSuffixToCalls(
@@ -37,11 +52,27 @@ export function applyBuilderDataSuffixToCalls(
   dataSuffix: Hex | undefined = DATA_SUFFIX,
 ): Array<{ to: Address; value?: bigint; data?: Hex }> {
   if (!dataSuffix || !isBaseChain(chainId)) return calls
-  return calls.map((c) => ({
-    ...c,
-    // Keep Universal Router `execute(...)` calldata canonical for paymaster policy checks.
-    data: shouldPreserveCanonicalCallData(c.data) ? c.data : appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
-  }))
+  return calls.map((c) => {
+    if (shouldPreserveCanonicalCallData(c)) {
+      const strippedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
+      if (AA_DEBUG && strippedData !== c.data) {
+        logger.debug('[ERC-4337] Removed builder suffix from canonical Universal Router calldata', {
+          target: c.to,
+          selector: String(c.data ?? '').slice(0, 10),
+        })
+      }
+      return {
+        ...c,
+        // Keep Universal Router `execute(...)` calldata canonical for paymaster policy checks.
+        // Also strip an already-appended suffix to protect against upstream/double mutation.
+        data: strippedData,
+      }
+    }
+    return {
+      ...c,
+      data: appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
+    }
+  })
 }
 
 // Sanity check at module load time
@@ -1539,6 +1570,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   const paymasterClient = createPaymasterClient({ transport: paymasterTransport })
   let bundlerClient = createBundlerClient({
     client: publicClient as any,
+    // Avoid inheriting wagmi/global dataSuffix on the bundler client.
+    // We control per-call attribution in `applyBuilderDataSuffixToCalls`.
+    dataSuffix: '0x',
     transport: buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler }),
   })
 
@@ -1566,6 +1600,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
     bundlerClient = createBundlerClient({
       client: publicClient as any,
+      dataSuffix: '0x',
       transport: buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler }),
     })
     await verifyBundlerSupportsV06(bundlerUrlForBundler, { includeCredentials: shouldSendSessionToBundler })

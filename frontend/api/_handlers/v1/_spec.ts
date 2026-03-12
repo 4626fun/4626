@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions } from '../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../server/_lib/agentApiGuard.js'
+import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 
 type OpenApiSpec = Record<string, any>
 
@@ -13,6 +14,14 @@ function setPublicCors(res: VercelResponse) {
 
 function setCache(res: VercelResponse, seconds: number = 300) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 2}`)
+}
+
+function resolveServerBaseUrl(req: VercelRequest): string {
+  try {
+    return `${getCanonicalOrigin(req)}/api`
+  } catch {
+    return 'https://4626.fun/api'
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -33,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       version: '1.0.0',
       description: 'Public, agent-friendly API for querying 4626.fun and building onchain transactions (build-only).',
     },
-    servers: [{ url: 'https://4626.fun/api' }],
+    servers: [{ url: resolveServerBaseUrl(req) }],
     paths: {
       '/v1/spec.json': { get: { summary: 'OpenAPI spec', responses: { '200': { description: 'OK' } } } },
       '/v1/vault/{address}/report': { get: { summary: 'Vault report', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },

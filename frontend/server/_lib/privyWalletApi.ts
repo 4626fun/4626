@@ -1,4 +1,5 @@
 import { createPrivateKey, sign } from 'node:crypto'
+import { assertTeeAttestationOrThrow } from './teeAttestationGate.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -209,7 +210,22 @@ export async function walletRpc<T>(params: {
   rpcParams: any
   chainType?: 'ethereum' | 'solana'
   idempotencyKey?: string
+  teeContext?: {
+    action?: string
+    actorAddress?: string
+    metadata?: Record<string, unknown>
+  }
 }): Promise<T> {
+  await assertTeeAttestationOrThrow({
+    action: params.teeContext?.action ?? `privy_wallet_rpc:${params.method}`,
+    actorAddress: params.teeContext?.actorAddress,
+    metadata: {
+      walletId: params.walletId,
+      chainType: params.chainType ?? 'ethereum',
+      ...(params.teeContext?.metadata ?? {}),
+    },
+  })
+
   const body = {
     method: params.method,
     params: params.rpcParams,
@@ -229,6 +245,9 @@ export async function secp256k1SignHash(params: { walletId: string; hash: `0x${s
     method: 'secp256k1_sign',
     rpcParams: { hash: params.hash },
     idempotencyKey: params.idempotencyKey,
+    teeContext: {
+      action: 'privy_wallet_rpc:secp256k1_sign',
+    },
   })
   const sig = String(res?.data?.signature ?? '').trim()
   if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_secp256k1_sign_invalid_signature')
