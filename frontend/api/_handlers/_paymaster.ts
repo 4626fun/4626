@@ -789,7 +789,9 @@ const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
 const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
-const BASE_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
+// Uniswap Universal Router on Base (legacy + current deployments).
+const BASE_SWAP_ROUTER_LEGACY = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
+const BASE_SWAP_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
 const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
 const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
 
@@ -1356,6 +1358,14 @@ async function validateInnerCalls(params: {
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
   const vaultActivationBatcher = getAddress(contracts.vaultActivationBatcher)
   const permit2 = getAddress(contracts.permit2)
+  const configuredSwapRouter =
+    contracts.swapRouter && isAddress(contracts.swapRouter) ? getAddress(contracts.swapRouter) : null
+  const allowedSwapRouters = new Set<Address>([
+    BASE_SWAP_ROUTER_LEGACY,
+    BASE_SWAP_ROUTER_CURRENT,
+    ...(configuredSwapRouter ? [configuredSwapRouter] : []),
+  ])
+  const defaultSwapRouterForDerivedAddresses = configuredSwapRouter ?? BASE_SWAP_ROUTER_CURRENT
   const create2DeployerFromStoreRaw = contracts.universalCreate2DeployerFromStore
   if (!create2DeployerFromStoreRaw) throw new Error('create2_deployer_from_store_not_configured')
   const create2DeployerFromStore = getAddress(create2DeployerFromStoreRaw)
@@ -1382,7 +1392,7 @@ async function validateInnerCalls(params: {
   for (const c of innerCalls) {
     if (c.value === 0n) continue
     const selector = getSelector(c.data)
-    const isRouterSwapCall = c.target === BASE_SWAP_ROUTER && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+    const isRouterSwapCall = allowedSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
     if (!isRouterSwapCall) throw new Error('value_transfer_not_allowed')
   }
 
@@ -1542,7 +1552,7 @@ async function validateInnerCalls(params: {
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
 
-          if (c.target === BASE_SWAP_ROUTER) {
+          if (allowedSwapRouters.has(c.target)) {
             if (selector !== SELECTOR_SWAP_ROUTER_EXECUTE) {
               return { matched: false, creatorToken: null as Address | null }
             }
@@ -1885,7 +1895,7 @@ async function validateInnerCalls(params: {
         expectedVault,
         expectedBurnStream,
         params.sender,
-        BASE_SWAP_ROUTER,
+        defaultSwapRouterForDerivedAddresses,
         BASE_WETH,
       ]),
     })
@@ -2082,7 +2092,7 @@ async function validateInnerCalls(params: {
           throw new Error('payout_router_burn_stream_mismatch')
         }
         if (!ownerArg || ownerArg !== params.sender) throw new Error('payout_router_owner_mismatch')
-        if (!swapRouterArg || swapRouterArg !== BASE_SWAP_ROUTER) throw new Error('payout_router_swap_router_mismatch')
+        if (!swapRouterArg || !allowedSwapRouters.has(swapRouterArg)) throw new Error('payout_router_swap_router_mismatch')
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
       } else {
         throw new Error('create2_codeid_not_allowed')
