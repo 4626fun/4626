@@ -102,6 +102,7 @@ type XmtpContextValue = {
     options?: SendChatMessageOptions,
   ) => Promise<ChatMessage>
   startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<string | null>
+  startDmByInbox: (peerInboxId: string, options?: StartDmOptions) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
@@ -239,6 +240,7 @@ const XmtpContext = createContext<XmtpContextValue>({
     isSelf: true,
   }),
   startDm: async () => null,
+  startDmByInbox: async () => null,
   subscribeToMessages: () => noop,
   resolveInboxAddress: async () => null,
 })
@@ -392,6 +394,36 @@ function normalizeEvmAddress(value: unknown): string | null {
   const raw = value.trim()
   if (!raw || !isAddress(raw)) return null
   return getAddress(raw).toLowerCase()
+}
+
+function upsertConversationSummary(
+  prev: ChatConversation[],
+  incoming: ChatConversation,
+): ChatConversation[] {
+  const incomingPeer =
+    incoming.type === 'dm' && incoming.peerAddress
+      ? incoming.peerAddress.toLowerCase()
+      : null
+
+  const existing = prev.find((item) => item.id === incoming.id) ?? null
+  const merged: ChatConversation = existing
+    ? {
+        ...existing,
+        ...incoming,
+        name: incoming.name?.trim() || existing.name,
+        imageUrl: incoming.imageUrl ?? existing.imageUrl,
+        unreadCount: existing.unreadCount,
+      }
+    : incoming
+
+  const filtered = prev.filter((item) => {
+    if (item.id === incoming.id) return false
+    if (!incomingPeer) return true
+    if (item.type !== 'dm' || !item.peerAddress) return true
+    return item.peerAddress.toLowerCase() !== incomingPeer
+  })
+
+  return [merged, ...filtered]
 }
 
 type ParsedWireContent = {
@@ -1162,15 +1194,18 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         const convos = await client.conversations.list()
         const summaries = await Promise.all(convos.map(buildConvoSummary))
         summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
-        conversationsRef.current = summaries
-        if (mountedRef.current) setConversations(summaries)
+        let normalizedSummaries: ChatConversation[] = []
+        for (let i = summaries.length - 1; i >= 0; i -= 1) {
+          normalizedSummaries = upsertConversationSummary(normalizedSummaries, summaries[i])
+        }
+        conversationsRef.current = normalizedSummaries
+        if (mountedRef.current) setConversations(normalizedSummaries)
         const convoStream = await client.conversations.stream({
           onValue: async (convo: any) => {
             if (!mountedRef.current) return
             const summary = await buildConvoSummary(convo)
             setConversations((prev) => {
-              if (prev.find((c) => c.id === summary.id)) return prev
-              const next = [summary, ...prev]
+              const next = upsertConversationSummary(prev, summary)
               conversationsRef.current = next
               return next
             })
@@ -1219,7 +1254,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         if (agentAddr && /^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
           void (async () => {
             try {
-              const alreadyExists = summaries.some(
+              const alreadyExists = normalizedSummaries.some(
                 (c) => c.peerAddress?.toLowerCase() === agentAddr.toLowerCase(),
               )
               if (alreadyExists) return // DM already exists
@@ -1232,8 +1267,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               const summary = await buildConvoSummary(dm as any)
               if (mountedRef.current) {
                 setConversations((prev) => {
-                  if (prev.find((c) => c.id === summary.id)) return prev
-                  const next = [summary, ...prev]
+                  const next = upsertConversationSummary(prev, summary)
                   conversationsRef.current = next
                   return next
                 })
@@ -1853,6 +1887,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const client = clientRef.current
     if (!client) return null
     try {
+      await client.conversations.sync().catch(() => undefined)
       const dm = await client.conversations.createDmWithIdentifier({
         identifier: peerAddress,
         identifierKind: IdentifierKind.Ethereum,
@@ -1864,14 +1899,41 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         imageUrl: options?.imageUrl?.trim() || summary.imageUrl,
       }
       setConversations((prev) => {
-        if (prev.find((c) => c.id === summaryWithHints.id)) return prev
-        const next = [summaryWithHints, ...prev]
+        const next = upsertConversationSummary(prev, summaryWithHints)
         conversationsRef.current = next
         return next
       })
       return dm.id
     } catch (e) {
       console.error('[xmtp] startDm error:', e)
+      return null
+    }
+  }, [buildConvoSummary])
+
+  const startDmByInbox = useCallback(async (
+    peerInboxId: string,
+    options?: StartDmOptions,
+  ): Promise<string | null> => {
+    const client = clientRef.current
+    const normalizedPeerInboxId = peerInboxId.trim()
+    if (!client || !normalizedPeerInboxId) return null
+    try {
+      await client.conversations.sync().catch(() => undefined)
+      const dm = await client.conversations.createDm(normalizedPeerInboxId)
+      const summary = await buildConvoSummary(dm as any)
+      const summaryWithHints: ChatConversation = {
+        ...summary,
+        name: options?.nameHint?.trim() || summary.name,
+        imageUrl: options?.imageUrl?.trim() || summary.imageUrl,
+      }
+      setConversations((prev) => {
+        const next = upsertConversationSummary(prev, summaryWithHints)
+        conversationsRef.current = next
+        return next
+      })
+      return dm.id
+    } catch (e) {
+      console.error('[xmtp] startDmByInbox error:', e)
       return null
     }
   }, [buildConvoSummary])
@@ -1929,6 +1991,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         loadMessages,
         sendMessage,
         startDm,
+        startDmByInbox,
         subscribeToMessages,
         resolveInboxAddress,
       }}

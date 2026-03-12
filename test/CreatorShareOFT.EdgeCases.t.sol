@@ -61,6 +61,20 @@ contract MockLotteryManager {
         return calls.length;
     }
 
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256)
+        external
+        payable
+        returns (uint256)
+    {
+        if (shouldRevert) revert("Lottery reverted");
+        if (gasToConsume > 0) {
+            uint256 gasStart = gasleft();
+            while (gasStart - gasleft() < gasToConsume) {}
+        }
+        calls.push(LotteryCall({buyer: buyer, tokenIn: tokenIn, amountIn: amountIn, timestamp: block.timestamp}));
+        return calls.length;
+    }
+
     function setShouldRevert(bool _revert) external {
         shouldRevert = _revert;
     }

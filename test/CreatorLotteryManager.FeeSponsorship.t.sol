@@ -234,6 +234,26 @@ contract CreatorLotteryManagerFeeSponsorshipTest is Test {
         assertEq(integrator.requestCount(), 2, "origin cap should limit total sponsored VRF requests");
     }
 
+    function test_RemoteLotteryEntry_V2Payload_IsAccepted() public {
+        vm.deal(address(lotteryManager), 1 ether);
+
+        vm.prank(owner);
+        lotteryManager.setVrfSponsorshipPolicy(true, 0.02 ether, 1 ether, 1 hours);
+
+        Origin memory origin = Origin({srcEid: REMOTE_ENTRY_EID, sender: REMOTE_ENTRY_SENDER, nonce: 1});
+        bytes memory payload = abi.encode(
+            uint16(lotteryManager.MSG_TYPE_LOTTERY_ENTRY()),
+            address(0x1111),
+            shareOFT,
+            SWAP_AMOUNT,
+            uint32(42161),
+            uint256(100 ether)
+        );
+
+        lotteryManager.exposedLzReceive(origin, payload);
+        assertEq(integrator.requestCount(), 1, "v2 payload should be decoded and processed");
+    }
+
     function test_SponsoredEntries_CappedByBudget() public {
         vm.deal(address(lotteryManager), 1 ether);
 
@@ -381,11 +401,11 @@ contract CreatorLotteryManagerFeeSponsorshipTest is Test {
     function test_ProcessSwapLottery_RevertsForUnauthorizedCaller() public {
         vm.prank(unauthorizedSwap);
         vm.expectRevert(CreatorLotteryManager.Unauthorized.selector);
-        lotteryManager.processSwapLottery(buyer, shareOFT, SWAP_AMOUNT);
+        lotteryManager.processSwapLottery(buyer, shareOFT, SWAP_AMOUNT, 0);
     }
 
     function _processSwap(uint256 msgValue) internal returns (uint256) {
         vm.prank(authorizedSwap);
-        return lotteryManager.processSwapLottery{value: msgValue}(buyer, shareOFT, SWAP_AMOUNT);
+        return lotteryManager.processSwapLottery{value: msgValue}(buyer, shareOFT, SWAP_AMOUNT, 0);
     }
 }

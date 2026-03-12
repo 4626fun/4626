@@ -201,6 +201,7 @@ function makeRequestBody() {
 describe('deploy session dry run', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    process.env.BASE_RPC_URL = 'http://127.0.0.1:8545'
     createWalletClientMock.mockImplementation(() => ({
       request: requestMock,
       sendTransaction: sendTransactionMock,
@@ -250,6 +251,21 @@ describe('deploy session dry run', () => {
         chain: baseChainMock,
       }),
     )
+  })
+
+  it('returns a non-500 error when dry-run is called without a local fork RPC', async () => {
+    process.env.BASE_RPC_URL = 'https://mainnet.base.org'
+    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('local-fork-only')
+    expect(createWalletClientMock).not.toHaveBeenCalled()
+    expect(sendTransactionMock).not.toHaveBeenCalled()
   })
 
   it('returns the first failing phase and call index when simulation fails', async () => {

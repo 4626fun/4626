@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 
@@ -19,6 +20,17 @@ export function AccountModeIndicator() {
   const { connector } = useAccount()
   const account = useAccountContext()
 
+  const copyAddress = useCallback(async (address: string | undefined) => {
+    if (!address) return
+    if (typeof navigator === 'undefined') return
+    if (!navigator.clipboard?.writeText) return
+    try {
+      await navigator.clipboard.writeText(address)
+    } catch {
+      // Ignore clipboard write failures (for example insecure context).
+    }
+  }, [])
+
   const showModeToggle =
     account.signerType === 'EOA' &&
     account.eoaIsOwnerOfCsw === true &&
@@ -30,9 +42,18 @@ export function AccountModeIndicator() {
     <div className="border-b border-vault-border/60 bg-black/45">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 min-h-[42px]">
         <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-[11px] scrollbar-hide">
-          <span
-            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300"
-            title={account.signerType === 'SMART_WALLET' ? `Smart Wallet ${shortAddress(account.signerAddress)}` : account.signerType === 'EOA' ? `User Wallet ${shortAddress(account.signerAddress)}` : 'Not connected'}
+          <button
+            type="button"
+            onClick={() => void copyAddress(account.signerAddress)}
+            disabled={!account.signerAddress}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 disabled:cursor-default enabled:cursor-copy enabled:hover:text-white"
+            title={
+              account.signerType === 'SMART_WALLET'
+                ? `Smart Wallet ${shortAddress(account.signerAddress)} (click to copy)`
+                : account.signerType === 'EOA'
+                  ? `User Wallet ${shortAddress(account.signerAddress)} (click to copy)`
+                  : 'Not connected'
+            }
           >
             <WalletProviderIcon
               provider={account.signerType === 'SMART_WALLET' ? 'coinbase' : undefined}
@@ -42,10 +63,19 @@ export function AccountModeIndicator() {
               size={12}
             />
             {account.signerType ? shortAddress(account.signerAddress) : '—'}
-          </span>
-          <span
-            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300"
-            title={account.activeAccountType === 'SMART_WALLET' ? `Smart Wallet ${shortAddress(account.activeAccount)}` : account.activeAccountType === 'EOA' ? `User Wallet ${shortAddress(account.activeAccount)}` : 'Unavailable'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyAddress(account.activeAccount)}
+            disabled={!account.activeAccount}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 disabled:cursor-default enabled:cursor-copy enabled:hover:text-white"
+            title={
+              account.activeAccountType === 'SMART_WALLET'
+                ? `Smart Wallet ${shortAddress(account.activeAccount)} (click to copy)`
+                : account.activeAccountType === 'EOA'
+                  ? `User Wallet ${shortAddress(account.activeAccount)} (click to copy)`
+                  : 'Unavailable'
+            }
           >
             <WalletProviderIcon
               provider={account.activeAccountType === 'SMART_WALLET' ? 'coinbase' : undefined}
@@ -55,7 +85,7 @@ export function AccountModeIndicator() {
               size={12}
             />
             {account.activeAccountType !== 'UNKNOWN' ? shortAddress(account.activeAccount) : '—'}
-          </span>
+          </button>
           <span
             className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
               account.uiFlags.paymasterAvailable

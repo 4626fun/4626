@@ -14,14 +14,34 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 interface Ive4626 {
+    struct Lock {
+        uint256 amount;
+        uint256 end;
+        uint256 start;
+        address lockedToken;
+        uint256 underlyingValue;
+    }
+
     function getVotingPower(address user) external view returns (uint256);
     function getTotalVotingPower() external view returns (uint256);
     function hasActiveLock(address user) external view returns (bool);
     function getRemainingLockTime(address user) external view returns (uint256);
+    function getLock(address user) external view returns (Lock memory);
 }
 
 interface ICreatorGaugeController {
     function getJackpotReserve() external view returns (uint256);
+}
+
+interface ICreatorRegistryCoverage {
+    function getShareOFTForToken(address token) external view returns (address);
+    function getTokenForShareOFT(address shareOFT) external view returns (address);
+    function getOracleForToken(address token) external view returns (address);
+    function isCreatorCoinActive(address token) external view returns (bool);
+}
+
+interface ICreatorOracleCoverage {
+    function getCreatorPrice() external view returns (int256 price, uint256 timestamp);
 }
 
 contract ve4626BoostManager is Ownable, ReentrancyGuard {
@@ -113,7 +133,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
             return baseBoost;
         }
 
-        uint256 scaledShare = Math.mulDiv(userPower, BOOST_PRECISION * 100, totalPower);
+        uint256 scaledShare = Math.mulDiv(userPower, BOOST_PRECISION, totalPower);
         if (scaledShare > BOOST_PRECISION) scaledShare = BOOST_PRECISION;
 
         uint256 boostRange = maxBoost - baseBoost;
@@ -143,6 +163,76 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         totalBoostBps = (maxProbBoost * remainingTime) / maxLockTime;
 
         return totalBoostBps;
+    }
+
+    function getCoverageBps(
+        address user,
+        address registry,
+        address creatorCoin,
+        address shareBalanceToken,
+        uint256 creatorShareBalanceAmount,
+        uint256 swapAmountUSD
+    ) external view returns (uint256 coverageBps) {
+        if (
+            swapAmountUSD == 0 || registry == address(0) || creatorCoin == address(0) || shareBalanceToken == address(0)
+                || creatorShareBalanceAmount == 0
+        ) {
+            return 0;
+        }
+
+        uint256 creatorShareBalanceUSD =
+            _calculateTokenUsd(registry, creatorCoin, shareBalanceToken, creatorShareBalanceAmount);
+        if (creatorShareBalanceUSD == 0) return 0;
+
+        Ive4626.Lock memory userLock = ve4626.getLock(user);
+        uint256 lockAmount = userLock.underlyingValue > 0 ? userLock.underlyingValue : userLock.amount;
+        address lockedToken = userLock.lockedToken;
+        if (lockAmount == 0 || lockedToken == address(0)) return 0;
+
+        ICreatorRegistryCoverage coverageRegistry = ICreatorRegistryCoverage(registry);
+        address lockCreatorCoin = coverageRegistry.getTokenForShareOFT(lockedToken);
+        if (lockCreatorCoin == address(0)) {
+            if (!coverageRegistry.isCreatorCoinActive(lockedToken)) return 0;
+            lockCreatorCoin = lockedToken;
+        }
+
+        uint256 veLockedUSD = _calculateTokenUsd(registry, lockCreatorCoin, lockedToken, lockAmount);
+        if (veLockedUSD == 0) return 0;
+
+        uint256 coveredUsd = creatorShareBalanceUSD;
+        if (veLockedUSD < coveredUsd) coveredUsd = veLockedUSD;
+        if (swapAmountUSD < coveredUsd) coveredUsd = swapAmountUSD;
+
+        coverageBps = Math.mulDiv(coveredUsd, BOOST_PRECISION, swapAmountUSD);
+        if (coverageBps > BOOST_PRECISION) return BOOST_PRECISION;
+    }
+
+    function _calculateTokenUsd(address registry, address creatorCoin, address tokenIn, uint256 amount)
+        internal
+        view
+        returns (uint256 usd1e6)
+    {
+        if (amount == 0) return 0;
+
+        ICreatorRegistryCoverage coverageRegistry = ICreatorRegistryCoverage(registry);
+        address oracleAddr = coverageRegistry.getOracleForToken(creatorCoin);
+        if (oracleAddr == address(0)) return 0;
+
+        address shareOFT = coverageRegistry.getShareOFTForToken(creatorCoin);
+        if (tokenIn != creatorCoin && tokenIn != shareOFT) return 0;
+
+        int256 price;
+        uint256 timestamp;
+        try ICreatorOracleCoverage(oracleAddr).getCreatorPrice() returns (int256 p, uint256 t) {
+            price = p;
+            timestamp = t;
+        } catch {
+            return 0;
+        }
+        if (price <= 0 || timestamp == 0 || timestamp > block.timestamp) return 0;
+
+        uint256 usd1e18 = Math.mulDiv(amount, uint256(price), 1e18);
+        return usd1e18 / 1e12;
     }
 
     function previewBoost(address user)

@@ -78,7 +78,7 @@ function ConversationItem({
       ? (agentIdentity ? '4626 assistant' : (identity.secondary ?? truncateAddress(peerAddress)))
       : null
   const avatar = convo.type === 'dm'
-    ? (agentIdentity?.avatar ?? identity.basenameAvatar ?? identity.avatar ?? convo.imageUrl ?? null)
+    ? (agentIdentity?.avatar ?? identity.avatar ?? convo.imageUrl ?? null)
     : (convo.imageUrl ?? null)
   const subtitle = convo.lastMessageText
     ? (displaySecondary ? `${displaySecondary} · ${convo.lastMessageText}` : convo.lastMessageText)
@@ -239,7 +239,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
             <div className="px-4 pb-3">
               <div className="flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm text-zinc-500">
                 <MessageSquare className="w-4 h-4 text-zinc-400" />
-                Ask Keepr or Search
+                Ask Akita or Search
               </div>
             </div>
           )}

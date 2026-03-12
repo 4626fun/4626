@@ -2,6 +2,7 @@ import { getAddress, isAddress } from 'viem'
 import { apiFetch } from '@/lib/apiBase'
 import {
   getBasename,
+  getBasenameProfile,
   getBasenameProfileByName,
   resolveBasenameAddress,
 } from '@/lib/basename-api'
@@ -89,15 +90,17 @@ async function resolveCanonicalRecipientAddress(address: `0x${string}`): Promise
 export async function resolveDmRecipient(input: string): Promise<DmRecipientResolution | null> {
   const raw = input.trim()
   if (!raw) return null
+  const inputHint = basenameHintFromInput(raw)
 
   if (isAddress(raw)) {
     const normalized = normalizeDmAddress(raw)
     if (!normalized) return null
     const recipientAddress = await resolveCanonicalRecipientAddress(normalized)
+    const recipientBasenameProfile = await getBasenameProfile(recipientAddress).catch(() => ({ name: null, avatar: null }))
     return {
       address: recipientAddress,
       basenameHint: null,
-      avatarUrl: null,
+      avatarUrl: recipientBasenameProfile?.avatar ?? null,
     }
   }
 
@@ -109,17 +112,27 @@ export async function resolveDmRecipient(input: string): Promise<DmRecipientReso
   if (!normalizedResolved) return null
 
   const recipientAddress = await resolveCanonicalRecipientAddress(normalizedResolved)
+  const recipientBasenameProfile = await getBasenameProfile(recipientAddress).catch(() => ({ name: null, avatar: null }))
 
-  const reverseBasename =
-    await getBasenameName(recipientAddress).catch(() => null) ??
-    await getBasenameName(normalizedResolved).catch(() => null)
+  const normalizedRecipient = recipientAddress.toLowerCase()
+  const normalizedInitial = normalizedResolved.toLowerCase()
+  const shouldLookupReverse = !inputHint
+  let reverseBasename: string | null = null
+
+  if (shouldLookupReverse) {
+    reverseBasename = await getBasenameName(recipientAddress).catch(() => null)
+    if (!reverseBasename && normalizedRecipient !== normalizedInitial) {
+      reverseBasename = await getBasenameName(normalizedResolved).catch(() => null)
+    }
+  }
+
   const basenameHint =
-    reverseBasename?.replace(/\.base\.eth$/i, '').trim() || basenameHintFromInput(raw)
+    reverseBasename?.replace(/\.base\.eth$/i, '').trim() || inputHint
 
   return {
     address: recipientAddress,
     basenameHint: basenameHint || null,
-    avatarUrl: inputBasenameProfile?.avatar ?? null,
+    avatarUrl: inputBasenameProfile?.avatar ?? recipientBasenameProfile?.avatar ?? null,
   }
 }
 

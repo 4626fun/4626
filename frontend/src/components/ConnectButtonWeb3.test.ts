@@ -76,6 +76,7 @@ describe('deriveWalletIdentityPresentation', () => {
       deriveWalletIdentityPresentation({
         address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
         basename: 'akita.base.eth',
+        basenameAvatar: 'https://example.com/base-avatar.png',
         miniUsername: 'akita',
         miniAvatarUrl: 'https://example.com/akita.png',
       }),
@@ -92,13 +93,14 @@ describe('deriveWalletIdentityPresentation', () => {
       deriveWalletIdentityPresentation({
         address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
         basename: 'akita.base.eth',
+        basenameAvatar: 'https://example.com/base-avatar.png',
         miniUsername: null,
         miniAvatarUrl: null,
       }),
     ).toEqual({
       primaryLabel: 'akita',
       secondaryLabel: '0xab6d...67b5',
-      avatarUrl: null,
+      avatarUrl: 'https://example.com/base-avatar.png',
       avatarFallback: 'A',
     })
   })
@@ -108,6 +110,7 @@ describe('deriveWalletIdentityPresentation', () => {
       deriveWalletIdentityPresentation({
         address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
         basename: null,
+        basenameAvatar: null,
         miniUsername: null,
         miniAvatarUrl: null,
       }),

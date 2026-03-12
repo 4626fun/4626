@@ -181,7 +181,7 @@ contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
 
         vm.prank(authorizedSwap);
         vm.expectRevert(CreatorLotteryManager.InvalidAmount.selector);
-        lotteryManager.processSwapLottery{value: 1}(buyer, shareOFT, SWAP_AMOUNT);
+        lotteryManager.processSwapLottery{value: 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
     }
 
     function test_processSwapLottery_revertsWhenCallerFeeNotExact() public {
@@ -192,10 +192,10 @@ contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
 
         vm.startPrank(authorizedSwap);
         vm.expectRevert(abi.encodeWithSelector(mismatchSelector, nativeFee - 1, nativeFee));
-        lotteryManager.processSwapLottery{value: nativeFee - 1}(buyer, shareOFT, SWAP_AMOUNT);
+        lotteryManager.processSwapLottery{value: nativeFee - 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
 
         vm.expectRevert(abi.encodeWithSelector(mismatchSelector, nativeFee + 1, nativeFee));
-        lotteryManager.processSwapLottery{value: nativeFee + 1}(buyer, shareOFT, SWAP_AMOUNT);
+        lotteryManager.processSwapLottery{value: nativeFee + 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
         vm.stopPrank();
     }
 
@@ -207,7 +207,7 @@ contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
         assertEq(address(lotteryManager).balance, 0, "test assumes zero starting balance");
 
         vm.prank(authorizedSwap);
-        uint256 entryId = lotteryManager.processSwapLottery{value: nativeFee}(buyer, shareOFT, SWAP_AMOUNT);
+        uint256 entryId = lotteryManager.processSwapLottery{value: nativeFee}(buyer, shareOFT, SWAP_AMOUNT, 0);
 
         assertEq(entryId, 0, "entry should be skipped when VRF send fails");
         assertEq(address(lotteryManager).balance, 0, "caller fee should be refunded on send failure");

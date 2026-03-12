@@ -18,6 +18,10 @@ import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
 /// @dev Hub-only: interface for local lottery manager calls on Base
 interface ICreatorLotteryManager {
     function processSwapLottery(address buyer, address tokenIn, uint256 amountIn) external payable returns (uint256);
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256 buyerCurrentShareBalance)
+        external
+        payable
+        returns (uint256);
 }
 
 /**
@@ -612,7 +616,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (mgr == address(0)) return;
 
         // External call wrapped in try-catch to prevent lottery issues from blocking transfers
-        try ICreatorLotteryManager(mgr).processSwapLottery(buyer, address(this), amount) returns (uint256 id) {
+        uint256 buyerCurrentShareBalance = balanceOf(buyer);
+        try ICreatorLotteryManager(mgr).processSwapLottery(
+            buyer, address(this), amount, buyerCurrentShareBalance
+        ) returns (uint256 id) {
             if (id > 0) emit LotteryTriggered(buyer, amount, id);
         } catch {
             // Lottery failure should not block the transfer
@@ -695,12 +702,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         view
         returns (bytes memory payload, bytes memory options, MessagingFee memory fee)
     {
+        uint256 buyerCurrentShareBalance = buyer == address(0) ? 0 : balanceOf(buyer);
         payload = abi.encode(
             MSG_TYPE_LOTTERY_ENTRY,
             buyer,
             address(this), // tokenIn (this ShareOFT)
             amount,
-            uint32(block.chainid) // sourceChainId for winner callback routing
+            uint32(block.chainid), // sourceChainId for winner callback routing
+            buyerCurrentShareBalance // coverage input on the hub lottery manager
         );
 
         options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(lotteryEntryGasLimit, 0);

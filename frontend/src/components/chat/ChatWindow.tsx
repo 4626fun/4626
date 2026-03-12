@@ -41,9 +41,27 @@ type Props = {
   minimized: boolean
   onMinimize: () => void
   onClose: () => void
+  onConversationRekey?: (oldConversationId: string, newConversationId: string) => void
   variant?: 'desktop' | 'mobile'
   seedCommandId?: string | null
   onSeedConsumed?: () => void
+}
+
+function isEvmAddress(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+export function shouldAttemptInactiveDmRecovery(params: {
+  reason: string
+  conversationType: 'dm' | 'group'
+  dmPeerAddress: string | null
+  dmPeerInboxId: string | null
+}): boolean {
+  if (params.conversationType !== 'dm') return false
+  const hasPeerAddress = Boolean(params.dmPeerAddress && isEvmAddress(params.dmPeerAddress))
+  const hasPeerInboxId = Boolean(params.dmPeerInboxId?.trim())
+  if (!hasPeerAddress && !hasPeerInboxId) return false
+  return /group is inactive/i.test(params.reason)
 }
 
 function formatTimestamp(date: Date): string {
@@ -135,6 +153,7 @@ export function ChatWindow({
   minimized,
   onMinimize,
   onClose,
+  onConversationRekey,
   variant = 'desktop',
   seedCommandId = null,
   onSeedConsumed,
@@ -144,6 +163,8 @@ export function ChatWindow({
   const {
     loadMessages,
     sendMessage,
+    startDm,
+    startDmByInbox,
     subscribeToMessages,
     status,
     resolveInboxAddress,
@@ -195,7 +216,7 @@ export function ChatWindow({
       ? (agentIdentity ? '4626 assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
       : null
   const headerAvatar = conversationType === 'dm'
-    ? (agentIdentity?.avatar ?? dmIdentity.basenameAvatar ?? dmIdentity.avatar ?? conversationImageUrl ?? null)
+    ? (agentIdentity?.avatar ?? dmIdentity.avatar ?? conversationImageUrl ?? null)
     : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
   const lensBadge = conversationType === 'dm' && dmPeerAddress && dmIdentity.lensHandle
@@ -382,8 +403,44 @@ export function ChatWindow({
         setReplyToMessageId(null)
         return true
       } catch (error) {
-        const reason = error instanceof Error ? error.message : 'send_failed'
+        let reason = error instanceof Error ? error.message : 'send_failed'
         console.error('[chat] send error:', error)
+
+        if (
+          shouldAttemptInactiveDmRecovery({
+            reason,
+            conversationType,
+            dmPeerAddress,
+            dmPeerInboxId: peerInboxId ?? null,
+          }) &&
+          (Boolean(dmPeerAddress && isEvmAddress(dmPeerAddress)) || Boolean(peerInboxId?.trim()))
+        ) {
+          try {
+            const recoveredConversationId =
+              dmPeerAddress && isEvmAddress(dmPeerAddress)
+                ? await startDm(dmPeerAddress)
+                : await startDmByInbox(String(peerInboxId ?? '').trim())
+            if (recoveredConversationId) {
+              if (recoveredConversationId !== conversationId) {
+                onConversationRekey?.(conversationId, recoveredConversationId)
+              }
+              await sendMessage(recoveredConversationId, text, replyToId ? { replyToId } : undefined)
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === messageId
+                    ? { ...msg, status: 'sent', error: null }
+                    : msg,
+                ),
+              )
+              setReplyToMessageId(null)
+              return true
+            }
+          } catch (retryError) {
+            reason = retryError instanceof Error ? retryError.message : reason
+            console.error('[chat] inactive recovery send error:', retryError)
+          }
+        }
+
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === messageId
@@ -404,7 +461,19 @@ export function ChatWindow({
         setSending(false)
       }
     },
-    [buildLocalMessage, conversationId, emitTelemetry, sendMessage, sending],
+    [
+      buildLocalMessage,
+      conversationId,
+      conversationType,
+      dmPeerAddress,
+      emitTelemetry,
+      onConversationRekey,
+      peerInboxId,
+      sendMessage,
+      sending,
+      startDm,
+      startDmByInbox,
+    ],
   )
 
   const handleSend = useCallback(async () => {

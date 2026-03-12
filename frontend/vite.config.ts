@@ -242,6 +242,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/social/talent': () => import('./api/_handlers/social/_talent'),
         '/api/openclaw/tools': () => import('./api/_handlers/openclaw/_tools'),
         '/api/openclaw/execute': () => import('./api/_handlers/openclaw/_execute'),
+        '/api/v1/chat/command-preflight': () => import('./api/_handlers/v1/chat/_commandPreflight'),
+        '/api/v1/chat/telemetry': () => import('./api/_handlers/v1/chat/_telemetry'),
       }
 
       server.middlewares.use(async (req, res, next) => {

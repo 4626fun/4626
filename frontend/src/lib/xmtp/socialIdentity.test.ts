@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getBasenameMock = vi.fn()
+const getBasenameProfileMock = vi.fn()
 const getBasenameProfileByNameMock = vi.fn()
 const resolveBasenameAddressMock = vi.fn()
 const apiFetchMock = vi.fn()
 
 vi.mock('@/lib/basename-api', () => ({
   getBasename: (...args: unknown[]) => getBasenameMock(...args),
+  getBasenameProfile: (...args: unknown[]) => getBasenameProfileMock(...args),
   getBasenameProfileByName: (...args: unknown[]) => getBasenameProfileByNameMock(...args),
   resolveBasenameAddress: (...args: unknown[]) => resolveBasenameAddressMock(...args),
 }))
@@ -40,9 +42,11 @@ describe('resolveDmRecipient', () => {
 
   beforeEach(() => {
     getBasenameMock.mockReset()
+    getBasenameProfileMock.mockReset()
     getBasenameProfileByNameMock.mockReset()
     resolveBasenameAddressMock.mockReset()
     apiFetchMock.mockReset()
+    getBasenameProfileMock.mockResolvedValue({ name: null, avatar: null })
     getBasenameProfileByNameMock.mockResolvedValue({ name: null, avatar: null })
     apiFetchMock.mockResolvedValue({
       ok: true,
@@ -51,12 +55,17 @@ describe('resolveDmRecipient', () => {
   })
 
   it('accepts direct Ethereum addresses', async () => {
+    getBasenameProfileMock.mockResolvedValue({
+      name: 'akita.base.eth',
+      avatar: 'https://example.com/base-avatar.png',
+    })
+
     const resolved = await resolveDmRecipient(sampleAddress)
 
     expect(resolved).toEqual({
       address: sampleAddress.toLowerCase(),
       basenameHint: null,
-      avatarUrl: null,
+      avatarUrl: 'https://example.com/base-avatar.png',
     })
     expect(resolveBasenameAddressMock).not.toHaveBeenCalled()
   })
@@ -112,6 +121,20 @@ describe('resolveDmRecipient', () => {
       basenameHint: 'akita',
       avatarUrl: null,
     })
+  })
+
+  it('skips reverse lookups when input basename hint is already stable', async () => {
+    resolveBasenameAddressMock.mockResolvedValue(sampleAddress)
+    getBasenameMock.mockResolvedValue(null)
+
+    const resolved = await resolveDmRecipient('akita')
+
+    expect(resolved).toEqual({
+      address: sampleAddress.toLowerCase(),
+      basenameHint: 'akita',
+      avatarUrl: null,
+    })
+    expect(getBasenameMock).not.toHaveBeenCalled()
   })
 
   it('returns null when input cannot be resolved', async () => {

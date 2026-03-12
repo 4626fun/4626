@@ -18,7 +18,7 @@ export const BASE_DEFAULTS = {
   // NOTE: If you redeploy CreatorRegistry (e.g. after ABI/storage breaking changes),
   // set `VITE_REGISTRY` in the environment and/or update this default.
   registry: addr('888506B92181c57A2fD06516FFFb6F375b7A4626'),
-  lotteryManager: addr('77705A2f173dd52F28300447506Dc35086c34626'),
+  lotteryManager: addr('3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3'),
   vrfConsumer: addr('9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 

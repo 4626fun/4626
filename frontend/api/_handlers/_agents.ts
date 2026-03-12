@@ -109,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const byo = {
     registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
     agentUriHint:
-      'Use a validator-compatible agentURI: https:// gateway URL, ipfs://, ar://, or data:. If using Lens Grove, prefer gatewayUrl over lens://.',
+      'Use a content-addressed agentURI for clean scanner results: data:, ipfs://, or ar://. HTTPS gateway URLs remain valid fallback; if using Lens Grove, use gatewayUrl (not lens://).',
     agentUriService: `${origin}/api/lens/agent-registration`,
     requiredFields: ['type', 'name', 'description', 'image', 'services', 'x402Support', 'active', 'registrations'],
     specUrl: 'https://eips.ethereum.org/EIPS/eip-8004',
