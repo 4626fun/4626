@@ -4,6 +4,8 @@
 import { createPublicClient, fallback, getAddress, http, isAddress, toCoinType } from 'viem'
 import { base, baseSepolia, mainnet } from 'viem/chains'
 import { normalize } from 'viem/ens'
+import { trackEvent } from './analytics'
+import { apiFetch } from './apiBase'
 import { logger } from './logger'
 
 export interface BasenameInfo {
@@ -20,7 +22,26 @@ export interface BasenameInfo {
 
 const IS_BROWSER = typeof window !== 'undefined'
 const ENS_GATEWAY_URLS = ['https://ccip.ens.xyz'] as const
-const BASENAME_CACHE_TTL_MS = 60_000
+const BASENAME_CACHE_TTL_SUCCESS_MS = 5 * 60_000
+const BASENAME_CACHE_TTL_MISS_MS = 60_000
+const BASENAME_TELEMETRY_BATCH_SIZE = 20
+const BASENAME_TELEMETRY_FLUSH_INTERVAL_MS = 60_000
+const BASENAME_TELEMETRY_SAMPLE_RATE = 0.2
+const BASENAME_TELEMETRY_SLOW_MS = 1_500
+
+type BasenameLookupKind =
+  | 'get_basename'
+  | 'resolve_basename_address'
+  | 'get_basename_profile'
+  | 'get_basename_profile_by_name'
+
+type BasenameLookupStatus = 'hit' | 'miss' | 'error' | 'timeout'
+
+type BasenameLookupSample = {
+  kind: BasenameLookupKind
+  status: BasenameLookupStatus
+  durationMs: number
+}
 
 type CacheEntry<T> = {
   value: T
@@ -35,6 +56,8 @@ const pendingBasenameByAddress = new Map<string, Promise<string | null>>()
 const pendingBasenameAddressByInput = new Map<string, Promise<string | null>>()
 const pendingBasenameProfileByAddress = new Map<string, Promise<BasenameInfo>>()
 const pendingBasenameProfileByName = new Map<string, Promise<BasenameInfo>>()
+const basenameLookupSamples: BasenameLookupSample[] = []
+let basenameTelemetryLastFlushAt = 0
 
 function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | undefined {
   const entry = cache.get(key)
@@ -46,10 +69,10 @@ function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | undef
   return entry.value
 }
 
-function writeCache<T>(cache: Map<string, CacheEntry<T>>, key: string, value: T): T {
+function writeCache<T>(cache: Map<string, CacheEntry<T>>, key: string, value: T, ttlMs: number = BASENAME_CACHE_TTL_SUCCESS_MS): T {
   cache.set(key, {
     value,
-    expiresAt: Date.now() + BASENAME_CACHE_TTL_MS,
+    expiresAt: Date.now() + ttlMs,
   })
   return value
 }
@@ -85,6 +108,141 @@ function isBasenameDebugLoggingEnabled(): boolean {
   }
 }
 
+function isBasenameTelemetryEnabled(): boolean {
+  if (!IS_BROWSER) return false
+  if (import.meta.env.VITE_BASENAME_LOOKUP_TELEMETRY === 'true') return true
+  if (import.meta.env.PROD) return true
+  try {
+    return window.localStorage.getItem('cv:debug:basename-telemetry') === 'true'
+  } catch {
+    return false
+  }
+}
+
+function isTimeoutBasenameError(error: unknown): boolean {
+  const msg = errorMessage(error)
+  if (!msg) return false
+  return (
+    msg.includes('timed out') ||
+    msg.includes('request took too long') ||
+    msg.includes('timeout') ||
+    msg.includes('aborterror')
+  )
+}
+
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const rank = Math.ceil((p / 100) * sorted.length)
+  const index = Math.max(0, Math.min(sorted.length - 1, rank - 1))
+  return sorted[index] ?? null
+}
+
+function flushBasenameLookupTelemetry(reason: 'batch' | 'interval' | 'timeout'): void {
+  if (!IS_BROWSER) return
+  if (basenameLookupSamples.length === 0) return
+
+  const samples = basenameLookupSamples.splice(0, basenameLookupSamples.length)
+  basenameTelemetryLastFlushAt = Date.now()
+
+  const kindStats: Record<
+    BasenameLookupKind,
+    { count: number; timeoutCount: number; errorCount: number; missCount: number; durations: number[] }
+  > = {
+    get_basename: { count: 0, timeoutCount: 0, errorCount: 0, missCount: 0, durations: [] },
+    resolve_basename_address: { count: 0, timeoutCount: 0, errorCount: 0, missCount: 0, durations: [] },
+    get_basename_profile: { count: 0, timeoutCount: 0, errorCount: 0, missCount: 0, durations: [] },
+    get_basename_profile_by_name: { count: 0, timeoutCount: 0, errorCount: 0, missCount: 0, durations: [] },
+  }
+
+  let timeoutCount = 0
+  let errorCount = 0
+  let missCount = 0
+  const durations: number[] = []
+
+  for (const sample of samples) {
+    durations.push(sample.durationMs)
+    const stats = kindStats[sample.kind]
+    stats.count += 1
+    stats.durations.push(sample.durationMs)
+
+    if (sample.status === 'timeout') {
+      timeoutCount += 1
+      stats.timeoutCount += 1
+    } else if (sample.status === 'error') {
+      errorCount += 1
+      stats.errorCount += 1
+    } else if (sample.status === 'miss') {
+      missCount += 1
+      stats.missCount += 1
+    }
+  }
+
+  const payload = {
+    reason,
+    source: 'basename-api',
+    sampleCount: samples.length,
+    timeoutCount,
+    errorCount,
+    missCount,
+    p50Ms: percentile(durations, 50),
+    p95Ms: percentile(durations, 95),
+    p99Ms: percentile(durations, 99),
+    kinds: Object.fromEntries(
+      (Object.keys(kindStats) as BasenameLookupKind[]).map((kind) => [
+        kind,
+        {
+          count: kindStats[kind].count,
+          timeoutCount: kindStats[kind].timeoutCount,
+          errorCount: kindStats[kind].errorCount,
+          missCount: kindStats[kind].missCount,
+          p95Ms: percentile(kindStats[kind].durations, 95),
+        },
+      ]),
+    ),
+  }
+
+  trackEvent('xmtp_basename_lookup_batch', payload)
+  void apiFetch('/api/v1/chat/telemetry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event: 'xmtp_basename_lookup_batch',
+      ...payload,
+    }),
+  }).catch(() => undefined)
+
+  if (isBasenameDebugLoggingEnabled()) {
+    logger.debug('[Basename] Telemetry batch', payload)
+  }
+}
+
+function recordBasenameLookupTelemetry(kind: BasenameLookupKind, status: BasenameLookupStatus, durationMs: number): void {
+  if (!isBasenameTelemetryEnabled()) return
+  const roundedDuration = Math.max(0, Math.round(durationMs))
+
+  const sample: BasenameLookupSample = { kind, status, durationMs: roundedDuration }
+  const isInterestingSample = status === 'timeout' || roundedDuration >= BASENAME_TELEMETRY_SLOW_MS
+  const shouldSample = isInterestingSample || Math.random() < BASENAME_TELEMETRY_SAMPLE_RATE
+  if (!shouldSample) return
+
+  basenameLookupSamples.push(sample)
+  const now = Date.now()
+  const shouldFlushByInterval =
+    basenameTelemetryLastFlushAt > 0 && now - basenameTelemetryLastFlushAt >= BASENAME_TELEMETRY_FLUSH_INTERVAL_MS
+  if (status === 'timeout') {
+    flushBasenameLookupTelemetry('timeout')
+    return
+  }
+  if (basenameLookupSamples.length >= BASENAME_TELEMETRY_BATCH_SIZE) {
+    flushBasenameLookupTelemetry('batch')
+    return
+  }
+  if (shouldFlushByInterval) {
+    flushBasenameLookupTelemetry('interval')
+  }
+}
+
 export function isExpectedBasenameLookupError(error: unknown): boolean {
   const msg = errorMessage(error)
   if (!msg) return false
@@ -96,6 +254,12 @@ export function isExpectedBasenameLookupError(error: unknown): boolean {
   if (
     (msg.includes('failed to fetch') || msg.includes('network error') || msg.includes('networkerror')) &&
     (msg.includes('ccip') || msg.includes('gateway') || msg.includes('ens') || msg.includes('basename'))
+  ) {
+    return true
+  }
+  if (
+    (msg.includes('timed out') || msg.includes('request took too long') || msg.includes('timeout')) &&
+    (msg.includes('ccip') || msg.includes('gateway') || msg.includes('ens') || msg.includes('basename') || msg.includes('/api/rpc'))
   ) {
     return true
   }
@@ -141,6 +305,7 @@ export async function getBasename(
   if (pending) return pending
 
   const request = (async () => {
+    const startedAt = Date.now()
     try {
       // Basenames are resolved via ENSIP-19 reverse resolution on Ethereum mainnet,
       // using Base chain coinType + CCIP gateways.
@@ -154,14 +319,29 @@ export async function getBasename(
         gatewayUrls: [...ENS_GATEWAY_URLS],
       })
 
-      if (!name) return writeCache(basenameByAddressCache, key, null)
+      if (!name) {
+        const cached = writeCache(basenameByAddressCache, key, null, BASENAME_CACHE_TTL_MISS_MS)
+        recordBasenameLookupTelemetry('get_basename', 'miss', Date.now() - startedAt)
+        return cached
+      }
       // Guardrail: ENSIP-19 can resolve non-Basenames depending on user config.
       // For 4626 identity UI, only treat *.base.eth as a Basename.
-      if (!name.toLowerCase().endsWith('.base.eth')) return writeCache(basenameByAddressCache, key, null)
-      return writeCache(basenameByAddressCache, key, name)
+      if (!name.toLowerCase().endsWith('.base.eth')) {
+        const cached = writeCache(basenameByAddressCache, key, null, BASENAME_CACHE_TTL_MISS_MS)
+        recordBasenameLookupTelemetry('get_basename', 'miss', Date.now() - startedAt)
+        return cached
+      }
+      const cached = writeCache(basenameByAddressCache, key, name)
+      recordBasenameLookupTelemetry('get_basename', 'hit', Date.now() - startedAt)
+      return cached
     } catch (error) {
       logBasenameLookupError('Failed to fetch Basename', error)
-      writeCache(basenameByAddressCache, key, null)
+      writeCache(basenameByAddressCache, key, null, BASENAME_CACHE_TTL_MISS_MS)
+      recordBasenameLookupTelemetry(
+        'get_basename',
+        isTimeoutBasenameError(error) ? 'timeout' : 'error',
+        Date.now() - startedAt,
+      )
       return null
     }
   })()
@@ -201,13 +381,14 @@ export async function resolveBasenameAddress(
   if (pending) return pending
 
   const request = (async () => {
+    const startedAt = Date.now()
     try {
       const raw = input.trim()
       if (!raw) return null
       if (isAddress(raw)) return getAddress(raw)
 
       const basename = normalizeBasenameInput(raw)
-      if (!basename) return writeCache(basenameAddressByInputCache, inputKey, null)
+      if (!basename) return writeCache(basenameAddressByInputCache, inputKey, null, BASENAME_CACHE_TTL_MISS_MS)
 
       const client = createMainnetReadClient()
       const resolved = await client.getEnsAddress({
@@ -215,10 +396,22 @@ export async function resolveBasenameAddress(
         coinType: toCoinType(chainId === baseSepolia.id ? baseSepolia.id : base.id),
         gatewayUrls: [...ENS_GATEWAY_URLS],
       })
-      return writeCache(basenameAddressByInputCache, inputKey, resolved ? getAddress(resolved) : null)
+      if (!resolved) {
+        const cached = writeCache(basenameAddressByInputCache, inputKey, null, BASENAME_CACHE_TTL_MISS_MS)
+        recordBasenameLookupTelemetry('resolve_basename_address', 'miss', Date.now() - startedAt)
+        return cached
+      }
+      const cached = writeCache(basenameAddressByInputCache, inputKey, getAddress(resolved))
+      recordBasenameLookupTelemetry('resolve_basename_address', 'hit', Date.now() - startedAt)
+      return cached
     } catch (error) {
       logBasenameLookupError('Failed to resolve Basename address', error)
-      writeCache(basenameAddressByInputCache, inputKey, null)
+      writeCache(basenameAddressByInputCache, inputKey, null, BASENAME_CACHE_TTL_MISS_MS)
+      recordBasenameLookupTelemetry(
+        'resolve_basename_address',
+        isTimeoutBasenameError(error) ? 'timeout' : 'error',
+        Date.now() - startedAt,
+      )
       return null
     }
   })()
@@ -242,11 +435,16 @@ export async function getBasenameProfile(
   if (pending) return pending.then(cloneBasenameInfo)
 
   const request = (async () => {
+    const startedAt = Date.now()
     try {
       const name = await getBasename(address, chainId)
 
       if (!name) {
-        return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, { name: null }))
+        const result = cloneBasenameInfo(
+          writeCache(basenameProfileByAddressCache, key, { name: null }, BASENAME_CACHE_TTL_MISS_MS),
+        )
+        recordBasenameLookupTelemetry('get_basename_profile', 'miss', Date.now() - startedAt)
+        return result
       }
 
       const client = createMainnetReadClient()
@@ -276,10 +474,20 @@ export async function getBasenameProfile(
         email,
         url,
       }
-      return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, profile))
+      const result = cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, profile))
+      recordBasenameLookupTelemetry('get_basename_profile', 'hit', Date.now() - startedAt)
+      return result
     } catch (error) {
       logBasenameLookupError('Failed to fetch Basename profile', error)
-      return cloneBasenameInfo(writeCache(basenameProfileByAddressCache, key, { name: null }))
+      const result = cloneBasenameInfo(
+        writeCache(basenameProfileByAddressCache, key, { name: null }, BASENAME_CACHE_TTL_MISS_MS),
+      )
+      recordBasenameLookupTelemetry(
+        'get_basename_profile',
+        isTimeoutBasenameError(error) ? 'timeout' : 'error',
+        Date.now() - startedAt,
+      )
+      return result
     }
   })()
   pendingBasenameProfileByAddress.set(key, request)
@@ -304,6 +512,7 @@ export async function getBasenameProfileByName(
   if (pending) return pending.then(cloneBasenameInfo)
 
   const request = (async () => {
+    const startedAt = Date.now()
     try {
       const client = createMainnetReadClient()
       const normalizedName = normalize(basename)
@@ -331,10 +540,20 @@ export async function getBasenameProfileByName(
         email,
         url,
       }
-      return cloneBasenameInfo(writeCache(basenameProfileByNameCache, key, profile))
+      const result = cloneBasenameInfo(writeCache(basenameProfileByNameCache, key, profile))
+      recordBasenameLookupTelemetry('get_basename_profile_by_name', 'hit', Date.now() - startedAt)
+      return result
     } catch (error) {
       logBasenameLookupError('Failed to fetch Basename profile by name', error)
-      return cloneBasenameInfo(writeCache(basenameProfileByNameCache, key, { name: null }))
+      const result = cloneBasenameInfo(
+        writeCache(basenameProfileByNameCache, key, { name: null }, BASENAME_CACHE_TTL_MISS_MS),
+      )
+      recordBasenameLookupTelemetry(
+        'get_basename_profile_by_name',
+        isTimeoutBasenameError(error) ? 'timeout' : 'error',
+        Date.now() - startedAt,
+      )
+      return result
     }
   })()
   pendingBasenameProfileByName.set(key, request)

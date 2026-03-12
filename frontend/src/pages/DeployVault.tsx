@@ -104,7 +104,8 @@ const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
 const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
 const BATCHER_VAULT_ADMIN_MODULE_SELECTOR = '822f9d9b'
-const NO_EOA_STRICT_BLOCKER = 'No-EOA deploy is only available for preconfigured Privy-owner wallets.'
+const NO_EOA_STRICT_BLOCKER =
+  'No-EOA deploy requires a preconfigured Privy owner signer that can sign on Base. Switch to wallet sign-in to refresh wallet linkage.'
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',
@@ -171,6 +172,23 @@ function normalizeBytes32(value: unknown): Hex | null {
   if (getHexByteLength(value) !== 32) return null
   if (value.toLowerCase() === ZERO_BYTES32) return null
   return value as Hex
+}
+
+function normalizeAddressLike(value: unknown): Address | null {
+  if (typeof value !== 'string') return null
+  if (!isAddress(value)) return null
+  try {
+    return getAddress(value)
+  } catch {
+    return null
+  }
+}
+
+function sameAddress(a: unknown, b: unknown): boolean {
+  const left = normalizeAddressLike(a)
+  const right = normalizeAddressLike(b)
+  if (left && right) return left === right
+  return String(a ?? '').toLowerCase() === String(b ?? '').toLowerCase()
 }
 
 function parseUint8(value: unknown): number | null {
@@ -332,6 +350,30 @@ function isUserRejectedErrorMessage(error: unknown): boolean {
   )
 }
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message || ''
+  return String((error as any)?.message ?? error ?? '')
+}
+
+function isTransientRpcFailure(error: unknown): boolean {
+  const lower = errorMessage(error).toLowerCase()
+  const code = Number((error as any)?.code ?? (error as any)?.cause?.code ?? NaN)
+  if (code === 429 || code === -32016 || code === -32011) return true
+  return (
+    lower.includes('429') ||
+    lower.includes('too many requests') ||
+    lower.includes('over rate limit') ||
+    lower.includes('rate limit') ||
+    lower.includes('requested resource not available') ||
+    lower.includes('resource not available') ||
+    lower.includes('no backend is currently healthy') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('network error') ||
+    lower.includes('failed to fetch')
+  )
+}
+
 function debugSignatureReady(context: string, signature: Hex, details?: Record<string, unknown>) {
   if (!AA_DEBUG) return
   logger.debug('[DeployVault] UserOp signature ready', {
@@ -353,6 +395,30 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   } finally {
     if (timer) clearTimeout(timer)
   }
+}
+
+async function postJsonWithTimeout<T>(params: {
+  url: string
+  body: unknown
+  label: string
+  requestTimeoutMs?: number
+  parseTimeoutMs?: number
+}): Promise<{ response: Response; json: ApiEnvelope<T> | null }> {
+  const response = await withTimeout(
+    fetch(params.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params.body),
+    }),
+    params.requestTimeoutMs ?? 20_000,
+    `${params.label} request`,
+  )
+  const json = await withTimeout(
+    response.json().catch(() => null) as Promise<ApiEnvelope<T> | null>,
+    params.parseTimeoutMs ?? 10_000,
+    `${params.label} response parse`,
+  )
+  return { response, json }
 }
 
 async function waitForContractsDeployed(params: {
@@ -2040,6 +2106,9 @@ function DeployVaultBatcher({
         'Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account), then retry.'
       )
     }
+    if (lower.includes('no-eoa deploy requires') || lower.includes('no-eoa deploy is only available')) {
+      return `${NO_EOA_STRICT_BLOCKER} Click “${switchAuthLabel ?? 'Sign in with wallet'}” and retry.`
+    }
     if (
       lower.includes('smart wallet client required') ||
       lower.includes('privy smart wallet client required') ||
@@ -2094,6 +2163,12 @@ function DeployVaultBatcher({
     }
     if (lower.includes('cdp paymaster endpoint is not configured')) {
       return 'Paymaster proxy is missing a server-side CDP endpoint. Keep `VITE_CDP_PAYMASTER_URL=/api/paymaster`, and set `CDP_PAYMASTER_URL` (server env) to `https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>`.'
+    }
+    if (lower.includes('aa21')) {
+      return (
+        'Bundler rejected the UserOp with AA21 during account/init validation. ' +
+        'Re-auth with wallet sign-in, ensure the canonical sender can pass validation on Base, and retry.'
+      )
     }
     if (
       lower.includes('sponsored userop exceeds paymaster total gas cap') ||
@@ -2408,7 +2483,7 @@ function DeployVaultBatcher({
     }
 
     // Fallback: external owner EOA + direct tx (existing behavior)
-    if (!connectedAddress || !wagmiWalletClient || connectedAddress.toLowerCase() === owner.toLowerCase()) {
+    if (!connectedAddress || !wagmiWalletClient || sameAddress(connectedAddress, owner)) {
       throw new Error(
         'Deploy session signer is not installed. Connect an owner EOA wallet (for example Coinbase Wallet) and retry.',
       )
@@ -2484,12 +2559,11 @@ function DeployVaultBatcher({
     let sentStepWithoutHashSinceMs: number | null = null
     const isHexHash = (value: unknown): value is Hex => typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value)
     while (true) {
-      const sres = await fetch('/api/deploy/session/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
+      const { response: sres, json: sjson } = await postJsonWithTimeout<any>({
+        url: '/api/deploy/session/status',
+        body: { sessionId },
+        label: 'deploy session status',
       })
-      const sjson = (await sres.json().catch(() => null)) as ApiEnvelope<any> | null
       if (!sres.ok || !sjson?.success) throw new Error(sjson?.error || 'Failed to fetch deploy status')
       const step = String(sjson.data?.step ?? '')
       const lastTxHash = typeof sjson.data?.lastTxHash === 'string' ? sjson.data.lastTxHash : null
@@ -2587,12 +2661,11 @@ function DeployVaultBatcher({
       lastPolledStepRef.current = ''
       try {
         await ensurePaymasterSession()
-        const statusRes = await fetch('/api/deploy/session/status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
+        const { response: statusRes, json: statusJson } = await postJsonWithTimeout<any>({
+          url: '/api/deploy/session/status',
+          body: { sessionId },
+          label: 'deploy session resume status',
         })
-        const statusJson = (await statusRes.json().catch(() => null)) as ApiEnvelope<any> | null
         if (!statusRes.ok || !statusJson?.success) throw new Error(statusJson?.error || 'Failed to fetch deploy status')
         const step = String(statusJson.data?.step ?? '')
         if (step === 'created') {
@@ -2603,12 +2676,11 @@ function DeployVaultBatcher({
             throw new Error('Invalid deploy session status response')
           }
           await ensureDeploySessionSignerInstalled(getAddress(sessionSignerRaw) as Address)
-          const continueRes = await fetch('/api/deploy/session/continue', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId }),
+          const { response: continueRes, json: continueJson } = await postJsonWithTimeout<any>({
+            url: '/api/deploy/session/continue',
+            body: { sessionId },
+            label: 'deploy session resume continue',
           })
-          const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
           if (!continueRes.ok || !continueJson?.success) {
             throw new Error(continueJson?.error || 'Failed to continue deploy')
           }
@@ -3084,7 +3156,7 @@ function DeployVaultBatcher({
   const payoutMismatch =
     !!expectedPayoutRouter &&
     !!currentPayoutRecipient &&
-    expectedPayoutRouter.toLowerCase() !== currentPayoutRecipient.toLowerCase()
+    !sameAddress(expectedPayoutRouter, currentPayoutRecipient)
 
   const serializeSessionCalls = useCallback(
     (calls: Array<{ target: Address; value: bigint; data: Hex }>): DeploySessionCall[] =>
@@ -3131,7 +3203,7 @@ function DeployVaultBatcher({
       await ensurePaymasterSession()
       if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
       const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? getAddress(runtimeConfig.creatorVaultBatcher) : null
-      if (runtimeBatcher && runtimeBatcher.toLowerCase() !== batcherAddress.toLowerCase()) {
+      if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
         throw new Error(
           `Deploy page is stale after a local restart. Client batcher ${batcherAddress} does not match server batcher ${runtimeBatcher}. Hard refresh the page and try again.`,
         )
@@ -3593,7 +3665,40 @@ function DeployVaultBatcher({
         const usdcForV3 = getAddress(((CONTRACTS as any).usdc ?? BASE_USDC) as Address)
         const chainlinkEthUsdForPricing = getAddress(((CONTRACTS as any).chainlinkEthUsd ?? BASE_CHAINLINK_ETH_USD) as Address)
 
-        const fallbackV3InitialSqrtPriceX96 = null
+        const fallbackV3InitialSqrtPriceX96 = (() => {
+          try {
+            // Conservative fallback when market-derived pricing is unavailable:
+            // target ~100 CREATOR per 1 USDC (i.e. 0.01 USDC per CREATOR).
+            const creatorDecimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
+            const usdcDecimals = 6
+            const pow10 = (d: number) => 10n ** BigInt(d)
+            const creatorUnit = pow10(creatorDecimals)
+            const usdcUnit = pow10(usdcDecimals)
+            const usdcPerCreatorBase = 10_000n // 0.01 USDC in 6-decimal base units
+
+            const creatorAddr = getAddress(creatorToken as Address)
+            const usdcAddr = usdcForV3
+            const token0IsCreator = creatorAddr.toLowerCase() < usdcAddr.toLowerCase()
+
+            let amount0: bigint
+            let amount1: bigint
+            if (token0IsCreator) {
+              amount0 = creatorUnit
+              amount1 = usdcPerCreatorBase
+            } else {
+              amount0 = usdcUnit
+              amount1 = (creatorUnit * usdcUnit) / usdcPerCreatorBase
+            }
+            if (amount0 <= 0n || amount1 <= 0n) return 1n << 96n
+
+            const ratioX192 = (amount1 << 192n) / amount0
+            const sqrtPriceX96 = sqrtBigInt(ratioX192)
+            return sqrtPriceX96 > (2n ** 160n - 1n) ? (2n ** 160n - 1n) : sqrtPriceX96
+          } catch {
+            // Final guard: 1:1 price so phase3 can proceed.
+            return 1n << 96n
+          }
+        })()
 
         const CHAINLINK_AGGREGATOR_ABI = [
           { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
@@ -3679,7 +3784,11 @@ function DeployVaultBatcher({
         })()
 
         if (!marketV3InitialSqrtPriceX96) {
-          throw new Error('Market-derived V3 price unavailable. Retry once pricing is available.')
+          logger.warn('[DeployVault] Market-derived V3 price unavailable; using conservative fallback', {
+            creatorToken,
+            owner,
+            deploymentVersion,
+          })
         }
 
         const phase3Params = {
@@ -3753,7 +3862,18 @@ function DeployVaultBatcher({
               nonce,
               deadline,
             })
-            const signature = await signOwnerPermit2TypedData(typedData as unknown as Record<string, unknown>)
+            let signature: Hex
+            try {
+              signature = await signOwnerPermit2TypedData(typedData as unknown as Record<string, unknown>)
+            } catch (permit2SignErr) {
+              if (!isUserRejectedErrorMessage(permit2SignErr)) throw permit2SignErr
+              logger.info('[DeployVault] Permit2 signature was rejected; retrying once', {
+                owner,
+                batcher: batcherAddress,
+              })
+              await new Promise((resolve) => setTimeout(resolve, 250))
+              signature = await signOwnerPermit2TypedData(typedData as unknown as Record<string, unknown>)
+            }
             phase2UsesPermit2 = true
             logger.info('[DeployVault] phase2 finalize using Permit2 signature transfer', {
               owner,
@@ -4951,10 +5071,10 @@ function DeployVaultBatcher({
           const cancelSession = async () => {
             if (!sessionId) return
             try {
-              await fetch('/api/deploy/session/cancel', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
+              await postJsonWithTimeout({
+                url: '/api/deploy/session/cancel',
+                body: { sessionId },
+                label: 'deploy session cancel',
               })
             } catch {
               // ignore cleanup failures
@@ -4963,12 +5083,11 @@ function DeployVaultBatcher({
           const shouldCancelSessionAfterError = async (): Promise<boolean> => {
             if (!sessionId) return false
             try {
-              const statusRes = await fetch('/api/deploy/session/status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
+              const { response: statusRes, json: statusJson } = await postJsonWithTimeout<any>({
+                url: '/api/deploy/session/status',
+                body: { sessionId },
+                label: 'deploy session post-error status',
               })
-              const statusJson = (await statusRes.json().catch(() => null)) as ApiEnvelope<any> | null
               if (!statusRes.ok || !statusJson?.success) return false
               const step = String(statusJson.data?.step ?? '')
               // Preserve progressed sessions (phase*_sent / confirmed) so retries can resume.
@@ -4992,12 +5111,11 @@ function DeployVaultBatcher({
               const body: DeploySessionCreateRequest = preflightOnly
                 ? { ...sessionCreatePayload, preflightOnly: true }
                 : sessionCreatePayload
-              const createRes = await fetch('/api/deploy/session/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
+              const { response: createRes, json: createJson } = await postJsonWithTimeout<any>({
+                url: '/api/deploy/session/create',
+                body,
+                label: preflightOnly ? 'deploy session preflight create' : 'deploy session create',
               })
-              const createJson = (await createRes.json().catch(() => null)) as ApiEnvelope<any> | null
               if (createRes.ok && createJson?.success) return createJson
               const errMsg = String(createJson?.error || 'Failed to create deploy session')
               if (!attemptedReauth && shouldRetrySessionAuth(errMsg)) {
@@ -5027,12 +5145,11 @@ function DeployVaultBatcher({
             await ensureDeploySessionSignerInstalled(sessionOwner)
 
             // Kick off server continuation; status polling will advance remaining phases.
-            const continueRes = await fetch('/api/deploy/session/continue', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sessionId }),
+            const { response: continueRes, json: continueJson } = await postJsonWithTimeout<any>({
+              url: '/api/deploy/session/continue',
+              body: { sessionId },
+              label: 'deploy session continue',
             })
-            const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
             if (!continueRes.ok || !continueJson?.success) {
               throw new Error(continueJson?.error || 'Failed to continue deploy')
             }
@@ -5212,12 +5329,11 @@ function DeployVaultBatcher({
 
       let attemptedReauth = false
       while (true) {
-        const res = await fetch('/api/deploy/session/dry-run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(plan.sessionCreateRequest),
+        const { response: res, json } = await postJsonWithTimeout<DeploySessionDryRunResponse>({
+          url: '/api/deploy/session/dry-run',
+          body: plan.sessionCreateRequest,
+          label: 'deploy session dry-run',
         })
-        const json = (await res.json().catch(() => null)) as ApiEnvelope<DeploySessionDryRunResponse> | null
         if (res.ok && json?.success && json.data) {
           setDryRunResult(json.data)
           return
@@ -6853,7 +6969,8 @@ function DeployVaultMain() {
     ],
     enabled: Boolean(publicClient && creatorVaultBatcherAddress),
     staleTime: 60_000,
-    retry: 0,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     queryFn: async () => {
       const batcher = creatorVaultBatcherAddress as Address
 
@@ -6865,36 +6982,73 @@ function DeployVaultMain() {
         )
       }
 
-      let bytecodeStore: Address
-      let create2Deployer: Address
+      const getterErrors: unknown[] = []
+      let bytecodeStore: Address | null = null
+      let create2Deployer: Address | null = null
       try {
-        ;[bytecodeStore, create2Deployer] = (await Promise.all([
-          publicClient!.readContract({
-            address: batcher,
-            abi: CREATOR_VAULT_BATCHER_ABI,
-            functionName: 'bytecodeStore',
-          }),
-          publicClient!.readContract({
-            address: batcher,
-            abi: CREATOR_VAULT_BATCHER_ABI,
-            functionName: 'create2Deployer',
-          }),
-        ])) as [Address, Address]
-      } catch {
+        bytecodeStore = (await publicClient!.readContract({
+          address: batcher,
+          abi: CREATOR_VAULT_BATCHER_ABI,
+          functionName: 'bytecodeStore',
+        })) as Address
+      } catch (err: unknown) {
+        getterErrors.push(err)
+      }
+      try {
+        create2Deployer = (await publicClient!.readContract({
+          address: batcher,
+          abi: CREATOR_VAULT_BATCHER_ABI,
+          functionName: 'create2Deployer',
+        })) as Address
+      } catch (err: unknown) {
+        getterErrors.push(err)
+      }
+
+      if (!bytecodeStore || !isAddress(String(bytecodeStore))) {
+        const fallback = (CONTRACTS.universalBytecodeStore ?? null) as Address | null
+        bytecodeStore = fallback && isAddress(String(fallback)) ? fallback : null
+      }
+      if (!create2Deployer || !isAddress(String(create2Deployer))) {
+        const fallback = (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null
+        create2Deployer = fallback && isAddress(String(fallback)) ? fallback : null
+      }
+      if (!bytecodeStore || !create2Deployer) {
+        if (getterErrors.some((e) => isTransientRpcFailure(e))) {
+          throw new Error(
+            'Could not verify deployment batcher interface due to temporary RPC/network limits. Retry in a few seconds.',
+          )
+        }
         throw new Error(
           `Configured batcher at ${batcher} does not expose expected phased deploy interface (bytecodeStore/create2Deployer). Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.`,
         )
       }
+      const bytecodeStoreAddress = bytecodeStore as Address
+      const create2DeployerAddress = create2Deployer as Address
 
-      const deployerStore = (await publicClient!.readContract({
-        address: create2Deployer,
-        abi: CREATE2_DEPLOYER_STORE_ABI,
-        functionName: 'store',
-      })) as Address
-
-      if (bytecodeStore.toLowerCase() !== deployerStore.toLowerCase()) {
+      let deployerStore: Address | null = null
+      try {
+        deployerStore = (await publicClient!.readContract({
+          address: create2DeployerAddress,
+          abi: CREATE2_DEPLOYER_STORE_ABI,
+          functionName: 'store',
+        })) as Address
+      } catch (err: unknown) {
+        if (isTransientRpcFailure(err)) {
+          throw new Error(
+            'Could not verify deployment CREATE2 store due to temporary RPC/network limits. Retry in a few seconds.',
+          )
+        }
+        throw err
+      }
+      if (!deployerStore || !isAddress(String(deployerStore))) {
         throw new Error(
-          `Misconfigured infra: batcher.bytecodeStore=${bytecodeStore} but create2Deployer.store=${deployerStore}`,
+          `Configured create2 deployer at ${create2DeployerAddress} does not expose expected store() interface.`,
+        )
+      }
+
+      if (bytecodeStoreAddress.toLowerCase() !== deployerStore.toLowerCase()) {
+        throw new Error(
+          `Misconfigured infra: batcher.bytecodeStore=${bytecodeStoreAddress} but create2Deployer.store=${deployerStore}`,
         )
       }
 
@@ -6902,7 +7056,7 @@ function DeployVaultMain() {
       let storeSupportsChunking = false
       try {
         await publicClient!.readContract({
-          address: bytecodeStore,
+          address: bytecodeStoreAddress,
           abi: UNIVERSAL_BYTECODE_STORE_CHUNKCOUNT_ABI,
           functionName: 'chunkCount',
           args: [deployCodeIds.vault],
@@ -6937,7 +7091,7 @@ function DeployVaultMain() {
       const pointerResults = await publicClient!.multicall({
         allowFailure: true,
         contracts: codeEntries.map((c) => ({
-          address: bytecodeStore,
+          address: bytecodeStoreAddress,
           abi: UNIVERSAL_BYTECODE_STORE_POINTERS_ABI,
           functionName: 'pointers',
           args: [c.codeId],
@@ -6954,8 +7108,8 @@ function DeployVaultMain() {
       const missing = entries.filter((e) => !e.ok).map((e) => e.label)
 
       return {
-        bytecodeStore,
-        create2Deployer,
+        bytecodeStore: bytecodeStoreAddress,
+        create2Deployer: create2DeployerAddress,
         storeSupportsChunking,
         entries,
         missing,

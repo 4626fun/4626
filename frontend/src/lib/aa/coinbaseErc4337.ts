@@ -24,6 +24,12 @@ import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/baseBu
 
 const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
 const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
+const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c'
+
+function shouldPreserveCanonicalCallData(data: Hex | undefined): boolean {
+  if (!data || data === '0x') return false
+  return data.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+}
 
 export function applyBuilderDataSuffixToCalls(
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
@@ -33,7 +39,8 @@ export function applyBuilderDataSuffixToCalls(
   if (!dataSuffix || !isBaseChain(chainId)) return calls
   return calls.map((c) => ({
     ...c,
-    data: appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
+    // Keep Universal Router `execute(...)` calldata canonical for paymaster policy checks.
+    data: shouldPreserveCanonicalCallData(c.data) ? c.data : appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
   }))
 }
 
@@ -380,7 +387,7 @@ function signatureMeta(signature: Hex) {
 }
 
 function isPaymasterStakeError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   return (
     lc.includes('banned opcode') ||
@@ -388,6 +395,59 @@ function isPaymasterStakeError(error: unknown): boolean {
     lc.includes('entity stake') ||
     lc.includes('unstake delay too low')
   )
+}
+
+function getErrorDiagnosticMessage(error: unknown): string {
+  const err = error as any
+  const parts: string[] = []
+  const push = (value: unknown) => {
+    if (typeof value !== 'string') return
+    const normalized = value.replace(/\s+/g, ' ').trim()
+    if (!normalized) return
+    parts.push(normalized)
+  }
+
+  push(err?.message)
+  push(err?.shortMessage)
+  push(err?.details)
+  push(err?.cause?.message)
+  push(err?.cause?.shortMessage)
+  push(err?.cause?.details)
+
+  const appendMetaMessages = (meta: unknown) => {
+    if (!Array.isArray(meta)) return
+    for (const entry of meta) {
+      if (typeof entry === 'string') {
+        push(entry)
+      } else {
+        try {
+          push(JSON.stringify(entry))
+        } catch {
+          // ignore non-serializable entries
+        }
+      }
+    }
+  }
+
+  appendMetaMessages(err?.metaMessages)
+  appendMetaMessages(err?.cause?.metaMessages)
+
+  const deduped: string[] = []
+  for (const item of parts) {
+    if (!deduped.includes(item)) deduped.push(item)
+  }
+  if (deduped.length === 0) {
+    return error instanceof Error ? error.message : String(error ?? '')
+  }
+  return deduped.join(' | ')
+}
+
+function getRpcErrorDetails(error: unknown): string | null {
+  const err = error as any
+  const details = typeof err?.details === 'string' ? err.details.trim() : ''
+  if (details) return details
+  const causeDetails = typeof err?.cause?.details === 'string' ? err.cause.details.trim() : ''
+  return causeDetails || null
 }
 
 function ensureUserOperationSucceeded(receipt: unknown, context: string): void {
@@ -415,7 +475,7 @@ function ensureUserOperationSucceeded(receipt: unknown, context: string): void {
 }
 
 function isPaymasterUnavailableError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   // NOTE: Do NOT match generic viem wrapper text like 'resource not available' /
   // 'requested resource not available'. Viem uses that shortMessage for ALL -32002
@@ -431,9 +491,26 @@ function isPaymasterUnavailableError(error: unknown): boolean {
 }
 
 function isPaymasterPolicyError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   return lc.includes('request denied') || lc.includes('not authenticated')
+}
+
+function isPaymasterAuthPolicyError(error: unknown): boolean {
+  const msg = getErrorDiagnosticMessage(error)
+  const lc = msg.toLowerCase()
+  return (
+    lc.includes('request denied - no_session') ||
+    lc.includes('request denied - not authenticated') ||
+    lc.includes('not authenticated') ||
+    lc.includes('session expired')
+  )
+}
+
+function isPaymasterRoutingPolicyError(error: unknown): boolean {
+  const msg = getErrorDiagnosticMessage(error)
+  const lc = msg.toLowerCase()
+  return lc.includes('unsupported chainid') || lc.includes('unsupported entrypoint')
 }
 
 function formatMetaMessages(error: unknown): string | null {
@@ -456,7 +533,7 @@ function delay(ms: number): Promise<void> {
 
 function isTransientUserOpSubmissionError(error: unknown): boolean {
   if (isUserRejection(error)) return false
-  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   const code = (error as any)?.code
   if (code === -32016 || code === -32011 || code === 429) return true
@@ -1563,7 +1640,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   const shouldRetryVerificationGas = (error: unknown): boolean => {
-    const errMsg = error instanceof Error ? error.message : String(error ?? '')
+    const errMsg = getErrorDiagnosticMessage(error)
     return isLikelyVerificationGasLimitError(errMsg)
   }
 
@@ -1625,7 +1702,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
     // If the paymaster rejects (policy/availability), allow a non-sponsored fallback.
     // This is required for non-deploy flows (e.g. legacy withdrawals) that the paymaster denies.
-    if (isPaymasterPolicyError(error)) return hasPrefundBalance
+    if (isPaymasterPolicyError(error)) {
+      // Auth/session or routing policy denials should not fall back to an unsponsored send.
+      // Retrying without sponsorship here just burns user attempts and obscures the root cause.
+      if (isPaymasterAuthPolicyError(error) || isPaymasterRoutingPolicyError(error)) return false
+      return hasPrefundBalance
+    }
     if (!allowPaymasterFallback && (isPaymasterStakeError(error) || isPaymasterUnavailableError(error))) return false
     if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true
@@ -1636,19 +1718,25 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (usePaymaster && lastError && shouldFallbackWithoutPaymaster(lastError)) {
     attemptedWithoutPaymaster = true
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
-    const paymasterErrorMsg = lastError instanceof Error ? lastError.message : String(lastError ?? '')
+    const paymasterErrorMsg = getErrorDiagnosticMessage(lastError)
+    const paymasterDetails = getRpcErrorDetails(lastError)
     const paymasterMeta = formatMetaMessages(lastError)
     if (isPaymasterUnavailableError(lastError) && !allowPaymasterFallback && hasPrefundBalance) {
       logger.warn('[ERC-4337] Paymaster unavailable; retrying with smart wallet balance', {
         smartWallet,
         balance: formatGasValue(smartWalletBalance),
         paymasterError: paymasterErrorMsg.slice(0, 300),
+        paymasterDetails: paymasterDetails ? paymasterDetails.slice(0, 200) : null,
         paymasterMeta,
       })
     } else {
       logger.warn('[ERC-4337] Retrying without sponsorship', {
         paymasterError: paymasterErrorMsg.slice(0, 300),
+        paymasterDetails: paymasterDetails ? paymasterDetails.slice(0, 200) : null,
         paymasterMeta,
+        isPolicyError: isPaymasterPolicyError(lastError),
+        isAuthPolicyError: isPaymasterAuthPolicyError(lastError),
+        isRoutingPolicyError: isPaymasterRoutingPolicyError(lastError),
         isStakeError: isPaymasterStakeError(lastError),
         isUnavailableError: isPaymasterUnavailableError(lastError),
         isGasRetry: shouldRetryVerificationGas(lastError),
@@ -1658,8 +1746,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   if (lastError) {
-    const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
+    const errMsg = getErrorDiagnosticMessage(lastError)
     const lc = errMsg.toLowerCase()
+    const errorDetails = getRpcErrorDetails(lastError)
     const metaDetail = formatMetaMessages(lastError)
     const metaSuffix = metaDetail ? ` (CDP: ${metaDetail})` : ''
     const isPrefundError =
@@ -1686,6 +1775,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         attemptedWithoutPaymaster,
         verificationGasLimits: uniqueVerificationGasLimits.map((v) => v.toString()),
         error: errMsg,
+        errorDetails,
         metaDetail,
       }
       console.error('[ERC-4337] UserOp failed', logPayload)

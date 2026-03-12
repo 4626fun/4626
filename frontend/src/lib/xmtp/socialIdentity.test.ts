@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getBasenameMock = vi.fn()
 const getBasenameProfileMock = vi.fn()
@@ -40,7 +40,12 @@ describe('getBasenameAutocompleteCandidate', () => {
 describe('resolveDmRecipient', () => {
   const sampleAddress = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
+    vi.useRealTimers()
     getBasenameMock.mockReset()
     getBasenameProfileMock.mockReset()
     getBasenameProfileByNameMock.mockReset()
@@ -68,6 +73,7 @@ describe('resolveDmRecipient', () => {
       avatarUrl: 'https://example.com/base-avatar.png',
     })
     expect(resolveBasenameAddressMock).not.toHaveBeenCalled()
+    expect(getBasenameMock).not.toHaveBeenCalled()
   })
 
   it('resolves basename handles and uses reverse basename when available', async () => {
@@ -143,5 +149,27 @@ describe('resolveDmRecipient', () => {
     const resolved = await resolveDmRecipient('not-a-valid-recipient')
 
     expect(resolved).toBeNull()
+    expect(getBasenameProfileByNameMock).not.toHaveBeenCalled()
+  })
+
+  it('times out optional basename profile lookup without blocking recipient resolution', async () => {
+    vi.useFakeTimers()
+    resolveBasenameAddressMock.mockResolvedValue(sampleAddress)
+    getBasenameProfileByNameMock.mockImplementation(
+      () =>
+        new Promise(() => {
+          // Intentionally unresolved: verifies timeout fallback path.
+        }),
+    )
+    getBasenameProfileMock.mockResolvedValue({ name: null, avatar: null })
+
+    const resolutionPromise = resolveDmRecipient('akita')
+    await vi.advanceTimersByTimeAsync(1_250)
+
+    await expect(resolutionPromise).resolves.toEqual({
+      address: sampleAddress.toLowerCase(),
+      basenameHint: 'akita',
+      avatarUrl: null,
+    })
   })
 })

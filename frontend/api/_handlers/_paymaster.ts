@@ -619,6 +619,8 @@ const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23' // deploy(bytes32,bytes3
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
+const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
+const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 const SELECTOR_ERC8004_SET_AGENT_WALLET = '0x2d1ef5ae' // setAgentWallet(uint256,address,uint256,bytes)
@@ -2103,7 +2105,14 @@ async function validateInnerCalls(params: {
 
     // Vault admin calls (phase2/phase3 deploy flow)
     if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
-      if (selector !== SELECTOR_VAULT_SET_BURN_STREAM && selector !== SELECTOR_VAULT_SET_WHITELIST) {
+      const phase3RuntimeSelectorAllowed =
+        mode === 'deploy_phase3' &&
+        (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE || selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES)
+      if (
+        selector !== SELECTOR_VAULT_SET_BURN_STREAM &&
+        selector !== SELECTOR_VAULT_SET_WHITELIST &&
+        !phase3RuntimeSelectorAllowed
+      ) {
         throw new Error('vault_selector_not_allowed')
       }
       if (selector === SELECTOR_VAULT_SET_BURN_STREAM) {
@@ -2121,11 +2130,15 @@ async function validateInnerCalls(params: {
           })
           throw new Error('vault_burn_stream_mismatch')
         }
-      } else {
+      } else if (selector === SELECTOR_VAULT_SET_WHITELIST) {
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
         if (!accountArg || accountArg !== expectedPayoutRouter) throw new Error('vault_whitelist_account_mismatch')
         if (statusArg !== true) throw new Error('vault_whitelist_status_mismatch')
+      } else if (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE) {
+        // Phase3 runtime idle tuning is allowed for the expected vault.
+      } else if (selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES) {
+        // Phase3 runtime deployment is allowed for the expected vault.
       }
       continue
     }

@@ -214,7 +214,14 @@ function normalizeTx(tx: TransactionRequest): RoutedCall {
 
 export function normalizeCanonicalSendError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
+  const details =
+    typeof (error as any)?.details === 'string'
+      ? String((error as any).details)
+      : typeof (error as any)?.cause?.details === 'string'
+        ? String((error as any).cause.details)
+        : ''
+  const diagnostic = [message, details].filter((part) => typeof part === 'string' && part.trim().length > 0).join(' | ')
+  const lower = diagnostic.toLowerCase()
 
   if (lower.includes('missing 4626 session token')) {
     return new Error('Missing 4626 session token for paymaster request.')
@@ -555,12 +562,11 @@ async function sendViaCanonical4337(params: {
       bundlerUrl,
       smartWallet: canonicalIdentity,
       ownerAddress: context.signerAddress,
+      // Let the ERC-4337 helper handle attribution so it can preserve canonical
+      // calldata for strict paymaster policies (e.g. Universal Router execute).
       calls: calls.map((call) => ({
         to: call.to,
-        data:
-          appendBuilderSuffixToHex(call.data, {
-            chainId: context.chainId,
-          }) ?? call.data,
+        data: call.data,
         value: call.value,
       })),
       version: '1',

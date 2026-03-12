@@ -240,7 +240,7 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
     expect(TEST_DATA_SUFFIX).toBeDefined()
     const forwardedData = sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.calls?.[0]?.data
-    expect(payloadEndsWithDataSuffix(forwardedData, TEST_DATA_SUFFIX!)).toBe(true)
+    expect(payloadEndsWithDataSuffix(forwardedData, TEST_DATA_SUFFIX!)).toBe(false)
   })
 
   it('locks canonical approval+swap sendCalls fallback to ERC-4337', async () => {
@@ -591,6 +591,16 @@ describe('txRouter', () => {
 
   it('normalizes unauthenticated paymaster errors into canonical session guidance', () => {
     expect(normalizeCanonicalSendError(new Error('request denied - not authenticated')).message).toBe(
+      'Paymaster rejected the swap because your 4626 session is not authenticated.',
+    )
+  })
+
+  it('normalizes viem resource-unavailable paymaster details into canonical session guidance', () => {
+    const err = {
+      message: 'Requested resource not available.',
+      details: 'request denied - no_session',
+    }
+    expect(normalizeCanonicalSendError(err).message).toBe(
       'Paymaster rejected the swap because your 4626 session is not authenticated.',
     )
   })

@@ -417,6 +417,186 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     expect((globalThis.fetch as any).mock.calls.length).toBe(1)
   })
 
+  it('accepts phase3 runtime vault calls after deployPhase3Strategies', async () => {
+    const BATCHER_ABI = [
+      {
+        type: 'function',
+        name: 'deployPhase3Strategies',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'creatorToken', type: 'address' },
+              { name: 'owner', type: 'address' },
+              { name: 'vault', type: 'address' },
+              { name: 'version', type: 'string' },
+              { name: 'initialSqrtPriceX96', type: 'uint160' },
+              { name: 'charmVaultName', type: 'string' },
+              { name: 'charmVaultSymbol', type: 'string' },
+              { name: 'ajnaVaultName', type: 'string' },
+              { name: 'ajnaVaultSymbol', type: 'string' },
+              { name: 'charmWeightBps', type: 'uint256' },
+              { name: 'ajnaWeightBps', type: 'uint256' },
+              { name: 'solanaWeightBps', type: 'uint256' },
+              { name: 'ajnaBufferRatioBps', type: 'uint256' },
+              { name: 'ajnaMinBucketIndex', type: 'uint256' },
+              { name: 'ajnaKeeper', type: 'address' },
+              { name: 'solanaKeeper', type: 'address' },
+              { name: 'solanaMaxNavAge', type: 'uint64' },
+              { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
+              { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
+              { name: 'solanaBridgeAddress', type: 'address' },
+              { name: 'enableAutoAllocate', type: 'bool' },
+            ],
+          },
+          {
+            name: 'codeIds',
+            type: 'tuple',
+            components: [
+              { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
+              { name: 'creatorCharmStrategy', type: 'bytes32' },
+              { name: 'ajnaVaultAuth', type: 'bytes32' },
+              { name: 'ajnaVault', type: 'bytes32' },
+              { name: 'erc4626StrategyAdapter', type: 'bytes32' },
+              { name: 'solanaStrategy', type: 'bytes32' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const VAULT_RUNTIME_ABI = [
+      {
+        type: 'function',
+        name: 'setMinimumTotalIdle',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
+        outputs: [],
+      },
+      {
+        type: 'function',
+        name: 'deployToStrategies',
+        stateMutability: 'nonpayable',
+        inputs: [],
+        outputs: [],
+      },
+    ] as const
+
+    const COINBASE_SMART_WALLET_BATCH_ABI = [
+      {
+        type: 'function',
+        name: 'executeBatch',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'calls',
+            type: 'tuple[]',
+            components: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    mockGetLogs.mockResolvedValue([{ args: { vault } }])
+
+    const phase3Data = encodeFunctionData({
+      abi: BATCHER_ABI,
+      functionName: 'deployPhase3Strategies',
+      args: [
+        {
+          creatorToken,
+          owner: sender,
+          vault,
+          version: 'v1',
+          initialSqrtPriceX96: 1n,
+          charmVaultName: 'Charm',
+          charmVaultSymbol: 'CHARM',
+          ajnaVaultName: 'Ajna Inner Vault',
+          ajnaVaultSymbol: 'aCRT',
+          charmWeightBps: 3_000n,
+          ajnaWeightBps: 3_000n,
+          solanaWeightBps: 3_000n,
+          ajnaBufferRatioBps: 1_000n,
+          ajnaMinBucketIndex: 4_156n,
+          ajnaKeeper: sender,
+          solanaKeeper: sender,
+          solanaMaxNavAge: 86_400n,
+          solanaMaxNavDeltaBpsPerUpdate: 500,
+          solanaMinBaseLiquidityBps: 100,
+          solanaBridgeAddress: sender,
+          enableAutoAllocate: false,
+        },
+        {
+          charmAlphaVaultDeploy: ZERO_BYTES32,
+          creatorCharmStrategy: ZERO_BYTES32,
+          ajnaVaultAuth: ZERO_BYTES32,
+          ajnaVault: ZERO_BYTES32,
+          erc4626StrategyAdapter: ZERO_BYTES32,
+          solanaStrategy: ZERO_BYTES32,
+        },
+      ],
+    })
+
+    const setMinimumIdleData = encodeFunctionData({
+      abi: VAULT_RUNTIME_ABI,
+      functionName: 'setMinimumTotalIdle',
+      args: [500_000n * 10n ** 18n],
+    })
+    const deployToStrategiesData = encodeFunctionData({
+      abi: VAULT_RUNTIME_ABI,
+      functionName: 'deployToStrategies',
+      args: [],
+    })
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_BATCH_ABI,
+      functionName: 'executeBatch',
+      args: [
+        [
+          { target: creatorVaultBatcher, value: 0n, data: phase3Data },
+          { target: vault, value: 0n, data: setMinimumIdleData },
+          { target: vault, value: 0n, data: deployToStrategiesData },
+        ],
+      ],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = responseBody?.error?.message ?? ''
+
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(1)
+  })
+
   it('rejects legacy direct-Ajna deployPhase3Strategies selector', async () => {
     const LEGACY_BATCHER_ABI = [
       {

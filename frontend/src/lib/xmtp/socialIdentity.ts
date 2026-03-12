@@ -7,6 +7,30 @@ import {
   resolveBasenameAddress,
 } from '@/lib/basename-api'
 
+const OPTIONAL_LOOKUP_TIMEOUT_MS = 1_200
+
+type BasenameProfileLite = {
+  name: string | null
+  avatar?: string | null
+}
+
+const EMPTY_BASENAME_PROFILE: BasenameProfileLite = {
+  name: null,
+  avatar: null,
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => resolve(fallback), timeoutMs)
+  })
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
 /**
  * Chat identity helpers.
  *
@@ -83,6 +107,26 @@ async function resolveCanonicalRecipientAddress(address: `0x${string}`): Promise
   }
 }
 
+async function resolveReverseBasename(
+  recipientAddress: `0x${string}`,
+  fallbackAddress: `0x${string}` | null,
+): Promise<string | null> {
+  const primary = await withTimeout(
+    getBasenameName(recipientAddress).catch(() => null),
+    OPTIONAL_LOOKUP_TIMEOUT_MS,
+    null,
+  )
+  if (primary) return primary
+  if (!fallbackAddress) return null
+  if (fallbackAddress.toLowerCase() === recipientAddress.toLowerCase()) return null
+
+  return withTimeout(
+    getBasenameName(fallbackAddress).catch(() => null),
+    OPTIONAL_LOOKUP_TIMEOUT_MS,
+    null,
+  )
+}
+
 /**
  * Resolve a "new DM" recipient input into an EVM address.
  * Supports raw addresses and basename handles (e.g. "akita", "@akita", "akita.base.eth").
@@ -90,44 +134,53 @@ async function resolveCanonicalRecipientAddress(address: `0x${string}`): Promise
 export async function resolveDmRecipient(input: string): Promise<DmRecipientResolution | null> {
   const raw = input.trim()
   if (!raw) return null
+  const inputIsAddress = isAddress(raw)
   const inputHint = basenameHintFromInput(raw)
 
-  if (isAddress(raw)) {
-    const normalized = normalizeDmAddress(raw)
-    if (!normalized) return null
-    const recipientAddress = await resolveCanonicalRecipientAddress(normalized)
-    const recipientBasenameProfile = await getBasenameProfile(recipientAddress).catch(() => ({ name: null, avatar: null }))
-    return {
-      address: recipientAddress,
-      basenameHint: null,
-      avatarUrl: recipientBasenameProfile?.avatar ?? null,
-    }
+  let normalizedResolved: `0x${string}` | null = null
+
+  if (inputIsAddress) {
+    normalizedResolved = normalizeDmAddress(raw)
+  } else {
+    const resolvedAddress = await resolveBasenameAddress(raw).catch(() => null)
+    if (!resolvedAddress) return null
+    normalizedResolved = normalizeDmAddress(resolvedAddress)
   }
-
-  const inputBasenameProfile = await getBasenameProfileByName(raw).catch(() => ({ name: null, avatar: null }))
-  const resolvedAddress = await resolveBasenameAddress(raw).catch(() => null)
-  if (!resolvedAddress) return null
-
-  const normalizedResolved = normalizeDmAddress(resolvedAddress)
   if (!normalizedResolved) return null
 
   const recipientAddress = await resolveCanonicalRecipientAddress(normalizedResolved)
-  const recipientBasenameProfile = await getBasenameProfile(recipientAddress).catch(() => ({ name: null, avatar: null }))
+
+  const inputBasenameProfilePromise: Promise<BasenameProfileLite> = inputIsAddress
+    ? Promise.resolve(EMPTY_BASENAME_PROFILE)
+    : withTimeout(
+        getBasenameProfileByName(raw).catch(() => EMPTY_BASENAME_PROFILE),
+        OPTIONAL_LOOKUP_TIMEOUT_MS,
+        EMPTY_BASENAME_PROFILE,
+      )
+  const recipientBasenameProfilePromise = withTimeout(
+    getBasenameProfile(recipientAddress).catch(() => EMPTY_BASENAME_PROFILE),
+    OPTIONAL_LOOKUP_TIMEOUT_MS,
+    EMPTY_BASENAME_PROFILE,
+  )
 
   const normalizedRecipient = recipientAddress.toLowerCase()
   const normalizedInitial = normalizedResolved.toLowerCase()
-  const shouldLookupReverse = !inputHint
-  let reverseBasename: string | null = null
+  const shouldLookupReverse = !inputHint && !inputIsAddress
+  const reverseBasename = shouldLookupReverse
+    ? await resolveReverseBasename(
+        recipientAddress,
+        normalizedRecipient !== normalizedInitial ? normalizedResolved : null,
+      )
+    : null
 
-  if (shouldLookupReverse) {
-    reverseBasename = await getBasenameName(recipientAddress).catch(() => null)
-    if (!reverseBasename && normalizedRecipient !== normalizedInitial) {
-      reverseBasename = await getBasenameName(normalizedResolved).catch(() => null)
-    }
-  }
+  const [inputBasenameProfile, recipientBasenameProfile] = await Promise.all([
+    inputBasenameProfilePromise,
+    recipientBasenameProfilePromise,
+  ])
 
-  const basenameHint =
-    reverseBasename?.replace(/\.base\.eth$/i, '').trim() || inputHint
+  const basenameHint = inputIsAddress
+    ? null
+    : reverseBasename?.replace(/\.base\.eth$/i, '').trim() || inputHint
 
   return {
     address: recipientAddress,

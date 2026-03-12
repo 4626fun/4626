@@ -38,4 +38,12 @@ describe('applyBuilderDataSuffixToCalls', () => {
     expect(payloadEndsWithDataSuffix(twice[0].data as Hex, dataSuffix as Hex)).toBe(true)
     expect(twice[0].data).toBe(once[0].data)
   })
+
+  it('preserves canonical Universal Router execute calldata without suffix mutation', () => {
+    expect(dataSuffix).toBeDefined()
+    const universalRouterCall = [{ to: target, value: 0n, data: '0x3593564c11223344' as Hex }]
+    const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
+    expect(result[0].data).toBe(universalRouterCall[0].data)
+    expect(payloadEndsWithDataSuffix(result[0].data as Hex, dataSuffix as Hex)).toBe(false)
+  })
 })

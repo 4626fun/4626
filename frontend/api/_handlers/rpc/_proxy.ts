@@ -55,10 +55,30 @@ const RETRYABLE_STATUS = new Set([429])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
 const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
+const RPC_CHAIN_ID_TIMEOUT_MS = 1_500
+const RPC_FORWARD_TIMEOUT_MS = 5_000
 const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function normalizeRpcUrl(raw: string): string | null {
@@ -121,16 +141,20 @@ function normalizeChainIdHex(raw: string): string | null {
 
 async function readRpcChainId(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_chainId',
-        params: [],
-      }),
-    })
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_chainId',
+          params: [],
+        }),
+      },
+      RPC_CHAIN_ID_TIMEOUT_MS,
+    )
     if (!response.ok) return null
     const json = (await response.json().catch(() => null)) as { result?: unknown } | null
     if (!json || typeof json.result !== 'string') return null
@@ -195,11 +219,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (delay > 0) await sleep(delay)
       }
       try {
-        const response = await fetch(rpc, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
+        const response = await fetchWithTimeout(
+          rpc,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+          RPC_FORWARD_TIMEOUT_MS,
+        )
 
         if (response.ok) {
           const text = await response.text()
@@ -223,7 +251,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.setHeader('Content-Type', contentType)
         return res.status(status).send(text)
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e ?? 'RPC proxy error')
+        if (isAbortError(e)) {
+          lastError = `RPC request timeout (${rpc})`
+        } else {
+          lastError = e instanceof Error ? e.message : String(e ?? 'RPC proxy error')
+        }
         lastStatus = 502
         if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
         break
