@@ -14,10 +14,13 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract AjnaVaultAuth {
     using SafeERC20 for IERC20;
 
+    uint256 internal constant MAX_AJNA_BUCKET_INDEX = 7_388;
+
     error NotAuthorized();
     error ZeroAddress();
     error FeeTooHigh();
     error BufferRatioTooHigh();
+    error InvalidMinBucketIndex();
 
     event AdminSet(address indexed admin);
     event SwapperSet(address indexed swapper);
@@ -120,6 +123,7 @@ contract AjnaVaultAuth {
     }
 
     function setMinBucketIndex(uint256 nextMinBucketIndex) external onlyAdmin {
+        if (nextMinBucketIndex > MAX_AJNA_BUCKET_INDEX) revert InvalidMinBucketIndex();
         minBucketIndex = nextMinBucketIndex;
         emit MinBucketIndexSet(nextMinBucketIndex);
     }
