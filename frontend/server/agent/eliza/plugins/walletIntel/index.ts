@@ -226,7 +226,7 @@ const walletIntelAction: Action = {
     })
     if (!address) {
       await callback?.({
-        text: 'Usage: `/intel <address>`\nIf omitted, defaults to your wallet when available.',
+        text: 'Usage: /intel <address>\nIf omitted, defaults to your wallet when available.',
       } as Content)
       return
     }
@@ -272,7 +272,7 @@ const funderTraceAction: Action = {
     })
     if (!address) {
       await callback?.({
-        text: 'Usage: `/funder <address>`\nIf omitted, defaults to your wallet when available.',
+        text: 'Usage: /funder <address>\nIf omitted, defaults to your wallet when available.',
       } as Content)
       return
     }
@@ -316,7 +316,7 @@ const portfolioAction: Action = {
     })
     if (!address) {
       await callback?.({
-        text: 'Usage: `/portfolio <address>`\nIf omitted, defaults to your wallet when available.',
+        text: 'Usage: /portfolio <address>\nIf omitted, defaults to your wallet when available.',
       } as Content)
       return
     }
@@ -364,7 +364,7 @@ const entityLabelsAction: Action = {
         : []
     if (addresses.length === 0) {
       await callback?.({
-        text: 'Usage: `/labels <address> [address2] ...`\nIf omitted, defaults to your wallet when available.',
+        text: 'Usage: /labels <address> [address2] ...\nIf omitted, defaults to your wallet when available.',
       } as Content)
       return
     }

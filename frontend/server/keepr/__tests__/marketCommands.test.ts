@@ -85,7 +85,7 @@ describe('/mkt commands', () => {
     })
 
     expect(result.ok).toBe(false)
-    expect(result.response).toContain('Usage: `/mkt quote <symbol>`')
+    expect(result.response).toContain('Usage: /mkt quote <symbol>')
     expect((fetch as any).mock.calls.length).toBe(0)
   })
 

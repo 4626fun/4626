@@ -153,7 +153,7 @@ const reputationGraphAction: Action = {
     const agentId = resolveAgentId(text, options)
 
     if (agentId === null || isNaN(agentId)) {
-      await callback?.({ text: 'Usage: `/reputation <agentId>`\nProvide the numeric agent ID to build its reputation graph.\n\n(Tip: set ERC8004_AGENT_ID to default to your own agent.)' } as Content)
+      await callback?.({ text: 'Usage: /reputation <agentId>\nProvide the numeric agent ID to build its reputation graph.\n\n(Tip: set ERC8004_AGENT_ID to default to your own agent.)' } as Content)
       return
     }
 
@@ -202,7 +202,7 @@ const feedbackReadAction: Action = {
     const agentId = resolveAgentId(text, options)
 
     if (agentId === null || isNaN(agentId)) {
-      await callback?.({ text: 'Usage: `/feedback <agentId>`\nProvide the numeric agent ID to read its feedback.\n\n(Tip: set ERC8004_AGENT_ID to default to your own agent.)' } as Content)
+      await callback?.({ text: 'Usage: /feedback <agentId>\nProvide the numeric agent ID to read its feedback.\n\n(Tip: set ERC8004_AGENT_ID to default to your own agent.)' } as Content)
       return
     }
 

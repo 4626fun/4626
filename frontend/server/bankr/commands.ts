@@ -114,7 +114,7 @@ export async function handleBankrCommand(params: {
       }
       case 'ask': {
         const prompt = parsed.args.join(' ').trim()
-        if (!prompt) return { ok: false, response: 'Usage: `/bankr ask <question>`' }
+        if (!prompt) return { ok: false, response: 'Usage: /bankr ask <question>' }
         const result = await executeBankrSkill(
           'bankr_prompt',
           {
@@ -135,7 +135,7 @@ export async function handleBankrCommand(params: {
       case 'exec': {
         const parsedExec = parseExecArgs(parsed.args)
         if (!parsedExec.prompt) {
-          return { ok: false, response: 'Usage: `/bankr exec <instruction> --confirm`' }
+          return { ok: false, response: 'Usage: /bankr exec <instruction> --confirm' }
         }
         const result = await executeBankrSkill(
           'bankr_prompt',
@@ -169,7 +169,7 @@ export async function handleBankrCommand(params: {
         }
       }
       default: {
-        return { ok: false, response: 'Unknown /bankr command. Try `/bankr help`.' }
+        return { ok: false, response: 'Unknown /bankr command. Try /bankr help.' }
       }
     }
   } catch (error) {

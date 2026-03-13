@@ -11,6 +11,10 @@ const {
   createTelegramLinkStartTokenMock,
   createTelegramActionTokenMock,
   consumeTelegramActionTokenMock,
+  upsertTelegramTradePercentPromptMock,
+  getTelegramTradePercentPromptMock,
+  consumeTelegramTradePercentPromptMock,
+  clearTelegramTradePercentPromptMock,
   ensureTelegramTradingSchemaMock,
   getTelegramLinkByUserIdMock,
   getTelegramPortfolioSummaryMock,
@@ -19,8 +23,12 @@ const {
   listTelegramSignalsMock,
   listTelegramUserBidsMock,
   getTelegramChatTradePolicyMock,
+  getHolderRoomPolicyByVaultMock,
+  listHolderRoomPoliciesMock,
+  upsertHolderRoomMemberMock,
   revokeTelegramLinkMock,
   logTelegramActionAuditMock,
+  checkSharesEligibilityMock,
   privyGetUserByIdMock,
   createPublicClientMock,
   resolvePrivyCoinbaseSmartWalletOwnerContextMock,
@@ -34,6 +42,10 @@ const {
   createTelegramLinkStartTokenMock: vi.fn(),
   createTelegramActionTokenMock: vi.fn(),
   consumeTelegramActionTokenMock: vi.fn(),
+  upsertTelegramTradePercentPromptMock: vi.fn(),
+  getTelegramTradePercentPromptMock: vi.fn(),
+  consumeTelegramTradePercentPromptMock: vi.fn(),
+  clearTelegramTradePercentPromptMock: vi.fn(),
   ensureTelegramTradingSchemaMock: vi.fn(),
   getTelegramLinkByUserIdMock: vi.fn(),
   getTelegramPortfolioSummaryMock: vi.fn(),
@@ -42,8 +54,12 @@ const {
   listTelegramSignalsMock: vi.fn(),
   listTelegramUserBidsMock: vi.fn(),
   getTelegramChatTradePolicyMock: vi.fn(),
+  getHolderRoomPolicyByVaultMock: vi.fn(),
+  listHolderRoomPoliciesMock: vi.fn(),
+  upsertHolderRoomMemberMock: vi.fn(),
   revokeTelegramLinkMock: vi.fn(),
   logTelegramActionAuditMock: vi.fn(),
+  checkSharesEligibilityMock: vi.fn(),
   privyGetUserByIdMock: vi.fn(),
   createPublicClientMock: vi.fn(),
   resolvePrivyCoinbaseSmartWalletOwnerContextMock: vi.fn(),
@@ -92,10 +108,18 @@ vi.mock('../../server/_lib/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
+vi.mock('../../server/_lib/keeprGating.js', () => ({
+  checkSharesEligibility: checkSharesEligibilityMock,
+}))
+
 vi.mock('../../server/_lib/telegramTrading.js', () => ({
   createTelegramLinkStartToken: createTelegramLinkStartTokenMock,
   createTelegramActionToken: createTelegramActionTokenMock,
   consumeTelegramActionToken: consumeTelegramActionTokenMock,
+  upsertTelegramTradePercentPrompt: upsertTelegramTradePercentPromptMock,
+  getTelegramTradePercentPrompt: getTelegramTradePercentPromptMock,
+  consumeTelegramTradePercentPrompt: consumeTelegramTradePercentPromptMock,
+  clearTelegramTradePercentPrompt: clearTelegramTradePercentPromptMock,
   ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
   getTelegramLinkByUserId: getTelegramLinkByUserIdMock,
   getTelegramPortfolioSummary: getTelegramPortfolioSummaryMock,
@@ -104,6 +128,9 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   listTelegramSignals: listTelegramSignalsMock,
   listTelegramUserBids: listTelegramUserBidsMock,
   getTelegramChatTradePolicy: getTelegramChatTradePolicyMock,
+  getHolderRoomPolicyByVault: getHolderRoomPolicyByVaultMock,
+  listHolderRoomPolicies: listHolderRoomPoliciesMock,
+  upsertHolderRoomMember: upsertHolderRoomMemberMock,
   revokeTelegramLink: revokeTelegramLinkMock,
   logTelegramActionAudit: logTelegramActionAuditMock,
 }))
@@ -127,6 +154,19 @@ describe('telegram webhook handler', () => {
       expiresAt: '2026-03-13T00:01:30.000Z',
     })
     consumeTelegramActionTokenMock.mockResolvedValue({ ok: false, reason: 'not_found' })
+    upsertTelegramTradePercentPromptMock.mockResolvedValue({
+      chatId: '-100123',
+      telegramUserId: '99',
+      actionType: 'buy',
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      expiresAt: '2026-03-13T00:03:00.000Z',
+      consumedAt: null,
+      createdAt: '2026-03-13T00:00:00.000Z',
+      updatedAt: '2026-03-13T00:00:00.000Z',
+    })
+    getTelegramTradePercentPromptMock.mockResolvedValue(null)
+    consumeTelegramTradePercentPromptMock.mockResolvedValue(null)
+    clearTelegramTradePercentPromptMock.mockResolvedValue(undefined)
     getTelegramLinkByUserIdMock.mockResolvedValue(null)
     getTelegramPortfolioSummaryMock.mockResolvedValue(null)
     listTelegramAuctionsMock.mockResolvedValue([])
@@ -146,8 +186,21 @@ describe('telegram webhook handler', () => {
       buySellEnabled: true,
       bidEnabled: true,
     })
+    getHolderRoomPolicyByVaultMock.mockResolvedValue(null)
+    listHolderRoomPoliciesMock.mockResolvedValue([])
+    upsertHolderRoomMemberMock.mockResolvedValue(null)
     revokeTelegramLinkMock.mockResolvedValue({ revoked: false, link: null })
     logTelegramActionAuditMock.mockResolvedValue(undefined)
+    checkSharesEligibilityMock.mockResolvedValue({
+      eligible: false,
+      reason: 'share_balance<threshold',
+      evidence: {
+        shareBalance: '0',
+        threshold: '1',
+        blockNumber: 123,
+        rpcUrl: 'https://rpc.example.test',
+      },
+    })
     privyGetUserByIdMock.mockResolvedValue({
       id: 'did:privy:7',
       linkedAccounts: [
@@ -161,6 +214,7 @@ describe('telegram webhook handler', () => {
       ],
     })
     createPublicClientMock.mockReturnValue({
+      getBalance: vi.fn(async () => 1_000_000_000_000_000_000n),
       readContract: vi.fn(async ({ functionName }: any) => {
         if (functionName === 'getAuctionStatus') {
           return [
@@ -201,6 +255,7 @@ describe('telegram webhook handler', () => {
       TELEGRAM_ADMIN_USER_IDS: '42',
       TELEGRAM_DEFAULT_SENDER_WALLET: '0x00000000000000000000000000000000000000aa',
       TELEGRAM_GROUP_ID_MAP_JSON: JSON.stringify({ '-100123': 'xmtp-group-1' }),
+      TELEGRAM_HOLDER_ROOMS_ENABLED: 'true',
       PRIVY_APP_ID: 'privy-app',
       PRIVY_APP_SECRET: 'privy-secret',
       CDP_PAYMASTER_URL: 'https://bundler.example.test',
@@ -476,10 +531,8 @@ describe('telegram webhook handler', () => {
     expect(payload.inline_query_id).toBe('iq-trade')
     expect(Array.isArray(payload.results)).toBe(true)
     const first = payload.results[0]
-    expect(String(first?.title ?? '')).toContain('Reuse BUY')
-    expect(String(first?.input_message_content?.message_text ?? '')).toBe(
-      '/buy 0x2222222222222222222222222222222222222222 0.05 --confirm',
-    )
+    expect(String(first?.title ?? '')).toContain('Start BUY')
+    expect(String(first?.input_message_content?.message_text ?? '')).toBe('/buy')
   })
 
   it('personalizes inline results for unlinked users with a /link shortcut', async () => {
@@ -512,7 +565,7 @@ describe('telegram webhook handler', () => {
 
   it('adds scoped vault shortcuts to inline results and keeps deterministic caps', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+    getTelegramLinkByUserIdMock.mockResolvedValue({
       telegramUserId: '99',
       telegramUsername: 'akita',
       profileId: 7,
@@ -577,7 +630,8 @@ describe('telegram webhook handler', () => {
     const resultTexts = payload.results
       .map((entry: any) => String(entry?.input_message_content?.message_text ?? ''))
       .filter(Boolean)
-    expect(resultTexts.some((text: string) => text.includes('/buy 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0.05 --confirm'))).toBe(true)
+    expect(resultTexts.some((text: string) => text.trim() === '/buy')).toBe(true)
+    expect(resultTexts.some((text: string) => text.trim() === '/bid')).toBe(true)
   })
 
   it('returns inline shortcut launcher with prefill buttons', async () => {
@@ -882,6 +936,224 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('Portfolio')
   })
 
+  it('blocks /join when telegram user is not linked', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce(null)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 13_1,
+        message: {
+          message_id: 17,
+          text: '/join 0x1111111111111111111111111111111111111111',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(getHolderRoomPolicyByVaultMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '').toLowerCase()).toContain('link required')
+  })
+
+  it('blocks /join when holder threshold is not met', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValue({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    getHolderRoomPolicyByVaultMock.mockResolvedValueOnce({
+      chatId: '-100123',
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      roomChatId: '-100555',
+      minSharesRaw: '1000000000000000000',
+      graceHours: 24,
+      enabled: true,
+      createdAt: null,
+      updatedAt: null,
+    })
+    checkSharesEligibilityMock.mockResolvedValueOnce({
+      eligible: false,
+      reason: 'share_balance<threshold',
+      evidence: {
+        shareBalance: '1',
+        threshold: '1000000000000000000',
+        blockNumber: 456,
+        rpcUrl: 'https://rpc.example.test',
+      },
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 13_2,
+        message: {
+          message_id: 17,
+          text: '/join 0x1111111111111111111111111111111111111111',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(upsertHolderRoomMemberMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '').toLowerCase()).toContain('not eligible')
+  })
+
+  it('returns one-time room invite when /join user is eligible', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, result: { invite_link: 'https://t.me/+roomInvite123' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    getTelegramLinkByUserIdMock.mockResolvedValue({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    getHolderRoomPolicyByVaultMock.mockResolvedValueOnce({
+      chatId: '-100123',
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      roomChatId: '-100555',
+      minSharesRaw: '1000000000000000000',
+      graceHours: 24,
+      enabled: true,
+      createdAt: null,
+      updatedAt: null,
+    })
+    checkSharesEligibilityMock.mockResolvedValueOnce({
+      eligible: true,
+      reason: 'share_balance>=threshold',
+      evidence: {
+        shareBalance: '2000000000000000000',
+        threshold: '1000000000000000000',
+        blockNumber: 789,
+        rpcUrl: 'https://rpc.example.test',
+      },
+    })
+    upsertHolderRoomMemberMock.mockResolvedValueOnce({
+      roomChatId: '-100555',
+      telegramUserId: '99',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      status: 'active',
+      lastEligibleAt: '2026-03-13T00:00:00.000Z',
+      graceUntil: null,
+      lastCheckedAt: '2026-03-13T00:00:00.000Z',
+      removedAt: null,
+      createdAt: '2026-03-13T00:00:00.000Z',
+      updatedAt: '2026-03-13T00:00:00.000Z',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 13_3,
+        message: {
+          message_id: 17,
+          text: '/join 0x1111111111111111111111111111111111111111',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(2)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/createChatInviteLink')
+    const invitePayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(invitePayload.chat_id ?? '')).toBe('-100555')
+    expect(Number(invitePayload.member_limit)).toBe(1)
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/sendMessage')
+    const messagePayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(messagePayload.text ?? '')).toContain('https://t.me/+roomInvite123')
+  })
+
+  it('keeps holder-room command templates copy-friendly with backticks', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    listHolderRoomPoliciesMock.mockResolvedValueOnce([
+      {
+        chatId: '-100123',
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+        roomChatId: '-100555',
+        minSharesRaw: '1000000000000000000',
+        graceHours: 24,
+        enabled: true,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ])
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 13_4,
+        message: {
+          message_id: 17,
+          text: '/rooms',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('`/join` <vault|ticker>')
+    expect(String(payload.text ?? '')).toContain('`/eligibility` <vault|ticker>')
+    expect(String(payload.parse_mode ?? '')).toBe('Markdown')
+  })
+
   it('handles callback query for telegram-native portfolio menu action', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
@@ -979,7 +1251,7 @@ describe('telegram webhook handler', () => {
       buySellEnabled: false,
       bidEnabled: true,
     })
-    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+    getTelegramLinkByUserIdMock.mockResolvedValue({
       telegramUserId: '99',
       telegramUsername: 'akita',
       profileId: 7,
@@ -1001,7 +1273,7 @@ describe('telegram webhook handler', () => {
         update_id: 14_2,
         message: {
           message_id: 18,
-          text: '/buy 0x1111111111111111111111111111111111111111 0.05 --confirm',
+          text: '/buy',
           chat: { id: -100123 },
           from: { id: 99 },
         },
@@ -1023,7 +1295,7 @@ describe('telegram webhook handler', () => {
       buySellEnabled: true,
       bidEnabled: false,
     })
-    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+    getTelegramLinkByUserIdMock.mockResolvedValue({
       telegramUserId: '99',
       telegramUsername: 'akita',
       profileId: 7,
@@ -1045,7 +1317,7 @@ describe('telegram webhook handler', () => {
         update_id: 14_3,
         message: {
           message_id: 18,
-          text: '/bid 0x1111111111111111111111111111111111111111 $250 --confirm',
+          text: '/bid',
           chat: { id: -100123 },
           from: { id: 99 },
         },
@@ -1103,7 +1375,7 @@ describe('telegram webhook handler', () => {
           update_id: 14_4,
           message: {
             message_id: 18,
-            text: '/buy 0x1111111111111111111111111111111111111111 0.05 --confirm',
+            text: '/buy',
             chat: { id: -100123 },
             from: { id: 99 },
           },
@@ -1151,11 +1423,11 @@ describe('telegram webhook handler', () => {
         headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
         body: {
           update_id: 14_5,
-          message: {
-            message_id: 18,
-            text: '/buy 0x1111111111111111111111111111111111111111 0.05 --confirm',
-            chat: { id: -100123 },
+          callback_query: {
+            id: 'cbq-rate-limit-1',
+            data: 'tradeflow:p:buy:0x1111111111111111111111111111111111111111:2500',
             from: { id: 1999 },
+            message: { message_id: 18, chat: { id: -100123 } },
           },
         },
       })
@@ -1167,11 +1439,11 @@ describe('telegram webhook handler', () => {
         headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
         body: {
           update_id: 14_6,
-          message: {
-            message_id: 19,
-            text: '/buy 0x1111111111111111111111111111111111111111 0.06 --confirm',
-            chat: { id: -100123 },
+          callback_query: {
+            id: 'cbq-rate-limit-2',
+            data: 'tradeflow:p:buy:0x1111111111111111111111111111111111111111:2500',
             from: { id: 1999 },
+            message: { message_id: 19, chat: { id: -100123 } },
           },
         },
       })
@@ -1180,17 +1452,18 @@ describe('telegram webhook handler', () => {
 
       expect(firstRes.statusCode).toBe(200)
       expect(secondRes.statusCode).toBe(200)
-      expect((fetch as any).mock.calls.length).toBe(2)
-      const secondPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+      expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
+      expect((fetch as any).mock.calls.length).toBe(4)
+      const secondPayload = JSON.parse(String((fetch as any).mock.calls[3][1]?.body ?? '{}'))
       expect(String(secondPayload.text ?? '')).toContain('rate_limit_user')
     } finally {
       restoreRateLimitEnv()
     }
   })
 
-  it('renders buy preview with signed confirm callback token', async () => {
+  it('renders buy preview with signed accept callback token', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+    getTelegramLinkByUserIdMock.mockResolvedValue({
       telegramUserId: '99',
       telegramUsername: 'akita',
       profileId: 7,
@@ -1215,11 +1488,11 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 15,
-        message: {
-          message_id: 19,
-          text: '/buy 0x1111111111111111111111111111111111111111 0.05 --confirm',
-          chat: { id: -100123 },
+        callback_query: {
+          id: 'cbq-preview-buy',
+          data: 'tradeflow:p:buy:0x1111111111111111111111111111111111111111:2500',
           from: { id: 99 },
+          message: { message_id: 19, chat: { id: -100123 } },
         },
       },
     })
@@ -1230,21 +1503,21 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     expect(handleKeeprCommandMock).not.toHaveBeenCalled()
     expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
-    expect((fetch as any).mock.calls.length).toBe(1)
-    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect((fetch as any).mock.calls.length).toBe(2)
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Preview: BUY')
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     expect(Array.isArray(keyboard)).toBe(true)
-    expect(keyboard.length).toBe(2)
-    expect(String(keyboard?.[0]?.[0]?.callback_data ?? '')).toContain('trade:confirm:trade-token-1')
-    const secondaryButtons = (keyboard?.[1] ?? []) as Array<any>
-    expect(secondaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Edit Amount')).toBe(true)
-    expect(secondaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Cancel')).toBe(true)
+    expect(keyboard.length).toBe(1)
+    const primaryButtons = (keyboard?.[0] ?? []) as Array<any>
+    expect(primaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Accept')).toBe(true)
+    expect(primaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Decline')).toBe(true)
+    expect(String(primaryButtons?.[0]?.callback_data ?? '')).toContain('trade:accept:trade-token-1')
   })
 
   it('renders bid preview with live auction context and drift safety note', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+    getTelegramLinkByUserIdMock.mockResolvedValue({
       telegramUserId: '99',
       telegramUsername: 'akita',
       profileId: 7,
@@ -1269,11 +1542,11 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 15_1,
-        message: {
-          message_id: 19_1,
-          text: '/bid 0x1111111111111111111111111111111111111111 $250 --confirm',
-          chat: { id: -100123 },
+        callback_query: {
+          id: 'cbq-preview-bid',
+          data: 'tradeflow:p:bid:0x1111111111111111111111111111111111111111:2500',
           from: { id: 99 },
+          message: { message_id: 19_1, chat: { id: -100123 } },
         },
       },
     })
@@ -1283,8 +1556,8 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
-    expect((fetch as any).mock.calls.length).toBe(1)
-    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect((fetch as any).mock.calls.length).toBe(2)
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Preview: BID')
     expect(String(payload.text ?? '')).toContain('Auction:')
     expect(String(payload.text ?? '')).toContain('Max price cap:')
@@ -1374,22 +1647,13 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('Confirmed BUY request')
     const signalPayload = JSON.parse(String((fetch as any).mock.calls[2][1]?.body ?? '{}'))
     expect(String(signalPayload.text ?? '')).toContain('✅ Trade Signal • BUY')
-    expect(String(signalPayload.text ?? '')).toContain('Copy: `/buy 0x2222222222222222222222222222222222222222 0.05 --confirm`')
+    expect(String(signalPayload.text ?? '')).toContain('Next: `/buy`')
     const signalButtons = signalPayload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(
       signalButtons.some(
         (button: any) =>
-          String(button?.text ?? '').trim() === 'Reuse Buy' &&
-          String(button?.copy_text?.text ?? '').trim() ===
-          '/buy 0x2222222222222222222222222222222222222222 0.05 --confirm',
-      ),
-    ).toBe(true)
-    expect(
-      signalButtons.some(
-        (button: any) =>
-          String(button?.text ?? '').trim() === 'Edit Amount' &&
-          String(button?.switch_inline_query_current_chat ?? '').trim() ===
-          '/buy 0x2222222222222222222222222222222222222222 <new-eth-amount> --confirm',
+          String(button?.text ?? '').trim() === 'Start Buy' &&
+          String(button?.copy_text?.text ?? '').trim() === '/buy',
       ),
     ).toBe(true)
     expect(
@@ -1561,9 +1825,8 @@ describe('telegram webhook handler', () => {
       expect(
         signalButtons.some(
           (button: any) =>
-            String(button?.text ?? '').trim() === 'Reuse Buy' &&
-            String(button?.switch_inline_query_current_chat ?? '').trim() ===
-              '/buy 0x2222222222222222222222222222222222222222 0.05 --confirm',
+            String(button?.text ?? '').trim() === 'Start Buy' &&
+            String(button?.switch_inline_query_current_chat ?? '').trim() === '/buy',
         ),
       ).toBe(true)
     } finally {
@@ -1648,21 +1911,13 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(3)
     const signalPayload = JSON.parse(String((fetch as any).mock.calls[2][1]?.body ?? '{}'))
     expect(String(signalPayload.text ?? '')).toContain('✅ Trade Signal • SELL')
+    expect(String(signalPayload.text ?? '')).toContain('Next: `/sell`')
     const signalButtons = signalPayload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(
       signalButtons.some(
         (button: any) =>
-          String(button?.text ?? '').trim() === 'Reuse Sell' &&
-          String(button?.copy_text?.text ?? '').trim() ===
-          '/sell 0x1111111111111111111111111111111111111111 1200 --confirm',
-      ),
-    ).toBe(true)
-    expect(
-      signalButtons.some(
-        (button: any) =>
-          String(button?.text ?? '').trim() === 'Edit Amount' &&
-          String(button?.switch_inline_query_current_chat ?? '').trim() ===
-          '/sell 0x1111111111111111111111111111111111111111 <new-share-amount> --confirm',
+          String(button?.text ?? '').trim() === 'Start Sell' &&
+          String(button?.copy_text?.text ?? '').trim() === '/sell',
       ),
     ).toBe(true)
     expect(
@@ -1910,22 +2165,13 @@ describe('telegram webhook handler', () => {
       expect(signalPayload.chat_id).toBe('-100123')
       expect(signalPayload.message_thread_id).toBe(777)
       expect(String(signalPayload.text ?? '')).toContain('✅ Trade Signal • BUY')
-      expect(String(signalPayload.text ?? '')).toContain('Copy: `/buy 0x2222222222222222222222222222222222222222 0.05 --confirm`')
+      expect(String(signalPayload.text ?? '')).toContain('Next: `/buy`')
       const signalButtons = signalPayload.reply_markup?.inline_keyboard?.flat?.() ?? []
       expect(
         signalButtons.some(
           (button: any) =>
-            String(button?.text ?? '').trim() === 'Reuse Buy' &&
-            String(button?.copy_text?.text ?? '').trim() ===
-            '/buy 0x2222222222222222222222222222222222222222 0.05 --confirm',
-        ),
-      ).toBe(true)
-      expect(
-        signalButtons.some(
-          (button: any) =>
-            String(button?.text ?? '').trim() === 'Edit Amount' &&
-            String(button?.switch_inline_query_current_chat ?? '').trim() ===
-            '/buy 0x2222222222222222222222222222222222222222 <new-eth-amount> --confirm',
+            String(button?.text ?? '').trim() === 'Start Buy' &&
+            String(button?.copy_text?.text ?? '').trim() === '/buy',
         ),
       ).toBe(true)
       expect(
@@ -2029,22 +2275,13 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('0x6666666666666666666666666666666666666666666666666666666666666666')
     const signalPayload = JSON.parse(String((fetch as any).mock.calls[2][1]?.body ?? '{}'))
     expect(String(signalPayload.text ?? '')).toContain('✅ Trade Signal • BID')
-    expect(String(signalPayload.text ?? '')).toContain('Copy: `/bid 0x1111111111111111111111111111111111111111 $300 --confirm`')
+    expect(String(signalPayload.text ?? '')).toContain('Next: `/bid`')
     const signalButtons = signalPayload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(
       signalButtons.some(
         (button: any) =>
-          String(button?.text ?? '').trim() === 'Reuse Bid' &&
-          String(button?.copy_text?.text ?? '').trim() ===
-          '/bid 0x1111111111111111111111111111111111111111 $300 --confirm',
-      ),
-    ).toBe(true)
-    expect(
-      signalButtons.some(
-        (button: any) =>
-          String(button?.text ?? '').trim() === 'Edit Amount' &&
-          String(button?.switch_inline_query_current_chat ?? '').trim() ===
-          '/bid 0x1111111111111111111111111111111111111111 $<new-usd-amount> --confirm',
+          String(button?.text ?? '').trim() === 'Start Bid' &&
+          String(button?.copy_text?.text ?? '').trim() === '/bid',
       ),
     ).toBe(true)
     expect(
@@ -2172,5 +2409,231 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('already confirmed')
+  })
+
+  it('starts interactive buy flow with a vault picker on /buy', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_1,
+        message: {
+          message_id: 30,
+          text: '/buy',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Pick a vault')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    expect(Array.isArray(keyboard)).toBe(true)
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('tradeflow:v:buy:'))).toBe(true)
+  })
+
+  it('shows percent picker after selecting a vault in interactive flow', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_2,
+        callback_query: {
+          id: 'cbq-flow-vault-buy',
+          data: 'tradeflow:v:buy:0x1111111111111111111111111111111111111111',
+          from: { id: 99 },
+          message: { message_id: 31, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(2)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Pick size')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('tradeflow:p:buy:'))).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('tradeflow:c:buy:'))).toBe(true)
+  })
+
+  it('rejects typed /buy arguments and guides users to interactive flow', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_3,
+        message: {
+          message_id: 32,
+          text: '/buy 0x1111111111111111111111111111111111111111 0.05 --confirm',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(createTelegramActionTokenMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('/buy')
+    expect(String(payload.text ?? '')).toContain('interactive')
+  })
+
+  it('prompts for custom percent and stores pending prompt state', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_4,
+        callback_query: {
+          id: 'cbq-flow-custom-buy',
+          data: 'tradeflow:c:buy:0x1111111111111111111111111111111111111111',
+          from: { id: 99 },
+          message: { message_id: 33, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(upsertTelegramTradePercentPromptMock).toHaveBeenCalledTimes(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Custom BUY size')
+    expect(String(payload.text ?? '')).toContain('1 and 99.99')
+  })
+
+  it('consumes pending custom percent input and renders a preview', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramTradePercentPromptMock.mockResolvedValueOnce({
+      chatId: '-100123',
+      telegramUserId: '99',
+      actionType: 'buy',
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      expiresAt: '2026-03-13T00:03:00.000Z',
+      consumedAt: null,
+      createdAt: '2026-03-13T00:00:00.000Z',
+      updatedAt: '2026-03-13T00:00:00.000Z',
+    })
+    consumeTelegramTradePercentPromptMock.mockResolvedValueOnce({
+      chatId: '-100123',
+      telegramUserId: '99',
+      actionType: 'buy',
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      expiresAt: '2026-03-13T00:03:00.000Z',
+      consumedAt: '2026-03-13T00:00:45.000Z',
+      createdAt: '2026-03-13T00:00:00.000Z',
+      updatedAt: '2026-03-13T00:00:45.000Z',
+    })
+    createTelegramActionTokenMock.mockResolvedValueOnce({
+      token: 'trade-token-custom-1',
+      expiresAt: '2026-03-13T00:01:30.000Z',
+    })
+    getTelegramLinkByUserIdMock.mockResolvedValue({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_5,
+        message: {
+          message_id: 34,
+          text: '42%',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(consumeTelegramTradePercentPromptMock).toHaveBeenCalledTimes(1)
+    expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Preview: BUY')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('trade:accept:'))).toBe(true)
   })
 })

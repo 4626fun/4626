@@ -56,6 +56,61 @@ export type TelegramChatTradePolicy = {
   bidEnabled: boolean
 }
 
+export type TelegramHolderRoomPolicy = {
+  chatId: string
+  vaultAddress: string
+  roomChatId: string
+  minSharesRaw: string
+  graceHours: number
+  enabled: boolean
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type TelegramHolderRoomMemberStatus = 'active' | 'grace' | 'removed'
+
+export type TelegramHolderRoomMember = {
+  roomChatId: string
+  telegramUserId: string
+  canonicalCswAddress: string
+  status: TelegramHolderRoomMemberStatus
+  lastEligibleAt: string | null
+  graceUntil: string | null
+  lastCheckedAt: string | null
+  removedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type TelegramHolderRoomRecheckRow = {
+  chatId: string
+  vaultAddress: string
+  roomChatId: string
+  shareTokenAddress: string
+  minSharesRaw: string
+  graceHours: number
+  enabled: boolean
+  telegramUserId: string
+  canonicalCswAddress: string
+  status: TelegramHolderRoomMemberStatus
+  lastEligibleAt: string | null
+  graceUntil: string | null
+  lastCheckedAt: string | null
+}
+
+export type TelegramTradePercentPromptAction = 'buy' | 'sell' | 'bid'
+
+export type TelegramTradePercentPrompt = {
+  chatId: string
+  telegramUserId: string
+  actionType: TelegramTradePercentPromptAction
+  vaultAddress: string
+  expiresAt: string
+  consumedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export type TelegramSignalRow = {
   telegramUserId: string
   actionType: string
@@ -119,6 +174,41 @@ function parseJsonObject(value: unknown): Record<string, any> {
   } catch {
     return {}
   }
+}
+
+function normalizeAddress(value: unknown): string {
+  const address = asTrimmed(value).toLowerCase()
+  return /^0x[a-f0-9]{40}$/.test(address) ? address : ''
+}
+
+function normalizeRawAmount(value: unknown): string {
+  if (typeof value === 'bigint') {
+    return value > 0n ? value.toString() : ''
+  }
+  const raw = typeof value === 'number' && Number.isFinite(value) ? String(Math.trunc(value)) : asTrimmed(value)
+  if (!/^\d+$/.test(raw)) return ''
+  const normalized = raw.replace(/^0+(?=\d)/, '')
+  return normalized === '0' ? '' : normalized
+}
+
+function normalizeHolderRoomMemberStatus(value: unknown): TelegramHolderRoomMemberStatus {
+  const status = asTrimmed(value).toLowerCase()
+  if (status === 'grace') return 'grace'
+  if (status === 'removed') return 'removed'
+  return 'active'
+}
+
+function normalizeTradeActionType(value: unknown): TelegramTradePercentPromptAction {
+  const action = asTrimmed(value).toLowerCase()
+  if (action === 'sell') return 'sell'
+  if (action === 'bid') return 'bid'
+  return 'buy'
+}
+
+function parseGraceHours(value: unknown, fallback = 24): number {
+  const parsed = Math.floor(Number(value))
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.min(24 * 30, parsed))
 }
 
 function base64UrlEncode(input: string | Buffer): string {
@@ -444,6 +534,47 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
         bid_enabled BOOLEAN NOT NULL DEFAULT true
       );
     `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_holder_room_policies (
+        chat_id TEXT NOT NULL,
+        vault_address TEXT NOT NULL,
+        room_chat_id TEXT NOT NULL,
+        min_shares_raw TEXT NOT NULL,
+        grace_hours INTEGER NOT NULL DEFAULT 24,
+        enabled BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (chat_id, vault_address)
+      );
+    `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_holder_room_members (
+        room_chat_id TEXT NOT NULL,
+        telegram_user_id BIGINT NOT NULL,
+        canonical_csw_address TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        last_eligible_at TIMESTAMPTZ NULL,
+        grace_until TIMESTAMPTZ NULL,
+        last_checked_at TIMESTAMPTZ NULL,
+        removed_at TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_chat_id, telegram_user_id)
+      );
+    `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_trade_percent_prompts (
+        chat_id TEXT NOT NULL,
+        telegram_user_id BIGINT NOT NULL,
+        action_type TEXT NOT NULL,
+        vault_address TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        consumed_at TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (chat_id, telegram_user_id)
+      );
+    `
 
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_user_links_csw_idx
@@ -468,6 +599,26 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_action_audit_user_created_idx
       ON telegram_action_audit (telegram_user_id, created_at DESC);
+    `
+    await db.sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS telegram_holder_room_policies_room_chat_uidx
+      ON telegram_holder_room_policies (room_chat_id);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_holder_room_policies_chat_enabled_idx
+      ON telegram_holder_room_policies (chat_id, enabled);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_holder_room_members_status_checked_idx
+      ON telegram_holder_room_members (status, last_checked_at);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_holder_room_members_wallet_idx
+      ON telegram_holder_room_members (canonical_csw_address);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_trade_percent_prompts_active_idx
+      ON telegram_trade_percent_prompts (expires_at, consumed_at);
     `
 
     telegramTradingSchemaEnsured = true
@@ -758,6 +909,386 @@ export async function getTelegramChatTradePolicy(params: {
     buySellEnabled: Boolean(row.buy_sell_enabled),
     bidEnabled: Boolean(row.bid_enabled),
   }
+}
+
+function mapHolderRoomPolicyRow(row: any): TelegramHolderRoomPolicy {
+  return {
+    chatId: asTrimmed(row.chat_id),
+    vaultAddress: normalizeAddress(row.vault_address),
+    roomChatId: asTrimmed(row.room_chat_id),
+    minSharesRaw: normalizeRawAmount(row.min_shares_raw) || '1',
+    graceHours: parseGraceHours(row.grace_hours, 24),
+    enabled: Boolean(row.enabled),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  }
+}
+
+function mapHolderRoomMemberRow(row: any): TelegramHolderRoomMember {
+  return {
+    roomChatId: asTrimmed(row.room_chat_id),
+    telegramUserId: String(row.telegram_user_id),
+    canonicalCswAddress: normalizeAddress(row.canonical_csw_address),
+    status: normalizeHolderRoomMemberStatus(row.status),
+    lastEligibleAt: toIso(row.last_eligible_at),
+    graceUntil: toIso(row.grace_until),
+    lastCheckedAt: toIso(row.last_checked_at),
+    removedAt: toIso(row.removed_at),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  }
+}
+
+function mapTradePercentPromptRow(row: any): TelegramTradePercentPrompt {
+  return {
+    chatId: asTrimmed(row.chat_id),
+    telegramUserId: String(row.telegram_user_id),
+    actionType: normalizeTradeActionType(row.action_type),
+    vaultAddress: normalizeAddress(row.vault_address),
+    expiresAt: toIso(row.expires_at) ?? new Date(0).toISOString(),
+    consumedAt: toIso(row.consumed_at),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  }
+}
+
+export async function getHolderRoomPolicyByVault(params: {
+  db: Db
+  chatId: string
+  vaultAddress: string
+}): Promise<TelegramHolderRoomPolicy | null> {
+  const chatId = asTrimmed(params.chatId)
+  const vaultAddress = normalizeAddress(params.vaultAddress)
+  if (!chatId || !vaultAddress) return null
+
+  const result = await params.db.sql`
+    SELECT chat_id, vault_address, room_chat_id, min_shares_raw, grace_hours, enabled, created_at, updated_at
+    FROM telegram_holder_room_policies
+    WHERE chat_id = ${chatId}
+      AND vault_address = ${vaultAddress}
+    LIMIT 1;
+  `
+  const row = result.rows?.[0]
+  return row ? mapHolderRoomPolicyRow(row) : null
+}
+
+export async function listHolderRoomPolicies(params: {
+  db: Db
+  chatId: string
+  enabledOnly?: boolean
+  limit?: number
+}): Promise<TelegramHolderRoomPolicy[]> {
+  const chatId = asTrimmed(params.chatId)
+  if (!chatId) return []
+  const enabledOnly = Boolean(params.enabledOnly)
+  const limit = Math.max(1, Math.min(50, Math.floor(Number(params.limit ?? 20))))
+  const result = await params.db.sql`
+    SELECT chat_id, vault_address, room_chat_id, min_shares_raw, grace_hours, enabled, created_at, updated_at
+    FROM telegram_holder_room_policies
+    WHERE chat_id = ${chatId}
+      AND (${enabledOnly} = false OR enabled = true)
+    ORDER BY updated_at DESC
+    LIMIT ${limit};
+  `
+  return (result.rows ?? []).map(mapHolderRoomPolicyRow)
+}
+
+export async function upsertHolderRoomPolicy(params: {
+  db: Db
+  chatId: string
+  vaultAddress: string
+  roomChatId: string
+  minSharesRaw: string | number | bigint
+  graceHours?: number
+  enabled?: boolean
+}): Promise<TelegramHolderRoomPolicy | null> {
+  const chatId = asTrimmed(params.chatId)
+  const vaultAddress = normalizeAddress(params.vaultAddress)
+  const roomChatId = asTrimmed(params.roomChatId)
+  const minSharesRaw = normalizeRawAmount(params.minSharesRaw)
+  const graceHours = parseGraceHours(params.graceHours, 24)
+  if (!chatId || !vaultAddress || !roomChatId || !minSharesRaw) return null
+
+  const result = await params.db.sql`
+    INSERT INTO telegram_holder_room_policies (
+      chat_id,
+      vault_address,
+      room_chat_id,
+      min_shares_raw,
+      grace_hours,
+      enabled,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${chatId},
+      ${vaultAddress},
+      ${roomChatId},
+      ${minSharesRaw},
+      ${graceHours},
+      ${typeof params.enabled === 'boolean' ? params.enabled : true},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (chat_id, vault_address) DO UPDATE
+    SET
+      room_chat_id = EXCLUDED.room_chat_id,
+      min_shares_raw = EXCLUDED.min_shares_raw,
+      grace_hours = EXCLUDED.grace_hours,
+      enabled = EXCLUDED.enabled,
+      updated_at = NOW()
+    RETURNING chat_id, vault_address, room_chat_id, min_shares_raw, grace_hours, enabled, created_at, updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapHolderRoomPolicyRow(row) : null
+}
+
+export async function upsertHolderRoomMember(params: {
+  db: Db
+  roomChatId: string
+  telegramUserId: string | number | bigint
+  canonicalCswAddress: string
+  status?: TelegramHolderRoomMemberStatus
+  lastEligibleAt?: string | Date | null
+  graceUntil?: string | Date | null
+  lastCheckedAt?: string | Date | null
+  removedAt?: string | Date | null
+}): Promise<TelegramHolderRoomMember | null> {
+  const roomChatId = asTrimmed(params.roomChatId)
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  const canonicalCswAddress = normalizeAddress(params.canonicalCswAddress)
+  if (!roomChatId || !userId || !canonicalCswAddress) return null
+  const status = normalizeHolderRoomMemberStatus(params.status)
+
+  const result = await params.db.sql`
+    INSERT INTO telegram_holder_room_members (
+      room_chat_id,
+      telegram_user_id,
+      canonical_csw_address,
+      status,
+      last_eligible_at,
+      grace_until,
+      last_checked_at,
+      removed_at,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${roomChatId},
+      ${userId},
+      ${canonicalCswAddress},
+      ${status},
+      ${toIso(params.lastEligibleAt) ?? null},
+      ${toIso(params.graceUntil) ?? null},
+      ${toIso(params.lastCheckedAt) ?? null},
+      ${toIso(params.removedAt) ?? null},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (room_chat_id, telegram_user_id) DO UPDATE
+    SET
+      canonical_csw_address = EXCLUDED.canonical_csw_address,
+      status = EXCLUDED.status,
+      last_eligible_at = EXCLUDED.last_eligible_at,
+      grace_until = EXCLUDED.grace_until,
+      last_checked_at = EXCLUDED.last_checked_at,
+      removed_at = EXCLUDED.removed_at,
+      updated_at = NOW()
+    RETURNING
+      room_chat_id,
+      telegram_user_id,
+      canonical_csw_address,
+      status,
+      last_eligible_at,
+      grace_until,
+      last_checked_at,
+      removed_at,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapHolderRoomMemberRow(row) : null
+}
+
+export async function upsertTelegramTradePercentPrompt(params: {
+  db: Db
+  chatId: string
+  telegramUserId: string | number | bigint
+  actionType: TelegramTradePercentPromptAction
+  vaultAddress: string
+  ttlSeconds?: number
+}): Promise<TelegramTradePercentPrompt | null> {
+  const chatId = asTrimmed(params.chatId)
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  const actionType = normalizeTradeActionType(params.actionType)
+  const vaultAddress = normalizeAddress(params.vaultAddress)
+  if (!chatId || !userId || !vaultAddress) return null
+  const ttlSeconds = Math.max(15, Math.min(60 * 10, Math.floor(Number(params.ttlSeconds ?? 60 * 3))))
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
+
+  const result = await params.db.sql`
+    INSERT INTO telegram_trade_percent_prompts (
+      chat_id,
+      telegram_user_id,
+      action_type,
+      vault_address,
+      expires_at,
+      consumed_at,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${chatId},
+      ${userId},
+      ${actionType},
+      ${vaultAddress},
+      ${expiresAt},
+      NULL,
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (chat_id, telegram_user_id) DO UPDATE
+    SET
+      action_type = EXCLUDED.action_type,
+      vault_address = EXCLUDED.vault_address,
+      expires_at = EXCLUDED.expires_at,
+      consumed_at = NULL,
+      updated_at = NOW()
+    RETURNING
+      chat_id,
+      telegram_user_id,
+      action_type,
+      vault_address,
+      expires_at,
+      consumed_at,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTradePercentPromptRow(row) : null
+}
+
+export async function getTelegramTradePercentPrompt(params: {
+  db: Db
+  chatId: string
+  telegramUserId: string | number | bigint
+}): Promise<TelegramTradePercentPrompt | null> {
+  const chatId = asTrimmed(params.chatId)
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  if (!chatId || !userId) return null
+  const result = await params.db.sql`
+    SELECT
+      chat_id,
+      telegram_user_id,
+      action_type,
+      vault_address,
+      expires_at,
+      consumed_at,
+      created_at,
+      updated_at
+    FROM telegram_trade_percent_prompts
+    WHERE chat_id = ${chatId}
+      AND telegram_user_id = ${userId}
+      AND consumed_at IS NULL
+      AND expires_at > NOW()
+    LIMIT 1;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTradePercentPromptRow(row) : null
+}
+
+export async function consumeTelegramTradePercentPrompt(params: {
+  db: Db
+  chatId: string
+  telegramUserId: string | number | bigint
+}): Promise<TelegramTradePercentPrompt | null> {
+  const chatId = asTrimmed(params.chatId)
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  if (!chatId || !userId) return null
+  const consumed = await params.db.sql`
+    UPDATE telegram_trade_percent_prompts
+    SET consumed_at = NOW(), updated_at = NOW()
+    WHERE chat_id = ${chatId}
+      AND telegram_user_id = ${userId}
+      AND consumed_at IS NULL
+      AND expires_at > NOW()
+    RETURNING
+      chat_id,
+      telegram_user_id,
+      action_type,
+      vault_address,
+      expires_at,
+      consumed_at,
+      created_at,
+      updated_at;
+  `
+  const row = consumed.rows?.[0]
+  return row ? mapTradePercentPromptRow(row) : null
+}
+
+export async function clearTelegramTradePercentPrompt(params: {
+  db: Db
+  chatId: string
+  telegramUserId: string | number | bigint
+}): Promise<void> {
+  const chatId = asTrimmed(params.chatId)
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  if (!chatId || !userId) return
+  await params.db.sql`
+    DELETE FROM telegram_trade_percent_prompts
+    WHERE chat_id = ${chatId}
+      AND telegram_user_id = ${userId};
+  `
+}
+
+export async function listHolderRoomMembersNeedingRecheck(params: {
+  db: Db
+  limit?: number
+  chatId?: string
+}): Promise<TelegramHolderRoomRecheckRow[]> {
+  const limit = Math.max(1, Math.min(250, Math.floor(Number(params.limit ?? 50))))
+  const chatId = asTrimmed(params.chatId ?? '')
+  const result = await params.db.sql`
+    SELECT
+      p.chat_id,
+      p.vault_address,
+      p.room_chat_id,
+      p.min_shares_raw,
+      p.grace_hours,
+      p.enabled,
+      m.telegram_user_id,
+      m.canonical_csw_address,
+      m.status,
+      m.last_eligible_at,
+      m.grace_until,
+      m.last_checked_at,
+      COALESCE(NULLIF(LOWER(k.creator_coin_address), ''), p.vault_address) AS share_token_address
+    FROM telegram_holder_room_members m
+    INNER JOIN telegram_holder_room_policies p
+      ON p.room_chat_id = m.room_chat_id
+    LEFT JOIN keepr_vaults k
+      ON LOWER(k.vault_address) = p.vault_address
+    WHERE p.enabled = true
+      AND m.status <> 'removed'
+      AND (${chatId} = '' OR p.chat_id = ${chatId})
+    ORDER BY COALESCE(m.last_checked_at, TO_TIMESTAMP(0)) ASC
+    LIMIT ${limit};
+  `
+  return (result.rows ?? []).map((row: any) => ({
+    chatId: asTrimmed(row.chat_id),
+    vaultAddress: normalizeAddress(row.vault_address),
+    roomChatId: asTrimmed(row.room_chat_id),
+    shareTokenAddress: normalizeAddress(row.share_token_address) || normalizeAddress(row.vault_address),
+    minSharesRaw: normalizeRawAmount(row.min_shares_raw) || '1',
+    graceHours: parseGraceHours(row.grace_hours, 24),
+    enabled: Boolean(row.enabled),
+    telegramUserId: String(row.telegram_user_id),
+    canonicalCswAddress: normalizeAddress(row.canonical_csw_address),
+    status: normalizeHolderRoomMemberStatus(row.status),
+    lastEligibleAt: toIso(row.last_eligible_at),
+    graceUntil: toIso(row.grace_until),
+    lastCheckedAt: toIso(row.last_checked_at),
+  }))
 }
 
 export async function listTelegramAuctions(params: {

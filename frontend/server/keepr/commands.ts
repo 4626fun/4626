@@ -510,7 +510,7 @@ function resolveCalendarRange(arg: string | null): { startDate: string; endDate:
 
   const explicit = parseIsoRangeToken(raw)
   if (!explicit) {
-    return { error: 'Usage: `/mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]`' }
+    return { error: 'Usage: /mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]' }
   }
   if (daysBetween(explicit.startDate, explicit.endDate) > 31) {
     return { error: 'Date range too large. Limit calendar queries to 31 days.' }
@@ -543,7 +543,7 @@ function resolveChartRange(arg: string | null): { startDate: string; endDate: st
 
   const explicit = parseIsoRangeToken(raw)
   if (!explicit) {
-    return { error: 'Usage: `/mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]`' }
+    return { error: 'Usage: /mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]' }
   }
   const days = daysBetween(explicit.startDate, explicit.endDate)
   if (days > 400) {
@@ -569,7 +569,7 @@ async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
 
   if (cmd === 'quote') {
     const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: `/mkt quote <symbol>`' }
+    if (!symbol) return { ok: false, response: 'Usage: /mkt quote <symbol>' }
     const result = await openbbEquityQuote({ symbol })
     if (!result.ok) return { ok: false, response: formatMarketError(result) }
 
@@ -613,7 +613,7 @@ async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
 
   if (cmd === 'news') {
     const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: `/mkt news <symbol> [limit]`' }
+    if (!symbol) return { ok: false, response: 'Usage: /mkt news <symbol> [limit]' }
     const limit = arg2 ? Math.max(1, Math.min(10, Math.floor(Number(arg2)))) : 5
     const endDate = isoDateUtcFromMs(Date.now())
     const startDate = isoDateUtcFromMs(Date.now() - 7 * DAY_MS)
@@ -645,7 +645,7 @@ async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
 
   if (cmd === 'ratios') {
     const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: `/mkt ratios <symbol>`' }
+    if (!symbol) return { ok: false, response: 'Usage: /mkt ratios <symbol>' }
     const result = await openbbFinancialRatios({ symbol, limit: 1 })
     if (!result.ok) {
       // Fundamentals often require paid providers; give a more actionable hint.
@@ -761,7 +761,7 @@ async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
 
   if (cmd === 'chart') {
     const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: `/mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]`' }
+    if (!symbol) return { ok: false, response: 'Usage: /mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]' }
     const range = resolveChartRange(arg2)
     if ('error' in range) return { ok: false, response: range.error }
     const result = await openbbEquityHistorical({

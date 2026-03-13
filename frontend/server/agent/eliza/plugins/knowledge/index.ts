@@ -142,7 +142,7 @@ const knowledgeAction: Action = {
     const query = text.replace(/^\/(knowledge|kb)\s*/i, '').trim()
     if (!query) {
       await callback?.({
-        text: 'Usage: `/knowledge <query>` or `/kb <query>`',
+        text: 'Usage: /knowledge <query> or /kb <query>',
       } as Content)
       return
     }

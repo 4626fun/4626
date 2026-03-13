@@ -1,9 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { PrivyClient } from '@privy-io/server-auth'
-import { createPublicClient, encodeFunctionData, formatUnits, getAddress, http, parseEther, type Address } from 'viem'
+import { createPublicClient, encodeFunctionData, erc20Abi, formatUnits, getAddress, http, parseEther, type Address } from 'viem'
 import { base } from 'viem/chains'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import {
@@ -15,16 +16,23 @@ import {
   consumeTelegramActionToken,
   createTelegramLinkStartToken,
   createTelegramActionToken,
+  consumeTelegramTradePercentPrompt,
+  getTelegramTradePercentPrompt,
+  clearTelegramTradePercentPrompt,
   ensureTelegramTradingSchema,
   getTelegramChatTradePolicy,
+  getHolderRoomPolicyByVault,
   getTelegramLinkByUserId,
   getTelegramPortfolioSummary,
+  listHolderRoomPolicies,
   logTelegramActionAudit,
   listTelegramAuctions,
   listTelegramScopedVaults,
   listTelegramSignals,
   listTelegramUserBids,
   revokeTelegramLink,
+  upsertTelegramTradePercentPrompt,
+  upsertHolderRoomMember,
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
@@ -300,6 +308,9 @@ const TELEGRAM_NATIVE_COMMANDS = new Set([
   'link',
   'linked',
   'unlink',
+  'join',
+  'rooms',
+  'eligibility',
   'portfolio',
   'vaults',
   'list',
@@ -318,6 +329,9 @@ const TELEGRAM_COMMAND_HEADS = [
   'link',
   'linked',
   'unlink',
+  'join',
+  'rooms',
+  'eligibility',
   'portfolio',
   'vaults',
   'list',
@@ -412,16 +426,24 @@ const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string }> = [
     hint: 'symbol: ticker, e.g. BTC',
   },
   {
-    pattern: /\/buy\s+<vault-address>\s+<eth-amount>\s+--confirm/i,
-    hint: 'vault-address: 0x..., eth-amount: positive number',
+    pattern: /\/buy\b/i,
+    hint: 'interactive: pick vault, choose size, then Accept',
   },
   {
-    pattern: /\/sell\s+<vault-address>\s+<share-amount>\s+--confirm/i,
-    hint: 'vault-address: 0x..., share-amount: positive number',
+    pattern: /\/sell\b/i,
+    hint: 'interactive: pick vault, choose size, then Accept',
   },
   {
-    pattern: /\/bid\s+<vault-address>\s+\$<usd-amount>\s+--confirm/i,
-    hint: 'vault-address: 0x..., usd-amount: positive number',
+    pattern: /\/bid\b/i,
+    hint: 'interactive: pick vault, choose ETH %, then Accept',
+  },
+  {
+    pattern: /\/join\s+<vault\|ticker>/i,
+    hint: 'vault|ticker: scoped vault address or symbol',
+  },
+  {
+    pattern: /\/eligibility\s+<vault\|ticker>/i,
+    hint: 'checks holder-room threshold for a scoped vault',
   },
 ]
 
@@ -460,6 +482,8 @@ type ParsedTelegramTradeIntent =
       amount: number
       amountUnit: 'USD'
     }
+
+type InteractiveTradeAction = 'buy' | 'sell' | 'bid'
 
 type CcaAuctionQuote = {
   auctionAddress: `0x${string}`
@@ -656,6 +680,15 @@ function parseTelegramTradeIntent(rawText: string): ParsedTelegramTradeIntent | 
   return null
 }
 
+function commandHasArguments(rawText: string, head: InteractiveTradeAction): boolean {
+  const text = asTrimmed(rawText)
+  if (!text) return false
+  const pattern = new RegExp(`^/?${head}(?:\\s+(.+))?$`, 'i')
+  const match = text.match(pattern)
+  const argTail = asTrimmed(match?.[1] ?? '')
+  return Boolean(argTail)
+}
+
 function resolveTradeTarget(
   scopedVaults: Awaited<ReturnType<typeof listTelegramScopedVaults>>,
   identifier: string,
@@ -677,18 +710,54 @@ function resolveTradeTarget(
   return null
 }
 
+function parseTradeFlowCallbackData(rawData: string):
+  | { kind: 'vault'; actionType: InteractiveTradeAction; vaultAddress: `0x${string}` }
+  | { kind: 'percent'; actionType: InteractiveTradeAction; vaultAddress: `0x${string}`; percentBps: number }
+  | { kind: 'custom'; actionType: InteractiveTradeAction; vaultAddress: `0x${string}` }
+  | null {
+  const data = asTrimmed(rawData)
+  const vaultMatch = data.match(/^tradeflow:v:(buy|sell|bid):(0x[a-fA-F0-9]{40})$/)
+  if (vaultMatch) {
+    return {
+      kind: 'vault',
+      actionType: vaultMatch[1].toLowerCase() as InteractiveTradeAction,
+      vaultAddress: vaultMatch[2].toLowerCase() as `0x${string}`,
+    }
+  }
+  const percentMatch = data.match(/^tradeflow:p:(buy|sell|bid):(0x[a-fA-F0-9]{40}):(\d{1,4})$/)
+  if (percentMatch) {
+    const percentBps = Number(percentMatch[3] ?? 0)
+    if (!Number.isFinite(percentBps) || percentBps < 100 || percentBps > 9_999) return null
+    return {
+      kind: 'percent',
+      actionType: percentMatch[1].toLowerCase() as InteractiveTradeAction,
+      vaultAddress: percentMatch[2].toLowerCase() as `0x${string}`,
+      percentBps: Math.floor(percentBps),
+    }
+  }
+  const customMatch = data.match(/^tradeflow:c:(buy|sell|bid):(0x[a-fA-F0-9]{40})$/)
+  if (customMatch) {
+    return {
+      kind: 'custom',
+      actionType: customMatch[1].toLowerCase() as InteractiveTradeAction,
+      vaultAddress: customMatch[2].toLowerCase() as `0x${string}`,
+    }
+  }
+  return null
+}
+
 function parseTradeCallbackData(rawData: string):
-  | { kind: 'confirm' | 'cancel'; token: string }
+  | { kind: 'accept' | 'decline'; token: string }
   | { kind: 'edit'; actionType: 'buy' | 'sell' | 'bid' }
   | null {
   const data = asTrimmed(rawData)
   if (!data.startsWith('trade:')) return null
   const parts = data.split(':')
   const kind = asTrimmed(parts[1]).toLowerCase()
-  if (kind === 'confirm' || kind === 'cancel') {
+  if (kind === 'accept' || kind === 'confirm' || kind === 'decline' || kind === 'cancel') {
     const token = asTrimmed(parts[2])
     if (!token) return null
-    return { kind, token }
+    return { kind: kind === 'accept' || kind === 'confirm' ? 'accept' : 'decline', token }
   }
   if (kind === 'edit') {
     const actionType = asTrimmed(parts[2]).toLowerCase()
@@ -893,15 +962,13 @@ async function readCcaAuctionQuote(params: {
 }
 
 function buildTradePreviewReplyMarkup(params: {
-  actionType: 'buy' | 'sell' | 'bid'
   token: string
 }): Record<string, unknown> {
   return {
     inline_keyboard: [
-      [{ text: 'Confirm', callback_data: `trade:confirm:${params.token}` }],
       [
-        { text: 'Edit Amount', callback_data: `trade:edit:${params.actionType}` },
-        { text: 'Cancel', callback_data: `trade:cancel:${params.token}` },
+        { text: 'Accept', callback_data: `trade:accept:${params.token}` },
+        { text: 'Decline', callback_data: `trade:decline:${params.token}` },
       ],
     ],
   }
@@ -961,9 +1028,9 @@ function formatTradePreviewText(params: {
 }
 
 function tradeEditHint(actionType: 'buy' | 'sell' | 'bid'): string {
-  if (actionType === 'buy') return 'Edit amount and resend: /buy <vault-address> <eth-amount> --confirm'
-  if (actionType === 'sell') return 'Edit amount and resend: /sell <vault-address> <share-amount> --confirm'
-  return 'Edit amount and resend: /bid <vault-address> $<usd-amount> --confirm'
+  if (actionType === 'buy') return 'Start again with /buy'
+  if (actionType === 'sell') return 'Start again with /sell'
+  return 'Start again with /bid'
 }
 
 function normalizeInlineDraft(rawQuery: string): string {
@@ -1010,14 +1077,11 @@ async function buildInlineQueryResults(params: {
   }
 
   if (tradeIntent) {
-    const tradeCommand =
-      tradeIntent.actionType === 'bid'
-        ? `/bid ${tradeIntent.identifier} $${tradeIntent.amountInput} --confirm`
-        : `/${tradeIntent.actionType} ${tradeIntent.identifier} ${tradeIntent.amountInput} --confirm`
+    const tradeCommand = tradeIntent.actionType === 'buy' ? '/buy' : tradeIntent.actionType === 'sell' ? '/sell' : '/bid'
     pushResult({
       type: 'article',
       id: 'trade-copy',
-      title: `Reuse ${tradeIntent.actionType.toUpperCase()} command`,
+      title: `Start ${tradeIntent.actionType.toUpperCase()} flow`,
       description: tradeCommand,
       input_message_content: { message_text: tradeCommand },
     })
@@ -1073,16 +1137,16 @@ async function buildInlineQueryResults(params: {
       type: 'article',
       id: `vault-buy-${idx}`,
       title: `Buy ${truncateAddress(vaultAddress)}`,
-      description: '/buy <vault> 0.05 --confirm',
-      input_message_content: { message_text: `/buy ${vaultAddress} 0.05 --confirm` },
+      description: '/buy',
+      input_message_content: { message_text: '/buy' },
     })
     if (isAddressLike(vault.ccaStrategyAddress) && !vault.isSettled) {
       pushResult({
         type: 'article',
         id: `vault-bid-${idx}`,
         title: `Bid ${truncateAddress(vaultAddress)}`,
-        description: '/bid <vault> $250 --confirm',
-        input_message_content: { message_text: `/bid ${vaultAddress} $250 --confirm` },
+        description: '/bid',
+        input_message_content: { message_text: '/bid' },
       })
     }
   }
@@ -1267,6 +1331,11 @@ function buildHelpReplyMarkup(chatId: string): Record<string, unknown> {
         { text: 'Auctions', callback_data: 'menu:auctions' },
       ],
       [
+        { text: 'Join Room', callback_data: 'menu:join' },
+        { text: 'Eligibility', callback_data: 'menu:eligibility' },
+        { text: 'Rooms', callback_data: 'menu:rooms' },
+      ],
+      [
         { text: 'My Bids', callback_data: 'menu:mybids' },
         { text: 'Signals', callback_data: 'menu:signals' },
         { text: 'Help Topics', callback_data: 'menu:help' },
@@ -1309,9 +1378,12 @@ function resolveHelpCallbackCommand(rawData: string): string | null {
     if (action === 'link') return '/link'
     if (action === 'linked') return '/linked'
     if (action === 'unlink') return '/unlink'
-    if (action === 'buy') return '/buy vault 0.05 --confirm'
-    if (action === 'sell') return '/sell vault 100 --confirm'
-    if (action === 'bid') return '/bid vault $250 --confirm'
+    if (action === 'buy') return '/buy'
+    if (action === 'sell') return '/sell'
+    if (action === 'bid') return '/bid'
+    if (action === 'join') return '/join'
+    if (action === 'eligibility') return '/eligibility'
+    if (action === 'rooms') return '/rooms'
     if (action === 'portfolio') return '/portfolio'
     if (action === 'vaults') return '/vaults'
     if (action === 'auctions') return '/auctions'
@@ -1722,6 +1794,80 @@ function formatSignalsText(title: string, rows: Awaited<ReturnType<typeof listTe
   return lines.join('\n')
 }
 
+function areHolderRoomsEnabled(): boolean {
+  return parseBoolean(process.env.TELEGRAM_HOLDER_ROOMS_ENABLED, false)
+}
+
+function parseHolderRoomIdentifier(rawText: string, head: 'join' | 'eligibility'): string {
+  const text = asTrimmed(rawText)
+  if (!text) return ''
+  const pattern = new RegExp(`^/?${head}(?:\\s+(\\S+))?`, 'i')
+  const match = text.match(pattern)
+  return asTrimmed(match?.[1] ?? '')
+}
+
+function formatHolderRoomUsageText(): string {
+  return [
+    'Holder Rooms',
+    '',
+    '- usage: `/join` <vault|ticker>',
+    '- usage: `/eligibility` <vault|ticker>',
+    '- list active rooms: `/rooms`',
+  ].join('\n')
+}
+
+function formatHolderRoomsText(policies: Awaited<ReturnType<typeof listHolderRoomPolicies>>): string {
+  if (policies.length === 0) {
+    return [
+      'Holder Rooms',
+      '',
+      '- no holder rooms configured for this chat',
+      '- usage: `/join` <vault|ticker>',
+      '- usage: `/eligibility` <vault|ticker>',
+    ].join('\n')
+  }
+  const lines = [
+    'Holder Rooms',
+    '',
+    '- join command: `/join` <vault|ticker>',
+    '- check command: `/eligibility` <vault|ticker>',
+    '',
+  ]
+  for (const policy of policies.slice(0, 12)) {
+    lines.push(
+      `- ${truncateAddress(policy.vaultAddress)} -> ${policy.roomChatId} | minSharesRaw=${policy.minSharesRaw} | graceHours=${policy.graceHours} | enabled=${String(policy.enabled)}`,
+    )
+  }
+  return lines.join('\n')
+}
+
+async function createTelegramHolderRoomInviteLink(params: {
+  botToken: string
+  roomChatId: string
+  ttlSeconds?: number
+}): Promise<string | null> {
+  const endpoint = `https://api.telegram.org/bot${params.botToken}/createChatInviteLink`
+  const ttl = Math.max(60, Math.min(3600, Math.floor(Number(params.ttlSeconds ?? 60 * 10))))
+  const payload: Record<string, unknown> = {
+    chat_id: params.roomChatId,
+    member_limit: 1,
+    creates_join_request: false,
+    expire_date: Math.floor(Date.now() / 1000) + ttl,
+  }
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`telegram_create_invite_failed_${response.status}:${details.slice(0, 180)}`)
+  }
+  const body = (await response.json().catch(() => null)) as any
+  const inviteLink = asTrimmed(body?.result?.invite_link ?? '')
+  return inviteLink || null
+}
+
 function readTradeLimitFromEnv(key: string, fallback: number): number {
   const raw = Number(asTrimmed(process.env[key] ?? ''))
   if (!Number.isFinite(raw) || raw <= 0) return fallback
@@ -1774,9 +1920,9 @@ function checkTelegramTradeRateLimit(params: {
 }
 
 function buildTradeCommandTemplate(actionType: 'buy' | 'sell' | 'bid'): string {
-  if (actionType === 'buy') return '/buy <vault-address> <eth-amount> --confirm'
-  if (actionType === 'sell') return '/sell <vault-address> <share-amount> --confirm'
-  return '/bid <vault-address> $<usd-amount> --confirm'
+  if (actionType === 'buy') return '/buy'
+  if (actionType === 'sell') return '/sell'
+  return '/bid'
 }
 
 function formatTradeRateLimitText(params: {
@@ -1791,6 +1937,202 @@ function formatTradeRateLimitText(params: {
     `- retry_after_seconds: ${params.retryAfterSeconds}`,
     `- retry: ${buildTradeCommandTemplate(params.actionType)}`,
   ].join('\n')
+}
+
+type ScopedVaultRow = (Awaited<ReturnType<typeof listTelegramScopedVaults>>)[number]
+
+function resolveScopedVaultByAddress(scopedVaults: ScopedVaultRow[], vaultAddress: string): ScopedVaultRow | null {
+  const normalized = asTrimmed(vaultAddress).toLowerCase()
+  if (!isAddressLike(normalized)) return null
+  return scopedVaults.find((row) => row.vaultAddress.toLowerCase() === normalized) ?? null
+}
+
+function buildTradeVaultPickerReplyMarkup(params: {
+  actionType: InteractiveTradeAction
+  scopedVaults: ScopedVaultRow[]
+}): Record<string, unknown> {
+  const rows: Array<Array<Record<string, unknown>>> = []
+  const buttons = params.scopedVaults.slice(0, 12).map((vault) => ({
+    text: truncateAddress(vault.vaultAddress),
+    callback_data: `tradeflow:v:${params.actionType}:${vault.vaultAddress.toLowerCase()}`,
+  }))
+  for (let idx = 0; idx < buttons.length; idx += 2) {
+    rows.push(buttons.slice(idx, idx + 2))
+  }
+  return {
+    inline_keyboard: rows,
+  }
+}
+
+function formatBpsPercentLabel(percentBps: number): string {
+  const whole = Math.floor(percentBps / 100)
+  const fraction = percentBps % 100
+  if (fraction === 0) return `${whole}%`
+  return `${whole}.${String(fraction).padStart(2, '0')}%`
+}
+
+function buildTradePercentPickerReplyMarkup(params: {
+  actionType: InteractiveTradeAction
+  vaultAddress: `0x${string}`
+}): Record<string, unknown> {
+  const presets = [2500, 5000, 7500, 9900]
+  const presetButtons = presets.map((percentBps) => ({
+    text: formatBpsPercentLabel(percentBps),
+    callback_data: `tradeflow:p:${params.actionType}:${params.vaultAddress}:${percentBps}`,
+  }))
+  return {
+    inline_keyboard: [
+      [presetButtons[0]!, presetButtons[1]!],
+      [presetButtons[2]!, presetButtons[3]!],
+      [{ text: 'Custom', callback_data: `tradeflow:c:${params.actionType}:${params.vaultAddress}` }],
+    ],
+  }
+}
+
+function formatUnitsCompact(value: bigint, decimals: number, maxFractionDigits = 8): string {
+  const full = formatUnits(value, Math.max(0, decimals))
+  const [whole, fraction = ''] = full.split('.')
+  if (!fraction) return whole
+  const trimmed = fraction.slice(0, Math.max(0, maxFractionDigits)).replace(/0+$/, '')
+  return trimmed ? `${whole}.${trimmed}` : whole
+}
+
+function parsePercentInputToBps(rawText: string): number | null {
+  const text = asTrimmed(rawText)
+  if (!text) return null
+  const normalized = text.replace(/%/g, '').replace(/,/g, '').trim()
+  const value = Number(normalized)
+  if (!Number.isFinite(value) || value < 1 || value > 99.99) return null
+  const bps = Math.round(value * 100)
+  if (!Number.isFinite(bps) || bps < 100 || bps > 9_999) return null
+  return bps
+}
+
+async function buildTradeIntentFromPercent(params: {
+  actionType: InteractiveTradeAction
+  vault: ScopedVaultRow
+  canonicalCswAddress: `0x${string}`
+  percentBps: number
+}): Promise<{ ok: true; tradeIntent: ParsedTelegramTradeIntent } | { ok: false; text: string }> {
+  const percentBps = Math.max(100, Math.min(9_999, Math.floor(Number(params.percentBps))))
+  const wallet = getAddress(params.canonicalCswAddress as Address)
+  const client = createPublicClient({
+    chain: base,
+    transport: http(getBaseRpcUrl(), { timeout: 20_000 }),
+  }) as any
+
+  if (params.actionType === 'buy' || params.actionType === 'bid') {
+    const ethBalanceWei = (await client.getBalance({ address: wallet }).catch(() => 0n)) as bigint
+    const amountWei = applyBps(ethBalanceWei, BigInt(percentBps))
+    if (amountWei <= 0n) {
+      return {
+        ok: false,
+        text: [
+          'Trade blocked',
+          '',
+          '- selected size rounds to zero from your current ETH balance',
+          '- choose a larger percent or fund your wallet',
+        ].join('\n'),
+      }
+    }
+    const amountEthText = formatUnitsCompact(amountWei, 18, 8)
+    const amountEth = Number(amountEthText)
+    if (!Number.isFinite(amountEth) || amountEth <= 0) {
+      return {
+        ok: false,
+        text: 'Trade blocked: failed to derive a valid ETH amount from the selected percent.',
+      }
+    }
+    if (params.actionType === 'buy') {
+      return {
+        ok: true,
+        tradeIntent: {
+          actionType: 'buy',
+          identifier: params.vault.vaultAddress,
+          amountInput: amountEthText,
+          amount: amountEth,
+          amountUnit: 'ETH',
+        },
+      }
+    }
+    const usdIntentRaw = amountEth * readEthUsdPrice()
+    const usdIntentText = formatAmount(usdIntentRaw, 2)
+    const usdIntent = Number(usdIntentText)
+    if (!Number.isFinite(usdIntent) || usdIntent <= 0) {
+      return {
+        ok: false,
+        text: 'Bid blocked: selected ETH size is too small after USD conversion.',
+      }
+    }
+    return {
+      ok: true,
+      tradeIntent: {
+        actionType: 'bid',
+        identifier: params.vault.vaultAddress,
+        amountInput: usdIntentText,
+        amount: usdIntent,
+        amountUnit: 'USD',
+      },
+    }
+  }
+
+  if (!isAddressLike(params.vault.creatorCoinAddress)) {
+    return {
+      ok: false,
+      text: 'Sell blocked: creator coin token address is unavailable for this vault.',
+    }
+  }
+
+  const shareToken = getAddress(params.vault.creatorCoinAddress as Address)
+  const [shareBalanceRaw, decimalsRaw] = (await Promise.all([
+    client
+      .readContract({
+        address: shareToken,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [wallet],
+      })
+      .catch(() => 0n),
+    client
+      .readContract({
+        address: shareToken,
+        abi: erc20Abi,
+        functionName: 'decimals',
+      })
+      .catch(() => 18),
+  ])) as [bigint, bigint | number]
+  const decimals = Number(decimalsRaw)
+  const shareDecimals = Number.isFinite(decimals) && decimals >= 0 ? Math.floor(decimals) : 18
+  const amountRaw = applyBps(shareBalanceRaw, BigInt(percentBps))
+  if (amountRaw <= 0n) {
+    return {
+      ok: false,
+      text: [
+        'Sell blocked',
+        '',
+        '- selected size rounds to zero from your current share balance',
+        '- choose a larger percent or acquire more shares',
+      ].join('\n'),
+    }
+  }
+  const shareAmountText = formatUnitsCompact(amountRaw, shareDecimals, 8)
+  const shareAmount = Number(shareAmountText)
+  if (!Number.isFinite(shareAmount) || shareAmount <= 0) {
+    return {
+      ok: false,
+      text: 'Sell blocked: failed to derive a valid share amount from the selected percent.',
+    }
+  }
+  return {
+    ok: true,
+    tradeIntent: {
+      actionType: 'sell',
+      identifier: params.vault.vaultAddress,
+      amountInput: shareAmountText,
+      amount: shareAmount,
+      amountUnit: 'SHARE',
+    },
+  }
 }
 
 function isTradeMembershipCheckEnabled(): boolean {
@@ -1839,6 +2181,7 @@ async function executeTelegramNativeCommand(params: {
   chatId: string
   userId: string
   messageId?: number
+  allowTradeArgs?: boolean
 }): Promise<TelegramCommandResponse | null> {
   if (!isTelegramNativeCommand(params.text)) return null
   const head = getCommandHead(params.text)
@@ -1963,6 +2306,19 @@ async function executeTelegramNativeCommand(params: {
     if (head === 'signals') {
       return { text: ['Signals', '', '- unavailable while database is offline'].join('\n') }
     }
+    if (head === 'join' || head === 'rooms' || head === 'eligibility') {
+      return { text: ['Holder Rooms', '', '- unavailable while database is offline'].join('\n') }
+    }
+    if (head === 'buy' || head === 'sell' || head === 'bid') {
+      return {
+        text: [
+          'Trade Flow',
+          '',
+          '- interactive trade flow is unavailable while database is offline',
+          '- retry in a few seconds',
+        ].join('\n'),
+      }
+    }
     if (tradeIntent) {
       return {
         text: [
@@ -1979,6 +2335,295 @@ async function executeTelegramNativeCommand(params: {
   await ensureWaitlistSchema(db as any)
   await ensureKeeprSchema()
   await ensureTelegramTradingSchema(db as any)
+
+  if (head === 'buy' || head === 'sell' || head === 'bid') {
+    const actionType = head as InteractiveTradeAction
+    const hasArgs = commandHasArguments(params.text, actionType)
+    if (hasArgs && !params.allowTradeArgs) {
+      return {
+        text: [
+          'Trade Flow',
+          '',
+          `- \`/${actionType}\` is interactive now`,
+          `- send \`/${actionType}\` with no arguments`,
+          '- pick vault, then size, then Accept or Decline',
+        ].join('\n'),
+      }
+    }
+    if (!hasArgs) {
+      const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+      if (!link || link.linkStatus !== 'active') {
+        return {
+          text: [
+            'Trade blocked',
+            '',
+            '- link required: run /link first',
+            '- after linking, retry your command',
+          ].join('\n'),
+        }
+      }
+      if (!link.ownerVerified) {
+        return {
+          text: [
+            'Trade blocked',
+            '',
+            '- owner verification required',
+            '- run /linked and ensure ownerVerified is true',
+          ].join('\n'),
+        }
+      }
+
+      const tradePolicy = await getTelegramChatTradePolicy({
+        db: db as any,
+        chatId: params.chatId,
+      })
+      if ((actionType === 'buy' || actionType === 'sell') && !tradePolicy.buySellEnabled) {
+        return {
+          text: [
+            'Trade blocked',
+            '',
+            '- buy/sell disabled for this chat scope',
+            '- ask an admin to enable buy/sell in telegram_chat_vault_scope',
+          ].join('\n'),
+        }
+      }
+      if (actionType === 'bid' && !tradePolicy.bidEnabled) {
+        return {
+          text: [
+            'Trade blocked',
+            '',
+            '- bid disabled for this chat scope',
+            '- ask an admin to enable bid in telegram_chat_vault_scope',
+          ].join('\n'),
+        }
+      }
+
+      const membership = await verifyTradeMembership({
+        chatId: params.chatId,
+        userId: params.userId,
+      })
+      if (!membership.ok) {
+        return {
+          text: [
+            'Trade blocked',
+            '',
+            '- membership check failed for this chat',
+            `- status: ${membership.status ?? 'unknown'}`,
+            '- rejoin the group/topic and retry',
+          ].join('\n'),
+        }
+      }
+
+      const scopedVaults = await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
+      if (scopedVaults.length === 0) {
+        return {
+          text: [
+            'Trade blocked',
+            '',
+            '- no vaults are currently scoped for this chat',
+            '- ask an admin to configure telegram_chat_vault_scope',
+          ].join('\n'),
+        }
+      }
+      return {
+        text: `Pick a vault to ${actionType.toUpperCase()}`,
+        replyMarkup: buildTradeVaultPickerReplyMarkup({
+          actionType,
+          scopedVaults,
+        }),
+      }
+    }
+  }
+
+  if (head === 'rooms') {
+    if (!areHolderRoomsEnabled()) {
+      return {
+        text: [
+          'Holder Rooms',
+          '',
+          '- holder rooms are currently disabled in this chat',
+          '- ask an admin to enable TELEGRAM_HOLDER_ROOMS_ENABLED',
+          '',
+          formatHolderRoomUsageText(),
+        ].join('\n'),
+      }
+    }
+    const policies = await listHolderRoomPolicies({
+      db: db as any,
+      chatId: params.chatId,
+      enabledOnly: true,
+      limit: 20,
+    })
+    return { text: formatHolderRoomsText(policies) }
+  }
+
+  if (head === 'join' || head === 'eligibility') {
+    if (!areHolderRoomsEnabled()) {
+      return {
+        text: [
+          'Holder Rooms',
+          '',
+          '- holder rooms are currently disabled in this chat',
+          '- ask an admin to enable TELEGRAM_HOLDER_ROOMS_ENABLED',
+          '',
+          formatHolderRoomUsageText(),
+        ].join('\n'),
+      }
+    }
+
+    const identifier = parseHolderRoomIdentifier(params.text, head)
+    if (!identifier) {
+      return {
+        text: formatHolderRoomUsageText(),
+      }
+    }
+
+    const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+    if (!link || link.linkStatus !== 'active') {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- link required: run /link first',
+          '- after linking, retry your command',
+        ].join('\n'),
+      }
+    }
+    if (!link.ownerVerified) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- owner verification required',
+          '- run /linked and ensure ownerVerified is true',
+        ].join('\n'),
+      }
+    }
+
+    const scopedVaults = await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 50 })
+    const target = resolveTradeTarget(scopedVaults, identifier)
+    if (!target) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- target vault not found in this chat scope',
+          '- run /vaults to see scoped vaults',
+          '- usage: `/join` <vault|ticker>',
+        ].join('\n'),
+      }
+    }
+
+    const policy = await getHolderRoomPolicyByVault({
+      db: db as any,
+      chatId: params.chatId,
+      vaultAddress: target.vaultAddress,
+    })
+    if (!policy || !policy.enabled) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- no holder room policy configured for this vault',
+          '- run /rooms to list available holder rooms',
+        ].join('\n'),
+      }
+    }
+
+    const minShares = toBigIntStrict(policy.minSharesRaw)
+    if (minShares <= 0n) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- holder room policy is misconfigured',
+          '- minSharesRaw must be greater than 0',
+        ].join('\n'),
+      }
+    }
+
+    const shareToken = isAddressLike(target.creatorCoinAddress)
+      ? target.creatorCoinAddress.toLowerCase()
+      : target.vaultAddress.toLowerCase()
+    const eligibility = await checkSharesEligibility({
+      wallet: link.canonicalCswAddress.toLowerCase() as Address,
+      shareToken: shareToken as Address,
+      minShares,
+    })
+
+    const eligibilityLines = [
+      'Holder Eligibility',
+      '',
+      `- vault: ${truncateAddress(target.vaultAddress)}`,
+      `- roomChatId: ${policy.roomChatId}`,
+      `- status: ${eligibility.eligible ? 'eligible' : 'not eligible'}`,
+      `- balanceRaw: ${eligibility.evidence.shareBalance}`,
+      `- thresholdRaw: ${eligibility.evidence.threshold}`,
+      `- reason: ${eligibility.reason}`,
+    ]
+
+    if (head === 'eligibility') {
+      if (eligibility.eligible) {
+        eligibilityLines.push('- next: `/join` <vault|ticker>')
+      } else {
+        eligibilityLines.push('- next: acquire enough shares, then retry `/eligibility` <vault|ticker>')
+      }
+      return { text: eligibilityLines.join('\n') }
+    }
+
+    if (!eligibility.eligible) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- not eligible for holder room access',
+          `- balanceRaw: ${eligibility.evidence.shareBalance}`,
+          `- thresholdRaw: ${eligibility.evidence.threshold}`,
+          '- check exact status: `/eligibility` <vault|ticker>',
+        ].join('\n'),
+      }
+    }
+
+    const inviteLink = await createTelegramHolderRoomInviteLink({
+      botToken: asTrimmed(process.env.TELEGRAM_BOT_TOKEN ?? ''),
+      roomChatId: policy.roomChatId,
+      ttlSeconds: 60 * 10,
+    })
+    if (!inviteLink) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- invite creation failed',
+          '- retry `/join` <vault|ticker> in a few seconds',
+        ].join('\n'),
+      }
+    }
+
+    const nowIso = new Date().toISOString()
+    await upsertHolderRoomMember({
+      db: db as any,
+      roomChatId: policy.roomChatId,
+      telegramUserId: params.userId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      status: 'active',
+      lastEligibleAt: nowIso,
+      graceUntil: null,
+      lastCheckedAt: nowIso,
+      removedAt: null,
+    })
+    return {
+      text: [
+        'Join Room',
+        '',
+        '- eligible: yes',
+        `- vault: ${truncateAddress(target.vaultAddress)}`,
+        `- roomChatId: ${policy.roomChatId}`,
+        `- invite: ${inviteLink}`,
+        '- invite validity is short-lived; use immediately',
+      ].join('\n'),
+    }
+  }
 
   if (head === 'linked') {
     const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
@@ -2130,7 +2775,7 @@ async function executeTelegramNativeCommand(params: {
           '',
           '- target vault not found in this chat scope',
           '- use /vaults to list allowed vaults',
-          '- use /buy <vault-address> <amount> --confirm',
+          '- start again with /buy, /sell, or /bid',
         ].join('\n'),
       }
     }
@@ -2271,13 +2916,234 @@ async function executeTelegramNativeCommand(params: {
           : null,
       }),
       replyMarkup: buildTradePreviewReplyMarkup({
-        actionType: tradeIntent.actionType,
         token: tradeToken.token,
       }),
     }
   }
 
   return null
+}
+
+function tradeIntentToSyntheticCommand(tradeIntent: ParsedTelegramTradeIntent): string {
+  if (tradeIntent.actionType === 'bid') {
+    return `/bid ${tradeIntent.identifier} $${tradeIntent.amountInput}`
+  }
+  return `/${tradeIntent.actionType} ${tradeIntent.identifier} ${tradeIntent.amountInput}`
+}
+
+async function handleTelegramTradeFlowCallback(params: {
+  callbackData: string
+  chatId: string
+  userId: string
+  messageId?: number
+}): Promise<TelegramCommandResponse | null> {
+  const callback = parseTradeFlowCallbackData(params.callbackData)
+  if (!callback) return null
+
+  const db = await getDb()
+  if (!db) {
+    return {
+      text: 'Trade flow unavailable while database is offline. Please retry in a few seconds.',
+      callbackToast: 'Temporarily unavailable',
+    }
+  }
+  await ensureWaitlistSchema(db as any)
+  await ensureKeeprSchema()
+  await ensureTelegramTradingSchema(db as any)
+
+  const scopedVaults = await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
+  const target = resolveScopedVaultByAddress(scopedVaults, callback.vaultAddress)
+  if (!target) {
+    return {
+      text: [
+        'Trade flow',
+        '',
+        '- selected vault is no longer available in this chat scope',
+        '- run /vaults and start again',
+      ].join('\n'),
+      callbackToast: 'Vault unavailable',
+    }
+  }
+
+  if (callback.kind === 'vault') {
+    return {
+      text: `Pick size for ${callback.actionType.toUpperCase()} ${truncateAddress(target.vaultAddress)}`,
+      replyMarkup: buildTradePercentPickerReplyMarkup({
+        actionType: callback.actionType,
+        vaultAddress: callback.vaultAddress,
+      }),
+      callbackToast: 'Vault selected',
+    }
+  }
+
+  if (callback.kind === 'custom') {
+    await upsertTelegramTradePercentPrompt({
+      db: db as any,
+      chatId: params.chatId,
+      telegramUserId: params.userId,
+      actionType: callback.actionType,
+      vaultAddress: callback.vaultAddress,
+      ttlSeconds: 60 * 3,
+    })
+    return {
+      text: [
+        `Custom ${callback.actionType.toUpperCase()} size`,
+        '',
+        `Vault: ${truncateAddress(target.vaultAddress)}`,
+        '- send a percent between 1 and 99.99 (example: 42%)',
+      ].join('\n'),
+      callbackToast: 'Send percent',
+    }
+  }
+
+  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+  if (!link || link.linkStatus !== 'active') {
+    return {
+      text: [
+        'Trade blocked',
+        '',
+        '- link required: run /link first',
+        '- after linking, retry your command',
+      ].join('\n'),
+      callbackToast: 'Link required',
+    }
+  }
+  if (!link.ownerVerified) {
+    return {
+      text: [
+        'Trade blocked',
+        '',
+        '- owner verification required',
+        '- run /linked and ensure ownerVerified is true',
+      ].join('\n'),
+      callbackToast: 'Owner check required',
+    }
+  }
+
+  const intentResult = await buildTradeIntentFromPercent({
+    actionType: callback.actionType,
+    vault: target,
+    canonicalCswAddress: link.canonicalCswAddress.toLowerCase() as `0x${string}`,
+    percentBps: callback.percentBps,
+  })
+  if (!intentResult.ok) {
+    return {
+      text: intentResult.text,
+      callbackToast: 'Invalid size',
+    }
+  }
+  const syntheticCommand = tradeIntentToSyntheticCommand(intentResult.tradeIntent)
+  const previewResponse = await executeTelegramNativeCommand({
+    text: syntheticCommand,
+    chatId: params.chatId,
+    userId: params.userId,
+    messageId: params.messageId,
+    allowTradeArgs: true,
+  })
+  if (!previewResponse) {
+    return {
+      text: 'Trade preview unavailable. Please retry /buy, /sell, or /bid.',
+      callbackToast: 'Preview unavailable',
+    }
+  }
+  return {
+    ...previewResponse,
+    callbackToast: asTrimmed(previewResponse.callbackToast ?? '') || 'Preview ready',
+  }
+}
+
+async function maybeHandlePendingTradePercentInput(params: {
+  text: string
+  chatId: string
+  userId: string
+  messageId?: number
+}): Promise<TelegramCommandResponse | null> {
+  if (!params.text || params.text.startsWith('/')) return null
+  const db = await getDb()
+  if (!db) return null
+  await ensureTelegramTradingSchema(db as any)
+  const prompt = await getTelegramTradePercentPrompt({
+    db: db as any,
+    chatId: params.chatId,
+    telegramUserId: params.userId,
+  })
+  if (!prompt) return null
+
+  const percentBps = parsePercentInputToBps(params.text)
+  if (!percentBps) {
+    return {
+      text: [
+        `Custom ${prompt.actionType.toUpperCase()} size`,
+        '',
+        '- send a percent between 1 and 99.99',
+        '- example: 42%',
+      ].join('\n'),
+    }
+  }
+
+  const scopedVaults = await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
+  const target = resolveScopedVaultByAddress(scopedVaults, prompt.vaultAddress)
+  if (!target) {
+    await clearTelegramTradePercentPrompt({
+      db: db as any,
+      chatId: params.chatId,
+      telegramUserId: params.userId,
+    })
+    return {
+      text: [
+        'Trade flow',
+        '',
+        '- the selected vault is no longer available in this chat scope',
+        '- run /vaults and start again',
+      ].join('\n'),
+    }
+  }
+
+  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+  if (!link || link.linkStatus !== 'active' || !link.ownerVerified) {
+    await clearTelegramTradePercentPrompt({
+      db: db as any,
+      chatId: params.chatId,
+      telegramUserId: params.userId,
+    })
+    return {
+      text: [
+        'Trade blocked',
+        '',
+        '- link + owner verification required',
+        '- run /link then /linked, then retry',
+      ].join('\n'),
+    }
+  }
+
+  const intentResult = await buildTradeIntentFromPercent({
+    actionType: prompt.actionType,
+    vault: target,
+    canonicalCswAddress: link.canonicalCswAddress.toLowerCase() as `0x${string}`,
+    percentBps,
+  })
+  if (!intentResult.ok) {
+    return { text: intentResult.text }
+  }
+
+  await consumeTelegramTradePercentPrompt({
+    db: db as any,
+    chatId: params.chatId,
+    telegramUserId: params.userId,
+  })
+
+  const syntheticCommand = tradeIntentToSyntheticCommand(intentResult.tradeIntent)
+  const previewResponse = await executeTelegramNativeCommand({
+    text: syntheticCommand,
+    chatId: params.chatId,
+    userId: params.userId,
+    messageId: params.messageId,
+    allowTradeArgs: true,
+  })
+  if (previewResponse) return previewResponse
+  return {
+    text: 'Trade preview unavailable. Please retry /buy, /sell, or /bid.',
+  }
 }
 
 async function executeTelegramCommand(params: {
@@ -2289,6 +3155,14 @@ async function executeTelegramCommand(params: {
   isAdmin: boolean
   messageId?: number
 }): Promise<TelegramCommandResponse> {
+  const pendingCustomResponse = await maybeHandlePendingTradePercentInput({
+    text: params.text,
+    chatId: params.chatId,
+    userId: params.userId,
+    messageId: params.messageId,
+  })
+  if (pendingCustomResponse) return pendingCustomResponse
+
   const nativeResponse = await executeTelegramNativeCommand({
     text: params.text,
     chatId: params.chatId,
@@ -2332,23 +3206,16 @@ function buildTradeSignalText(params: {
   txHash?: string | null
 }): string {
   const lines = [`✅ Trade Signal • ${params.actionType.toUpperCase()}`, '', `Vault: ${params.targetLabel}`]
-  const targetAddress = isAddressLike(params.targetAddress) ? params.targetAddress.toLowerCase() : null
 
   if (params.actionType === 'buy') {
     lines.push(`Size: ${params.amountInput} ETH (~$${formatAmount(params.usdEstimate ?? 0, 2)})`)
-    if (targetAddress) {
-      lines.push(`Copy: /buy ${targetAddress} ${params.amountInput} --confirm`)
-    }
+    lines.push('Next: /buy')
   } else if (params.actionType === 'sell') {
     lines.push(`Size: ${params.amountInput} SHARE (~$${formatAmount(params.usdEstimate ?? 0, 2)})`)
-    if (targetAddress) {
-      lines.push(`Copy: /sell ${targetAddress} ${params.amountInput} --confirm`)
-    }
+    lines.push('Next: /sell')
   } else {
     lines.push(`Size: ${formatAmount(params.amountEth ?? 0, 6)} ETH (intent ~$${formatAmount(params.usdEstimate ?? 0, 2)})`)
-    if (targetAddress) {
-      lines.push(`Copy: /bid ${targetAddress} $${params.amountInput} --confirm`)
-    }
+    lines.push('Next: /bid')
     if (typeof params.usdEstimate === 'number' && Number.isFinite(params.usdEstimate)) {
       lines.push(`Intent: ~$${formatAmount(params.usdEstimate, 2)} USD`)
     }
@@ -2367,21 +3234,10 @@ function buildTradeSignalReplyMarkup(params: {
 }): Record<string, unknown> | undefined {
   const target = isAddressLike(params.targetAddress) ? params.targetAddress.toLowerCase() : null
   if (!target) return undefined
-  const amount = asTrimmed(params.amountInput)
-  if (!amount) return undefined
+  if (!asTrimmed(params.amountInput)) return undefined
 
-  const command =
-    params.actionType === 'bid'
-      ? `/bid ${target} $${amount} --confirm`
-      : `/${params.actionType} ${target} ${amount} --confirm`
-  const editCommand =
-    params.actionType === 'bid'
-      ? `/bid ${target} $<new-usd-amount> --confirm`
-      : params.actionType === 'buy'
-        ? `/buy ${target} <new-eth-amount> --confirm`
-        : `/sell ${target} <new-share-amount> --confirm`
-  const reuseLabel =
-    params.actionType === 'buy' ? 'Reuse Buy' : params.actionType === 'sell' ? 'Reuse Sell' : 'Reuse Bid'
+  const command = params.actionType === 'buy' ? '/buy' : params.actionType === 'sell' ? '/sell' : '/bid'
+  const reuseLabel = params.actionType === 'buy' ? 'Start Buy' : params.actionType === 'sell' ? 'Start Sell' : 'Start Bid'
   const useCopyText = parseBoolean(process.env.TELEGRAM_COPY_TEXT_BUTTONS, true)
   const reuseButton = useCopyText
     ? { text: reuseLabel, copy_text: { text: command } }
@@ -2399,11 +3255,7 @@ function buildTradeSignalReplyMarkup(params: {
   })
 
   const keyboard: Array<Array<Record<string, unknown>>> = [
-    [reuseButton],
-    [
-      { text: 'Edit Amount', switch_inline_query_current_chat: editCommand },
-      { text: 'Open Portfolio', callback_data: 'menu:portfolio' },
-    ],
+    [reuseButton, { text: 'Open Portfolio', callback_data: 'menu:portfolio' }],
     [{ text: 'View Vault', url: vaultUrl }],
   ]
   if (isStarsTipsEnabledForChat(asTrimmed(params.chatId ?? ''))) {
@@ -2493,7 +3345,7 @@ async function handleTelegramTradeCallback(params: {
     }
   }
 
-  if (callback.kind === 'cancel') {
+  if (callback.kind === 'decline') {
     await logTelegramActionAudit({
       db: db as any,
       telegramUserId: params.userId,
@@ -2506,8 +3358,8 @@ async function handleTelegramTradeCallback(params: {
       status: 'cancelled',
     })
     return {
-      text: `Cancelled ${actionTypeSafe.toUpperCase()} preview.`,
-      callbackToast: `${actionTypeSafe.toUpperCase()} cancelled`,
+      text: `Declined ${actionTypeSafe.toUpperCase()} preview.`,
+      callbackToast: `${actionTypeSafe.toUpperCase()} declined`,
     }
   }
 
@@ -2962,6 +3814,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const chatId = String(callbackMessage?.chat?.id ?? '').trim()
     const callbackMessageId = typeof callbackMessage?.message_id === 'number' ? callbackMessage.message_id : undefined
     const userId = String(callbackQuery.from?.id ?? '').trim()
+    const parsedTradeFlowCallback = parseTradeFlowCallbackData(callbackData)
     const parsedTradeCallback = parseTradeCallbackData(callbackData)
     const parsedTipCallback = parseTipCallbackData(callbackData)
     const isMenuNavigationCallback = callbackData.startsWith('menu:') || callbackData.startsWith('help:')
@@ -3024,7 +3877,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    if (!parsedTradeCallback) {
+    if (!parsedTradeCallback && !parsedTradeFlowCallback) {
       try {
         await answerTelegramCallbackQuery({ botToken, callbackQueryId })
       } catch (error) {
@@ -3038,14 +3891,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const groupId = resolveGroupId(chatId)
     const senderWallet = resolveSenderWallet(userId)
-    const tradeCallbackResponse = await handleTelegramTradeCallback({
-      callbackData,
-      chatId,
-      userId,
-      messageId: callbackMessage?.message_id,
-      groupId,
-      senderWallet,
-    })
+    const tradeCallbackResponse =
+      (await handleTelegramTradeFlowCallback({
+        callbackData,
+        chatId,
+        userId,
+        messageId: callbackMessage?.message_id,
+      })) ??
+      (await handleTelegramTradeCallback({
+        callbackData,
+        chatId,
+        userId,
+        messageId: callbackMessage?.message_id,
+        groupId,
+        senderWallet,
+      }))
     if (tradeCallbackResponse) {
       try {
         await answerTelegramCallbackQuery({
