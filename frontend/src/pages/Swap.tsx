@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
@@ -18,7 +18,9 @@ import { useSwapExecution } from '@/hooks/useSwapExecution'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { apiFetch } from '@/lib/apiBase'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { readTelegramMiniAppLinkContext, stripTelegramMiniAppLinkParams } from '@/lib/telegramMiniAppLink'
 import {
   claimLiquidityFees,
   createPosition,
@@ -97,6 +99,10 @@ const CORE_TOKENS: TokenOption[] = [
 ]
 
 type QuoteShape = Record<string, unknown>
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+type TelegramLinkCompleteResponse = {
+  linked: boolean
+}
 const BASE_CHAIN_ID_HEX = '0x2105'
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
   {
@@ -341,6 +347,7 @@ function LpPositionCard(props: {
 
 export function Swap() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const privyClientStatus = usePrivyClientStatus()
@@ -409,12 +416,99 @@ export function Swap() {
   const [lpPositionId, setLpPositionId] = useState<string>('')
   const [lpStatus, setLpStatus] = useState<string>('')
   const [lpError, setLpError] = useState<string>('')
+  const telegramLinkContext = useMemo(() => readTelegramMiniAppLinkContext(searchParams), [searchParams])
+  const [telegramLinkState, setTelegramLinkState] = useState<'idle' | 'linking' | 'linked' | 'error'>('idle')
+  const [telegramLinkMessage, setTelegramLinkMessage] = useState<string | null>(null)
+  const telegramLinkAttemptRef = useRef<string>('')
+  const telegramLinkFlowActive = Boolean(telegramLinkContext)
+
+  const retryTelegramLink = useCallback(() => {
+    telegramLinkAttemptRef.current = ''
+    setTelegramLinkState('idle')
+    setTelegramLinkMessage(null)
+  }, [])
 
   // ─── URL params ───────────────────────────────────────────────────────────
   useEffect(() => {
     const qToken = (searchParams.get('token') ?? '').trim()
     if (isAddress(qToken)) setTokenOut(getAddress(qToken))
   }, [searchParams, setTokenOut])
+
+  useEffect(() => {
+    if (!telegramLinkContext) return
+    if (telegramLinkState === 'linking' || telegramLinkState === 'linked') return
+    if (!privyReady) return
+    if (!getAccessToken) {
+      setTelegramLinkState('error')
+      setTelegramLinkMessage('Privy is not available. Reload and try Telegram linking again.')
+      return
+    }
+    if (telegramLinkAttemptRef.current === telegramLinkContext.linkToken) return
+    telegramLinkAttemptRef.current = telegramLinkContext.linkToken
+
+    void (async () => {
+      setTelegramLinkState('linking')
+      setTelegramLinkMessage('Linking Telegram to your canonical 4626 wallet…')
+
+      let accessToken = ''
+      if (privyAuthenticated) {
+        accessToken = (await getAccessToken().catch(() => null))?.trim() ?? ''
+      }
+      if (!accessToken) {
+        await signIn({ method: 'privy' })
+        accessToken = (await getAccessToken().catch(() => null))?.trim() ?? ''
+      }
+      if (!accessToken) {
+        throw new Error('Could not read your Privy access token. Please retry linking.')
+      }
+
+      const res = await apiFetch('/api/telegram/link/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'x-privy-token': accessToken,
+        },
+        body: JSON.stringify({
+          token: telegramLinkContext.linkToken,
+          telegramUsername: telegramLinkContext.telegramUsername,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteResponse> | null
+      if (!res.ok || !json?.success || json?.data?.linked !== true) {
+        const message = typeof json?.error === 'string' && json.error.trim() ? json.error.trim() : 'Telegram linking failed.'
+        throw new Error(message)
+      }
+
+      setTelegramLinkState('linked')
+      setTelegramLinkMessage('Telegram linked successfully. Return to Telegram and run /linked.')
+      const cleaned = stripTelegramMiniAppLinkParams(searchParams)
+      const next = cleaned.toString()
+      navigate(
+        {
+          pathname: '/swap',
+          search: next ? `?${next}` : '',
+        },
+        { replace: true },
+      )
+    })().catch((error: unknown) => {
+      const message =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : 'Could not complete Telegram linking. Retry in a moment.'
+      setTelegramLinkState('error')
+      setTelegramLinkMessage(message)
+    })
+  }, [
+    getAccessToken,
+    navigate,
+    privyAuthenticated,
+    privyReady,
+    searchParams,
+    signIn,
+    telegramLinkContext,
+    telegramLinkState,
+  ])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1283,6 +1377,36 @@ export function Swap() {
         title="Swap"
         subtitle="1-Click Swaps on Base"
       />
+
+      {telegramLinkFlowActive ? (
+        <div className="mx-auto mt-4 max-w-4xl">
+          <Alert
+            variant={telegramLinkState === 'error' ? 'warning' : telegramLinkState === 'linked' ? 'success' : 'info'}
+            title={
+              telegramLinkState === 'linking'
+                ? 'Linking Telegram account'
+                : telegramLinkState === 'linked'
+                  ? 'Telegram account linked'
+                  : telegramLinkState === 'error'
+                    ? 'Telegram linking needs attention'
+                    : 'Preparing Telegram link'
+            }
+          >
+            {telegramLinkMessage ?? 'Finalizing your Telegram + 4626 account link.'}
+            {telegramLinkState === 'error' ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={retryTelegramLink}
+                  className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white transition hover:bg-white/10"
+                >
+                  Retry link
+                </button>
+              </div>
+            ) : null}
+          </Alert>
+        </div>
+      ) : null}
 
       {activePanel === 'swap' && needsPrivyCanonicalAuth ? (
         <div className="mx-auto mt-4 max-w-4xl">

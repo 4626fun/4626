@@ -181,6 +181,11 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
   'social/twitter': () => import('./social/_twitter.js'),
+  'telegram/link/start': () => import('./telegram/_link-start.js'),
+  'telegram/link/complete': () => import('./telegram/_link-complete.js'),
+  'telegram/link/status': () => import('./telegram/_link-status.js'),
+  'telegram/portfolio': () => import('./telegram/_portfolio.js'),
+  'telegram/unlink': () => import('./telegram/_unlink.js'),
   'telegram/webhook': () => import('./telegram/_webhook.js'),
 
   'status/protocolReport': () => import('./status/_protocolReport.js'),

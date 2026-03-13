@@ -47,6 +47,16 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     followUpIds: ['vault-status', 'bankr-status', 'cre-health'],
   },
   {
+    id: 'ai-assistant',
+    label: 'Ask AI',
+    description: 'Prefill a vault assistant question.',
+    category: 'knowledge',
+    command: '/ai What should I do next?',
+    risk: 'read',
+    mode: 'prefill',
+    followUpIds: ['vault-status', 'market-quote-eth'],
+  },
+  {
     id: 'vault-status',
     label: 'Vault Status',
     description: 'Check current vault configuration and state.',

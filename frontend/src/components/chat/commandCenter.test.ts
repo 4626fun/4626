@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getChatCommandById,
   getChatCommandByCommandText,
   inferCommandIdFromAgentText,
   listChatFollowUps,
@@ -27,5 +28,10 @@ describe('chat command center helpers', () => {
   it('resolves configured follow-up chips', () => {
     const followUps = listChatFollowUps('vault-status')
     expect(followUps.map((entry) => entry.id)).toEqual(['vault-rules', 'cre-health'])
+  })
+
+  it('registers AI assistant seed command for mini-app deep links', () => {
+    const command = getChatCommandById('ai-assistant')
+    expect(command?.command).toContain('/ai ')
   })
 })
