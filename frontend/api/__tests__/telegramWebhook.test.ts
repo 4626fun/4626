@@ -346,7 +346,8 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
-    expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(true)
+    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:help')).toBe(true)
+    expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(false)
     expect(
       callbackButtons.some(
         (button: any) => typeof button?.url === 'string' && String(button.url).includes('chatAction=vault-status'),
@@ -937,6 +938,35 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Link Status')
+  })
+
+  it('renders /link with friendly mini app and status buttons', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_1,
+        message: { message_id: 16, text: '/link', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(handleTwitterCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Link your 4626 account (one time)')
+    expect(String(payload.text ?? '')).toContain('Tap Open Mini App below')
+    expect(String(payload.text ?? '')).not.toContain('Open: https://')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
+    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:linked')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === '/linked')).toBe(true)
   })
 
   it('handles /portfolio as a telegram-native command without delegating to keepr', async () => {
@@ -1533,6 +1563,7 @@ describe('telegram webhook handler', () => {
     expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Step 3/3')
     expect(String(payload.text ?? '')).toContain('Preview: BUY')
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     expect(Array.isArray(keyboard)).toBe(true)
@@ -1669,7 +1700,7 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(3)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
     const callbackAckPayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(String(callbackAckPayload.text ?? '')).toContain('BUY sent')
+    expect(String(callbackAckPayload.text ?? '')).toContain('Processing')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Confirmed BUY request')
@@ -2477,6 +2508,7 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Step 1/3')
     expect(String(payload.text ?? '')).toContain('Pick a vault')
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     expect(Array.isArray(keyboard)).toBe(true)
@@ -2522,6 +2554,7 @@ describe('telegram webhook handler', () => {
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Step 2/3')
     expect(String(payload.text ?? '')).toContain('Pick size')
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     const flat = keyboard.flat()

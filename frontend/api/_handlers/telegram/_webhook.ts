@@ -1007,7 +1007,7 @@ function formatTradePreviewText(params: {
 }): string {
   if (params.actionType === 'buy') {
     return [
-      `Preview: BUY ${params.targetLabel}`,
+      `Step 3/3 • Preview: BUY ${params.targetLabel}`,
       '',
       `Intent: ${params.amountInput} ETH`,
       `USD estimate: ~$${formatAmount(params.usdEstimate, 2)}`,
@@ -1018,7 +1018,7 @@ function formatTradePreviewText(params: {
   }
   if (params.actionType === 'sell') {
     return [
-      `Preview: SELL ${params.targetLabel}`,
+      `Step 3/3 • Preview: SELL ${params.targetLabel}`,
       '',
       `Intent: ${params.amountInput} SHARE`,
       `USD estimate: ~$${formatAmount(params.usdEstimate, 2)}`,
@@ -1028,7 +1028,7 @@ function formatTradePreviewText(params: {
     ].join('\n')
   }
   const bidLines = [
-    `Preview: BID ${params.targetLabel}`,
+    `Step 3/3 • Preview: BID ${params.targetLabel}`,
     '',
     `Intent: $${params.amountInput} USD`,
     `Estimated bid: ${formatAmount(params.amountEth, 4)} ETH`,
@@ -1333,56 +1333,36 @@ function buildHelpReplyMarkup(chatId: string): Record<string, unknown> {
   })
 
   const keyboard: Array<Array<Record<string, unknown>>> = [
-      [
-        { text: 'Link', callback_data: 'menu:link' },
-        { text: 'Linked', callback_data: 'menu:linked' },
-        { text: 'Unlink', callback_data: 'menu:unlink' },
-      ],
-      [
-        { text: 'Buy', callback_data: 'menu:buy' },
-        { text: 'Sell', callback_data: 'menu:sell' },
-        { text: 'Bid', callback_data: 'menu:bid' },
-      ],
-      [
-        { text: 'Portfolio', callback_data: 'menu:portfolio' },
-        { text: 'Vaults', callback_data: 'menu:vaults' },
-        { text: 'Auctions', callback_data: 'menu:auctions' },
-      ],
-      [
-        { text: 'Join Room', callback_data: 'menu:join' },
-        { text: 'Eligibility', callback_data: 'menu:eligibility' },
-        { text: 'Rooms', callback_data: 'menu:rooms' },
-      ],
-      [
-        { text: 'My Bids', callback_data: 'menu:mybids' },
-        { text: 'Signals', callback_data: 'menu:signals' },
-        { text: 'Help Topics', callback_data: 'menu:help' },
-      ],
-      [
-        { text: 'Core', callback_data: 'help:core' },
-        { text: 'Coin', callback_data: 'help:coin' },
-        { text: 'Market', callback_data: 'help:market' },
-      ],
-      [
-        { text: 'Social', callback_data: 'help:social' },
-        { text: 'Ops', callback_data: 'help:ops' },
-        { text: 'Bankr', callback_data: 'help:bankr' },
-      ],
-      [
-        { text: 'Wallet', callback_data: 'help:wallet' },
-        { text: 'All Commands', callback_data: 'help:all' },
-      ],
-      [{ text: 'Inline Shortcuts', callback_data: 'help:inline' }],
-      [
-        { text: 'Ask AI', switch_inline_query_current_chat: 'ai What should I do next?' },
-        { text: 'Draft X Post', switch_inline_query_current_chat: 'x post your update here' },
-      ],
-      [
-        buildMiniAppLaunchButton({ chatId, text: 'Mini App: Trade', url: tradeAppUrl }),
-        buildMiniAppLaunchButton({ chatId, text: 'Mini App: Vault', url: statusAppUrl }),
-      ],
-      [buildMiniAppLaunchButton({ chatId, text: 'Mini App: Ask AI', url: aiAppUrl })],
-    ]
+    [
+      { text: 'Buy', callback_data: 'menu:buy' },
+      { text: 'Sell', callback_data: 'menu:sell' },
+      { text: 'Bid', callback_data: 'menu:bid' },
+    ],
+    [
+      { text: 'Portfolio', callback_data: 'menu:portfolio' },
+      { text: 'Vaults', callback_data: 'menu:vaults' },
+      { text: 'Auctions', callback_data: 'menu:auctions' },
+    ],
+    [
+      { text: 'Signals', callback_data: 'menu:signals' },
+      { text: 'My Bids', callback_data: 'menu:mybids' },
+      { text: 'Rooms', callback_data: 'menu:rooms' },
+    ],
+    [
+      { text: 'Link', callback_data: 'menu:link' },
+      { text: 'Help Topics', callback_data: 'menu:help' },
+      { text: 'All Commands', callback_data: 'help:all' },
+    ],
+    [
+      { text: 'Ask AI', switch_inline_query_current_chat: 'ai What should I do next?' },
+      { text: 'Draft X Post', switch_inline_query_current_chat: 'x post your update here' },
+    ],
+    [
+      buildMiniAppLaunchButton({ chatId, text: 'Mini App: Trade', url: tradeAppUrl }),
+      buildMiniAppLaunchButton({ chatId, text: 'Mini App: Vault', url: statusAppUrl }),
+    ],
+    [buildMiniAppLaunchButton({ chatId, text: 'Mini App: Ask AI', url: aiAppUrl })],
+  ]
 
   return {
     inline_keyboard: keyboard,
@@ -1449,6 +1429,27 @@ function resolveNavigationCallbackToast(rawData: string, mappedCommand: string |
   if (token.startsWith('help:')) return 'Help topic'
   if (mappedCommand === '/help' || mappedCommand?.startsWith('/help ')) return 'Help'
   return ''
+}
+
+function resolveImmediateCallbackToast(params: {
+  parsedTradeFlowCallback: ReturnType<typeof parseTradeFlowCallbackData>
+  parsedTradeCallback: ReturnType<typeof parseTradeCallbackData>
+  callbackData: string
+  mappedCommand: string | null
+}): string {
+  const tradeFlow = params.parsedTradeFlowCallback
+  if (tradeFlow) {
+    if (tradeFlow.kind === 'vault') return 'Loading sizes...'
+    if (tradeFlow.kind === 'percent') return 'Building preview...'
+    return 'Send custom %'
+  }
+  const trade = params.parsedTradeCallback
+  if (trade) {
+    if (trade.kind === 'accept') return 'Processing...'
+    if (trade.kind === 'decline') return 'Declining...'
+    return 'Edit command'
+  }
+  return resolveNavigationCallbackToast(params.callbackData, params.mappedCommand)
 }
 
 async function sendTelegramMessage(params: {
@@ -1999,6 +2000,7 @@ function buildTradeVaultPickerReplyMarkup(params: {
   for (let idx = 0; idx < buttons.length; idx += 2) {
     rows.push(buttons.slice(idx, idx + 2))
   }
+  rows.push([{ text: 'Back', callback_data: 'menu:help' }])
   return {
     inline_keyboard: rows,
   }
@@ -2024,7 +2026,10 @@ function buildTradePercentPickerReplyMarkup(params: {
     inline_keyboard: [
       [presetButtons[0]!, presetButtons[1]!],
       [presetButtons[2]!, presetButtons[3]!],
-      [{ text: 'Custom', callback_data: `tradeflow:c:${params.actionType}:${params.vaultAddress}` }],
+      [
+        { text: 'Custom %', callback_data: `tradeflow:c:${params.actionType}:${params.vaultAddress}` },
+        { text: 'Change Vault', callback_data: `menu:${params.actionType}` },
+      ],
     ],
   }
 }
@@ -2255,19 +2260,25 @@ async function executeTelegramNativeCommand(params: {
             : '/swap',
       },
     })
+    const openMiniAppButton = buildMiniAppLaunchButton({
+      chatId: params.chatId,
+      text: 'Open Mini App',
+      url: linkUrl,
+    })
     return {
       text: [
         'Link your 4626 account (one time)',
         '',
-        '1) Open the Mini App link below',
+        '1) Tap Open Mini App below',
         '2) Authenticate with Privy',
         '3) Confirm your canonical Coinbase Smart Wallet',
-        '',
-        `Open: ${linkUrl}`,
         ...(linkToken ? ['', `Link expires: ${linkToken.expiresAt}`] : []),
         '',
-        'After completing, run /linked.',
+        'Then tap Check Link Status below to confirm.',
       ].join('\n'),
+      replyMarkup: {
+        inline_keyboard: [[openMiniAppButton], [{ text: '/linked', callback_data: 'menu:linked' }]],
+      },
     }
   }
 
@@ -2384,9 +2395,9 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Trade Flow',
           '',
-          `- \`/${actionType}\` is interactive now`,
-          `- send \`/${actionType}\` with no arguments`,
-          '- pick vault, then size, then Accept or Decline',
+          `- Step 1/3: send \`/${actionType}\` with no arguments`,
+          '- Step 2/3: pick vault and size',
+          '- Step 3/3: review preview and tap Accept or Decline',
         ].join('\n'),
       }
     }
@@ -2466,7 +2477,7 @@ async function executeTelegramNativeCommand(params: {
         }
       }
       return {
-        text: `Pick a vault to ${actionType.toUpperCase()}`,
+        text: `Step 1/3 • Pick a vault to ${actionType.toUpperCase()}`,
         replyMarkup: buildTradeVaultPickerReplyMarkup({
           actionType,
           scopedVaults,
@@ -3007,7 +3018,7 @@ async function handleTelegramTradeFlowCallback(params: {
 
   if (callback.kind === 'vault') {
     return {
-      text: `Pick size for ${callback.actionType.toUpperCase()} ${truncateAddress(target.vaultAddress)}`,
+      text: `Step 2/3 • Pick size for ${callback.actionType.toUpperCase()} ${truncateAddress(target.vaultAddress)}`,
       replyMarkup: buildTradePercentPickerReplyMarkup({
         actionType: callback.actionType,
         vaultAddress: callback.vaultAddress,
@@ -3027,7 +3038,7 @@ async function handleTelegramTradeFlowCallback(params: {
     })
     return {
       text: [
-        `Custom ${callback.actionType.toUpperCase()} size`,
+        `Step 2/3 • Custom ${callback.actionType.toUpperCase()} size`,
         '',
         `Vault: ${truncateAddress(target.vaultAddress)}`,
         '- send a percent between 1 and 99.99 (example: 42%)',
@@ -3113,7 +3124,7 @@ async function maybeHandlePendingTradePercentInput(params: {
   if (!percentBps) {
     return {
       text: [
-        `Custom ${prompt.actionType.toUpperCase()} size`,
+        `Step 2/3 • Custom ${prompt.actionType.toUpperCase()} size`,
         '',
         '- send a percent between 1 and 99.99',
         '- example: 42%',
@@ -3918,20 +3929,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    if (!parsedTradeCallback && !parsedTradeFlowCallback) {
-      try {
-        await answerTelegramCallbackQuery({
-          botToken,
-          callbackQueryId,
-          text: resolveNavigationCallbackToast(callbackData, mappedCommand),
-        })
-      } catch (error) {
-        console.error('[telegram/webhook] callback acknowledgement failed', {
-          updateId: update.update_id ?? null,
-          callbackQueryId,
-          err: error instanceof Error ? error.message : String(error),
-        })
-      }
+    let callbackAcknowledged = false
+    try {
+      await answerTelegramCallbackQuery({
+        botToken,
+        callbackQueryId,
+        text: resolveImmediateCallbackToast({
+          parsedTradeFlowCallback,
+          parsedTradeCallback,
+          callbackData,
+          mappedCommand,
+        }),
+      })
+      callbackAcknowledged = true
+    } catch (error) {
+      console.error('[telegram/webhook] callback acknowledgement failed', {
+        updateId: update.update_id ?? null,
+        callbackQueryId,
+        err: error instanceof Error ? error.message : String(error),
+      })
     }
 
     const groupId = resolveGroupId(chatId)
@@ -3952,18 +3968,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         senderWallet,
       }))
     if (tradeCallbackResponse) {
-      try {
-        await answerTelegramCallbackQuery({
-          botToken,
-          callbackQueryId,
-          text: asTrimmed(tradeCallbackResponse.callbackToast ?? ''),
-        })
-      } catch (error) {
-        console.error('[telegram/webhook] trade callback acknowledgement failed', {
-          updateId: update.update_id ?? null,
-          callbackQueryId,
-          err: error instanceof Error ? error.message : String(error),
-        })
+      if (!callbackAcknowledged) {
+        try {
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: asTrimmed(tradeCallbackResponse.callbackToast ?? ''),
+          })
+        } catch (error) {
+          console.error('[telegram/webhook] trade callback acknowledgement failed', {
+            updateId: update.update_id ?? null,
+            callbackQueryId,
+            err: error instanceof Error ? error.message : String(error),
+          })
+        }
       }
       const chunks = splitTelegramMessage(tradeCallbackResponse.text)
       let startIdx = 0

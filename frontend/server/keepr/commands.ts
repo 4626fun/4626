@@ -149,6 +149,12 @@ function formatKeeprQuickHelp(unknownTopic: string | null = null): string {
   lines.push(
     'Group chat mode: interact in this thread with slash commands and bot buttons.',
     '',
+    'Fastest trade flow:',
+    '- /buy',
+    '- /sell',
+    '- /bid',
+    '- then pick vault -> size -> Accept or Decline',
+    '',
     'Most used:',
     '- /keepr status — vault status and config',
     '- /ai <question> — ask in plain English',
