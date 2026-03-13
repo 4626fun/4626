@@ -16,6 +16,7 @@ import {
   createTelegramLinkStartToken,
   createTelegramActionToken,
   ensureTelegramTradingSchema,
+  getTelegramChatTradePolicy,
   getTelegramLinkByUserId,
   getTelegramPortfolioSummary,
   logTelegramActionAudit,
@@ -26,6 +27,7 @@ import {
   revokeTelegramLink,
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { handleKeeprCommand } from '../../../server/keepr/commands.js'
 import { handleTwitterCommand } from '../../../server/twitter/commands.js'
 
@@ -48,6 +50,7 @@ type TelegramMessage = {
   caption?: string
   from?: TelegramFrom
   chat?: TelegramChat
+  successful_payment?: TelegramSuccessfulPayment
 }
 
 type TelegramInlineQuery = {
@@ -63,6 +66,22 @@ type TelegramCallbackQuery = {
   message?: TelegramMessage
 }
 
+type TelegramSuccessfulPayment = {
+  currency?: string
+  total_amount?: number
+  invoice_payload?: string
+  telegram_payment_charge_id?: string
+  provider_payment_charge_id?: string
+}
+
+type TelegramPreCheckoutQuery = {
+  id?: string | number
+  from?: TelegramFrom
+  currency?: string
+  total_amount?: number
+  invoice_payload?: string
+}
+
 type TelegramUpdate = {
   update_id?: number
   message?: TelegramMessage
@@ -70,6 +89,7 @@ type TelegramUpdate = {
   channel_post?: TelegramMessage
   inline_query?: TelegramInlineQuery
   callback_query?: TelegramCallbackQuery
+  pre_checkout_query?: TelegramPreCheckoutQuery
 }
 
 type TelegramWebhookOk = {
@@ -137,6 +157,53 @@ function parseOptionalPositiveInteger(value: unknown): number | null {
   const parsed = Number(raw)
   if (!Number.isInteger(parsed) || parsed <= 0) return null
   return parsed
+}
+
+function parseDelimitedSet(value: string): Set<string> {
+  return new Set(
+    value
+      .split(/[\s,]+/g)
+      .map((part) => part.trim())
+      .filter(Boolean),
+  )
+}
+
+function parseTipStars(raw: unknown): number | null {
+  const parsed = parseOptionalPositiveInteger(raw)
+  if (!parsed || parsed <= 0) return null
+  return parsed
+}
+
+function parseTipCallbackData(rawData: string): { stars: number; context: string } | null {
+  const data = asTrimmed(rawData)
+  const match = data.match(/^tip:(\d+):([a-z0-9-]{1,24})$/i)
+  if (!match) return null
+  const stars = parseTipStars(match[1])
+  const context = asTrimmed(match[2]).toLowerCase()
+  if (!stars || !context) return null
+  return { stars, context }
+}
+
+function parseTipInvoicePayload(rawPayload: unknown): { stars: number; context: string } | null {
+  const payload = asTrimmed(rawPayload)
+  const match = payload.match(/^tip:(\d+):([a-z0-9-]{1,24})(?::.*)?$/i)
+  if (!match) return null
+  const stars = parseTipStars(match[1])
+  const context = asTrimmed(match[2]).toLowerCase()
+  if (!stars || !context) return null
+  return { stars, context }
+}
+
+function areStarsTipsEnabled(): boolean {
+  return parseBoolean(process.env.TELEGRAM_STARS_TIPS_ENABLED, false)
+}
+
+function isStarsTipsEnabledForChat(chatId: string): boolean {
+  if (!areStarsTipsEnabled()) return false
+  const allowedRaw = asTrimmed(process.env.TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS ?? '')
+  if (!allowedRaw) return true
+  const allowed = parseDelimitedSet(allowedRaw)
+  return allowed.has(chatId)
 }
 
 function resolveSignalsDestination(sourceChatId: string): { chatId: string; messageThreadId?: number } {
@@ -242,6 +309,7 @@ const TELEGRAM_NATIVE_COMMANDS = new Set([
   'buy',
   'sell',
   'bid',
+  'tip',
 ])
 
 const TELEGRAM_COMMAND_HEADS = [
@@ -259,6 +327,7 @@ const TELEGRAM_COMMAND_HEADS = [
   'buy',
   'sell',
   'bid',
+  'tip',
   'inline',
   'shortcuts',
   'x',
@@ -274,6 +343,7 @@ type TelegramCommandResponse = {
   replyMarkup?: Record<string, unknown>
   signalText?: string
   signalReplyMarkup?: Record<string, unknown>
+  callbackToast?: string
 }
 
 function wrapCommandListingsWithBackticks(text: string): string {
@@ -330,6 +400,49 @@ function wrapCommandListingsWithBackticks(text: string): string {
       })
     })
     .join('\n')
+}
+
+const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string }> = [
+  {
+    pattern: /\/coin\s+create\s+<name>\s+<symbol>\s+<(?:uri|url)>/i,
+    hint: 'name: 1-24 chars, symbol: 2-6 chars, url: https://...',
+  },
+  {
+    pattern: /\/mkt\s+quote\s+<symbol>/i,
+    hint: 'symbol: ticker, e.g. BTC',
+  },
+  {
+    pattern: /\/buy\s+<vault-address>\s+<eth-amount>\s+--confirm/i,
+    hint: 'vault-address: 0x..., eth-amount: positive number',
+  },
+  {
+    pattern: /\/sell\s+<vault-address>\s+<share-amount>\s+--confirm/i,
+    hint: 'vault-address: 0x..., share-amount: positive number',
+  },
+  {
+    pattern: /\/bid\s+<vault-address>\s+\$<usd-amount>\s+--confirm/i,
+    hint: 'vault-address: 0x..., usd-amount: positive number',
+  },
+]
+
+function appendCommandMicroHints(text: string): string {
+  const lines = text.split('\n')
+  const nextLines = lines.slice(1)
+  const output: string[] = []
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const line = lines[idx] ?? ''
+    output.push(line)
+    if (!line) continue
+    const nextLine = nextLines[idx] ?? ''
+    if (nextLine.includes('↳')) continue
+    for (const rule of TELEGRAM_COMMAND_MICRO_HINTS) {
+      if (rule.pattern.test(line)) {
+        output.push(`  ↳ ${rule.hint}`)
+        break
+      }
+    }
+  }
+  return output.join('\n')
 }
 
 type ParsedTelegramTradeIntent =
@@ -786,8 +899,10 @@ function buildTradePreviewReplyMarkup(params: {
   return {
     inline_keyboard: [
       [{ text: 'Confirm', callback_data: `trade:confirm:${params.token}` }],
-      [{ text: 'Edit Amount', callback_data: `trade:edit:${params.actionType}` }],
-      [{ text: 'Cancel', callback_data: `trade:cancel:${params.token}` }],
+      [
+        { text: 'Edit Amount', callback_data: `trade:edit:${params.actionType}` },
+        { text: 'Cancel', callback_data: `trade:cancel:${params.token}` },
+      ],
     ],
   }
 }
@@ -867,19 +982,39 @@ function inferMarketSymbol(rawQuery: string): string {
   return /^[a-zA-Z]{1,10}$/.test(token) ? token.toUpperCase() : 'BTC'
 }
 
-function buildInlineQueryResults(rawQuery: string): Array<Record<string, unknown>> {
-  const query = asTrimmed(rawQuery)
+function readInlineQueryResultCap(): number {
+  const configured = Number(asTrimmed(process.env.TELEGRAM_INLINE_MAX_RESULTS ?? ''))
+  if (Number.isFinite(configured) && configured >= 3 && configured <= 20) return Math.floor(configured)
+  return 8
+}
+
+async function buildInlineQueryResults(params: {
+  rawQuery: string
+  userId: string
+  chatId: string
+}): Promise<Array<Record<string, unknown>>> {
+  const query = asTrimmed(params.rawQuery)
+  const userId = asTrimmed(params.userId)
+  const chatId = asTrimmed(params.chatId)
   const xPostCommand = `/x post ${normalizeInlineDraft(query)} --confirm`
   const aiPrompt = query ? `/ai ${query}` : '/ai What should I do next?'
   const marketQuote = `/mkt quote ${inferMarketSymbol(query)}`
   const tradeIntent = parseTelegramTradeIntent(query.startsWith('/') ? query : `/${query}`)
-  const tradeResult: Record<string, unknown>[] = []
+  const results: Record<string, unknown>[] = []
+  const seenIds = new Set<string>()
+  const pushResult = (entry: Record<string, unknown>): void => {
+    const id = asTrimmed(entry.id ?? '')
+    if (!id || seenIds.has(id)) return
+    seenIds.add(id)
+    results.push(entry)
+  }
+
   if (tradeIntent) {
     const tradeCommand =
       tradeIntent.actionType === 'bid'
         ? `/bid ${tradeIntent.identifier} $${tradeIntent.amountInput} --confirm`
         : `/${tradeIntent.actionType} ${tradeIntent.identifier} ${tradeIntent.amountInput} --confirm`
-    tradeResult.push({
+    pushResult({
       type: 'article',
       id: 'trade-copy',
       title: `Reuse ${tradeIntent.actionType.toUpperCase()} command`,
@@ -888,44 +1023,107 @@ function buildInlineQueryResults(rawQuery: string): Array<Record<string, unknown
     })
   }
 
-  return [
-    ...tradeResult,
-    {
+  let link: Awaited<ReturnType<typeof getTelegramLinkByUserId>> | null = null
+  let scopedVaults: Awaited<ReturnType<typeof listTelegramScopedVaults>> = []
+  const db = await getDb().catch(() => null)
+  if (db && userId) {
+    try {
+      await ensureTelegramTradingSchema(db as any)
+      link = await getTelegramLinkByUserId({
+        db: db as any,
+        telegramUserId: userId,
+      })
+      if (chatId) {
+        scopedVaults = await listTelegramScopedVaults({
+          db: db as any,
+          chatId,
+          limit: 3,
+        })
+      }
+    } catch {
+      link = null
+      scopedVaults = []
+    }
+  }
+
+  if (!link || link.linkStatus !== 'active') {
+    pushResult({
+      type: 'article',
+      id: 'link-account',
+      title: 'Link account to trade',
+      description: 'Insert /link',
+      input_message_content: { message_text: '/link' },
+    })
+  } else {
+    pushResult({
+      type: 'article',
+      id: 'portfolio',
+      title: 'My Portfolio',
+      description: 'Insert /portfolio',
+      input_message_content: { message_text: '/portfolio' },
+    })
+  }
+
+  const sortedVaults = [...scopedVaults].sort((left, right) => left.vaultAddress.localeCompare(right.vaultAddress))
+  for (let idx = 0; idx < sortedVaults.length; idx += 1) {
+    const vault = sortedVaults[idx]
+    const vaultAddress = asTrimmed(vault?.vaultAddress ?? '').toLowerCase()
+    if (!isAddressLike(vaultAddress)) continue
+    pushResult({
+      type: 'article',
+      id: `vault-buy-${idx}`,
+      title: `Buy ${truncateAddress(vaultAddress)}`,
+      description: '/buy <vault> 0.05 --confirm',
+      input_message_content: { message_text: `/buy ${vaultAddress} 0.05 --confirm` },
+    })
+    if (isAddressLike(vault.ccaStrategyAddress) && !vault.isSettled) {
+      pushResult({
+        type: 'article',
+        id: `vault-bid-${idx}`,
+        title: `Bid ${truncateAddress(vaultAddress)}`,
+        description: '/bid <vault> $250 --confirm',
+        input_message_content: { message_text: `/bid ${vaultAddress} $250 --confirm` },
+      })
+    }
+  }
+
+  pushResult({
       type: 'article',
       id: 'help',
       title: 'Keepr Help',
       description: 'Insert /help',
       input_message_content: { message_text: '/help' },
-    },
-    {
+    })
+  pushResult({
       type: 'article',
       id: 'status',
       title: 'Vault Status',
       description: 'Insert /keepr status',
       input_message_content: { message_text: '/keepr status' },
-    },
-    {
+    })
+  pushResult({
       type: 'article',
       id: 'xpost',
       title: 'Draft X Post',
       description: 'Insert /x post ... --confirm',
       input_message_content: { message_text: xPostCommand },
-    },
-    {
+    })
+  pushResult({
       type: 'article',
       id: 'ai',
       title: 'Ask Keepr AI',
       description: 'Insert /ai <question>',
       input_message_content: { message_text: aiPrompt },
-    },
-    {
+    })
+  pushResult({
       type: 'article',
       id: 'mkt',
       title: 'Market Quote',
       description: 'Insert /mkt quote <symbol>',
       input_message_content: { message_text: marketQuote },
-    },
-  ]
+    })
+
+  return results.slice(0, readInlineQueryResultCap())
 }
 
 function buildInlineLauncherReplyMarkup(): Record<string, unknown> {
@@ -1150,7 +1348,8 @@ async function sendTelegramMessage(params: {
   replyMarkup?: Record<string, unknown>
 }): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/sendMessage`
-  const formattedText = wrapCommandListingsWithBackticks(params.text)
+  const textWithHints = appendCommandMicroHints(params.text)
+  const formattedText = wrapCommandListingsWithBackticks(textWithHints)
   const backtickCount = (formattedText.match(/`/g) ?? []).length
   const useMarkdown = backtickCount >= 2 && backtickCount % 2 === 0
   const sendOnce = async (replyToMessageId?: number): Promise<Response> => {
@@ -1204,7 +1403,8 @@ async function editTelegramMessage(params: {
   replyMarkup?: Record<string, unknown>
 }): Promise<boolean> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/editMessageText`
-  const formattedText = wrapCommandListingsWithBackticks(params.text)
+  const textWithHints = appendCommandMicroHints(params.text)
+  const formattedText = wrapCommandListingsWithBackticks(textWithHints)
   const backtickCount = (formattedText.match(/`/g) ?? []).length
   const useMarkdown = backtickCount >= 2 && backtickCount % 2 === 0
   const payload: Record<string, unknown> = {
@@ -1308,13 +1508,19 @@ async function answerTelegramInlineQuery(params: {
   botToken: string
   inlineQueryId: string
   query: string
+  userId: string
+  chatId: string
 }): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/answerInlineQuery`
   const payload = {
     inline_query_id: params.inlineQueryId,
     cache_time: 5,
     is_personal: true,
-    results: buildInlineQueryResults(params.query),
+    results: await buildInlineQueryResults({
+      rawQuery: params.query,
+      userId: params.userId,
+      chatId: params.chatId,
+    }),
   }
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -1331,6 +1537,7 @@ async function answerTelegramCallbackQuery(params: {
   botToken: string
   callbackQueryId: string
   text?: string
+  showAlert?: boolean
 }): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/answerCallbackQuery`
   const payload: Record<string, unknown> = {
@@ -1338,6 +1545,9 @@ async function answerTelegramCallbackQuery(params: {
   }
   if (asTrimmed(params.text).length > 0) {
     payload.text = asTrimmed(params.text)
+  }
+  if (typeof params.showAlert === 'boolean') {
+    payload.show_alert = params.showAlert
   }
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -1347,6 +1557,63 @@ async function answerTelegramCallbackQuery(params: {
   if (!response.ok) {
     const details = await response.text().catch(() => '')
     throw new Error(`telegram_callback_answer_failed_${response.status}:${details.slice(0, 180)}`)
+  }
+}
+
+async function answerTelegramPreCheckoutQuery(params: {
+  botToken: string
+  preCheckoutQueryId: string
+  ok: boolean
+  errorMessage?: string
+}): Promise<void> {
+  const endpoint = `https://api.telegram.org/bot${params.botToken}/answerPreCheckoutQuery`
+  const payload: Record<string, unknown> = {
+    pre_checkout_query_id: params.preCheckoutQueryId,
+    ok: params.ok,
+  }
+  if (!params.ok) {
+    payload.error_message = asTrimmed(params.errorMessage ?? '') || 'Tip is not available right now.'
+  }
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`telegram_precheckout_answer_failed_${response.status}:${details.slice(0, 180)}`)
+  }
+}
+
+async function sendTelegramStarsInvoice(params: {
+  botToken: string
+  chatId: string
+  userId: string
+  stars: number
+  context: string
+}): Promise<void> {
+  const endpoint = `https://api.telegram.org/bot${params.botToken}/sendInvoice`
+  const payload: Record<string, unknown> = {
+    chat_id: params.chatId,
+    title: `Tip ${params.stars} Stars`,
+    description: 'Support this 4626 signal with Telegram Stars.',
+    payload: `tip:${params.stars}:${params.context}:${params.userId}:${Date.now()}`,
+    currency: 'XTR',
+    prices: [{ label: `Tip ${params.stars} Stars`, amount: params.stars }],
+    start_parameter: 'tip-stars',
+  }
+  const providerToken = asTrimmed(process.env.TELEGRAM_STARS_PROVIDER_TOKEN ?? '')
+  if (providerToken) {
+    payload.provider_token = providerToken
+  }
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`telegram_send_invoice_failed_${response.status}:${details.slice(0, 180)}`)
   }
 }
 
@@ -1455,6 +1722,118 @@ function formatSignalsText(title: string, rows: Awaited<ReturnType<typeof listTe
   return lines.join('\n')
 }
 
+function readTradeLimitFromEnv(key: string, fallback: number): number {
+  const raw = Number(asTrimmed(process.env[key] ?? ''))
+  if (!Number.isFinite(raw) || raw <= 0) return fallback
+  return Math.floor(raw)
+}
+
+function tradeRateLimitForAction(actionType: 'buy' | 'sell' | 'bid'): { userLimit: number; chatLimit: number } {
+  if (actionType === 'bid') {
+    return {
+      userLimit: readTradeLimitFromEnv('TELEGRAM_BID_USER_RATE_LIMIT_PER_MIN', 3),
+      chatLimit: readTradeLimitFromEnv('TELEGRAM_BID_CHAT_RATE_LIMIT_PER_MIN', 20),
+    }
+  }
+  return {
+    userLimit: readTradeLimitFromEnv('TELEGRAM_TRADE_USER_RATE_LIMIT_PER_MIN', 10),
+    chatLimit: readTradeLimitFromEnv('TELEGRAM_TRADE_CHAT_RATE_LIMIT_PER_MIN', 60),
+  }
+}
+
+function checkTelegramTradeRateLimit(params: {
+  chatId: string
+  userId: string
+  actionType: 'buy' | 'sell' | 'bid'
+}): { ok: true } | { ok: false; reason: 'rate_limit_user' | 'rate_limit_chat'; retryAfterSeconds: number } {
+  const limits = tradeRateLimitForAction(params.actionType)
+  const userWindow = checkRateLimit(rateLimitKey('telegram', 'trade', 'user', params.actionType, params.userId), {
+    windowMs: 60_000,
+    maxRequests: limits.userLimit,
+  })
+  if (!userWindow.allowed) {
+    return {
+      ok: false,
+      reason: 'rate_limit_user',
+      retryAfterSeconds: Math.max(1, Math.ceil((userWindow.resetAt - Date.now()) / 1000)),
+    }
+  }
+
+  const chatWindow = checkRateLimit(rateLimitKey('telegram', 'trade', 'chat', params.actionType, params.chatId), {
+    windowMs: 60_000,
+    maxRequests: limits.chatLimit,
+  })
+  if (!chatWindow.allowed) {
+    return {
+      ok: false,
+      reason: 'rate_limit_chat',
+      retryAfterSeconds: Math.max(1, Math.ceil((chatWindow.resetAt - Date.now()) / 1000)),
+    }
+  }
+  return { ok: true }
+}
+
+function buildTradeCommandTemplate(actionType: 'buy' | 'sell' | 'bid'): string {
+  if (actionType === 'buy') return '/buy <vault-address> <eth-amount> --confirm'
+  if (actionType === 'sell') return '/sell <vault-address> <share-amount> --confirm'
+  return '/bid <vault-address> $<usd-amount> --confirm'
+}
+
+function formatTradeRateLimitText(params: {
+  actionType: 'buy' | 'sell' | 'bid'
+  reason: 'rate_limit_user' | 'rate_limit_chat'
+  retryAfterSeconds: number
+}): string {
+  return [
+    'Trade blocked',
+    '',
+    `- reason: ${params.reason}`,
+    `- retry_after_seconds: ${params.retryAfterSeconds}`,
+    `- retry: ${buildTradeCommandTemplate(params.actionType)}`,
+  ].join('\n')
+}
+
+function isTradeMembershipCheckEnabled(): boolean {
+  return parseBoolean(process.env.TELEGRAM_REQUIRE_TRADE_MEMBERSHIP, false)
+}
+
+async function readTelegramChatMemberStatus(params: {
+  chatId: string
+  userId: string
+}): Promise<string | null> {
+  const botToken = asTrimmed(process.env.TELEGRAM_BOT_TOKEN ?? '')
+  if (!botToken) return null
+  const endpoint = `https://api.telegram.org/bot${botToken}/getChatMember`
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: params.chatId,
+      user_id: params.userId,
+    }),
+  })
+  if (!response.ok) return null
+  const payload = (await response.json().catch(() => null)) as any
+  const status = asTrimmed(payload?.result?.status ?? '').toLowerCase()
+  return status || null
+}
+
+async function verifyTradeMembership(params: {
+  chatId: string
+  userId: string
+}): Promise<{ ok: true } | { ok: false; status: string | null }> {
+  if (!isTradeMembershipCheckEnabled()) return { ok: true }
+  if (isPrivateChatId(params.chatId)) return { ok: true }
+  const status = await readTelegramChatMemberStatus(params)
+  if (status === 'creator' || status === 'administrator' || status === 'member') {
+    return { ok: true }
+  }
+  return {
+    ok: false,
+    status,
+  }
+}
+
 async function executeTelegramNativeCommand(params: {
   text: string
   chatId: string
@@ -1506,6 +1885,37 @@ async function executeTelegramNativeCommand(params: {
         '',
         'After completing, run /linked.',
       ].join('\n'),
+    }
+  }
+
+  if (head === 'tip') {
+    if (!isStarsTipsEnabledForChat(params.chatId)) {
+      return {
+        text: [
+          'Tips',
+          '',
+          '- Telegram Stars tips are currently disabled in this chat',
+        ].join('\n'),
+      }
+    }
+    const starsMatch = params.text.match(/^\/?tip(?:\s+(\d+))?/i)
+    const stars = parseTipStars(starsMatch?.[1] ?? '') ?? 1
+    return {
+      text: [
+        'Tip with Telegram Stars',
+        '',
+        `Quick amount: ${stars} ⭐`,
+        'Tap a button below to open a one-tap Stars invoice.',
+      ].join('\n'),
+      replyMarkup: {
+        inline_keyboard: [
+          [{ text: `Tip ⭐${stars}`, callback_data: `tip:${stars}:manual` }],
+          [
+            { text: 'Tip ⭐1', callback_data: 'tip:1:manual' },
+            { text: 'Tip ⭐5', callback_data: 'tip:5:manual' },
+          ],
+        ],
+      },
     }
   }
 
@@ -1652,6 +2062,62 @@ async function executeTelegramNativeCommand(params: {
           '- owner verification required',
           '- run /linked and ensure ownerVerified is true',
         ].join('\n'),
+      }
+    }
+
+    const tradePolicy = await getTelegramChatTradePolicy({
+      db: db as any,
+      chatId: params.chatId,
+    })
+    if ((tradeIntent.actionType === 'buy' || tradeIntent.actionType === 'sell') && !tradePolicy.buySellEnabled) {
+      return {
+        text: [
+          'Trade blocked',
+          '',
+          '- buy/sell disabled for this chat scope',
+          '- ask an admin to enable buy/sell in telegram_chat_vault_scope',
+        ].join('\n'),
+      }
+    }
+    if (tradeIntent.actionType === 'bid' && !tradePolicy.bidEnabled) {
+      return {
+        text: [
+          'Trade blocked',
+          '',
+          '- bid disabled for this chat scope',
+          '- ask an admin to enable bid in telegram_chat_vault_scope',
+        ].join('\n'),
+      }
+    }
+
+    const membership = await verifyTradeMembership({
+      chatId: params.chatId,
+      userId: params.userId,
+    })
+    if (!membership.ok) {
+      return {
+        text: [
+          'Trade blocked',
+          '',
+          '- membership check failed for this chat',
+          `- status: ${membership.status ?? 'unknown'}`,
+          '- rejoin the group/topic and retry',
+        ].join('\n'),
+      }
+    }
+
+    const rateLimit = checkTelegramTradeRateLimit({
+      chatId: params.chatId,
+      userId: params.userId,
+      actionType: tradeIntent.actionType,
+    })
+    if (!rateLimit.ok) {
+      return {
+        text: formatTradeRateLimitText({
+          actionType: tradeIntent.actionType,
+          reason: rateLimit.reason,
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+        }),
       }
     }
 
@@ -1897,6 +2363,7 @@ function buildTradeSignalReplyMarkup(params: {
   actionType: 'buy' | 'sell' | 'bid'
   targetAddress?: string
   amountInput: string
+  chatId?: string
 }): Record<string, unknown> | undefined {
   const target = isAddressLike(params.targetAddress) ? params.targetAddress.toLowerCase() : null
   if (!target) return undefined
@@ -1915,6 +2382,10 @@ function buildTradeSignalReplyMarkup(params: {
         : `/sell ${target} <new-share-amount> --confirm`
   const reuseLabel =
     params.actionType === 'buy' ? 'Reuse Buy' : params.actionType === 'sell' ? 'Reuse Sell' : 'Reuse Bid'
+  const useCopyText = parseBoolean(process.env.TELEGRAM_COPY_TEXT_BUTTONS, true)
+  const reuseButton = useCopyText
+    ? { text: reuseLabel, copy_text: { text: command } }
+    : { text: reuseLabel, switch_inline_query_current_chat: command }
   const miniAppUrl = resolveTelegramMiniAppUrl()
   const vaultUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
@@ -1927,15 +2398,23 @@ function buildTradeSignalReplyMarkup(params: {
     },
   })
 
-  return {
-    inline_keyboard: [
-      [{ text: reuseLabel, switch_inline_query_current_chat: command }],
-      [
-        { text: 'Edit Amount', switch_inline_query_current_chat: editCommand },
-        { text: 'Open Portfolio', callback_data: 'menu:portfolio' },
-      ],
-      [{ text: 'View Vault', url: vaultUrl }],
+  const keyboard: Array<Array<Record<string, unknown>>> = [
+    [reuseButton],
+    [
+      { text: 'Edit Amount', switch_inline_query_current_chat: editCommand },
+      { text: 'Open Portfolio', callback_data: 'menu:portfolio' },
     ],
+    [{ text: 'View Vault', url: vaultUrl }],
+  ]
+  if (isStarsTipsEnabledForChat(asTrimmed(params.chatId ?? ''))) {
+    const tipContext = `signal-${params.actionType}`
+    keyboard.push([
+      { text: 'Tip ⭐1', callback_data: `tip:1:${tipContext}` },
+      { text: 'Tip ⭐5', callback_data: `tip:5:${tipContext}` },
+    ])
+  }
+  return {
+    inline_keyboard: keyboard,
   }
 }
 
@@ -1951,12 +2430,18 @@ async function handleTelegramTradeCallback(params: {
   if (!callback) return null
 
   if (callback.kind === 'edit') {
-    return { text: tradeEditHint(callback.actionType) }
+    return {
+      text: tradeEditHint(callback.actionType),
+      callbackToast: `${callback.actionType.toUpperCase()} template ready`,
+    }
   }
 
   const db = await getDb()
   if (!db) {
-    return { text: 'Trade action unavailable while database is offline. Please retry in a few seconds.' }
+    return {
+      text: 'Trade action unavailable while database is offline. Please retry in a few seconds.',
+      callbackToast: 'Temporarily unavailable',
+    }
   }
 
   await ensureWaitlistSchema(db as any)
@@ -1970,7 +2455,18 @@ async function handleTelegramTradeCallback(params: {
     chatId: params.chatId,
   })
   if (!consumed.ok) {
-    return { text: formatTradeTokenFailure(consumed.reason) }
+    const callbackToast =
+      consumed.reason === 'expired'
+        ? 'Preview expired'
+        : consumed.reason === 'consumed'
+          ? 'Already used'
+          : consumed.reason === 'scope_mismatch'
+            ? 'Wrong chat scope'
+            : 'Preview missing'
+    return {
+      text: formatTradeTokenFailure(consumed.reason),
+      callbackToast,
+    }
   }
 
   const actionType = asTrimmed(consumed.actionType).toLowerCase()
@@ -1993,6 +2489,7 @@ async function handleTelegramTradeCallback(params: {
         '- account link is no longer active/verified',
         '- run /linked and /link again if needed',
       ].join('\n'),
+      callbackToast: 'Relink required',
     }
   }
 
@@ -2008,7 +2505,38 @@ async function handleTelegramTradeCallback(params: {
       intent,
       status: 'cancelled',
     })
-    return { text: `Cancelled ${actionTypeSafe.toUpperCase()} preview.` }
+    return {
+      text: `Cancelled ${actionTypeSafe.toUpperCase()} preview.`,
+      callbackToast: `${actionTypeSafe.toUpperCase()} cancelled`,
+    }
+  }
+
+  const tradePolicy = await getTelegramChatTradePolicy({
+    db: db as any,
+    chatId: params.chatId,
+  })
+  if ((actionTypeSafe === 'buy' || actionTypeSafe === 'sell') && !tradePolicy.buySellEnabled) {
+    return {
+      text: 'Trade blocked: buy/sell disabled for this chat scope.',
+      callbackToast: 'Buy/sell disabled',
+    }
+  }
+  if (actionTypeSafe === 'bid' && !tradePolicy.bidEnabled) {
+    return {
+      text: 'Trade blocked: bid disabled for this chat scope.',
+      callbackToast: 'Bid disabled',
+    }
+  }
+
+  const membership = await verifyTradeMembership({
+    chatId: params.chatId,
+    userId: params.userId,
+  })
+  if (!membership.ok) {
+    return {
+      text: `Trade blocked: membership required (status=${membership.status ?? 'unknown'}).`,
+      callbackToast: 'Membership required',
+    }
   }
 
   if ((actionTypeSafe === 'buy' || actionTypeSafe === 'sell') && isAddressLike(creatorCoinAddress) && amountInput) {
@@ -2060,7 +2588,9 @@ async function handleTelegramTradeCallback(params: {
           actionType: actionTypeSafe,
           targetAddress: vaultAddress || creatorCoinAddress,
           amountInput,
+          chatId: params.chatId,
         }),
+        callbackToast: `${actionTypeSafe.toUpperCase()} sent`,
       }
     }
     return {
@@ -2069,12 +2599,13 @@ async function handleTelegramTradeCallback(params: {
         '',
         execution.response || 'Execution failed. Retry with a fresh preview.',
       ].join('\n'),
+      callbackToast: `${actionTypeSafe.toUpperCase()} failed`,
     }
   }
 
   if (actionTypeSafe === 'bid') {
     if (!isAddressLike(link.canonicalCswAddress)) {
-      return { text: 'Bid blocked: canonical wallet is not available.' }
+      return { text: 'Bid blocked: canonical wallet is not available.', callbackToast: 'Canonical wallet missing' }
     }
     const strategyAddressRaw = asTrimmed(intent.ccaStrategyAddress ?? '')
     const auctionAddressRaw = asTrimmed((intent as any)?.bid?.auctionAddress ?? '')
@@ -2089,6 +2620,7 @@ async function handleTelegramTradeCallback(params: {
           '- malformed bid intent payload',
           '- please run /bid again to generate a fresh preview',
         ].join('\n'),
+        callbackToast: 'Invalid bid preview',
       }
     }
 
@@ -2129,6 +2661,7 @@ async function handleTelegramTradeCallback(params: {
               `Drift ${formatAmount(driftBps / 100, 2)}% exceeded the 3% safety limit.`,
               'Please run /bid again for a fresh quote.',
             ].join('\n'),
+            callbackToast: 'Bid drift too high',
           }
         }
       }
@@ -2230,7 +2763,9 @@ async function handleTelegramTradeCallback(params: {
           actionType: 'bid',
           targetAddress: vaultAddress || creatorCoinAddress,
           amountInput,
+          chatId: params.chatId,
         }),
+        callbackToast: 'BID sent',
       }
     } catch (error: any) {
       const helperCode = isCoinbaseSmartWalletHelperError(error) ? error.code : null
@@ -2261,11 +2796,12 @@ async function handleTelegramTradeCallback(params: {
           helperCode ? `Reason: ${helperCode}` : `Reason: ${message}`,
           'Please run /bid again to retry.',
         ].join('\n'),
+        callbackToast: helperCode ? 'Bid failed' : 'Bid retry needed',
       }
     }
   }
 
-  return { text: 'Unsupported trade action.' }
+  return { text: 'Unsupported trade action.', callbackToast: 'Unsupported action' }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -2317,6 +2853,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         botToken,
         inlineQueryId,
         query: asTrimmed(inlineQuery.query ?? ''),
+        userId: String(inlineQuery.from?.id ?? '').trim(),
+        chatId: asTrimmed(process.env.TELEGRAM_TARGET_CHAT_ID ?? ''),
       })
     } catch (error) {
       console.error('[telegram/webhook] inline query failed', {
@@ -2332,6 +2870,90 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 
+  const preCheckoutQuery = update.pre_checkout_query
+  if (preCheckoutQuery && typeof preCheckoutQuery === 'object') {
+    const preCheckoutQueryId = asTrimmed(preCheckoutQuery.id ?? '')
+    const invoicePayload = parseTipInvoicePayload(preCheckoutQuery.invoice_payload)
+    const preCheckoutCurrency = asTrimmed(preCheckoutQuery.currency ?? '').toUpperCase()
+    const canProceed = areStarsTipsEnabled() && preCheckoutCurrency === 'XTR' && !!invoicePayload
+    if (preCheckoutQueryId) {
+      await answerTelegramPreCheckoutQuery({
+        botToken,
+        preCheckoutQueryId,
+        ok: canProceed,
+        errorMessage: canProceed ? undefined : 'Tip could not be validated. Please try again.',
+      }).catch((error) => {
+        console.error('[telegram/webhook] pre-checkout answer failed', {
+          updateId: update.update_id ?? null,
+          preCheckoutQueryId,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+    } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+
+  const paymentMessage = update.message && typeof update.message === 'object' ? update.message : null
+  const successfulPayment = paymentMessage?.successful_payment
+  if (paymentMessage && successfulPayment && typeof successfulPayment === 'object') {
+    const paymentChatId = String(paymentMessage.chat?.id ?? '').trim()
+    const paymentUserId = String(paymentMessage.from?.id ?? '').trim()
+    const paymentMessageId = typeof paymentMessage.message_id === 'number' ? paymentMessage.message_id : undefined
+    const tipPayload = parseTipInvoicePayload(successfulPayment.invoice_payload)
+    const paymentCurrency = asTrimmed(successfulPayment.currency ?? '').toUpperCase()
+    if (paymentChatId && tipPayload && paymentCurrency === 'XTR' && isStarsTipsEnabledForChat(paymentChatId)) {
+      const db = await getDb()
+      if (db && paymentUserId) {
+        const link = await getTelegramLinkByUserId({ db, telegramUserId: paymentUserId }).catch(() => null)
+        if (link && link.profileId > 0 && isAddressLike(link.canonicalCswAddress)) {
+          await logTelegramActionAudit({
+            db,
+            telegramUserId: paymentUserId,
+            chatId: paymentChatId,
+            messageId: paymentMessageId,
+            profileId: link.profileId,
+            canonicalCswAddress: link.canonicalCswAddress,
+            actionType: 'tip',
+            intent: {
+              source: 'telegram_stars',
+              stars: tipPayload.stars,
+              context: tipPayload.context,
+              invoicePayload: successfulPayment.invoice_payload,
+            },
+            quote: {
+              currency: paymentCurrency,
+              totalAmount: parseOptionalPositiveInteger(successfulPayment.total_amount),
+            },
+            execution: {
+              telegramPaymentChargeId: asTrimmed(successfulPayment.telegram_payment_charge_id ?? ''),
+              providerPaymentChargeId: asTrimmed(successfulPayment.provider_payment_charge_id ?? ''),
+            },
+            status: 'paid',
+          }).catch(() => {})
+        }
+      }
+      await sendTelegramMessage({
+        botToken,
+        chatId: paymentChatId,
+        text: `Thanks for the tip! ${tipPayload.stars} ⭐ received.`,
+        replyToMessageId: paymentMessageId,
+      }).catch((error) => {
+        console.error('[telegram/webhook] tip thank-you message failed', {
+          updateId: update.update_id ?? null,
+          chatId: paymentChatId,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+    } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+
   const callbackQuery = update.callback_query
   if (callbackQuery && typeof callbackQuery === 'object') {
     const callbackQueryId = String(callbackQuery.id ?? '').trim()
@@ -2340,6 +2962,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const chatId = String(callbackMessage?.chat?.id ?? '').trim()
     const callbackMessageId = typeof callbackMessage?.message_id === 'number' ? callbackMessage.message_id : undefined
     const userId = String(callbackQuery.from?.id ?? '').trim()
+    const parsedTradeCallback = parseTradeCallbackData(callbackData)
+    const parsedTipCallback = parseTipCallbackData(callbackData)
     const isMenuNavigationCallback = callbackData.startsWith('menu:') || callbackData.startsWith('help:')
     const canReplaceMenuMessage = isMenuNavigationCallback && typeof callbackMessageId === 'number'
     if (!callbackQueryId || !chatId) {
@@ -2363,14 +2987,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    try {
-      await answerTelegramCallbackQuery({ botToken, callbackQueryId })
-    } catch (error) {
-      console.error('[telegram/webhook] callback acknowledgement failed', {
-        updateId: update.update_id ?? null,
+    if (parsedTipCallback) {
+      const tipsEnabled = isStarsTipsEnabledForChat(chatId)
+      await answerTelegramCallbackQuery({
+        botToken,
         callbackQueryId,
-        err: error instanceof Error ? error.message : String(error),
-      })
+        text: tipsEnabled ? `Tip invoice sent (${parsedTipCallback.stars} ⭐)` : 'Tips are disabled in this chat',
+        showAlert: false,
+      }).catch(() => {})
+      if (tipsEnabled) {
+        try {
+          await sendTelegramStarsInvoice({
+            botToken,
+            chatId,
+            userId,
+            stars: parsedTipCallback.stars,
+            context: parsedTipCallback.context,
+          })
+        } catch (error) {
+          console.error('[telegram/webhook] sendInvoice failed', {
+            updateId: update.update_id ?? null,
+            callbackQueryId,
+            err: error instanceof Error ? error.message : String(error),
+          })
+          await sendTelegramMessage({
+            botToken,
+            chatId,
+            text: 'Tip invoice failed. Please retry.',
+            replyToMessageId: callbackMessageId,
+          }).catch(() => {})
+        }
+      }
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
+
+    if (!parsedTradeCallback) {
+      try {
+        await answerTelegramCallbackQuery({ botToken, callbackQueryId })
+      } catch (error) {
+        console.error('[telegram/webhook] callback acknowledgement failed', {
+          updateId: update.update_id ?? null,
+          callbackQueryId,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
 
     const groupId = resolveGroupId(chatId)
@@ -2384,16 +3047,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       senderWallet,
     })
     if (tradeCallbackResponse) {
+      try {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: asTrimmed(tradeCallbackResponse.callbackToast ?? ''),
+        })
+      } catch (error) {
+        console.error('[telegram/webhook] trade callback acknowledgement failed', {
+          updateId: update.update_id ?? null,
+          callbackQueryId,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      }
       const chunks = splitTelegramMessage(tradeCallbackResponse.text)
-      for (let idx = 0; idx < chunks.length; idx += 1) {
+      let startIdx = 0
+      if (typeof callbackMessageId === 'number' && chunks.length > 0) {
+        const firstChunk = chunks[0] ?? ''
+        if (firstChunk) {
+          await replaceTelegramMenuMessage({
+            botToken,
+            chatId,
+            messageId: callbackMessageId,
+            text: firstChunk,
+            replyMarkup: tradeCallbackResponse.replyMarkup,
+          })
+          startIdx = 1
+        }
+      }
+      for (let idx = startIdx; idx < chunks.length; idx += 1) {
         const chunk = chunks[idx]
         if (!chunk) continue
         await sendTelegramMessage({
           botToken,
           chatId,
           text: chunk,
-          replyToMessageId: idx === 0 ? callbackMessage?.message_id : undefined,
-          replyMarkup: idx === 0 ? tradeCallbackResponse.replyMarkup : undefined,
+          replyToMessageId: idx === 0 && startIdx === 0 ? callbackMessage?.message_id : undefined,
+          replyMarkup: idx === 0 && startIdx === 0 ? tradeCallbackResponse.replyMarkup : undefined,
         })
       }
       const signalChunks = splitTelegramMessage(asTrimmed(tradeCallbackResponse.signalText ?? ''))

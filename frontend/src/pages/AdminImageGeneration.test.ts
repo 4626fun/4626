@@ -27,5 +27,6 @@ describe('AdminImageGeneration', () => {
     expect(viteConfigSource).toContain("'/api/image/projects/refine': () => import('./api/_handlers/image/_refine')")
     expect(viteConfigSource).toContain("'/api/image/jobs/status': () => import('./api/_handlers/image/_jobs-status')")
     expect(viteConfigSource).toContain("'/api/image/projects/get': () => import('./api/_handlers/image/_projects-get')")
+    expect(viteConfigSource).toContain("'/api/image/external': () => import('./api/_handlers/image/_external-proxy')")
   })
 })

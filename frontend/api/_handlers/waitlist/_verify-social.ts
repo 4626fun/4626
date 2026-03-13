@@ -88,9 +88,44 @@ async function verifyDiscordMembership(discordUserId: string): Promise<boolean> 
 
 // Telegram verification would require a bot - use honor system for now
 async function verifyTelegramMembership(telegramUserId: string): Promise<boolean> {
-  // TODO: Implement Telegram bot verification
-  // For now, use honor system
-  return true
+  const userId = typeof telegramUserId === 'string' ? telegramUserId.trim() : ''
+  if (!/^\d+$/.test(userId)) return false
+
+  const botToken = typeof process.env.TELEGRAM_BOT_TOKEN === 'string' ? process.env.TELEGRAM_BOT_TOKEN.trim() : ''
+  const chatIdRaw =
+    typeof process.env.TELEGRAM_WAITLIST_VERIFY_CHAT_ID === 'string'
+      ? process.env.TELEGRAM_WAITLIST_VERIFY_CHAT_ID.trim()
+      : typeof process.env.TELEGRAM_TARGET_CHAT_ID === 'string'
+        ? process.env.TELEGRAM_TARGET_CHAT_ID.trim()
+        : ''
+
+  // Preserve current behavior for environments that haven't configured Telegram verification yet.
+  if (!botToken || !chatIdRaw) {
+    console.warn('Telegram verification not configured, using honor system')
+    return true
+  }
+
+  try {
+    const endpoint = `https://api.telegram.org/bot${botToken}/getChatMember`
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatIdRaw,
+        user_id: userId,
+      }),
+    })
+    if (!response.ok) {
+      console.error('Telegram membership verification API error:', response.status)
+      return false
+    }
+    const payload = (await response.json()) as any
+    const status = typeof payload?.result?.status === 'string' ? payload.result.status.trim().toLowerCase() : ''
+    return status === 'member' || status === 'administrator' || status === 'creator'
+  } catch (error) {
+    console.error('Telegram membership verification failed:', error)
+    return false
+  }
 }
 
 const PLATFORM_POINTS: Record<SocialPlatform, number> = {

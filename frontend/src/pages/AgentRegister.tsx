@@ -13,6 +13,7 @@ import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { apiFetch } from '@/lib/apiBase'
 import { signInWithSiwaAgent } from '@/lib/siwaAgentAuth'
+import { ensureProviderOnBase, ensureWagmiChainOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { useZoraProfile } from '@/lib/zora/hooks'
 
 const DEFAULT_ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
@@ -58,8 +59,6 @@ const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
     outputs: [],
   },
 ] as const
-const BASE_CHAIN_ID_HEX = '0x2105'
-
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type WaitlistMeData = {
@@ -232,9 +231,11 @@ export function AgentRegister() {
   const connectedAddressLc = String(connectedAddress ?? '').trim().toLowerCase() || null
 
   const ensureBaseChain = useCallback(async () => {
-    if (chainId === base.id) return
-    if (!switchChainAsync) throw new Error('Switch to Base in your wallet to continue.')
-    await switchChainAsync({ chainId: base.id })
+    await ensureWagmiChainOnBase({
+      currentChainId: chainId,
+      switchChainAsync,
+      label: 'your wallet',
+    })
   }, [chainId, switchChainAsync])
 
   const waitlistMeQuery = useQuery({
@@ -338,20 +339,6 @@ export function AgentRegister() {
     if (typeof walletAny?.signMessage === 'function') return true
     return false
   }, [privyEmbeddedEoaWallet])
-  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
-    if (!provider?.request) return
-    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
-    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
-      try {
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: BASE_CHAIN_ID_HEX }],
-        })
-      } catch {
-        throw new Error(`Please switch ${label} to Base network to continue.`)
-      }
-    }
-  }, [])
   const getPrivyEmbeddedEoaProvider = useCallback(async () => {
     const walletAny: any = privyEmbeddedEoaWallet as any
     if (!walletAny) return null
@@ -625,7 +612,7 @@ export function AgentRegister() {
           const embeddedProvider = await getPrivyEmbeddedEoaProvider()
           if (embeddedProvider?.request) {
             try {
-              await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+              await ensureProviderOnBase({ provider: embeddedProvider, label: 'Privy embedded EOA' })
               const embeddedWalletClientAdapter = {
                 request: async (args: { method: string; params?: any[] }) => {
                   if (args?.method === 'eth_sign') {
@@ -733,7 +720,6 @@ export function AgentRegister() {
     connectedAddress,
     chainId,
     ensureBaseChain,
-    ensureProviderOnBase,
     getPrivyEmbeddedEoaProvider,
     publicClient,
     privyEmbeddedEoaAddress,

@@ -51,6 +51,11 @@ export type TelegramAuctionRow = {
   isSettled: boolean
 }
 
+export type TelegramChatTradePolicy = {
+  buySellEnabled: boolean
+  bidEnabled: boolean
+}
+
 export type TelegramSignalRow = {
   telegramUserId: string
   actionType: string
@@ -722,6 +727,37 @@ export async function listTelegramScopedVaults(params: {
       ccaStrategyAddress: asTrimmed(contracts.ccaStrategy).toLowerCase() || null,
     }
   })
+}
+
+export async function getTelegramChatTradePolicy(params: {
+  db: Db
+  chatId: string
+}): Promise<TelegramChatTradePolicy> {
+  const chatId = asTrimmed(params.chatId)
+  if (!chatId) {
+    return {
+      buySellEnabled: true,
+      bidEnabled: true,
+    }
+  }
+
+  const result = await params.db.sql`
+    SELECT buy_sell_enabled, bid_enabled
+    FROM telegram_chat_vault_scope
+    WHERE chat_id = ${chatId}
+    LIMIT 1;
+  `
+  const row = result.rows?.[0]
+  if (!row) {
+    return {
+      buySellEnabled: true,
+      bidEnabled: true,
+    }
+  }
+  return {
+    buySellEnabled: Boolean(row.buy_sell_enabled),
+    bidEnabled: Boolean(row.bid_enabled),
+  }
 }
 
 export async function listTelegramAuctions(params: {

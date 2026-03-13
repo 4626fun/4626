@@ -40,6 +40,7 @@ import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
+import { ensureProviderOnBase, ensureWagmiChainOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
   normalizeUnderlyingSymbol,
@@ -134,7 +135,6 @@ function resolveDeployMode(): DeployMode {
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
 const DEFAULT_MIN_COIN_AGE_DAYS = 7
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
-const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
 const DEFAULT_DEPLOYMENT_VERSION = 'v1.3.11'
@@ -1801,37 +1801,12 @@ function DeployVaultBatcher({
   // NOTE: Zora cross-app integration is read-only in this app, so we do not use it for signing/transactions.
 
   const ensureBaseChain = useCallback(async (label: string) => {
-    if (chainId === base.id) return
-    if (typeof switchChainAsync !== 'function') {
-      throw new Error(`Please switch ${label} to Base network to continue.`)
-    }
-    try {
-      await switchChainAsync({ chainId: base.id })
-    } catch {
-      throw new Error(`Please switch ${label} to Base network to continue.`)
-    }
+    await ensureWagmiChainOnBase({
+      currentChainId: chainId,
+      switchChainAsync,
+      label,
+    })
   }, [chainId, switchChainAsync])
-
-  const ensureProviderOnBase = useCallback(
-    async (provider: any, label: string, opts?: { allowSwitch?: boolean }) => {
-    if (!provider?.request) return
-    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
-    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
-      if (opts?.allowSwitch === false) {
-        throw new Error(`Please switch ${label} to Base network to continue.`)
-      }
-      try {
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: BASE_CHAIN_ID_HEX }],
-        })
-      } catch {
-        throw new Error(`Please switch ${label} to Base network to continue.`)
-      }
-    }
-    },
-    [],
-  )
 
   const getPrivyEmbeddedEoaProvider = useCallback(async () => {
     const walletAny: any = privyEmbeddedEoaWallet as any
@@ -1854,7 +1829,7 @@ function DeployVaultBatcher({
       if (privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign && privyEmbeddedEoaAddress) {
         const embeddedProvider = await getPrivyEmbeddedEoaProvider()
         if (embeddedProvider?.request) {
-          await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+          await ensureProviderOnBase({ provider: embeddedProvider, label: 'Privy embedded EOA' })
           const rawSig = await embeddedProvider.request({
             method: 'eth_signTypedData_v4',
             params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
@@ -1864,7 +1839,7 @@ function DeployVaultBatcher({
       }
 
       if (privySmartWalletIsCanonicalOwner && privySmartWalletCanSign && smartWalletClient && privySmartWalletAddress) {
-        await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
+        await ensureProviderOnBase({ provider: smartWalletClient, label: 'Privy smart wallet' })
         const client: any = smartWalletClient as any
         const account: any = client?.account
         if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
@@ -1886,7 +1861,7 @@ function DeployVaultBatcher({
       }
 
       if (connectedAddress && wagmiWalletClient) {
-        await ensureProviderOnBase(wagmiWalletClient, 'Connected wallet')
+        await ensureProviderOnBase({ provider: wagmiWalletClient, label: 'Connected wallet' })
         const walletAny: any = wagmiWalletClient as any
         if (typeof walletAny?.signTypedData === 'function') {
           const rawResult = await withTimeout(
@@ -1909,7 +1884,6 @@ function DeployVaultBatcher({
     },
     [
       connectedAddress,
-      ensureProviderOnBase,
       getPrivyEmbeddedEoaProvider,
       privyEmbeddedEoaAddress,
       privyEmbeddedEoaCanSign,
@@ -2297,7 +2271,7 @@ function DeployVaultBatcher({
         try {
           const embeddedProvider = await getPrivyEmbeddedEoaProvider()
           if (embeddedProvider?.request) {
-            await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+            await ensureProviderOnBase({ provider: embeddedProvider, label: 'Privy embedded EOA' })
             const embeddedWalletClientAdapter = {
               request: async (args: { method: string; params?: any[] }) => {
                 if (args?.method === 'eth_sign') {
@@ -2372,7 +2346,7 @@ function DeployVaultBatcher({
       // PATH B: Privy smart wallet owner
       if (!erc4337Succeeded && privySmartWalletIsCanonicalOwner && privySmartWalletCanSign && smartWalletClient && privySmartWalletAddress) {
         try {
-          await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
+          await ensureProviderOnBase({ provider: smartWalletClient, label: 'Privy smart wallet' })
           const smartWalletClientAdapter = {
             request: async (args: { method: string; params: any[] }) => {
               const client: any = smartWalletClient as any
@@ -2535,7 +2509,6 @@ function DeployVaultBatcher({
   }, [
     connectedAddress,
     ensureBaseChain,
-    ensureProviderOnBase,
     getPrivyEmbeddedEoaProvider,
     owner,
     privyEmbeddedEoaAddress,
@@ -4659,7 +4632,7 @@ function DeployVaultBatcher({
               if (!embeddedProvider?.request) {
                 throw new Error('Privy embedded EOA provider not available')
               }
-              await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+              await ensureProviderOnBase({ provider: embeddedProvider, label: 'Privy embedded EOA' })
               const embeddedWalletClientAdapter = {
                 request: async (args: { method: string; params?: any[] }) => {
                   // Privy embedded providers may block eth_sign, but often support
@@ -4744,7 +4717,7 @@ function DeployVaultBatcher({
               privySmartWalletAddress,
             })
 
-            await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
+            await ensureProviderOnBase({ provider: smartWalletClient, label: 'Privy smart wallet' })
 
             const smartWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
@@ -6017,13 +5990,7 @@ function DeployVaultMain() {
       try {
         const client: any = smartWalletClient as any
         if (typeof client.request !== 'function' || !mounted) return
-        const current = await client.request({ method: 'eth_chainId' }).catch(() => null)
-        if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
-          await client.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: BASE_CHAIN_ID_HEX }],
-          })
-        }
+        await ensureProviderOnBase({ provider: client, label: 'Privy smart wallet' })
       } catch {
         // ignore
       }

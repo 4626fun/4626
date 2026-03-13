@@ -4,6 +4,21 @@ Date: 2026-03-13
 Status: Approved  
 Owner: 4626 Product + Agent Platform
 
+## Implementation Snapshot (2026-03-13)
+
+- Phase A+ shipped: link/unlink/status, read command set, callback menu wiring, and Telegram audit/schema helpers.
+- Phase B shipped: `/buy` and `/sell` preview/confirm, in-place menu edits, callback toasts, and 4626 scope guards.
+- Phase C shipped: `/bid` USD-intent ETH execution path, richer signal posts, copy shortcuts, and signal-topic routing.
+- Balanced controls shipped: scoped `setMyCommands`, menu-button config endpoint, copy_text fallback path, membership checks, and rate limiting.
+- Stars tips-first shipped behind feature flags:
+  - `TELEGRAM_STARS_TIPS_ENABLED`
+  - `TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS`
+  - Tip callbacks now open `XTR` invoices, pre-checkout is validated, and successful payments are logged into audit + thanked in chat.
+- Verification executed on shipped state:
+  - `pnpm -C frontend test -- api/__tests__/telegramEndpoints.test.ts api/__tests__/telegramWebhook.test.ts api/__tests__/waitlistVerifySocial.test.ts`
+  - `pnpm -C frontend typecheck`
+  - `pnpm -C frontend exec eslint api/_handlers/telegram/_webhook.ts api/__tests__/telegramWebhook.test.ts api/__tests__/telegramEndpoints.test.ts api/_handlers/waitlist/_verify-social.ts`
+
 ## Context
 
 The current command and messaging model works, but user behavior is concentrated in Telegram and X. Users want a Friendtech-like social experience where discovery and coordination happen in Telegram, while onchain actions stay constrained to the 4626 ecosystem.
@@ -369,6 +384,7 @@ Output:
 
 ### Phase A+
 
+- Status: shipped
 - link + unlink + status endpoints
 - read-only commands (`/portfolio`, `/vaults`, `/auctions`, `/signals`)
 - onboarding welcome flow
@@ -376,17 +392,21 @@ Output:
 
 ### Phase B
 
+- Status: shipped
 - `/buy` + `/sell` preview/confirm/execution
 - rich inline preview cards
 - strict 4626 scope enforcement
 
 ### Phase C
 
+- Status: shipped
 - `/bid` USD intent -> ETH execution
 - richer signal posts, leaderboard, copy-trade actions
+- Stars tips-first social layer (`XTR` invoice callbacks + pre-checkout + paid audit)
 
 ### Phase D
 
+- Status: pending
 - X parity as secondary surface
 - further automation and ranking loops
 

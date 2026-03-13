@@ -14,6 +14,9 @@ const {
   readTelegramLinkStartTokenMock,
   upsertTelegramUserLinkMock,
   bootstrapCanonicalDelegationStateMock,
+  setTelegramMyCommandsMock,
+  setTelegramChatMenuButtonMock,
+  resolveTelegramBotTokenMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(),
@@ -26,6 +29,9 @@ const {
   readTelegramLinkStartTokenMock: vi.fn(),
   upsertTelegramUserLinkMock: vi.fn(),
   bootstrapCanonicalDelegationStateMock: vi.fn(),
+  setTelegramMyCommandsMock: vi.fn(),
+  setTelegramChatMenuButtonMock: vi.fn(),
+  resolveTelegramBotTokenMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -51,6 +57,12 @@ vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
   bootstrapCanonicalDelegationState: bootstrapCanonicalDelegationStateMock,
 }))
 
+vi.mock('../../server/_lib/telegramBotApi.js', () => ({
+  setTelegramMyCommands: setTelegramMyCommandsMock,
+  setTelegramChatMenuButton: setTelegramChatMenuButtonMock,
+  resolveTelegramBotToken: resolveTelegramBotTokenMock,
+}))
+
 describe('telegram endpoint handlers', () => {
   let restoreEnv: (() => void) | null = null
 
@@ -59,6 +71,7 @@ describe('telegram endpoint handlers', () => {
     restoreEnv = applyEnv({
       TELEGRAM_LINK_API_SECRET: undefined,
       TELEGRAM_MINI_APP_URL: 'https://app.4626.fun',
+      TELEGRAM_BOT_TOKEN: 'test-bot-token',
     })
     getDbMock.mockResolvedValue({ sql: vi.fn() })
     ensureWaitlistSchemaMock.mockResolvedValue(undefined)
@@ -97,6 +110,7 @@ describe('telegram endpoint handlers', () => {
       lastFailureReason: null,
       unlinkRequestedAt: null,
     })
+    resolveTelegramBotTokenMock.mockReturnValue('test-bot-token')
   })
 
   afterEach(() => {
@@ -276,6 +290,27 @@ describe('telegram endpoint handlers', () => {
     expect(await getApiHandler('telegram/link/start')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/link/complete')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/link/status')).toBeTypeOf('function')
+  })
+
+  it('POST /api/telegram/bot-config syncs commands and menu button', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_bot-config.ts')
+    const req = createMockReq({
+      method: 'POST',
+      body: {},
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(setTelegramMyCommandsMock).toHaveBeenCalledTimes(3)
+    expect(setTelegramChatMenuButtonMock).toHaveBeenCalledTimes(1)
+    expect(res.body?.success).toBe(true)
+  })
+
+  it('route map registers telegram bot config endpoint', async () => {
+    const { getApiHandler } = await import('../_handlers/_routes.ts')
+    expect(await getApiHandler('telegram/bot-config')).toBeTypeOf('function')
   })
 })
 

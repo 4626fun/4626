@@ -44,6 +44,7 @@ import {
   uniswapBaseLogo,
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
+import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { useAccountContext } from '@/wallet/accountContext'
 import { PageMeta } from '@/components/seo/PageMeta'
 
@@ -103,7 +104,6 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type TelegramLinkCompleteResponse = {
   linked: boolean
 }
-const BASE_CHAIN_ID_HEX = '0x2105'
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
   {
     type: 'function',
@@ -602,21 +602,6 @@ export function Swap() {
     return false
   }, [privyEmbeddedEoaWallet])
 
-  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
-    if (!provider?.request) return
-    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
-    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
-      try {
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: BASE_CHAIN_ID_HEX }],
-        })
-      } catch {
-        throw new Error(`Please switch ${label} to Base network to continue.`)
-      }
-    }
-  }, [])
-
   const getPrivyEmbeddedEoaProvider = useCallback(async () => {
     const walletAny: any = privyEmbeddedEoaWallet as any
     if (!walletAny) return null
@@ -657,7 +642,7 @@ export function Swap() {
       request: async (args: { method: string; params?: any[] }) => {
         const provider = await getPrivyEmbeddedEoaProvider()
         if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
-        await ensureProviderOnBase(provider, 'Privy embedded EOA')
+        await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
         if (args?.method === 'eth_sign') {
           const params = Array.isArray(args.params) ? args.params : []
           const hashCandidate = typeof params[1] === 'string' ? params[1] : ''
@@ -678,7 +663,7 @@ export function Swap() {
       signMessage: async (args: { message: unknown }) => {
         const provider = await getPrivyEmbeddedEoaProvider()
         if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
-        await ensureProviderOnBase(provider, 'Privy embedded EOA')
+        await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
         const raw =
           typeof args?.message === 'object' && args.message !== null && 'raw' in (args.message as Record<string, unknown>)
             ? (args.message as Record<string, unknown>).raw
@@ -693,7 +678,7 @@ export function Swap() {
       signTypedData: async (typedData: unknown) => {
         const provider = await getPrivyEmbeddedEoaProvider()
         if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
-        await ensureProviderOnBase(provider, 'Privy embedded EOA')
+        await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
         const rawSig = await provider.request({
           method: 'eth_signTypedData_v4',
           params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
@@ -701,7 +686,7 @@ export function Swap() {
         return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
       },
     }
-  }, [ensureProviderOnBase, getPrivyEmbeddedEoaProvider, privyEmbeddedEoaAddress])
+  }, [getPrivyEmbeddedEoaProvider, privyEmbeddedEoaAddress])
 
   const preferredExecutionMode: WalletMode =
     accountContext.preferredMode === 'SMART_WALLET' ? 'canonical' : 'eoa'

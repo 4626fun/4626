@@ -12,6 +12,7 @@ import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { logger } from '@/lib/logger'
+import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
 
 // ---------------------------------------------------------------------------
@@ -21,7 +22,6 @@ import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
 const PLATFORM_REFERRER = getZoraPlatformReferrerAddress()
 
 const GROVE_BASE_CHAIN_ID = 8453 // Base mainnet for immutable uploads
-const BASE_CHAIN_ID_HEX = '0x2105'
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']
@@ -152,21 +152,6 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       }
     },
   })
-
-  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
-    if (!provider?.request) return
-    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
-    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
-      try {
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: BASE_CHAIN_ID_HEX }],
-        })
-      } catch {
-        throw new Error(`Please switch ${label} to Base network to continue.`)
-      }
-    }
-  }, [])
 
   const getPrivyEmbeddedEoaProvider = useCallback(async () => {
     const walletAny: any = privyEmbeddedEoaWallet as any
@@ -320,7 +305,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       ) {
         const embeddedProvider = await getPrivyEmbeddedEoaProvider()
         if (embeddedProvider?.request) {
-          await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+          await ensureProviderOnBase({ provider: embeddedProvider, label: 'Privy embedded EOA' })
           userOpOwnerAddress = getAddress(privyEmbeddedEoaAddress as Address)
           userOpWalletClient = {
             request: async (args: { method: string; params?: any[] }) => {
@@ -415,7 +400,6 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   }, [
     canSubmit,
     description,
-    ensureProviderOnBase,
     effectiveName,
     getPrivyEmbeddedEoaProvider,
     imageFile,

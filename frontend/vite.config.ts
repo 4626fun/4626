@@ -196,6 +196,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/image/projects/auto-assets': () => import('./api/_handlers/image/_auto-assets'),
         '/api/image/projects/direct-compose': () => import('./api/_handlers/image/_direct-compose'),
         '/api/image/projects/vault-image': () => import('./api/_handlers/image/_vault-image-get'),
+        '/api/image/external': () => import('./api/_handlers/image/_external-proxy'),
         '/api/deploy/config': () => import('./api/_handlers/deploy/_config'),
         '/api/deploy/smartWalletOwner': () => import('./api/_handlers/deploy/_smartWalletOwner'),
         '/api/deploy/session/cancel': () => import('./api/_handlers/deploy/session/_cancel'),

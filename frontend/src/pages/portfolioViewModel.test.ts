@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveCreatorCoinOptions, normalizeAddress, resolvePortfolioAddresses } from './portfolioViewModel'
+import { buildPortfolioImageProxyUrl, deriveCreatorCoinOptions, normalizeAddress, resolvePortfolioAddresses } from './portfolioViewModel'
 
 describe('portfolioViewModel', () => {
   it('normalizes valid EVM addresses and rejects invalid values', () => {
@@ -43,5 +43,23 @@ describe('portfolioViewModel', () => {
       '0x000000000000000000000000000000000000aaaa',
       '0x000000000000000000000000000000000000bbbb',
     ])
+  })
+
+  it('builds a first-party proxy URL for remote token images', () => {
+    expect(buildPortfolioImageProxyUrl('https://cdn.example.com/token.png')).toBe(
+      '/api/image/external?url=https%3A%2F%2Fcdn.example.com%2Ftoken.png',
+    )
+    expect(buildPortfolioImageProxyUrl('http://assets.example.com/logo.webp')).toBe(
+      '/api/image/external?url=http%3A%2F%2Fassets.example.com%2Flogo.webp',
+    )
+  })
+
+  it('rejects unsafe image URLs', () => {
+    expect(buildPortfolioImageProxyUrl('')).toBeNull()
+    expect(buildPortfolioImageProxyUrl('not-a-url')).toBeNull()
+    expect(buildPortfolioImageProxyUrl('data:image/png;base64,AAA=')).toBeNull()
+    expect(buildPortfolioImageProxyUrl('https://localhost/logo.png')).toBeNull()
+    expect(buildPortfolioImageProxyUrl('http://127.0.0.1/logo.png')).toBeNull()
+    expect(buildPortfolioImageProxyUrl('http://10.0.0.5/logo.png')).toBeNull()
   })
 })

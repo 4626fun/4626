@@ -35,7 +35,13 @@ import { fetchZoraCoin } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountContext } from '@/wallet/accountContext'
-import { deriveCreatorCoinOptions, normalizeAddress, resolvePortfolioAddresses, isEvmAddress } from './portfolioViewModel'
+import {
+  buildPortfolioImageProxyUrl,
+  deriveCreatorCoinOptions,
+  normalizeAddress,
+  resolvePortfolioAddresses,
+  isEvmAddress,
+} from './portfolioViewModel'
 
 function shortAddr(address: string): string {
   if (!address || address.length < 10) return address
@@ -235,11 +241,12 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
           const token = holding.token
           const name = token.symbol || token.name || holding.coin.symbol || holding.coin.name || token.id
           const price = typeof token.price === 'number' ? token.price : null
+          const tokenLogoSrc = buildPortfolioImageProxyUrl(token.logoUrl)
           return (
             <div key={`${holding.coinType}:${token.id}`} className="grid grid-cols-[minmax(0,1fr)_92px_92px_104px] items-center gap-3 px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
-                {token.logoUrl ? (
-                  <img src={token.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-full border border-white/10" />
+                {tokenLogoSrc ? (
+                  <img src={tokenLogoSrc} alt="" className="h-7 w-7 shrink-0 rounded-full border border-white/10" />
                 ) : (
                   <div className="h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5" />
                 )}
@@ -272,10 +279,11 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
           const token = holding.token
           const name = token.symbol || token.name || holding.coin.symbol || holding.coin.name || token.id
           const price = typeof token.price === 'number' ? token.price : null
+          const tokenLogoSrc = buildPortfolioImageProxyUrl(token.logoUrl)
           return (
             <div key={`mobile:${holding.coinType}:${token.id}`} className="flex items-center gap-3 px-4 py-3">
-              {token.logoUrl ? (
-                <img src={token.logoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/10" />
+              {tokenLogoSrc ? (
+                <img src={tokenLogoSrc} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/10" />
               ) : (
                 <div className="h-8 w-8 shrink-0 rounded-full border border-white/10 bg-white/5" />
               )}
