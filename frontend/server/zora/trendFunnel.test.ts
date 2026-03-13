@@ -177,6 +177,12 @@ describe('runTrendFunnel', () => {
     expect(result.action.executed).toBe(true)
     expect(result.action.txHash).toBe('0xabc123')
     expect(walletRpcMock).toHaveBeenCalledTimes(1)
+    expect(walletRpcMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey:
+          'trend-funnel:g3:0xccc:1000000000000000:0x9999999999999999999999999999999999999999',
+      }),
+    )
     expect(markTrendOpFunnelCompletedMock).toHaveBeenCalledTimes(1)
   })
 })
