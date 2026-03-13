@@ -6,7 +6,6 @@ import { ConnectButton } from '@/components/ConnectButton'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
-import { useMiniAppContext } from '@/hooks/useMiniAppContext'
 import { Logo } from './Logo'
 
 type NavItem = {
@@ -53,7 +52,6 @@ export function VaultNavBar() {
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
-  const mini = useMiniAppContext()
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const brandHref = hostMode === 'marketing' ? '/' : '/swap'
@@ -110,21 +108,6 @@ export function VaultNavBar() {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          {mini.isMiniApp === true && mini.username ? (
-            <div className="inline-flex items-center gap-2 h-11 px-3 rounded-xl border border-vault-border bg-vault-card/40 text-vault-text">
-              {mini.context?.user?.pfpUrl ? (
-                <img
-                  src={String(mini.context.user.pfpUrl)}
-                  alt={`@${mini.username}`}
-                  className="h-6 w-6 rounded-full object-cover"
-                />
-              ) : (
-                <div className="h-6 w-6 rounded-full bg-vault-bg border border-vault-border" />
-              )}
-              <span className="text-xs text-vault-subtext">Signed in</span>
-              <span className="text-sm font-medium text-vault-text">@{mini.username}</span>
-            </div>
-          ) : null}
           {showConnect ? <ConnectButton /> : null}
         </div>
 

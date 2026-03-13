@@ -4,7 +4,5 @@ export { useVaultGaugeVoting, useTimeRemaining, formatVotingPower } from './useV
 export type { VaultVote, EpochInfo, VotingPowerInfo } from './useVaultGaugeVoting'
 export { useCreatorAllowlist } from './useCreatorAllowlist'
 export type { CreatorAllowlistMode, CreatorAllowlistStatus } from './useCreatorAllowlist'
-export { useMiniAppContext } from './useMiniAppContext'
-export { useFarcasterAuth } from './useFarcasterAuth'
 export { useDeploymentTracker, getDeploymentVersion, getDeploymentsForOwner, getDeploymentForOwnerVersion } from './useDeploymentTracker'
 export type { DeploymentRecord } from './useDeploymentTracker'

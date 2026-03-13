@@ -4,7 +4,7 @@
  *
  * Why:
  * - We keep source assets as SVGs in `frontend/public/` (tracked, editable).
- * - Some platforms (Base/Farcaster + PWA) require specific PNG dimensions and "no alpha".
+ * - Some platform surfaces + PWA require specific PNG dimensions and "no alpha".
  * - Vite copies `public/` as-is into `dist/`, but does not generate PNG derivatives.
  *
  * This script generates required PNGs into the build output folder (default: dist/).
@@ -73,24 +73,24 @@ async function main() {
   }
 
   const tasks = [
-    // Mini App assets (Base/Farcaster)
+    // App metadata assets
     {
-      outName: 'miniapp-icon.png',
+      outName: 'app-icon.png',
       width: 1024,
       height: 1024,
-      sources: ['miniapp-icon.png', 'miniapp-icon.svg', 'logo.svg', 'favicon.svg'],
+      sources: ['app-icon.png', 'app-icon.svg', 'logo.svg', 'favicon.svg'],
     },
     {
-      outName: 'miniapp-splash.png',
+      outName: 'app-splash.png',
       width: 200,
       height: 200,
-      sources: ['miniapp-splash.png', 'miniapp-splash.svg', 'miniapp-icon.svg', 'logo.svg'],
+      sources: ['app-splash.png', 'app-splash.svg', 'app-icon.svg', 'logo.svg'],
     },
     {
-      outName: 'miniapp-hero.png',
+      outName: 'app-hero.png',
       width: 1200,
       height: 630,
-      sources: ['miniapp-hero.png', 'miniapp-hero.svg'],
+      sources: ['app-hero.png', 'app-hero.svg'],
     },
     {
       outName: 'screenshot-1.png',
@@ -138,11 +138,11 @@ async function main() {
   }
 
   // Cleanup: these are source-only artifacts that should not ship in `dist/`.
-  // The live Mini App + manifests reference the PNGs.
+  // Live metadata references the generated PNGs.
   const removeFromDist = [
-    'miniapp-icon.svg',
-    'miniapp-splash.svg',
-    'miniapp-hero.svg',
+    'app-icon.svg',
+    'app-splash.svg',
+    'app-hero.svg',
     'screenshot-portrait.svg',
     // These are generated PNG derivatives used by the manifest.
     // Keep the source-only screenshots out of dist if present.

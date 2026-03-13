@@ -8,8 +8,7 @@ export function shouldBlockSelfDm(params: {
   peerAddress: string | null | undefined
   identityAddress: string | null | undefined
 }): boolean {
-  const peer = normalizeDmGuardAddress(params.peerAddress)
-  const identity = normalizeDmGuardAddress(params.identityAddress)
-  if (!peer || !identity) return false
-  return peer === identity
+  void params
+  // Self-DMs are allowed so users can message their own identity.
+  return false
 }

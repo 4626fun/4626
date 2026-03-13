@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
 import { getExploreColumns } from '@/components/explore/tableColumns'
-import { fetchZoraExplore } from '@/lib/zora/client'
+import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
 import { apiFetch } from '@/lib/apiBase'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
@@ -22,8 +22,11 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 
 const PAGE_SIZE = 20
 const SEARCH_AUTO_FETCH_MAX_PAGES = 30
+const REMOTE_SEARCH_MIN_QUERY_LENGTH = 3
+const LIVE_METRICS_REFETCH_MS = 10_000
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
+const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ExploreMetrics = {
@@ -79,6 +82,148 @@ function toFiniteNumber(value: unknown): number | null {
   return n
 }
 
+function coalesceMetricValue(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (value == null) continue
+    if (Number.isFinite(value)) return value
+  }
+  return null
+}
+
+function normalizeSearchQuery(query: string): { raw: string; withoutAt: string; withoutBasenameSuffix: string } {
+  const raw = query.trim().toLowerCase()
+  const withoutAt = raw.startsWith('@') ? raw.slice(1) : raw
+  const withoutBasenameSuffix = withoutAt.endsWith('.base.eth') ? withoutAt.slice(0, -'.base.eth'.length) : withoutAt
+  return { raw, withoutAt, withoutBasenameSuffix }
+}
+
+function matchesCreatorSearchQuery(coin: ZoraCoin, query: string): boolean {
+  const normalized = normalizeSearchQuery(query)
+  if (!normalized.raw) return true
+
+  const name = (coin.name || '').toLowerCase()
+  const symbol = (coin.symbol || '').toLowerCase()
+  const address = (coin.address || '').toLowerCase()
+  const payout = (coin.payoutRecipientAddress || '').toLowerCase()
+  const creator = (coin.creatorAddress || '').toLowerCase()
+  const creatorHandle = (coin.creatorProfile?.handle || '').toLowerCase()
+  const creatorHandleWithoutBasename = creatorHandle.endsWith('.base.eth')
+    ? creatorHandle.slice(0, -'.base.eth'.length)
+    : creatorHandle
+
+  const candidates = [
+    normalized.raw,
+    normalized.withoutAt,
+    normalized.withoutBasenameSuffix,
+  ].filter(Boolean)
+
+  return candidates.some((candidate) =>
+    name.includes(candidate) ||
+    symbol.includes(candidate) ||
+    address.includes(candidate) ||
+    payout.includes(candidate) ||
+    creator.includes(candidate) ||
+    creatorHandle.includes(candidate) ||
+    creatorHandleWithoutBasename.includes(candidate),
+  )
+}
+
+function dedupeCoinsByAddress(coins: ZoraCoin[]): ZoraCoin[] {
+  const out: ZoraCoin[] = []
+  const seen = new Set<string>()
+  for (const coin of coins) {
+    const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
+    const fallback = `${coin.creatorAddress ?? ''}:${coin.symbol ?? ''}:${coin.name ?? ''}`.toLowerCase()
+    const key = address || fallback
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(coin)
+  }
+  return out
+}
+
+function buildProfileIdentifierCandidates(query: string): string[] {
+  const normalized = normalizeSearchQuery(query)
+  const base = normalized.withoutAt
+  if (!base) return []
+
+  const candidates: string[] = []
+  const pushUnique = (value: string) => {
+    if (!value || candidates.includes(value)) return
+    candidates.push(value)
+  }
+
+  pushUnique(base)
+  if (base.endsWith('.base.eth')) {
+    pushUnique(base.slice(0, -'.base.eth'.length))
+  } else if (!base.includes('.')) {
+    pushUnique(`${base}.base.eth`)
+  }
+  return candidates
+}
+
+async function resolveCreatorSearchCandidates(query: string): Promise<ZoraCoin[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  const results: ZoraCoin[] = []
+  const addCoin = (coin: ZoraCoin | null | undefined) => {
+    if (!coin) return
+    results.push(coin)
+  }
+
+  if (ADDRESS_REGEX.test(trimmed)) {
+    try {
+      const directCoin = await fetchZoraCoin(trimmed as `0x${string}`)
+      addCoin(directCoin)
+    } catch {
+      // Best-effort direct address lookup; continue with profile search.
+    }
+  }
+
+  const profileCandidates = buildProfileIdentifierCandidates(trimmed)
+  for (const identifier of profileCandidates) {
+    let profile = null as Awaited<ReturnType<typeof fetchZoraProfile>> | null
+    try {
+      profile = await fetchZoraProfile(identifier)
+    } catch {
+      profile = null
+    }
+    if (!profile) continue
+
+    const creatorCoinAddress = typeof profile.creatorCoin?.address === 'string' ? profile.creatorCoin.address : null
+    if (creatorCoinAddress && ADDRESS_REGEX.test(creatorCoinAddress)) {
+      try {
+        const creatorCoin = await fetchZoraCoin(creatorCoinAddress as `0x${string}`)
+        addCoin(creatorCoin)
+      } catch {
+        // keep going; fallback to createdCoins below
+      }
+    }
+
+    const profileEdges = Array.isArray(profile.createdCoins?.edges) ? profile.createdCoins.edges : []
+    for (const edge of profileEdges) {
+      addCoin(edge?.node as ZoraCoin | undefined)
+    }
+
+    if (creatorCoinAddress || profileEdges.length > 0) continue
+
+    try {
+      const profileWithCoins = await fetchZoraProfileCoins({ identifier, count: 8 })
+      const profileCoinsEdges = Array.isArray(profileWithCoins?.createdCoins?.edges)
+        ? profileWithCoins.createdCoins.edges
+        : []
+      for (const edge of profileCoinsEdges) {
+        addCoin(edge?.node as ZoraCoin | undefined)
+      }
+    } catch {
+      // ignore profile coin expansion errors
+    }
+  }
+
+  return dedupeCoinsByAddress(results)
+}
+
 function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number {
   const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
   if (address && migratedCoins?.has(address)) return 0.01
@@ -117,6 +262,20 @@ export function ExploreCreators() {
       return 5_000
     },
     refetchIntervalInBackground: true,
+  })
+
+  // Fast-updating top-creator slice used for visibly-live metric cards.
+  const liveMetricsQuery = useQuery({
+    queryKey: ['explore', 'creators', 'live', listType],
+    queryFn: async () =>
+      fetchZoraExplore({
+        list: listType,
+        count: PAGE_SIZE,
+      }),
+    staleTime: LIVE_METRICS_REFETCH_MS,
+    refetchInterval: LIVE_METRICS_REFETCH_MS,
+    refetchIntervalInBackground: true,
+    retry: 1,
   })
 
   const {
@@ -161,29 +320,45 @@ export function ExploreCreators() {
     return coins
   }, [data])
 
-  // Filter coins based on search query
+  const trimmedSearchQuery = searchQuery.trim()
+
+  // Local filtering over currently loaded ranking pages.
+  const localFilteredCoins = useMemo(() => {
+    if (!trimmedSearchQuery) return allCoins
+    return allCoins.filter((coin) => matchesCreatorSearchQuery(coin, trimmedSearchQuery))
+  }, [allCoins, trimmedSearchQuery])
+
+  // Fallback search resolves by creator handle/profile/address so creators outside
+  // currently fetched ranking pages can still be discovered from the search box.
+  const directSearchQuery = useQuery({
+    queryKey: ['explore', 'creators', 'direct-search', trimmedSearchQuery.toLowerCase()],
+    queryFn: () => resolveCreatorSearchCandidates(trimmedSearchQuery),
+    enabled: trimmedSearchQuery.length >= REMOTE_SEARCH_MIN_QUERY_LENGTH && localFilteredCoins.length === 0,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    retry: 1,
+  })
+
+  const directSearchCoins = useMemo(() => {
+    const data = directSearchQuery.data
+    if (!Array.isArray(data) || !trimmedSearchQuery) return []
+    return data.filter((coin) => matchesCreatorSearchQuery(coin, trimmedSearchQuery))
+  }, [directSearchQuery.data, trimmedSearchQuery])
+
   const filteredCoins = useMemo(() => {
-    if (!searchQuery.trim()) return allCoins
-    const query = searchQuery.toLowerCase()
-    const queryWithoutAt = query.startsWith('@') ? query.slice(1) : query
-    return allCoins.filter((coin) => {
-      const name = (coin.name || '').toLowerCase()
-      const symbol = (coin.symbol || '').toLowerCase()
-      const address = (coin.address || '').toLowerCase()
-      const payout = (coin.payoutRecipientAddress || '').toLowerCase()
-      const creator = (coin.creatorAddress || '').toLowerCase()
-      const creatorHandle = (coin.creatorProfile?.handle || '').toLowerCase()
-      return (
-        name.includes(query) ||
-        symbol.includes(query) ||
-        address.includes(query) ||
-        payout.includes(query) ||
-        creator.includes(query) ||
-        creatorHandle.includes(query) ||
-        creatorHandle.includes(queryWithoutAt)
-      )
-    })
-  }, [allCoins, searchQuery])
+    if (!trimmedSearchQuery) return allCoins
+    if (localFilteredCoins.length > 0) return localFilteredCoins
+    if (directSearchCoins.length > 0) return dedupeCoinsByAddress(directSearchCoins)
+    return localFilteredCoins
+  }, [allCoins, directSearchCoins, localFilteredCoins, trimmedSearchQuery])
+
+  const liveMetricCoins = useMemo(() => {
+    const edges = Array.isArray(liveMetricsQuery.data?.edges) ? liveMetricsQuery.data.edges : []
+    const nodes = edges
+      .map((edge) => edge?.node as ZoraCoin | undefined)
+      .filter((node): node is ZoraCoin => Boolean(node))
+    return nodes.length > 0 ? nodes : allCoins
+  }, [allCoins, liveMetricsQuery.data?.edges])
 
   const localMetricsFallback = useMemo(() => {
     const seenCoinKeys = new Set<string>()
@@ -195,7 +370,7 @@ export function ExploreCreators() {
     let volume24hUsd = 0
     let fees24hUsd = 0
 
-    for (const coin of allCoins) {
+    for (const coin of liveMetricCoins) {
       const coinAddress = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
       const coinKey =
         coinAddress ||
@@ -249,17 +424,27 @@ export function ExploreCreators() {
       creatorCoinsVolume24hUsd: volume24hUsd,
       creatorCoinsFees24hUsd: fees24hUsd,
     }
-  }, [allCoins, metricsQuery.data?.updatedAt, migratedCoins])
+  }, [liveMetricCoins, metricsQuery.data?.updatedAt, migratedCoins])
 
   const exactMetrics = metricsQuery.data?.exact === true
   const syncStatus = metricsQuery.data?.syncStatus ?? 'running'
   const syncMeta = metricsQuery.data?.sync ?? null
   const metricsTotals = metricsQuery.data?.totals ?? null
+  const metricsUpdatedAtMs = Date.parse(metricsQuery.data?.updatedAt ?? '')
+  const metricsAgeMs = Number.isFinite(metricsUpdatedAtMs) ? Date.now() - metricsUpdatedAtMs : Number.POSITIVE_INFINITY
+  const canonicalMetricsStale = metricsAgeMs > LIVE_METRICS_REFETCH_MS * 3
+  const useLiveMetricCards = !exactMetrics || metricsTotals?.partial === true || canonicalMetricsStale
   const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? localMetricsFallback.creatorsTotal
   const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? localMetricsFallback.creatorsNew24h
-  const marketCapDisplay = metricsTotals?.creatorCoinsMarketCapUsd ?? localMetricsFallback.creatorCoinsMarketCapUsd
-  const volume24hDisplay = metricsTotals?.creatorCoinsVolume24hUsd ?? localMetricsFallback.creatorCoinsVolume24hUsd
-  const fees24hDisplay = metricsTotals?.creatorCoinsFees24hUsd ?? localMetricsFallback.creatorCoinsFees24hUsd
+  const marketCapDisplay = useLiveMetricCards
+    ? coalesceMetricValue(localMetricsFallback.creatorCoinsMarketCapUsd, metricsTotals?.creatorCoinsMarketCapUsd)
+    : coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
+  const volume24hDisplay = useLiveMetricCards
+    ? coalesceMetricValue(localMetricsFallback.creatorCoinsVolume24hUsd, metricsTotals?.creatorCoinsVolume24hUsd)
+    : coalesceMetricValue(metricsTotals?.creatorCoinsVolume24hUsd, localMetricsFallback.creatorCoinsVolume24hUsd)
+  const fees24hDisplay = useLiveMetricCards
+    ? coalesceMetricValue(localMetricsFallback.creatorCoinsFees24hUsd, metricsTotals?.creatorCoinsFees24hUsd)
+    : coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
   const canonicalUpdatedAt = syncMeta?.lastFullSyncAt ?? null
   const updatedTimeDisplay = canonicalUpdatedAt
     ? new Date(canonicalUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -270,25 +455,35 @@ export function ExploreCreators() {
         ? `Indexed ${creatorsTotalDisplay.toLocaleString()} of ~${syncMeta.driftEstimateTotal.toLocaleString()} creators`
         : `Indexed ${creatorsTotalDisplay.toLocaleString()} creators`
       : null
+  const liveEstimateStatus = `Live estimate updates every ${Math.floor(LIVE_METRICS_REFETCH_MS / 1000)}s`
   const metricsStatusLine =
-    exactMetrics && updatedTimeDisplay
-      ? `Canonical totals refreshed ${updatedTimeDisplay}`
-      : syncStatus === 'error'
-        ? 'Canonical totals are temporarily delayed. Retrying in background.'
-        : indexedCreatorProgress
+    syncStatus === 'error'
+      ? `${liveEstimateStatus} while canonical totals retry in background.`
+      : useLiveMetricCards
+        ? [liveEstimateStatus, indexedCreatorProgress ?? (updatedTimeDisplay ? `Canonical refreshed ${updatedTimeDisplay}` : null)]
+            .filter(Boolean)
+            .join(' | ')
+        : exactMetrics && updatedTimeDisplay
+          ? `Canonical totals refreshed ${updatedTimeDisplay}`
+          : indexedCreatorProgress
   const creatorsLabel = exactMetrics ? 'Creators' : 'Indexed creators'
   const marketLabel = 'Market Cap'
+  const isSearchingDirectMatches =
+    trimmedSearchQuery.length >= REMOTE_SEARCH_MIN_QUERY_LENGTH &&
+    localFilteredCoins.length === 0 &&
+    (directSearchQuery.isLoading || directSearchQuery.isFetching)
   const showSyncingEmptyState =
-    !searchQuery.trim() &&
+    !trimmedSearchQuery &&
     filteredCoins.length === 0 &&
     !isLoading &&
     !isError &&
     ((creatorsTotalDisplay ?? 0) > 0 || syncStatus === 'running' || syncStatus === 'error')
   const shouldAutoFetchForSearch =
-    searchQuery.trim().length > 0 &&
+    trimmedSearchQuery.length > 0 &&
     filteredCoins.length === 0 &&
     !isLoading &&
     !isError &&
+    !isSearchingDirectMatches &&
     hasNextPage === true &&
     !isFetchingNextPage &&
     (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
@@ -580,7 +775,12 @@ export function ExploreCreators() {
                     Global stats are available, but the ranked creator rows have not finished loading yet.
                   </p>
                 </div>
-              ) : searchQuery.trim().length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
+              ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isSearchingDirectMatches ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400">Searching creators...</p>
+                  <p className="mt-2 text-xs text-zinc-600">Checking direct handle/profile matches.</p>
+                </div>
+              ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
                 <div className="px-6 py-12 text-center">
                   <p className="text-zinc-400">Searching more creators...</p>
                   <p className="mt-2 text-xs text-zinc-600">Scanning additional pages for matches.</p>
@@ -589,7 +789,7 @@ export function ExploreCreators() {
                 // Empty state
                 <div className="px-6 py-12 text-center">
                   <p className="text-zinc-400">
-                    {searchQuery ? 'No creators found matching your search' : 'No creators available'}
+                    {trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'}
                   </p>
                 </div>
               ) : (

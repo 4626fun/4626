@@ -12,7 +12,7 @@ function sampleRecipient(address: `0x${string}`): DmRecipientResolution {
 }
 
 describe('resolveDmRoute', () => {
-  it('reroutes self-recipient to Akita when agent address differs', () => {
+  it('keeps self-recipient unchanged', () => {
     const result = resolveDmRoute({
       recipient: sampleRecipient('0x1111111111111111111111111111111111111111'),
       identityAddress: '0x1111111111111111111111111111111111111111',
@@ -21,10 +21,9 @@ describe('resolveDmRoute', () => {
       agentDisplayName: 'akita',
     })
 
-    expect(result.reroutedToAgent).toBe(true)
-    expect(result.notice).toContain('Use Akita to chat about your wallet')
-    expect(result.recipient.address).toBe('0x2222222222222222222222222222222222222222')
-    expect(result.recipient.basenameHint).toBe('akita')
+    expect(result.reroutedToAgent).toBe(false)
+    expect(result.notice).toBeNull()
+    expect(result.recipient.address).toBe('0x1111111111111111111111111111111111111111')
   })
 
   it('keeps recipient unchanged when it is not self', () => {
@@ -41,7 +40,7 @@ describe('resolveDmRoute', () => {
     expect(result.recipient.address).toBe('0x1111111111111111111111111111111111111111')
   })
 
-  it('returns a self-chat notice when Akita address equals self', () => {
+  it('does not emit self-chat notice when recipient equals self', () => {
     const result = resolveDmRoute({
       recipient: sampleRecipient('0x1111111111111111111111111111111111111111'),
       identityAddress: '0x1111111111111111111111111111111111111111',
@@ -51,7 +50,7 @@ describe('resolveDmRoute', () => {
     })
 
     expect(result.reroutedToAgent).toBe(false)
-    expect(result.notice).toContain('Use Akita to chat about your wallet')
+    expect(result.notice).toBeNull()
     expect(result.recipient.address).toBe('0x1111111111111111111111111111111111111111')
   })
 })

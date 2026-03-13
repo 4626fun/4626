@@ -1,8 +1,8 @@
 /**
- * Capture real Mini App screenshots from a running frontend (Playwright).
+ * Capture real app screenshots from a running frontend (Playwright).
  *
  * Why:
- * - Farcaster + OG previews use PNGs served from `public/`.
+ * - Open graph previews use PNGs served from `public/`.
  * - "Screenshot" should reflect the actual product UI (not a stylized mock).
  *
  * Usage:
@@ -10,12 +10,12 @@
  *   pnpm -C frontend exec playwright install chromium
  *
  *   # With the dev server running (default http://localhost:5173):
- *   pnpm -C frontend run capture:miniapp-screens
+ *   pnpm -C frontend run capture:app-screens
  *
  * Env:
- *   MINIAPP_SCREENSHOT_BASE_URL=http://localhost:5173
- *   MINIAPP_HERO_PATH=/dashboard
- *   MINIAPP_SCREENSHOT_PATHS=/dashboard,/explore,/deploy
+ *   APP_SCREENSHOT_BASE_URL=http://localhost:5173
+ *   APP_HERO_PATH=/dashboard
+ *   APP_SCREENSHOT_PATHS=/dashboard,/explore,/deploy
  */
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -40,9 +40,9 @@ const __dirname = path.dirname(__filename)
 
 const OUT_DIR = path.resolve(__dirname, '../public')
 
-const baseUrl = (process.env.MINIAPP_SCREENSHOT_BASE_URL || 'http://localhost:5173').replace(/\/$/, '')
-const heroPath = process.env.MINIAPP_HERO_PATH || '/dashboard'
-const screenshotPathsRaw = process.env.MINIAPP_SCREENSHOT_PATHS || '/dashboard,/explore,/deploy'
+const baseUrl = (process.env.APP_SCREENSHOT_BASE_URL || 'http://localhost:5173').replace(/\/$/, '')
+const heroPath = process.env.APP_HERO_PATH || '/dashboard'
+const screenshotPathsRaw = process.env.APP_SCREENSHOT_PATHS || '/dashboard,/explore,/deploy'
 const screenshotPaths = screenshotPathsRaw
   .split(',')
   .map((s) => s.trim())
@@ -93,7 +93,7 @@ async function captureHero() {
   await gotoApp(page, urlFor(heroPath))
 
   await page.screenshot({
-    path: path.join(OUT_DIR, 'miniapp-hero.png'),
+    path: path.join(OUT_DIR, 'app-hero.png'),
     type: 'png',
   })
 
@@ -127,7 +127,7 @@ async function capturePortrait() {
 
 async function main() {
   // eslint-disable-next-line no-console
-  console.log('Capturing Mini App screenshots from', baseUrl)
+  console.log('Capturing app screenshots from', baseUrl)
   // eslint-disable-next-line no-console
   console.log(' - hero:', heroPath)
   // eslint-disable-next-line no-console
@@ -135,7 +135,7 @@ async function main() {
 
   await captureHero()
   // eslint-disable-next-line no-console
-  console.log('wrote miniapp-hero.png')
+  console.log('wrote app-hero.png')
 
   await capturePortrait()
   // eslint-disable-next-line no-console
@@ -147,4 +147,3 @@ main().catch((err) => {
   console.error(err)
   process.exit(1)
 })
-

@@ -10,6 +10,7 @@ type Tab = {
 const TABS: Tab[] = [
   { label: 'Creators', to: '/explore/creators' },
   { label: 'Content', to: '/explore/content' },
+  { label: 'Trends', to: '/explore/trends' },
   { label: 'Transactions', to: '/explore/transactions' },
 ]
 
@@ -144,7 +145,7 @@ export function ExploreSubnav({
 
       {/* Sort options row — visible below lg, horizontally scrollable */}
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide lg:hidden -mx-1 px-1">
-        <span className="text-[11px] sm:text-xs text-zinc-500 flex-shrink-0">Sort:</span>
+        <span className="text-[11px] sm:text-xs text-zinc-500 shrink-0">Sort:</span>
         {SORT_OPTIONS.map((option) => {
           const active = currentSort === option.value
           return (

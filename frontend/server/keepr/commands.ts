@@ -16,6 +16,7 @@ import {
   type FinancialRatiosData,
 } from '../_lib/openbbClient.js'
 import { handleFarcasterCommand } from '../farcaster/commands.js'
+import { handleTwitterCommand } from '../twitter/commands.js'
 import { handleCoinCommand } from '../zora/commands.js'
 import { handleBankrCommand } from '../bankr/commands.js'
 import { handleSendCommand } from './sendCommand.js'
@@ -30,15 +31,32 @@ export type KeeprCommandResult =
   | { ok: true; response: string; action?: any }
   | { ok: false; response: string }
 
-function formatKeeprHelp(): string {
+type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 'ops' | 'bankr' | 'wallet'
+
+function formatKeeprHelpTopics(): string[] {
   return [
-    'Keepr commands',
+    'Topic help:',
+    '- /help core — vault controls and permissions',
+    '- /help coin — Zora coin commands',
+    '- /help market — OpenBB market data commands',
+    '- /help social — Farcaster + X/Twitter commands',
+    '- /help ops — CRE keeper operations',
+    '- /help bankr — Bankr profile/exec commands',
+    '- /help wallet — send + identity/reputation commands',
+    '- /help all — full command list',
+  ]
+}
+
+function formatKeeprHelpFull(): string {
+  return [
+    'Keepr commands (full)',
     '',
-    'Tip: you can type with or without a leading slash.',
+    'Tip: use /help for quick mode, or /help <topic> for focused help.',
     '',
     'Start here:',
     '',
     '- /help — command list',
+    '- /inline — one-tap templates (Telegram)',
     '- /keepr status — vault status and config',
     '- /ai <question> — ask in plain English',
     '',
@@ -90,6 +108,12 @@ function formatKeeprHelp(): string {
     '- /fc gallery',
     '- /fc stats',
     '',
+    'Twitter/X commands (type /x help for more):',
+    '',
+    '- /x status',
+    '- /x post <message> --confirm (ADMIN/OWNER)',
+    '- /tweet <message> --confirm (ADMIN/OWNER)',
+    '',
     'CRE Keeper commands (type /cre help for more):',
     '',
     '- /cre status — vault keeper states',
@@ -114,6 +138,184 @@ function formatKeeprHelp(): string {
     '- /intel <address> — wallet intelligence report',
     '- /reputation [agentId] — ERC-8004 reputation graph',
     '- /feedback [agentId] — feedback summary',
+  ].join('\n')
+}
+
+function formatKeeprQuickHelp(unknownTopic: string | null = null): string {
+  const lines: string[] = ['Keepr quick help', '']
+  if (unknownTopic) {
+    lines.push(`Unknown help topic: ${unknownTopic}`)
+    lines.push('')
+  }
+  lines.push(
+    'Most used:',
+    '- /inline — one-tap templates (Telegram)',
+    '- /keepr status — vault status and config',
+    '- /ai <question> — ask in plain English',
+    '- /x post <message> --confirm (ADMIN/OWNER)',
+    '- /coin trend check <ticker>',
+    '- /mkt quote <symbol>',
+    '',
+    ...formatKeeprHelpTopics(),
+  )
+  return lines.join('\n')
+}
+
+function resolveKeeprHelpTopic(rawTopic: string | null | undefined): { topic: KeeprHelpTopic; unknownTopic: string | null } {
+  const token = String(rawTopic ?? '').trim().toLowerCase().split(/\s+/g)[0] ?? ''
+  if (!token) return { topic: 'quick', unknownTopic: null }
+
+  switch (token) {
+    case 'quick':
+    case 'start':
+    case 'starter':
+      return { topic: 'quick', unknownTopic: null }
+    case 'all':
+    case 'full':
+    case 'everything':
+    case 'commands':
+      return { topic: 'all', unknownTopic: null }
+    case 'core':
+    case 'vault':
+      return { topic: 'core', unknownTopic: null }
+    case 'coin':
+    case 'coins':
+    case 'zora':
+      return { topic: 'coin', unknownTopic: null }
+    case 'market':
+    case 'mkt':
+      return { topic: 'market', unknownTopic: null }
+    case 'social':
+    case 'fc':
+    case 'farcaster':
+    case 'x':
+    case 'twitter':
+      return { topic: 'social', unknownTopic: null }
+    case 'ops':
+    case 'cre':
+    case 'keeper':
+      return { topic: 'ops', unknownTopic: null }
+    case 'bankr':
+      return { topic: 'bankr', unknownTopic: null }
+    case 'wallet':
+    case 'identity':
+    case 'reputation':
+      return { topic: 'wallet', unknownTopic: null }
+    default:
+      return { topic: 'quick', unknownTopic: token }
+  }
+}
+
+function formatKeeprHelp(rawTopic: string | null = null): string {
+  const { topic, unknownTopic } = resolveKeeprHelpTopic(rawTopic)
+  if (topic === 'all') return formatKeeprHelpFull()
+  if (topic === 'quick') return formatKeeprQuickHelp(unknownTopic)
+
+  if (topic === 'core') {
+    return [
+      'Keepr help - core',
+      '',
+      '- /keepr status',
+      '- /keepr rules',
+      '- /keepr check',
+      '- /keepr check 0x... (ADMIN/OWNER)',
+      '- /keepr lock (OWNER)',
+      '- /keepr unlock (OWNER)',
+      '- /keepr sync (ADMIN/OWNER)',
+      '',
+      'Need everything? /help all',
+    ].join('\n')
+  }
+
+  if (topic === 'coin') {
+    return [
+      'Keepr help - coin',
+      '',
+      '- /coin create <name> <symbol> <uri>',
+      '- /coin buy <address> <eth-amount>',
+      '- /coin sell <address> <amount>',
+      '- /coin balance',
+      '- /coin info <address>',
+      '- /coin trend check <ticker>',
+      '- /coin trend reserve <ticker>',
+      '- /coin trend status <ticker>',
+      '- /coin trend funnel <ticker> [eth-amount]',
+      '',
+      'Need everything? /help all',
+    ].join('\n')
+  }
+
+  if (topic === 'market') {
+    return [
+      'Keepr help - market',
+      '',
+      '- /mkt quote <symbol>',
+      '- /mkt news <symbol> [limit]',
+      '- /mkt ratios <symbol>',
+      '- /mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]',
+      '- /mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]',
+      '',
+      'Need everything? /help all',
+    ].join('\n')
+  }
+
+  if (topic === 'social') {
+    return [
+      'Keepr help - social',
+      '',
+      '- /fc profile <address|fid>',
+      '- /fc cast <message> (ADMIN/OWNER)',
+      '- /fc gallery',
+      '- /fc stats',
+      '- /x status',
+      '- /x post <message> --confirm (ADMIN/OWNER)',
+      '- /tweet <message> --confirm (ADMIN/OWNER)',
+      '',
+      'Need everything? /help all',
+    ].join('\n')
+  }
+
+  if (topic === 'ops') {
+    return [
+      'Keepr help - ops',
+      '',
+      '- /cre status',
+      '- /cre auction',
+      '- /cre solana',
+      '- /cre health',
+      '- /cre tend [vault]',
+      '- /cre report [vault]',
+      '- /cre flush-fees',
+      '',
+      'Need everything? /help all',
+    ].join('\n')
+  }
+
+  if (topic === 'bankr') {
+    return [
+      'Keepr help - bankr',
+      '',
+      '- /bankr status',
+      '- /bankr me',
+      '- /bankr balances [base,solana]',
+      '- /bankr ask <question>',
+      '- /bankr exec <instruction> --confirm (ADMIN/OWNER)',
+      '',
+      'Need everything? /help all',
+    ].join('\n')
+  }
+
+  return [
+    'Keepr help - wallet',
+    '',
+    '- /send <amount> USDC to <address> (ADMIN/OWNER)',
+    '- /send <amount> ETH to <address> (ADMIN/OWNER)',
+    '- /whois <address>',
+    '- /intel <address>',
+    '- /reputation [agentId]',
+    '- /feedback [agentId]',
+    '',
+    'Need everything? /help all',
   ].join('\n')
 }
 
@@ -635,8 +837,9 @@ export async function handleKeeprCommand(params: {
 
     // Global aliases: /help and "help" should always respond (even without DB/vault config).
     const rawLower = raw.toLowerCase()
-    if (rawLower === '/help' || rawLower === 'help') {
-      return { ok: true, response: formatKeeprHelp() }
+    const globalHelpMatch = raw.match(/^\/?help(?:\s+(\S+))?\s*$/i)
+    if (globalHelpMatch) {
+      return { ok: true, response: formatKeeprHelp(globalHelpMatch[1] ?? null) }
     }
 
   // Identity lookup commands should work without vault config/DB.
@@ -682,6 +885,25 @@ export async function handleKeeprCommand(params: {
       role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
     }
     return handleFarcasterCommand({
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      text: raw,
+      role,
+    })
+  }
+
+  // Handle Twitter/X commands (/x, x, /tweet, tweet)
+  const looksLikeX = /^(\/x|x)(\s|$)/.test(rawLower) || /^(\/tweet|tweet)(\s|$)/.test(rawLower)
+  if (looksLikeX) {
+    const v = await getKeeprVaultByGroupId(params.groupId)
+    let role: KeeprRole = 'MEMBER'
+    if (v) {
+      const owner = v.canonicalOwnerAddress
+      const admins = Array.isArray(v.config?.roles?.admins) ? v.config.roles.admins : []
+      const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
+      role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
+    }
+    return handleTwitterCommand({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
       text: raw,
@@ -753,8 +975,9 @@ export async function handleKeeprCommand(params: {
     const looksLikeKeepr = raw0.startsWith('/keepr') || raw0.startsWith('keepr')
     const parts0 = raw0.split(/\s+/g).filter(Boolean)
     const cmd0 = looksLikeKeepr ? (parts0[1] ?? 'help') : ''
+    const arg0 = looksLikeKeepr ? (parts0[2] ? String(parts0[2]) : null) : null
     if (cmd0 === 'help') {
-      return { ok: true, response: formatKeeprHelp() }
+      return { ok: true, response: formatKeeprHelp(arg0) }
     }
     if (cmd0 === 'status') {
       return { ok: true, response: formatVaultStatus(null) }
@@ -812,7 +1035,7 @@ export async function handleKeeprCommand(params: {
   if (cmd === 'help') {
     return {
       ok: true,
-      response: formatKeeprHelp(),
+      response: formatKeeprHelp(arg),
     }
   }
 

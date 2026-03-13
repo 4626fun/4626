@@ -4,6 +4,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreCreators } from './ExploreCreators'
 
+const { useQueryMock, useInfiniteQueryMock } = vi.hoisted(() => ({
+  useQueryMock: vi.fn(),
+  useInfiniteQueryMock: vi.fn(),
+}))
+
 vi.mock('framer-motion', () => ({
   motion: new Proxy(
     {},
@@ -19,38 +24,8 @@ vi.mock('react-router-dom', () => ({
 }))
 
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: vi.fn(() => ({
-    data: {
-      exact: false,
-      syncStatus: 'running',
-      sync: {
-        lastFullSyncAt: null,
-      },
-      totals: {
-        creatorsTotal: 1507,
-        creatorsNew24h: 12,
-        creatorCoinsMarketCapUsd: 6260000,
-        creatorCoinsVolume24hUsd: 5720,
-        creatorCoinsFees24hUsd: 57.17,
-      },
-    },
-  })),
-  useInfiniteQuery: vi.fn(() => ({
-    data: {
-      pages: [
-        {
-          edges: [],
-          pageInfo: { hasNextPage: false, endCursor: null },
-        },
-      ],
-    },
-    fetchNextPage: vi.fn(),
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    isLoading: false,
-    isError: false,
-    error: null,
-  })),
+  useQuery: useQueryMock,
+  useInfiniteQuery: useInfiniteQueryMock,
 }))
 
 vi.mock('@/components/seo/PageMeta', () => ({
@@ -73,16 +48,135 @@ vi.mock('@/components/explore/tableColumns', () => ({
 }))
 
 vi.mock('@/hooks/useMigratedCoins', () => ({
-  useMigratedCoins: () => ({ migratedCoins: [] }),
+  useMigratedCoins: () => ({ migratedCoins: new Set<string>() }),
 }))
 
+const BASE_COIN = {
+  address: '0x1111111111111111111111111111111111111111',
+  creatorAddress: '0x2222222222222222222222222222222222222222',
+  payoutRecipientAddress: '0x2222222222222222222222222222222222222222',
+  symbol: 'TRND',
+  name: 'Trend One',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  marketCap: '5730',
+  volume24h: '5730',
+}
+
+function configureQueries(params?: {
+  metrics?: {
+    exact: boolean
+    creatorsTotal: number
+    creatorsNew24h: number
+    marketCap: number
+    volume24h: number
+    fees24h: number
+  }
+  liveEdges?: any[]
+  pageEdges?: any[]
+}) {
+  const metrics = params?.metrics ?? {
+    exact: false,
+    creatorsTotal: 1507,
+    creatorsNew24h: 12,
+    marketCap: 6260000,
+    volume24h: 5720,
+    fees24h: 57.17,
+  }
+  const liveEdges = params?.liveEdges ?? []
+  const pageEdges = params?.pageEdges ?? []
+
+  useInfiniteQueryMock.mockReturnValue({
+    data: {
+      pages: [
+        {
+          edges: pageEdges,
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      ],
+    },
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isLoading: false,
+    isError: false,
+    error: null,
+  })
+
+  useQueryMock.mockImplementation((opts: any) => {
+    const queryKey = Array.isArray(opts?.queryKey) ? opts.queryKey : []
+    const queryType = String(queryKey[2] ?? '')
+
+    if (queryType === 'metrics') {
+      return {
+        data: {
+          exact: metrics.exact,
+          syncStatus: 'running',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+          sync: {
+            lastFullSyncAt: null,
+            driftEstimateTotal: null,
+          },
+          totals: {
+            creatorsTotal: metrics.creatorsTotal,
+            creatorsNew24h: metrics.creatorsNew24h,
+            creatorCoinsMarketCapUsd: metrics.marketCap,
+            creatorCoinsVolume24hUsd: metrics.volume24h,
+            creatorCoinsFees24hUsd: metrics.fees24h,
+            partial: !metrics.exact,
+            sampledCreators: 100,
+          },
+        },
+      }
+    }
+
+    if (queryType === 'live') {
+      return {
+        data: {
+          edges: liveEdges,
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      }
+    }
+
+    return {
+      data: [],
+      isLoading: false,
+      isFetching: false,
+    }
+  })
+}
+
 describe('ExploreCreators', () => {
-  it('uses partial-sync copy instead of claiming no creators exist', () => {
+  it('uses partial-sync copy and includes live estimate status', () => {
+    configureQueries()
     const html = renderToStaticMarkup(React.createElement(ExploreCreators))
 
     expect(html).toContain('Indexed creators')
     expect(html).toContain('1,507')
     expect(html).toContain('Creator list is still syncing')
+    expect(html).toContain('Live estimate updates every 10s')
     expect(html).not.toContain('No creators available')
+  })
+
+  it('uses partial-sync copy instead of claiming no creators exist', () => {
+    configureQueries({
+      metrics: {
+        exact: false,
+        creatorsTotal: 2000,
+        creatorsNew24h: 25,
+        marketCap: 100,
+        volume24h: 200,
+        fees24h: 2,
+      },
+      liveEdges: [{ node: BASE_COIN }],
+      pageEdges: [{ node: BASE_COIN }],
+    })
+
+    const html = renderToStaticMarkup(React.createElement(ExploreCreators))
+
+    expect(html).toContain('2,000')
+    expect(html).toContain('$5.73K')
+    expect(html).toContain('$57.30')
+    expect(html).not.toContain('$100.00')
   })
 })

@@ -4,7 +4,6 @@ import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
-import { useMiniAppContext } from '@/hooks/useMiniAppContext'
 import { getAgentIdentity } from '@/components/chat/agentIdentity'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -145,7 +144,6 @@ export function ConnectButtonWeb3() {
   const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
-  const mini = useMiniAppContext()
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
@@ -174,7 +172,7 @@ export function ConnectButtonWeb3() {
   })
 
   const identityAddress = buttonState === 'connected-wallet' ? address ?? null : buttonState === 'session-restored' ? sessionAddress : null
-  const shouldResolveIdentity = Boolean(identityAddress) && !(mini.isMiniApp === true && mini.username)
+  const shouldResolveIdentity = Boolean(identityAddress)
   const sharedIdentity = useIdentity(shouldResolveIdentity ? identityAddress : null)
   const basename = shouldResolveIdentity ? sharedIdentity.basename : null
   const basenameAvatar = shouldResolveIdentity ? sharedIdentity.basenameAvatar : null
@@ -200,9 +198,8 @@ export function ConnectButtonWeb3() {
       address,
       basename,
       basenameAvatar: unifiedAvatar,
-      miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
-      miniAvatarUrl:
-        mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : unifiedAvatar,
+      miniUsername: null,
+      miniAvatarUrl: unifiedAvatar,
     })
 
     return (
@@ -297,9 +294,8 @@ export function ConnectButtonWeb3() {
       address: sessionAddress,
       basename,
       basenameAvatar: unifiedAvatar,
-      miniUsername: mini.isMiniApp === true ? mini.username ?? null : null,
-      miniAvatarUrl:
-        mini.context?.user?.pfpUrl ? String(mini.context.user.pfpUrl) : unifiedAvatar,
+      miniUsername: null,
+      miniAvatarUrl: unifiedAvatar,
     })
 
     return (

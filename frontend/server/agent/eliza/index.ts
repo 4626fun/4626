@@ -80,7 +80,7 @@ import {
   TARGET_CANONICAL_CSW_ADDRESS,
   isTargetCanonicalCsw,
   normalizePolicyAddress,
-} from '../../../src/wallet/canonicalWalletPolicy'
+} from '../../../src/wallet/canonicalWalletPolicy.js'
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'

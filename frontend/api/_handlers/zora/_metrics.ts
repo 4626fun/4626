@@ -32,7 +32,7 @@ type MetricsResponse = {
   }
 }
 
-const METRICS_CACHE_TTL_MS = 5 * 60 * 1000
+const METRICS_CACHE_TTL_MS = 60 * 1000
 const STALE_REFRESH_BACKOFF_MS = 60 * 1000
 const STALE_REFRESH_ERROR_LOG_THROTTLE_MS = 60 * 1000
 

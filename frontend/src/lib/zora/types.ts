@@ -121,15 +121,24 @@ export type ZoraExploreListType =
   | 'NEW'
   | 'LAST_TRADED'
   | 'LAST_TRADED_UNIQUE'
+  // Trend-specific lists
+  | 'MOST_VALUABLE_TRENDS'
+  | 'NEW_TRENDS'
+  | 'TOP_VOLUME_TRENDS_24H'
+  | 'TRENDING_TRENDS'
   // Creator-specific lists
   | 'NEW_CREATORS'
   | 'MOST_VALUABLE_CREATORS'
   | 'TOP_VOLUME_CREATORS_24H'
   | 'FEATURED_CREATORS'
+  | 'TRENDING_CREATORS'
   // Content-specific lists
   | 'FEATURED_VIDEOS'
+  | 'TRENDING_POSTS'
   // Combined lists
+  | 'TRENDING_ALL'
   | 'TOP_VOLUME_ALL_24H'
   | 'NEW_ALL'
+  | 'MOST_VALUABLE_ALL'
 
 

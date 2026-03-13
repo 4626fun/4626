@@ -2,7 +2,7 @@ import {
   normalizePolicyAddress,
   resolvePolicyCanonicalAddress,
   TARGET_CANONICAL_CSW_ADDRESS,
-} from '../../src/wallet/canonicalWalletPolicy'
+} from '../../src/wallet/canonicalWalletPolicy.js'
 import { bankrGetMe, isBankrConfigured, type BankrMeResponse } from './client.js'
 
 type WalletProbeReason =

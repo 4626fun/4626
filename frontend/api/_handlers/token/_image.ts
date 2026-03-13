@@ -256,7 +256,7 @@ interface FramedSvgParams {
 
 const SOURCE_CACHE_V = 4
 const FRAME_STYLE_V = 7
-const FRAME_ASSET_URL = new URL('../../../public/miniapp-icon.svg', import.meta.url)
+const FRAME_ASSET_URL = new URL('../../../public/app-icon.svg', import.meta.url)
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184

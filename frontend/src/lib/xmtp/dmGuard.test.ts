@@ -13,13 +13,13 @@ describe('dmGuard', () => {
     expect(normalizeDmGuardAddress('not-an-address')).toBeNull()
   })
 
-  it('blocks self DM when peer equals identity', () => {
+  it('allows self DM when peer equals identity', () => {
     expect(
       shouldBlockSelfDm({
         peerAddress: '0x1111111111111111111111111111111111111111',
         identityAddress: '0x1111111111111111111111111111111111111111',
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('does not block when peer differs from identity', () => {

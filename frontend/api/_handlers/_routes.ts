@@ -150,10 +150,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 
-  'farcaster/me': () => import('./farcaster/_me.js'),
   'farcaster/mention': () => import('./farcaster/_mention.js'),
-  'farcaster/nonce': () => import('./farcaster/_nonce.js'),
-  'farcaster/verify': () => import('./farcaster/_verify.js'),
 
   'bankr/status': () => import('./bankr/_status.js'),
   'bankr/profile': () => import('./bankr/_profile.js'),
@@ -184,6 +181,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
   'social/twitter': () => import('./social/_twitter.js'),
+  'telegram/webhook': () => import('./telegram/_webhook.js'),
 
   'status/protocolReport': () => import('./status/_protocolReport.js'),
   'status/vaultReport': () => import('./status/_vaultReport.js'),
@@ -210,7 +208,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'waitlist/verify-social': () => import('./waitlist/_verify-social.js'),
   'waitlist/verify-x': () => import('./waitlist/_verify-x.js'),
   'rpc': () => import('./rpc/_proxy.js'),
-  'webhook': () => import('./_webhook.js'),
 
   'uniswap/query': () => import('./uniswap/_query.js'),
   'uniswap/poolHistory': () => import('./uniswap/_poolHistory.js'),
@@ -256,6 +253,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'zora/trendReserve': () => import('./zora/_trendReserve.js'),
   'zora/trendFunnelRun': () => import('./zora/_trendFunnelRun.js'),
   'zora/trendMetrics': () => import('./zora/_trendMetrics.js'),
+  'zora/trendSentinelProcess': () => import('./zora/_trendSentinelProcess.js'),
   'zora/topCreators': () => import('./zora/_topCreators.js'),
 
   'admin/creator-access/allowlist': () => import('./admin/creator-access/_allowlist.js'),
@@ -267,7 +265,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/creator-access/revoke': () => import('./admin/creator-access/_revoke.js'),
   'admin/db/index-usage': () => import('./admin/db/_indexUsage.js'),
   'admin/farcaster/provider-dashboard': () => import('./admin/farcaster/_provider-dashboard.js'),
-  'admin/miniapp/sendNotification': () => import('./admin/miniapp/_sendNotification.js'),
   'admin/waitlist/detail': () => import('./admin/waitlist/_detail.js'),
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),

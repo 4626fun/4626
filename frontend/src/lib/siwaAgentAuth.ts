@@ -1,5 +1,3 @@
-import { buildSIWAMessage } from '@buildersgarden/siwa'
-
 import { apiFetch } from './apiBase'
 import { clearStoredSiwaReceipt, setStoredSiwaReceipt } from './siwaReceiptStorage'
 
@@ -26,6 +24,42 @@ type AgentVerifyResponse = {
   verified: 'offline' | 'onchain'
   receipt: string
   receiptExpiresAt: string
+}
+
+type SiwaMessageFields = {
+  domain: string
+  address: string
+  statement?: string
+  uri: string
+  version?: string
+  agentId: number
+  agentRegistry: string
+  chainId: number
+  nonce: string
+  issuedAt: string
+  expirationTime?: string
+  notBefore?: string
+  requestId?: string
+}
+
+function buildSiwaMessage(fields: SiwaMessageFields): string {
+  const lines: string[] = []
+  lines.push(`${fields.domain} wants you to sign in with your Agent account:`)
+  lines.push(fields.address)
+  lines.push('')
+  if (fields.statement) lines.push(fields.statement)
+  lines.push('')
+  lines.push(`URI: ${fields.uri}`)
+  lines.push(`Version: ${fields.version || '1'}`)
+  lines.push(`Agent ID: ${fields.agentId}`)
+  lines.push(`Agent Registry: ${fields.agentRegistry}`)
+  lines.push(`Chain ID: ${fields.chainId}`)
+  lines.push(`Nonce: ${fields.nonce}`)
+  lines.push(`Issued At: ${fields.issuedAt}`)
+  if (fields.expirationTime) lines.push(`Expiration Time: ${fields.expirationTime}`)
+  if (fields.notBefore) lines.push(`Not Before: ${fields.notBefore}`)
+  if (fields.requestId) lines.push(`Request ID: ${fields.requestId}`)
+  return lines.join('\n')
 }
 
 export type SignInWithSiwaAgentParams = {
@@ -83,7 +117,7 @@ export async function signInWithSiwaAgent(params: SignInWithSiwaAgentParams): Pr
   }
 
   const nonceData = nonceJson.data
-  const message = buildSIWAMessage({
+  const message = buildSiwaMessage({
     domain: nonceData.domain,
     address: nonceData.ownerAddress,
     statement: params.statement ?? 'Sign in with your agent identity to access 4626 agent APIs.',

@@ -215,9 +215,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/keepr/join': () => import('./api/_handlers/keepr/_join'),
         '/api/keepr/vault/upsert': () => import('./api/_handlers/keepr/vault/_upsert'),
 
-        '/api/farcaster/me': () => import('./api/_handlers/farcaster/_me'),
-        '/api/farcaster/nonce': () => import('./api/_handlers/farcaster/_nonce'),
-        '/api/farcaster/verify': () => import('./api/_handlers/farcaster/_verify'),
         '/api/onchain/protocolRewardsClaimable': () => import('./api/_handlers/onchain/_protocolRewardsClaimable'),
         '/api/onchain/protocolRewardsWithdrawn': () => import('./api/_handlers/onchain/_protocolRewardsWithdrawn'),
         '/api/agent/invokeSkill': () => import('./api/_handlers/agent/_invokeSkill'),
@@ -326,8 +323,6 @@ export default defineConfig(({ command }) => {
 
           if (isPkg('react') || isPkg('react-dom') || isPkg('react-router-dom')) return 'vendor'
           if (isPkg('d3') || isPkg('recharts')) return 'charts'
-
-          if (isPkg('@farcaster/auth-kit') || isPkg('@farcaster/miniapp-sdk')) return 'farcaster'
           if (isPkg('@xmtp/browser-sdk') || isPkg('@xmtp/content-type-primitives')) return 'xmtp'
 
           return undefined

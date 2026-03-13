@@ -5,6 +5,19 @@ import { apiFetch } from '@/lib/apiBase'
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminResponse = { address: string; isAdmin: boolean } | null
 
+type DeriveAdminStatusInput = {
+  authAddress: string | null | undefined
+  sessionHydrated: boolean
+  queryLoading: boolean
+  queryIsAdmin: boolean
+}
+
+type DeriveAdminStatusOutput = {
+  hasSessionAddress: boolean
+  isAdmin: boolean
+  isLoading: boolean
+}
+
 async function fetchAdminStatus(): Promise<AdminResponse> {
   const res = await apiFetch('/api/auth/admin', {
     method: 'GET',
@@ -17,8 +30,22 @@ async function fetchAdminStatus(): Promise<AdminResponse> {
   return json.data ?? null
 }
 
-export function useAdminStatus() {
-  const { authAddress, sessionHydrated } = useSiweAuth()
+export function deriveAdminStatus(input: DeriveAdminStatusInput): DeriveAdminStatusOutput {
+  const hasSessionAddress = Boolean(input.authAddress)
+
+  return {
+    hasSessionAddress,
+    isAdmin: hasSessionAddress && input.queryIsAdmin,
+    // No session means no admin query is needed; keep this non-blocking.
+    isLoading: hasSessionAddress ? (!input.sessionHydrated || input.queryLoading) : false,
+  }
+}
+
+function useAdminStatusQueryState(params: {
+  authAddress: string | null
+  sessionHydrated: boolean
+}) {
+  const { authAddress, sessionHydrated } = params
   const hasSessionAddress = Boolean(authAddress)
 
   const query = useQuery({
@@ -30,10 +57,32 @@ export function useAdminStatus() {
     retry: 0,
   })
 
+  const derived = deriveAdminStatus({
+    authAddress,
+    sessionHydrated,
+    queryLoading: query.isLoading,
+    queryIsAdmin: query.data?.isAdmin === true,
+  })
+
   return {
-    isAdmin: hasSessionAddress && query.data?.isAdmin === true,
-    isLoading: !sessionHydrated || (hasSessionAddress && query.isLoading),
+    isAdmin: derived.isAdmin,
+    isLoading: derived.isLoading,
     error: query.error,
     refetch: query.refetch,
   }
+}
+
+export function useAdminStatusFromSession(params: {
+  authAddress: string | null
+  sessionHydrated: boolean
+}) {
+  return useAdminStatusQueryState(params)
+}
+
+export function useAdminStatus() {
+  const { authAddress, sessionHydrated } = useSiweAuth()
+  return useAdminStatusQueryState({
+    authAddress,
+    sessionHydrated,
+  })
 }

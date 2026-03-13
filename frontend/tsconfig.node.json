@@ -20,6 +20,7 @@
     "server/debank/**/*.ts",
     "server/dexscreener/**/*.ts",
     "server/farcaster/**/*.ts",
+    "server/twitter/**/*.ts",
     "server/zora/**/*.ts",
     "server/uniswap/**/*.ts",
     "server/bankr/**/*.ts",

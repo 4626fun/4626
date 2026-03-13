@@ -29,7 +29,7 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
 import { LaunchCoinCard } from '@/components/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
-import { useCreatorAllowlist, useFarcasterAuth, useMiniAppContext, useDeploymentTracker } from '@/hooks'
+import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/DeploymentSuccess'
 import { VaultImageGenerator } from '@/components/VaultImageGenerator'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
@@ -39,7 +39,6 @@ import { logger } from '@/lib/logger'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
-import { getFarcasterUserByFid } from '@/lib/neynar-api'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
@@ -6184,58 +6183,6 @@ function DeployVaultMain() {
   // Also query Privy smart wallet's Zora profile (for Privy-first flow)
   const privyWalletProfileQuery = useZoraProfile(privySmartWalletAddress ?? undefined)
   const privyWalletProfile = privyWalletProfileQuery.data
-  const miniApp = useMiniAppContext()
-  const farcasterAuth = useFarcasterAuth()
-  // `sdk.context.*` is untrusted. Prefer verified Farcaster auth (Quick Auth / SIWF) when available.
-  const farcasterFidForLookup = useMemo(() => {
-    if (typeof farcasterAuth.fid === 'number' && farcasterAuth.fid > 0) return farcasterAuth.fid
-    if (typeof miniApp.fid === 'number' && miniApp.fid > 0) return miniApp.fid
-    return null
-  }, [farcasterAuth.fid, miniApp.fid])
-
-  const farcasterIdentityQuery = useQuery({
-    queryKey: ['farcasterIdentity', farcasterFidForLookup ?? 'none'],
-    enabled: typeof farcasterFidForLookup === 'number' && farcasterFidForLookup > 0,
-    queryFn: async () => {
-      return await getFarcasterUserByFid(farcasterFidForLookup as number)
-    },
-    staleTime: 60_000,
-    retry: 0,
-  })
-
-  const verifiedFarcasterUsername = useMemo(() => {
-    if (typeof farcasterAuth.fid !== 'number' || farcasterAuth.fid <= 0) return null
-    const u = farcasterIdentityQuery.data?.username
-    if (typeof u !== 'string') return null
-    const trimmed = u.trim()
-    return trimmed.length > 0 ? trimmed : null
-  }, [farcasterAuth.fid, farcasterIdentityQuery.data?.username])
-
-  const farcasterUsernameForZoraLookup = useMemo(() => {
-    // Prefer verified username (derived from verified fid); otherwise use untrusted context for suggestion-only.
-    const ctx = typeof miniApp.username === 'string' ? miniApp.username.trim() : ''
-    const fallback = typeof farcasterIdentityQuery.data?.username === 'string' ? farcasterIdentityQuery.data.username.trim() : ''
-    const out = verifiedFarcasterUsername || ctx || fallback
-    return out && out.length > 0 ? out : null
-  }, [verifiedFarcasterUsername, miniApp.username, farcasterIdentityQuery.data?.username])
-
-  const farcasterProfileQuery = useZoraProfile(farcasterUsernameForZoraLookup ?? undefined)
-
-  const farcasterCustodyAddress = useMemo(() => {
-    const v = farcasterIdentityQuery.data?.custodyAddress ? String(farcasterIdentityQuery.data.custodyAddress) : ''
-    return isAddress(v) ? (v as Address) : null
-  }, [farcasterIdentityQuery.data?.custodyAddress])
-
-  const farcasterVerifiedEthAddresses = useMemo(() => {
-    const raw = farcasterIdentityQuery.data?.verifiedEthAddresses ?? []
-    const out: Address[] = []
-    for (const a of raw) {
-      const v = typeof a === 'string' ? a : ''
-      if (!isAddress(v)) continue
-      out.push(v as Address)
-    }
-    return out
-  }, [farcasterIdentityQuery.data?.verifiedEthAddresses])
 
   const adminAuthQuery = useQuery({
     queryKey: ['adminAuth'],
@@ -6274,11 +6221,6 @@ function DeployVaultMain() {
     return isAddress(v) ? (v as Address) : null
   }, [myProfile?.creatorCoin?.address])
 
-  const detectedCreatorCoinFromFarcaster = useMemo(() => {
-    const v = farcasterProfileQuery.data?.creatorCoin?.address ? String(farcasterProfileQuery.data.creatorCoin.address) : ''
-    return isAddress(v) ? (v as Address) : null
-  }, [farcasterProfileQuery.data?.creatorCoin?.address])
-
   // Detect creator coin from Privy smart wallet's Zora profile (Privy-first flow)
   const detectedCreatorCoinFromPrivy = useMemo(() => {
     const v = privyWalletProfile?.creatorCoin?.address ? String(privyWalletProfile.creatorCoin.address) : ''
@@ -6314,19 +6256,6 @@ function DeployVaultMain() {
     setCreatorToken(detectedCreatorCoin)
     autofillRef.current.tokenFor = addressLc
   }, [isConnected, addressLc, prefillToken, creatorToken, detectedCreatorCoin])
-
-  // Mini App fallback (verified): only prefill from Farcaster-derived data once we have a verified session.
-  // `sdk.context.*` is suggestion-only and should not trigger irreversible defaults.
-  useEffect(() => {
-    if (prefillToken) return
-    if (creatorToken.trim().length > 0) return
-    if (!verifiedFarcasterUsername) return
-    if (!detectedCreatorCoinFromFarcaster) return
-    const key = `miniapp:${verifiedFarcasterUsername.toLowerCase()}`
-    if (autofillRef.current.tokenFor === key) return
-    setCreatorToken(detectedCreatorCoinFromFarcaster)
-    autofillRef.current.tokenFor = key
-  }, [prefillToken, creatorToken, verifiedFarcasterUsername, detectedCreatorCoinFromFarcaster])
 
   // Privy-first: auto-fill creator coin from Privy smart wallet's Zora profile
   useEffect(() => {
@@ -6438,10 +6367,10 @@ function DeployVaultMain() {
       connectedWallet: connectedWalletAddress,
       privySmartWallet: privySmartWalletAddress,
       zoraCoin: zoraCoin ?? null,
-      farcasterZoraProfile: farcasterProfileQuery.data ?? null,
-      farcasterCustodyAddress,
+      farcasterZoraProfile: null,
+      farcasterCustodyAddress: null,
     })
-  }, [connectedWalletAddress, privySmartWalletAddress, farcasterCustodyAddress, farcasterProfileQuery.data, zoraCoin])
+  }, [connectedWalletAddress, privySmartWalletAddress, zoraCoin])
 
   const canonicalIdentityAddress = identity.canonicalIdentity.address
   const deploySender = (canonicalIdentityAddress as Address | null) ?? null
@@ -7834,26 +7763,6 @@ function DeployVaultMain() {
             <div className="space-y-2">
                 <label className="label">Creator Coin</label>
 
-                {miniApp.isMiniApp && farcasterAuth.status !== 'verified' && farcasterAuth.canSiwf !== false ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-zinc-600">
-                      Verify your profile to enable Mini App autofill.
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void farcasterAuth.signIn()}
-                      disabled={farcasterAuth.status === 'loading'}
-                      className="text-[10px] text-zinc-600 hover:text-zinc-200 transition-colors disabled:opacity-60"
-                      title="Requests an in-app sign-in credential (no transaction)"
-                    >
-                      {farcasterAuth.status === 'loading' ? 'Verifying…' : 'Verify'}
-                    </button>
-                  </div>
-                ) : null}
-                {miniApp.isMiniApp && farcasterAuth.status === 'error' && farcasterAuth.error ? (
-                  <div className="text-[11px] text-red-400/80">{farcasterAuth.error}</div>
-                ) : null}
-
                 {!hasWallet ? (
                   tokenIsValid ? (
                     <input
@@ -8000,14 +7909,6 @@ function DeployVaultMain() {
                 <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
                   <div className="text-amber-300/90 text-sm font-medium">Identity mismatch</div>
                   <div className="text-amber-300/70 text-xs leading-relaxed">{identityBlockingReason}</div>
-                  {farcasterVerifiedEthAddresses.length > 0 ? (
-                    <div className="text-[11px] text-amber-300/70">
-                      Verified wallets (suggestion-only):{' '}
-                      <span className="font-mono text-amber-200">
-                        {farcasterVerifiedEthAddresses.map((a) => shortAddress(a)).join(', ')}
-                      </span>
-                    </div>
-                  ) : null}
                 </div>
               ) : tokenIsValid && zoraCoin && !isAuthorizedDeployerOrOperator ? (
                 <button
@@ -8054,18 +7955,6 @@ function DeployVaultMain() {
                 </button>
               ) : canDeploy ? (
                 <>
-                  {tokenIsValid && zoraCoin && identity.warnings.includes('CUSTODY_MISMATCH') && farcasterCustodyAddress ? (
-                    <div className="text-[11px] text-amber-300/80">
-                      Custody wallet{' '}
-                      <span className="font-mono text-amber-200">{shortAddress(farcasterCustodyAddress)}</span> does not match the coin’s
-                      canonical identity{' '}
-                      <span className="font-mono text-amber-200">
-                        {shortAddress(identity.canonicalIdentity.address as Address)}
-                      </span>
-                      . This does not block deploy, but double-check you’re using the intended identity.
-                    </div>
-                  ) : null}
-
                   {privySmartWalletIsCanonicalOwner ? (
                     <div className="flex items-center gap-2 text-[11px] text-green-400 mb-2">
                       <span>✓</span>

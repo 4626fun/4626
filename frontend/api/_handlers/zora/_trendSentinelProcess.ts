@@ -1,0 +1,93 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+import { handleOptions, setCors } from '../../../server/zora/_shared.js'
+import { runTrendLaunchSentinelProcess } from '../../../server/zora/trendLaunchSentinel.js'
+
+declare const process: { env: Record<string, string | undefined> }
+
+type Body = {
+  tickers?: string[] | string
+  creatorToken?: string
+  groupId?: string
+  pollMs?: number | string
+  jitterMs?: number | string
+  maxRuntimeMs?: number | string
+  maxConsecutiveErrors?: number | string
+  requireReceipt?: boolean | string
+}
+
+function readBearerToken(req: VercelRequest): string {
+  const header = String(req.headers.authorization ?? '').trim()
+  if (!header.toLowerCase().startsWith('bearer ')) return ''
+  return header.slice('bearer '.length).trim()
+}
+
+function parseBody(req: VercelRequest): Body {
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) return req.body as Body
+  if (typeof req.body === 'string' && req.body.trim()) {
+    try {
+      const parsed = JSON.parse(req.body) as Body
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+    } catch {}
+  }
+  return {}
+}
+
+function parseNumber(value: unknown): number | undefined {
+  const n = Number(String(value ?? '').trim())
+  if (!Number.isFinite(n)) return undefined
+  return Math.floor(n)
+}
+
+function parseBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (!raw) return undefined
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') return true
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return undefined
+}
+
+function parseTickers(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) return value.map((v) => String(v))
+  if (typeof value === 'string' && value.trim()) return value.split(/[\s,]+/g).filter(Boolean)
+  return undefined
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCors(req, res)
+  if (handleOptions(req, res)) return
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const secret = String(process.env.TREND_SENTINEL_SECRET ?? '').trim()
+  const provided = readBearerToken(req)
+  if (!secret || provided !== secret) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
+  }
+
+  const body = parseBody(req)
+  try {
+    const data = await runTrendLaunchSentinelProcess({
+      overrides: {
+        tickers: parseTickers(body.tickers),
+        creatorToken: body.creatorToken,
+        groupId: body.groupId,
+        pollMs: parseNumber(body.pollMs),
+        jitterMs: parseNumber(body.jitterMs),
+        maxRuntimeMs: parseNumber(body.maxRuntimeMs),
+        maxConsecutiveErrors: parseNumber(body.maxConsecutiveErrors),
+        requireReceipt: parseBoolean(body.requireReceipt),
+      },
+    })
+    return res.status(200).json({ success: true, data })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: String(error?.message ?? 'trend_sentinel_process_failed').slice(0, 220),
+    })
+  }
+}
+

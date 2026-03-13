@@ -50,6 +50,12 @@ function isKeeprCommand(text: string): boolean {
     t.startsWith('send ') ||
     t.startsWith('/fc') ||
     t.startsWith('fc ') ||
+    t.startsWith('/x') ||
+    t === 'x' ||
+    t.startsWith('x ') ||
+    t.startsWith('/tweet') ||
+    t === 'tweet' ||
+    t.startsWith('tweet ') ||
     t.startsWith('/coin') ||
     t.startsWith('coin ') ||
     t.startsWith('/ai') ||

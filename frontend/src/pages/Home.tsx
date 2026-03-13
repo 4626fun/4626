@@ -2,13 +2,29 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { getHostMode } from '@/lib/host'
+import { getHostMode, type HostMode } from '@/lib/host'
 import { useEffect, useMemo } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
 import { PageMeta } from '@/components/seo/PageMeta'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
+
+type HomeRedirectInput = {
+  hostMode: HostMode
+  search: string
+  hash: string
+}
+
+export function shouldRedirectHomeToSwap(input: HomeRedirectInput): boolean {
+  if (input.hostMode !== 'app') return false
+  const params = new URLSearchParams(input.search)
+  const reason = String(params.get('reason') ?? '').trim().toLowerCase()
+  const isWaitlistAccessReason = reason === 'needs-session' || reason === 'needs-acceptance'
+  if (isWaitlistAccessReason) return false
+  if (input.hash === '#waitlist') return false
+  return true
+}
 
 export function Home() {
   const location = useLocation()
@@ -61,7 +77,13 @@ export function Home() {
     })
   }, [hostMode, location.hash])
 
-  if (hostMode === 'app') {
+  if (
+    shouldRedirectHomeToSwap({
+      hostMode,
+      search: location.search,
+      hash: location.hash,
+    })
+  ) {
     return <Navigate to="/swap" replace />
   }
 

@@ -8,11 +8,25 @@ type ExploreList =
   | 'NEW'
   | 'LAST_TRADED'
   | 'LAST_TRADED_UNIQUE'
+  // Trend-specific
+  | 'MOST_VALUABLE_TRENDS'
+  | 'NEW_TRENDS'
+  | 'TOP_VOLUME_TRENDS_24H'
+  | 'TRENDING_TRENDS'
   // Creator-specific
   | 'NEW_CREATORS'
   | 'MOST_VALUABLE_CREATORS'
   | 'TOP_VOLUME_CREATORS_24H'
   | 'FEATURED_CREATORS'
+  | 'TRENDING_CREATORS'
+  // Content-specific
+  | 'FEATURED_VIDEOS'
+  | 'TRENDING_POSTS'
+  // Combined
+  | 'TRENDING_ALL'
+  | 'TOP_VOLUME_ALL_24H'
+  | 'NEW_ALL'
+  | 'MOST_VALUABLE_ALL'
 
 function parseList(value: string | null): ExploreList {
   switch (value) {
@@ -21,10 +35,21 @@ function parseList(value: string | null): ExploreList {
     case 'NEW':
     case 'LAST_TRADED':
     case 'LAST_TRADED_UNIQUE':
+    case 'MOST_VALUABLE_TRENDS':
+    case 'NEW_TRENDS':
+    case 'TOP_VOLUME_TRENDS_24H':
+    case 'TRENDING_TRENDS':
     case 'NEW_CREATORS':
     case 'MOST_VALUABLE_CREATORS':
     case 'TOP_VOLUME_CREATORS_24H':
     case 'FEATURED_CREATORS':
+    case 'TRENDING_CREATORS':
+    case 'FEATURED_VIDEOS':
+    case 'TRENDING_POSTS':
+    case 'TRENDING_ALL':
+    case 'TOP_VOLUME_ALL_24H':
+    case 'NEW_ALL':
+    case 'MOST_VALUABLE_ALL':
       return value
     default:
       return 'TOP_GAINERS'
@@ -67,11 +92,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'NEW': () => sdk.getCoinsNew(options),
       'LAST_TRADED': () => sdk.getCoinsLastTraded(options),
       'LAST_TRADED_UNIQUE': () => sdk.getCoinsLastTradedUnique(options),
+      // Trend-specific
+      'MOST_VALUABLE_TRENDS': () => sdk.getMostValuableTrends(options),
+      'NEW_TRENDS': () => sdk.getNewTrends(options),
+      'TOP_VOLUME_TRENDS_24H': () => sdk.getTopVolumeTrends24h(options),
+      'TRENDING_TRENDS': () => sdk.getTrendingTrends(options),
       // Creator-specific
       'NEW_CREATORS': () => sdk.getCreatorCoins(options),
       'MOST_VALUABLE_CREATORS': () => sdk.getMostValuableCreatorCoins(options),
       'TOP_VOLUME_CREATORS_24H': () => sdk.getExploreTopVolumeCreators24h(options),
       'FEATURED_CREATORS': () => sdk.getExploreFeaturedCreators(options),
+      'TRENDING_CREATORS': () => sdk.getTrendingCreators(options),
+      // Content-specific
+      'FEATURED_VIDEOS': () => sdk.getExploreFeaturedVideos(options),
+      'TRENDING_POSTS': () => sdk.getTrendingPosts(options),
+      // Combined
+      'TRENDING_ALL': () => sdk.getTrendingAll(options),
+      'TOP_VOLUME_ALL_24H': () => sdk.getExploreTopVolumeAll24h(options),
+      'NEW_ALL': () => sdk.getExploreNewAll(options),
+      'MOST_VALUABLE_ALL': () => sdk.getMostValuableAll(options),
     }
     
     const fn = sdkFunctions[list] || (() => sdk.getCoinsTopGainers(options))

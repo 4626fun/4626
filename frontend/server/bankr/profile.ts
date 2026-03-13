@@ -1,4 +1,4 @@
-import { normalizePolicyAddress } from '../../src/wallet/canonicalWalletPolicy'
+import { normalizePolicyAddress } from '../../src/wallet/canonicalWalletPolicy.js'
 import {
   bankrAddProfileUpdate,
   bankrCreateProfile,

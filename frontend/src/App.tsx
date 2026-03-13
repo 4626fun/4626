@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import { useCreatorAllowlist } from '@/hooks'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { useAdminStatus } from '@/hooks/useAdminStatus'
+import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { CANONICAL_EXPLORE_ROUTE, CANONICAL_SWAP_ROUTE, resolveLegacyRedirect } from '@/lib/routes/canonicalRoutes'
@@ -120,7 +120,10 @@ const ADMIN_BYPASS_ADDRESSES = buildAdminBypassSet()
 function useResolvedAccessState(): AccessState {
   const { address: connectedAddressRaw, isConnected } = useAccount()
   const siwe = useSiweAuth()
-  const adminStatus = useAdminStatus()
+  const adminStatus = useAdminStatusFromSession({
+    authAddress: typeof siwe.authAddress === 'string' ? siwe.authAddress : null,
+    sessionHydrated: siwe.sessionHydrated,
+  })
 
   const connectedAddress = useMemo(
     () =>
@@ -391,6 +394,11 @@ const ExploreContent = lazy(async () => {
   return { default: m.ExploreContent }
 })
 
+const ExploreTrends = lazy(async () => {
+  const m = await import('./pages/ExploreTrends')
+  return { default: m.ExploreTrends }
+})
+
 const ExploreTransactions = lazy(async () => {
   const m = await import('./pages/ExploreTransactions')
   return { default: m.ExploreTransactions }
@@ -544,6 +552,7 @@ function App() {
                 <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
                 <Route path="/explore/creators" element={<ExploreCreators />} />
                 <Route path="/explore/content" element={<ExploreContent />} />
+                <Route path="/explore/trends" element={<ExploreTrends />} />
                 <Route path="/explore/transactions" element={<ExploreTransactions />} />
                 <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
                 <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
@@ -597,7 +606,6 @@ function App() {
                       </WithSmartWallets>
                     }
                   />
-                  <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
                   <Route
                     path="deploy-strategies"
                     element={
@@ -607,7 +615,6 @@ function App() {
                     }
                   />
                 </Route>
-                <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
               </Route>
             </Route>
             </Route>

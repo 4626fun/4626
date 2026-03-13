@@ -13,7 +13,6 @@ export const APP_ONLY_PATHS = [
   '/vote',
   '/auction',
   '/admin',
-  '/miniapp',
   '/agents',
   '/coin',
   '/creator',

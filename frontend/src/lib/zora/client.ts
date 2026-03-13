@@ -118,16 +118,25 @@ export async function fetchZoraExplore(params: {
     'NEW': () => sdk.getCoinsNew(options),
     'LAST_TRADED': () => sdk.getCoinsLastTraded(options),
     'LAST_TRADED_UNIQUE': () => sdk.getCoinsLastTradedUnique(options),
+    // Trend-specific
+    'MOST_VALUABLE_TRENDS': () => sdk.getMostValuableTrends(options),
+    'NEW_TRENDS': () => sdk.getNewTrends(options),
+    'TOP_VOLUME_TRENDS_24H': () => sdk.getTopVolumeTrends24h(options),
+    'TRENDING_TRENDS': () => sdk.getTrendingTrends(options),
     // Creator-specific (these return creator coins, not profiles)
     'NEW_CREATORS': () => sdk.getCreatorCoins(options),
     'MOST_VALUABLE_CREATORS': () => sdk.getMostValuableCreatorCoins(options),
     'TOP_VOLUME_CREATORS_24H': () => sdk.getExploreTopVolumeCreators24h(options),
     'FEATURED_CREATORS': () => sdk.getExploreFeaturedCreators(options),
+    'TRENDING_CREATORS': () => sdk.getTrendingCreators(options),
     // Content-specific
-    'FEATURED_VIDEOS': () => sdk.getCoinsNew(options), // fallback, no specific endpoint
+    'FEATURED_VIDEOS': () => sdk.getExploreFeaturedVideos(options),
+    'TRENDING_POSTS': () => sdk.getTrendingPosts(options),
     // Combined
-    'TOP_VOLUME_ALL_24H': () => sdk.getCoinsTopVolume24h(options), // fallback
-    'NEW_ALL': () => sdk.getCoinsNew(options), // fallback
+    'TRENDING_ALL': () => sdk.getTrendingAll(options),
+    'TOP_VOLUME_ALL_24H': () => sdk.getExploreTopVolumeAll24h(options),
+    'NEW_ALL': () => sdk.getExploreNewAll(options),
+    'MOST_VALUABLE_ALL': () => sdk.getMostValuableAll(options),
   }
 
   const fn = sdkFunctions[list] || (() => sdk.getCoinsLastTradedUnique(options))

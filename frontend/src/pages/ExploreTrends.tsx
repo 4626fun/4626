@@ -1,0 +1,271 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
+import { useSearchParams } from 'react-router-dom'
+import { useInfiniteQuery } from '@tanstack/react-query'
+
+import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
+import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
+import { fetchZoraExplore } from '@/lib/zora/client'
+import { useMigratedCoins } from '@/hooks/useMigratedCoins'
+import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
+
+const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
+  volume: 'TOP_VOLUME_TRENDS_24H',
+  marketCap: 'MOST_VALUABLE_TRENDS',
+  priceChange: 'TRENDING_TRENDS',
+  new: 'NEW_TRENDS',
+}
+
+const PAGE_SIZE = 20
+const LIVE_REFETCH_MS = 12_000
+
+export function ExploreTrends() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [expandedFees, setExpandedFees] = useState<string | null>(null)
+
+  const currentTimeFilter = searchParams.get('time') || '1d'
+  const currentSort = searchParams.get('sort') || 'volume'
+
+  const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_TRENDS_24H'
+
+  // Fetch migrated coins for accurate fee detection
+  const { migratedCoins } = useMigratedCoins()
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+  } = useInfiniteQuery({
+    queryKey: ['explore', 'trends', listType],
+    queryFn: async ({ pageParam }) => {
+      const result = await fetchZoraExplore({
+        list: listType,
+        count: PAGE_SIZE,
+        after: pageParam,
+      })
+      return result
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage?.pageInfo?.hasNextPage) return undefined
+      return lastPage.pageInfo.endCursor
+    },
+    staleTime: LIVE_REFETCH_MS,
+    refetchInterval: LIVE_REFETCH_MS,
+    refetchIntervalInBackground: true,
+  })
+
+  const allCoins = useMemo(() => {
+    if (!data?.pages) return []
+    const coins: ZoraCoin[] = []
+    for (const page of data.pages) {
+      if (!page?.edges) continue
+      for (const edge of page.edges) {
+        if (edge?.node) coins.push(edge.node)
+      }
+    }
+    return coins
+  }, [data])
+
+  const filteredCoins = useMemo(() => {
+    if (!searchQuery.trim()) return allCoins
+    const query = searchQuery.toLowerCase()
+    return allCoins.filter((coin) => {
+      const name = (coin.name || '').toLowerCase()
+      const symbol = (coin.symbol || '').toLowerCase()
+      const address = (coin.address || '').toLowerCase()
+      const creator = (coin.creatorProfile?.handle || '').toLowerCase()
+      return name.includes(query) || symbol.includes(query) || address.includes(query) || creator.includes(query)
+    })
+  }, [allCoins, searchQuery])
+
+  // Handle infinite scroll
+  const handleScroll = useCallback(() => {
+    if (
+      window.innerHeight + document.documentElement.scrollTop >=
+      document.documentElement.offsetHeight - 500
+    ) {
+      if (hasNextPage && !isFetchingNextPage) {
+        fetchNextPage()
+      }
+    }
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [handleScroll])
+
+  const handleTimeFilterChange = (filter: string) => {
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('time', filter)
+    setSearchParams(newParams, { replace: true })
+  }
+
+  const handleSortChange = (sort: string) => {
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('sort', sort)
+    setSearchParams(newParams, { replace: true })
+  }
+
+  return (
+    <div className="relative min-h-screen pt-1 sm:pt-2">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="mb-4 sm:mb-6"
+        >
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
+            Top Trends on Base
+          </h1>
+          <p className="text-zinc-400 text-[13px] sm:text-sm">
+            Trend Coins ranked by trend velocity, volume, and market cap.
+          </p>
+        </motion.div>
+
+        {/* Navigation & Filters */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="mb-6"
+        >
+          <ExploreSubnav
+            searchPlaceholder="Search trends"
+            onSearch={setSearchQuery}
+            onTimeFilterChange={handleTimeFilterChange}
+            onSortChange={handleSortChange}
+            currentTimeFilter={currentTimeFilter}
+            currentSort={currentSort}
+          />
+        </motion.div>
+
+        {/* Pool Table */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+        >
+          {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
+          <div className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+            <div
+              className="overflow-x-auto scrollbar-hide"
+              id="explore-trends-header"
+              data-scrolled="0"
+              onScroll={(e) => {
+                const body = document.getElementById('explore-trends-body')
+                const scrolled = e.currentTarget.scrollLeft > 0
+                e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
+                if (body) {
+                  body.scrollLeft = e.currentTarget.scrollLeft
+                  body.dataset.scrolled = scrolled ? '1' : '0'
+                }
+              }}
+            >
+              <div className="min-w-max">
+                <PoolTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />
+              </div>
+            </div>
+          </div>
+
+          {/* Table body with synced horizontal scroll */}
+          <div
+            className="overflow-x-auto scrollbar-hide"
+            id="explore-trends-body"
+            data-scrolled="0"
+            onScroll={(e) => {
+              const header = document.getElementById('explore-trends-header')
+              const scrolled = e.currentTarget.scrollLeft > 0
+              if (header) {
+                header.scrollLeft = e.currentTarget.scrollLeft
+                header.dataset.scrolled = scrolled ? '1' : '0'
+              }
+              e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
+            }}
+          >
+            <div className="min-w-max divide-y divide-zinc-800/50">
+              {isLoading ? (
+                // Loading skeletons
+                Array.from({ length: 10 }).map((_, i) => <PoolRowSkeleton key={i} />)
+              ) : isError ? (
+                // Error state
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400 mb-4">Failed to load trends</p>
+                  <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
+                </div>
+              ) : filteredCoins.length === 0 ? (
+                // Empty state
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400">
+                    {searchQuery ? 'No trends found matching your search' : 'No trends available'}
+                  </p>
+                </div>
+              ) : (
+                // Pool rows
+                filteredCoins.map((coin, index) => {
+                  const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
+                  const isExpanded = expandedFees === rowId
+                  return (
+                    <PoolRow
+                      key={coin.address || index}
+                      rank={index + 1}
+                      coin={coin}
+                      timeframe={currentTimeFilter}
+                      migratedCoins={migratedCoins ?? undefined}
+                      isExpanded={isExpanded}
+                      onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
+                    />
+                  )
+                })
+              )}
+
+              {/* Loading more indicator */}
+              {isFetchingNextPage && (
+                <>
+                  <PoolRowSkeleton />
+                  <PoolRowSkeleton />
+                  <PoolRowSkeleton />
+                </>
+              )}
+
+              {/* Load more button (fallback for scroll) */}
+              {hasNextPage && !isFetchingNextPage && (
+                <div className="px-6 py-4 border-t border-zinc-800 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => fetchNextPage()}
+                    className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  >
+                    Load more
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Stats footer */}
+        {!isLoading && filteredCoins.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            className="mt-4 text-center text-xs text-zinc-600"
+          >
+            Showing {filteredCoins.length} trend coins
+          </motion.div>
+        )}
+      </div>
+    </div>
+  )
+}
+

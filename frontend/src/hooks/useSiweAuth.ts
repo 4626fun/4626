@@ -166,8 +166,7 @@ export function useSiweAuth() {
   // - creator access requests (/api/creator-access/*)
   // - admin gating (/api/admin/*)
   //
-  // It is NOT a Farcaster identity signal. Do not treat `isSignedIn` as equivalent to a verified Farcaster FID.
-  // Farcaster identity verification lives in `useFarcasterAuth()` (/api/farcaster/*).
+  // It is NOT a social identity signal and should not be mapped to any external profile ID.
   const { address, isConnected } = useAccount()
   const { signMessageAsync } = useSignMessage()
   const privyAny = useSafePrivyHook()
