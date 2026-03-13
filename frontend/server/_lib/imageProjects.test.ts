@@ -29,7 +29,7 @@ function createImageDb() {
 
       if (text.includes('insert into image_generation_projects')) {
         if (!text.includes('creator_address')) {
-          throw new Error('INSERT must include creator_address column')
+          throw new Error('image_generation_projects INSERT must include creator_address column')
         }
         const row = {
           id: String(values[0]),
@@ -165,6 +165,7 @@ describe('image project storage', () => {
     const { createImageGenerationProject } = await import('./imageProjects.ts')
     const project = await createImageGenerationProject({
       ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      creatorAddress: '0xB05CF01231CF2FF99499682E64D3780D57C80FDD',
       instruction: 'Put the dog in the square.',
       stylePreset: 'modern_elegant',
       brandContext: ['creator coin', 'vault icon'],
