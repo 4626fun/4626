@@ -1,10 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 
 import { handleOptions, setCors } from '../../../server/auth/_shared.js'
 
 const FETCH_TIMEOUT_MS = 8_000
 const MAX_IMAGE_BYTES = 2_000_000
+const MAX_REDIRECTS = 3
 const CACHE_CONTROL_VALUE = 'public, max-age=3600, stale-while-revalidate=86400'
 
 function firstQueryString(value: string | string[] | undefined): string {
@@ -36,15 +38,26 @@ function isPrivateIpv4(host: string): boolean {
   if (a === 192 && b === 168) return true
   if (a === 100 && b >= 64 && b <= 127) return true
   if (a === 198 && (b === 18 || b === 19)) return true
+  if (a >= 224) return true
   return false
 }
 
 function isPrivateIpv6(host: string): boolean {
   const value = host.toLowerCase()
+  if (value.startsWith('::ffff:')) {
+    return isPrivateIpv4(value.slice('::ffff:'.length))
+  }
   if (value === '::1') return true
   if (value === '::') return true
   if (value.startsWith('fc') || value.startsWith('fd')) return true
   if (value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb')) return true
+  return false
+}
+
+function isForbiddenIpAddress(address: string): boolean {
+  const ipVersion = isIP(address)
+  if (ipVersion === 4) return isPrivateIpv4(address)
+  if (ipVersion === 6) return isPrivateIpv6(address)
   return false
 }
 
@@ -54,9 +67,7 @@ function isForbiddenHostname(hostname: string): boolean {
   if (host === 'localhost' || host.endsWith('.localhost')) return true
   if (host === '0.0.0.0') return true
 
-  const ipVersion = isIP(host)
-  if (ipVersion === 4) return isPrivateIpv4(host)
-  if (ipVersion === 6) return isPrivateIpv6(host)
+  if (isForbiddenIpAddress(host)) return true
   return false
 }
 
@@ -70,6 +81,62 @@ function parseExternalImageUrl(raw: string): URL | null {
   } catch {
     return null
   }
+}
+
+async function isHostnameResolutionSafe(hostname: string): Promise<boolean> {
+  if (isForbiddenHostname(hostname)) return false
+  if (isIP(hostname) !== 0) return true
+  try {
+    const resolved = await lookup(hostname, { all: true, verbatim: true })
+    if (!Array.isArray(resolved) || resolved.length === 0) return false
+    for (const row of resolved) {
+      const address = String(row?.address ?? '').trim()
+      if (!address || isForbiddenIpAddress(address)) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+function readRedirectUrl(currentUrl: URL, locationHeader: string | null): URL | null {
+  const location = String(locationHeader ?? '').trim()
+  if (!location) return null
+  try {
+    const nextUrl = new URL(location, currentUrl)
+    if (nextUrl.protocol !== 'http:' && nextUrl.protocol !== 'https:') return null
+    if (isForbiddenHostname(nextUrl.hostname)) return null
+    return nextUrl
+  } catch {
+    return null
+  }
+}
+
+async function fetchUpstreamImage(startUrl: URL, signal: AbortSignal): Promise<Response | null> {
+  let currentUrl = startUrl
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const safeHost = await isHostnameResolutionSafe(currentUrl.hostname)
+    if (!safeHost) return null
+
+    const response = await fetch(currentUrl.toString(), {
+      method: 'GET',
+      headers: { Accept: 'image/*' },
+      signal,
+      redirect: 'manual',
+    })
+
+    if (response.status >= 300 && response.status < 400) {
+      if (hop >= MAX_REDIRECTS) return null
+      const redirectedUrl = readRedirectUrl(currentUrl, response.headers.get('location'))
+      if (!redirectedUrl) return null
+      currentUrl = redirectedUrl
+      continue
+    }
+
+    return response
+  }
+
+  return null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -90,11 +157,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const timeout = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
 
   try {
-    const upstream = await fetch(externalUrl.toString(), {
-      method: 'GET',
-      headers: { Accept: 'image/*' },
-      signal: ctrl.signal,
-    })
+    const upstream = await fetchUpstreamImage(externalUrl, ctrl.signal)
+    if (!upstream) {
+      return res.status(400).json({ success: false, error: 'Invalid image URL' })
+    }
 
     if (!upstream.ok) {
       return res.status(502).json({ success: false, error: 'Failed to fetch image' })
