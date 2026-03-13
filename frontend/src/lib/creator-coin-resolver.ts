@@ -7,10 +7,26 @@ import { logger } from './logger'
 
 const CREATOR_COIN_DEBUG = import.meta.env.DEV && import.meta.env.VITE_DEBUG_LOGS === 'true'
 const ZERO_ADDRESS = `0x${'0000000000000000000000000000000000000000'}` as Address
+const IS_BROWSER = typeof window !== 'undefined'
+const BASE_RPC_RAW =
+  (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
+  (import.meta.env.VITE_BASE_RPC as string | undefined)?.trim() ||
+  ''
+
+function isCorsRestrictedRpc(url: string): boolean {
+  // Alchemy browser CORS is opt-in; avoid hard failures by default.
+  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
+}
+
+function getBaseRpcUrl(): string {
+  if (IS_BROWSER) return '/api/rpc?chain=base'
+  if (BASE_RPC_RAW && !isCorsRestrictedRpc(BASE_RPC_RAW)) return BASE_RPC_RAW
+  return 'https://base-mainnet.public.blastapi.io'
+}
 
 const publicClient = createPublicClient({
   chain: base,
-  transport: http(),
+  transport: http(getBaseRpcUrl()),
 })
 
 // CreatorCoin ABI - we only need the functions we're calling

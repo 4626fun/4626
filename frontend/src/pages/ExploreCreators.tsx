@@ -21,6 +21,9 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 }
 
 const PAGE_SIZE = 20
+const SEARCH_AUTO_FETCH_MAX_PAGES = 30
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ExploreMetrics = {
@@ -68,6 +71,20 @@ function formatCompactUsd(v: number | null): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
   if (n >= 1_000) return `$${(n / 1_000).toFixed(2)}K`
   return `$${n.toFixed(2)}`
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : NaN
+  if (!Number.isFinite(n)) return null
+  return n
+}
+
+function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number {
+  const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
+  if (address && migratedCoins?.has(address)) return 0.01
+  const createdAtMs = typeof coin.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
+  if (!Number.isFinite(createdAtMs)) return 0.01
+  return createdAtMs >= V4_CUTOFF_DATE_MS ? 0.01 : 0.03
 }
 
 export function ExploreCreators() {
@@ -148,49 +165,133 @@ export function ExploreCreators() {
   const filteredCoins = useMemo(() => {
     if (!searchQuery.trim()) return allCoins
     const query = searchQuery.toLowerCase()
+    const queryWithoutAt = query.startsWith('@') ? query.slice(1) : query
     return allCoins.filter((coin) => {
       const name = (coin.name || '').toLowerCase()
       const symbol = (coin.symbol || '').toLowerCase()
       const address = (coin.address || '').toLowerCase()
       const payout = (coin.payoutRecipientAddress || '').toLowerCase()
       const creator = (coin.creatorAddress || '').toLowerCase()
+      const creatorHandle = (coin.creatorProfile?.handle || '').toLowerCase()
       return (
         name.includes(query) ||
         symbol.includes(query) ||
         address.includes(query) ||
         payout.includes(query) ||
-        creator.includes(query)
+        creator.includes(query) ||
+        creatorHandle.includes(query) ||
+        creatorHandle.includes(queryWithoutAt)
       )
     })
   }, [allCoins, searchQuery])
+
+  const localMetricsFallback = useMemo(() => {
+    const seenCoinKeys = new Set<string>()
+    const seenCreators = new Set<string>()
+    const creatorLatestCreatedAt = new Map<string, number>()
+    const createdAtSamples: number[] = []
+
+    let marketCapUsd = 0
+    let volume24hUsd = 0
+    let fees24hUsd = 0
+
+    for (const coin of allCoins) {
+      const coinAddress = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
+      const coinKey =
+        coinAddress ||
+        `${coin.creatorAddress ?? ''}:${coin.payoutRecipientAddress ?? ''}:${coin.symbol ?? ''}:${coin.createdAt ?? ''}`
+      if (seenCoinKeys.has(coinKey)) continue
+      seenCoinKeys.add(coinKey)
+
+      const creatorAddressRaw =
+        (typeof coin.creatorAddress === 'string' && coin.creatorAddress) ||
+        (typeof coin.payoutRecipientAddress === 'string' && coin.payoutRecipientAddress) ||
+        ''
+      const creatorAddress = creatorAddressRaw.toLowerCase()
+      if (creatorAddress) seenCreators.add(creatorAddress)
+
+      const createdAtMs = typeof coin.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
+      if (Number.isFinite(createdAtMs)) {
+        createdAtSamples.push(createdAtMs)
+      }
+      if (creatorAddress && Number.isFinite(createdAtMs)) {
+        const prevCreatedAt = creatorLatestCreatedAt.get(creatorAddress)
+        if (prevCreatedAt == null || createdAtMs > prevCreatedAt) {
+          creatorLatestCreatedAt.set(creatorAddress, createdAtMs)
+        }
+      }
+
+      const marketCapValue = toFiniteNumber(coin.marketCap)
+      if (marketCapValue != null) marketCapUsd += marketCapValue
+
+      const volumeValue = toFiniteNumber(coin.volume24h)
+      if (volumeValue != null) {
+        volume24hUsd += volumeValue
+        fees24hUsd += volumeValue * inferFeeRate(coin, migratedCoins)
+      }
+    }
+
+    const metricsUpdatedAtMs = Date.parse(metricsQuery.data?.updatedAt ?? '')
+    const fallbackNowMs =
+      Number.isFinite(metricsUpdatedAtMs) ? metricsUpdatedAtMs : createdAtSamples.length > 0 ? Math.max(...createdAtSamples) : null
+    const dayAgoMs = fallbackNowMs != null ? fallbackNowMs - ONE_DAY_MS : null
+    let creatorsNew24h = 0
+    if (dayAgoMs != null) {
+      for (const createdAtMs of creatorLatestCreatedAt.values()) {
+        if (createdAtMs >= dayAgoMs) creatorsNew24h += 1
+      }
+    }
+
+    return {
+      creatorsTotal: seenCreators.size > 0 ? seenCreators.size : seenCoinKeys.size,
+      creatorsNew24h,
+      creatorCoinsMarketCapUsd: marketCapUsd,
+      creatorCoinsVolume24hUsd: volume24hUsd,
+      creatorCoinsFees24hUsd: fees24hUsd,
+    }
+  }, [allCoins, metricsQuery.data?.updatedAt, migratedCoins])
 
   const exactMetrics = metricsQuery.data?.exact === true
   const syncStatus = metricsQuery.data?.syncStatus ?? 'running'
   const syncMeta = metricsQuery.data?.sync ?? null
   const metricsTotals = metricsQuery.data?.totals ?? null
-  const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? null
-  const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? null
-  const marketCapDisplay = metricsTotals?.creatorCoinsMarketCapUsd ?? null
-  const volume24hDisplay = metricsTotals?.creatorCoinsVolume24hUsd ?? null
-  const fees24hDisplay = metricsTotals?.creatorCoinsFees24hUsd ?? null
+  const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? localMetricsFallback.creatorsTotal
+  const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? localMetricsFallback.creatorsNew24h
+  const marketCapDisplay = metricsTotals?.creatorCoinsMarketCapUsd ?? localMetricsFallback.creatorCoinsMarketCapUsd
+  const volume24hDisplay = metricsTotals?.creatorCoinsVolume24hUsd ?? localMetricsFallback.creatorCoinsVolume24hUsd
+  const fees24hDisplay = metricsTotals?.creatorCoinsFees24hUsd ?? localMetricsFallback.creatorCoinsFees24hUsd
   const canonicalUpdatedAt = syncMeta?.lastFullSyncAt ?? null
   const updatedTimeDisplay = canonicalUpdatedAt
     ? new Date(canonicalUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
-  const syncingLabel =
-    syncStatus === 'running'
-      ? 'Syncing canonical totals...'
+  const indexedCreatorProgress =
+    !exactMetrics && creatorsTotalDisplay > 0
+      ? syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotalDisplay
+        ? `Indexed ${creatorsTotalDisplay.toLocaleString()} of ~${syncMeta.driftEstimateTotal.toLocaleString()} creators`
+        : `Indexed ${creatorsTotalDisplay.toLocaleString()} creators`
+      : null
+  const metricsStatusLine =
+    exactMetrics && updatedTimeDisplay
+      ? `Canonical totals refreshed ${updatedTimeDisplay}`
       : syncStatus === 'error'
-        ? 'Canonical sync error. Retrying soon...'
-        : 'Canonical backfill pending...'
+        ? 'Canonical totals are temporarily delayed. Retrying in background.'
+        : indexedCreatorProgress
   const creatorsLabel = exactMetrics ? 'Creators' : 'Indexed creators'
-  const marketLabel = exactMetrics ? 'Market Cap' : 'Indexed MCap'
+  const marketLabel = 'Market Cap'
   const showSyncingEmptyState =
     !searchQuery.trim() &&
     filteredCoins.length === 0 &&
     !isLoading &&
     !isError &&
     ((creatorsTotalDisplay ?? 0) > 0 || syncStatus === 'running' || syncStatus === 'error')
+  const shouldAutoFetchForSearch =
+    searchQuery.trim().length > 0 &&
+    filteredCoins.length === 0 &&
+    !isLoading &&
+    !isError &&
+    hasNextPage === true &&
+    !isFetchingNextPage &&
+    (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
 
   // Handle infinite scroll
   const handleScroll = useCallback(() => {
@@ -208,6 +309,14 @@ export function ExploreCreators() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
+
+  useEffect(() => {
+    if (!shouldAutoFetchForSearch) return
+    const timer = window.setTimeout(() => {
+      fetchNextPage().catch(() => undefined)
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [fetchNextPage, shouldAutoFetchForSearch])
 
   const updateHorizontalControls = useCallback((el: HTMLElement | null) => {
     if (!el) return
@@ -319,8 +428,8 @@ export function ExploreCreators() {
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
                 {creatorsNew24hDisplay != null
-                  ? `${exactMetrics ? '+' : '≈+'}${creatorsNew24hDisplay.toLocaleString()} today`
-                  : syncingLabel}
+                  ? `+${creatorsNew24hDisplay.toLocaleString()} today`
+                  : 'Tracking newly created creators'}
               </div>
             </div>
 
@@ -330,7 +439,7 @@ export function ExploreCreators() {
                 {formatCompactUsd(marketCapDisplay)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {exactMetrics ? 'All creators' : 'Estimated while canonical sync runs'}
+                Across indexed creator coins
               </div>
             </div>
 
@@ -340,7 +449,7 @@ export function ExploreCreators() {
                 {formatCompactUsd(volume24hDisplay)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {exactMetrics ? 'Across creator coins' : 'Estimated while canonical sync runs'}
+                24H trade volume across creator coins
               </div>
             </div>
 
@@ -350,16 +459,14 @@ export function ExploreCreators() {
                 {formatCompactUsd(fees24hDisplay)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {exactMetrics ? 'Trading fees (global 24H)' : 'Estimated while canonical sync runs'}
+                24H fees from creator-coin trading
               </div>
             </div>
           </div>
 
-          <div className="mt-2 text-right text-[11px] text-zinc-500">
-            {exactMetrics && updatedTimeDisplay
-              ? `Last canonical sync ${updatedTimeDisplay}`
-              : syncingLabel}
-          </div>
+          {metricsStatusLine ? (
+            <div className="mt-2 text-right text-[11px] text-zinc-500">{metricsStatusLine}</div>
+          ) : null}
         </motion.div>
 
         {/* Navigation & Filters */}
@@ -472,6 +579,11 @@ export function ExploreCreators() {
                   <p className="mt-2 text-xs text-zinc-600">
                     Global stats are available, but the ranked creator rows have not finished loading yet.
                   </p>
+                </div>
+              ) : searchQuery.trim().length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400">Searching more creators...</p>
+                  <p className="mt-2 text-xs text-zinc-600">Scanning additional pages for matches.</p>
                 </div>
               ) : filteredCoins.length === 0 ? (
                 // Empty state

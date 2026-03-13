@@ -1,5 +1,14 @@
 import type { Address, Hex } from 'viem'
-import { decodeAbiParameters, encodeAbiParameters, getAddress, hashTypedData, http, isAddress } from 'viem'
+import {
+  decodeAbiParameters,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  hashTypedData,
+  http,
+  isAddress,
+} from 'viem'
 import { toAccount } from 'viem/accounts'
 import {
   createBundlerClient,
@@ -10,6 +19,8 @@ import {
   toCoinbaseSmartAccount,
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
+import { trackEvent } from '@/lib/analytics'
+import { apiFetch } from '@/lib/apiBase'
 import { logger } from '@/lib/logger'
 import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/baseBuilderCodes'
 
@@ -24,6 +35,60 @@ import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/baseBu
 
 const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
 const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
+const BUNDLER_PROBE_TIMEOUT_MS = 3_000
+const RPC_READ_TIMEOUT_MS = 8_000
+const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
+const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
+const UNIVERSAL_ROUTER_BASE_LEGACY = getAddress('0x2626664c2603336e57b271c5c0b26f421741e481').toLowerCase()
+const UNISWAP_UNIVERSAL_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
+
+function isUniversalRouterTarget(to: Address): boolean {
+  const target = String(to).toLowerCase()
+  return target === UNIVERSAL_ROUTER_BASE_CURRENT || target === UNIVERSAL_ROUTER_BASE_LEGACY
+}
+
+function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | undefined): Hex | undefined {
+  if (!data || data === '0x' || !dataSuffix) return data
+  const payload = data.slice(2)
+  const suffix = dataSuffix.slice(2)
+  if (!suffix) return data
+  if (payload.length <= suffix.length) return data
+  if (!payload.toLowerCase().endsWith(suffix.toLowerCase())) return data
+  return `0x${payload.slice(0, payload.length - suffix.length)}` as Hex
+}
+
+function canonicalizeUniversalRouterExecuteCalldata(data: Hex | undefined): Hex | undefined {
+  if (!data || data === '0x') return data
+  if (!data.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)) return data
+
+  try {
+    const decoded = decodeFunctionData({
+      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
+      data,
+    })
+    if (decoded.functionName !== 'execute') return data
+    return encodeFunctionData({
+      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: decoded.args,
+    })
+  } catch {
+    // If decode fails, preserve original payload rather than mutating semantics.
+    return data
+  }
+}
 
 export function applyBuilderDataSuffixToCalls(
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
@@ -31,10 +96,46 @@ export function applyBuilderDataSuffixToCalls(
   dataSuffix: Hex | undefined = DATA_SUFFIX,
 ): Array<{ to: Address; value?: bigint; data?: Hex }> {
   if (!dataSuffix || !isBaseChain(chainId)) return calls
-  return calls.map((c) => ({
-    ...c,
-    data: appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
-  }))
+
+  return calls.map((c) => {
+    if (isUniversalRouterTarget(c.to)) {
+      const cleanedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
+      const candidateData = canonicalizeUniversalRouterExecuteCalldata(cleanedData ?? c.data)
+      const isCanonical =
+        !!candidateData &&
+        candidateData !== '0x' &&
+        candidateData.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+
+      if (AA_DEBUG) {
+        logger.debug('[Builder] Universal Router call detected', {
+          target: c.to,
+          originalDataPrefix: String(c.data ?? '').slice(0, 30),
+          cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
+          willPreserveCanonical: isCanonical,
+        })
+      }
+
+      if (isCanonical) {
+        if (AA_DEBUG) logger.info('[Builder] Preserving canonical Universal Router calldata (no suffix)')
+      } else if (AA_DEBUG) {
+        logger.warn('[Builder] Universal Router calldata is non-canonical; preserving without suffix mutation', {
+          target: c.to,
+          cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
+        })
+      }
+
+      // Never append builder suffix to Universal Router calls.
+      return {
+        ...c,
+        data: candidateData ?? cleanedData ?? c.data,
+      }
+    }
+
+    return {
+      ...c,
+      data: appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
+    }
+  })
 }
 
 // Sanity check at module load time
@@ -45,27 +146,53 @@ if (ENTRYPOINT_V06 !== ENTRYPOINT_V06_EXPECTED) {
   )
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  label: string,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 /**
  * Verify the bundler supports EntryPoint v0.6.
  * Throws if the bundler doesn't support v0.6.
  */
-async function verifyBundlerSupportsV06(
+export async function verifyBundlerSupportsV06(
   bundlerUrl: string,
-  options?: { includeCredentials?: boolean },
+  options?: { includeCredentials?: boolean; timeoutMs?: number },
 ): Promise<void> {
   const credentials = options?.includeCredentials ? 'include' : 'omit'
+  const timeoutMs = options?.timeoutMs ?? BUNDLER_PROBE_TIMEOUT_MS
   try {
-    const response = await fetch(bundlerUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_supportedEntryPoints',
-        params: [],
-      }),
-    })
+    const response = await fetchWithTimeout(
+      bundlerUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_supportedEntryPoints',
+          params: [],
+        }),
+      },
+      timeoutMs,
+      'bundler eth_supportedEntryPoints',
+    )
     
     if (!response.ok) {
       // Don't fail on network errors - let the actual UserOp fail with a better message
@@ -161,6 +288,131 @@ function isDebugEnabled(): boolean {
 }
 
 const AA_DEBUG = isDebugEnabled()
+const USEROP_TELEMETRY_BATCH_SIZE = 20
+const USEROP_TELEMETRY_FLUSH_INTERVAL_MS = 60_000
+const USEROP_TELEMETRY_SAMPLE_RATE = 0.2
+const USEROP_TELEMETRY_SLOW_MS = 2_500
+
+type UserOpTelemetrySample = {
+  status: 'success' | 'error' | 'timeout'
+  durationMs: number
+  verificationGasLimit: string | null
+  paymasterMode: 'sponsored' | 'self_funded' | 'fallback_to_self_funded'
+  signatureMode: 'eth_sign' | 'signMessage' | 'auto'
+  ownerIsContract: boolean
+}
+
+const userOpTelemetrySamples: UserOpTelemetrySample[] = []
+let userOpTelemetryLastFlushAt = 0
+
+function isUserOpTelemetryEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  if (import.meta.env.VITE_USEROP_TELEMETRY === 'true') return true
+  if (import.meta.env.PROD) return true
+  try {
+    return window.localStorage.getItem('cv:debug:userop-telemetry') === 'true'
+  } catch {
+    return false
+  }
+}
+
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const rank = Math.ceil((p / 100) * sorted.length)
+  const index = Math.max(0, Math.min(sorted.length - 1, rank - 1))
+  return sorted[index] ?? null
+}
+
+function flushUserOpTelemetry(reason: 'batch' | 'interval' | 'timeout'): void {
+  if (typeof window === 'undefined') return
+  if (userOpTelemetrySamples.length === 0) return
+
+  const samples = userOpTelemetrySamples.splice(0, userOpTelemetrySamples.length)
+  userOpTelemetryLastFlushAt = Date.now()
+
+  const durations = samples.map((sample) => sample.durationMs)
+  const timeoutCount = samples.filter((sample) => sample.status === 'timeout').length
+  const errorCount = samples.filter((sample) => sample.status === 'error').length
+  const successCount = samples.length - timeoutCount - errorCount
+
+  const signatureModes = {
+    eth_sign: samples.filter((sample) => sample.signatureMode === 'eth_sign').length,
+    signMessage: samples.filter((sample) => sample.signatureMode === 'signMessage').length,
+    auto: samples.filter((sample) => sample.signatureMode === 'auto').length,
+  }
+
+  const paymasterUsage = {
+    sponsored: samples.filter((sample) => sample.paymasterMode === 'sponsored').length,
+    selfFunded: samples.filter((sample) => sample.paymasterMode === 'self_funded').length,
+    fallbackToSelfFunded: samples.filter((sample) => sample.paymasterMode === 'fallback_to_self_funded').length,
+  }
+
+  const ownerType = {
+    contract: samples.filter((sample) => sample.ownerIsContract).length,
+    eoa: samples.filter((sample) => !sample.ownerIsContract).length,
+  }
+
+  const verificationGasLimitUsed = Object.fromEntries(
+    [...new Set(samples.map((sample) => sample.verificationGasLimit ?? 'unknown'))].map((limit) => [
+      limit,
+      samples.filter((sample) => (sample.verificationGasLimit ?? 'unknown') === limit).length,
+    ]),
+  )
+
+  const payload = {
+    source: 'coinbaseErc4337',
+    reason,
+    sampleCount: samples.length,
+    successCount,
+    errorCount,
+    timeoutCount,
+    p50Ms: percentile(durations, 50),
+    p95Ms: percentile(durations, 95),
+    p99Ms: percentile(durations, 99),
+    signatureModes,
+    paymasterUsage,
+    ownerType,
+    verificationGasLimitUsed,
+  }
+
+  trackEvent('xmtp_userop_submission_batch', payload)
+  void apiFetch('/api/v1/chat/telemetry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event: 'xmtp_userop_submission_batch',
+      ...payload,
+    }),
+  }).catch(() => undefined)
+
+  if (AA_DEBUG) logger.debug('[ERC-4337] UserOp telemetry batch', payload)
+}
+
+function recordUserOpTelemetry(sample: UserOpTelemetrySample): void {
+  if (!isUserOpTelemetryEnabled()) return
+  const interestingSample =
+    sample.status !== 'success' || sample.durationMs >= USEROP_TELEMETRY_SLOW_MS
+  const shouldSample = interestingSample || Math.random() < USEROP_TELEMETRY_SAMPLE_RATE
+  if (!shouldSample) return
+
+  userOpTelemetrySamples.push(sample)
+  const now = Date.now()
+  const shouldFlushByInterval =
+    userOpTelemetryLastFlushAt > 0 &&
+    now - userOpTelemetryLastFlushAt >= USEROP_TELEMETRY_FLUSH_INTERVAL_MS
+
+  if (sample.status === 'timeout') {
+    flushUserOpTelemetry('timeout')
+    return
+  }
+  if (userOpTelemetrySamples.length >= USEROP_TELEMETRY_BATCH_SIZE) {
+    flushUserOpTelemetry('batch')
+    return
+  }
+  if (shouldFlushByInterval) flushUserOpTelemetry('interval')
+}
+
 const PAYMASTER_DEBUG_HEADER_ENABLED =
   String((import.meta.env as Record<string, string | undefined>).VITE_PAYMASTER_DEBUG ?? '')
     .trim()
@@ -380,7 +632,7 @@ function signatureMeta(signature: Hex) {
 }
 
 function isPaymasterStakeError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   return (
     lc.includes('banned opcode') ||
@@ -388,6 +640,59 @@ function isPaymasterStakeError(error: unknown): boolean {
     lc.includes('entity stake') ||
     lc.includes('unstake delay too low')
   )
+}
+
+function getErrorDiagnosticMessage(error: unknown): string {
+  const err = error as any
+  const parts: string[] = []
+  const push = (value: unknown) => {
+    if (typeof value !== 'string') return
+    const normalized = value.replace(/\s+/g, ' ').trim()
+    if (!normalized) return
+    parts.push(normalized)
+  }
+
+  push(err?.message)
+  push(err?.shortMessage)
+  push(err?.details)
+  push(err?.cause?.message)
+  push(err?.cause?.shortMessage)
+  push(err?.cause?.details)
+
+  const appendMetaMessages = (meta: unknown) => {
+    if (!Array.isArray(meta)) return
+    for (const entry of meta) {
+      if (typeof entry === 'string') {
+        push(entry)
+      } else {
+        try {
+          push(JSON.stringify(entry))
+        } catch {
+          // ignore non-serializable entries
+        }
+      }
+    }
+  }
+
+  appendMetaMessages(err?.metaMessages)
+  appendMetaMessages(err?.cause?.metaMessages)
+
+  const deduped: string[] = []
+  for (const item of parts) {
+    if (!deduped.includes(item)) deduped.push(item)
+  }
+  if (deduped.length === 0) {
+    return error instanceof Error ? error.message : String(error ?? '')
+  }
+  return deduped.join(' | ')
+}
+
+function getRpcErrorDetails(error: unknown): string | null {
+  const err = error as any
+  const details = typeof err?.details === 'string' ? err.details.trim() : ''
+  if (details) return details
+  const causeDetails = typeof err?.cause?.details === 'string' ? err.cause.details.trim() : ''
+  return causeDetails || null
 }
 
 function ensureUserOperationSucceeded(receipt: unknown, context: string): void {
@@ -415,7 +720,7 @@ function ensureUserOperationSucceeded(receipt: unknown, context: string): void {
 }
 
 function isPaymasterUnavailableError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   // NOTE: Do NOT match generic viem wrapper text like 'resource not available' /
   // 'requested resource not available'. Viem uses that shortMessage for ALL -32002
@@ -431,9 +736,26 @@ function isPaymasterUnavailableError(error: unknown): boolean {
 }
 
 function isPaymasterPolicyError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   return lc.includes('request denied') || lc.includes('not authenticated')
+}
+
+function isPaymasterAuthPolicyError(error: unknown): boolean {
+  const msg = getErrorDiagnosticMessage(error)
+  const lc = msg.toLowerCase()
+  return (
+    lc.includes('request denied - no_session') ||
+    lc.includes('request denied - not authenticated') ||
+    lc.includes('not authenticated') ||
+    lc.includes('session expired')
+  )
+}
+
+function isPaymasterRoutingPolicyError(error: unknown): boolean {
+  const msg = getErrorDiagnosticMessage(error)
+  const lc = msg.toLowerCase()
+  return lc.includes('unsupported chainid') || lc.includes('unsupported entrypoint')
 }
 
 function formatMetaMessages(error: unknown): string | null {
@@ -446,6 +768,44 @@ function formatMetaMessages(error: unknown): string | null {
   if (messages.length === 0) return null
   const limited = messages.slice(0, 3)
   return limited.join(' | ') + (messages.length > limited.length ? ' | ...' : '')
+}
+
+const TRANSIENT_USER_OP_RETRY_DELAYS_MS = [250, 750, 1500] as const
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTransientUserOpSubmissionError(error: unknown): boolean {
+  if (isUserRejection(error)) return false
+  const msg = getErrorDiagnosticMessage(error)
+  const lc = msg.toLowerCase()
+  const code = (error as any)?.code
+  if (code === -32016 || code === -32011 || code === 429) return true
+  return (
+    lc.includes('429') ||
+    lc.includes('too many requests') ||
+    lc.includes('over rate limit') ||
+    lc.includes('rate limit') ||
+    lc.includes('resource not available') ||
+    lc.includes('temporarily unavailable') ||
+    lc.includes('no backend is currently healthy') ||
+    lc.includes('gateway timeout') ||
+    lc.includes('request timeout') ||
+    lc.includes('network error') ||
+    lc.includes('failed to fetch')
+  )
+}
+
+function isExpectedUserOpTimeoutError(error: unknown): boolean {
+  const msg = getErrorDiagnosticMessage(error).toLowerCase()
+  if (!msg) return false
+  return (
+    msg.includes('timed out') ||
+    msg.includes('timeout') ||
+    msg.includes('request took too long') ||
+    msg.includes('gateway timeout')
+  )
 }
 
 function debugSignature(context: string, signature: Hex, source?: string | null) {
@@ -480,6 +840,20 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
 }
 
 const SIGN_TIMEOUT_MS = 30_000
+const USEROP_POLL_INTERVAL_MS = 2_000
+const USEROP_POLL_MAX_DURATION_MS = 180_000
+const USEROP_POLL_TIMEOUT_MS = 10_000
+
+export type UserOpStatus = 'pending' | 'confirmed' | 'failed' | 'timeout'
+
+export type PollUserOperationStatusOptions = {
+  pollIntervalMs?: number
+  maxDurationMs?: number
+  perCheckTimeoutMs?: number
+  onStatusChange?: (status: UserOpStatus, txHash?: Hex) => void
+  onError?: (error: Error) => void
+  signal?: AbortSignal
+}
 
 function isUserOpHashLike(value: unknown): boolean {
   return isHexString(value) && value.length === 66
@@ -593,6 +967,28 @@ const COINBASE_SMART_WALLET_OWNERS_ABI = [
   },
 ] as const
 
+const OWNER_INDEX_CACHE_TTL_MS = 5 * 60_000
+
+type OwnerIndexCacheEntry = {
+  ownerIndex: number
+  ownerCountSnapshot: number
+  expiresAt: number
+}
+
+const OWNER_INDEX_CACHE = new Map<string, OwnerIndexCacheEntry>()
+
+function getOwnerIndexCacheKey(params: {
+  chainId: number
+  smartWallet: Address
+  ownerAddress: Address
+}): string {
+  return `${params.chainId}:${params.smartWallet.toLowerCase()}:${params.ownerAddress.toLowerCase()}`
+}
+
+export function resetOwnerIndexCacheForTests(): void {
+  OWNER_INDEX_CACHE.clear()
+}
+
 function asOwnerBytes(owner: Address): Hex {
   // Coinbase Smart Wallet stores EOA owners as 32-byte left-padded address bytes.
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
@@ -623,24 +1019,51 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
   smartWallet: Address
   ownerAddress: Address
   maxScan?: number
+  useCache?: boolean
 }): Promise<{ ownerIndex: number | null; ownerCount: number }> {
-  const { publicClient, smartWallet, ownerAddress, maxScan = 256 } = params
-  const countRaw = (await publicClient.readContract({
-    address: smartWallet,
-    abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-    functionName: 'ownerCount',
-  })) as bigint
+  const { publicClient, smartWallet, ownerAddress, maxScan = 256, useCache = true } = params
+  const chainId = Number((publicClient as any)?.chain?.id ?? 0)
+  const cacheKey = getOwnerIndexCacheKey({ chainId, smartWallet, ownerAddress })
+  if (!useCache) OWNER_INDEX_CACHE.delete(cacheKey)
+
+  const countRaw = (await withTimeout(
+    publicClient.readContract({
+      address: smartWallet,
+      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+      functionName: 'ownerCount',
+    }),
+    RPC_READ_TIMEOUT_MS,
+    'ownerCount read',
+  )) as bigint
   const count = Number(countRaw)
-  if (!Number.isFinite(count) || count <= 0) return { ownerIndex: null, ownerCount: 0 }
+  if (!Number.isFinite(count) || count <= 0) {
+    OWNER_INDEX_CACHE.delete(cacheKey)
+    return { ownerIndex: null, ownerCount: 0 }
+  }
+
+  const scanLimit = Math.max(1, maxScan)
+  if (useCache) {
+    const cached = OWNER_INDEX_CACHE.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      if (cached.ownerCountSnapshot === count && cached.ownerIndex >= 0 && cached.ownerIndex < scanLimit) {
+        return { ownerIndex: cached.ownerIndex, ownerCount: count }
+      }
+      OWNER_INDEX_CACHE.delete(cacheKey)
+    }
+  }
 
   // Use nextOwnerIndex when available to avoid missing owners after removals.
   let upperBound = count
   try {
-    const nextRaw = (await publicClient.readContract({
-      address: smartWallet,
-      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'nextOwnerIndex',
-    })) as bigint
+    const nextRaw = (await withTimeout(
+      publicClient.readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'nextOwnerIndex',
+      }),
+      RPC_READ_TIMEOUT_MS,
+      'nextOwnerIndex read',
+    )) as bigint
     const next = Number(nextRaw)
     if (Number.isFinite(next) && next > 0) upperBound = next
   } catch {
@@ -648,16 +1071,30 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
   }
 
   const expected = asOwnerBytes(ownerAddress).toLowerCase()
-  const limit = Math.min(upperBound, Math.max(1, maxScan))
+  const limit = Math.min(upperBound, scanLimit)
   for (let i = 0; i < limit; i++) {
-    const b = (await publicClient.readContract({
-      address: smartWallet,
-      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'ownerAtIndex',
-      args: [BigInt(i)],
-    })) as Hex
-    if (String(b).toLowerCase() === expected) return { ownerIndex: i, ownerCount: count }
+    const b = (await withTimeout(
+      publicClient.readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      }),
+      RPC_READ_TIMEOUT_MS,
+      `ownerAtIndex(${i}) read`,
+    )) as Hex
+    if (String(b).toLowerCase() === expected) {
+      if (useCache) {
+        OWNER_INDEX_CACHE.set(cacheKey, {
+          ownerIndex: i,
+          ownerCountSnapshot: count,
+          expiresAt: Date.now() + OWNER_INDEX_CACHE_TTL_MS,
+        })
+      }
+      return { ownerIndex: i, ownerCount: count }
+    }
   }
+  OWNER_INDEX_CACHE.delete(cacheKey)
   return { ownerIndex: null, ownerCount: count }
 }
 
@@ -1242,6 +1679,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   retryWithLowGasContractSigner?: boolean
   useTypedDataSigning?: boolean
   retryWithTypedDataSigning?: boolean
+  bypassOwnerIndexCache?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
     publicClient,
@@ -1262,8 +1700,19 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     retryOnInvalidSignature = true,
     retryOnPrefund = true,
     retryWithLowGasContractSigner = true,
+    bypassOwnerIndexCache = false,
   } = params
-  
+
+  const submissionStartedAt = Date.now()
+  let telemetryStatus: UserOpTelemetrySample['status'] = 'error'
+  let telemetryVerificationGasLimit: string | null = null
+  let telemetryPaymasterMode: UserOpTelemetrySample['paymasterMode'] = skipPaymaster
+    ? 'self_funded'
+    : 'sponsored'
+  let telemetrySignatureMode: UserOpTelemetrySample['signatureMode'] = userOpSignMode
+  let telemetryOwnerIsContract = typeof ownerIsContractOverride === 'boolean' ? ownerIsContractOverride : false
+
+  try {
   // Input validation
   if (!bundlerUrlInput) throw new Error('Missing bundler URL')
   if (!smartWallet) throw new Error('Missing smart wallet address')
@@ -1295,25 +1744,34 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // Pre-flight simulation: check if the underlying call would succeed
   // This helps diagnose contract-level reverts vs ERC-4337 issues
   if (!skipPreflightSimulation && AA_DEBUG) {
-    const simResult = await simulateSmartWalletCalls({ publicClient, smartWallet, calls: attributedCalls })
-    if (!simResult.success) {
-      logger.warn('[ERC-4337] Pre-flight simulation FAILED - underlying call would revert', {
-        smartWallet,
-        callCount: calls.length,
-        error: simResult.error,
-        revertData: simResult.revertData,
-        errorName: simResult.errorName,
-        firstCallTo: attributedCalls[0]?.to,
-        firstCallData: attributedCalls[0]?.data?.slice(0, 10), // Just selector
+    void simulateSmartWalletCalls({ publicClient, smartWallet, calls: attributedCalls })
+      .then((simResult) => {
+        if (!simResult.success) {
+          logger.warn('[ERC-4337] Pre-flight simulation FAILED - underlying call would revert', {
+            smartWallet,
+            callCount: calls.length,
+            error: simResult.error,
+            revertData: simResult.revertData,
+            errorName: simResult.errorName,
+            firstCallTo: attributedCalls[0]?.to,
+            firstCallData: attributedCalls[0]?.data?.slice(0, 10), // Just selector
+          })
+          return
+        }
+        logger.debug('[ERC-4337] Pre-flight simulation passed', {
+          smartWallet,
+          callCount: attributedCalls.length,
+        })
       })
-      // Don't throw here - let the actual UserOp attempt fail with full context
-      // This is just diagnostic logging
-    } else {
-      logger.debug('[ERC-4337] Pre-flight simulation passed', {
-        smartWallet,
-        callCount: attributedCalls.length,
+      .catch((error: unknown) => {
+        if (AA_DEBUG) {
+          const msg = error instanceof Error ? error.message : String(error ?? '')
+          logger.debug('[ERC-4337] Pre-flight simulation failed unexpectedly', {
+            smartWallet,
+            error: msg,
+          })
+        }
       })
-    }
   }
 
   // Find owner index
@@ -1321,6 +1779,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     publicClient,
     smartWallet,
     ownerAddress,
+    useCache: !bypassOwnerIndexCache,
   })
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] Owner index lookup', {
@@ -1343,7 +1802,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (typeof ownerIsContractOverride !== 'boolean') {
     try {
       if (typeof (publicClient as any)?.getBytecode === 'function') {
-        const bytecode = await (publicClient as any).getBytecode({ address: ownerAddress })
+        const bytecode = await withTimeout(
+          (publicClient as any).getBytecode({ address: ownerAddress }),
+          RPC_READ_TIMEOUT_MS,
+          'owner getBytecode',
+        )
         ownerIsContract = typeof bytecode === 'string' && bytecode !== '0x'
       }
     } catch {
@@ -1351,11 +1814,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
     if (!ownerIsContract) {
       try {
-        const ownerBytecode = await publicClient.readContract({
-          address: ownerAddress,
-          abi: [{ type: 'function', name: 'ownerCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
-          functionName: 'ownerCount',
-        }).catch(() => null)
+        const ownerBytecode = await withTimeout(
+          publicClient.readContract({
+            address: ownerAddress,
+            abi: [{ type: 'function', name: 'ownerCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+            functionName: 'ownerCount',
+          }).catch(() => null),
+          RPC_READ_TIMEOUT_MS,
+          'owner ownerCount probe',
+        )
         // If we can call ownerCount, it's likely a Coinbase Smart Wallet
         ownerIsContract = ownerBytecode !== null
       } catch {
@@ -1363,6 +1830,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       }
     }
   }
+  telemetryOwnerIsContract = ownerIsContract
 
   const shouldCoerceToEthSign =
     !ownerIsContract && userOpSignMode === 'signMessage' && !allowEoaSignMessageFallback
@@ -1380,6 +1848,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       ownerAddress,
     })
   }
+  telemetrySignatureMode = effectiveUserOpSignMode
   const usedSignMessageFallback = userOpSignMode === 'auto' && effectiveUserOpSignMode === 'signMessage'
   const useTypedDataSigning = params.useTypedDataSigning ?? false
 
@@ -1435,6 +1904,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   const paymasterClient = createPaymasterClient({ transport: paymasterTransport })
   let bundlerClient = createBundlerClient({
     client: publicClient as any,
+    // Avoid inheriting wagmi/global dataSuffix on the bundler client.
+    // We control per-call attribution in `applyBuilderDataSuffixToCalls`.
+    dataSuffix: '0x',
     transport: buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler }),
   })
 
@@ -1462,6 +1934,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
     bundlerClient = createBundlerClient({
       client: publicClient as any,
+      dataSuffix: '0x',
       transport: buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler }),
     })
     await verifyBundlerSupportsV06(bundlerUrlForBundler, { includeCredentials: shouldSendSessionToBundler })
@@ -1484,6 +1957,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       ? [1_500_000n, 3_000_000n, 5_000_000n]
       : [400_000n, 800_000n, 1_500_000n, 3_000_000n, 5_000_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
+  telemetryVerificationGasLimit = String(uniqueVerificationGasLimits[0] ?? 0n)
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
       ownerIsContract,
@@ -1498,7 +1972,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   let smartWalletBalance: bigint | null = null
   try {
     if (typeof (publicClient as any)?.getBalance === 'function') {
-      smartWalletBalance = await (publicClient as any).getBalance({ address: smartWallet })
+      smartWalletBalance = await withTimeout(
+        (publicClient as any).getBalance({ address: smartWallet }),
+        RPC_READ_TIMEOUT_MS,
+        'smart wallet balance read',
+      )
       if (AA_DEBUG) {
         logger.debug('[ERC-4337] smart wallet balance', {
           smartWallet,
@@ -1536,7 +2014,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   const shouldRetryVerificationGas = (error: unknown): boolean => {
-    const errMsg = error instanceof Error ? error.message : String(error ?? '')
+    const errMsg = getErrorDiagnosticMessage(error)
     return isLikelyVerificationGasLimitError(errMsg)
   }
 
@@ -1544,7 +2022,33 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     for (let i = 0; i < uniqueVerificationGasLimits.length; i++) {
       const limit = uniqueVerificationGasLimits[i]
       try {
-        userOpHash = await sendWithVerificationGasLimit(limit, usePaymaster)
+        let sent = false
+        const maxTransientAttempts = 1 + TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
+        for (let transientAttempt = 0; transientAttempt < maxTransientAttempts; transientAttempt += 1) {
+          try {
+            userOpHash = await sendWithVerificationGasLimit(limit, usePaymaster)
+            sent = true
+            break
+          } catch (e: unknown) {
+            lastError = e
+            const hasNextTransientAttempt = transientAttempt < TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
+            if (!hasNextTransientAttempt || !isTransientUserOpSubmissionError(e)) {
+              break
+            }
+            const retryInMs = TRANSIENT_USER_OP_RETRY_DELAYS_MS[transientAttempt] ?? 0
+            if (AA_DEBUG) {
+              logger.debug('[ERC-4337] retrying transient UserOp submission error', {
+                attempt: transientAttempt + 1,
+                retryInMs,
+                usePaymaster,
+                verificationGasLimit: String(limit),
+                error: e instanceof Error ? e.message : String(e ?? ''),
+              })
+            }
+            await delay(retryInMs)
+          }
+        }
+        if (!sent) throw lastError ?? new Error('UserOp submission failed')
         lastError = null
         return
       } catch (e: unknown) {
@@ -1572,7 +2076,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
     // If the paymaster rejects (policy/availability), allow a non-sponsored fallback.
     // This is required for non-deploy flows (e.g. legacy withdrawals) that the paymaster denies.
-    if (isPaymasterPolicyError(error)) return false
+    if (isPaymasterPolicyError(error)) {
+      // Auth/session or routing policy denials should not fall back to an unsponsored send.
+      // Retrying without sponsorship here just burns user attempts and obscures the root cause.
+      if (isPaymasterAuthPolicyError(error) || isPaymasterRoutingPolicyError(error)) return false
+      return hasPrefundBalance
+    }
     if (!allowPaymasterFallback && (isPaymasterStakeError(error) || isPaymasterUnavailableError(error))) return false
     if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true
@@ -1582,20 +2091,27 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   if (usePaymaster && lastError && shouldFallbackWithoutPaymaster(lastError)) {
     attemptedWithoutPaymaster = true
+    telemetryPaymasterMode = 'fallback_to_self_funded'
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
-    const paymasterErrorMsg = lastError instanceof Error ? lastError.message : String(lastError ?? '')
+    const paymasterErrorMsg = getErrorDiagnosticMessage(lastError)
+    const paymasterDetails = getRpcErrorDetails(lastError)
     const paymasterMeta = formatMetaMessages(lastError)
     if (isPaymasterUnavailableError(lastError) && !allowPaymasterFallback && hasPrefundBalance) {
       logger.warn('[ERC-4337] Paymaster unavailable; retrying with smart wallet balance', {
         smartWallet,
         balance: formatGasValue(smartWalletBalance),
         paymasterError: paymasterErrorMsg.slice(0, 300),
+        paymasterDetails: paymasterDetails ? paymasterDetails.slice(0, 200) : null,
         paymasterMeta,
       })
     } else {
       logger.warn('[ERC-4337] Retrying without sponsorship', {
         paymasterError: paymasterErrorMsg.slice(0, 300),
+        paymasterDetails: paymasterDetails ? paymasterDetails.slice(0, 200) : null,
         paymasterMeta,
+        isPolicyError: isPaymasterPolicyError(lastError),
+        isAuthPolicyError: isPaymasterAuthPolicyError(lastError),
+        isRoutingPolicyError: isPaymasterRoutingPolicyError(lastError),
         isStakeError: isPaymasterStakeError(lastError),
         isUnavailableError: isPaymasterUnavailableError(lastError),
         isGasRetry: shouldRetryVerificationGas(lastError),
@@ -1605,8 +2121,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   if (lastError) {
-    const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
+    const errMsg = getErrorDiagnosticMessage(lastError)
     const lc = errMsg.toLowerCase()
+    const isExpectedTimeoutFailure = isExpectedUserOpTimeoutError(lastError)
+    const errorDetails = getRpcErrorDetails(lastError)
     const metaDetail = formatMetaMessages(lastError)
     const metaSuffix = metaDetail ? ` (CDP: ${metaDetail})` : ''
     const isPrefundError =
@@ -1633,9 +2151,18 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         attemptedWithoutPaymaster,
         verificationGasLimits: uniqueVerificationGasLimits.map((v) => v.toString()),
         error: errMsg,
+        errorDetails,
         metaDetail,
       }
-      console.error('[ERC-4337] UserOp failed', logPayload)
+      if (!isExpectedTimeoutFailure || AA_DEBUG) {
+        console.error('[ERC-4337] UserOp failed', logPayload)
+      } else {
+        logger.debug('[ERC-4337] UserOp timeout (expected transient)', {
+          smartWallet,
+          ownerAddress,
+          error: errMsg.slice(0, 220),
+        })
+      }
     } catch {
       // ignore logging failures
     }
@@ -1705,6 +2232,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           skipPreflightSimulation,
           skipPaymaster,
           retryOnInvalidSignature: false,
+          bypassOwnerIndexCache: true,
         })
       }
     }
@@ -1867,8 +2395,110 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
   
+  telemetryStatus = 'success'
   return { 
     userOpHash, 
     transactionHash: receipt.receipt.transactionHash as Hex 
   }
+  } catch (error) {
+    telemetryStatus = isExpectedUserOpTimeoutError(error) ? 'timeout' : 'error'
+    throw error
+  } finally {
+    recordUserOpTelemetry({
+      status: telemetryStatus,
+      durationMs: Math.max(0, Date.now() - submissionStartedAt),
+      verificationGasLimit: telemetryVerificationGasLimit,
+      paymasterMode: telemetryPaymasterMode,
+      signatureMode: telemetrySignatureMode,
+      ownerIsContract: telemetryOwnerIsContract,
+    })
+  }
+}
+
+function asError(error: unknown): Error {
+  if (error instanceof Error) return error
+  return new Error(String(error ?? 'Unknown error'))
+}
+
+export async function pollUserOperationStatus(params: {
+  bundlerClient: any
+  userOpHash: Hex
+  options?: PollUserOperationStatusOptions
+}): Promise<{ status: UserOpStatus; txHash?: Hex }> {
+  const { bundlerClient, userOpHash, options } = params
+  const pollIntervalMs = options?.pollIntervalMs ?? USEROP_POLL_INTERVAL_MS
+  const maxDurationMs = options?.maxDurationMs ?? USEROP_POLL_MAX_DURATION_MS
+  const perCheckTimeoutMs = options?.perCheckTimeoutMs ?? USEROP_POLL_TIMEOUT_MS
+  const startedAt = Date.now()
+  let lastStatus: UserOpStatus | null = null
+
+  const emitStatus = (status: UserOpStatus, txHash?: Hex) => {
+    if (status === lastStatus && status === 'pending') return
+    lastStatus = status
+    options?.onStatusChange?.(status, txHash)
+  }
+
+  while (Date.now() - startedAt < maxDurationMs) {
+    if (options?.signal?.aborted) {
+      const aborted = new Error('UserOp status polling aborted')
+      options?.onError?.(aborted)
+      emitStatus('failed')
+      return { status: 'failed' }
+    }
+
+    try {
+      let receipt: any = null
+      if (typeof bundlerClient?.getUserOperationReceipt === 'function') {
+        receipt = await withTimeout(
+          bundlerClient.getUserOperationReceipt({ hash: userOpHash }),
+          perCheckTimeoutMs,
+          'eth_getUserOperationReceipt',
+        )
+      } else {
+        receipt = await withTimeout(
+          waitForUserOperationReceipt(bundlerClient, {
+            hash: userOpHash,
+            timeout: perCheckTimeoutMs,
+          }),
+          perCheckTimeoutMs,
+          'waitForUserOperationReceipt poll',
+        )
+      }
+
+      const txHash = receipt?.receipt?.transactionHash
+      if (isHexString(txHash)) {
+        try {
+          ensureUserOperationSucceeded(receipt, 'ERC-4337 status poll')
+          emitStatus('confirmed', txHash as Hex)
+          return { status: 'confirmed', txHash: txHash as Hex }
+        } catch (error) {
+          const normalized = asError(error)
+          options?.onError?.(normalized)
+          emitStatus('failed')
+          return { status: 'failed' }
+        }
+      }
+
+      emitStatus('pending')
+    } catch (error) {
+      const msg = getErrorDiagnosticMessage(error).toLowerCase()
+      const expectedPending =
+        msg.includes('timed out') ||
+        msg.includes('timeout') ||
+        msg.includes('not found') ||
+        msg.includes('pending')
+      if (!expectedPending) {
+        const normalized = asError(error)
+        options?.onError?.(normalized)
+        emitStatus('failed')
+        return { status: 'failed' }
+      }
+      emitStatus('pending')
+    }
+
+    await delay(pollIntervalMs)
+  }
+
+  emitStatus('timeout')
+  return { status: 'timeout' }
 }

@@ -665,10 +665,13 @@ export function Swap() {
   const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
   const executionSignerType =
     executionMode === 'canonical' ? (usePrivyEmbeddedCanonicalSigner ? 'EOA' : 'UNKNOWN') : accountContext.signerType
-  const executionCapabilities =
-    executionMode === 'canonical'
-      ? { paymasterService: false, atomicStatus: 'unknown' as const, supports5792: false }
-      : accountContext.capabilities
+  const executionCapabilities = useMemo(
+    () =>
+      executionMode === 'canonical'
+        ? ({ paymasterService: false, atomicStatus: 'unknown', supports5792: false } as const)
+        : accountContext.capabilities,
+    [executionMode, accountContext.capabilities],
+  )
   const executionConnectorId =
     executionMode === 'canonical'
       ? usePrivyEmbeddedCanonicalSigner

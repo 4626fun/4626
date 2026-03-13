@@ -30,6 +30,7 @@ import {
   searchChatCommands,
   getChatCommandById,
 } from './commandCenter'
+import { resolveCommandCenterVisibility, shouldAttemptInactiveDmRecovery } from './chatWindowState'
 
 type Props = {
   conversationId: string
@@ -41,9 +42,14 @@ type Props = {
   minimized: boolean
   onMinimize: () => void
   onClose: () => void
+  onConversationRekey?: (oldConversationId: string, newConversationId: string) => void
   variant?: 'desktop' | 'mobile'
   seedCommandId?: string | null
   onSeedConsumed?: () => void
+}
+
+function isEvmAddress(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
 function formatTimestamp(date: Date): string {
@@ -99,6 +105,10 @@ type PreflightResult = {
   guardCategory?: string
 }
 
+const DESKTOP_CHAT_WINDOW_WIDTH = 350
+const DESKTOP_CHAT_WINDOW_HEIGHT = 520
+const DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT = 44
+
 function baseAllowedGuard(): CommandGuardResult {
   return {
     allowed: true,
@@ -115,9 +125,12 @@ function SenderLabel({ inboxId }: { inboxId: string }) {
 
   useEffect(() => {
     let cancelled = false
-    resolveInboxAddress(inboxId).then((addr) => {
-      if (!cancelled) setAddress(addr)
-    })
+    resolveInboxAddress(inboxId)
+      .then((addr) => {
+        if (cancelled) return
+        setAddress((prev) => (prev === addr ? prev : addr))
+      })
+      .catch(() => undefined)
     return () => { cancelled = true }
   }, [inboxId, resolveInboxAddress])
 
@@ -135,6 +148,7 @@ export function ChatWindow({
   minimized,
   onMinimize,
   onClose,
+  onConversationRekey,
   variant = 'desktop',
   seedCommandId = null,
   onSeedConsumed,
@@ -144,6 +158,8 @@ export function ChatWindow({
   const {
     loadMessages,
     sendMessage,
+    startDm,
+    startDmByInbox,
     subscribeToMessages,
     status,
     resolveInboxAddress,
@@ -161,9 +177,13 @@ export function ChatWindow({
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null)
   const [commandHint, setCommandHint] = useState<string | null>(null)
   const [commandGuards, setCommandGuards] = useState<Record<string, CommandGuardResult>>({})
+  const [desktopCommandsOpen, setDesktopCommandsOpen] = useState(false)
+  const [peerAddressCopied, setPeerAddressCopied] = useState(false)
+  const [peerAddressHovered, setPeerAddressHovered] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const resolvingPeerInboxIdRef = useRef<string | null>(null)
   const localMessageSeqRef = useRef(0)
   const trackedShownButtonsRef = useRef<Set<string>>(new Set())
   const pendingCompletionRef = useRef<{ commandId: string; source: string } | null>(null)
@@ -173,11 +193,26 @@ export function ChatWindow({
     if (peerAddress) return
     if (!peerInboxId) return
     let cancelled = false
-    resolveInboxAddress(peerInboxId).then((addr) => {
-      if (!cancelled) setResolvedPeer({ inboxId: peerInboxId, address: addr })
-    })
+    if (resolvedPeer?.inboxId === peerInboxId) return
+    if (resolvingPeerInboxIdRef.current === peerInboxId) return
+    resolvingPeerInboxIdRef.current = peerInboxId
+    resolveInboxAddress(peerInboxId)
+      .then((addr) => {
+        if (cancelled) return
+        const normalizedAddr = typeof addr === 'string' ? addr.toLowerCase() : null
+        setResolvedPeer((prev) => {
+          if (prev?.inboxId === peerInboxId && prev.address === normalizedAddr) return prev
+          return { inboxId: peerInboxId, address: normalizedAddr }
+        })
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (resolvingPeerInboxIdRef.current === peerInboxId) {
+          resolvingPeerInboxIdRef.current = null
+        }
+      })
     return () => { cancelled = true }
-  }, [conversationType, peerInboxId, peerAddress, resolveInboxAddress])
+  }, [conversationType, peerInboxId, peerAddress, resolveInboxAddress, resolvedPeer?.inboxId])
 
   const dmPeerAddress =
     conversationType === 'dm'
@@ -194,8 +229,10 @@ export function ChatWindow({
     conversationType === 'dm' && dmPeerAddress
       ? (agentIdentity ? '4626 assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
       : null
+  const copyablePeerAddress = conversationType === 'dm' ? dmPeerAddress : null
+  const peerProfileHref = copyablePeerAddress ? `/portfolio/${copyablePeerAddress}` : null
   const headerAvatar = conversationType === 'dm'
-    ? (agentIdentity?.avatar ?? dmIdentity.basenameAvatar ?? dmIdentity.avatar ?? conversationImageUrl ?? null)
+    ? (conversationImageUrl ?? agentIdentity?.avatar ?? dmIdentity.avatar ?? null)
     : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
   const lensBadge = conversationType === 'dm' && dmPeerAddress && dmIdentity.lensHandle
@@ -209,6 +246,34 @@ export function ChatWindow({
     const trimmed = raw.trim().toLowerCase()
     return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed : ''
   }, [accountContext.activeAccount, accountContext.activeAccountType, address])
+
+  const handleCopyPeerAddress = useCallback(async () => {
+    if (!copyablePeerAddress) return
+    if (typeof navigator === 'undefined') return
+    if (!navigator.clipboard?.writeText) return
+    try {
+      await navigator.clipboard.writeText(copyablePeerAddress)
+      setPeerAddressCopied(true)
+    } catch {
+      // ignore clipboard copy failures
+    }
+  }, [copyablePeerAddress])
+
+  const handleOpenPeerProfile = useCallback(
+    (event?: { stopPropagation?: () => void }) => {
+      event?.stopPropagation?.()
+      if (!peerProfileHref) return
+      if (typeof window === 'undefined') return
+      window.open(peerProfileHref, '_blank', 'noopener,noreferrer')
+    },
+    [peerProfileHref],
+  )
+
+  useEffect(() => {
+    if (!peerAddressCopied) return
+    const timer = window.setTimeout(() => setPeerAddressCopied(false), 1200)
+    return () => window.clearTimeout(timer)
+  }, [peerAddressCopied])
 
   // Load initial messages
   useEffect(() => {
@@ -382,8 +447,51 @@ export function ChatWindow({
         setReplyToMessageId(null)
         return true
       } catch (error) {
-        const reason = error instanceof Error ? error.message : 'send_failed'
+        let reason = error instanceof Error ? error.message : 'send_failed'
         console.error('[chat] send error:', error)
+
+        if (
+          shouldAttemptInactiveDmRecovery({
+            reason,
+            conversationType,
+            dmPeerAddress,
+            dmPeerInboxId: peerInboxId ?? null,
+          }) &&
+          (Boolean(dmPeerAddress && isEvmAddress(dmPeerAddress)) || Boolean(peerInboxId?.trim()))
+        ) {
+          try {
+            let recoveredConversationId: string | null = null
+            if (dmPeerAddress && isEvmAddress(dmPeerAddress)) {
+              const recoveredDm = await startDm(dmPeerAddress)
+              if (recoveredDm.ok) {
+                recoveredConversationId = recoveredDm.conversationId
+              } else {
+                reason = recoveredDm.message || reason
+              }
+            } else {
+              recoveredConversationId = await startDmByInbox(String(peerInboxId ?? '').trim())
+            }
+            if (recoveredConversationId) {
+              if (recoveredConversationId !== conversationId) {
+                onConversationRekey?.(conversationId, recoveredConversationId)
+              }
+              await sendMessage(recoveredConversationId, text, replyToId ? { replyToId } : undefined)
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === messageId
+                    ? { ...msg, status: 'sent', error: null }
+                    : msg,
+                ),
+              )
+              setReplyToMessageId(null)
+              return true
+            }
+          } catch (retryError) {
+            reason = retryError instanceof Error ? retryError.message : reason
+            console.error('[chat] inactive recovery send error:', retryError)
+          }
+        }
+
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === messageId
@@ -404,7 +512,19 @@ export function ChatWindow({
         setSending(false)
       }
     },
-    [buildLocalMessage, conversationId, emitTelemetry, sendMessage, sending],
+    [
+      buildLocalMessage,
+      conversationId,
+      conversationType,
+      dmPeerAddress,
+      emitTelemetry,
+      onConversationRekey,
+      peerInboxId,
+      sendMessage,
+      sending,
+      startDm,
+      startDmByInbox,
+    ],
   )
 
   const handleSend = useCallback(async () => {
@@ -429,6 +549,11 @@ export function ChatWindow({
 
   const isMobile = variant === 'mobile'
   const showCommandCenter = conversationType === 'dm' && Boolean(agentIdentity)
+  const showCommandCenterPanel = resolveCommandCenterVisibility({
+    isMobile,
+    showCommandCenter,
+    desktopCommandsOpen,
+  })
   const quickActions = useMemo(() => listQuickChatCommands(), [])
   const allCommands = useMemo(() => listAllChatCommands(), [])
   const categoryActions = useMemo(
@@ -443,6 +568,37 @@ export function ChatWindow({
     () => listChatFollowUps(lastCommandId),
     [lastCommandId],
   )
+
+  useEffect(() => {
+    if (isMobile || !showCommandCenter) {
+      setDesktopCommandsOpen(false)
+    }
+  }, [isMobile, showCommandCenter])
+
+  useEffect(() => {
+    if (isMobile || !showCommandCenter) return
+    if (pendingCommand) {
+      setDesktopCommandsOpen(true)
+    }
+  }, [isMobile, pendingCommand, showCommandCenter])
+
+  useEffect(() => {
+    if (isMobile || !showCommandCenter) return
+    if (input.trim().startsWith('/')) {
+      setDesktopCommandsOpen(true)
+    }
+  }, [input, isMobile, showCommandCenter])
+
+  useEffect(() => {
+    if (isMobile || !desktopCommandsOpen) return
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setDesktopCommandsOpen(false)
+      inputRef.current?.focus()
+    }
+    window.addEventListener('keydown', handleWindowKeyDown)
+    return () => window.removeEventListener('keydown', handleWindowKeyDown)
+  }, [desktopCommandsOpen, isMobile])
 
   const messageById = useMemo(
     () => new Map(messages.map((msg) => [msg.id, msg])),
@@ -710,7 +866,14 @@ export function ChatWindow({
       className={`flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl ${
         isMobile ? 'h-full w-full rounded-none' : 'rounded-t-xl'
       }`}
-      style={isMobile ? undefined : { width: 320, height: minimized ? 40 : 420 }}
+      style={
+        isMobile
+          ? undefined
+          : {
+              width: DESKTOP_CHAT_WINDOW_WIDTH,
+              height: minimized ? DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT : DESKTOP_CHAT_WINDOW_HEIGHT,
+            }
+      }
     >
       {/* Header */}
       {isMobile ? (
@@ -724,13 +887,29 @@ export function ChatWindow({
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0">
-              {headerAvatar ? (
-                <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                headerInitials
-              )}
-            </div>
+            {peerProfileHref ? (
+              <button
+                type="button"
+                onClick={() => handleOpenPeerProfile()}
+                className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0 ring-1 ring-transparent hover:ring-white/25 transition-colors"
+                aria-label="Open profile"
+                title="Open profile"
+              >
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </button>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0">
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </div>
+            )}
             <div className="min-w-0 text-left">
               <div className="text-sm font-semibold text-zinc-100 truncate">
                 {headerName}
@@ -738,6 +917,25 @@ export function ChatWindow({
               {headerSubline && (
                 <div className="text-[10px] text-zinc-500 truncate">
                   {headerSubline}
+                </div>
+              )}
+              {copyablePeerAddress && (
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyPeerAddress()}
+                    onMouseEnter={() => setPeerAddressHovered(true)}
+                    onMouseLeave={() => setPeerAddressHovered(false)}
+                    onFocus={() => setPeerAddressHovered(true)}
+                    onBlur={() => setPeerAddressHovered(false)}
+                    className="font-mono text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                    title={`Copy address ${copyablePeerAddress}`}
+                  >
+                    {peerAddressHovered ? copyablePeerAddress : truncateAddress(copyablePeerAddress)}
+                  </button>
+                  {peerAddressCopied ? (
+                    <span className="text-[9px] text-emerald-300/90">Copied</span>
+                  ) : null}
                 </div>
               )}
               {lensBadge && (
@@ -762,17 +960,55 @@ export function ChatWindow({
           onClick={onMinimize}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0">
-              {headerAvatar ? (
-                <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                headerInitials
-              )}
-            </div>
+            {peerProfileHref ? (
+              <button
+                type="button"
+                onClick={(event) => handleOpenPeerProfile(event)}
+                className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0 ring-1 ring-transparent hover:ring-white/25 transition-colors"
+                aria-label="Open profile"
+                title="Open profile"
+              >
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </button>
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0">
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </div>
+            )}
             <div className="min-w-0">
               <div className="text-sm text-zinc-200 font-medium truncate">{headerName}</div>
               {headerSubline && (
                 <div className="text-[10px] text-zinc-500 truncate">{headerSubline}</div>
+              )}
+              {copyablePeerAddress && (
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void handleCopyPeerAddress()
+                    }}
+                    onMouseEnter={() => setPeerAddressHovered(true)}
+                    onMouseLeave={() => setPeerAddressHovered(false)}
+                    onFocus={() => setPeerAddressHovered(true)}
+                    onBlur={() => setPeerAddressHovered(false)}
+                    className="font-mono text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                    title={`Copy address ${copyablePeerAddress}`}
+                  >
+                    {peerAddressHovered ? copyablePeerAddress : truncateAddress(copyablePeerAddress)}
+                  </button>
+                  {peerAddressCopied ? (
+                    <span className="text-[9px] text-emerald-300/90">Copied</span>
+                  ) : null}
+                </div>
               )}
               {lensBadge && (
                 <div className="text-[9px] text-cyan-200 truncate">{lensBadge}</div>
@@ -780,6 +1016,23 @@ export function ChatWindow({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {showCommandCenter ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDesktopCommandsOpen((prev) => !prev)
+                }}
+                className={`rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
+                  desktopCommandsOpen
+                    ? 'border-cyan-400/35 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20'
+                    : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'
+                }`}
+                aria-label={desktopCommandsOpen ? 'Back to chat' : 'Open commands'}
+              >
+                {desktopCommandsOpen ? 'Back' : 'Commands'}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onMinimize() }}
@@ -902,8 +1155,24 @@ export function ChatWindow({
             )}
           </div>
 
-          {showCommandCenter && (
-            <div className="border-t border-white/10 bg-zinc-900/75 px-3 py-2 space-y-2 shrink-0">
+          {showCommandCenterPanel && (
+            <div className="border-t border-white/10 bg-zinc-900/75 px-3 py-2 shrink-0">
+              {!isMobile && (
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">Command Center</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDesktopCommandsOpen(false)
+                      inputRef.current?.focus()
+                    }}
+                    className="rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 transition-colors hover:bg-white/10"
+                  >
+                    Back to chat
+                  </button>
+                </div>
+              )}
+              <div className={isMobile ? 'space-y-2' : 'max-h-56 overflow-y-auto pr-1 space-y-2'}>
               {slashSuggestions.length > 0 && (
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500 mb-1.5">Slash Suggestions</div>
@@ -1059,6 +1328,7 @@ export function ChatWindow({
                   </div>
                 </div>
               )}
+              </div>
             </div>
           )}
 

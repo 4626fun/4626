@@ -6,8 +6,9 @@ type JsonRpcRequest = { jsonrpc?: string; id?: unknown; method?: unknown; params
 
 const DEFAULT_CHAIN_RPCS = {
   base: [
-    'https://base-mainnet.public.blastapi.io',
     'https://base.llamarpc.com',
+    'https://base-mainnet.public.blastapi.io',
+    'https://base.meowrpc.com',
     'https://mainnet.base.org',
   ],
   mainnet: [
@@ -35,19 +36,49 @@ const DEFAULT_CHAIN_RPCS = {
 type RpcChain = keyof typeof DEFAULT_CHAIN_RPCS
 
 const CHAIN_ENV_KEYS: Record<RpcChain, string[]> = {
-  base: ['BASE_RPC_URL'],
+  base: ['BASE_READ_RPC_URL', 'BASE_LOGS_RPC_URL', 'BASE_RPC_URL'],
   mainnet: ['ETH_RPC_URL', 'ETHEREUM_RPC_URL'],
   arbitrum: ['ARBITRUM_RPC_URL'],
   optimism: ['OPTIMISM_RPC_URL'],
   polygon: ['POLYGON_RPC_URL'],
 }
 
+const EXPECTED_CHAIN_ID_HEX: Record<RpcChain, string> = {
+  base: '0x2105',
+  mainnet: '0x1',
+  arbitrum: '0xa4b1',
+  optimism: '0xa',
+  polygon: '0x89',
+}
+
 const RETRYABLE_STATUS = new Set([429])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
+const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
+const RPC_CHAIN_ID_TIMEOUT_MS = 1_500
+const RPC_FORWARD_TIMEOUT_MS = 5_000
+const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function normalizeRpcUrl(raw: string): string | null {
@@ -98,6 +129,50 @@ function getRpcUrls(chain: RpcChain): string[] {
   return Array.from(new Set(urls))
 }
 
+function normalizeChainIdHex(raw: string): string | null {
+  const value = String(raw ?? '').trim()
+  if (!value) return null
+  try {
+    return `0x${BigInt(value).toString(16)}`
+  } catch {
+    return null
+  }
+}
+
+async function readRpcChainId(url: string): Promise<string | null> {
+  try {
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_chainId',
+          params: [],
+        }),
+      },
+      RPC_CHAIN_ID_TIMEOUT_MS,
+    )
+    if (!response.ok) return null
+    const json = (await response.json().catch(() => null)) as { result?: unknown } | null
+    if (!json || typeof json.result !== 'string') return null
+    return normalizeChainIdHex(json.result)
+  } catch {
+    return null
+  }
+}
+
+async function readRpcChainIdCached(url: string): Promise<string | null> {
+  const now = Date.now()
+  const cached = rpcChainIdCache.get(url)
+  if (cached && cached.expiresAt > now) return cached.value
+  const value = await readRpcChainId(url)
+  rpcChainIdCache.set(url, { value, expiresAt: now + RPC_CHAIN_ID_CACHE_TTL_MS })
+  return value
+}
+
 function isValidRpcBody(body: unknown): body is JsonRpcRequest | JsonRpcRequest[] {
   if (!body) return false
   if (Array.isArray(body)) return body.length > 0
@@ -123,21 +198,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payload = body
   const chain = resolveRpcChain(req)
   const rpcUrls = getRpcUrls(chain)
+  const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
+  const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
   let lastStatus = 502
   let lastError: string | null = null
 
   for (const rpc of rpcUrls) {
+    if (envRpcUrls.has(rpc) && expectedChainId) {
+      const actualChainId = await readRpcChainIdCached(rpc)
+      if (actualChainId && actualChainId !== expectedChainId) {
+        lastStatus = 502
+        lastError = `RPC chain mismatch for ${rpc}: expected ${expectedChainId}, got ${actualChainId}`
+        continue
+      }
+    }
+
     for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_RPC; attempt++) {
       if (attempt > 0) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 250
         if (delay > 0) await sleep(delay)
       }
       try {
-        const response = await fetch(rpc, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
+        const response = await fetchWithTimeout(
+          rpc,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+          RPC_FORWARD_TIMEOUT_MS,
+        )
 
         if (response.ok) {
           const text = await response.text()
@@ -161,7 +251,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.setHeader('Content-Type', contentType)
         return res.status(status).send(text)
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e ?? 'RPC proxy error')
+        if (isAbortError(e)) {
+          lastError = `RPC request timeout (${rpc})`
+        } else {
+          lastError = e instanceof Error ? e.message : String(e ?? 'RPC proxy error')
+        }
         lastStatus = 502
         if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
         break

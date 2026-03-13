@@ -28,7 +28,8 @@ pnpm dev
 
 ## Local deploy dry-run
 
-Use this when you want `/deploy` to hit a local Base fork for the new dry-run flow:
+Use this when you want `/deploy` to hit a local Base fork for the new dry-run flow.
+This flow is local-fork-only, and `https://app.4626.fun` does not expose the dry-run action.
 
 ```bash
 cd frontend
@@ -42,6 +43,7 @@ What it does:
 - starts an Anvil Base fork on `127.0.0.1:8545`
 - deploys a local `DeploymentBatcher` copy onto that fork and points `/deploy` at the local batcher by default
 - exports `BASE_RPC_URL` and `VITE_BASE_RPC` to that local fork for the process
+- enables the `Run dry-run` action in `/deploy` (only when `VITE_BASE_RPC` is localhost/127.0.0.1)
 - forces `VITE_ALLOW_CONTRACT_OVERRIDES=0` and `ALLOW_API_CONTRACT_OVERRIDES=0`
 - runs the frontend dev server in the foreground
 

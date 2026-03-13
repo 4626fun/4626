@@ -4,7 +4,10 @@ import { readSessionFromRequest } from '../auth/_shared.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-const SEEDED_ADMIN_ADDRESSES = ['0xb05cf01231cf2ff99499682e64d3780d57c80fdd']
+const SEEDED_ADMIN_ADDRESSES = [
+  '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+  '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+]
 
 function collectAdminAddressSources(): string {
   // Support both server/admin env and client bypass env for parity across

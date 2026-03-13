@@ -12,7 +12,7 @@ function isDebugEnabled(): boolean {
   }
 }
 
-const MIN_LEVEL: LogLevel = isDebugEnabled() ? 'debug' : import.meta.env.PROD ? 'warn' : 'debug'
+const MIN_LEVEL: LogLevel = isDebugEnabled() ? 'debug' : import.meta.env.PROD ? 'warn' : 'info'
 
 export const logger = {
   debug: (msg: string, data?: unknown) => log('debug', msg, data),

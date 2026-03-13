@@ -5,7 +5,7 @@
  * When expanded: a panel listing all conversations.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
@@ -50,17 +50,34 @@ function ConversationItem({
 }) {
   const { resolveInboxAddress } = useXmtp()
   const [resolvedPeer, setResolvedPeer] = useState<{ inboxId: string; address: string | null } | null>(null)
+  const resolvingInboxIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (convo.type !== 'dm') return
     if (convo.peerAddress) return
     if (!convo.peerInboxId) return
     let cancelled = false
-    resolveInboxAddress(convo.peerInboxId).then((addr) => {
-      if (!cancelled) setResolvedPeer({ inboxId: convo.peerInboxId!, address: addr })
-    })
+    const inboxId = convo.peerInboxId
+    if (resolvedPeer?.inboxId === inboxId) return
+    if (resolvingInboxIdRef.current === inboxId) return
+    resolvingInboxIdRef.current = inboxId
+    resolveInboxAddress(inboxId)
+      .then((addr) => {
+        if (cancelled) return
+        const normalizedAddr = typeof addr === 'string' ? addr.toLowerCase() : null
+        setResolvedPeer((prev) => {
+          if (prev?.inboxId === inboxId && prev.address === normalizedAddr) return prev
+          return { inboxId, address: normalizedAddr }
+        })
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (resolvingInboxIdRef.current === inboxId) {
+          resolvingInboxIdRef.current = null
+        }
+      })
     return () => { cancelled = true }
-  }, [convo.type, convo.peerAddress, convo.peerInboxId, resolveInboxAddress])
+  }, [convo.type, convo.peerAddress, convo.peerInboxId, resolveInboxAddress, resolvedPeer?.inboxId])
 
   const peerAddress =
     convo.peerAddress ??
@@ -78,7 +95,7 @@ function ConversationItem({
       ? (agentIdentity ? '4626 assistant' : (identity.secondary ?? truncateAddress(peerAddress)))
       : null
   const avatar = convo.type === 'dm'
-    ? (agentIdentity?.avatar ?? identity.basenameAvatar ?? identity.avatar ?? convo.imageUrl ?? null)
+    ? (agentIdentity?.avatar ?? identity.avatar ?? convo.imageUrl ?? null)
     : (convo.imageUrl ?? null)
   const subtitle = convo.lastMessageText
     ? (displaySecondary ? `${displaySecondary} · ${convo.lastMessageText}` : convo.lastMessageText)
@@ -92,6 +109,7 @@ function ConversationItem({
         ...convo,
         name: displayName,
         peerAddress: peerAddress ?? convo.peerAddress,
+        imageUrl: avatar ?? convo.imageUrl,
       })}
       className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
     >
@@ -239,7 +257,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
             <div className="px-4 pb-3">
               <div className="flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm text-zinc-500">
                 <MessageSquare className="w-4 h-4 text-zinc-400" />
-                Ask Keepr or Search
+                Ask Akita or Search
               </div>
             </div>
           )}

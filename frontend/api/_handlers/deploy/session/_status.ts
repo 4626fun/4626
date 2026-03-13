@@ -34,6 +34,14 @@ const REPLAY_SKIP_PHASE2_CORE_AT_KEY = 'replaySkipPhase2CoreAt'
 const REPLAY_SKIP_PHASE2_CORE_REASON_KEY = 'replaySkipPhase2CoreReason'
 const REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY = 'replaySkipPhase2FinalizeAt'
 const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
+const PHASE3_AJNA_ADMIN_ALIGNMENT_KEY = 'phase3AjnaAdminAlignment'
+
+type Phase3AjnaAdminAlignment = {
+  ajnaAuthAddress: Address | null
+  expectedAjnaAuthAdmin: Address | null
+  ajnaAuthAdmin: Address | null
+  ajnaAuthAdminMatchesOwner: boolean | null
+}
 
 function isSessionExpired(expiresAt: unknown): boolean {
   if (typeof expiresAt !== 'string') return false
@@ -46,6 +54,22 @@ function readPayloadObjectSafe(value: unknown): Record<string, any> {
     return asPayloadObject(value)
   } catch {
     return {}
+  }
+}
+
+function readPhase3AjnaAdminAlignment(value: unknown): Phase3AjnaAdminAlignment {
+  const payload = readPayloadObjectSafe(value)
+  const raw = isPlainObject(payload?.[PHASE3_AJNA_ADMIN_ALIGNMENT_KEY]) ? payload[PHASE3_AJNA_ADMIN_ALIGNMENT_KEY] : {}
+  const ajnaAuthAddress = normalizeAddress(raw?.ajnaAuthAddress)
+  const expectedAjnaAuthAdmin = normalizeAddress(raw?.expectedAjnaAuthAdmin)
+  const ajnaAuthAdmin = normalizeAddress(raw?.ajnaAuthAdmin)
+  const ajnaAuthAdminMatchesOwner =
+    typeof raw?.ajnaAuthAdminMatchesOwner === 'boolean' ? raw.ajnaAuthAdminMatchesOwner : null
+  return {
+    ajnaAuthAddress,
+    expectedAjnaAuthAdmin,
+    ajnaAuthAdmin,
+    ajnaAuthAdminMatchesOwner,
   }
 }
 
@@ -480,6 +504,16 @@ const AJNA_INNER_VAULT_VIEW_ABI = [
   {
     type: 'function',
     name: 'AUTH',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const AJNA_AUTH_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'admin',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'address' }],
@@ -1066,7 +1100,7 @@ async function readSolanaBridgeAddress(params: {
 async function verifyPhase3PostState(params: {
   publicClient: any
   phase3Calls: Array<{ to: Address; value: bigint; data: Hex }>
-}): Promise<void> {
+}): Promise<Phase3AjnaAdminAlignment> {
   const info = extractPhase3DeployInfo(params.phase3Calls)
   if (!info) {
     throw new Error('phase3 verification failed: phase3Calls missing deployPhase3Strategies')
@@ -1147,6 +1181,9 @@ async function verifyPhase3PostState(params: {
   const remaining = strategyDetails.filter((entry) => entry.strategy.toLowerCase() !== charm.strategy.toLowerCase())
 
   let ajna: (typeof strategyDetails)[number] | undefined
+  let ajnaAuthAddress: Address | null = null
+  let expectedAjnaAuthAdmin: Address | null = null
+  let ajnaAuthAdmin: Address | null = null
   if (info.ajnaWeightBps > 0n) {
     ajna =
       remaining.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
@@ -1172,6 +1209,19 @@ async function verifyPhase3PostState(params: {
     if (ajna.ajna.auth && !(await hasRuntimeCode(params.publicClient, ajna.ajna.auth))) {
       throw new Error(`phase3 verification failed: ajna auth code missing at ${ajna.ajna.auth}`)
     }
+
+    ajnaAuthAddress = ajna.ajna.auth
+    expectedAjnaAuthAdmin = info.owner
+    if (ajnaAuthAddress) {
+      const ajnaAuthAdminRaw = await params.publicClient
+        .readContract({
+          address: ajnaAuthAddress,
+          abi: AJNA_AUTH_VIEW_ABI,
+          functionName: 'admin',
+        })
+        .catch(() => null)
+      ajnaAuthAdmin = normalizeAddress(ajnaAuthAdminRaw)
+    }
   }
 
   if (info.solanaWeightBps > 0n) {
@@ -1192,6 +1242,16 @@ async function verifyPhase3PostState(params: {
     if (!(await hasRuntimeCode(params.publicClient, solana.strategy))) {
       throw new Error(`phase3 verification failed: solana strategy code missing at ${solana.strategy}`)
     }
+  }
+
+  return {
+    ajnaAuthAddress,
+    expectedAjnaAuthAdmin,
+    ajnaAuthAdmin,
+    ajnaAuthAdminMatchesOwner:
+      ajnaAuthAdmin && expectedAjnaAuthAdmin
+        ? ajnaAuthAdmin.toLowerCase() === expectedAjnaAuthAdmin.toLowerCase()
+        : null,
   }
 }
 
@@ -2197,7 +2257,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   if (step === 'phase3_sent') {
-    await verifyPhase3PostState({
+    const ajnaAdminAlignment = await verifyPhase3PostState({
       publicClient,
       phase3Calls,
     })
@@ -2206,6 +2266,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       fromStep: 'phase3_sent',
       toStep: 'phase3_confirmed',
       lastTxHash: txHash,
+      payloadPatch: { [PHASE3_AJNA_ADMIN_ALIGNMENT_KEY]: ajnaAdminAlignment },
     })
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
     if (hasPhase4) {
@@ -2407,6 +2468,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ovaultEnabled =
     isPlainObject(rec?.payload?.solanaOvault) && rec.payload.solanaOvault.enabled === true
   const ovaultRaw = isPlainObject(rec?.payload?.ovault) ? rec.payload.ovault : {}
+  const phase3AjnaAdminAlignment = readPhase3AjnaAdminAlignment(rec?.payload)
   return res.status(200).json({
     success: true,
     data: {
@@ -2421,6 +2483,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessionSignerWalletId:
         (typeof rec?.payload?.deploySignerWalletId === 'string' && rec.payload.deploySignerWalletId.trim()) || null,
       diagnostics: buildSessionDiagnostics(rec),
+      phase3AjnaAdminAlignment,
       ovault: ovaultEnabled
         ? {
             existingMintCompatible: ovaultRaw.existingMintCompatible === false ? false : true,

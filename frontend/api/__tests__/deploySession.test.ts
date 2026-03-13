@@ -536,6 +536,8 @@ describe('deploy session optimistic concurrency', () => {
     const ccaStrategy = '0x5000000000000000000000000000000000000005'
     const charmStrategy = '0x8100000000000000000000000000000000000008'
     const ajnaStrategy = '0x9100000000000000000000000000000000000009'
+    const ajnaInnerVault = '0x9200000000000000000000000000000000000009'
+    const ajnaAuth = '0x9300000000000000000000000000000000000009'
     const solanaStrategy = '0xa10000000000000000000000000000000000000a'
     const charmVault = '0xb10000000000000000000000000000000000000b'
     const ajnaPool = '0xc10000000000000000000000000000000000000c'
@@ -643,9 +645,20 @@ describe('deploy session optimistic concurrency', () => {
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
             throw new Error('not_charm_strategy')
-          case 'ajnaPool':
-            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaPool
-            throw new Error('not_ajna_strategy')
+          case 'ERC4626_VAULT':
+            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaInnerVault
+            throw new Error('not_ajna_adapter')
+          case 'AJNA_POOL':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_inner_vault')
+          case 'AUTH':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
+            throw new Error('not_ajna_inner_vault')
+          case 'admin':
+            if (String(address ?? '').toLowerCase() === ajnaAuth.toLowerCase()) {
+              return '0x2000000000000000000000000000000000000002'
+            }
+            throw new Error('not_ajna_auth')
           case 'bridgeAddress':
             if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
             throw new Error('not_solana_strategy')
@@ -676,6 +689,8 @@ describe('deploy session optimistic concurrency', () => {
           ccaStrategy.toLowerCase(),
           charmStrategy.toLowerCase(),
           ajnaStrategy.toLowerCase(),
+          ajnaInnerVault.toLowerCase(),
+          ajnaAuth.toLowerCase(),
           solanaStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),
@@ -1796,6 +1811,11 @@ describe('deploy session optimistic concurrency', () => {
             return usdc
           case 'getPool':
             return v3Pool
+          case 'admin':
+            if (String(address ?? '').toLowerCase() === ajnaAuth.toLowerCase()) {
+              return '0x2000000000000000000000000000000000000002'
+            }
+            throw new Error('not_ajna_auth')
           default:
             return '0xownerbytes'
         }
@@ -1827,6 +1847,21 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.body?.data?.step).toBe('completed')
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        fromStep: 'phase3_sent',
+        toStep: 'phase3_confirmed',
+        payloadPatch: expect.objectContaining({
+          phase3AjnaAdminAlignment: expect.objectContaining({
+            ajnaAuthAddress: ajnaAuth,
+            expectedAjnaAuthAdmin: '0x2000000000000000000000000000000000000002',
+            ajnaAuthAdmin: '0x2000000000000000000000000000000000000002',
+            ajnaAuthAdminMatchesOwner: true,
+          }),
+        }),
+      }),
     )
   })
 
@@ -1966,6 +2001,37 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
+  it('status returns persisted phase3 Ajna admin alignment diagnostics', async () => {
+    const rec = {
+      ...makeDeploySession('completed'),
+      payload: JSON.stringify({
+        phase1Calls: [],
+        phase2Calls: [],
+        phase3Calls: [],
+        phase4Calls: [],
+        phase3AjnaAdminAlignment: {
+          ajnaAuthAddress: '0x9200000000000000000000000000000000000009',
+          expectedAjnaAuthAdmin: '0x2000000000000000000000000000000000000002',
+          ajnaAuthAdmin: '0x7000000000000000000000000000000000000007',
+          ajnaAuthAdminMatchesOwner: false,
+        },
+      }),
+    }
+    getDeploySessionByIdMock.mockResolvedValueOnce(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.phase3AjnaAdminAlignment).toEqual({
+      ajnaAuthAddress: '0x9200000000000000000000000000000000000009',
+      expectedAjnaAuthAdmin: '0x2000000000000000000000000000000000000002',
+      ajnaAuthAdmin: '0x7000000000000000000000000000000000000007',
+      ajnaAuthAdminMatchesOwner: false,
+    })
+  })
+
   it('status advances phase3_sent with extra strategies when SolanaStrategy exposes bridgeAddress', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
@@ -1980,6 +2046,8 @@ describe('deploy session optimistic concurrency', () => {
     const charmStrategy = '0x8200000000000000000000000000000000000008'
     const extraStrategy = '0x8300000000000000000000000000000000000008'
     const ajnaStrategy = '0x9200000000000000000000000000000000000009'
+    const ajnaInnerVault = '0x9300000000000000000000000000000000000009'
+    const ajnaAuth = '0x9400000000000000000000000000000000000009'
     const solanaStrategy = '0xa20000000000000000000000000000000000000a'
     const charmVault = '0xb20000000000000000000000000000000000000b'
     const ajnaPool = '0xc20000000000000000000000000000000000000c'
@@ -2048,9 +2116,20 @@ describe('deploy session optimistic concurrency', () => {
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
             throw new Error('not_charm_strategy')
-          case 'ajnaPool':
-            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaPool
-            throw new Error('not_ajna_strategy')
+          case 'ERC4626_VAULT':
+            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaInnerVault
+            throw new Error('not_ajna_adapter')
+          case 'AJNA_POOL':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_inner_vault')
+          case 'AUTH':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
+            throw new Error('not_ajna_inner_vault')
+          case 'admin':
+            if (String(address ?? '').toLowerCase() === ajnaAuth.toLowerCase()) {
+              return '0x2000000000000000000000000000000000000002'
+            }
+            throw new Error('not_ajna_auth')
           case 'bridgeAddress':
             if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
             throw new Error('not_solana_strategy')
@@ -2072,6 +2151,8 @@ describe('deploy session optimistic concurrency', () => {
           charmStrategy.toLowerCase(),
           extraStrategy.toLowerCase(),
           ajnaStrategy.toLowerCase(),
+          ajnaInnerVault.toLowerCase(),
+          ajnaAuth.toLowerCase(),
           solanaStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),

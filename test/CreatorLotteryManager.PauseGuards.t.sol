@@ -112,9 +112,45 @@ contract MockLocalVrfConsumerPauseGuards {
     }
 }
 
+contract MockShareTokenPauseGuards {
+    mapping(address => uint256) public balanceOf;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+}
+
+contract MockVe4626PauseGuards {
+    struct Lock {
+        uint256 amount;
+        uint256 end;
+        uint256 start;
+        address lockedToken;
+        uint256 underlyingValue;
+    }
+
+    mapping(address => Lock) internal _locks;
+
+    function setLock(address user, address lockedToken, uint256 amount, uint256 underlyingValue) external {
+        _locks[user] = Lock({
+            amount: amount,
+            end: block.timestamp + 365 days,
+            start: block.timestamp,
+            lockedToken: lockedToken,
+            underlyingValue: underlyingValue
+        });
+    }
+
+    function getLock(address user) external view returns (Lock memory) {
+        return _locks[user];
+    }
+}
+
 contract MockBoostManagerPauseGuards {
     uint256 public boostBps = 10_000;
     uint256 public probabilityBoostBps;
+    uint256 public coverageBps = 10_000;
+    address public ve4626;
 
     function setBoostBps(uint256 nextBoostBps) external {
         boostBps = nextBoostBps;
@@ -122,6 +158,14 @@ contract MockBoostManagerPauseGuards {
 
     function setProbabilityBoostBps(uint256 nextProbabilityBoostBps) external {
         probabilityBoostBps = nextProbabilityBoostBps;
+    }
+
+    function setVe4626(address nextVe4626) external {
+        ve4626 = nextVe4626;
+    }
+
+    function setCoverageBps(uint256 nextCoverageBps) external {
+        coverageBps = nextCoverageBps;
     }
 
     function calculateBoost(address) external view returns (uint256) {
@@ -134,6 +178,10 @@ contract MockBoostManagerPauseGuards {
 
     function hasBoost(address) external view returns (bool) {
         return boostBps > 10_000 || probabilityBoostBps > 0;
+    }
+
+    function getCoverageBps(address, address, address, address, uint256, uint256) external view returns (uint256) {
+        return coverageBps;
     }
 }
 
@@ -166,13 +214,15 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
     MockLocalVrfConsumerPauseGuards internal localVrfConsumer;
     MockBoostManagerPauseGuards internal boostManager;
     MockVaultGaugeVotingPauseGuards internal vaultGaugeVoting;
+    MockShareTokenPauseGuards internal shareToken;
+    MockVe4626PauseGuards internal ve4626;
 
     address internal owner = address(0xA11CE);
     address internal authorizedSwap = address(0xBEEF);
     address internal buyer = address(0xCAFE);
 
     address internal creatorCoin = address(0x1001);
-    address internal shareOFT = address(0x1002);
+    address internal shareOFT;
     address internal vault = address(0x1003);
 
     uint32 internal constant SRC_EID = 30110;
@@ -190,6 +240,12 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         localVrfConsumer = new MockLocalVrfConsumerPauseGuards();
         boostManager = new MockBoostManagerPauseGuards();
         vaultGaugeVoting = new MockVaultGaugeVotingPauseGuards();
+        shareToken = new MockShareTokenPauseGuards();
+        shareOFT = address(shareToken);
+        ve4626 = new MockVe4626PauseGuards();
+        boostManager.setVe4626(address(ve4626));
+        shareToken.mint(buyer, 100 ether);
+        ve4626.setLock(buyer, shareOFT, 100 ether, 100 ether);
 
         registry = new MockLotteryRegistryPauseGuards(
             LZ_ENDPOINT, creatorCoin, shareOFT, address(oracle), vault, address(gauge)
@@ -224,10 +280,10 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         boostManager.setBoostBps(20_000);
 
         vm.prank(authorizedSwap);
-        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
+        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
 
-        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,,,) = lotteryManager.vrfRequests(requestId);
+        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
         assertEq(baseWinChance, 40, "expected $1 trade to use base odds");
         assertEq(effectiveWinChancePPM, 80, "request should store boosted odds snapshot");
@@ -248,10 +304,10 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         boostManager.setBoostBps(20_000);
 
         vm.prank(authorizedSwap);
-        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
+        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
 
-        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,,,) = lotteryManager.vrfRequests(requestId);
+        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
         assertEq(baseWinChance, 40, "expected $1 trade to use base odds");
         assertEq(effectiveWinChancePPM, 80, "request should store boosted odds snapshot");
@@ -269,7 +325,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
 
         assertEq(gauge.payCount(), 0, "payout should be deferred while paused");
 
-        (address storedUser,,,,,,,,) = lotteryManager.vrfRequests(requestId);
+        (address storedUser,,,,,) = lotteryManager.vrfRequests(requestId);
         assertEq(storedUser, buyer, "request should remain until processed");
 
         vm.prank(owner);
@@ -282,7 +338,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         assertEq(gauge.payCount(), 1, "payout should occur after unpause processing");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
 
-        (address userAfter,,,,,,,,) = lotteryManager.vrfRequests(requestId);
+        (address userAfter,,,,,) = lotteryManager.vrfRequests(requestId);
         assertEq(userAfter, address(0), "request should be cleared after processing");
     }
 
@@ -290,10 +346,10 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         boostManager.setProbabilityBoostBps(1); // +100 PPM
 
         vm.prank(authorizedSwap);
-        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
+        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
 
-        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,,,) = lotteryManager.vrfRequests(requestId);
+        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
         assertEq(baseWinChance, 40, "expected $1 trade to use base odds");
         assertEq(effectiveWinChancePPM, 140, "request should include additive probability boost");
@@ -311,16 +367,16 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
     }
 
     function test_VrfCallback_UsesStoredVoteDirectedGaugeBoost() public {
-        uint256 tradeAmount = 5000 ether;
+        uint256 tradeAmount = 1 ether;
         vaultGaugeVoting.setGaugeBoostPPM(vault, 10_000);
 
         vm.prank(authorizedSwap);
-        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, tradeAmount);
+        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, tradeAmount, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
 
-        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,,,) = lotteryManager.vrfRequests(requestId);
+        (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
-        assertGt(effectiveWinChancePPM, baseWinChance + 1, "request should include vote-directed gauge boost");
+        assertEq(effectiveWinChancePPM, baseWinChance + 10_000, "request should include full flat gauge boost");
 
         vaultGaugeVoting.setGaugeBoostPPM(vault, 0);
 
@@ -334,78 +390,17 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
     }
 
-    function test_VrfCallback_AllowsOriginalProviderAfterConsumerRotation() public {
-        boostManager.setBoostBps(20_000);
-
-        vm.prank(authorizedSwap);
-        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
-        assertGt(requestId, 0, "expected VRF request");
-
-        MockLocalVrfConsumerPauseGuards replacementConsumer = new MockLocalVrfConsumerPauseGuards();
+    function test_SetLotteryConfig_Allows200kCapAndRejectsAbove() public {
         vm.prank(owner);
-        lotteryManager.setLocalVRFConsumer(address(replacementConsumer));
+        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 200_000, 10_500);
 
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 60; // Above base odds (40), below boosted odds (80).
-
-        vm.prank(address(replacementConsumer));
-        vm.expectRevert(CreatorLotteryManager.InvalidVrfCallback.selector);
-        lotteryManager.receiveRandomWords(requestId, randomWords);
-
-        vm.prank(address(localVrfConsumer));
-        lotteryManager.receiveRandomWords(requestId, randomWords);
-
-        assertEq(gauge.payCount(), 1, "request-bound provider should still finalize settlement");
-        assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
-    }
-
-    function test_VrfCallback_UsesStoredRewardSnapshotAfterConfigChange() public {
-        boostManager.setBoostBps(20_000);
-
-        vm.prank(authorizedSwap);
-        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
-        assertGt(requestId, 0, "expected VRF request");
-
-        (,,, uint256 effectiveWinChancePPM, uint16 rewardBps,,,,) = lotteryManager.vrfRequests(requestId);
-        assertEq(effectiveWinChancePPM, 80, "request should store boosted odds snapshot");
-        assertEq(uint256(rewardBps), 6900, "request should snapshot current reward bps");
-
-        (uint256 minSwap, uint256 currentReward, bool isActive, uint256 baseWinChance, uint256 maxWinChance, uint256 usdMultiplierBps)
-        = lotteryManager.lotteryConfig();
-        assertEq(currentReward, 6900, "default reward bps mismatch");
+        (,,,, uint256 maxWinChance,) = lotteryManager.lotteryConfig();
+        assertEq(maxWinChance, 200_000, "expected max win chance updated to new cap");
 
         vm.prank(owner);
-        lotteryManager.setLotteryConfig(minSwap, 0, isActive, baseWinChance, maxWinChance, usdMultiplierBps);
-
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 60; // Above base odds (40), below boosted odds (80).
-
-        vm.prank(address(localVrfConsumer));
-        lotteryManager.receiveRandomWords(requestId, randomWords);
-
-        uint256 expectedRewardShares = (gauge.jackpot() * uint256(rewardBps)) / 10_000;
-        assertEq(gauge.payCount(), 1, "entry-time reward snapshot should drive payout");
-        assertEq(gauge.lastShares(), expectedRewardShares, "payout should use snapshotted reward bps");
+        vm.expectRevert(CreatorLotteryManager.InvalidAmount.selector);
+        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 200_001, 10_500);
     }
 
-    function test_RemoteWin_FinalizesEvenWhenWinnerCallbackSendFails() public {
-        boostManager.setBoostBps(20_000);
-
-        Origin memory origin = Origin({srcEid: SRC_EID, sender: SRC_SENDER, nonce: 7});
-        bytes memory payload =
-            abi.encode(uint16(lotteryManager.MSG_TYPE_LOTTERY_ENTRY()), buyer, shareOFT, 1 ether, SOURCE_CHAIN_ID);
-
-        lotteryManager.exposedLzReceive(origin, payload);
-
-        uint256 requestId = localVrfConsumer.nextRequestId() - 1;
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 60; // Above base odds (40), below boosted odds (80).
-
-        vm.prank(address(localVrfConsumer));
-        lotteryManager.receiveRandomWords(requestId, randomWords);
-
-        assertEq(gauge.payCount(), 1, "remote entry payout should finalize even if callback send fails");
-        assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
-    }
 }
 

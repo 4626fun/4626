@@ -127,7 +127,7 @@ contract CreatorLotteryManagerOracleGuardsTest is Test {
         vm.warp(block.timestamp + 61);
 
         vm.prank(authorizedSwap);
-        uint256 entryId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
+        uint256 entryId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
         assertEq(entryId, 0, "stale oracle should skip the entry");
     }
 
@@ -140,14 +140,14 @@ contract CreatorLotteryManagerOracleGuardsTest is Test {
 
         // First entry sets the reference price.
         vm.prank(authorizedSwap);
-        uint256 firstId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
+        uint256 firstId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
         assertGt(firstId, 0, "first entry should succeed");
 
         // Price jumps +50% within the deviation window → should be considered ineligible.
         oracle.setPrice(15e17);
 
         vm.prank(authorizedSwap);
-        uint256 secondId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether);
+        uint256 secondId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
         assertEq(secondId, 0, "deviation guard should skip the entry");
     }
 }

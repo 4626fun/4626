@@ -4,96 +4,73 @@ pragma solidity ^0.8.20;
 /**
  * @title ve4626BoostManager
  * @author 0xakita.eth
- * @notice Calculates lottery boost based on ve4626 holdings.
- * @dev Users who lock ■4626 into ve4626 receive higher win probability.
+ * @notice Calculates personal ve4626 lottery boost (global 2.5x max, coverage-scaled by held creator shares only)
+ * @dev ONE LOCK ONLY: users lock into ve4626 once. No per-creator lock or "veAKITA" required.
+ *      - Global multiplier from total ve4626 share
+ *      - Coverage = only the creator shares the user actually holds (passed from swap)
+ *      - Matches "full 2.5x only up to their value" requirement
  */
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 interface Ive4626 {
+    struct Lock {
+        uint256 amount;
+        uint256 end;
+        uint256 start;
+        address lockedToken;
+        uint256 underlyingValue;
+    }
     function getVotingPower(address user) external view returns (uint256);
     function getTotalVotingPower() external view returns (uint256);
     function hasActiveLock(address user) external view returns (bool);
     function getRemainingLockTime(address user) external view returns (uint256);
+    function getLock(address user) external view returns (Lock memory);
 }
 
-interface ICreatorGaugeController {
-    function getJackpotReserve() external view returns (uint256);
+interface ICreatorRegistryCoverage {
+    function getShareOFTForToken(address token) external view returns (address);
+    function getTokenForShareOFT(address shareOFT) external view returns (address);
+    function getOracleForToken(address token) external view returns (address);
+    function isCreatorCoinActive(address token) external view returns (bool);
+}
+
+interface ICreatorOracleCoverage {
+    function getCreatorPrice() external view returns (int256 price, uint256 timestamp);
 }
 
 contract ve4626BoostManager is Ownable, ReentrancyGuard {
-    // ================================
-    // CONSTANTS
-    // ================================
-
-    /// @notice Precision for boost calculations (10000 = 100%)
-    uint256 public constant BOOST_PRECISION = 10000;
-
-    /// @notice Maximum boost for ve4626 lockers (2.5x)
-    uint256 public constant MAX_VE_BOOST = 25000;
-
-    /// @notice Minimum holding blocks for flash loan protection
+    uint256 public constant BOOST_PRECISION = 10_000;
+    uint256 public constant MAX_VE_BOOST = 25_000;
     uint256 public constant MIN_HOLDING_BLOCKS = 10;
 
-    // ================================
-    // STATE
-    // ================================
-
-    /// @notice ve4626 token
     Ive4626 public immutable ve4626;
 
-    /// @notice GaugeController (optional, for probability boost)
-    ICreatorGaugeController public gaugeController;
-
-    /// @notice Base boost (1.0x = 10000 bps)
-    uint256 public baseBoost = 10000;
-
-    /// @notice Max boost (2.5x = 25000 bps)
-    uint256 public maxBoost = 25000;
-
-    /// @notice Minimum ve4626 to participate
+    uint256 public baseBoost = 10_000; // 1.0x
+    uint256 public maxBoost = 25_000; // 2.5x
     uint256 public minVotingPower = 0.1 ether;
-
-    /// @notice Flash loan protection: last balance update block
-    mapping(address => uint256) public lastBalanceUpdateBlock;
-
-    /// @notice Boost parameters locked after first set
     bool public boostParametersLocked;
 
-    // ================================
-    // EVENTS
-    // ================================
+    // Flash-loan protection
+    mapping(address => uint256) public lastBalanceUpdateBlock;
 
     event BoostCalculated(address indexed user, uint256 boostMultiplier);
     event BoostParametersUpdated(uint256 baseBoost, uint256 maxBoost);
-    event GaugeControllerUpdated(address indexed controller);
     event MinVotingPowerUpdated(uint256 minPower);
-
-    // ================================
-    // ERRORS
-    // ================================
+    event BalanceTrackingUpdated(address indexed user, uint256 blockNumber);
 
     error ZeroAddress();
     error InvalidBoostParameters();
     error BoostParametersAreLocked();
-
-    // ================================
-    // CONSTRUCTOR
-    // ================================
 
     constructor(address _ve4626, address _owner) Ownable(_owner) {
         if (_ve4626 == address(0)) revert ZeroAddress();
         ve4626 = Ive4626(_ve4626);
     }
 
-    // ================================
-    // BOOST CALCULATION
-    // ================================
-
-    function calculateBoost(address user) public view returns (uint256 boostMultiplier) {
+    function calculateBoost(address user) public view returns (uint256) {
         return calculateBoostWithProtection(user);
     }
 
@@ -105,106 +82,63 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         uint256 userPower = ve4626.getVotingPower(user);
         uint256 totalPower = ve4626.getTotalVotingPower();
 
-        if (userPower == 0 || totalPower == 0) {
+        if (userPower == 0 || totalPower == 0 || userPower < minVotingPower) {
             return baseBoost;
         }
 
-        if (userPower < minVotingPower) {
-            return baseBoost;
-        }
-
-        uint256 scaledShare = Math.mulDiv(userPower, BOOST_PRECISION * 100, totalPower);
+        uint256 scaledShare = Math.mulDiv(userPower, BOOST_PRECISION, totalPower);
         if (scaledShare > BOOST_PRECISION) scaledShare = BOOST_PRECISION;
 
         uint256 boostRange = maxBoost - baseBoost;
-        boostMultiplier = baseBoost + ((boostRange * scaledShare) / BOOST_PRECISION);
-
-        if (boostMultiplier > maxBoost) {
-            boostMultiplier = maxBoost;
-        }
+        boostMultiplier = baseBoost + Math.mulDiv(boostRange, scaledShare, BOOST_PRECISION);
+        if (boostMultiplier > maxBoost) boostMultiplier = maxBoost;
 
         return boostMultiplier;
     }
 
-    function getBoostWithEvent(address user) external returns (uint256 boostMultiplier) {
-        boostMultiplier = calculateBoost(user);
-        emit BoostCalculated(user, boostMultiplier);
-    }
-
     function getTotalProbabilityBoost(address user) external view returns (uint256 totalBoostBps) {
-        if (!ve4626.hasActiveLock(user)) {
-            return 0;
-        }
+        if (!ve4626.hasActiveLock(user)) return 0;
 
         uint256 remainingTime = ve4626.getRemainingLockTime(user);
         uint256 maxLockTime = 4 * 365 days;
+        uint256 maxProbBoost = 690; // becomes 69_000 PPM in lottery
 
-        uint256 maxProbBoost = 690;
-        totalBoostBps = (maxProbBoost * remainingTime) / maxLockTime;
-
-        return totalBoostBps;
+        totalBoostBps = Math.mulDiv(maxProbBoost, remainingTime, maxLockTime);
     }
 
-    function previewBoost(address user)
-        external
-        view
-        returns (uint256 multiplier, bool hasLock, uint256 lockTimeRemaining)
-    {
-        multiplier = calculateBoost(user);
-        hasLock = ve4626.hasActiveLock(user);
-        lockTimeRemaining = ve4626.getRemainingLockTime(user);
+    /**
+     * @notice Coverage is now purely based on held creator shares in USD
+     * @dev No ve lock matching, no per-creator lock required - one ve4626 lock only
+     */
+    function getCoverageBps(
+        address /*user*/,
+        address /*registry*/,
+        address /*creatorCoin*/,
+        address /*shareBalanceToken*/,
+        uint256 creatorShareBalanceUSD,
+        uint256 swapAmountUSD
+    ) external pure returns (uint256 coverageBps) {
+        if (swapAmountUSD == 0 || creatorShareBalanceUSD == 0) return 0;
+
+        uint256 coveredUsd = Math.min(creatorShareBalanceUSD, swapAmountUSD);
+        coverageBps = Math.mulDiv(coveredUsd, BOOST_PRECISION, swapAmountUSD);
+        if (coverageBps > BOOST_PRECISION) coverageBps = BOOST_PRECISION;
     }
-
-    function getBoostInfo(address user)
-        external
-        view
-        returns (
-            uint256 boostMultiplier,
-            uint256 userVotingPower,
-            uint256 totalVotingPower,
-            uint256 userShareBps,
-            bool isProtected
-        )
-    {
-        boostMultiplier = calculateBoost(user);
-        userVotingPower = ve4626.getVotingPower(user);
-        totalVotingPower = ve4626.getTotalVotingPower();
-
-        if (totalVotingPower > 0) {
-            userShareBps = (userVotingPower * BOOST_PRECISION) / totalVotingPower;
-        }
-
-        isProtected = block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS;
-    }
-
-    // ================================
-    // FLASH LOAN PROTECTION
-    // ================================
 
     function updateBalanceTracking(address user) external {
         require(msg.sender == address(ve4626), "Only ve4626");
         lastBalanceUpdateBlock[user] = block.number;
+        emit BalanceTrackingUpdated(user, block.number);
     }
-
-    // ================================
-    // ADMIN
-    // ================================
 
     function setBoostParameters(uint256 _baseBoost, uint256 _maxBoost) external onlyOwner {
         if (boostParametersLocked) revert BoostParametersAreLocked();
-        if (_baseBoost == 0 || _maxBoost <= _baseBoost) revert InvalidBoostParameters();
-        if (_maxBoost > MAX_VE_BOOST) revert InvalidBoostParameters();
+        if (_baseBoost == 0 || _maxBoost <= _baseBoost || _maxBoost > MAX_VE_BOOST) revert InvalidBoostParameters();
 
         baseBoost = _baseBoost;
         maxBoost = _maxBoost;
         boostParametersLocked = true;
-
         emit BoostParametersUpdated(_baseBoost, _maxBoost);
-    }
-
-    function setGaugeController(address _controller) external onlyOwner {
-        gaugeController = ICreatorGaugeController(_controller);
-        emit GaugeControllerUpdated(_controller);
     }
 
     function setMinVotingPower(uint256 _minPower) external onlyOwner {
@@ -212,20 +146,8 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         emit MinVotingPowerUpdated(_minPower);
     }
 
-    // ================================
-    // VIEW FUNCTIONS
-    // ================================
-
     function hasBoost(address user) external view returns (bool) {
         return calculateBoost(user) > baseBoost;
-    }
-
-    function getBoostPercentage(address user) external view returns (uint256) {
-        return (calculateBoost(user) * 100) / BOOST_PRECISION;
-    }
-
-    function getMaxBoost() external view returns (uint256) {
-        return maxBoost;
     }
 }
 

@@ -328,6 +328,7 @@ Canonical Ajna notes:
 - creator opt-in is per vault and currently scoped to `ajna_min_bucket_only`
 - sender is the creator's canonical CSW, not the protocol keeper wallet
 - signer bridge is the creator's Privy embedded EOA, not the XMTP server signer
+- new deploy-session launches on the auto-handoff batcher should already have `AjnaVaultAuth.admin = canonical CSW`
 - if canonical context cannot be proven, Ajna actions hard-stop with `canonical_sender_required:*`
 
 Optional (Charm rebalance manager):
@@ -375,6 +376,13 @@ Ajna exception: canonical Ajna automation does **not** use this shared keeper
 authorization. For opted-in vaults, `AjnaVaultAuth.admin()` must remain the
 creator's canonical CSW, and Ajna actions fail closed if that relationship no
 longer holds.
+
+Legacy vault migration:
+
+- if older vaults still have `AjnaVaultAuth.admin != canonical CSW`, run the Safe backfill script from the frontend workspace:
+  - `pnpm -C frontend exec tsx scripts/ops/ajna-admin-backfill-safe.ts --origin https://4626.fun --only-enabled`
+  - then re-run with `--propose --safe-address <SAFE> --safe-owner-pk <PK>` to submit `setAdmin(canonicalCsw)` proposals.
+- CRE Ajna workflows should remain fail-closed until this migration is complete for each mismatched vault.
 
 ### 4. Fund the Keeper
 

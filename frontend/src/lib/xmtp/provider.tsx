@@ -17,6 +17,7 @@ import {
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
+import { shouldBlockSelfDm } from '@/lib/xmtp/dmGuard'
 import { getBasenameName } from '@/lib/xmtp/socialIdentity'
 import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from '@/lib/xmtp/identityResolver'
 import { useAccountContext } from '@/wallet/accountContext'
@@ -28,6 +29,7 @@ import {
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
   Client,
+  LogLevel,
   Opfs,
   toSafeSigner,
   type Signer,
@@ -84,9 +86,16 @@ export type StartDmOptions = {
   imageUrl?: string | null
 }
 
+export type StartDmFailureReason = 'not_connected' | 'self_recipient' | 'create_failed'
+
+export type StartDmResult =
+  | { ok: true; conversationId: string }
+  | { ok: false; reason: StartDmFailureReason; message: string }
+
 type XmtpContextValue = {
   status: XmtpStatus
   error: string | null
+  identityAddress: string | null
   inboxId: string | null
   /** InboxId extracted from a 10/10 installations error (if present). */
   installationLimitInboxId: string | null
@@ -101,7 +110,8 @@ type XmtpContextValue = {
     text: string,
     options?: SendChatMessageOptions,
   ) => Promise<ChatMessage>
-  startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<string | null>
+  startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<StartDmResult>
+  startDmByInbox: (peerInboxId: string, options?: StartDmOptions) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
@@ -220,6 +230,7 @@ const noop = () => {}
 const XmtpContext = createContext<XmtpContextValue>({
   status: 'idle',
   error: null,
+  identityAddress: null,
   inboxId: null,
   installationLimitInboxId: null,
   connect: async () => {},
@@ -238,7 +249,12 @@ const XmtpContext = createContext<XmtpContextValue>({
     sentAt: new Date(),
     isSelf: true,
   }),
-  startDm: async () => null,
+  startDm: async () => ({
+    ok: false,
+    reason: 'not_connected',
+    message: 'Messaging client not connected.',
+  }),
+  startDmByInbox: async () => null,
   subscribeToMessages: () => noop,
   resolveInboxAddress: async () => null,
 })
@@ -394,6 +410,36 @@ function normalizeEvmAddress(value: unknown): string | null {
   return getAddress(raw).toLowerCase()
 }
 
+function upsertConversationSummary(
+  prev: ChatConversation[],
+  incoming: ChatConversation,
+): ChatConversation[] {
+  const incomingPeer =
+    incoming.type === 'dm' && incoming.peerAddress
+      ? incoming.peerAddress.toLowerCase()
+      : null
+
+  const existing = prev.find((item) => item.id === incoming.id) ?? null
+  const merged: ChatConversation = existing
+    ? {
+        ...existing,
+        ...incoming,
+        name: incoming.name?.trim() || existing.name,
+        imageUrl: incoming.imageUrl ?? existing.imageUrl,
+        unreadCount: existing.unreadCount,
+      }
+    : incoming
+
+  const filtered = prev.filter((item) => {
+    if (item.id === incoming.id) return false
+    if (!incomingPeer) return true
+    if (item.type !== 'dm' || !item.peerAddress) return true
+    return item.peerAddress.toLowerCase() !== incomingPeer
+  })
+
+  return [merged, ...filtered]
+}
+
 type ParsedWireContent = {
   content: string
   contentType: ChatMessageContentType
@@ -531,6 +577,23 @@ function isOpfsAccessHandleError(message: string): boolean {
   return m.includes('createsyncaccesshandle') || m.includes('nomodificationallowederror')
 }
 
+function isXmtpVerboseLoggingEnabled(): boolean {
+  if (import.meta.env.VITE_XMTP_DEBUG === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem('cv:debug:xmtp') === 'true'
+  } catch {
+    return false
+  }
+}
+
+const XMTP_VERBOSE_LOGS = isXmtpVerboseLoggingEnabled()
+
+function xmtpDebug(...args: unknown[]): void {
+  if (!XMTP_VERBOSE_LOGS) return
+  console.log(...args)
+}
+
 /**
  * Auto-revoke the single oldest XMTP installation to free exactly 1 slot.
  *
@@ -542,7 +605,7 @@ async function autoRevokeOldestInstallation(
   signer: Signer,
   inboxId: string,
 ): Promise<void> {
-  console.log('[xmtp] Fetching installations for inbox', inboxId)
+  xmtpDebug('[xmtp] Fetching installations for inbox', inboxId)
   const states = await (Client as any).fetchInboxStates(
     [inboxId],
     XMTP_ENV as any,
@@ -575,7 +638,7 @@ async function autoRevokeOldestInstallation(
   })
   const toRevoke = [sorted[0].bytes]
 
-  console.log(
+  xmtpDebug(
     `[xmtp] Revoking 1 oldest of ${installs.length} installation(s) (256-update budget)…`,
   )
   await (Client as any).revokeInstallations(
@@ -584,7 +647,7 @@ async function autoRevokeOldestInstallation(
     toRevoke,
     XMTP_ENV as any,
   )
-  console.log('[xmtp] Auto-revocation complete — freed 1 slot')
+  xmtpDebug('[xmtp] Auto-revocation complete — freed 1 slot')
 }
 
 // ---------------------------------------------------------------------------
@@ -604,11 +667,11 @@ async function requestPersistentStorage(): Promise<void> {
   try {
     const alreadyPersisted = await navigator.storage.persisted()
     if (alreadyPersisted) {
-      console.log('[xmtp] Storage is already persistent')
+      xmtpDebug('[xmtp] Storage is already persistent')
       return
     }
     const granted = await navigator.storage.persist()
-    console.log(`[xmtp] Persistent storage ${granted ? 'granted' : 'denied'}`)
+    xmtpDebug(`[xmtp] Persistent storage ${granted ? 'granted' : 'denied'}`)
   } catch (err) {
     console.warn('[xmtp] navigator.storage.persist() failed (non-fatal):', err)
   }
@@ -629,7 +692,7 @@ async function hasOpfsDatabase(): Promise<boolean> {
       const found = files.some(
         (f) => f.startsWith(prefix) && f.endsWith('.db3'),
       )
-      console.log(
+      xmtpDebug(
         `[xmtp] OPFS files: ${files.length} total, DB present: ${found}`,
         files.filter((f) => f.endsWith('.db3')),
       )
@@ -697,6 +760,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
   const [status, setStatus] = useState<XmtpStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [identityAddress, setIdentityAddress] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [inboxId, setInboxId] = useState<string | null>(null)
   const [installationLimitInboxId, setInstallationLimitInboxId] = useState<string | null>(null)
@@ -714,6 +778,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     Map<string, { identityAddress: string; isCanonicalSmartWallet: boolean }>
   >(new Map())
   const cswOwnerIndexCache = useRef<Map<string, number | null>>(new Map())
+  const identityAddressRef = useRef<string | null>(null)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -730,8 +795,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       void cleanup()
       setStatus('idle')
       setError(null)
+      setIdentityAddress(null)
       setConversations([])
       conversationsRef.current = []
+      identityAddressRef.current = null
       setInboxId(null)
       setInstallationLimitInboxId(null)
     }
@@ -749,6 +816,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       try { clientRef.current?.close() } catch {}
       clientRef.current = null
       conversationsRef.current = []
+      identityAddressRef.current = null
   }
 
   // ------- resolve address → display name (Basename / truncated) -------
@@ -1027,7 +1095,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setInstallationLimitInboxId(null)
       const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
       xmtpIdentityAddress = resolved.identityAddress
-      console.log('[xmtp] Using identity for connect:', xmtpIdentityAddress)
+      const normalizedIdentity = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
+      identityAddressRef.current = normalizedIdentity
+      if (mountedRef.current) setIdentityAddress(normalizedIdentity)
+      xmtpDebug('[xmtp] Using identity for connect:', xmtpIdentityAddress)
 
       const identifier = {
         identifier: xmtpIdentityAddress as `0x${string}`,
@@ -1036,6 +1107,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const baseOptions = {
         env: XMTP_ENV as any,
         appVersion: XMTP_APP_VERSION,
+        loggingLevel: XMTP_VERBOSE_LOGS ? LogLevel.Info : LogLevel.Warn,
+        structuredLogging: XMTP_VERBOSE_LOGS,
+        performanceLogging: false,
       }
 
       type SignerSelection = {
@@ -1112,7 +1186,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
                 primaryType: 'CoinbaseSmartWalletMessage' as const,
                 message: { hash: msgHash },
               })
-              console.log('[xmtp] CSW EIP-712 replaySafeHash signed; wrapping with ownerIndex', idx)
+              xmtpDebug('[xmtp] CSW EIP-712 replaySafeHash signed; wrapping with ownerIndex', idx)
               return wrapCswSignature(idx, hexToBytes(typedSig))
             } catch (e) {
               console.warn('[xmtp] signTypedData failed; falling back to personal_sign wrapping', e)
@@ -1162,15 +1236,18 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         const convos = await client.conversations.list()
         const summaries = await Promise.all(convos.map(buildConvoSummary))
         summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
-        conversationsRef.current = summaries
-        if (mountedRef.current) setConversations(summaries)
+        let normalizedSummaries: ChatConversation[] = []
+        for (let i = summaries.length - 1; i >= 0; i -= 1) {
+          normalizedSummaries = upsertConversationSummary(normalizedSummaries, summaries[i])
+        }
+        conversationsRef.current = normalizedSummaries
+        if (mountedRef.current) setConversations(normalizedSummaries)
         const convoStream = await client.conversations.stream({
           onValue: async (convo: any) => {
             if (!mountedRef.current) return
             const summary = await buildConvoSummary(convo)
             setConversations((prev) => {
-              if (prev.find((c) => c.id === summary.id)) return prev
-              const next = [summary, ...prev]
+              const next = upsertConversationSummary(prev, summary)
               conversationsRef.current = next
               return next
             })
@@ -1219,7 +1296,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         if (agentAddr && /^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
           void (async () => {
             try {
-              const alreadyExists = summaries.some(
+              const alreadyExists = normalizedSummaries.some(
                 (c) => c.peerAddress?.toLowerCase() === agentAddr.toLowerCase(),
               )
               if (alreadyExists) return // DM already exists
@@ -1227,13 +1304,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
                 identifier: agentAddr as `0x${string}`,
                 identifierKind: IdentifierKind.Ethereum,
               })
-              console.log('[xmtp] Created DM with agent (no message sent)', agentAddr)
+              xmtpDebug('[xmtp] Created DM with agent (no message sent)', agentAddr)
               // Add to conversation list so it appears immediately
               const summary = await buildConvoSummary(dm as any)
               if (mountedRef.current) {
                 setConversations((prev) => {
-                  if (prev.find((c) => c.id === summary.id)) return prev
-                  const next = [summary, ...prev]
+                  const next = upsertConversationSummary(prev, summary)
                   conversationsRef.current = next
                   return next
                 })
@@ -1276,19 +1352,19 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
         // Attempt 1: try with the stored encryption key
         try {
-          console.log('[xmtp] OPFS database found — attempting Client.build restore…')
+          xmtpDebug('[xmtp] OPFS database found — attempting Client.build restore…')
           buildClient = await Client.build(identifier, {
             ...baseOptions,
             dbEncryptionKey: encKeyBytes,
           })
           if (buildClient?.inboxId) {
             buildSucceeded = true
-            console.log(
+            xmtpDebug(
               '[xmtp] Client.build succeeded — reusing installation',
               buildClient.installationId,
             )
           } else {
-            console.log('[xmtp] Client.build returned no inboxId')
+            xmtpDebug('[xmtp] Client.build returned no inboxId')
             try { buildClient?.close() } catch {}
             buildClient = null
           }
@@ -1310,13 +1386,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         // different one) if the key in localStorage drifted.
         if (!buildSucceeded) {
           try {
-            console.log('[xmtp] Retrying Client.build without dbEncryptionKey…')
+            xmtpDebug('[xmtp] Retrying Client.build without dbEncryptionKey…')
             buildClient = await Client.build(identifier, { ...baseOptions })
             if (buildClient?.inboxId) {
               buildSucceeded = true
               restoreFailureMessage = null
               restoreFailureKind = null
-              console.log(
+              xmtpDebug(
                 '[xmtp] Client.build succeeded (no key) — reusing installation',
                 buildClient.installationId,
               )
@@ -1369,7 +1445,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           return
         }
       } else {
-        console.log('[xmtp] No OPFS database found — first use, will create new installation')
+        xmtpDebug('[xmtp] No OPFS database found — first use, will create new installation')
       }
 
       // ── Phase 1b: Client.build succeeded — set up conversations ──
@@ -1391,7 +1467,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             // Critical anti-churn path: register the restored installation in-place.
             // Do NOT fall through to Client.create here — that would burn a new
             // installation each retry and quickly hit 10/10.
-            console.log(
+            xmtpDebug(
               '[xmtp] Uninitialized identity on restored installation — attempting in-place register (no new installation)…',
             )
             try {
@@ -1444,7 +1520,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
                     for (const f of files) {
                       if (f.endsWith('.db3')) {
                         const ok = await opfs.deleteFile(f)
-                        console.log(`[xmtp] Deleted stale OPFS file: ${f} (${ok})`)
+                        xmtpDebug(`[xmtp] Deleted stale OPFS file: ${f} (${ok})`)
                       }
                     }
                   } finally { opfs.close() }
@@ -1465,7 +1541,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           } else {
             // Transient error (network timeout, server error, etc.).
             // Retry once — do NOT fall through to Client.create.
-            console.log('[xmtp] Retrying setupConversations once…')
+            xmtpDebug('[xmtp] Retrying setupConversations once…')
             try {
               await setupConversations(buildClient)
               return // retry succeeded
@@ -1486,7 +1562,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       if (signer.type === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
       else writeStoredSignerType(xmtpIdentityAddress, 'EOA')
 
-      console.log('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
+      xmtpDebug('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
 
       // Helper: attempt Client.create, auto-revoking stale installations on 10/10.
       const tryCreate = async (activeSigner: Signer, dbKey: Uint8Array): Promise<Client> => {
@@ -1500,7 +1576,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           const limitInboxId = extractInstallationLimitInboxId(errMsg)
           if (!limitInboxId) throw createErr
 
-          console.log('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
+          xmtpDebug('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
           setStatus('connecting')
           await autoRevokeOldestInstallation(activeSigner, limitInboxId)
           return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })
@@ -1554,6 +1630,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
+        setIdentityAddress(null)
+        identityAddressRef.current = null
         if (isInstallationLimitError(msg)) {
           setInstallationLimitInboxId(extractInstallationLimitInboxId(msg))
           // Disable auto-connect so the 10/10 error doesn't fire on every page load.
@@ -1754,8 +1832,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     void cleanup()
     setStatus('idle')
     setError(null)
+    setIdentityAddress(null)
     setConversations([])
     conversationsRef.current = []
+    identityAddressRef.current = null
     setInboxId(null)
   }, [])
 
@@ -1849,10 +1929,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const startDm = useCallback(async (
     peerAddress: `0x${string}`,
     options?: StartDmOptions,
-  ): Promise<string | null> => {
+  ): Promise<StartDmResult> => {
+    if (shouldBlockSelfDm({ peerAddress, identityAddress: identityAddressRef.current })) {
+      return {
+        ok: false,
+        reason: 'self_recipient',
+        message: 'Use Akita to chat about your wallet.',
+      }
+    }
+
     const client = clientRef.current
-    if (!client) return null
+    if (!client) {
+      return {
+        ok: false,
+        reason: 'not_connected',
+        message: 'Messaging client not connected.',
+      }
+    }
     try {
+      await client.conversations.sync().catch(() => undefined)
       const dm = await client.conversations.createDmWithIdentifier({
         identifier: peerAddress,
         identifierKind: IdentifierKind.Ethereum,
@@ -1864,14 +1959,45 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         imageUrl: options?.imageUrl?.trim() || summary.imageUrl,
       }
       setConversations((prev) => {
-        if (prev.find((c) => c.id === summaryWithHints.id)) return prev
-        const next = [summaryWithHints, ...prev]
+        const next = upsertConversationSummary(prev, summaryWithHints)
+        conversationsRef.current = next
+        return next
+      })
+      return { ok: true, conversationId: dm.id }
+    } catch (e) {
+      console.error('[xmtp] startDm error:', e)
+      return {
+        ok: false,
+        reason: 'create_failed',
+        message: e instanceof Error && e.message ? e.message : 'Could not start conversation',
+      }
+    }
+  }, [buildConvoSummary])
+
+  const startDmByInbox = useCallback(async (
+    peerInboxId: string,
+    options?: StartDmOptions,
+  ): Promise<string | null> => {
+    const client = clientRef.current
+    const normalizedPeerInboxId = peerInboxId.trim()
+    if (!client || !normalizedPeerInboxId) return null
+    try {
+      await client.conversations.sync().catch(() => undefined)
+      const dm = await client.conversations.createDm(normalizedPeerInboxId)
+      const summary = await buildConvoSummary(dm as any)
+      const summaryWithHints: ChatConversation = {
+        ...summary,
+        name: options?.nameHint?.trim() || summary.name,
+        imageUrl: options?.imageUrl?.trim() || summary.imageUrl,
+      }
+      setConversations((prev) => {
+        const next = upsertConversationSummary(prev, summaryWithHints)
         conversationsRef.current = next
         return next
       })
       return dm.id
     } catch (e) {
-      console.error('[xmtp] startDm error:', e)
+      console.error('[xmtp] startDmByInbox error:', e)
       return null
     }
   }, [buildConvoSummary])
@@ -1920,6 +2046,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       value={{
         status,
         error,
+        identityAddress,
         inboxId,
         installationLimitInboxId,
         connect,
@@ -1929,6 +2056,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         loadMessages,
         sendMessage,
         startDm,
+        startDmByInbox,
         subscribeToMessages,
         resolveInboxAddress,
       }}

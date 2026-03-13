@@ -49,6 +49,15 @@ contract MockLotteryManager {
         return calls.length; // Return non-zero to indicate success
     }
 
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256)
+        external
+        payable
+        returns (uint256)
+    {
+        calls.push(LotteryCall({buyer: buyer, tokenIn: tokenIn, amountIn: amountIn}));
+        return calls.length; // Return non-zero to indicate success
+    }
+
     function getCallCount() external view returns (uint256) {
         return calls.length;
     }

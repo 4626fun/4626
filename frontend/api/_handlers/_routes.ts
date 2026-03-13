@@ -252,6 +252,10 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'zora/profile': () => import('./zora/_profile.js'),
   'zora/profileCoins': () => import('./zora/_profileCoins.js'),
   'zora/resolve': () => import('./zora/_resolve.js'),
+  'zora/trendStatus': () => import('./zora/_trendStatus.js'),
+  'zora/trendReserve': () => import('./zora/_trendReserve.js'),
+  'zora/trendFunnelRun': () => import('./zora/_trendFunnelRun.js'),
+  'zora/trendMetrics': () => import('./zora/_trendMetrics.js'),
   'zora/topCreators': () => import('./zora/_topCreators.js'),
 
   'admin/creator-access/allowlist': () => import('./admin/creator-access/_allowlist.js'),

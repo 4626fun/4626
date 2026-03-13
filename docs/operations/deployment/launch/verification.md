@@ -56,6 +56,19 @@ Recommended operator check:
 
 If `/status` does not show the adapter-backed inner vault shape, treat that deployment as misconfigured.
 
+### Ajna Auth Admin Alignment Branch
+
+Use deploy-session status to distinguish new auto-handoff launches from legacy vaults:
+
+1. Call `/api/deploy/session/status` for the launch session id.
+2. Inspect `data.phase3AjnaAdminAlignment`:
+   - `ajnaAuthAdminMatchesOwner === true` means the new auto-handoff path is aligned.
+   - `ajnaAuthAdminMatchesOwner === false` means `AjnaVaultAuth.admin` is still mismatched.
+3. For mismatched legacy vaults, run:
+   - `pnpm -C frontend exec tsx scripts/ops/ajna-admin-backfill-safe.ts --origin https://4626.fun --only-enabled`
+   - then `--propose --safe-address <SAFE> --safe-owner-pk <PK>` to submit Safe proposals.
+4. Re-check `/status?vault=<vault>` and confirm `ajnaAuthAdmin` now equals the creator canonical CSW.
+
 ### Canonical Ajna Automation Verification (Opt-In)
 
 If the creator enabled Ajna automation, verify the sender model as well:

@@ -2,6 +2,7 @@ import { http, createConfig, fallback } from 'wagmi'
 import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected } from 'wagmi/connectors'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/baseBuilderCodes'
+import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
 /**
  * Minimal Wagmi Config
@@ -120,15 +121,6 @@ const POLYGON_READ_RPC_URLS = uniqueNonEmptyStrings(
   ].filter(Boolean),
 )
 
-function isLockedEthereumProviderGlobal(): boolean {
-  if (!IS_BROWSER) return false
-  const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
-  if (!descriptor) return false
-  const hasGetter = typeof descriptor.get === 'function'
-  const hasSetter = typeof descriptor.set === 'function'
-  return hasGetter && !hasSetter
-}
-
 function buildConnectors() {
   const baseConnectors = [
     coinbaseWallet({
@@ -139,8 +131,10 @@ function buildConnectors() {
 
   // Some wallet extensions install a getter-only `window.ethereum`, which causes
   // other extensions to throw during provider injection. Avoid injected connector
-  // in that state; users can still connect via Coinbase Wallet.
-  const shouldUseInjected = ENABLE_INJECTED_CONNECTOR && !isLockedEthereumProviderGlobal()
+  // in that state (or when multiple injected providers conflict); users can still
+  // connect via Coinbase Wallet.
+  const providerCollision = detectEthereumProviderCollision()
+  const shouldUseInjected = ENABLE_INJECTED_CONNECTOR && !providerCollision.shouldDisableInjectedConnector
   if (!shouldUseInjected) return baseConnectors as any
   return [
     ...baseConnectors,

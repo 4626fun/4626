@@ -18,6 +18,13 @@ type RankedAction = {
   reason: string
 }
 
+type SwarmRole = 'general' | 'trader' | 'social' | 'knowledge'
+
+type SwarmProfile = {
+  role: SwarmRole
+  capabilities: string[]
+}
+
 type RuntimeBridge = {
   runtime: IAgentRuntime
   createInboundMemory: (msg: InboundMessage) => Memory
@@ -184,6 +191,29 @@ function actionScoreFromMessage(actionName: string, text: string): { score: numb
   return { score: 0.65, reason: 'validated_action' }
 }
 
+function roleBiasForAction(input: {
+  role: SwarmRole
+  capabilities: string[]
+  actionName: string
+}): { delta: number; reason: string | null } {
+  const action = input.actionName.toLowerCase()
+  const roleWeights: Record<SwarmRole, string[]> = {
+    general: [],
+    trader: ['uniswap', 'zora', 'cre', 'keepr'],
+    social: ['lens'],
+    knowledge: ['knowledge', 'reputation', 'wallet'],
+  }
+  const roleHints = roleWeights[input.role]
+  if (roleHints.length === 0) return { delta: 0, reason: null }
+
+  const capabilityHit = input.capabilities.some((entry) => action.includes(entry.toLowerCase()))
+  if (capabilityHit) return { delta: 0.08, reason: `${input.role}_capability_match` }
+
+  const roleHit = roleHints.some((entry) => action.includes(entry))
+  if (roleHit) return { delta: 0.06, reason: `${input.role}_role_match` }
+  return { delta: -0.04, reason: `${input.role}_out_of_scope` }
+}
+
 export function createRuntimeBridge(params: {
   agentKey: string
   plugins: Plugin[]
@@ -196,11 +226,19 @@ export function createRuntimeBridge(params: {
     maxConversations?: number
     maxMessagesPerConversation?: number
   }
+  swarm?: {
+    role?: SwarmRole
+    capabilities?: string[]
+  }
 }): RuntimeBridge {
   const inMemoryHistory = new Map<string, Memory[]>()
   const maxConversations = Math.max(1, Math.floor(params.history?.maxConversations ?? 250))
   const maxMessagesPerConversation = Math.max(1, Math.floor(params.history?.maxMessagesPerConversation ?? 30))
   const runtimeAgentId = formatAsUuid(shortHash(`agent:${params.agentKey}`))
+  const swarmProfile: SwarmProfile = {
+    role: params.swarm?.role ?? 'general',
+    capabilities: Array.isArray(params.swarm?.capabilities) ? params.swarm.capabilities : [],
+  }
 
   const trimHistoryBuckets = () => {
     while (inMemoryHistory.size > maxConversations) {
@@ -452,14 +490,22 @@ export function createRuntimeBridge(params: {
         if (!matches) continue
         const actionName = String(action?.name ?? 'unknown')
         const { score: baseScore, reason: baseReason } = actionScoreFromMessage(actionName, text)
+        const roleBias = roleBiasForAction({
+          role: swarmProfile.role,
+          capabilities: swarmProfile.capabilities,
+          actionName,
+        })
         const evalAdjust = await evaluatorAdjustment({
           plugin,
           actionName,
           memory,
           state,
         })
-        const score = clampScore(baseScore + evalAdjust.delta)
-        const reason = evalAdjust.reason ? `${baseReason}+${evalAdjust.reason}` : baseReason
+        const score = clampScore(baseScore + roleBias.delta + evalAdjust.delta)
+        const reasonParts = [baseReason]
+        if (roleBias.reason) reasonParts.push(roleBias.reason)
+        if (evalAdjust.reason) reasonParts.push(evalAdjust.reason)
+        const reason = reasonParts.join('+')
         ranked.push({ action, score, reason })
       }
     }

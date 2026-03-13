@@ -619,6 +619,8 @@ const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23' // deploy(bytes32,bytes3
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
+const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
+const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 const SELECTOR_ERC8004_SET_AGENT_WALLET = '0x2d1ef5ae' // setAgentWallet(uint256,address,uint256,bytes)
@@ -789,7 +791,9 @@ const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
 const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
-const BASE_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
+// Uniswap Universal Router on Base (legacy + current deployments).
+const BASE_SWAP_ROUTER_LEGACY = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
+const BASE_SWAP_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
 const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
 const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
 
@@ -1356,6 +1360,14 @@ async function validateInnerCalls(params: {
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
   const vaultActivationBatcher = getAddress(contracts.vaultActivationBatcher)
   const permit2 = getAddress(contracts.permit2)
+  const configuredSwapRouter =
+    contracts.swapRouter && isAddress(contracts.swapRouter) ? getAddress(contracts.swapRouter) : null
+  const allowedSwapRouters = new Set<Address>([
+    BASE_SWAP_ROUTER_LEGACY,
+    BASE_SWAP_ROUTER_CURRENT,
+    ...(configuredSwapRouter ? [configuredSwapRouter] : []),
+  ])
+  const defaultSwapRouterForDerivedAddresses = configuredSwapRouter ?? BASE_SWAP_ROUTER_CURRENT
   const create2DeployerFromStoreRaw = contracts.universalCreate2DeployerFromStore
   if (!create2DeployerFromStoreRaw) throw new Error('create2_deployer_from_store_not_configured')
   const create2DeployerFromStore = getAddress(create2DeployerFromStoreRaw)
@@ -1382,7 +1394,7 @@ async function validateInnerCalls(params: {
   for (const c of innerCalls) {
     if (c.value === 0n) continue
     const selector = getSelector(c.data)
-    const isRouterSwapCall = c.target === BASE_SWAP_ROUTER && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+    const isRouterSwapCall = allowedSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
     if (!isRouterSwapCall) throw new Error('value_transfer_not_allowed')
   }
 
@@ -1542,7 +1554,7 @@ async function validateInnerCalls(params: {
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
 
-          if (c.target === BASE_SWAP_ROUTER) {
+          if (allowedSwapRouters.has(c.target)) {
             if (selector !== SELECTOR_SWAP_ROUTER_EXECUTE) {
               return { matched: false, creatorToken: null as Address | null }
             }
@@ -1885,7 +1897,7 @@ async function validateInnerCalls(params: {
         expectedVault,
         expectedBurnStream,
         params.sender,
-        BASE_SWAP_ROUTER,
+        defaultSwapRouterForDerivedAddresses,
         BASE_WETH,
       ]),
     })
@@ -2082,7 +2094,7 @@ async function validateInnerCalls(params: {
           throw new Error('payout_router_burn_stream_mismatch')
         }
         if (!ownerArg || ownerArg !== params.sender) throw new Error('payout_router_owner_mismatch')
-        if (!swapRouterArg || swapRouterArg !== BASE_SWAP_ROUTER) throw new Error('payout_router_swap_router_mismatch')
+        if (!swapRouterArg || !allowedSwapRouters.has(swapRouterArg)) throw new Error('payout_router_swap_router_mismatch')
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
       } else {
         throw new Error('create2_codeid_not_allowed')
@@ -2093,7 +2105,14 @@ async function validateInnerCalls(params: {
 
     // Vault admin calls (phase2/phase3 deploy flow)
     if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
-      if (selector !== SELECTOR_VAULT_SET_BURN_STREAM && selector !== SELECTOR_VAULT_SET_WHITELIST) {
+      const phase3RuntimeSelectorAllowed =
+        mode === 'deploy_phase3' &&
+        (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE || selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES)
+      if (
+        selector !== SELECTOR_VAULT_SET_BURN_STREAM &&
+        selector !== SELECTOR_VAULT_SET_WHITELIST &&
+        !phase3RuntimeSelectorAllowed
+      ) {
         throw new Error('vault_selector_not_allowed')
       }
       if (selector === SELECTOR_VAULT_SET_BURN_STREAM) {
@@ -2111,11 +2130,15 @@ async function validateInnerCalls(params: {
           })
           throw new Error('vault_burn_stream_mismatch')
         }
-      } else {
+      } else if (selector === SELECTOR_VAULT_SET_WHITELIST) {
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
         if (!accountArg || accountArg !== expectedPayoutRouter) throw new Error('vault_whitelist_account_mismatch')
         if (statusArg !== true) throw new Error('vault_whitelist_status_mismatch')
+      } else if (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE) {
+        // Phase3 runtime idle tuning is allowed for the expected vault.
+      } else if (selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES) {
+        // Phase3 runtime deployment is allowed for the expected vault.
       }
       continue
     }

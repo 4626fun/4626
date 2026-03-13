@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
+import { usePrivyClientStatus } from './client'
 
 /**
  * Route-scoped SmartWallets provider.
@@ -8,5 +9,7 @@ import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
  * on routes that actually call `useSmartWallets()`.
  */
 export function SmartWalletsRouteProvider({ children }: { children: ReactNode }) {
+  const status = usePrivyClientStatus()
+  if (status !== 'ready') return <>{children}</>
   return <SmartWalletsProvider>{children}</SmartWalletsProvider>
 }

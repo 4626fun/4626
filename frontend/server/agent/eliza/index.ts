@@ -53,7 +53,12 @@ import { zoraPlugin } from './plugins/zora/index.js'
 import { uniswapPlugin } from './plugins/uniswap/index.js'
 import { knowledgePlugin } from './plugins/knowledge/index.js'
 import { bankrPlugin } from './plugins/bankr/index.js'
+import { telegramPlugin } from './plugins/telegram/index.js'
+import { discordPlugin } from './plugins/discord/index.js'
+import { twitterPlugin } from './plugins/twitter/index.js'
 import { creatorVaultCharacter, resolveCharacterRuntimeConfig } from './character.js'
+import { keeprTraderCharacter } from './characters/keepr-trader.character.js'
+import { keeprSocialCharacter } from './characters/keepr-social.character.js'
 import { XmtpService } from './plugins/xmtp/service.js'
 import { createRuntimeBridge } from './runtimeBridge.js'
 import { getElizaLlmService } from './llm.js'
@@ -70,6 +75,7 @@ import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agentRegistrationPublisher.js'
 import { formatNumberedCommandFallback, formatWelcomeNumberedOptions } from '../../_lib/chatCommandFallback.js'
 import { createCorrelationLogger, logger } from '../../_lib/logger.js'
+import { emitTelemetryEvent } from '../../_lib/telemetry.js'
 import {
   TARGET_CANONICAL_CSW_ADDRESS,
   isTargetCanonicalCsw,
@@ -313,12 +319,17 @@ function makeDbPath(): (inboxId: string) => string {
   }
 }
 
+type DbPersistenceCheckResult = {
+  errors: string[]
+}
+
 /**
  * Pre-flight check: log whether we're reusing an existing XMTP installation
- * or creating a fresh one.  If the DB directory is empty (no .db3 files),
- * this is almost certainly an ephemeral filesystem → warn loudly.
+ * or creating a fresh one. If strict persistence policies are enabled,
+ * this check can return fatal startup errors.
  */
-function checkDbPersistence(): void {
+function checkDbPersistence(): DbPersistenceCheckResult {
+  const errors: string[] = []
   try {
     const files = fs.readdirSync(XMTP_DB_DIR).filter((f: string) => f.endsWith('.db3'))
     if (files.length > 0) {
@@ -336,11 +347,22 @@ function checkDbPersistence(): void {
         `    → Docs: https://docs.xmtp.org/agents/build-agents/local-database`,
       )
     }
-    if (!XMTP_DB_ENCRYPTION_KEY) {
-      logger.warn(
-        '[xmtp] ⚠️  XMTP_DB_ENCRYPTION_KEY is not set — DB cannot be reopened across restarts!\n' +
-        '    Generate one: openssl rand -hex 32  (then prefix with 0x)',
+    if (AGENT_CONSUME_XMTP && XMTP_REQUIRE_PERSISTENT_DB && (XMTP_DB_DIR === '/tmp' || XMTP_DB_DIR.startsWith('/tmp/'))) {
+      errors.push(
+        `[xmtp] Runtime policy requires persistent storage, but XMTP DB path resolves to temp storage (${XMTP_DB_DIR}).`,
       )
+    }
+    if (!XMTP_DB_ENCRYPTION_KEY) {
+      if (AGENT_CONSUME_XMTP && XMTP_REQUIRE_DB_ENCRYPTION && !XMTP_DB_PLAINTEXT_ONLY) {
+        errors.push(
+          '[xmtp] Runtime policy requires XMTP_DB_ENCRYPTION_KEY, but no key is configured.',
+        )
+      } else {
+        logger.warn(
+          '[xmtp] ⚠️  XMTP_DB_ENCRYPTION_KEY is not set — DB cannot be reopened across restarts!\n' +
+          '    Generate one: openssl rand -hex 32  (then prefix with 0x)',
+        )
+      }
     } else if (XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED && !XMTP_DB_FORCE_ENCRYPTED_MIGRATION) {
       logger.warn(
         '[xmtp] Forced encrypted migration requested but NOT confirmed.\n' +
@@ -353,6 +375,7 @@ function checkDbPersistence(): void {
   } catch {
     // Directory doesn't exist yet — will be created by makeDbPath
   }
+  return { errors }
 }
 
 // ERC-8004 identity (loaded from env vars in a separate module to avoid circular imports)
@@ -364,7 +387,7 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
-const plugins = [
+const corePlugins = [
   keeprPlugin,
   zoraPlugin,
   uniswapPlugin,
@@ -375,7 +398,124 @@ const plugins = [
   crePlugin,
   knowledgePlugin,
 ]
+
+function channelFlagEnabled(envKey: string): boolean {
+  return parseEnvBoolean(process.env[envKey], false)
+}
+
+const channelPlugins = [
+  ...(channelFlagEnabled('ELIZA_CHANNEL_TELEGRAM_ENABLED') ? [telegramPlugin] : []),
+  ...(channelFlagEnabled('ELIZA_CHANNEL_DISCORD_ENABLED') ? [discordPlugin] : []),
+  ...(channelFlagEnabled('ELIZA_CHANNEL_TWITTER_ENABLED') ? [twitterPlugin] : []),
+]
+
+const plugins = [...corePlugins, ...channelPlugins]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
+
+type AgentSwarmRole = 'general' | 'trader' | 'social' | 'knowledge'
+
+const DEFAULT_SWARM_CAPABILITIES: Record<AgentSwarmRole, string[]> = {
+  general: [],
+  trader: ['uniswap', 'zora', 'cre', 'keepr'],
+  social: ['lens'],
+  knowledge: ['knowledge', 'reputation', 'wallet'],
+}
+
+function normalizeSwarmRole(raw: string): AgentSwarmRole | null {
+  const normalized = raw.trim().toLowerCase()
+  if (normalized === 'general' || normalized === 'trader' || normalized === 'social' || normalized === 'knowledge') {
+    return normalized
+  }
+  return null
+}
+
+function parseSwarmRoleMap(raw: string | undefined): Record<string, AgentSwarmRole> {
+  const source = String(raw ?? '').trim()
+  if (!source) return {}
+  try {
+    const parsed = JSON.parse(source) as Record<string, unknown>
+    const out: Record<string, AgentSwarmRole> = {}
+    for (const [key, value] of Object.entries(parsed ?? {})) {
+      const role = normalizeSwarmRole(String(value ?? ''))
+      if (!role) continue
+      out[key.toLowerCase()] = role
+    }
+    return out
+  } catch {
+    logger.warn('[eliza/swarm] failed to parse ELIZA_SWARM_ROLE_MAP_JSON; using defaults')
+    return {}
+  }
+}
+
+function parseSwarmCapabilityMap(raw: string | undefined): Partial<Record<AgentSwarmRole, string[]>> {
+  const source = String(raw ?? '').trim()
+  if (!source) return {}
+  try {
+    const parsed = JSON.parse(source) as Record<string, unknown>
+    const out: Partial<Record<AgentSwarmRole, string[]>> = {}
+    for (const [key, value] of Object.entries(parsed ?? {})) {
+      const role = normalizeSwarmRole(key)
+      if (!role || !Array.isArray(value)) continue
+      out[role] = value
+        .map((entry) => String(entry ?? '').trim().toLowerCase())
+        .filter(Boolean)
+    }
+    return out
+  } catch {
+    logger.warn('[eliza/swarm] failed to parse ELIZA_SWARM_CAPABILITIES_JSON; using defaults')
+    return {}
+  }
+}
+
+const SWARM_ROLE_MAP = parseSwarmRoleMap(process.env.ELIZA_SWARM_ROLE_MAP_JSON)
+const SWARM_CAPABILITY_OVERRIDES = parseSwarmCapabilityMap(process.env.ELIZA_SWARM_CAPABILITIES_JSON)
+
+function inferSwarmRoleFromAgentKey(agentKey: string): AgentSwarmRole {
+  const normalized = agentKey.trim().toLowerCase()
+  if (normalized.includes('trader')) return 'trader'
+  if (normalized.includes('social')) return 'social'
+  if (normalized.includes('knowledge')) return 'knowledge'
+  return 'general'
+}
+
+function resolveSwarmProfile(agentKey: string): { role: AgentSwarmRole; capabilities: string[] } {
+  const normalized = agentKey.trim().toLowerCase()
+  const mapped = SWARM_ROLE_MAP[normalized]
+  const role = mapped ?? inferSwarmRoleFromAgentKey(agentKey)
+  const overridden = SWARM_CAPABILITY_OVERRIDES[role]
+  const capabilities = (overridden ?? DEFAULT_SWARM_CAPABILITIES[role]).map((entry) => entry.toLowerCase())
+  return { role, capabilities }
+}
+
+function roleCharacter(role: AgentSwarmRole): {
+  name: string
+  description: string
+  system: string
+  settingsModel?: string
+} {
+  if (role === 'trader') {
+    return {
+      name: keeprTraderCharacter.name,
+      description: keeprTraderCharacter.description ?? creatorVaultCharacter.description,
+      system: keeprTraderCharacter.system ?? characterRuntimeConfig.systemPrompt,
+      settingsModel: String((keeprTraderCharacter as any)?.settings?.model ?? '').trim() || undefined,
+    }
+  }
+  if (role === 'social') {
+    return {
+      name: keeprSocialCharacter.name,
+      description: keeprSocialCharacter.description ?? creatorVaultCharacter.description,
+      system: keeprSocialCharacter.system ?? characterRuntimeConfig.systemPrompt,
+      settingsModel: String((keeprSocialCharacter as any)?.settings?.model ?? '').trim() || undefined,
+    }
+  }
+  return {
+    name: creatorVaultCharacter.name,
+    description: creatorVaultCharacter.description,
+    system: characterRuntimeConfig.systemPrompt,
+    settingsModel: characterRuntimeConfig.preferredModel,
+  }
+}
 
 export {
   keeprPlugin,
@@ -387,6 +527,9 @@ export {
   reputationPlugin,
   crePlugin,
   knowledgePlugin,
+  telegramPlugin,
+  discordPlugin,
+  twitterPlugin,
 }
 
 // ---------------------------------------------------------------------------
@@ -475,11 +618,64 @@ type EnvValidationResult = {
   warnings: string[]
 }
 
+type RuntimeRole = 'primary' | 'standby'
+
+type RuntimeLeaseState = {
+  key: string
+  ownerId: string
+  active: boolean
+}
+
 let latestEnvValidation: EnvValidationResult = { errors: [], warnings: [] }
 let backgroundWorker: { stop: () => void } | null = null
 let queueEnabled = false
 let dbRequiredForRuntime = false
 let stderrNoiseFilterInstalled = false
+let runtimeLeaseHeartbeat: ReturnType<typeof setInterval> | null = null
+let runtimeLeaseState: RuntimeLeaseState | null = null
+
+function parseEnvBoolean(value: string | undefined, fallback: boolean): boolean {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (!raw) return fallback
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') return true
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return fallback
+}
+
+const AGENT_RUNTIME_ROLE: RuntimeRole = (() => {
+  const raw = String(process.env.AGENT_RUNTIME_ROLE ?? 'primary').trim().toLowerCase()
+  return raw === 'standby' ? 'standby' : 'primary'
+})()
+
+const AGENT_CONSUME_XMTP = parseEnvBoolean(
+  process.env.AGENT_CONSUME_XMTP,
+  AGENT_RUNTIME_ROLE === 'primary',
+)
+const AGENT_RUNTIME_LOCK_REQUIRED = parseEnvBoolean(
+  process.env.AGENT_RUNTIME_LOCK_REQUIRED,
+  false,
+)
+const AGENT_RUNTIME_LOCK_KEY = (() => {
+  const raw = (process.env.AGENT_RUNTIME_LOCK_KEY ?? '').trim()
+  return raw || 'xmtp-primary-runtime-lock'
+})()
+const AGENT_RUNTIME_LOCK_HEARTBEAT_MS = Math.floor(
+  parsePositiveNumber(process.env.AGENT_RUNTIME_LOCK_HEARTBEAT_MS, 10_000),
+)
+const AGENT_RUNTIME_LOCK_STALE_MS = Math.floor(
+  parsePositiveNumber(process.env.AGENT_RUNTIME_LOCK_STALE_MS, 30_000),
+)
+const RUNTIME_LEASE_OWNER_ID = `${AGENT_RUNTIME_ROLE}:${Date.now().toString(36)}:${Math.random()
+  .toString(16)
+  .slice(2, 10)}`
+const XMTP_REQUIRE_PERSISTENT_DB = parseEnvBoolean(
+  process.env.XMTP_REQUIRE_PERSISTENT_DB,
+  AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary',
+)
+const XMTP_REQUIRE_DB_ENCRYPTION = parseEnvBoolean(
+  process.env.XMTP_REQUIRE_DB_ENCRYPTION,
+  AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary',
+)
 
 function wrapWriteWithNoiseFilter(write: (chunk: any, encoding?: any, cb?: any) => boolean) {
   const ignoredPatterns = [
@@ -525,15 +721,24 @@ function validateStartupEnv(): EnvValidationResult {
   const hasCswConfig = hasCswAddress && hasCswPrivyWallet
   const multiAgentConfigured = hasDb && hasEncKey
 
-  if (!multiAgentConfigured && !hasPrivateKey && !hasCswConfig) {
-    errors.push(
-      'No startup mode is fully configured. Set multi-agent, CSW, or EOA credentials before boot.',
+  if (!AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary') {
+    warnings.push('AGENT_RUNTIME_ROLE=primary but AGENT_CONSUME_XMTP=false. This instance will run in passive standby mode.')
+  }
+  if (AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'standby') {
+    warnings.push(
+      'AGENT_RUNTIME_ROLE=standby with AGENT_CONSUME_XMTP=true can create dual-consumer risk. Prefer AGENT_CONSUME_XMTP=false for standby replicas.',
     )
   }
 
-  if (hasDb && !hasEncKey && !hasPrivateKey && !hasCswConfig) {
+  if (AGENT_CONSUME_XMTP && !multiAgentConfigured && !hasPrivateKey && !hasCswConfig) {
+    errors.push(
+      'No startup mode is fully configured for XMTP consumption. Set multi-agent, CSW, or EOA credentials before boot.',
+    )
+  }
+
+  if (AGENT_CONSUME_XMTP && hasDb && !hasEncKey && !hasPrivateKey && !hasCswConfig) {
     errors.push('XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent DB mode.')
-  } else if (hasDb && !hasEncKey && !hasCswConfig) {
+  } else if (AGENT_CONSUME_XMTP && hasDb && !hasEncKey && !hasCswConfig) {
     warnings.push('DATABASE_URL/POSTGRES_URL is set but XMTP_AGENT_KEY_ENCRYPTION_KEY is missing; multi-agent mode is disabled.')
   }
 
@@ -560,7 +765,29 @@ function validateStartupEnv(): EnvValidationResult {
       errors.push('XMTP_DB_ENCRYPTION_KEY must be a 32-byte hex string (64 hex chars, optional 0x prefix).')
     }
   } else {
-    warnings.push('XMTP_DB_ENCRYPTION_KEY is not set. XMTP installation reuse may degrade across restarts.')
+    if (XMTP_REQUIRE_DB_ENCRYPTION && AGENT_CONSUME_XMTP && !XMTP_DB_PLAINTEXT_ONLY) {
+      errors.push(
+        'XMTP_DB_ENCRYPTION_KEY is required for this runtime policy. Set XMTP_DB_ENCRYPTION_KEY or explicitly set XMTP_REQUIRE_DB_ENCRYPTION=false for non-production paths.',
+      )
+    } else {
+      warnings.push('XMTP_DB_ENCRYPTION_KEY is not set. XMTP installation reuse may degrade across restarts.')
+    }
+  }
+
+  const configuredDbDir = (process.env.XMTP_DB_DIRECTORY ?? '').trim()
+  if (configuredDbDir && path.resolve(configuredDbDir) !== path.resolve(XMTP_DB_DIR)) {
+    errors.push(
+      `XMTP_DB_DIRECTORY (${configuredDbDir}) is not writable/usable; runtime resolved fallback ${XMTP_DB_DIR}. Fix directory permissions or mount.`,
+    )
+  }
+  if (
+    XMTP_REQUIRE_PERSISTENT_DB &&
+    AGENT_CONSUME_XMTP &&
+    (XMTP_DB_DIR === '/tmp' || XMTP_DB_DIR.startsWith('/tmp/'))
+  ) {
+    errors.push(
+      `XMTP persistent storage policy is enabled but resolved XMTP DB directory is temporary (${XMTP_DB_DIR}). Mount durable storage and/or set XMTP_DB_DIRECTORY.`,
+    )
   }
 
   if (hasCswAddress && !hasCswPrivyWallet) {
@@ -580,6 +807,19 @@ function validateStartupEnv(): EnvValidationResult {
 
   if (!llmService.getAvailableProviders().length) {
     warnings.push('No LLM provider API key configured; /ai fallback will be disabled.')
+  }
+
+  if (AGENT_RUNTIME_LOCK_REQUIRED && !AGENT_CONSUME_XMTP) {
+    warnings.push('AGENT_RUNTIME_LOCK_REQUIRED=true has no effect when AGENT_CONSUME_XMTP=false.')
+  }
+  if (AGENT_RUNTIME_LOCK_REQUIRED && AGENT_CONSUME_XMTP && !hasDb) {
+    errors.push('AGENT_RUNTIME_LOCK_REQUIRED=true requires DATABASE_URL/POSTGRES_URL so the runtime lease lock can be acquired.')
+  }
+  if (
+    AGENT_RUNTIME_LOCK_REQUIRED &&
+    AGENT_RUNTIME_LOCK_HEARTBEAT_MS >= AGENT_RUNTIME_LOCK_STALE_MS
+  ) {
+    errors.push('AGENT_RUNTIME_LOCK_HEARTBEAT_MS must be lower than AGENT_RUNTIME_LOCK_STALE_MS.')
   }
 
   if (ACTION_MAX_CANDIDATES < 1) {
@@ -625,17 +865,179 @@ function ensureBackgroundWorker(): void {
   queueEnabled = true
 }
 
+const RUNTIME_LEASE_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS agent_runtime_leases (
+    lease_key TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    runtime_role TEXT NOT NULL,
+    heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`
+
+let runtimeLeaseSchemaEnsured = false
+
+async function ensureRuntimeLeaseSchema(db: any): Promise<void> {
+  if (runtimeLeaseSchemaEnsured) return
+  if (typeof db?.query === 'function') {
+    await db.query(RUNTIME_LEASE_TABLE_SQL)
+  } else {
+    const stmt = [RUNTIME_LEASE_TABLE_SQL] as unknown as TemplateStringsArray
+    ;(stmt as any).raw = [RUNTIME_LEASE_TABLE_SQL]
+    await db.sql(stmt)
+  }
+  runtimeLeaseSchemaEnsured = true
+}
+
+function clearRuntimeLeaseHeartbeat(): void {
+  if (!runtimeLeaseHeartbeat) return
+  clearInterval(runtimeLeaseHeartbeat)
+  runtimeLeaseHeartbeat = null
+}
+
+async function releaseRuntimeLease(): Promise<void> {
+  clearRuntimeLeaseHeartbeat()
+  if (!runtimeLeaseState?.active) return
+  try {
+    const db = await getDb()
+    if (db) {
+      await db.sql`
+        DELETE FROM agent_runtime_leases
+        WHERE lease_key = ${runtimeLeaseState.key}
+          AND owner_id = ${runtimeLeaseState.ownerId};
+      `
+    }
+  } catch (error) {
+    logger.warn('[eliza/runtime-lock] failed to release runtime lease', {
+      key: runtimeLeaseState.key,
+      ownerId: runtimeLeaseState.ownerId,
+      error: toErrorDetails(error),
+    })
+  } finally {
+    runtimeLeaseState = null
+  }
+}
+
+async function acquireRuntimeLeaseOrExit(): Promise<void> {
+  if (!AGENT_CONSUME_XMTP || !AGENT_RUNTIME_LOCK_REQUIRED) return
+
+  const db = await getDb()
+  if (!db) {
+    logger.error('[eliza/runtime-lock] DB connection unavailable for runtime lease lock')
+    process.exit(1)
+    return
+  }
+
+  await ensureRuntimeLeaseSchema(db)
+
+  const upsert = await db.sql`
+    INSERT INTO agent_runtime_leases (
+      lease_key, owner_id, runtime_role, heartbeat_at, created_at, updated_at
+    ) VALUES (
+      ${AGENT_RUNTIME_LOCK_KEY},
+      ${RUNTIME_LEASE_OWNER_ID},
+      ${AGENT_RUNTIME_ROLE},
+      NOW(),
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (lease_key)
+    DO UPDATE SET
+      owner_id = EXCLUDED.owner_id,
+      runtime_role = EXCLUDED.runtime_role,
+      heartbeat_at = NOW(),
+      updated_at = NOW()
+    WHERE agent_runtime_leases.owner_id = EXCLUDED.owner_id
+       OR agent_runtime_leases.heartbeat_at < NOW() - (${AGENT_RUNTIME_LOCK_STALE_MS} * INTERVAL '1 millisecond')
+    RETURNING owner_id, runtime_role, heartbeat_at;
+  `
+
+  const acquiredRow = (upsert.rows ?? [])[0] as any
+  const acquiredOwner = String(acquiredRow?.owner_id ?? '')
+  if (acquiredOwner !== RUNTIME_LEASE_OWNER_ID) {
+    const holderRes = await db.sql`
+      SELECT owner_id, runtime_role, heartbeat_at
+      FROM agent_runtime_leases
+      WHERE lease_key = ${AGENT_RUNTIME_LOCK_KEY}
+      LIMIT 1;
+    `
+    const holder = (holderRes.rows ?? [])[0] as any
+    logger.error('[eliza/runtime-lock] runtime lease already held by another instance', {
+      leaseKey: AGENT_RUNTIME_LOCK_KEY,
+      holderOwnerId: holder?.owner_id ?? null,
+      holderRole: holder?.runtime_role ?? null,
+      holderHeartbeatAt: holder?.heartbeat_at ?? null,
+    })
+    process.exit(1)
+    return
+  }
+
+  runtimeLeaseState = {
+    key: AGENT_RUNTIME_LOCK_KEY,
+    ownerId: RUNTIME_LEASE_OWNER_ID,
+    active: true,
+  }
+
+  clearRuntimeLeaseHeartbeat()
+  runtimeLeaseHeartbeat = setInterval(() => {
+    void (async () => {
+      if (!runtimeLeaseState?.active) return
+      try {
+        const dbLease = await getDb()
+        if (!dbLease) {
+          logger.error('[eliza/runtime-lock] lost DB while maintaining runtime lease; exiting')
+          process.exit(1)
+          return
+        }
+        const refreshed = await dbLease.sql`
+          UPDATE agent_runtime_leases
+          SET heartbeat_at = NOW(), updated_at = NOW()
+          WHERE lease_key = ${runtimeLeaseState.key}
+            AND owner_id = ${runtimeLeaseState.ownerId}
+          RETURNING owner_id;
+        `
+        const rowCount = Number((refreshed as any)?.rowCount ?? 0)
+        if (!Number.isFinite(rowCount) || rowCount <= 0) {
+          logger.error('[eliza/runtime-lock] runtime lease lost; refusing split-brain. Exiting.')
+          process.exit(1)
+        }
+      } catch (error) {
+        logger.error('[eliza/runtime-lock] failed to refresh runtime lease', {
+          key: runtimeLeaseState.key,
+          ownerId: runtimeLeaseState.ownerId,
+          error: toErrorDetails(error),
+        })
+        process.exit(1)
+      }
+    })()
+  }, AGENT_RUNTIME_LOCK_HEARTBEAT_MS)
+}
+
 function initializeRuntimeBridge(agentKey: string): ReturnType<typeof createRuntimeBridge> {
+  const swarm = resolveSwarmProfile(agentKey)
+  const profileCharacter = roleCharacter(swarm.role)
+  const envSystemPrompt = String(process.env.ELIZA_CHARACTER_SYSTEM_PROMPT ?? '').trim()
+  const envPreferredModel = String(process.env.ELIZA_CHARACTER_MODEL ?? '').trim()
+  const preferredModel =
+    envPreferredModel ||
+    profileCharacter.settingsModel ||
+    characterRuntimeConfig.preferredModel
+  const settings: Record<string, string> = {
+    ...characterRuntimeConfig.settings,
+    CHARACTER_NAME: profileCharacter.name,
+    CHARACTER_DESCRIPTION: profileCharacter.description,
+    CHARACTER_MODEL: preferredModel ?? '',
+  }
   return createRuntimeBridge({
     agentKey,
     plugins,
-    settings: {
-      ...characterRuntimeConfig.settings,
-    },
+    settings,
     character: {
-      systemPrompt: characterRuntimeConfig.systemPrompt,
-      preferredModel: characterRuntimeConfig.preferredModel,
+      systemPrompt: envSystemPrompt || profileCharacter.system || characterRuntimeConfig.systemPrompt,
+      preferredModel: preferredModel || undefined,
     },
+    swarm,
   })
 }
 
@@ -665,6 +1067,12 @@ async function handleMessage(
   const { correlationId, logger: reqLogger } = createCorrelationLogger('msg', {
     agentKey: ctx.agentKey,
     conversationId: msg.conversationId,
+  })
+  void emitTelemetryEvent('eliza_message_received', {
+    agentKey: ctx.agentKey,
+    conversationId: msg.conversationId,
+    correlationId,
+    length: text.length,
   })
   const isKeeprStatusCommand = /^\/?keepr\s+status\b/i.test(text)
   if (isKeeprStatusCommand) {
@@ -767,6 +1175,15 @@ async function handleMessage(
           reason: candidate.reason,
           retriesUsed: actionRetryBudget,
         })
+        void emitTelemetryEvent('eliza_action_executed', {
+          action: actionName,
+          score: candidate.score,
+          reason: candidate.reason,
+          retriesUsed: actionRetryBudget,
+          agentKey: ctx.agentKey,
+          conversationId: msg.conversationId,
+          correlationId,
+        })
         if (isKeeprStatusCommand) {
           reqLogger.info('[eliza/vertical] keepr_status reply', {
             correlationId,
@@ -784,6 +1201,16 @@ async function handleMessage(
         reason: candidate.reason,
         error: agentError.message,
         code: agentError.code,
+      })
+      void emitTelemetryEvent('eliza_action_failed', {
+        action: actionName,
+        score: candidate.score,
+        reason: candidate.reason,
+        error: agentError.message,
+        code: agentError.code,
+        agentKey: ctx.agentKey,
+        conversationId: msg.conversationId,
+        correlationId,
       })
       if (isKeeprStatusCommand) {
         reqLogger.warn('[eliza/vertical] keepr_status action failed', {
@@ -849,6 +1276,18 @@ async function handleMessage(
     }
   }
 
+  const senderWallet =
+    typeof msg.senderAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(msg.senderAddress)
+      ? msg.senderAddress.toLowerCase()
+      : null
+  if (senderWallet) {
+    vaultContext +=
+      '\n[wallet_context]\n' +
+      `primary_sender_wallet=${senderWallet}\n` +
+      'When the user says "my wallet", "my balance", or "my portfolio", default to this wallet unless they provide another address.\n' +
+      '[/wallet_context]\n'
+  }
+
   try {
     const llm = await withRetry({
       operation: 'llm_generate_response',
@@ -906,6 +1345,8 @@ type RunningAgent = {
   runtimeBridge: ReturnType<typeof createRuntimeBridge>
   rowFingerprint: string
   startedAtMs: number
+  swarmRole: AgentSwarmRole
+  swarmCapabilities: string[]
 }
 
 function computeRowFingerprint(row: AgentRow): string {
@@ -972,6 +1413,7 @@ async function loadAgentRows(): Promise<AgentRow[]> {
 
 async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(row)): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const swarmProfile = resolveSwarmProfile(row.creatorAddress)
   const runtimeBridge = initializeRuntimeBridge(row.creatorAddress)
   let signer: any
 
@@ -1034,6 +1476,7 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
   logger.info(`[eliza] Started agent for creator ${row.creatorAddress}`, {
     agentAddress: xmtp.address,
     agentType: row.agentType,
+    swarmRole: swarmProfile.role,
   })
 
   return {
@@ -1042,6 +1485,8 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
     runtimeBridge,
     rowFingerprint,
     startedAtMs: Date.now(),
+    swarmRole: swarmProfile.role,
+    swarmCapabilities: swarmProfile.capabilities,
   }
 }
 
@@ -1129,6 +1574,11 @@ async function shutdown() {
   if (shuttingDown) return
   shuttingDown = true
   logger.info('[eliza] Shutting down...')
+  void emitTelemetryEvent('runtime_shutdown', {
+    runtimeRole: AGENT_RUNTIME_ROLE,
+    consumeXmtp: AGENT_CONSUME_XMTP,
+    agentsRunning: runningAgents.size,
+  })
 
   const stops = [...runningAgents.values()].map(async (r) => {
     try {
@@ -1146,6 +1596,7 @@ async function shutdown() {
 
   logger.info(`[eliza] All ${runningAgents.size} agents stopped`)
   runningAgents.clear()
+  await releaseRuntimeLease()
   process.exit(0)
 }
 
@@ -1160,6 +1611,7 @@ async function shutdown() {
  */
 async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const swarmProfile = resolveSwarmProfile('single-agent')
   const runtimeBridge = initializeRuntimeBridge('single-agent')
   const xmtp = new XmtpService({
     privateKey,
@@ -1196,7 +1648,10 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
     },
   })
 
-  logger.info(`[eliza] Single EOA agent started`, { agentAddress: xmtp.address })
+  logger.info(`[eliza] Single EOA agent started`, {
+    agentAddress: xmtp.address,
+    swarmRole: swarmProfile.role,
+  })
 
   return {
     creatorAddress: 'single-agent',
@@ -1204,6 +1659,8 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
     runtimeBridge,
     rowFingerprint: 'single-agent:eoa',
     startedAtMs: Date.now(),
+    swarmRole: swarmProfile.role,
+    swarmCapabilities: swarmProfile.capabilities,
   }
 }
 
@@ -1227,6 +1684,7 @@ async function startSingleAgentCsw(params: {
   chainId?: number
 }): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const swarmProfile = resolveSwarmProfile('single-agent-csw')
   const runtimeBridge = initializeRuntimeBridge('single-agent-csw')
   const signer = createPrivyScwSigner({
     walletId: params.privyWalletId,
@@ -1308,6 +1766,7 @@ async function startSingleAgentCsw(params: {
     agentAddress: activeXmtp.address,
     cswAddress: params.cswAddress,
     privyWalletId: params.privyWalletId.slice(0, 12) + '...',
+    swarmRole: swarmProfile.role,
   })
 
   return {
@@ -1316,6 +1775,8 @@ async function startSingleAgentCsw(params: {
     runtimeBridge,
     rowFingerprint: `single-agent:csw:${params.cswAddress.toLowerCase()}`,
     startedAtMs: Date.now(),
+    swarmRole: swarmProfile.role,
+    swarmCapabilities: swarmProfile.capabilities,
   }
 }
 
@@ -1409,6 +1870,12 @@ async function main() {
 
   // Start health check server FIRST so Railway healthcheck passes during boot
   startHealthServer()
+  void emitTelemetryEvent('runtime_boot', {
+    runtimeRole: AGENT_RUNTIME_ROLE,
+    consumeXmtp: AGENT_CONSUME_XMTP,
+    runtimeLockRequired: AGENT_RUNTIME_LOCK_REQUIRED,
+    xmtpEnv: XMTP_ENV,
+  })
 
   latestEnvValidation = validateStartupEnv()
   if (latestEnvValidation.warnings.length > 0) {
@@ -1430,9 +1897,11 @@ async function main() {
   const hasCswConfig = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim() &&
     !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
   const multiAgentMode = hasDb && hasEncKey
-  dbRequiredForRuntime = multiAgentMode
+  const shouldRunXmtp = AGENT_CONSUME_XMTP
+  const runtimeLockRequired = shouldRunXmtp && AGENT_RUNTIME_LOCK_REQUIRED
+  dbRequiredForRuntime = multiAgentMode || runtimeLockRequired
 
-  if (multiAgentMode) {
+  if (dbRequiredForRuntime) {
     const dbReady = await withRetry({
       operation: 'startup_db_connectivity_check',
       maxRetries: STARTUP_DB_MAX_RETRIES,
@@ -1458,7 +1927,11 @@ async function main() {
     }
   }
 
-  if (multiAgentMode) {
+  if (runtimeLockRequired) {
+    await acquireRuntimeLeaseOrExit()
+  }
+
+  if (multiAgentMode && shouldRunXmtp) {
     ensureBackgroundWorker()
     void enqueueAgentBackgroundTask({
       taskType: 'knowledge_refresh',
@@ -1467,7 +1940,9 @@ async function main() {
     })
   } else {
     queueEnabled = false
-    if (hasDb) {
+    if (!shouldRunXmtp) {
+      logger.info('[eliza] XMTP consumption disabled; running in standby mode.')
+    } else if (hasDb) {
       if (hasCswConfig || hasPrivateKey) {
         logger.info(
           '[eliza] DB is configured; single-agent mode is active and background DB queue is intentionally disabled.',
@@ -1485,7 +1960,14 @@ async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   // Check DB persistence before creating any agent
-  checkDbPersistence()
+  const persistenceCheck = checkDbPersistence()
+  if (persistenceCheck.errors.length > 0) {
+    for (const error of persistenceCheck.errors) {
+      logger.error('[xmtp] startup persistence policy failure', { error })
+    }
+    process.exit(1)
+    return
+  }
 
   // Determine mode label
   const modeLabel = multiAgentMode
@@ -1499,6 +1981,9 @@ async function main() {
   const llmProvider = resolveProvider()
   const actionCount = allActions.length
   console.log(`  Mode: ${modeLabel}`)
+  console.log(`  Runtime role: ${AGENT_RUNTIME_ROLE}`)
+  console.log(`  Consume XMTP: ${AGENT_CONSUME_XMTP ? 'yes' : 'no (standby)'}`)
+  console.log(`  Runtime lock: ${AGENT_RUNTIME_LOCK_REQUIRED ? `enabled (${AGENT_RUNTIME_LOCK_KEY})` : 'disabled'}`)
   console.log(
     `  LLM provider: ${llmProvider?.name ?? 'none (conversational AI disabled)'}${
       llmProvider?.model ? ` (${llmProvider.model})` : ''
@@ -1518,7 +2003,12 @@ async function main() {
   }
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-  if (multiAgentMode) {
+  if (!AGENT_CONSUME_XMTP) {
+    console.log('\n  Standby mode active: this instance will not connect to XMTP.')
+    console.log('  Promote by setting AGENT_CONSUME_XMTP=true and redeploying.\n')
+    process.on('SIGINT', () => void shutdown())
+    process.on('SIGTERM', () => void shutdown())
+  } else if (multiAgentMode) {
     // -----------------------------------------------------------------------
     // Multi-agent mode: load agents from DB, decrypt keys, run orchestrator
     // -----------------------------------------------------------------------
@@ -1616,6 +2106,11 @@ async function main() {
   }
 
   agentBooted = true
+  void emitTelemetryEvent('runtime_ready', {
+    runtimeRole: AGENT_RUNTIME_ROLE,
+    consumeXmtp: AGENT_CONSUME_XMTP,
+    agentsRunning: runningAgents.size,
+  })
   logger.info('[eliza] Runtime ready. Press Ctrl+C to stop.')
 }
 
@@ -1648,6 +2143,8 @@ function startHealthServer() {
       const health = agent.xmtp.getHealth()
       return {
         creatorAddress: agent.creatorAddress,
+        swarmRole: agent.swarmRole,
+        swarmCapabilities: agent.swarmCapabilities,
         running: health.running,
         address: health.address,
         state: health.state,
@@ -1657,24 +2154,29 @@ function startHealthServer() {
       }
     })
     const xmtpReady = xmtpStates.every((entry) => entry.running)
+    const requiresXmtp = AGENT_CONSUME_XMTP
     const readinessReasons: string[] = []
     if (!agentBooted) readinessReasons.push('booting')
-    if (agentCount === 0) readinessReasons.push('no_agents')
+    if (requiresXmtp && agentCount === 0) readinessReasons.push('no_agents')
     if (latestEnvValidation.errors.length > 0) readinessReasons.push('env_validation_failed')
     if (shouldCheckDb && db === null) readinessReasons.push('db_unavailable')
-    if (!xmtpReady) readinessReasons.push('xmtp_not_running')
+    if (requiresXmtp && !xmtpReady) readinessReasons.push('xmtp_not_running')
     if ((queueStats?.staleProcessing ?? 0) > 0) readinessReasons.push('queue_stale_leases')
     const ready = Boolean(
       agentBooted &&
-      agentCount > 0 &&
+      (requiresXmtp ? agentCount > 0 : true) &&
       latestEnvValidation.errors.length === 0 &&
       (shouldCheckDb ? db !== null : true) &&
-      xmtpReady,
+      (requiresXmtp ? xmtpReady : true),
     )
     const status =
-      !agentBooted
+      requiresXmtp && !agentBooted
         ? 'booting'
-        : ready
+        : !requiresXmtp
+          ? ready
+            ? 'standby'
+            : 'degraded'
+          : ready
           ? 'ok'
           : agentCount === 0
             ? 'no_agents'
@@ -1684,6 +2186,13 @@ function startHealthServer() {
       uptimeMs: Date.now() - runtimeStartedAtMs,
       agents: agentCount,
       readinessReasons,
+      runtime: {
+        role: AGENT_RUNTIME_ROLE,
+        consumeXmtp: AGENT_CONSUME_XMTP,
+        lockRequired: AGENT_RUNTIME_LOCK_REQUIRED,
+        lockKey: AGENT_RUNTIME_LOCK_REQUIRED ? AGENT_RUNTIME_LOCK_KEY : null,
+        lockOwner: runtimeLeaseState?.ownerId ?? null,
+      },
       dependencies: {
         db: {
           configured: dbConfigured,
@@ -1728,5 +2237,5 @@ void main().catch((err) => {
     error: msg,
     stack: err instanceof Error ? err.stack : undefined,
   })
-  process.exit(1)
+  void releaseRuntimeLease().finally(() => process.exit(1))
 })

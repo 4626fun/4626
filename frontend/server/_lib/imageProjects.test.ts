@@ -169,6 +169,7 @@ describe('image project storage', () => {
       instruction: 'Put the dog in the square.',
       stylePreset: 'modern_elegant',
       brandContext: ['creator coin', 'vault icon'],
+      creatorAddress: '0xB05Cf01231Cf2ff99499682E64D3780D57c80fDd',
     })
 
     expect(project.status).toBe('draft')

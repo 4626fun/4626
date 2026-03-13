@@ -242,11 +242,11 @@ export function PoolRow({
       {/* Holders */}
       <span className="text-white tabular-nums px-3 py-2 text-right">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
-      {/* Market cap */}
-      <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(marketCap)}</span>
-
       {/* Volume */}
       <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volume)}</span>
+
+      {/* Market cap */}
+      <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(marketCap)}</span>
 
       {/* Δ 24H */}
       <span className={`tabular-nums px-3 py-2 text-right ${change.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
@@ -265,7 +265,7 @@ export function PoolRow({
       </div>
 
       {/* Total Fees */}
-      <div className="px-3 py-2 text-right flex items-center justify-end gap-1 text-zinc-200 tabular-nums" title={feeBreakdown}>
+      <div className="px-3 py-2 text-center flex items-center justify-center gap-1 text-zinc-200 tabular-nums" title={feeBreakdown}>
         <span>{totalFees}</span>
         {canToggleFees ? (
           <button
@@ -285,7 +285,7 @@ export function PoolRow({
       </div>
 
       {/* Payout To */}
-      <span className="text-zinc-400 font-mono text-[10px] truncate px-3 py-2" title={payoutTo || undefined}>
+      <span className="text-zinc-400 font-mono text-[10px] truncate px-3 py-2 text-center" title={payoutTo || undefined}>
         {shortAddress(payoutTo)}
       </span>
     </Link>

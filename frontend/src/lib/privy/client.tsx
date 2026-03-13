@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { Component, createContext, useContext, useMemo } from 'react'
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
-import { PrivyProvider } from '@privy-io/react-auth'
+import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { createPrivyAppearance } from './clientAppearance'
 
@@ -48,6 +48,15 @@ class PrivyProviderSafetyBoundary extends Component<
   }
 }
 
+function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => void }) {
+  const { ready } = usePrivy()
+  const { onStatus } = props
+  useEffect(() => {
+    onStatus(ready ? 'ready' : 'loading')
+  }, [onStatus, ready])
+  return null
+}
+
 /**
  * Privy Client Provider
  *
@@ -64,9 +73,15 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   const { children, showWalletLoginFirst = true } = props
   const enabled = isPrivyClientEnabled()
   const appId = enabled ? getPrivyAppId() : null
-
-  const status: PrivyClientStatus = !enabled || !appId ? 'disabled' : 'ready'
-  const ctx = useMemo(() => status, [status])
+  const hasRuntimeConfig = Boolean(enabled && appId)
+  const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
+  const handleRuntimeStatus = useCallback((next: PrivyClientStatus) => {
+    setRuntimeStatus((prev) => (prev === next ? prev : next))
+  }, [])
+  const ctx = useMemo<PrivyClientStatus>(
+    () => (hasRuntimeConfig ? runtimeStatus : 'disabled'),
+    [hasRuntimeConfig, runtimeStatus],
+  )
 
   // Keep hooks unconditional; the objects are only consumed when Privy is enabled.
   const solanaConnectors = useMemo(
@@ -88,7 +103,7 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
     [solanaConnectors],
   )
 
-  if (status !== 'ready' || !appId) {
+  if (!hasRuntimeConfig || !appId) {
     return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>
   }
 
@@ -125,8 +140,9 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   } as any
 
   return (
-    <PrivyClientContext.Provider value="ready">
+    <PrivyClientContext.Provider value={ctx}>
       <PrivyProviderSafetyBoundary appId={appId} baseConfig={baseConfig} safeConfig={safeConfig}>
+        <PrivyStatusObserver onStatus={handleRuntimeStatus} />
         {children}
       </PrivyProviderSafetyBoundary>
     </PrivyClientContext.Provider>

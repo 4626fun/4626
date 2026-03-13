@@ -134,6 +134,11 @@ function formatCoinHelp(): string {
     '- /coin buy <coin-address> <eth-amount> — Buy a coin with ETH',
     '- /coin sell <coin-address> <amount> — Sell a coin for ETH',
     '- /coin info <coin-address> — Look up coin details',
+    '- /coin trend help — Trend ops help',
+    '- /coin trend check <ticker> — preflight ticker/address status',
+    '- /coin trend reserve <ticker> — deploy TrendCoin for this creator',
+    '- /coin trend status <ticker> — show persisted + onchain trend state',
+    '- /coin trend funnel <ticker> [eth-amount] — run guarded funnel action',
     '',
     'Revenue:',
     `- Platform referrer: ${referrer ?? '(not set)'}`,
@@ -657,6 +662,257 @@ async function handleSell(params: {
 }
 
 // ---------------------------------------------------------------------------
+// /coin trend
+// ---------------------------------------------------------------------------
+
+function formatTrendHelp(): string {
+  return [
+    'Trend command usage',
+    '',
+    '- /coin trend check <ticker>',
+    '- /coin trend reserve <ticker>',
+    '- /coin trend status <ticker>',
+    '- /coin trend funnel <ticker> [eth-amount]',
+    '',
+    'Examples:',
+    '- /coin trend check "BASE AI"',
+    '- /coin trend reserve BASEAI',
+    '- /coin trend funnel BASEAI 0.005',
+  ].join('\n')
+}
+
+function parseOptionalEthToWei(raw: string | undefined): bigint | null {
+  const value = String(raw ?? '').trim()
+  if (!value) return null
+  try {
+    const wei = parseEther(value)
+    if (wei <= 0n) return null
+    return wei
+  } catch {
+    return null
+  }
+}
+
+async function handleTrend(params: {
+  groupId: string
+  senderWallet: Address
+  args: string[]
+  vault: KeeprVaultRow
+}): Promise<KeeprCommandResult> {
+  const sub = String(params.args[0] ?? 'help').trim().toLowerCase()
+  const ticker = String(params.args[1] ?? '').trim()
+
+  if (sub === 'help') {
+    return { ok: true, response: formatTrendHelp() }
+  }
+  if (!ticker) {
+    return { ok: false, response: `Missing ticker.\n\n${formatTrendHelp()}` }
+  }
+
+  try {
+    const { preflightTrendTicker, reserveTrendTicker } = await import('./trends.js')
+    const {
+      getTrendOpByTickerHash,
+      markTrendOpDeployed,
+      markTrendOpDeploying,
+      markTrendOpFailed,
+      upsertTrendPrediction,
+    } = await import('../_lib/zoraTrendOpsStore.js')
+
+    if (sub === 'check') {
+      const preflight = await preflightTrendTicker({ ticker })
+      return {
+        ok: true,
+        response: [
+          'Trend preflight',
+          '',
+          `- Ticker: ${preflight.ticker}`,
+          `- Ticker hash: ${preflight.tickerHash}`,
+          `- Predicted coin: ${preflight.predictedAddress}`,
+          `- Deployed: ${preflight.deployed ? 'yes' : 'no'}`,
+        ].join('\n'),
+      }
+    }
+
+    if (sub === 'status') {
+      const preflight = await preflightTrendTicker({ ticker })
+      let stored: any = null
+      try {
+        stored = await getTrendOpByTickerHash(preflight.tickerHash)
+      } catch {
+        stored = null
+      }
+      return {
+        ok: true,
+        response: [
+          'Trend status',
+          '',
+          `- Ticker: ${preflight.ticker}`,
+          `- Ticker hash: ${preflight.tickerHash}`,
+          `- Predicted coin: ${preflight.predictedAddress}`,
+          `- Onchain deployed: ${preflight.deployed ? 'yes' : 'no'}`,
+          `- Stored status: ${stored?.status ?? 'n/a'}`,
+          `- Stored tx: ${stored?.txHash ?? 'n/a'}`,
+          `- Last error: ${stored?.lastError ?? 'n/a'}`,
+          `- Updated: ${stored?.updatedAt ?? 'n/a'}`,
+        ].join('\n'),
+      }
+    }
+
+    if (sub === 'reserve') {
+      const preflight = await preflightTrendTicker({ ticker })
+      await upsertTrendPrediction({
+        ticker: preflight.ticker,
+        tickerHash: preflight.tickerHash,
+        predictedCoinAddress: preflight.predictedAddress,
+        actorWallet: params.senderWallet,
+        groupId: params.groupId,
+        vaultAddress: params.vault.vaultAddress,
+        funnelMetadata: {
+          source: 'xmtp_coin_command',
+          command: 'reserve',
+        },
+      })
+
+      if (preflight.deployed) {
+        await markTrendOpDeployed({
+          tickerHash: preflight.tickerHash,
+          deployedCoinAddress: preflight.predictedAddress,
+        })
+        return {
+          ok: true,
+          response: [
+            'Trend already deployed',
+            '',
+            `- Ticker: ${preflight.ticker}`,
+            `- Coin: ${preflight.predictedAddress}`,
+          ].join('\n'),
+        }
+      }
+
+      await markTrendOpDeploying({ tickerHash: preflight.tickerHash })
+
+      try {
+        const reservation = await reserveTrendTicker({
+          ticker: preflight.ticker,
+          creatorToken: params.vault.creatorCoinAddress,
+          groupId: params.groupId,
+          waitForReceipt: true,
+        })
+
+        if (reservation.status === 'deployed' || reservation.status === 'already_deployed') {
+          await markTrendOpDeployed({
+            tickerHash: preflight.tickerHash,
+            deployedCoinAddress: reservation.deployedAddress,
+            txHash: reservation.txHash,
+            actorWallet: reservation.walletAddress ?? undefined,
+          })
+        } else {
+          await markTrendOpDeploying({
+            tickerHash: preflight.tickerHash,
+            txHash: reservation.txHash,
+            actorWallet: reservation.walletAddress ?? undefined,
+          })
+        }
+
+        recordExecution(params.groupId)
+        return {
+          ok: true,
+          response: [
+            reservation.status === 'deployed' ? 'Trend reserved + deployed' : 'Trend reserve submitted',
+            '',
+            `- Ticker: ${reservation.ticker}`,
+            `- Ticker hash: ${reservation.tickerHash}`,
+            `- Coin: ${reservation.deployedAddress}`,
+            `- Deployed: ${reservation.deployed ? 'yes' : 'pending'}`,
+            `- Tx: ${reservation.txHash ? `https://basescan.org/tx/${reservation.txHash}` : 'n/a'}`,
+          ].join('\n'),
+          action: {
+            action: 'zora.trend.reserve',
+            ticker: reservation.ticker,
+            tickerHash: reservation.tickerHash,
+            coinAddress: reservation.deployedAddress,
+            txHash: reservation.txHash,
+            status: reservation.status,
+            groupId: params.groupId,
+          },
+        }
+      } catch (error: any) {
+        await markTrendOpFailed({
+          tickerHash: preflight.tickerHash,
+          lastError: String(error?.message ?? 'reserve_failed'),
+        })
+        throw error
+      }
+    }
+
+    if (sub === 'funnel') {
+      const notionalWei = parseOptionalEthToWei(params.args[2])
+      if (params.args[2] && !notionalWei) {
+        return { ok: false, response: 'Invalid optional ETH amount. Example: `/coin trend funnel BASEAI 0.005`' }
+      }
+
+      const preflight = await preflightTrendTicker({ ticker })
+      await upsertTrendPrediction({
+        ticker: preflight.ticker,
+        tickerHash: preflight.tickerHash,
+        predictedCoinAddress: preflight.predictedAddress,
+        actorWallet: params.senderWallet,
+        groupId: params.groupId,
+        vaultAddress: params.vault.vaultAddress,
+        funnelMetadata: {
+          source: 'xmtp_coin_command',
+          command: 'funnel',
+        },
+      })
+
+      const { runTrendFunnel } = await import('./trendFunnel.js')
+      const run = await runTrendFunnel({
+        ticker: preflight.ticker,
+        tickerHash: preflight.tickerHash,
+        trendCoinAddress: preflight.predictedAddress,
+        creatorToken: params.vault.creatorCoinAddress,
+        groupId: params.groupId,
+        notionalWei: notionalWei ?? undefined,
+      })
+
+      recordExecution(params.groupId)
+      return {
+        ok: run.status === 'executed',
+        response: [
+          `Trend funnel: ${run.status}`,
+          '',
+          `- Ticker: ${preflight.ticker}`,
+          `- Trend coin: ${preflight.predictedAddress}`,
+          `- Routeability passed: ${run.routeability.passed ? 'yes' : 'no'}`,
+          `- Action executed: ${run.action.executed ? 'yes' : 'no'}`,
+          `- Target token: ${run.action.targetToken ?? 'n/a'}`,
+          `- Amount in: ${run.action.amountInWei ?? 'n/a'} wei`,
+          `- Tx: ${run.action.txHash ? `https://basescan.org/tx/${run.action.txHash}` : 'n/a'}`,
+          run.reason ? `- Reason: ${run.reason}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        action: {
+          action: 'zora.trend.funnel',
+          ticker: preflight.ticker,
+          tickerHash: preflight.tickerHash,
+          status: run.status,
+          txHash: run.action.txHash,
+          groupId: params.groupId,
+          reason: run.reason,
+        },
+      }
+    }
+
+    return { ok: false, response: `Unknown trend subcommand: ${sub}. Try \`/coin trend help\`.` }
+  } catch (err: any) {
+    logger.error('[coin/trend] command failed', { sub, err })
+    return { ok: false, response: `Trend command failed: ${(err?.message ?? '').slice(0, 220)}` }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main router
 // ---------------------------------------------------------------------------
 
@@ -723,6 +979,14 @@ export async function handleCoinCommand(params: {
 
     case 'sell':
       return handleSell({
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        args,
+        vault: params.vault,
+      })
+
+    case 'trend':
+      return handleTrend({
         groupId: params.groupId,
         senderWallet: params.senderWallet,
         args,

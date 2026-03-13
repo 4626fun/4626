@@ -36,6 +36,18 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function resolveAgentAddress(): `0x${string}` | null {
+  const candidates = [
+    (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim(),
+    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
+    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
+  ]
+  for (const raw of candidates) {
+    if (isAddressLike(raw)) return raw.toLowerCase() as `0x${string}`
+  }
+  return null
+}
+
 function parseSupportedTrust(raw: string | undefined): string[] {
   if (!raw) return ['reputation', 'crypto-economic', 'tee-attestation']
   const entries = raw
@@ -88,8 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'agents', kind: 'read' })
   if (!g.ok) return
 
-  const addr = (process.env.XMTP_AGENT_ADDRESS ?? '').trim()
-  const agentAddress = isAddressLike(addr) ? (addr.toLowerCase() as `0x${string}`) : null
+  const agentAddress = resolveAgentAddress()
 
   const agents = agentAddress
     ? [
@@ -109,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const byo = {
     registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
     agentUriHint:
-      'Use a validator-compatible agentURI: https:// gateway URL, ipfs://, ar://, or data:. If using Lens Grove, prefer gatewayUrl over lens://.',
+      'Use a content-addressed agentURI for clean scanner results: data:, ipfs://, or ar://. HTTPS gateway URLs remain valid fallback; if using Lens Grove, use gatewayUrl (not lens://).',
     agentUriService: `${origin}/api/lens/agent-registration`,
     requiredFields: ['type', 'name', 'description', 'image', 'services', 'x402Support', 'active', 'registrations'],
     specUrl: 'https://eips.ethereum.org/EIPS/eip-8004',

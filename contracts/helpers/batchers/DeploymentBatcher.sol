@@ -673,87 +673,22 @@ contract DeploymentBatcher is ReentrancyGuard {
     function deployPhase2AndLaunch(Phase2Params calldata params, CodeIds calldata codeIds)
         external
         nonReentrant
-        returns (Phase2Result memory out)
+        returns (Phase2Result memory)
     {
-        _requireOwner(params.owner);
-        _pullCreatorTokens(params.creatorToken, params.owner, params.depositAmount);
-        Phase2Result memory coreOut = _deployPhase2Core(
-            Phase2CoreParams({
-                creatorToken: params.creatorToken,
-                owner: params.owner,
-                creatorTreasury: params.creatorTreasury,
-                payoutRecipient: params.payoutRecipient,
-                vault: params.vault,
-                wrapper: params.wrapper,
-                shareOFT: params.shareOFT,
-                shareSymbol: params.shareSymbol,
-                version: params.version,
-                floorPriceQ96: params.floorPriceQ96
-            }),
-            codeIds
-        );
-        out = _finalizePhase2Internal(
-            Phase2FinalizeParams({
-                creatorToken: params.creatorToken,
-                owner: params.owner,
-                vault: params.vault,
-                wrapper: params.wrapper,
-                shareOFT: params.shareOFT,
-                gaugeController: coreOut.gaugeController,
-                ccaStrategy: coreOut.ccaStrategy,
-                oracle: coreOut.oracle,
-                version: params.version,
-                depositAmount: params.depositAmount,
-                requiredRaise: params.requiredRaise,
-                floorPriceQ96: params.floorPriceQ96,
-                auctionSteps: params.auctionSteps,
-                meteoraAlphaVault: bytes32(0),
-                solanaIxs: new IBaseSolanaBridge.Ix[](0)
-            })
-        );
+        params;
+        codeIds;
+        revert InvalidCodeId();
     }
 
     function deployPhase2AndLaunchWithPermit(
         Phase2Params calldata params,
         CodeIds calldata codeIds,
         PermitData calldata permit
-    ) external nonReentrant returns (Phase2Result memory out) {
-        _requireOwner(params.owner);
-        _permitAndPull(params.creatorToken, params.owner, params.depositAmount, permit);
-        Phase2Result memory coreOut = _deployPhase2Core(
-            Phase2CoreParams({
-                creatorToken: params.creatorToken,
-                owner: params.owner,
-                creatorTreasury: params.creatorTreasury,
-                payoutRecipient: params.payoutRecipient,
-                vault: params.vault,
-                wrapper: params.wrapper,
-                shareOFT: params.shareOFT,
-                shareSymbol: params.shareSymbol,
-                version: params.version,
-                floorPriceQ96: params.floorPriceQ96
-            }),
-            codeIds
-        );
-        out = _finalizePhase2Internal(
-            Phase2FinalizeParams({
-                creatorToken: params.creatorToken,
-                owner: params.owner,
-                vault: params.vault,
-                wrapper: params.wrapper,
-                shareOFT: params.shareOFT,
-                gaugeController: coreOut.gaugeController,
-                ccaStrategy: coreOut.ccaStrategy,
-                oracle: coreOut.oracle,
-                version: params.version,
-                depositAmount: params.depositAmount,
-                requiredRaise: params.requiredRaise,
-                floorPriceQ96: params.floorPriceQ96,
-                auctionSteps: params.auctionSteps,
-                meteoraAlphaVault: bytes32(0),
-                solanaIxs: new IBaseSolanaBridge.Ix[](0)
-            })
-        );
+    ) external nonReentrant returns (Phase2Result memory) {
+        params;
+        codeIds;
+        permit;
+        revert InvalidCodeId();
     }
 
     function deployPhase2AndLaunchWithPermit2(
@@ -761,43 +696,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         CodeIds calldata codeIds,
         ISignatureTransfer.PermitTransferFrom calldata permit,
         bytes calldata signature
-    ) external nonReentrant returns (Phase2Result memory out) {
-        _requireOwner(params.owner);
-        _permit2Pull(params.creatorToken, params.owner, params.depositAmount, permit, signature);
-        Phase2Result memory coreOut = _deployPhase2Core(
-            Phase2CoreParams({
-                creatorToken: params.creatorToken,
-                owner: params.owner,
-                creatorTreasury: params.creatorTreasury,
-                payoutRecipient: params.payoutRecipient,
-                vault: params.vault,
-                wrapper: params.wrapper,
-                shareOFT: params.shareOFT,
-                shareSymbol: params.shareSymbol,
-                version: params.version,
-                floorPriceQ96: params.floorPriceQ96
-            }),
-            codeIds
-        );
-        out = _finalizePhase2Internal(
-            Phase2FinalizeParams({
-                creatorToken: params.creatorToken,
-                owner: params.owner,
-                vault: params.vault,
-                wrapper: params.wrapper,
-                shareOFT: params.shareOFT,
-                gaugeController: coreOut.gaugeController,
-                ccaStrategy: coreOut.ccaStrategy,
-                oracle: coreOut.oracle,
-                version: params.version,
-                depositAmount: params.depositAmount,
-                requiredRaise: params.requiredRaise,
-                floorPriceQ96: params.floorPriceQ96,
-                auctionSteps: params.auctionSteps,
-                meteoraAlphaVault: bytes32(0),
-                solanaIxs: new IBaseSolanaBridge.Ix[](0)
-            })
-        );
+    ) external nonReentrant returns (Phase2Result memory) {
+        params;
+        codeIds;
+        permit;
+        signature;
+        revert InvalidCodeId();
     }
 
     function deployPhase2Core(Phase2CoreParams calldata params, CodeIds calldata codeIds)
@@ -1120,7 +1024,9 @@ contract DeploymentBatcher is ReentrancyGuard {
         out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.erc4626StrategyAdapter, ajnaArgs);
         IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
         IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
-        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(protocolTreasury);
+        // Set Ajna auth admin to the creator owner (canonical CSW sender) so
+        // post-launch keeper actions can execute without a manual admin handoff.
+        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(params.owner);
 
         // ───────────────────────────────
         // 4b) Deploy Solana strategy + transfer ownership
@@ -1179,7 +1085,6 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (msg.sender != protocolTreasury) revert NotOwner();
         solanaBridgeAdapter = _adapter;
         solanaDestination = _destination;
-        emit SolanaConfigSet(_adapter, _destination);
     }
 
     /**
@@ -1197,7 +1102,6 @@ contract DeploymentBatcher is ReentrancyGuard {
             solanaEid: _solanaEid,
             enabled: _enabled
         });
-        emit OVaultRuntimeConfigSet(_hubComposer, _solanaEid, _enabled);
     }
 
     function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory) {

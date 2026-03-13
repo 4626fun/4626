@@ -54,10 +54,10 @@ contract DeployLotteryManagerCreate2V2 is Script {
     bytes32 constant SALT = 0x677c2dd18a357e3ccc1987d7bdf5dac0b82097a7f3713070bd67fa4c98a41412;
 
     // Expected vanity address for this salt+initcode on Base.
-    address constant EXPECTED_ADDRESS = 0x77740CD67aF6bC81Cb71c9808B260cf8A4be4626;
+    address constant EXPECTED_ADDRESS = 0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3;
 
     // Base mainnet canonical registry + owner (EOA that holds registry ownership).
-    address constant REGISTRY = 0x777616Bc376ebf9A9F2C7E3cFB64123FB8e84626;
+    address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
     address constant OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
     uint256 constant BASE_CHAIN_ID = 8453;
 
@@ -156,10 +156,14 @@ contract DeployLotteryManagerCreate2V2 is Script {
 
         // Point registry to the new lottery manager (affects existing creators too).
         ICreatorRegistryLotteryManager registry = ICreatorRegistryLotteryManager(REGISTRY);
-        require(registry.owner() == OWNER, "registry owner mismatch");
-        if (registry.getLotteryManager(BASE_CHAIN_ID) != predicted) {
-            registry.setLotteryManager(BASE_CHAIN_ID, predicted);
-            console.log("registry.setLotteryManager(Base, lottery)");
+        address registryOwner = registry.owner();
+        if (registryOwner == OWNER) {
+            if (registry.getLotteryManager(BASE_CHAIN_ID) != predicted) {
+                registry.setLotteryManager(BASE_CHAIN_ID, predicted);
+                console.log("registry.setLotteryManager(Base, lottery)");
+            }
+        } else {
+            console.log("registry owner is not broadcaster; skipping setLotteryManager");
         }
 
         // Authorize existing ShareOFTs to trigger buy-side lottery entries.

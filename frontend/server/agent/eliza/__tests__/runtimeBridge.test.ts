@@ -64,6 +64,44 @@ describe('runtime bridge', () => {
     expect(ranked[0]?.score).toBeGreaterThan(ranked[1]?.score ?? 0)
   })
 
+  it('applies deterministic swarm-role bias to action ranking', async () => {
+    const { createRuntimeBridge } = await import('../runtimeBridge.ts')
+
+    const traderAction = {
+      name: 'UNISWAP_SWAP',
+      validate: vi.fn(async () => true),
+      handler: vi.fn(),
+    }
+    const knowledgeAction = {
+      name: 'KNOWLEDGE_LOOKUP',
+      validate: vi.fn(async () => true),
+      handler: vi.fn(),
+    }
+    const plugins = [{ name: 'test-plugin', actions: [knowledgeAction, traderAction] }] as any
+
+    const bridge = createRuntimeBridge({
+      agentKey: 'creator-trader',
+      plugins,
+      swarm: {
+        role: 'trader',
+        capabilities: ['uniswap', 'cre'],
+      },
+    })
+
+    const message = bridge.createInboundMemory({
+      conversationId: 'conv-role',
+      conversationType: 'group',
+      senderAddress: '0x1111111111111111111111111111111111111111',
+      content: 'run action',
+    })
+
+    await bridge.runtime.createMemory(message as any, 'messages' as any)
+    const ranked = await bridge.rankActions('run action', message)
+
+    expect(ranked.map((r) => r.action.name)).toEqual(['UNISWAP_SWAP', 'KNOWLEDGE_LOOKUP'])
+    expect(String(ranked[0]?.reason ?? '')).toContain('trader_')
+  })
+
   it('persists memory rows when a DB is available', async () => {
     const db = {
       query: vi.fn(async () => ({ rows: [] })),

@@ -69,14 +69,14 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
     { id: 'name', label: nameLabel, group: 'identity', widthPx: collapseIdentity ? 56 : 208, align: 'left', sticky: true },
 
     { id: 'holders', label: 'Holders', group: 'market', widthPx: holdersWidth, align: centerMarket ? 'center' : 'right' },
-    { id: 'marketCap', label: 'MCap', group: 'market', widthPx: marketCapWidth, align: centerMarket ? 'center' : 'right', sortKey: 'marketCap' },
     { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: volumeWidth, align: centerMarket ? 'center' : 'right', sortKey: 'volume' },
+    { id: 'marketCap', label: 'MCap', group: 'market', widthPx: marketCapWidth, align: centerMarket ? 'center' : 'right', sortKey: 'marketCap' },
     { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: deltaWidth, align: centerMarket ? 'center' : 'right', sortKey: 'priceChange' },
 
     { id: 'feeBadge', label: 'Fee %', group: 'fees', widthPx: 72, align: 'center' },
-    { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 110, align: 'right' },
+    { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 110, align: 'center' },
 
-    { id: 'payoutTo', label: 'Payout To', group: 'payout', widthPx: 132, align: 'left' },
+    { id: 'payoutTo', label: 'Payout To', group: 'payout', widthPx: 132, align: 'center' },
   ]
 }
 

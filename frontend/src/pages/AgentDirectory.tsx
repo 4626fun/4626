@@ -135,8 +135,8 @@ export function AgentDirectory() {
         return
       }
       setMessagingAddress(null)
-      const convoId = await startDm(agentAddress as `0x${string}`)
-      if (convoId) {
+      const dmResult = await startDm(agentAddress as `0x${string}`)
+      if (dmResult.ok) {
         // The ChatWidget will auto-show the new conversation
       }
     },
