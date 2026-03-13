@@ -14,9 +14,11 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('Keepr quick help')
+    expect(result.response).toContain('Group chat mode')
     expect(result.response).toContain('/help coin')
     expect(result.response).toContain('/help all')
     expect(result.response).not.toContain('/coin trend funnel')
+    expect(result.response).not.toContain('/inline')
   })
 
   it('returns market topic help from /help market', async () => {

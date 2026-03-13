@@ -361,14 +361,31 @@ type TelegramCommandResponse = {
 }
 
 function wrapCommandListingsWithBackticks(text: string): string {
+  const splitCommandSuffix = (command: string): { commandPart: string; suffix: string } => {
+    const separators = [' — ', ' – ', ' - ', ' | ', ' -> ']
+    let hitIndex = -1
+    for (const separator of separators) {
+      const idx = command.indexOf(separator)
+      if (idx > 0 && (hitIndex < 0 || idx < hitIndex)) {
+        hitIndex = idx
+      }
+    }
+    if (hitIndex <= 0) return { commandPart: command, suffix: '' }
+    return {
+      commandPart: command.slice(0, hitIndex).trimEnd(),
+      suffix: command.slice(hitIndex),
+    }
+  }
+
   const formatCommandForBackticks = (rawCommand: string): string => {
     const command = asTrimmed(rawCommand)
     if (!command || command.includes('`')) return command
-    const tokens = command.split(/\s+/g).filter(Boolean)
+    const { commandPart, suffix } = splitCommandSuffix(command)
+    const tokens = commandPart.split(/\s+/g).filter(Boolean)
     if (tokens.length === 0) return command
 
     const hasPlaceholder = tokens.some((token) => /^<[^>]+>$/.test(token) || /^\$<[^>]+>$/.test(token))
-    if (!hasPlaceholder) return `\`${command}\``
+    if (!hasPlaceholder) return `\`${commandPart}\`${suffix}`
 
     const head: string[] = []
     for (const token of tokens) {
@@ -386,8 +403,9 @@ function wrapCommandListingsWithBackticks(text: string): string {
     }
 
     const remainder = tokens.slice(head.length).join(' ')
-    if (head.length === 0) return `\`${command}\``
-    return remainder ? `\`${head.join(' ')}\` ${remainder}` : `\`${head.join(' ')}\``
+    if (head.length === 0) return `\`${commandPart}\`${suffix}`
+    const formatted = remainder ? `\`${head.join(' ')}\` ${remainder}` : `\`${head.join(' ')}\``
+    return `${formatted}${suffix}`
   }
 
   const bulletCommandPattern = new RegExp(`^(\\s*[-*]\\s*)(\\/(?:${TELEGRAM_COMMAND_HEADS_PATTERN})\\b.*)$`, 'i')
@@ -1409,6 +1427,28 @@ function resolveHelpCallbackCommand(rawData: string): string | null {
     return `/help ${action}`
   }
   return null
+}
+
+function resolveNavigationCallbackToast(rawData: string, mappedCommand: string | null): string {
+  const token = asTrimmed(rawData).toLowerCase()
+  if (token === 'menu:portfolio') return 'Portfolio ready'
+  if (token === 'menu:vaults') return 'Vaults ready'
+  if (token === 'menu:auctions') return 'Auctions ready'
+  if (token === 'menu:mybids') return 'Bids ready'
+  if (token === 'menu:signals') return 'Signals ready'
+  if (token === 'menu:buy') return 'Buy flow'
+  if (token === 'menu:sell') return 'Sell flow'
+  if (token === 'menu:bid') return 'Bid flow'
+  if (token === 'menu:link') return 'Link flow'
+  if (token === 'menu:linked') return 'Link status'
+  if (token === 'menu:unlink') return 'Unlink flow'
+  if (token === 'menu:join') return 'Join flow'
+  if (token === 'menu:eligibility') return 'Eligibility check'
+  if (token === 'menu:rooms') return 'Rooms list'
+  if (token === 'help:inline') return 'Inline shortcuts'
+  if (token.startsWith('help:')) return 'Help topic'
+  if (mappedCommand === '/help' || mappedCommand?.startsWith('/help ')) return 'Help'
+  return ''
 }
 
 async function sendTelegramMessage(params: {
@@ -3817,6 +3857,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parsedTradeFlowCallback = parseTradeFlowCallbackData(callbackData)
     const parsedTradeCallback = parseTradeCallbackData(callbackData)
     const parsedTipCallback = parseTipCallbackData(callbackData)
+    const mappedCommand = resolveHelpCallbackCommand(callbackData)
     const isMenuNavigationCallback = callbackData.startsWith('menu:') || callbackData.startsWith('help:')
     const canReplaceMenuMessage = isMenuNavigationCallback && typeof callbackMessageId === 'number'
     if (!callbackQueryId || !chatId) {
@@ -3879,7 +3920,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!parsedTradeCallback && !parsedTradeFlowCallback) {
       try {
-        await answerTelegramCallbackQuery({ botToken, callbackQueryId })
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: resolveNavigationCallbackToast(callbackData, mappedCommand),
+        })
       } catch (error) {
         console.error('[telegram/webhook] callback acknowledgement failed', {
           updateId: update.update_id ?? null,
@@ -3965,7 +4010,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    const mappedCommand = resolveHelpCallbackCommand(callbackData)
     if (!mappedCommand) {
       if (canReplaceMenuMessage) {
         await replaceTelegramMenuMessage({

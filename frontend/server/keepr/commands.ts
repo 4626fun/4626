@@ -56,7 +56,6 @@ function formatKeeprHelpFull(): string {
     'Start here:',
     '',
     '- /help — command list',
-    '- /inline — one-tap templates (Telegram)',
     '- /keepr status — vault status and config',
     '- /ai <question> — ask in plain English',
     '',
@@ -148,8 +147,9 @@ function formatKeeprQuickHelp(unknownTopic: string | null = null): string {
     lines.push('')
   }
   lines.push(
+    'Group chat mode: interact in this thread with slash commands and bot buttons.',
+    '',
     'Most used:',
-    '- /inline — one-tap templates (Telegram)',
     '- /keepr status — vault status and config',
     '- /ai <question> — ask in plain English',
     '- /x post <message> --confirm (ADMIN/OWNER)',
@@ -822,7 +822,7 @@ async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
   return {
     ok: false,
     response: formatNumberedCommandFallback({
-      intro: 'Unknown /mkt command. Try `/mkt help`.',
+      intro: 'Unknown /mkt command. Try /mkt help.',
     }),
   }
 }
@@ -1134,7 +1134,7 @@ export async function handleKeeprCommand(params: {
     return {
       ok: false,
       response: formatNumberedCommandFallback({
-        intro: 'Unknown command. Try `/keepr help`.',
+        intro: 'Unknown command. Try /keepr help.',
       }),
     }
   } catch (error) {

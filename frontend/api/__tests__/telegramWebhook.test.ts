@@ -354,6 +354,32 @@ describe('telegram webhook handler', () => {
     ).toBe(true)
   })
 
+  it('backticks only the command and not the help description', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({
+      ok: true,
+      response: ['Keepr quick help', '', 'Most used:', '- /keepr status — vault status and config'].join('\n'),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_0,
+        message: { message_id: 90, text: '/help', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    const text = String(payload.text ?? '')
+    expect(text).toContain('- `/keepr status` — vault status and config')
+    expect(text).not.toContain('- `/keepr status — vault status and config`')
+  })
+
   it('maps /start in DM to help and returns the help menu keyboard', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr quick help' })
@@ -1192,6 +1218,8 @@ describe('telegram webhook handler', () => {
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(2)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    const ackPayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(ackPayload.text ?? '')).toContain('Portfolio')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Portfolio')
