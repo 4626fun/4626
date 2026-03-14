@@ -61,6 +61,14 @@ type WarmMemorySnapshot = {
   generatedAt: string
 }
 
+type SemanticRecallHit = {
+  id: string
+  role: string
+  content: string
+  createdAt: string
+  score: number
+}
+
 type ArchiveTurn = {
   id: string
   role: string
@@ -112,6 +120,28 @@ const AGENT_MEMORY_INDEX_SQL = `
 const AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS agent_message_memory_agent_conversation_idx
     ON agent_message_memory (agent_id, conversation_id);
+`
+
+const PGVECTOR_EXTENSION_SQL = `
+  CREATE EXTENSION IF NOT EXISTS vector;
+`
+
+const AGENT_MEMORY_EMBEDDING_COLUMN_SQL = `
+  ALTER TABLE agent_message_memory
+  ADD COLUMN IF NOT EXISTS embedding vector(1536);
+`
+
+const AGENT_MEMORY_EMBEDDING_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS agent_message_memory_embedding_ivfflat_idx
+    ON agent_message_memory
+    USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);
+`
+
+const AGENT_MEMORY_CONTENT_GIN_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS agent_message_memory_content_tsv_idx
+    ON agent_message_memory
+    USING GIN (to_tsvector('simple', content));
 `
 
 const EPISODIC_SUMMARIES_TABLE_SQL = `
@@ -210,6 +240,8 @@ const AGENT_MEMORY_POLICY_SQL = `
 `
 
 let memorySchemaEnsured = false
+let semanticEmbeddingColumnChecked = false
+let semanticEmbeddingColumnAvailable = false
 
 function shortHash(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 32)
@@ -241,6 +273,14 @@ function parsePositiveInt(value: unknown, fallback: number): number {
   return Math.max(1, Math.floor(parsed))
 }
 
+function parseBoolean(value: unknown, fallback: boolean): boolean {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
 function truncateForSummary(input: string, maxLength = 220): string {
   const normalized = String(input ?? '').replace(/\s+/g, ' ').trim()
   if (normalized.length <= maxLength) return normalized
@@ -252,13 +292,34 @@ function normalizeAddressLower(value: string): string {
 }
 
 function readArchiveEnabled(): boolean {
-  const raw = String(process.env.ELIZA_GROVE_ARCHIVE_ENABLED ?? '').trim().toLowerCase()
-  if (!raw) return false
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+  return parseBoolean(process.env.ELIZA_GROVE_ARCHIVE_ENABLED, false)
 }
 
 function readArchiveRecallMaxChunks(): number {
   return parsePositiveInt(process.env.ELIZA_GROVE_RECALL_MAX_CHUNKS, 5)
+}
+
+function readSemanticRecallEnabled(): boolean {
+  return parseBoolean(process.env.ELIZA_SEMANTIC_RECALL_ENABLED, false)
+}
+
+function readSemanticRecallTopK(): number {
+  return Math.max(1, Math.min(8, parsePositiveInt(process.env.ELIZA_SEMANTIC_RECALL_TOP_K, 4)))
+}
+
+function readSemanticRecallMinLexicalScore(): number {
+  const parsed = Number(process.env.ELIZA_SEMANTIC_RECALL_MIN_LEXICAL_SCORE ?? '')
+  if (!Number.isFinite(parsed)) return 0.05
+  return Math.max(0, Math.min(1, parsed))
+}
+
+function readSemanticRecallEmbeddingModel(): string {
+  const configured = String(process.env.ELIZA_SEMANTIC_RECALL_EMBED_MODEL ?? '').trim()
+  return configured || 'text-embedding-3-small'
+}
+
+function readSemanticRecallEmbeddingTimeoutMs(): number {
+  return Math.max(1_000, parsePositiveInt(process.env.ELIZA_SEMANTIC_RECALL_EMBED_TIMEOUT_MS, 8_000))
 }
 
 function readArchiveEncryptionKeySeed(): Buffer | null {
@@ -603,6 +664,8 @@ async function ensureMemorySchema(): Promise<void> {
   if (!db) return
 
   await executeSchemaStatement(db, AGENT_MEMORY_TABLE_SQL)
+  await executeOptionalSchemaStatement(db, PGVECTOR_EXTENSION_SQL)
+  await executeOptionalSchemaStatement(db, AGENT_MEMORY_EMBEDDING_COLUMN_SQL)
   await executeSchemaStatement(db, EPISODIC_SUMMARIES_TABLE_SQL)
   await executeSchemaStatement(db, FACT_CARDS_TABLE_SQL)
   await executeSchemaStatement(db, TASK_LOOPS_TABLE_SQL)
@@ -614,12 +677,231 @@ async function ensureMemorySchema(): Promise<void> {
 
   await executeSchemaStatement(db, AGENT_MEMORY_INDEX_SQL)
   await executeSchemaStatement(db, AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL)
+  await executeOptionalSchemaStatement(db, AGENT_MEMORY_EMBEDDING_INDEX_SQL)
+  await executeSchemaStatement(db, AGENT_MEMORY_CONTENT_GIN_INDEX_SQL)
   await executeSchemaStatement(db, FACT_CARDS_ENTITY_INDEX_SQL)
   await executeSchemaStatement(db, FACT_CARDS_CONVERSATION_ENTITY_UNIQUE_SQL)
   await executeSchemaStatement(db, TASK_LOOPS_CONVERSATION_STATUS_INDEX_SQL)
   await executeSchemaStatement(db, GROVE_MANIFEST_CONVERSATION_INDEX_SQL)
 
+  semanticEmbeddingColumnChecked = false
+  semanticEmbeddingColumnAvailable = false
   memorySchemaEnsured = true
+}
+
+async function hasSemanticEmbeddingColumn(db: Db): Promise<boolean> {
+  if (semanticEmbeddingColumnChecked) return semanticEmbeddingColumnAvailable
+  try {
+    const result = await db.sql`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'agent_message_memory'
+        AND column_name = 'embedding'
+      LIMIT 1;
+    `
+    semanticEmbeddingColumnAvailable = Array.isArray(result.rows) && result.rows.length > 0
+  } catch {
+    semanticEmbeddingColumnAvailable = false
+  }
+  semanticEmbeddingColumnChecked = true
+  return semanticEmbeddingColumnAvailable
+}
+
+function toVectorLiteral(embedding: number[]): string {
+  const values = embedding.map((value) => (Number.isFinite(value) ? Number(value) : 0))
+  return `[${values.map((value) => value.toFixed(8)).join(',')}]`
+}
+
+async function fetchOpenAiEmbedding(text: string): Promise<number[] | null> {
+  const apiKey = String(process.env.OPENAI_API_KEY ?? '').trim()
+  if (!apiKey) return null
+  const fetchImpl = (globalThis as any).fetch
+  if (typeof fetchImpl !== 'function') return null
+  const input = String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 3_000)
+  if (!input) return null
+
+  const timeoutMs = readSemanticRecallEmbeddingTimeoutMs()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetchImpl('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: readSemanticRecallEmbeddingModel(),
+        input,
+      }),
+      signal: controller.signal,
+    })
+    if (!response?.ok) return null
+    const json = await response.json()
+    const embeddingRaw = Array.isArray(json?.data?.[0]?.embedding) ? json.data[0].embedding : null
+    if (!embeddingRaw || embeddingRaw.length === 0) return null
+    const embedding = embeddingRaw
+      .map((value: unknown) => Number(value))
+      .filter((value: number) => Number.isFinite(value))
+    return embedding.length > 0 ? embedding : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function mapSemanticRecallRows(rows: any[]): SemanticRecallHit[] {
+  return rows
+    .map((row) => {
+      const createdAtRaw = String(row?.created_at ?? '')
+      const parsedCreatedAt = Date.parse(createdAtRaw)
+      const createdAt = Number.isFinite(parsedCreatedAt) ? new Date(parsedCreatedAt).toISOString() : new Date().toISOString()
+      return {
+        id: String(row?.id ?? randomUUID()),
+        role: String(row?.role ?? 'user').toLowerCase() === 'assistant' ? 'assistant' : 'user',
+        content: String(row?.content ?? '').trim(),
+        createdAt,
+        score: Number(row?.score ?? 0),
+      } satisfies SemanticRecallHit
+    })
+    .filter((hit) => hit.content)
+}
+
+async function loadVectorSemanticRecallHits(params: {
+  db: Db
+  runtimeAgentId: string
+  conversationId: string
+  queryText: string
+  limit: number
+}): Promise<SemanticRecallHit[]> {
+  if (!(await hasSemanticEmbeddingColumn(params.db))) return []
+  const queryEmbedding = await fetchOpenAiEmbedding(params.queryText)
+  if (!queryEmbedding || queryEmbedding.length === 0) return []
+  const vectorLiteral = toVectorLiteral(queryEmbedding)
+  const result = await params.db.sql`
+    SELECT
+      id,
+      role,
+      content,
+      created_at,
+      (1 - (embedding <=> ${vectorLiteral}::vector)) AS score
+    FROM agent_message_memory
+    WHERE agent_id = ${params.runtimeAgentId}
+      AND conversation_id = ${params.conversationId}
+      AND embedding IS NOT NULL
+      AND content <> ''
+    ORDER BY embedding <=> ${vectorLiteral}::vector
+    LIMIT ${Math.max(params.limit * 2, params.limit)};
+  `
+  return mapSemanticRecallRows((result.rows ?? []) as any[])
+}
+
+async function loadLexicalSemanticRecallHits(params: {
+  db: Db
+  runtimeAgentId: string
+  conversationId: string
+  queryText: string
+  limit: number
+}): Promise<SemanticRecallHit[]> {
+  const normalizedQuery = String(params.queryText ?? '').replace(/\s+/g, ' ').trim()
+  if (!normalizedQuery) return []
+  const result = await params.db.sql`
+    SELECT
+      id,
+      role,
+      content,
+      created_at,
+      ts_rank_cd(to_tsvector('simple', content), plainto_tsquery('simple', ${normalizedQuery})) AS score
+    FROM agent_message_memory
+    WHERE agent_id = ${params.runtimeAgentId}
+      AND conversation_id = ${params.conversationId}
+      AND content <> ''
+      AND to_tsvector('simple', content) @@ plainto_tsquery('simple', ${normalizedQuery})
+    ORDER BY score DESC, created_at DESC
+    LIMIT ${Math.max(params.limit * 3, params.limit)};
+  `
+  const minScore = readSemanticRecallMinLexicalScore()
+  return mapSemanticRecallRows((result.rows ?? []) as any[]).filter((hit) => Number.isFinite(hit.score) && hit.score >= minScore)
+}
+
+async function loadSemanticRecallHits(params: {
+  db: Db | null
+  runtimeAgentId: string
+  conversationId: string
+  queryText: string
+}): Promise<SemanticRecallHit[]> {
+  if (!readSemanticRecallEnabled()) return []
+  if (!params.db) return []
+  const queryText = String(params.queryText ?? '').replace(/\s+/g, ' ').trim()
+  if (!queryText) return []
+  const limit = readSemanticRecallTopK()
+
+  try {
+    const vectorHits = await loadVectorSemanticRecallHits({
+      db: params.db,
+      runtimeAgentId: params.runtimeAgentId,
+      conversationId: params.conversationId,
+      queryText,
+      limit,
+    })
+    if (vectorHits.length > 0) {
+      return vectorHits.slice(0, limit)
+    }
+  } catch (error) {
+    logger.warn('[eliza/runtime] vector semantic recall failed (non-blocking)', {
+      conversationId: params.conversationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  try {
+    const lexicalHits = await loadLexicalSemanticRecallHits({
+      db: params.db,
+      runtimeAgentId: params.runtimeAgentId,
+      conversationId: params.conversationId,
+      queryText,
+      limit,
+    })
+    return lexicalHits.slice(0, limit)
+  } catch (error) {
+    logger.warn('[eliza/runtime] lexical semantic recall failed (non-blocking)', {
+      conversationId: params.conversationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
+}
+
+function buildSemanticRecallBlock(hits: SemanticRecallHit[]): string {
+  if (!hits.length) return '<semantic_recall />'
+  const entries = hits
+    .map((hit) => `<hit role="${hit.role}" score="${hit.score.toFixed(2)}" ts="${hit.createdAt}">${truncateForSummary(hit.content, 280)}</hit>`)
+    .join('\n')
+  return `<semantic_recall>\n${entries}\n</semantic_recall>`
+}
+
+async function maybePersistMessageEmbedding(params: {
+  db: Db
+  memoryId: string
+  runtimeAgentId: string
+  content: string
+}): Promise<void> {
+  if (!readSemanticRecallEnabled()) return
+  if (!(await hasSemanticEmbeddingColumn(params.db))) return
+  const content = String(params.content ?? '').trim()
+  if (!content) return
+  const embedding = await fetchOpenAiEmbedding(content)
+  if (!embedding || embedding.length === 0) return
+  const vectorLiteral = toVectorLiteral(embedding)
+  await params.db.sql`
+    UPDATE agent_message_memory
+    SET embedding = ${vectorLiteral}::vector
+    WHERE id = ${params.memoryId}
+      AND agent_id = ${params.runtimeAgentId}
+      AND embedding IS NULL;
+  `
 }
 
 function extractFactCardsFromText(text: string, senderAddress: string | null): WarmFactCard[] {
@@ -1353,6 +1635,18 @@ export function createRuntimeBridge(params: {
           )
           ON CONFLICT (id) DO NOTHING;
         `
+        void maybePersistMessageEmbedding({
+          db: db as any,
+          memoryId: String(memory.id),
+          runtimeAgentId,
+          content: String((memory.content as any)?.text ?? ''),
+        }).catch((error) => {
+          logger.warn('[eliza/runtime] embedding write failed (non-blocking)', {
+            agentKey: params.agentKey,
+            conversationId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
         await persistWarmMemoryArtifacts({
           db: db as any,
           runtimeAgentId,
@@ -1486,10 +1780,32 @@ export function createRuntimeBridge(params: {
         memorySnapshot: null,
       }
     })
+    const semanticRecallQueryText = String((memory.content as any)?.text ?? '')
+    const semanticHitsRaw = await loadSemanticRecallHits({
+      db: db as any,
+      runtimeAgentId,
+      conversationId,
+      queryText: semanticRecallQueryText,
+    })
+    const recentSignatures = new Set(
+      recentMessages.map((entry) => `${entry.role}:${entry.text.replace(/\s+/g, ' ').trim().toLowerCase()}`),
+    )
+    const normalizedCurrentQuery = semanticRecallQueryText.replace(/\s+/g, ' ').trim().toLowerCase()
+    const semanticRecall = semanticHitsRaw
+      .filter((hit) => {
+        const normalized = hit.content.replace(/\s+/g, ' ').trim().toLowerCase()
+        if (!normalized) return false
+        if (normalizedCurrentQuery && normalized === normalizedCurrentQuery) return false
+        const signature = `${hit.role}:${normalized}`
+        return !recentSignatures.has(signature)
+      })
+      .slice(0, readSemanticRecallTopK())
+
     const historyBlock = buildHistoryBlock(recentMessages)
     const factCardsBlock = buildFactCardsBlock(warmState.factCards)
     const openTasksBlock = buildOpenTasksBlock(warmState.openTasks)
     const memorySnapshotBlock = buildMemorySnapshotBlock(warmState.memorySnapshot)
+    const semanticRecallBlock = buildSemanticRecallBlock(semanticRecall)
     const senderAddress = asAddress(metadata.senderAddress)
     const session = buildRuntimeSessionContext(senderAddress)
     return {
@@ -1501,9 +1817,11 @@ export function createRuntimeBridge(params: {
       factCardsBlock,
       openTasksBlock,
       memorySnapshotBlock,
+      semanticRecallBlock,
       factCards: warmState.factCards,
       openTasks: warmState.openTasks,
       memorySnapshot: warmState.memorySnapshot,
+      semanticRecall,
       session,
       character: {
         systemPrompt: params.character?.systemPrompt ?? '',

@@ -57,7 +57,7 @@ function buildSystemPrompt(vault: KeeprVaultRow | null, conversationType: string
     'When users ask if you are connected to ElizaOS, answer yes.',
     'When users ask about memory, explain that memory is persistent per conversation (when storage is available).',
     'If conversation memory blocks are present, never claim you have no memory for this conversation.',
-    'Prefer continuity by using provided <conversation_history>, <memory_snapshot>, <fact_cards>, and <open_tasks> blocks.',
+    'Prefer continuity by using provided <conversation_history>, <memory_snapshot>, <fact_cards>, <open_tasks>, and <semantic_recall> blocks.',
     'If users ask "are you Eliza/ElizaOS" (including minor misspellings like "elizao"), clarify that you are Akitai running on ElizaOS.',
     'Never claim you are Meta AI, a generic model, or that your stack is unknown.',
     'Keep responses concise (2-3 sentences max).',
@@ -275,6 +275,7 @@ function buildStructuredMemoryContext(state: Record<string, unknown>): string {
     readStateBlock(state, 'memorySnapshotBlock'),
     readStateBlock(state, 'factCardsBlock'),
     readStateBlock(state, 'openTasksBlock'),
+    readStateBlock(state, 'semanticRecallBlock'),
   ].filter(Boolean)
   return blocks.join('\n\n')
 }

@@ -125,6 +125,8 @@ describe('generateLlmResponse memory integration', () => {
       memorySnapshotBlock: '<memory_snapshot>\n<summary>User wants Base-first actions.</summary>\n</memory_snapshot>',
       factCardsBlock: '<fact_cards>\n<fact entity="user_style" confidence="0.90">prefers concise responses</fact>\n</fact_cards>',
       openTasksBlock: '<open_tasks>\n<task id="1" status="open">Ship staged rollout</task>\n</open_tasks>',
+      semanticRecallBlock:
+        '<semantic_recall>\n<hit role="assistant" score="0.77" ts="2026-03-14T08:00:00.000Z">Use lower slippage for volatile routes.</hit>\n</semantic_recall>',
     } as any)
 
     const { generateLlmResponse } = await import('../chat.ts')
@@ -140,6 +142,7 @@ describe('generateLlmResponse memory integration', () => {
     expect(call?.vaultContext).toContain('<memory_snapshot>')
     expect(call?.vaultContext).toContain('<fact_cards>')
     expect(call?.vaultContext).toContain('<open_tasks>')
+    expect(call?.vaultContext).toContain('<semantic_recall>')
   })
 
   it('persists inbound and outbound memory around the LLM call', async () => {

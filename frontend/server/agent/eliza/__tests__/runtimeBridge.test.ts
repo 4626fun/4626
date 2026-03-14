@@ -250,6 +250,73 @@ describe('runtime bridge', () => {
     expect((state as any).openTasks[0]?.task).toContain('Telegram rollout flags')
   })
 
+  it('hydrates semantic recall hits into composed state when enabled', async () => {
+    const previousSemanticEnabled = process.env.ELIZA_SEMANTIC_RECALL_ENABLED
+    const previousOpenAiKey = process.env.OPENAI_API_KEY
+    process.env.ELIZA_SEMANTIC_RECALL_ENABLED = '1'
+    process.env.OPENAI_API_KEY = ''
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = String(strings?.[0] ?? '')
+        if (query.includes('FROM episodic_summaries')) return { rows: [] }
+        if (query.includes('FROM fact_cards')) return { rows: [] }
+        if (query.includes('FROM task_loops')) return { rows: [] }
+        if (query.includes('FROM memory_snapshots')) return { rows: [] }
+        if (query.includes('SELECT role, content') && query.includes('FROM agent_message_memory')) {
+          return { rows: [{ role: 'user', content: 'Need a recap on vault status and next step.' }] }
+        }
+        if (query.includes('ts_rank_cd') && query.includes('plainto_tsquery')) {
+          return {
+            rows: [
+              {
+                id: 'msg-1',
+                role: 'assistant',
+                content: 'Vault status is healthy. Next step is to review slippage before swapping.',
+                created_at: new Date('2026-03-14T08:00:00.000Z').toISOString(),
+                score: 0.82,
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+      query: vi.fn(async () => ({ rows: [] })),
+    }
+    getDbMock.mockResolvedValue(db as any)
+
+    try {
+      const { createRuntimeBridge } = await import('../runtimeBridge.ts')
+      const bridge = createRuntimeBridge({
+        agentKey: 'creator-semantic',
+        plugins: [],
+      })
+
+      const inbound = bridge.createInboundMemory({
+        conversationId: 'conv-semantic',
+        conversationType: 'dm',
+        senderAddress: '0x1111111111111111111111111111111111111111',
+        content: 'What is the vault status and what should I do next?',
+      })
+      await bridge.runtime.createMemory(inbound as any, 'messages' as any)
+      const state = await bridge.composeState(inbound as any)
+      const statements = (db.sql.mock.calls as Array<any[]>).map((call) => String(call?.[0]?.[0] ?? ''))
+
+      expect(statements.some((query) => query.includes('to_tsvector'))).toBe(true)
+      expect(statements.some((query) => query.includes('information_schema.columns'))).toBe(true)
+      expect(statements.join('\n---\n')).toContain('plainto_tsquery')
+      expect(Array.isArray((state as any).semanticRecall)).toBe(true)
+      expect((state as any).semanticRecall).toHaveLength(1)
+      expect(String((state as any).semanticRecallBlock ?? '')).toContain('<semantic_recall>')
+      expect(String((state as any).semanticRecallBlock ?? '')).toContain('Vault status is healthy')
+    } finally {
+      if (typeof previousSemanticEnabled === 'string') process.env.ELIZA_SEMANTIC_RECALL_ENABLED = previousSemanticEnabled
+      else delete process.env.ELIZA_SEMANTIC_RECALL_ENABLED
+      if (typeof previousOpenAiKey === 'string') process.env.OPENAI_API_KEY = previousOpenAiKey
+      else delete process.env.OPENAI_API_KEY
+    }
+  })
+
   it('extracts durable fact cards and tasks from user messages', async () => {
     const sqlMock = vi.fn(async (strings: TemplateStringsArray) => {
       const query = String(strings?.[0] ?? '')
