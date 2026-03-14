@@ -1580,6 +1580,20 @@ function buildTelegramLinkFlowResponse(params: {
   telegramUsername?: string | null
   linkButtonText: string
 }): TelegramCommandResponse {
+  if (!isPrivateChatId(params.chatId)) {
+    return {
+      text: [
+        'Link your 4626 account (one time)',
+        '',
+        'For security, linking is only available in a private chat with this bot.',
+        'Open a DM with the bot, run /link there, then return here and tap Check Link Status.',
+      ].join('\n'),
+      replyMarkup: {
+        inline_keyboard: [[{ text: 'Check Link Status', callback_data: 'menu:linked' }]],
+      },
+    }
+  }
+
   const miniAppUrl = resolveTelegramMiniAppUrl()
   let linkToken: { token: string; expiresAt: string } | null = null
   try {
