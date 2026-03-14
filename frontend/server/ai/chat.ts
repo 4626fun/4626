@@ -38,11 +38,15 @@ function recordLlmCall(groupId: string): void {
 // ---------------------------------------------------------------------------
 function buildSystemPrompt(vault: KeeprVaultRow | null): string {
   const base = [
-    'You are a helpful 4626 assistant in an XMTP group chat.',
+    'You are a helpful 4626 assistant in a messaging conversation (Telegram, XMTP, or similar).',
     'Keep responses concise (2-3 sentences max).',
     'Be factual and helpful. Do NOT make financial guarantees or investment recommendations.',
     'Do NOT hallucinate features that do not exist.',
     'If you are unsure, say so.',
+    'Use provided conversation history context when available to maintain continuity.',
+    'When asked about memory, explain that you can reference prior turns from this conversation context.',
+    'Do not claim "I cannot remember previous messages" if conversation history in this thread is available.',
+    'Be explicit that continuity may be limited outside this conversation context.',
   ]
 
   if (vault) {

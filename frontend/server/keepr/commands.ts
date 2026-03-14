@@ -329,6 +329,38 @@ function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function isPlainConversationText(raw: string): boolean {
+  const text = raw.trim()
+  if (!text) return false
+  return !text.startsWith('/')
+}
+
+function looksLikeGroupConnectIntent(raw: string): boolean {
+  const text = raw.trim().toLowerCase()
+  if (!text) return false
+  const asksConnect = /\b(connect|link|setup|set up|configure|onboard)\b/.test(text)
+  if (!asksConnect) return false
+  const mentionsGroup = /\b(group|chat|telegram|room|thread)\b/.test(text)
+  const mentionsApp = /\b(4626|keepr)\b/.test(text)
+  return mentionsGroup || mentionsApp
+}
+
+function formatGroupConnectGuidance(groupId: string): string {
+  return [
+    'Group Setup (4626)',
+    '',
+    'I can help once this Telegram chat is linked to a 4626 vault.',
+    '',
+    'Setup steps:',
+    '1) In this chat, run /link and complete wallet linking',
+    '2) Run /linked and confirm ownerVerified is true',
+    '3) Scope at least one vault to this chat in 4626',
+    '4) Run /vaults, then /keepr status to confirm config',
+    '',
+    `If the app asks for the chat/group identifier, use: ${groupId}`,
+  ].join('\n')
+}
+
 function roleForWallet(params: { wallet: Address; owner: Address; admins: Address[] }): KeeprRole {
   const w = params.wallet.toLowerCase()
   if (w === params.owner.toLowerCase()) return 'OWNER'
@@ -999,6 +1031,21 @@ export async function handleKeeprCommand(params: {
         ].join('\n'),
       }
     }
+    if (looksLikeGroupConnectIntent(raw)) {
+      return {
+        ok: true,
+        response: formatGroupConnectGuidance(params.groupId),
+      }
+    }
+    if (isPlainConversationText(raw)) {
+      const llmResult = await generateLlmResponse({
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        text: raw,
+        vault: null,
+      })
+      if (llmResult.ok || llmResult.response) return llmResult
+    }
     return {
       ok: false,
       response: formatNumberedCommandFallback({
@@ -1015,22 +1062,14 @@ export async function handleKeeprCommand(params: {
 
   const prefix = raw.toLowerCase().startsWith('/keepr') ? '/keepr' : raw.toLowerCase().startsWith('keepr') ? 'keepr' : null
   if (!prefix) {
-    // Check for /ai, @keepr, or @bot → LLM response
-    const looksLikeAi =
-      raw.toLowerCase().startsWith('/ai') ||
-      raw.toLowerCase().startsWith('@keepr') ||
-      raw.toLowerCase().startsWith('@bot')
-    if (looksLikeAi) {
-      const aiText = raw.replace(/^\/?ai\s*/i, '').replace(/^@(keepr|bot)\s*/i, '').trim()
-      if (aiText) {
-        const llmResult = await generateLlmResponse({
-          groupId: params.groupId,
-          senderWallet: params.senderWallet,
-          text: aiText,
-          vault: v,
-        })
-        if (llmResult.ok) return llmResult
-      }
+    if (isPlainConversationText(raw)) {
+      const llmResult = await generateLlmResponse({
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        text: raw,
+        vault: v,
+      })
+      if (llmResult.ok || llmResult.response) return llmResult
     }
     return { ok: false, response: '' }
   }
