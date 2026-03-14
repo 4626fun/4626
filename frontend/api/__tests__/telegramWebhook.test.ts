@@ -567,6 +567,45 @@ describe('telegram webhook handler', () => {
     expect(String(first?.input_message_content?.message_text ?? '')).toBe('/buy')
   })
 
+  it('uses brand-style inline growth copy when TELEGRAM_INLINE_GROWTH_MODE is enabled', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    const restoreGrowthEnv = applyEnv({
+      TELEGRAM_INLINE_GROWTH_MODE: '1',
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 5_15,
+          inline_query: {
+            id: 'iq-growth',
+            from: { id: 777 },
+            query: 'start trading',
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+      const titles = payload.results.map((entry: any) => String(entry?.title ?? ''))
+      const descriptions = payload.results.map((entry: any) => String(entry?.description ?? ''))
+
+      expect(titles.some((title: string) => title.includes('Unlock trading'))).toBe(true)
+      expect(descriptions.some((description: string) => description.includes('One-time setup -> buy, sell, bid'))).toBe(true)
+      expect(titles.some((title: string) => title.includes('Quick start (30 sec)'))).toBe(true)
+      expect(titles.some((title: string) => title.includes('Ask Keepr AI'))).toBe(true)
+      expect(titles.join(' ')).not.toContain('🚀')
+      expect(descriptions.join(' ')).not.toContain('🚀')
+    } finally {
+      restoreGrowthEnv()
+    }
+  })
+
   it('personalizes inline results for unlinked users with a /link shortcut', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     getTelegramLinkByUserIdMock.mockResolvedValueOnce(null)
@@ -722,6 +761,100 @@ describe('telegram webhook handler', () => {
     expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+  })
+
+  it('auto-routes plain private-chat followups into /ai', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 7_1,
+        message: {
+          message_id: 12_1,
+          text: 'Why?',
+          chat: { id: 7726886643 },
+          from: { id: 42 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+    expect(handleKeeprCommandMock).toHaveBeenCalledWith({
+      groupId: 'telegram:7726886643',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/ai Why?',
+    })
+  })
+
+  it('auto-routes plain replies to bot messages into /ai in groups', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 7_2,
+        message: {
+          message_id: 12_2,
+          text: 'Why?',
+          chat: { id: -100123 },
+          from: { id: 99 },
+          reply_to_message: {
+            message_id: 12_0,
+            from: { id: 42, is_bot: true },
+          },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+    expect(handleKeeprCommandMock).toHaveBeenCalledWith({
+      groupId: 'xmtp-group-1',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/ai Why?',
+    })
+  })
+
+  it('keeps plain group chat text as-is when not replying to the bot', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'No auto-route' })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 7_3,
+        message: {
+          message_id: 12_3,
+          text: 'Why?',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+    expect(handleKeeprCommandMock).toHaveBeenCalledWith({
+      groupId: 'xmtp-group-1',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: 'Why?',
+    })
   })
 
   it('keeps non-admin private DM blocked when target chat is set', async () => {

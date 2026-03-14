@@ -48,6 +48,7 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 type TelegramFrom = {
   id?: number | string
   is_bot?: boolean
+  username?: string
 }
 
 type TelegramChat = {
@@ -60,6 +61,7 @@ type TelegramMessage = {
   caption?: string
   from?: TelegramFrom
   chat?: TelegramChat
+  reply_to_message?: TelegramMessage
   successful_payment?: TelegramSuccessfulPayment
 }
 
@@ -773,6 +775,24 @@ function getCommandHead(rawText: string): string {
   return token.replace(/^\//, '').toLowerCase()
 }
 
+function isLikelyCommandText(rawText: string): boolean {
+  return TELEGRAM_COMMAND_HEADS.includes(getCommandHead(rawText) as (typeof TELEGRAM_COMMAND_HEADS)[number])
+}
+
+function isTelegramAiFollowupEnabled(): boolean {
+  return parseBoolean(process.env.TELEGRAM_AI_FOLLOWUP_ENABLED, true)
+}
+
+function shouldAutoRouteToAi(params: { chatId: string; text: string; message: TelegramMessage }): boolean {
+  if (!isTelegramAiFollowupEnabled()) return false
+  const text = asTrimmed(params.text)
+  if (!text) return false
+  if (text.startsWith('/')) return false
+  if (isLikelyCommandText(text)) return false
+  if (isPrivateChatId(params.chatId)) return true
+  return Boolean(params.message.reply_to_message?.from?.is_bot)
+}
+
 function isTelegramNativeCommand(rawText: string): boolean {
   return TELEGRAM_NATIVE_COMMANDS.has(getCommandHead(rawText))
 }
@@ -1289,6 +1309,10 @@ function readInlineQueryResultCap(): number {
   return 8
 }
 
+function isTelegramInlineGrowthModeEnabled(): boolean {
+  return parseBoolean(process.env.TELEGRAM_INLINE_GROWTH_MODE, false)
+}
+
 async function buildInlineQueryResults(params: {
   rawQuery: string
   userId: string
@@ -1297,10 +1321,45 @@ async function buildInlineQueryResults(params: {
   const query = asTrimmed(params.rawQuery)
   const userId = asTrimmed(params.userId)
   const chatId = asTrimmed(params.chatId)
+  const growthMode = isTelegramInlineGrowthModeEnabled()
   const xPostCommand = `/x post ${normalizeInlineDraft(query)} --confirm`
   const aiPrompt = query ? `/ai ${query}` : '/ai What should I do next?'
   const marketQuote = `/mkt quote ${inferMarketSymbol(query)}`
   const tradeIntent = parseTelegramTradeIntent(query.startsWith('/') ? query : `/${query}`)
+  const tradeFlowHint = growthMode ? '3 taps -> vault, size, Accept' : '3 taps: vault -> size -> Accept'
+  const copy = growthMode
+    ? {
+        linkTitle: 'Unlock trading -> link wallet',
+        linkDescription: 'One-time setup -> buy, sell, bid',
+        portfolioTitle: 'Portfolio pulse',
+        portfolioDescription: 'Positions + recent activity',
+        helpTitle: 'Quick start (30 sec)',
+        helpDescription: 'Beginner-first commands',
+        statusTitle: 'Vault health',
+        statusDescription: 'Live config + permissions',
+        xPostTitle: 'Draft X post',
+        xPostDescription: 'Template ready to send',
+        aiTitle: 'Ask Keepr AI',
+        aiDescription: 'Get one clear next action',
+        marketTitle: 'Market quote',
+        marketDescription: 'Fast BTC/ETH check',
+      }
+    : {
+        linkTitle: 'Link wallet to unlock trading',
+        linkDescription: 'One-time setup, then buy/sell/bid instantly',
+        portfolioTitle: 'My portfolio snapshot',
+        portfolioDescription: 'Positions, recent actions, and status',
+        helpTitle: 'Quick start guide',
+        helpDescription: 'Beginner-friendly commands and shortcuts',
+        statusTitle: 'Vault health check',
+        statusDescription: 'Config, permissions, and live status',
+        xPostTitle: 'Draft X post',
+        xPostDescription: 'Pre-filled and confirm-ready',
+        aiTitle: 'Ask Keepr AI',
+        aiDescription: 'Get next actions in plain English',
+        marketTitle: 'Market quote',
+        marketDescription: 'Fast quote for BTC/ETH and more',
+      }
   const results: Record<string, unknown>[] = []
   const seenIds = new Set<string>()
   const pushResult = (entry: Record<string, unknown>): void => {
@@ -1315,8 +1374,10 @@ async function buildInlineQueryResults(params: {
     pushResult({
       type: 'article',
       id: 'trade-copy',
-      title: `Start ${tradeIntent.actionType.toUpperCase()} flow`,
-      description: tradeCommand,
+      title: growthMode
+        ? `${tradeIntent.actionType.toUpperCase()} now -> guided`
+        : `Start ${tradeIntent.actionType.toUpperCase()} now`,
+      description: tradeFlowHint,
       input_message_content: { message_text: tradeCommand },
     })
   }
@@ -1348,16 +1409,23 @@ async function buildInlineQueryResults(params: {
     pushResult({
       type: 'article',
       id: 'link-account',
-      title: 'Link account to trade',
-      description: 'Insert /link',
+      title: copy.linkTitle,
+      description: copy.linkDescription,
       input_message_content: { message_text: '/link' },
     })
   } else {
     pushResult({
       type: 'article',
+      id: 'trade-quickstart',
+      title: growthMode ? 'Buy now -> 3 taps' : 'Buy in 3 taps',
+      description: tradeFlowHint,
+      input_message_content: { message_text: '/buy' },
+    })
+    pushResult({
+      type: 'article',
       id: 'portfolio',
-      title: 'My Portfolio',
-      description: 'Insert /portfolio',
+      title: copy.portfolioTitle,
+      description: copy.portfolioDescription,
       input_message_content: { message_text: '/portfolio' },
     })
   }
@@ -1371,7 +1439,7 @@ async function buildInlineQueryResults(params: {
       type: 'article',
       id: `vault-buy-${idx}`,
       title: `Buy ${truncateAddress(vaultAddress)}`,
-      description: '/buy',
+      description: tradeFlowHint,
       input_message_content: { message_text: '/buy' },
     })
     if (isAddressLike(vault.ccaStrategyAddress) && !vault.isSettled) {
@@ -1379,7 +1447,7 @@ async function buildInlineQueryResults(params: {
         type: 'article',
         id: `vault-bid-${idx}`,
         title: `Bid ${truncateAddress(vaultAddress)}`,
-        description: '/bid',
+        description: growthMode ? 'Auction flow -> ETH % sizing' : 'Auction mode with ETH % sizing',
         input_message_content: { message_text: '/bid' },
       })
     }
@@ -1388,36 +1456,36 @@ async function buildInlineQueryResults(params: {
   pushResult({
       type: 'article',
       id: 'help',
-      title: 'Keepr Help',
-      description: 'Insert /help',
+      title: copy.helpTitle,
+      description: copy.helpDescription,
       input_message_content: { message_text: '/help' },
     })
   pushResult({
       type: 'article',
       id: 'status',
-      title: 'Vault Status',
-      description: 'Insert /keepr status',
+      title: copy.statusTitle,
+      description: copy.statusDescription,
       input_message_content: { message_text: '/keepr status' },
     })
   pushResult({
       type: 'article',
       id: 'xpost',
-      title: 'Draft X Post',
-      description: 'Insert /x post ... --confirm',
+      title: copy.xPostTitle,
+      description: copy.xPostDescription,
       input_message_content: { message_text: xPostCommand },
     })
   pushResult({
       type: 'article',
       id: 'ai',
-      title: 'Ask Keepr AI',
-      description: 'Insert /ai <question>',
+      title: copy.aiTitle,
+      description: copy.aiDescription,
       input_message_content: { message_text: aiPrompt },
     })
   pushResult({
       type: 'article',
       id: 'mkt',
-      title: 'Market Quote',
-      description: 'Insert /mkt quote <symbol>',
+      title: copy.marketTitle,
+      description: copy.marketDescription,
       input_message_content: { message_text: marketQuote },
     })
 
@@ -5327,6 +5395,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const text = asTrimmed(message.text ?? message.caption ?? '')
   const isStartCommand = /^\/start(?:\s+.*)?$/i.test(text)
   const normalizedText = normalizeTelegramCommand(text)
+  const commandText = shouldAutoRouteToAi({ chatId, text, message }) ? normalizeTelegramCommand(`/ai ${text}`) : normalizedText
   if (!chatId || !text) {
     return res.status(200).json({
       success: true,
@@ -5375,7 +5444,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let response: TelegramCommandResponse = { text: '' }
   try {
     response = await executeTelegramCommand({
-      text: normalizedText,
+      text: commandText,
       chatId,
       userId,
       groupId,
@@ -5399,7 +5468,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     response.text = [
       'Welcome to 4626 on Telegram',
       '',
-      'Use the menu below for quick actions: Link, Portfolio, Vaults, Auctions, Signals.',
+      'New user quick path: Link -> Trade -> Portfolio.',
+      'Use the menu buttons for one-tap actions.',
       '',
       response.text,
     ].join('\n')

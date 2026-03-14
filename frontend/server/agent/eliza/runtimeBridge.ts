@@ -109,6 +109,11 @@ const AGENT_MEMORY_INDEX_SQL = `
     ON agent_message_memory (conversation_id, created_at DESC);
 `
 
+const AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS agent_message_memory_agent_conversation_idx
+    ON agent_message_memory (agent_id, conversation_id);
+`
+
 const EPISODIC_SUMMARIES_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS episodic_summaries (
     conversation_id TEXT PRIMARY KEY,
@@ -608,6 +613,7 @@ async function ensureMemorySchema(): Promise<void> {
   await executeOptionalSchemaStatement(db, AGENT_MEMORY_POLICY_SQL)
 
   await executeSchemaStatement(db, AGENT_MEMORY_INDEX_SQL)
+  await executeSchemaStatement(db, AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL)
   await executeSchemaStatement(db, FACT_CARDS_ENTITY_INDEX_SQL)
   await executeSchemaStatement(db, FACT_CARDS_CONVERSATION_ENTITY_UNIQUE_SQL)
   await executeSchemaStatement(db, TASK_LOOPS_CONVERSATION_STATUS_INDEX_SQL)

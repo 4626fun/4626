@@ -12,10 +12,14 @@ interface ChainSelectorProps {
 
 function ChainLogo({ src, name, size = 20 }: { src: string; name: string; size?: number }) {
   const [error, setError] = useState(false)
-  if (error || !src) {
+  const isBaseLogo = name.trim().toLowerCase() === 'base'
+  const resolvedSrc = isBaseLogo ? '/base/base-square-blue.svg' : src
+  const shapeClass = isBaseLogo ? 'rounded-[4px]' : 'rounded-full'
+  const fitClass = isBaseLogo ? 'object-contain' : 'object-cover'
+  if (error || !resolvedSrc) {
     return (
       <div
-        className="shrink-0 flex items-center justify-center rounded-full bg-vault-cardRaised text-[9px] font-bold text-vault-text"
+        className={`shrink-0 flex items-center justify-center bg-vault-cardRaised text-[9px] font-bold text-vault-text ${shapeClass}`}
         style={{ width: size, height: size }}
         aria-hidden="true"
       >
@@ -25,9 +29,9 @@ function ChainLogo({ src, name, size = 20 }: { src: string; name: string; size?:
   }
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={name}
-      className="rounded-full object-cover shrink-0"
+      className={`${shapeClass} ${fitClass} shrink-0`}
       style={{ width: size, height: size }}
       loading="lazy"
       onError={() => setError(true)}

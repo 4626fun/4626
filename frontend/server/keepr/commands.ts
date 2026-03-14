@@ -35,14 +35,8 @@ type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 
 
 function formatKeeprHelpTopics(): string[] {
   return [
-    'Topic help:',
-    '- /help core — vault controls and permissions',
-    '- /help coin — Zora coin commands',
-    '- /help market — OpenBB market data commands',
-    '- /help social — Farcaster + X/Twitter commands',
-    '- /help ops — CRE keeper operations',
-    '- /help bankr — Bankr profile/exec commands',
-    '- /help wallet — send + identity/reputation commands',
+    'Need more?',
+    '- /help core | coin | market | social | ops | bankr | wallet',
     '- /help all — full command list',
   ]
 }
@@ -147,20 +141,19 @@ function formatKeeprQuickHelp(unknownTopic: string | null = null): string {
     lines.push('')
   }
   lines.push(
-    'Group chat mode: interact in this thread with slash commands and bot buttons.',
+    'Start here (30 seconds):',
     '',
-    'Fastest trade flow:',
-    '- /buy',
-    '- /sell',
-    '- /bid',
-    '- then pick vault -> size -> Accept or Decline',
+    '1) /link — connect Telegram to your wallet',
+    '2) /buy | /sell | /bid — pick vault -> size -> Accept',
+    '3) /portfolio — check your positions',
     '',
     'Most used:',
     '- /keepr status — vault status and config',
     '- /ai <question> — ask in plain English',
-    '- /x post <message> --confirm (ADMIN/OWNER)',
-    '- /coin trend check <ticker>',
     '- /mkt quote <symbol>',
+    '- /coin trend check <ticker>',
+    '- /x post <message> --confirm (ADMIN/OWNER)',
+    '  ↳ symbol example: BTC',
     '',
     ...formatKeeprHelpTopics(),
   )

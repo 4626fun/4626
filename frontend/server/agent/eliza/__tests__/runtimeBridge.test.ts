@@ -153,7 +153,11 @@ describe('runtime bridge', () => {
     const insertCall = (db.sql.mock.calls as any[]).find((call: any[]) =>
       String(call?.[0]?.[0] ?? '').includes('INSERT INTO agent_message_memory'),
     )
+    const indexCall = (db.query.mock.calls as any[]).find((call: any[]) =>
+      String(call?.[0] ?? '').includes('agent_message_memory_agent_conversation_idx'),
+    )
     expect(db.query).toHaveBeenCalled()
+    expect(indexCall).toBeTruthy()
     expect(insertCall).toBeTruthy()
   })
 

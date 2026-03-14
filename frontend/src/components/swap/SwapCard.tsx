@@ -58,7 +58,7 @@ type SwapCardProps = {
 export function SwapCard(props: SwapCardProps) {
   return (
     <div className="bv-panel p-4">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <div className="text-sm text-vault-subtext space-y-1">
           <div className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] text-vault-subtext" style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.65)', background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
             <span>Powered by</span>

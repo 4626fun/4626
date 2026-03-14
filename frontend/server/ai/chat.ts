@@ -55,6 +55,9 @@ function buildSystemPrompt(vault: KeeprVaultRow | null, conversationType: string
     '- Wallet/auth context: Privy + Coinbase Smart Wallet (ERC-4337).',
     '- LLM serving: 4626 Eliza LLM service with provider routing.',
     'When users ask if you are connected to ElizaOS, answer yes.',
+    'When users ask about memory, explain that memory is persistent per conversation (when storage is available).',
+    'If conversation memory blocks are present, never claim you have no memory for this conversation.',
+    'Prefer continuity by using provided <conversation_history>, <memory_snapshot>, <fact_cards>, and <open_tasks> blocks.',
     'If users ask "are you Eliza/ElizaOS" (including minor misspellings like "elizao"), clarify that you are Akitai running on ElizaOS.',
     'Never claim you are Meta AI, a generic model, or that your stack is unknown.',
     'Keep responses concise (2-3 sentences max).',
@@ -88,48 +91,63 @@ function buildSystemPrompt(vault: KeeprVaultRow | null, conversationType: string
 }
 
 function normalizeIntentText(text: string): string {
-  return String(text ?? '').trim().toLowerCase()
+  return String(text ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
-function isStackQuestion(text: string): boolean {
-  const normalized = normalizeIntentText(text)
-  if (!normalized.includes('stack')) return false
-  return (
-    normalized.includes('your') ||
-    normalized.includes('you') ||
-    normalized.includes('current') ||
-    normalized.includes('tech')
-  )
-}
+type IdentityIntent = 'stack' | 'eliza' | 'memory' | 'identity' | null
 
-function isElizaConnectionQuestion(text: string): boolean {
+function classifyIdentityIntent(text: string): IdentityIntent {
   const normalized = normalizeIntentText(text)
-  const mentionsEliza = /\beliza(?:\s*os)?\b|\beliza[a-z0-9]{1,2}\b/.test(normalized)
-  if (!mentionsEliza) return false
+  if (!normalized) return null
+
+  const mentionsStack = /\bstack\b/.test(normalized)
+  const mentionsEliza = /\beliza(?:\s*os)?\b|\beliza[a-z0-9]{1,3}\b/.test(normalized)
+  const mentionsMemory = /\b(memory|remember|recall|context)\b/.test(normalized)
+  const mentionsPersistence = /\b(persistent|persist|across|between|session|sessions|retain|store|saved|save)\b/.test(normalized)
+  const asksWho =
+    /\bwho(?:mst)?\s+are\s+you\b/.test(normalized) ||
+    /\bwhat\s+are\s+you\b/.test(normalized) ||
+    /\bwhat\s+is\s+your\s+name\b/.test(normalized)
   const asksConnection =
-    normalized.includes('connect') ||
-    normalized.includes('connected') ||
-    normalized.includes('run') ||
-    normalized.includes('using') ||
-    normalized.includes('use')
-  const asksIdentity =
-    normalized.startsWith('are you') ||
-    normalized.includes('are you ') ||
-    normalized.includes('you eliza') ||
-    normalized.includes('you the eliza')
-  return asksConnection || asksIdentity
+    /\bconnect(?:ed|ion)?\b/.test(normalized) ||
+    /\brun(?:ning)?\b/.test(normalized) ||
+    /\busing\b/.test(normalized) ||
+    /\buse\b/.test(normalized) ||
+    /\bare\s+you\b/.test(normalized)
+
+  if (mentionsMemory && (mentionsPersistence || mentionsEliza || /\bi thought\b|\ballowed\b/.test(normalized))) {
+    return 'memory'
+  }
+  if (mentionsStack && /\b(your|you|current|tech|what|tell)\b/.test(normalized)) {
+    return 'stack'
+  }
+  if (mentionsEliza && asksConnection) {
+    return 'eliza'
+  }
+  if (asksWho) {
+    return 'identity'
+  }
+  return null
 }
 
-function isIdentityQuestion(text: string): boolean {
+function isLikelyIdentityDrift(text: string): boolean {
   const normalized = normalizeIntentText(text)
+  if (!normalized) return false
   return (
-    normalized === 'who are you' ||
-    normalized.startsWith('who are you ') ||
-    normalized.includes('who r u') ||
-    normalized === 'what are you' ||
-    normalized.startsWith('what are you ') ||
-    normalized === 'what is your name' ||
-    normalized.startsWith('what is your name ')
+    normalized.includes('xmtp assistant') ||
+    normalized.includes('cloud based language model') ||
+    normalized.includes('not publicly disclosed') ||
+    normalized.includes('do not have personal identity') ||
+    normalized.includes('dont have personal identity') ||
+    normalized.includes('not connected to eliza') ||
+    normalized.includes('not aware of any connection to eliza') ||
+    normalized.includes('not the same as eliza') ||
+    normalized.includes('do not have any information about being') ||
+    normalized.includes('dont have any information about being')
   )
 }
 
@@ -162,7 +180,25 @@ function buildIdentityReply(conversationType: string): string {
   ].join('\n')
 }
 
+function buildMemoryReply(conversationType: string): string {
+  const platform = platformLabelForPrompt(conversationType)
+  return [
+    `Yes — I keep memory for this ${platform} conversation.`,
+    'I retain recent turns plus summarized facts/tasks, and can restore older context when storage is available.',
+    "Memory is scoped per conversation, so I don't mix context from unrelated chats.",
+  ].join('\n')
+}
+
 type ConversationTurn = { role: 'user' | 'assistant'; text: string }
+
+function readStateBlock(state: Record<string, unknown>, key: string): string {
+  const raw = state[key]
+  if (typeof raw !== 'string') return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  if (/^<\w+(?:_\w+)?\s*\/>$/.test(trimmed)) return ''
+  return trimmed
+}
 
 function normalizeHistoryText(value: unknown): string {
   if (typeof value !== 'string') return ''
@@ -234,6 +270,15 @@ function buildConversationHistoryContext(turns: ConversationTurn[]): string {
   ].join('\n')
 }
 
+function buildStructuredMemoryContext(state: Record<string, unknown>): string {
+  const blocks = [
+    readStateBlock(state, 'memorySnapshotBlock'),
+    readStateBlock(state, 'factCardsBlock'),
+    readStateBlock(state, 'openTasksBlock'),
+  ].filter(Boolean)
+  return blocks.join('\n\n')
+}
+
 export async function generateLlmResponse(params: {
   groupId: string
   senderWallet: string
@@ -241,13 +286,17 @@ export async function generateLlmResponse(params: {
   vault: KeeprVaultRow | null
 }): Promise<{ ok: true; response: string } | { ok: false; response: string }> {
   const conversationType = resolveConversationType(params.groupId)
-  if (isStackQuestion(params.text)) {
+  const identityIntent = classifyIdentityIntent(params.text)
+  if (identityIntent === 'stack') {
     return { ok: true, response: buildStackSnapshotReply(conversationType) }
   }
-  if (isElizaConnectionQuestion(params.text)) {
+  if (identityIntent === 'eliza') {
     return { ok: true, response: buildElizaConnectionReply(conversationType) }
   }
-  if (isIdentityQuestion(params.text)) {
+  if (identityIntent === 'memory') {
+    return { ok: true, response: buildMemoryReply(conversationType) }
+  }
+  if (identityIntent === 'identity') {
     return { ok: true, response: buildIdentityReply(conversationType) }
   }
 
@@ -277,6 +326,10 @@ export async function generateLlmResponse(params: {
       const turns = trimTrailingCurrentUserTurn(extractRecentTurns(state), params.text)
       historyTurns = turns.length
       historyContext = buildConversationHistoryContext(turns)
+      const structuredMemoryContext = buildStructuredMemoryContext(state)
+      if (structuredMemoryContext) {
+        historyContext = [historyContext, structuredMemoryContext].filter(Boolean).join('\n\n')
+      }
       logger.info('[ai/chat] conversation memory loaded', {
         groupId: params.groupId,
         turns: historyTurns,
@@ -301,12 +354,28 @@ export async function generateLlmResponse(params: {
       return { ok: false, response: '' }
     }
 
+    let finalText = result.text.trim()
+    // Defense-in-depth: if identity/stack intent somehow reached LLM and drifted,
+    // force canonical replies instead of leaking generic model self-descriptions.
+    if (isLikelyIdentityDrift(finalText)) {
+      const fallbackIntent = classifyIdentityIntent(params.text)
+      if (fallbackIntent === 'stack') {
+        finalText = buildStackSnapshotReply(conversationType)
+      } else if (fallbackIntent === 'eliza') {
+        finalText = buildElizaConnectionReply(conversationType)
+      } else if (fallbackIntent === 'memory') {
+        finalText = buildMemoryReply(conversationType)
+      } else if (fallbackIntent === 'identity') {
+        finalText = buildIdentityReply(conversationType)
+      }
+    }
+
     if (memoryEnabled) {
       try {
         const outbound = conversationMemoryBridge.createOutboundMemory(
           params.groupId,
           conversationType,
-          result.text.trim(),
+          finalText,
         )
         await conversationMemoryBridge.runtime.createMemory(outbound as any, 'messages' as any)
       } catch (error) {
@@ -322,7 +391,7 @@ export async function generateLlmResponse(params: {
       provider: result.provider,
       historyTurns,
     })
-    return { ok: true, response: result.text.trim() }
+    return { ok: true, response: finalText }
   } catch (error) {
     const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM generation failed')
     if (agentError.code === 'BUDGET_EXCEEDED') {

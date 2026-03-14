@@ -119,6 +119,29 @@ describe('generateLlmResponse memory integration', () => {
     expect(call?.vaultContext).not.toContain('user: Can you restate that with one action item?')
   })
 
+  it('injects warm memory blocks into LLM context when available', async () => {
+    composeStateMock.mockResolvedValueOnce({
+      recentMessages: [{ role: 'assistant', text: 'Prior answer from earlier turn.' }],
+      memorySnapshotBlock: '<memory_snapshot>\n<summary>User wants Base-first actions.</summary>\n</memory_snapshot>',
+      factCardsBlock: '<fact_cards>\n<fact entity="user_style" confidence="0.90">prefers concise responses</fact>\n</fact_cards>',
+      openTasksBlock: '<open_tasks>\n<task id="1" status="open">Ship staged rollout</task>\n</open_tasks>',
+    } as any)
+
+    const { generateLlmResponse } = await import('../chat.ts')
+    await generateLlmResponse({
+      groupId: 'telegram:7726886643',
+      senderWallet: '0x1111111111111111111111111111111111111111',
+      text: 'What should we do next?',
+      vault: null,
+    })
+
+    expect(generateResponseMock).toHaveBeenCalledTimes(1)
+    const call = (generateResponseMock as any).mock.calls[0]?.[0] as any
+    expect(call?.vaultContext).toContain('<memory_snapshot>')
+    expect(call?.vaultContext).toContain('<fact_cards>')
+    expect(call?.vaultContext).toContain('<open_tasks>')
+  })
+
   it('persists inbound and outbound memory around the LLM call', async () => {
     const events: string[] = []
     runtimeCreateMemoryMock.mockImplementation(async (memory: any) => {
@@ -185,6 +208,21 @@ describe('generateLlmResponse memory integration', () => {
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
+  it('answers stack questions without requiring the word current', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x4444444444444444444444444444444444444444',
+      text: 'what is your stack',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('Telegram + XMTP')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
   it('answers ElizaOS connection questions explicitly', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     const result = await generateLlmResponse({
@@ -217,6 +255,38 @@ describe('generateLlmResponse memory integration', () => {
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
+  it('answers persistent memory questions deterministically', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x5555555555555555555555555555555555555555',
+      text: 'hi do you have persistent memory now?',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response.toLowerCase()).toContain('yes')
+    expect(result.response.toLowerCase()).toContain('memory')
+    expect(result.response.toLowerCase()).toContain('conversation')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers Eliza remember prompts without denying memory', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x5555555555555555555555555555555555555555',
+      text: 'I thought elizaOS allowed you to remember though',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response.toLowerCase()).toContain('memory')
+    expect(result.response.toLowerCase()).toContain('conversation')
+    expect(result.response.toLowerCase()).not.toContain("don't retain information between sessions")
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
   it('answers generic identity prompts without LLM drift', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     const result = await generateLlmResponse({
@@ -230,6 +300,21 @@ describe('generateLlmResponse memory integration', () => {
     expect(result.response).toContain('Akitai (Keepr)')
     expect(result.response).toContain('ElizaOS')
     expect(result.response).toContain('Telegram')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers uncommon who-are-you variants like whomst', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x7777777777777777777777777777777777777777',
+      text: 'whomst are you',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('Akitai (Keepr)')
+    expect(result.response).toContain('ElizaOS')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
