@@ -2,8 +2,20 @@ import { logger } from '../_lib/logger.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import { toAgentError } from '../agent/eliza/_errors.js'
 import { getElizaLlmService } from '../agent/eliza/llm.js'
+import { createRuntimeBridge } from '../agent/eliza/runtimeBridge.js'
 
 const llmService = getElizaLlmService()
+const CHAT_MEMORY_AGENT_KEY = 'keepr-ai-chat'
+const HISTORY_TURN_LIMIT = 10
+const HISTORY_CHAR_BUDGET = 1_800
+const conversationMemoryBridge = createRuntimeBridge({
+  agentKey: CHAT_MEMORY_AGENT_KEY,
+  plugins: [],
+  history: {
+    maxConversations: 500,
+    maxMessagesPerConversation: 40,
+  },
+})
 
 // ---------------------------------------------------------------------------
 // Rate limiting – one LLM call per group every 10 s
@@ -57,6 +69,78 @@ function buildSystemPrompt(vault: KeeprVaultRow | null): string {
   return base.join('\n')
 }
 
+type ConversationTurn = { role: 'user' | 'assistant'; text: string }
+
+function normalizeHistoryText(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function resolveConversationType(groupId: string): string {
+  const normalized = groupId.trim().toLowerCase()
+  if (normalized.startsWith('telegram:')) return 'telegram'
+  if (normalized.startsWith('discord:')) return 'discord'
+  if (normalized.startsWith('farcaster:')) return 'farcaster'
+  if (normalized.startsWith('xmtp')) return 'xmtp'
+  return 'group'
+}
+
+function extractRecentTurns(state: Record<string, unknown>): ConversationTurn[] {
+  const recent = Array.isArray((state as any)?.recentMessages) ? (state as any).recentMessages : []
+  const turns: ConversationTurn[] = []
+  for (const entry of recent) {
+    const role = String((entry as any)?.role ?? '').trim().toLowerCase()
+    const text = normalizeHistoryText((entry as any)?.text)
+    if (!text) continue
+    if (role === 'assistant') {
+      turns.push({ role: 'assistant', text })
+      continue
+    }
+    turns.push({ role: 'user', text })
+  }
+  return turns
+}
+
+function trimTrailingCurrentUserTurn(turns: ConversationTurn[], currentText: string): ConversationTurn[] {
+  const normalizedCurrent = normalizeHistoryText(currentText)
+  if (!normalizedCurrent || turns.length === 0) return turns
+  const last = turns[turns.length - 1]
+  if (!last) return turns
+  if (last.role === 'user' && normalizeHistoryText(last.text) === normalizedCurrent) {
+    return turns.slice(0, -1)
+  }
+  return turns
+}
+
+function buildConversationHistoryContext(turns: ConversationTurn[]): string {
+  if (!turns.length) return ''
+  const boundedTurns = turns.slice(-HISTORY_TURN_LIMIT)
+  const lines: string[] = []
+  let usedChars = 0
+  for (let i = boundedTurns.length - 1; i >= 0; i -= 1) {
+    const turn = boundedTurns[i]
+    if (!turn) continue
+    const line = `${turn.role}: ${turn.text}`
+    if (!line) continue
+    const additional = line.length + 1
+    if (usedChars + additional > HISTORY_CHAR_BUDGET && lines.length > 0) break
+    if (usedChars + additional > HISTORY_CHAR_BUDGET && lines.length === 0) {
+      lines.unshift(line.slice(0, Math.max(1, HISTORY_CHAR_BUDGET - 1)).trimEnd() + '…')
+      usedChars = HISTORY_CHAR_BUDGET
+      break
+    }
+    lines.unshift(line)
+    usedChars += additional
+  }
+  if (!lines.length) return ''
+  return [
+    '[conversation_history]',
+    'Prior turns from this same conversation. Use them to preserve context and references.',
+    ...lines,
+    '[/conversation_history]',
+  ].join('\n')
+}
+
 export async function generateLlmResponse(params: {
   groupId: string
   senderWallet: string
@@ -74,11 +158,39 @@ export async function generateLlmResponse(params: {
   try {
     recordLlmCall(params.groupId)
     const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
+    const conversationType = resolveConversationType(params.groupId)
+    let historyContext = ''
+    let historyTurns = 0
+    let memoryEnabled = true
+    try {
+      const inbound = conversationMemoryBridge.createInboundMemory({
+        conversationId: params.groupId,
+        conversationType,
+        senderAddress: params.senderWallet,
+        content: params.text,
+      })
+      await conversationMemoryBridge.runtime.createMemory(inbound as any, 'messages' as any)
+      const state = await conversationMemoryBridge.composeState(inbound as any)
+      const turns = trimTrailingCurrentUserTurn(extractRecentTurns(state), params.text)
+      historyTurns = turns.length
+      historyContext = buildConversationHistoryContext(turns)
+      logger.info('[ai/chat] conversation memory loaded', {
+        groupId: params.groupId,
+        turns: historyTurns,
+      })
+    } catch (error) {
+      memoryEnabled = false
+      logger.warn('[ai/chat] conversation memory unavailable; falling back to stateless prompt', {
+        groupId: params.groupId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
     const result = await llmService.generateResponse({
       agentKey: params.groupId,
       userMessage: `${identityHint}: ${params.text}`,
       systemPrompt: buildSystemPrompt(params.vault),
-      vaultContext: '',
+      vaultContext: historyContext,
       correlationId: `keepr-${params.groupId}-${Date.now()}`,
     })
 
@@ -86,9 +198,26 @@ export async function generateLlmResponse(params: {
       return { ok: false, response: '' }
     }
 
+    if (memoryEnabled) {
+      try {
+        const outbound = conversationMemoryBridge.createOutboundMemory(
+          params.groupId,
+          conversationType,
+          result.text.trim(),
+        )
+        await conversationMemoryBridge.runtime.createMemory(outbound as any, 'messages' as any)
+      } catch (error) {
+        logger.warn('[ai/chat] assistant memory persistence failed (non-blocking)', {
+          groupId: params.groupId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
     logger.info('[ai/chat] Unified Eliza LLM response', {
       groupId: params.groupId,
       provider: result.provider,
+      historyTurns,
     })
     return { ok: true, response: result.text.trim() }
   } catch (error) {
