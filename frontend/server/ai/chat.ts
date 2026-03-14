@@ -36,9 +36,27 @@ function recordLlmCall(groupId: string): void {
 // ---------------------------------------------------------------------------
 // System prompt builder
 // ---------------------------------------------------------------------------
-function buildSystemPrompt(vault: KeeprVaultRow | null): string {
+function platformLabelForPrompt(conversationType: string): string {
+  if (conversationType === 'telegram') return 'Telegram'
+  if (conversationType === 'xmtp') return 'XMTP'
+  if (conversationType === 'discord') return 'Discord'
+  if (conversationType === 'farcaster') return 'Farcaster'
+  return 'group chat'
+}
+
+function buildSystemPrompt(vault: KeeprVaultRow | null, conversationType: string): string {
+  const platform = platformLabelForPrompt(conversationType)
   const base = [
-    'You are a helpful 4626 assistant in an XMTP group chat.',
+    'You are Akitai (Keepr), the 4626 assistant.',
+    `You are currently responding inside ${platform}.`,
+    'Core runtime facts you must keep accurate:',
+    '- Runtime/orchestration: ElizaOS + 4626 action plugins.',
+    '- Messaging transports: Telegram and XMTP.',
+    '- Wallet/auth context: Privy + Coinbase Smart Wallet (ERC-4337).',
+    '- LLM serving: 4626 Eliza LLM service with provider routing.',
+    'When users ask if you are connected to ElizaOS, answer yes.',
+    'If users ask "are you Eliza/ElizaOS" (including minor misspellings like "elizao"), clarify that you are Akitai running on ElizaOS.',
+    'Never claim you are Meta AI, a generic model, or that your stack is unknown.',
     'Keep responses concise (2-3 sentences max).',
     'Be factual and helpful. Do NOT make financial guarantees or investment recommendations.',
     'Do NOT hallucinate features that do not exist.',
@@ -67,6 +85,81 @@ function buildSystemPrompt(vault: KeeprVaultRow | null): string {
   }
 
   return base.join('\n')
+}
+
+function normalizeIntentText(text: string): string {
+  return String(text ?? '').trim().toLowerCase()
+}
+
+function isStackQuestion(text: string): boolean {
+  const normalized = normalizeIntentText(text)
+  if (!normalized.includes('stack')) return false
+  return (
+    normalized.includes('your') ||
+    normalized.includes('you') ||
+    normalized.includes('current') ||
+    normalized.includes('tech')
+  )
+}
+
+function isElizaConnectionQuestion(text: string): boolean {
+  const normalized = normalizeIntentText(text)
+  const mentionsEliza = /\beliza(?:\s*os)?\b|\beliza[a-z0-9]{1,2}\b/.test(normalized)
+  if (!mentionsEliza) return false
+  const asksConnection =
+    normalized.includes('connect') ||
+    normalized.includes('connected') ||
+    normalized.includes('run') ||
+    normalized.includes('using') ||
+    normalized.includes('use')
+  const asksIdentity =
+    normalized.startsWith('are you') ||
+    normalized.includes('are you ') ||
+    normalized.includes('you eliza') ||
+    normalized.includes('you the eliza')
+  return asksConnection || asksIdentity
+}
+
+function isIdentityQuestion(text: string): boolean {
+  const normalized = normalizeIntentText(text)
+  return (
+    normalized === 'who are you' ||
+    normalized.startsWith('who are you ') ||
+    normalized.includes('who r u') ||
+    normalized === 'what are you' ||
+    normalized.startsWith('what are you ') ||
+    normalized === 'what is your name' ||
+    normalized.startsWith('what is your name ')
+  )
+}
+
+function buildStackSnapshotReply(conversationType: string): string {
+  const platform = platformLabelForPrompt(conversationType)
+  return [
+    `Current stack (${platform} route):`,
+    '- Runtime/orchestration: ElizaOS + 4626 plugins/actions',
+    '- Messaging: Telegram + XMTP',
+    '- Wallet/auth context: Privy + Coinbase Smart Wallet (ERC-4337)',
+    '- LLM serving: 4626 Eliza LLM service (provider can vary by runtime policy)',
+  ].join('\n')
+}
+
+function buildElizaConnectionReply(conversationType: string): string {
+  const platform = platformLabelForPrompt(conversationType)
+  return [
+    'Yes — I am connected to ElizaOS.',
+    `This ${platform} assistant runs through 4626's Eliza-based runtime.`,
+    'You can ask `/ai what is your current stack` for a stack breakdown.',
+  ].join('\n')
+}
+
+function buildIdentityReply(conversationType: string): string {
+  const platform = platformLabelForPrompt(conversationType)
+  return [
+    `I am Akitai (Keepr), the 4626 assistant for ${platform}.`,
+    "I'm connected to ElizaOS and run through 4626's Eliza-based runtime.",
+    'I can help with vault actions, trading flows, and ecosystem questions.',
+  ].join('\n')
 }
 
 type ConversationTurn = { role: 'user' | 'assistant'; text: string }
@@ -147,6 +240,17 @@ export async function generateLlmResponse(params: {
   text: string
   vault: KeeprVaultRow | null
 }): Promise<{ ok: true; response: string } | { ok: false; response: string }> {
+  const conversationType = resolveConversationType(params.groupId)
+  if (isStackQuestion(params.text)) {
+    return { ok: true, response: buildStackSnapshotReply(conversationType) }
+  }
+  if (isElizaConnectionQuestion(params.text)) {
+    return { ok: true, response: buildElizaConnectionReply(conversationType) }
+  }
+  if (isIdentityQuestion(params.text)) {
+    return { ok: true, response: buildIdentityReply(conversationType) }
+  }
+
   if (!canCallLlm(params.groupId)) {
     return { ok: false, response: 'AI is rate-limited. Try again in a few seconds.' }
   }
@@ -158,7 +262,6 @@ export async function generateLlmResponse(params: {
   try {
     recordLlmCall(params.groupId)
     const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
-    const conversationType = resolveConversationType(params.groupId)
     let historyContext = ''
     let historyTurns = 0
     let memoryEnabled = true
@@ -189,7 +292,7 @@ export async function generateLlmResponse(params: {
     const result = await llmService.generateResponse({
       agentKey: params.groupId,
       userMessage: `${identityHint}: ${params.text}`,
-      systemPrompt: buildSystemPrompt(params.vault),
+      systemPrompt: buildSystemPrompt(params.vault, conversationType),
       vaultContext: historyContext,
       correlationId: `keepr-${params.groupId}-${Date.now()}`,
     })

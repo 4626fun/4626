@@ -168,4 +168,84 @@ describe('generateLlmResponse memory integration', () => {
     expect(call?.vaultContext).toBe('')
     expect(createOutboundMemoryMock).not.toHaveBeenCalled()
   })
+
+  it('answers stack questions with deterministic runtime facts', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x4444444444444444444444444444444444444444',
+      text: 'what is your current stack',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('Telegram + XMTP')
+    expect(result.response).toContain('Coinbase Smart Wallet')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers ElizaOS connection questions explicitly', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x5555555555555555555555555555555555555555',
+      text: 'are you connected to elizaOS?',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response.toLowerCase()).toContain('yes')
+    expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('Telegram')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers ElizaOS identity questions with typo variants', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x5555555555555555555555555555555555555555',
+      text: 'are you elizao',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response.toLowerCase()).toContain('yes')
+    expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('Telegram')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers generic identity prompts without LLM drift', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x7777777777777777777777777777777777777777',
+      text: 'who are you',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('Akitai (Keepr)')
+    expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('Telegram')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('injects channel-aware identity guardrails in the LLM system prompt', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    await generateLlmResponse({
+      groupId: 'telegram:chat-identity',
+      senderWallet: '0x6666666666666666666666666666666666666666',
+      text: '/ai summarize vault status',
+      vault: null,
+    })
+
+    expect(generateResponseMock).toHaveBeenCalledTimes(1)
+    const call = (generateResponseMock as any).mock.calls[0]?.[0] as any
+    expect(call?.systemPrompt).toContain('You are Akitai (Keepr), the 4626 assistant.')
+    expect(call?.systemPrompt).toContain('currently responding inside Telegram')
+    expect(call?.systemPrompt).toContain('Never claim you are Meta AI')
+  })
 })
