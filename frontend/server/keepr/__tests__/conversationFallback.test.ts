@@ -64,6 +64,38 @@ describe('keepr conversational fallback behavior', () => {
     expect(generateLlmResponseMock).not.toHaveBeenCalled()
   })
 
+  it('returns deterministic connect guidance for /ai setup prompts in unconfigured groups', async () => {
+    getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
+    const { handleKeeprCommand } = await import('../commands.ts')
+
+    const result = await handleKeeprCommand({
+      groupId: 'telegram:-1003595003982',
+      senderWallet: TEST_WALLET,
+      text: '/ai help me configure this group to 4626',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('Group Setup (4626)')
+    expect(result.response).toContain('telegram:-1003595003982')
+    expect(generateLlmResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks privileged /send command in assistant-only mode', async () => {
+    getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
+    const { handleKeeprCommand } = await import('../commands.ts')
+
+    const result = await handleKeeprCommand({
+      groupId: 'telegram:-1003595003982',
+      senderWallet: TEST_WALLET,
+      text: '/send 1 USDC to 0x1111111111111111111111111111111111111111',
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('Assistant-only mode')
+    expect(result.response).toContain('/send is disabled')
+    expect(result.response).toContain('/link')
+  })
+
   it('routes plain text to AI with vault context when configured', async () => {
     const vault = {
       vaultAddress: '0x1111111111111111111111111111111111111111',

@@ -361,6 +361,16 @@ function formatGroupConnectGuidance(groupId: string): string {
   ].join('\n')
 }
 
+function formatAssistantOnlyBlocked(command: string): string {
+  return [
+    'Assistant-only mode',
+    '',
+    `- ${command} is disabled until this group is connected to a 4626 vault`,
+    '- You can still use /ai, /help, /mkt, /whois, and /bankr status',
+    '- To enable full actions: run /link, verify /linked, scope a vault, then confirm with /keepr status',
+  ].join('\n')
+}
+
 function roleForWallet(params: { wallet: Address; owner: Address; admins: Address[] }): KeeprRole {
   const w = params.wallet.toLowerCase()
   if (w === params.owner.toLowerCase()) return 'OWNER'
@@ -374,6 +384,7 @@ function formatVaultStatus(v: Awaited<ReturnType<typeof getKeeprVaultByGroupId>>
       'Keepr status',
       '',
       '- configured: no',
+      '- mode: assistant_only (setup pending)',
       '- next: ask the creator to connect this group in 4626',
     ].join('\n')
   }
@@ -897,6 +908,9 @@ export async function handleKeeprCommand(params: {
       return { ok: true, response: 'Ask me anything about this vault or DeFi on Base.' }
     }
     const v = await getKeeprVaultByGroupId(params.groupId)
+    if (!v && looksLikeGroupConnectIntent(aiText)) {
+      return { ok: true, response: formatGroupConnectGuidance(params.groupId) }
+    }
     return generateLlmResponse({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
@@ -974,7 +988,7 @@ export async function handleKeeprCommand(params: {
   const looksLikeSend = raw.toLowerCase().startsWith('/send') || raw.toLowerCase().startsWith('send ')
   if (looksLikeSend) {
     const sv = await getKeeprVaultByGroupId(params.groupId)
-    if (!sv) return { ok: false, response: 'Vault not configured. /send requires a connected vault.' }
+    if (!sv) return { ok: false, response: formatAssistantOnlyBlocked('/send') }
     const sOwner = sv.canonicalOwnerAddress
     const sAdmins = Array.isArray(sv.config?.roles?.admins) ? sv.config.roles.admins : []
     const sAdminsLc = sAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
@@ -992,7 +1006,7 @@ export async function handleKeeprCommand(params: {
   const looksLikeCoin = raw.toLowerCase().startsWith('/coin') || raw.toLowerCase().startsWith('coin ')
   if (looksLikeCoin) {
     const cv = await getKeeprVaultByGroupId(params.groupId)
-    if (!cv) return { ok: false, response: 'Vault not configured. /coin requires a connected vault.' }
+    if (!cv) return { ok: false, response: formatAssistantOnlyBlocked('/coin') }
     const cOwner = cv.canonicalOwnerAddress
     const cAdmins = Array.isArray(cv.config?.roles?.admins) ? cv.config.roles.admins : []
     const cAdminsLc = cAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
