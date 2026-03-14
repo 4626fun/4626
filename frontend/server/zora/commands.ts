@@ -247,16 +247,21 @@ async function handleCreate(params: {
         '',
         'Example: /coin create "My Content" MYC ipfs://Qm... CREATOR_COIN',
         '',
-        'Currencies: CREATOR_COIN (default), ETH, ZORA',
+        'Currencies: CREATOR_COIN (default), ETH, ZORA, CONTENT_COIN (alias for CREATOR_COIN)',
       ].join('\n'),
     }
   }
 
   const validCurrencies = ['CREATOR_COIN', 'ETH', 'ZORA', 'CREATOR_COIN_OR_ZORA'] as const
+  const validCurrencyInputs = [...validCurrencies, 'CONTENT_COIN'] as const
   type Currency = (typeof validCurrencies)[number]
-  const currency: Currency = validCurrencies.includes((currencyArg ?? 'CREATOR_COIN').toUpperCase() as Currency)
-    ? ((currencyArg ?? 'CREATOR_COIN').toUpperCase() as Currency)
-    : 'CREATOR_COIN'
+  const currencyToken = (currencyArg ?? 'CREATOR_COIN').toUpperCase() as (typeof validCurrencyInputs)[number]
+  const currency: Currency =
+    currencyToken === 'CONTENT_COIN'
+      ? 'CREATOR_COIN'
+      : validCurrencies.includes(currencyToken as Currency)
+        ? (currencyToken as Currency)
+        : 'CREATOR_COIN'
 
   // Get agent wallet
   let agentWalletId: string

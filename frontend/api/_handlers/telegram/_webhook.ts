@@ -308,6 +308,8 @@ const TELEGRAM_NATIVE_COMMANDS = new Set([
   'link',
   'linked',
   'unlink',
+  'zora',
+  'deploy',
   'join',
   'rooms',
   'eligibility',
@@ -329,6 +331,8 @@ const TELEGRAM_COMMAND_HEADS = [
   'link',
   'linked',
   'unlink',
+  'zora',
+  'deploy',
   'join',
   'rooms',
   'eligibility',
@@ -502,6 +506,168 @@ type ParsedTelegramTradeIntent =
     }
 
 type InteractiveTradeAction = 'buy' | 'sell' | 'bid'
+
+type DeployWizardType = 'trend' | 'content' | 'creator'
+
+type DeployCurrencyInput = 'ETH' | 'ZORA' | 'CREATOR_COIN' | 'CONTENT_COIN'
+
+type CommandCoinCurrency = 'ETH' | 'ZORA' | 'CREATOR_COIN'
+
+type ParsedTelegramDeployIntent =
+  | { kind: 'menu' }
+  | { kind: 'zora' }
+  | { kind: 'usage'; text: string }
+  | { kind: 'trend'; ticker: string }
+  | {
+      kind: 'coin'
+      coinType: Exclude<DeployWizardType, 'trend'>
+      name: string
+      symbol: string
+      metadataUri: string
+      currencyInput: DeployCurrencyInput
+      commandCurrency: CommandCoinCurrency
+    }
+
+const DEPLOY_CURRENCY_VALUES: DeployCurrencyInput[] = ['ETH', 'ZORA', 'CREATOR_COIN', 'CONTENT_COIN']
+
+const SUPPORTED_METADATA_URI_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 'data:'] as const
+
+function tokenizeTelegramCommand(rawText: string): string[] {
+  const raw = asTrimmed(rawText)
+  const tokenized: string[] = []
+  const regex = /"([^"]+)"|(\S+)/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(raw)) !== null) {
+    tokenized.push(asTrimmed(match[1] ?? match[2] ?? ''))
+  }
+  return tokenized.filter(Boolean)
+}
+
+function isDeployCurrencyInput(raw: string): raw is DeployCurrencyInput {
+  const token = asTrimmed(raw).toUpperCase()
+  return DEPLOY_CURRENCY_VALUES.includes(token as DeployCurrencyInput)
+}
+
+function mapDeployCurrencyToCommandCurrency(input: DeployCurrencyInput): CommandCoinCurrency {
+  if (input === 'ETH') return 'ETH'
+  if (input === 'ZORA') return 'ZORA'
+  // CONTENT_COIN is a Telegram label that maps to Zora's CREATOR_COIN mode.
+  return 'CREATOR_COIN'
+}
+
+function defaultDeployCurrency(coinType: Exclude<DeployWizardType, 'trend'>): DeployCurrencyInput {
+  if (coinType === 'creator') return 'CREATOR_COIN'
+  return 'CONTENT_COIN'
+}
+
+function normalizeDeploySymbol(raw: string): string {
+  return asTrimmed(raw).toUpperCase()
+}
+
+function isSupportedMetadataUri(raw: string): boolean {
+  const uri = asTrimmed(raw)
+  if (!uri) return false
+  return SUPPORTED_METADATA_URI_PREFIXES.some((prefix) => uri.startsWith(prefix))
+}
+
+function buildDefaultCoinMetadataUri(params: {
+  coinType: Exclude<DeployWizardType, 'trend'>
+  name: string
+  symbol: string
+}): string {
+  const payload = {
+    name: params.name,
+    symbol: params.symbol,
+    description: `${params.name} (${params.symbol}) launched via 4626 Telegram ${params.coinType} deploy wizard.`,
+  }
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')
+  return `data:application/json;base64,${encoded}`
+}
+
+function formatDeployUsageText(reason?: string): string {
+  const lines = [
+    'Deploy Wizard',
+    '',
+    reason ? `- ${reason}` : '- usage:',
+    '- `/deploy`',
+    '- `/deploy trend` <TICKER>',
+    '- `/deploy content` "<NAME>" <SYMBOL> [metadataUri] [ETH|ZORA|CREATOR_COIN|CONTENT_COIN]',
+    '- `/deploy creator` "<NAME>" <SYMBOL> [metadataUri] [ETH|ZORA|CREATOR_COIN|CONTENT_COIN]',
+    '- `/zora`',
+    '',
+    'Examples:',
+    '- `/deploy trend` BASEAI',
+    '- `/deploy content` "Base Daily Recap" BDR',
+    '- `/deploy creator` "Akita Creator Pass" AKITA https://example.com/meta.json CREATOR_COIN',
+  ]
+  return lines.join('\n')
+}
+
+function parseTelegramDeployIntent(rawText: string): ParsedTelegramDeployIntent | null {
+  const tokenized = tokenizeTelegramCommand(rawText)
+  const prefix = asTrimmed(tokenized[0] ?? '')
+    .replace(/^\//, '')
+    .toLowerCase()
+  if (prefix !== 'deploy') return null
+  const sub = asTrimmed(tokenized[1] ?? '').toLowerCase()
+  if (!sub) return { kind: 'menu' }
+  if (sub === 'zora' || sub === 'signup' || sub === 'sign-up' || sub === 'sign_up') {
+    return { kind: 'zora' }
+  }
+  if (sub === 'trend') {
+    const ticker = asTrimmed(tokenized[2] ?? '').toUpperCase()
+    if (!ticker) {
+      return { kind: 'usage', text: formatDeployUsageText('Missing trend ticker.') }
+    }
+    if (!/^[A-Z0-9._-]{2,24}$/.test(ticker)) {
+      return { kind: 'usage', text: formatDeployUsageText('Ticker must be 2-24 chars: A-Z, 0-9, ., _, -.') }
+    }
+    return { kind: 'trend', ticker }
+  }
+  if (sub !== 'content' && sub !== 'creator') {
+    return { kind: 'usage', text: formatDeployUsageText(`Unknown deploy target: ${sub}`) }
+  }
+
+  const coinType = sub as Exclude<DeployWizardType, 'trend'>
+  const name = asTrimmed(tokenized[2] ?? '')
+  const symbol = normalizeDeploySymbol(tokenized[3] ?? '')
+  if (!name || !symbol) {
+    return { kind: 'usage', text: formatDeployUsageText('Missing name or symbol for coin deploy.') }
+  }
+  if (name.length < 1 || name.length > 48) {
+    return { kind: 'usage', text: formatDeployUsageText('Coin name must be between 1 and 48 characters.') }
+  }
+  if (!/^[A-Z0-9_]{2,10}$/.test(symbol)) {
+    return { kind: 'usage', text: formatDeployUsageText('Symbol must be 2-10 chars: A-Z, 0-9, _.') }
+  }
+
+  let metadataCandidate = asTrimmed(tokenized[4] ?? '')
+  let currencyCandidate = asTrimmed(tokenized[5] ?? '').toUpperCase()
+  if (metadataCandidate && isDeployCurrencyInput(metadataCandidate)) {
+    currencyCandidate = metadataCandidate.toUpperCase()
+    metadataCandidate = ''
+  }
+
+  if (currencyCandidate && !isDeployCurrencyInput(currencyCandidate)) {
+    return { kind: 'usage', text: formatDeployUsageText(`Unsupported currency: ${currencyCandidate}`) }
+  }
+  if (metadataCandidate && !isSupportedMetadataUri(metadataCandidate)) {
+    return { kind: 'usage', text: formatDeployUsageText('metadataUri must start with https://, ipfs://, ar://, or data:.') }
+  }
+
+  const currencyInput = (currencyCandidate || defaultDeployCurrency(coinType)) as DeployCurrencyInput
+  const metadataUri = metadataCandidate || buildDefaultCoinMetadataUri({ coinType, name, symbol })
+
+  return {
+    kind: 'coin',
+    coinType,
+    name,
+    symbol,
+    metadataUri,
+    currencyInput,
+    commandCurrency: mapDeployCurrencyToCommandCurrency(currencyInput),
+  }
+}
 
 type CcaAuctionQuote = {
   auctionAddress: `0x${string}`
@@ -781,6 +947,34 @@ function parseTradeCallbackData(rawData: string):
     const actionType = asTrimmed(parts[2]).toLowerCase()
     if (actionType === 'buy' || actionType === 'sell' || actionType === 'bid') {
       return { kind: 'edit', actionType }
+    }
+  }
+  return null
+}
+
+function parseDeployCallbackData(rawData: string):
+  | { kind: 'type'; deployType: DeployWizardType | 'zora' }
+  | { kind: 'confirm' | 'decline'; token: string }
+  | null {
+  const data = asTrimmed(rawData)
+  const typeMatch = data.match(/^deploy:type:(trend|content|creator|zora)$/)
+  if (typeMatch) {
+    const deployType = asTrimmed(typeMatch[1]).toLowerCase()
+    if (deployType === 'trend' || deployType === 'content' || deployType === 'creator' || deployType === 'zora') {
+      return {
+        kind: 'type',
+        deployType,
+      }
+    }
+  }
+  const actionMatch = data.match(/^deploy:(confirm|accept|decline|cancel):([a-zA-Z0-9._-]+)$/)
+  if (actionMatch) {
+    const action = asTrimmed(actionMatch[1]).toLowerCase()
+    const token = asTrimmed(actionMatch[2])
+    if (!token) return null
+    return {
+      kind: action === 'confirm' || action === 'accept' ? 'confirm' : 'decline',
+      token,
     }
   }
   return null
@@ -1349,6 +1543,10 @@ function buildHelpReplyMarkup(chatId: string): Record<string, unknown> {
       { text: 'Rooms', callback_data: 'menu:rooms' },
     ],
     [
+      { text: 'Deploy', callback_data: 'menu:deploy' },
+      { text: 'Zora', callback_data: 'menu:zora' },
+    ],
+    [
       { text: 'Link', callback_data: 'menu:link' },
       { text: 'Help Topics', callback_data: 'menu:help' },
       { text: 'All Commands', callback_data: 'help:all' },
@@ -1387,6 +1585,8 @@ function resolveHelpCallbackCommand(rawData: string): string | null {
     if (action === 'auctions') return '/auctions'
     if (action === 'mybids') return '/mybids'
     if (action === 'signals') return '/signals'
+    if (action === 'deploy') return '/deploy'
+    if (action === 'zora') return '/zora'
     if (action === 'help') return '/help'
     return null
   }
@@ -1419,6 +1619,8 @@ function resolveNavigationCallbackToast(rawData: string, mappedCommand: string |
   if (token === 'menu:buy') return 'Buy flow'
   if (token === 'menu:sell') return 'Sell flow'
   if (token === 'menu:bid') return 'Bid flow'
+  if (token === 'menu:deploy') return 'Deploy wizard'
+  if (token === 'menu:zora') return 'Zora setup'
   if (token === 'menu:link') return 'Link flow'
   if (token === 'menu:linked') return 'Link status'
   if (token === 'menu:unlink') return 'Unlink flow'
@@ -1434,6 +1636,7 @@ function resolveNavigationCallbackToast(rawData: string, mappedCommand: string |
 function resolveImmediateCallbackToast(params: {
   parsedTradeFlowCallback: ReturnType<typeof parseTradeFlowCallbackData>
   parsedTradeCallback: ReturnType<typeof parseTradeCallbackData>
+  parsedDeployCallback: ReturnType<typeof parseDeployCallbackData>
   callbackData: string
   mappedCommand: string | null
 }): string {
@@ -1448,6 +1651,13 @@ function resolveImmediateCallbackToast(params: {
     if (trade.kind === 'accept') return 'Processing...'
     if (trade.kind === 'decline') return 'Declining...'
     return 'Edit command'
+  }
+  const deploy = params.parsedDeployCallback
+  if (deploy) {
+    if (deploy.kind === 'confirm') return 'Deploying...'
+    if (deploy.kind === 'decline') return 'Deploy declined'
+    if (deploy.kind === 'type') return deploy.deployType === 'zora' ? 'Zora setup' : 'Preparing template...'
+    return ''
   }
   return resolveNavigationCallbackToast(params.callbackData, params.mappedCommand)
 }
@@ -2225,12 +2435,15 @@ async function executeTelegramNativeCommand(params: {
   text: string
   chatId: string
   userId: string
+  groupId?: string
+  senderWallet?: `0x${string}`
   messageId?: number
   allowTradeArgs?: boolean
 }): Promise<TelegramCommandResponse | null> {
   if (!isTelegramNativeCommand(params.text)) return null
   const head = getCommandHead(params.text)
   const tradeIntent = parseTelegramTradeIntent(params.text)
+  const deployIntent = parseTelegramDeployIntent(params.text)
 
   if (head === 'link') {
     const miniAppUrl = resolveTelegramMiniAppUrl()
@@ -2313,6 +2526,10 @@ async function executeTelegramNativeCommand(params: {
     }
   }
 
+  if (head === 'zora') {
+    return buildTelegramZoraResponse(params.chatId)
+  }
+
   const db = await getDb()
   if (!db) {
     if (head === 'linked') {
@@ -2380,12 +2597,140 @@ async function executeTelegramNativeCommand(params: {
         ].join('\n'),
       }
     }
+    if (head === 'deploy') {
+      if (deployIntent?.kind === 'zora') {
+        return buildTelegramZoraResponse(params.chatId)
+      }
+      if (deployIntent?.kind === 'menu' || deployIntent?.kind === 'usage' || !deployIntent) {
+        return {
+          text: deployIntent?.kind === 'usage' ? deployIntent.text : formatDeployUsageText(),
+          replyMarkup: buildDeployMenuReplyMarkup(),
+        }
+      }
+      return {
+        text: [
+          'Deploy flow',
+          '',
+          '- database unavailable',
+          '- retry in a few seconds',
+        ].join('\n'),
+      }
+    }
     return null
   }
 
   await ensureWaitlistSchema(db as any)
   await ensureKeeprSchema()
   await ensureTelegramTradingSchema(db as any)
+
+  if (head === 'deploy') {
+    if (!deployIntent) {
+      return {
+        text: formatDeployUsageText(),
+        replyMarkup: buildDeployMenuReplyMarkup(),
+      }
+    }
+    if (deployIntent.kind === 'menu') {
+      return {
+        text: [
+          'Deploy Wizard',
+          '',
+          '- pick deploy type below',
+          '- then run the generated `/deploy ...` template',
+          '- confirm preview to execute',
+        ].join('\n'),
+        replyMarkup: buildDeployMenuReplyMarkup(),
+      }
+    }
+    if (deployIntent.kind === 'usage') {
+      return {
+        text: deployIntent.text,
+        replyMarkup: buildDeployMenuReplyMarkup(),
+      }
+    }
+    if (deployIntent.kind === 'zora') {
+      return buildTelegramZoraResponse(params.chatId)
+    }
+
+    const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+    if (!link || link.linkStatus !== 'active') {
+      return {
+        text: [
+          'Deploy blocked',
+          '',
+          '- link required: run /link first',
+          '- after linking, retry /deploy',
+        ].join('\n'),
+      }
+    }
+    if (!link.ownerVerified) {
+      return {
+        text: [
+          'Deploy blocked',
+          '',
+          '- owner verification required',
+          '- run /linked and ensure ownerVerified is true',
+        ].join('\n'),
+      }
+    }
+
+    const intentPayload: Record<string, unknown> =
+      deployIntent.kind === 'trend'
+        ? {
+            deployType: 'trend',
+            ticker: deployIntent.ticker,
+          }
+        : {
+            deployType: deployIntent.coinType,
+            name: deployIntent.name,
+            symbol: deployIntent.symbol,
+            metadataUri: deployIntent.metadataUri,
+            currencyInput: deployIntent.currencyInput,
+          }
+
+    const deployBuild = buildDeployCommandFromIntent(intentPayload)
+    if (!deployBuild) {
+      return {
+        text: formatDeployUsageText('Unable to build deploy command from supplied arguments.'),
+        replyMarkup: buildDeployMenuReplyMarkup(),
+      }
+    }
+
+    const token = await createTelegramActionToken({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      actionType: deployIntent.kind === 'trend' ? 'deploy_trend' : `deploy_${deployIntent.coinType}`,
+      intentPayload,
+      ttlSeconds: 60 * 3,
+    })
+
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: 'deploy',
+      intent: intentPayload,
+      execution: {
+        mode: 'preview',
+        commandText: deployBuild.commandText,
+      },
+      status: 'previewed',
+    })
+
+    return {
+      text: formatDeployPreviewText({
+        commandText: deployBuild.commandText,
+        deployLabel: deployBuild.deployLabel,
+        detailLines: deployBuild.detailLines,
+        expiresAt: token.expiresAt,
+      }),
+      replyMarkup: buildDeployPreviewReplyMarkup(token.token),
+    }
+  }
 
   if (head === 'buy' || head === 'sell' || head === 'bid') {
     const actionType = head as InteractiveTradeAction
@@ -3197,6 +3542,351 @@ async function maybeHandlePendingTradePercentInput(params: {
   }
 }
 
+function buildReusableCommandButton(label: string, command: string): Record<string, unknown> {
+  const useCopyText = parseBoolean(process.env.TELEGRAM_COPY_TEXT_BUTTONS, true)
+  if (useCopyText) {
+    return { text: label, copy_text: { text: command } }
+  }
+  return { text: label, switch_inline_query_current_chat: command }
+}
+
+function buildDeployMenuReplyMarkup(): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Trend Deploy', callback_data: 'deploy:type:trend' },
+        { text: 'Content Coin', callback_data: 'deploy:type:content' },
+      ],
+      [
+        { text: 'Creator Coin', callback_data: 'deploy:type:creator' },
+        { text: 'Zora Sign Up', callback_data: 'deploy:type:zora' },
+      ],
+      [{ text: 'Back', callback_data: 'menu:help' }],
+    ],
+  }
+}
+
+function buildDeployTypeReplyMarkup(deployType: DeployWizardType): Record<string, unknown> {
+  if (deployType === 'trend') {
+    return {
+      inline_keyboard: [
+        [buildReusableCommandButton('Insert Trend Template', '/deploy trend BASEAI')],
+        [{ text: 'Back', callback_data: 'menu:deploy' }],
+      ],
+    }
+  }
+  if (deployType === 'content') {
+    return {
+      inline_keyboard: [
+        [buildReusableCommandButton('Insert Content Template', '/deploy content "My Content Coin" MCC')],
+        [{ text: 'Back', callback_data: 'menu:deploy' }],
+      ],
+    }
+  }
+  return {
+    inline_keyboard: [
+      [buildReusableCommandButton('Insert Creator Template', '/deploy creator "My Creator Coin" MCC')],
+      [{ text: 'Back', callback_data: 'menu:deploy' }],
+    ],
+  }
+}
+
+function buildDeployPreviewReplyMarkup(token: string): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Confirm', callback_data: `deploy:confirm:${token}` },
+        { text: 'Decline', callback_data: `deploy:decline:${token}` },
+      ],
+    ],
+  }
+}
+
+function formatDeployTypeText(deployType: DeployWizardType): string {
+  if (deployType === 'trend') {
+    return [
+      'Deploy Wizard • Trend',
+      '',
+      '- command: `/deploy trend` <TICKER>',
+      '- example: `/deploy trend` BASEAI',
+      '- flow: preview -> confirm -> execute `/coin trend reserve`',
+    ].join('\n')
+  }
+  if (deployType === 'content') {
+    return [
+      'Deploy Wizard • Content Coin',
+      '',
+      '- command: `/deploy content` "<NAME>" <SYMBOL> [metadataUri] [ETH|ZORA|CREATOR_COIN|CONTENT_COIN]',
+      '- default currency label: CONTENT_COIN',
+      '- metadataUri optional: auto-generated when omitted',
+    ].join('\n')
+  }
+  return [
+    'Deploy Wizard • Creator Coin',
+    '',
+    '- command: `/deploy creator` "<NAME>" <SYMBOL> [metadataUri] [ETH|ZORA|CREATOR_COIN|CONTENT_COIN]',
+    '- default currency label: CREATOR_COIN',
+    '- metadataUri optional: auto-generated when omitted',
+  ].join('\n')
+}
+
+function formatTelegramZoraText(chatId: string): string {
+  const miniAppUrl = resolveTelegramMiniAppUrl()
+  const zoraAppUrl = buildTelegramMiniAppUrl({
+    baseUrl: miniAppUrl,
+    pathname: '/accounts',
+    query: {
+      tgMiniApp: '1',
+      tgEntry: 'zora-signup',
+      chatAction: 'zora-signup',
+      tgChatId: chatId,
+    },
+  })
+  return [
+    'Zora Sign Up',
+    '',
+    '1) Run `/link` if your Telegram account is not linked yet',
+    '2) Open the app link below',
+    '3) Tap "Link Zora" in Accounts',
+    '',
+    `Open: ${zoraAppUrl}`,
+  ].join('\n')
+}
+
+function buildTelegramZoraResponse(chatId: string): TelegramCommandResponse {
+  const miniAppUrl = resolveTelegramMiniAppUrl()
+  const zoraAppUrl = buildTelegramMiniAppUrl({
+    baseUrl: miniAppUrl,
+    pathname: '/accounts',
+    query: {
+      tgMiniApp: '1',
+      tgEntry: 'zora-signup',
+      chatAction: 'zora-signup',
+      tgChatId: chatId,
+    },
+  })
+  return {
+    text: formatTelegramZoraText(chatId),
+    replyMarkup: {
+      inline_keyboard: [
+        [buildMiniAppLaunchButton({ chatId, text: 'Open Zora Linking', url: zoraAppUrl })],
+        [{ text: 'Back', callback_data: 'menu:help' }],
+      ],
+    },
+  }
+}
+
+function buildDeployCommandFromIntent(intent: Record<string, unknown>): {
+  commandText: string
+  deployLabel: string
+  detailLines: string[]
+} | null {
+  const deployType = asTrimmed(intent.deployType ?? '').toLowerCase()
+  if (deployType === 'trend') {
+    const ticker = asTrimmed(intent.ticker ?? '').toUpperCase()
+    if (!/^[A-Z0-9._-]{2,24}$/.test(ticker)) return null
+    return {
+      commandText: `/coin trend reserve ${ticker}`,
+      deployLabel: 'TREND',
+      detailLines: [`- Ticker: ${ticker}`],
+    }
+  }
+
+  if (deployType === 'content' || deployType === 'creator') {
+    const name = asTrimmed(intent.name ?? '').replace(/"/g, '')
+    const symbol = normalizeDeploySymbol(asTrimmed(intent.symbol ?? ''))
+    const metadataUri = asTrimmed(intent.metadataUri ?? '')
+    const currencyInputRaw = asTrimmed(intent.currencyInput ?? '').toUpperCase()
+    if (!name || !/^[A-Z0-9_]{2,10}$/.test(symbol) || !isSupportedMetadataUri(metadataUri) || !isDeployCurrencyInput(currencyInputRaw)) {
+      return null
+    }
+    const commandCurrency = mapDeployCurrencyToCommandCurrency(currencyInputRaw)
+    return {
+      commandText: `/coin create "${name}" ${symbol} ${metadataUri} ${commandCurrency}`,
+      deployLabel: deployType === 'content' ? 'CONTENT_COIN' : 'CREATOR_COIN',
+      detailLines: [
+        `- Name: ${name}`,
+        `- Symbol: ${symbol}`,
+        `- Metadata URI: ${metadataUri}`,
+        `- Currency label: ${currencyInputRaw}`,
+        `- Command currency: ${commandCurrency}`,
+      ],
+    }
+  }
+  return null
+}
+
+function formatDeployPreviewText(params: {
+  commandText: string
+  deployLabel: string
+  detailLines: string[]
+  expiresAt: string
+}): string {
+  return [
+    `Deploy Preview • ${params.deployLabel}`,
+    '',
+    ...params.detailLines,
+    '',
+    `Action: ${params.commandText}`,
+    `Token expires: ${params.expiresAt}`,
+  ].join('\n')
+}
+
+function formatDeployTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {
+  if (reason === 'expired') return 'Deploy confirmation expired. Start a new `/deploy` preview.'
+  if (reason === 'consumed') return 'This deploy preview was already confirmed or cancelled.'
+  if (reason === 'scope_mismatch') return 'Deploy confirmation scope mismatch. Use a fresh preview from this chat.'
+  return 'Deploy confirmation token not found. Start a new `/deploy` preview.'
+}
+
+async function handleTelegramDeployCallback(params: {
+  callbackData: string
+  chatId: string
+  userId: string
+  messageId?: number
+  groupId: string
+  senderWallet: `0x${string}`
+}): Promise<TelegramCommandResponse | null> {
+  const callback = parseDeployCallbackData(params.callbackData)
+  if (!callback) return null
+
+  if (callback.kind === 'type') {
+    if (callback.deployType === 'zora') {
+      return {
+        ...buildTelegramZoraResponse(params.chatId),
+        callbackToast: 'Zora setup',
+      }
+    }
+    return {
+      text: formatDeployTypeText(callback.deployType),
+      replyMarkup: buildDeployTypeReplyMarkup(callback.deployType),
+      callbackToast: 'Template ready',
+    }
+  }
+
+  const db = await getDb()
+  if (!db) {
+    return {
+      text: 'Deploy action unavailable while database is offline. Please retry in a few seconds.',
+      callbackToast: 'Temporarily unavailable',
+    }
+  }
+
+  await ensureWaitlistSchema(db as any)
+  await ensureKeeprSchema()
+  await ensureTelegramTradingSchema(db as any)
+
+  const consumed = await consumeTelegramActionToken({
+    db: db as any,
+    token: callback.token,
+    telegramUserId: params.userId,
+    chatId: params.chatId,
+  })
+  if (!consumed.ok) {
+    const callbackToast =
+      consumed.reason === 'expired'
+        ? 'Preview expired'
+        : consumed.reason === 'consumed'
+          ? 'Already used'
+          : consumed.reason === 'scope_mismatch'
+            ? 'Wrong chat scope'
+            : 'Preview missing'
+    return {
+      text: formatDeployTokenFailure(consumed.reason),
+      callbackToast,
+    }
+  }
+
+  const intent = consumed.intentPayload ?? {}
+  const deployBuild = buildDeployCommandFromIntent(intent)
+  if (!deployBuild) {
+    return {
+      text: [
+        'Deploy blocked',
+        '',
+        '- malformed deploy payload',
+        '- start a new `/deploy` preview',
+      ].join('\n'),
+      callbackToast: 'Invalid preview',
+    }
+  }
+
+  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+  if (!link || link.linkStatus !== 'active' || !link.ownerVerified) {
+    return {
+      text: [
+        'Deploy blocked',
+        '',
+        '- account link is no longer active/verified',
+        '- run /linked and /link again if needed',
+      ].join('\n'),
+      callbackToast: 'Relink required',
+    }
+  }
+
+  if (callback.kind === 'decline') {
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: 'deploy',
+      intent,
+      status: 'cancelled',
+    })
+    return {
+      text: `Declined ${deployBuild.deployLabel} deploy preview.`,
+      callbackToast: 'Deploy declined',
+    }
+  }
+
+  const execution = await handleKeeprCommand({
+    groupId: params.groupId,
+    senderWallet: isAddressLike(link.canonicalCswAddress)
+      ? (link.canonicalCswAddress as `0x${string}`)
+      : params.senderWallet,
+    text: deployBuild.commandText,
+  })
+
+  const status = execution.ok ? 'executed' : 'failed'
+  await logTelegramActionAudit({
+    db: db as any,
+    telegramUserId: params.userId,
+    chatId: params.chatId,
+    messageId: params.messageId,
+    profileId: link.profileId,
+    canonicalCswAddress: link.canonicalCswAddress,
+    actionType: 'deploy',
+    intent,
+    execution: {
+      mode: 'keepr_coin_command',
+      commandText: deployBuild.commandText,
+    },
+    status,
+    errorMessage: execution.ok ? null : asTrimmed(execution.response),
+  })
+  if (execution.ok) {
+    return {
+      text: [
+        `Deploy sent • ${deployBuild.deployLabel}`,
+        '',
+        execution.response,
+      ].join('\n'),
+      callbackToast: 'Deploy sent',
+    }
+  }
+  return {
+    text: [
+      `Deploy failed • ${deployBuild.deployLabel}`,
+      '',
+      execution.response || 'Execution failed. Retry with a fresh deploy preview.',
+    ].join('\n'),
+    callbackToast: 'Deploy failed',
+  }
+}
+
 async function executeTelegramCommand(params: {
   text: string
   chatId: string
@@ -3218,6 +3908,8 @@ async function executeTelegramCommand(params: {
     text: params.text,
     chatId: params.chatId,
     userId: params.userId,
+    groupId: params.groupId,
+    senderWallet: params.senderWallet,
     messageId: params.messageId,
   })
   if (nativeResponse) return nativeResponse
@@ -3867,6 +4559,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = String(callbackQuery.from?.id ?? '').trim()
     const parsedTradeFlowCallback = parseTradeFlowCallbackData(callbackData)
     const parsedTradeCallback = parseTradeCallbackData(callbackData)
+    const parsedDeployCallback = parseDeployCallbackData(callbackData)
     const parsedTipCallback = parseTipCallbackData(callbackData)
     const mappedCommand = resolveHelpCallbackCommand(callbackData)
     const isMenuNavigationCallback = callbackData.startsWith('menu:') || callbackData.startsWith('help:')
@@ -3937,6 +4630,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         text: resolveImmediateCallbackToast({
           parsedTradeFlowCallback,
           parsedTradeCallback,
+          parsedDeployCallback,
           callbackData,
           mappedCommand,
         }),
@@ -3952,7 +4646,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const groupId = resolveGroupId(chatId)
     const senderWallet = resolveSenderWallet(userId)
-    const tradeCallbackResponse =
+    const callbackResponse =
+      (await handleTelegramDeployCallback({
+        callbackData,
+        chatId,
+        userId,
+        messageId: callbackMessage?.message_id,
+        groupId,
+        senderWallet,
+      })) ??
       (await handleTelegramTradeFlowCallback({
         callbackData,
         chatId,
@@ -3967,13 +4669,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         groupId,
         senderWallet,
       }))
-    if (tradeCallbackResponse) {
+    if (callbackResponse) {
       if (!callbackAcknowledged) {
         try {
           await answerTelegramCallbackQuery({
             botToken,
             callbackQueryId,
-            text: asTrimmed(tradeCallbackResponse.callbackToast ?? ''),
+            text: asTrimmed(callbackResponse.callbackToast ?? ''),
           })
         } catch (error) {
           console.error('[telegram/webhook] trade callback acknowledgement failed', {
@@ -3983,7 +4685,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
         }
       }
-      const chunks = splitTelegramMessage(tradeCallbackResponse.text)
+      const chunks = splitTelegramMessage(callbackResponse.text)
       let startIdx = 0
       if (typeof callbackMessageId === 'number' && chunks.length > 0) {
         const firstChunk = chunks[0] ?? ''
@@ -3993,7 +4695,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             chatId,
             messageId: callbackMessageId,
             text: firstChunk,
-            replyMarkup: tradeCallbackResponse.replyMarkup,
+            replyMarkup: callbackResponse.replyMarkup,
           })
           startIdx = 1
         }
@@ -4006,10 +4708,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           chatId,
           text: chunk,
           replyToMessageId: idx === 0 && startIdx === 0 ? callbackMessage?.message_id : undefined,
-          replyMarkup: idx === 0 && startIdx === 0 ? tradeCallbackResponse.replyMarkup : undefined,
+          replyMarkup: idx === 0 && startIdx === 0 ? callbackResponse.replyMarkup : undefined,
         })
       }
-      const signalChunks = splitTelegramMessage(asTrimmed(tradeCallbackResponse.signalText ?? ''))
+      const signalChunks = splitTelegramMessage(asTrimmed(callbackResponse.signalText ?? ''))
       const signalDestination = resolveSignalsDestination(chatId)
       for (let idx = 0; idx < signalChunks.length; idx += 1) {
         const signalChunk = signalChunks[idx]
@@ -4019,7 +4721,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           chatId: signalDestination.chatId,
           text: signalChunk,
           messageThreadId: signalDestination.messageThreadId,
-          replyMarkup: idx === 0 ? tradeCallbackResponse.signalReplyMarkup : undefined,
+          replyMarkup: idx === 0 ? callbackResponse.signalReplyMarkup : undefined,
         })
       }
       return res.status(200).json({

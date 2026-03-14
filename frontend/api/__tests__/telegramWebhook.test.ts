@@ -2697,4 +2697,180 @@ describe('telegram webhook handler', () => {
     const flat = keyboard.flat()
     expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('trade:accept:'))).toBe(true)
   })
+
+  it('starts deploy wizard from /deploy with deploy-type buttons', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_6,
+        message: {
+          message_id: 35,
+          text: '/deploy',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Deploy')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'deploy:type:trend')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'deploy:type:content')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'deploy:type:creator')).toBe(true)
+  })
+
+  it('renders deploy preview for trend reserve and includes confirm callback token', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    createTelegramActionTokenMock.mockResolvedValueOnce({
+      token: 'deploy-token-1',
+      expiresAt: '2026-03-13T00:01:30.000Z',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_7,
+        message: {
+          message_id: 36,
+          text: '/deploy trend BASEAI',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Deploy Preview')
+    expect(String(payload.text ?? '')).toContain('TREND')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('deploy:confirm:deploy-token-1'))).toBe(true)
+  })
+
+  it('confirms deploy callback and executes /coin trend reserve via canonical CSW', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    consumeTelegramActionTokenMock.mockResolvedValueOnce({
+      ok: true,
+      actionType: 'deploy_trend',
+      intentPayload: {
+        deployType: 'trend',
+        ticker: 'BASEAI',
+        commandText: '/coin trend reserve BASEAI',
+      },
+      expiresAt: '2026-03-13T00:01:30.000Z',
+      consumedAt: '2026-03-13T00:00:32.000Z',
+    })
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Trend reserved + deployed.' })
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_8,
+        callback_query: {
+          id: 'cbq-deploy-confirm',
+          data: 'deploy:confirm:deploy-token-1',
+          from: { id: 99 },
+          message: { message_id: 37, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+    expect(handleKeeprCommandMock).toHaveBeenCalledWith({
+      groupId: 'xmtp-group-1',
+      senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      text: '/coin trend reserve BASEAI',
+    })
+    expect((fetch as any).mock.calls.length).toBe(2)
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Deploy sent')
+  })
+
+  it('handles /zora as a telegram-native command with guided app link', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_9,
+        message: { message_id: 38, text: '/zora', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Zora')
+    expect(String(payload.text ?? '')).toContain('/link')
+  })
 })

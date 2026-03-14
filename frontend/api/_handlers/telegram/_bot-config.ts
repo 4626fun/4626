@@ -55,6 +55,8 @@ function privateCommands(): TelegramBotCommand[] {
     { command: 'help', description: 'Open minimal command menu' },
     { command: 'link', description: 'Link Telegram to your 4626 wallet' },
     { command: 'linked', description: 'Check link and wallet status' },
+    { command: 'zora', description: 'Open Zora signup/linking flow' },
+    { command: 'deploy', description: 'Guided trend/content/creator deploy' },
     { command: 'portfolio', description: 'View positions and recent actions' },
     { command: 'buy', description: 'Preview buy in 4626 vault scope' },
     { command: 'sell', description: 'Preview sell in 4626 vault scope' },
@@ -65,6 +67,8 @@ function privateCommands(): TelegramBotCommand[] {
 function groupCommands(): TelegramBotCommand[] {
   return [
     { command: 'help', description: 'Open command menu' },
+    { command: 'zora', description: 'Open Zora signup/linking flow' },
+    { command: 'deploy', description: 'Guided trend/content/creator deploy' },
     { command: 'vaults', description: 'List scoped vaults in this chat' },
     { command: 'auctions', description: 'List active CCA auctions' },
     { command: 'signals', description: 'Recent trade signals in this chat' },
@@ -77,6 +81,8 @@ function groupCommands(): TelegramBotCommand[] {
 function adminCommands(): TelegramBotCommand[] {
   return [
     { command: 'help', description: 'Open command menu' },
+    { command: 'zora', description: 'Open Zora signup/linking flow' },
+    { command: 'deploy', description: 'Guided trend/content/creator deploy' },
     { command: 'inline', description: 'Open one-tap command templates' },
     { command: 'x', description: 'Draft X post (confirm required)' },
     { command: 'portfolio', description: 'View linked account activity' },
