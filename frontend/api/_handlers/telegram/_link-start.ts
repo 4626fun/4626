@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { createTelegramLinkStartToken } from '../../../server/_lib/telegramTrading.js'
+import { getDb } from '../../../server/_lib/postgres.js'
+import {
+  createTelegramLinkStartToken,
+  ensureTelegramTradingSchema,
+  isTelegramFunnelEventsEnabledForChat,
+  logTelegramFunnelEvent,
+} from '../../../server/_lib/telegramTrading.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type LinkStartBody = {
   telegramUserId?: string | number
@@ -120,6 +127,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       next: nextPath,
     },
   })
+
+  const shouldEmitFunnelEvent = isTelegramFunnelEventsEnabledForChat(chatId)
+  const db = shouldEmitFunnelEvent ? await getDb().catch(() => null) : null
+  if (db && shouldEmitFunnelEvent) {
+    await ensureWaitlistSchema(db as any).catch(() => {})
+    await ensureTelegramTradingSchema(db as any).catch(() => {})
+    await logTelegramFunnelEvent({
+      db: db as any,
+      telegramUserId,
+      chatId,
+      eventName: 'link_start',
+      actionType: 'link',
+      context: {
+        hasUsername: Boolean(asTrimmed(body.telegramUsername ?? '')),
+      },
+    }).catch(() => {})
+  }
 
   return res.status(200).json({
     success: true,

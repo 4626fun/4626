@@ -25,6 +25,8 @@ const {
   getTelegramChatTradePolicyMock,
   getHolderRoomPolicyByVaultMock,
   listHolderRoomPoliciesMock,
+  isTelegramFunnelEventsEnabledForChatMock,
+  logTelegramFunnelEventMock,
   upsertHolderRoomMemberMock,
   revokeTelegramLinkMock,
   logTelegramActionAuditMock,
@@ -56,6 +58,8 @@ const {
   getTelegramChatTradePolicyMock: vi.fn(),
   getHolderRoomPolicyByVaultMock: vi.fn(),
   listHolderRoomPoliciesMock: vi.fn(),
+  isTelegramFunnelEventsEnabledForChatMock: vi.fn(),
+  logTelegramFunnelEventMock: vi.fn(),
   upsertHolderRoomMemberMock: vi.fn(),
   revokeTelegramLinkMock: vi.fn(),
   logTelegramActionAuditMock: vi.fn(),
@@ -130,6 +134,8 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   getTelegramChatTradePolicy: getTelegramChatTradePolicyMock,
   getHolderRoomPolicyByVault: getHolderRoomPolicyByVaultMock,
   listHolderRoomPolicies: listHolderRoomPoliciesMock,
+  isTelegramFunnelEventsEnabledForChat: isTelegramFunnelEventsEnabledForChatMock,
+  logTelegramFunnelEvent: logTelegramFunnelEventMock,
   upsertHolderRoomMember: upsertHolderRoomMemberMock,
   revokeTelegramLink: revokeTelegramLinkMock,
   logTelegramActionAudit: logTelegramActionAuditMock,
@@ -188,6 +194,8 @@ describe('telegram webhook handler', () => {
     })
     getHolderRoomPolicyByVaultMock.mockResolvedValue(null)
     listHolderRoomPoliciesMock.mockResolvedValue([])
+    isTelegramFunnelEventsEnabledForChatMock.mockReturnValue(true)
+    logTelegramFunnelEventMock.mockResolvedValue(undefined)
     upsertHolderRoomMemberMock.mockResolvedValue(null)
     revokeTelegramLinkMock.mockResolvedValue({ revoked: false, link: null })
     logTelegramActionAuditMock.mockResolvedValue(undefined)
@@ -347,12 +355,9 @@ describe('telegram webhook handler', () => {
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:help')).toBe(true)
+    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:more')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(false)
-    expect(
-      callbackButtons.some(
-        (button: any) => typeof button?.url === 'string' && String(button.url).includes('chatAction=vault-status'),
-      ),
-    ).toBe(true)
+    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:deploy')).toBe(false)
   })
 
   it('backticks only the command and not the help description', async () => {
@@ -917,6 +922,51 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:help')).toBe(true)
   })
 
+  it('handles callback query for more tools menu and returns secondary actions', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 11_1,
+        callback_query: {
+          id: 'cbq-more',
+          data: 'menu:more',
+          from: { id: 99 },
+          message: { message_id: 15, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(2)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('More Tools')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
+    expect(allButtons.some((button: any) => button?.callback_data === 'menu:deploy')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'menu:zora')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'menu:help')).toBe(true)
+  })
+
   it('handles /linked as a telegram-native command without delegating to keepr', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
@@ -938,6 +988,49 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Link Status')
+    expect(String(payload.text ?? '')).toContain('- linked: no')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:link')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Start Link')).toBe(true)
+  })
+
+  it('renders /linked success with trade shortcuts when owner is verified', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: null,
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_0,
+        message: { message_id: 16, text: '/linked', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Ready actions')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:sell')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:bid')).toBe(true)
   })
 
   it('renders /link with friendly mini app and status buttons', async () => {
@@ -961,12 +1054,15 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Link your 4626 account (one time)')
-    expect(String(payload.text ?? '')).toContain('Tap Open Mini App below')
+    expect(String(payload.text ?? '')).toContain('Tap Open Mini App.')
+    expect(String(payload.text ?? '')).toContain('If the button fails')
     expect(String(payload.text ?? '')).not.toContain('Open: https://')
+    expect(String(payload.parse_mode ?? '')).toBe('Markdown')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(true)
     expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:linked')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === '/linked')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Check Link Status')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:link')).toBe(true)
   })
 
   it('handles /portfolio as a telegram-native command without delegating to keepr', async () => {
@@ -1561,6 +1657,16 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     expect(handleKeeprCommandMock).not.toHaveBeenCalled()
     expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
+    expect(getDbMock).toHaveBeenCalledTimes(1)
+    expect(clearTelegramTradePercentPromptMock).toHaveBeenCalledWith({
+      db: expect.anything(),
+      chatId: '-100123',
+      telegramUserId: '99',
+    })
+    const previewFunnelCalls = logTelegramFunnelEventMock.mock.calls.map((call) => call[0] ?? {})
+    expect(
+      previewFunnelCalls.some((entry: any) => entry?.eventName === 'trade_preview_ready' && entry?.actionType === 'buy'),
+    ).toBe(true)
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Step 3/3')
@@ -2468,6 +2574,16 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('already confirmed')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'menu:help')).toBe(true)
+    const invalidTokenFunnelCalls = logTelegramFunnelEventMock.mock.calls.map((call) => call[0] ?? {})
+    expect(
+      invalidTokenFunnelCalls.some(
+        (entry: any) => entry?.eventName === 'trade_confirm_token_invalid' && entry?.context?.reason === 'consumed',
+      ),
+    ).toBe(true)
   })
 
   it('starts interactive buy flow with a vault picker on /buy', async () => {
@@ -2514,6 +2630,55 @@ describe('telegram webhook handler', () => {
     expect(Array.isArray(keyboard)).toBe(true)
     const flat = keyboard.flat()
     expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('tradeflow:v:buy:'))).toBe(true)
+    expect(clearTelegramTradePercentPromptMock).toHaveBeenCalledWith({
+      db: expect.anything(),
+      chatId: '-100123',
+      telegramUserId: '99',
+    })
+    const startFunnelCalls = logTelegramFunnelEventMock.mock.calls.map((call) => call[0] ?? {})
+    expect(
+      startFunnelCalls.some((entry: any) => entry?.eventName === 'trade_flow_started' && entry?.actionType === 'buy'),
+    ).toBe(true)
+  })
+
+  it('skips funnel logging when chat is outside rollout cohort', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    isTelegramFunnelEventsEnabledForChatMock.mockReturnValue(false)
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_1_1,
+        message: {
+          message_id: 30,
+          text: '/buy',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(logTelegramFunnelEventMock).not.toHaveBeenCalled()
   })
 
   it('shows percent picker after selecting a vault in interactive flow', async () => {
@@ -2627,6 +2792,51 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Custom BUY size')
     expect(String(payload.text ?? '')).toContain('1 and 99.99')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'tradeflow:v:buy:0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
+  })
+
+  it('keeps custom percent flow active on invalid input with recovery buttons', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramTradePercentPromptMock.mockResolvedValueOnce({
+      chatId: '-100123',
+      telegramUserId: '99',
+      actionType: 'buy',
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      expiresAt: '2026-03-13T00:03:00.000Z',
+      consumedAt: null,
+      createdAt: '2026-03-13T00:00:00.000Z',
+      updatedAt: '2026-03-13T00:00:00.000Z',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_4_1,
+        message: {
+          message_id: 33,
+          text: 'abc',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(consumeTelegramTradePercentPromptMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Custom BUY size')
+    expect(String(payload.text ?? '')).toContain('between 1 and 99.99')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'tradeflow:v:buy:0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
   })
 
   it('consumes pending custom percent input and renders a preview', async () => {
@@ -2777,6 +2987,50 @@ describe('telegram webhook handler', () => {
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     const flat = keyboard.flat()
     expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('deploy:confirm:deploy-token-1'))).toBe(true)
+  })
+
+  it('shows deploy recovery actions when deploy confirmation token is expired', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    consumeTelegramActionTokenMock.mockResolvedValueOnce({ ok: false, reason: 'expired' })
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_7_1,
+        callback_query: {
+          id: 'cbq-deploy-expired',
+          data: 'deploy:confirm:deploy-token-expired',
+          from: { id: 99 },
+          message: { message_id: 36, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(2)
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Deploy confirmation expired')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'deploy:type:trend')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'menu:help')).toBe(true)
   })
 
   it('confirms deploy callback and executes /coin trend reserve via canonical CSW', async () => {

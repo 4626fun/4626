@@ -642,6 +642,50 @@ function parseEnvBoolean(value: string | undefined, fallback: boolean): boolean 
   return fallback
 }
 
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function buildFallbackHistoryBlock(state: Record<string, unknown>): string {
+  const recent = Array.isArray((state as any).recentMessages)
+    ? ((state as any).recentMessages as Array<any>)
+    : []
+  const entries = recent
+    .map((entry) => {
+      const role = String(entry?.role ?? 'user')
+      const text = String(entry?.text ?? '').replace(/\s+/g, ' ').trim()
+      const createdAt = Number(entry?.createdAt ?? Date.now())
+      const ts = Number.isFinite(createdAt) ? new Date(createdAt).toISOString() : new Date().toISOString()
+      return `<turn role="${xmlEscape(role)}" ts="${ts}">${xmlEscape(text)}</turn>`
+    })
+    .join('\n')
+  return `<history>\n${entries}\n</history>`
+}
+
+function buildContinuityContextBlock(state: Record<string, unknown>): string {
+  const historyBlock =
+    typeof (state as any).historyBlock === 'string' && (state as any).historyBlock.trim()
+      ? String((state as any).historyBlock)
+      : buildFallbackHistoryBlock(state)
+  const snapshotBlock =
+    typeof (state as any).memorySnapshotBlock === 'string' && (state as any).memorySnapshotBlock.trim()
+      ? String((state as any).memorySnapshotBlock)
+      : '<memory_snapshot />'
+  const factCardsBlock =
+    typeof (state as any).factCardsBlock === 'string' && (state as any).factCardsBlock.trim()
+      ? String((state as any).factCardsBlock)
+      : '<fact_cards />'
+  const openTasksBlock =
+    typeof (state as any).openTasksBlock === 'string' && (state as any).openTasksBlock.trim()
+      ? String((state as any).openTasksBlock)
+      : '<open_tasks />'
+
+  return [historyBlock, snapshotBlock, factCardsBlock, openTasksBlock].join('\n\n').trim()
+}
+
 const AGENT_RUNTIME_ROLE: RuntimeRole = (() => {
   const raw = String(process.env.AGENT_RUNTIME_ROLE ?? 'primary').trim().toLowerCase()
   return raw === 'standby' ? 'standby' : 'primary'
@@ -1051,6 +1095,7 @@ async function handleMessage(
     conversationType: string
     senderAddress: string | null
     content: string
+    xmtpConversationKey?: string | null
   },
   ctx: {
     agentKey: string
@@ -1289,6 +1334,7 @@ async function handleMessage(
   }
 
   try {
+    const continuityContextBlock = buildContinuityContextBlock(state as Record<string, unknown>)
     const llm = await withRetry({
       operation: 'llm_generate_response',
       maxRetries: EXTERNAL_MAX_RETRIES,
@@ -1296,7 +1342,7 @@ async function handleMessage(
       run: async () => llmService.generateResponse({
         agentKey: ctx.agentKey,
         userMessage: cleanText,
-        systemPrompt: characterRuntimeConfig.systemPrompt,
+        systemPrompt: `${characterRuntimeConfig.systemPrompt}\n\n${continuityContextBlock}`.trim(),
         vaultContext,
         correlationId,
         preferredModel: characterRuntimeConfig.preferredModel,
@@ -1457,6 +1503,7 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
         conversationType: msg.conversationType,
         senderAddress: msg.senderAddress,
         content: msg.content,
+        xmtpConversationKey: msg.conversationArchiveKey ?? null,
       },
       {
         agentKey: row.creatorAddress,
@@ -1632,6 +1679,7 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
         conversationType: msg.conversationType,
         senderAddress: msg.senderAddress,
         content: msg.content,
+        xmtpConversationKey: msg.conversationArchiveKey ?? null,
       },
       {
         agentKey: 'single-agent',
@@ -1712,6 +1760,7 @@ async function startSingleAgentCsw(params: {
         conversationType: msg.conversationType,
         senderAddress: msg.senderAddress,
         content: msg.content,
+        xmtpConversationKey: msg.conversationArchiveKey ?? null,
       },
       {
         agentKey: 'single-agent-csw',
@@ -1751,7 +1800,13 @@ async function startSingleAgentCsw(params: {
           `[eliza:csw] ${m.senderAddress?.slice(0, 10) ?? m.senderInboxId.slice(0, 10)}: ${m.content.slice(0, 80)}`,
         )
         return handleMessage(
-          { conversationId: m.conversationId, conversationType: m.conversationType, senderAddress: m.senderAddress, content: m.content },
+          {
+            conversationId: m.conversationId,
+            conversationType: m.conversationType,
+            senderAddress: m.senderAddress,
+            content: m.content,
+            xmtpConversationKey: m.conversationArchiveKey ?? null,
+          },
           { agentKey: 'single-agent-csw', runtimeBridge },
         )
       })

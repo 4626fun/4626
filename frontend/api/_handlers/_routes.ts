@@ -186,6 +186,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'telegram/link/start': () => import('./telegram/_link-start.js'),
   'telegram/link/complete': () => import('./telegram/_link-complete.js'),
   'telegram/link/status': () => import('./telegram/_link-status.js'),
+  'telegram/metrics': () => import('./telegram/_metrics.js'),
   'telegram/portfolio': () => import('./telegram/_portfolio.js'),
   'telegram/unlink': () => import('./telegram/_unlink.js'),
   'telegram/webhook': () => import('./telegram/_webhook.js'),

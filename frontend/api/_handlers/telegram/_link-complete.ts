@@ -5,7 +5,9 @@ import { bootstrapCanonicalDelegationState } from '../../../server/_lib/canonica
 import { getDb } from '../../../server/_lib/postgres.js'
 import {
   ensureTelegramTradingSchema,
-  readTelegramLinkStartToken,
+  isTelegramFunnelEventsEnabledForChat,
+  logTelegramFunnelEvent,
+  readTelegramLinkStartTokenStatus,
   upsertTelegramUserLink,
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
@@ -53,13 +55,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (await readJsonBody<LinkCompleteBody>(req).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
   const token = asTrimmed(body.token ?? '')
-  const parsed = readTelegramLinkStartToken(token)
-  if (!parsed) {
-    return res.status(400).json({
+  const tokenStatus = readTelegramLinkStartTokenStatus(token)
+  if (!tokenStatus.ok) {
+    const statusCode = tokenStatus.reason === 'expired' ? 410 : 400
+    const errorMessage =
+      tokenStatus.reason === 'expired'
+        ? 'Telegram link expired. Run /link in Telegram and open the new Mini App button.'
+        : 'Invalid link token'
+    return res.status(statusCode).json({
       success: false,
-      error: 'Invalid or expired link token',
+      error: errorMessage,
     } satisfies ApiEnvelope<never>)
   }
+  const parsed = tokenStatus.payload
+  const shouldEmitFunnelEvent = isTelegramFunnelEventsEnabledForChat(parsed.chatId)
 
   const db = await getDb()
   if (!db) {
@@ -82,6 +91,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     if (!link) {
       return res.status(500).json({ success: false, error: 'Failed to persist telegram link' } satisfies ApiEnvelope<never>)
+    }
+
+    if (shouldEmitFunnelEvent) {
+      await logTelegramFunnelEvent({
+        db: db as any,
+        telegramUserId: parsed.telegramUserId,
+        chatId: parsed.chatId,
+        eventName: 'link_complete_success',
+        actionType: 'link',
+        context: {
+          profileId: link.profileId,
+          ownerVerified: link.ownerVerified,
+          linkStatus: link.linkStatus,
+        },
+      }).catch(() => {})
     }
 
     return res.status(200).json({
@@ -110,6 +134,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }>)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to complete Telegram link'
+    if (shouldEmitFunnelEvent) {
+      await logTelegramFunnelEvent({
+        db: db as any,
+        telegramUserId: parsed.telegramUserId,
+        chatId: parsed.chatId,
+        eventName: 'link_complete_failed',
+        actionType: 'link',
+        context: {
+          message,
+        },
+      }).catch(() => {})
+    }
     return res.status(resolveStatusCode(error)).json({
       success: false,
       error: message,

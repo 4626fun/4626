@@ -1,15 +1,22 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomUUID, randomBytes } from 'node:crypto'
 import type { IAgentRuntime, Memory, Plugin } from '@elizaos/core'
 
 import { getDb } from '../../_lib/postgres.js'
 import { buildRuntimeSessionContext } from '../../_lib/session.js'
 import { logger } from '../../_lib/logger.js'
+import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lensGrove.js'
+
+type Db = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+  query?: (sql: string) => Promise<{ rows: any[] }>
+}
 
 type InboundMessage = {
   conversationId: string
   conversationType: string
   senderAddress: string | null
   content: string
+  xmtpConversationKey?: string | null
 }
 
 type RankedAction = {
@@ -34,6 +41,53 @@ type RuntimeBridge = {
   getDebugState: () => { trackedConversations: number; conversationIds: string[] }
 }
 
+type WarmFactCard = {
+  entity: string
+  fact: string
+  confidence: number
+}
+
+type WarmTaskLoop = {
+  id: number
+  task: string
+  status: string
+}
+
+type WarmMemorySnapshot = {
+  summary: string
+  currentGoals: string[]
+  userPreferences: string[]
+  recentDecisions: string[]
+  generatedAt: string
+}
+
+type ArchiveTurn = {
+  id: string
+  role: string
+  content: string
+  createdAt: string
+}
+
+type ArchiveChunkPayload = {
+  conversationId: string
+  turns: ArchiveTurn[]
+}
+
+type EncryptedArchiveEnvelope = {
+  schema: '4626.eliza.archive.chunk.v1'
+  conversationId: string
+  chunkHash: string
+  encrypted: true
+  payload: {
+    alg: 'aes-256-gcm'
+    iv: string
+    tag: string
+    ciphertext: string
+    aad: string
+    keyDerivation: 'hmac-sha256-conversation'
+  }
+}
+
 const AGENT_MEMORY_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS agent_message_memory (
     id TEXT PRIMARY KEY,
@@ -53,6 +107,76 @@ const AGENT_MEMORY_TABLE_SQL = `
 const AGENT_MEMORY_INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS agent_message_memory_conversation_created_idx
     ON agent_message_memory (conversation_id, created_at DESC);
+`
+
+const EPISODIC_SUMMARIES_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS episodic_summaries (
+    conversation_id TEXT PRIMARY KEY,
+    summary TEXT NOT NULL,
+    last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    version INT NOT NULL DEFAULT 1
+  );
+`
+
+const FACT_CARDS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS fact_cards (
+    id BIGSERIAL PRIMARY KEY,
+    conversation_id TEXT,
+    entity TEXT,
+    fact TEXT NOT NULL,
+    confidence FLOAT,
+    source_turn_id BIGINT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`
+
+const FACT_CARDS_CONVERSATION_ENTITY_UNIQUE_SQL = `
+  CREATE UNIQUE INDEX IF NOT EXISTS fact_cards_conversation_entity_uidx
+    ON fact_cards (conversation_id, entity);
+`
+
+const FACT_CARDS_ENTITY_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_fact_cards_entity
+    ON fact_cards(entity, conversation_id);
+`
+
+const TASK_LOOPS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS task_loops (
+    id BIGSERIAL PRIMARY KEY,
+    conversation_id TEXT,
+    task TEXT NOT NULL,
+    status TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`
+
+const TASK_LOOPS_CONVERSATION_STATUS_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS task_loops_conversation_status_idx
+    ON task_loops (conversation_id, status, created_at DESC);
+`
+
+const GROVE_CHAT_MANIFESTS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS grove_chat_manifests (
+    conversation_id TEXT PRIMARY KEY,
+    chunk_list JSONB NOT NULL,
+    root_hash TEXT NOT NULL,
+    encryption_pubkey TEXT,
+    last_archived_at TIMESTAMPTZ,
+    lens_profile_id TEXT
+  );
+`
+
+const GROVE_MANIFEST_CONVERSATION_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_manifest_conv
+    ON grove_chat_manifests(conversation_id);
+`
+
+const MEMORY_SNAPSHOTS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS memory_snapshots (
+    conversation_id TEXT PRIMARY KEY,
+    snapshot_json JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
 `
 
 const AGENT_MEMORY_RLS_SQL = `
@@ -106,46 +230,966 @@ function asAddress(value: string | null | undefined): `0x${string}` | null {
   return raw as `0x${string}`
 }
 
+function parsePositiveInt(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.floor(parsed))
+}
+
+function truncateForSummary(input: string, maxLength = 220): string {
+  const normalized = String(input ?? '').replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trim()}…`
+}
+
+function normalizeAddressLower(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function readArchiveEnabled(): boolean {
+  const raw = String(process.env.ELIZA_GROVE_ARCHIVE_ENABLED ?? '').trim().toLowerCase()
+  if (!raw) return false
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function readArchiveRecallMaxChunks(): number {
+  return parsePositiveInt(process.env.ELIZA_GROVE_RECALL_MAX_CHUNKS, 5)
+}
+
+function readArchiveEncryptionKeySeed(): Buffer | null {
+  const explicit = String(process.env.ELIZA_GROVE_ARCHIVE_ENCRYPTION_KEY ?? '').trim()
+  const normalized = explicit.startsWith('0x') ? explicit.slice(2) : explicit
+  if (/^[a-fA-F0-9]{64}$/.test(normalized)) {
+    return Buffer.from(normalized, 'hex')
+  }
+  if (explicit) {
+    try {
+      const decoded = Buffer.from(explicit, 'base64')
+      if (decoded.length === 32) return decoded
+    } catch {
+      // Ignore invalid base64 and continue to fallback key derivation.
+    }
+    if (explicit.length >= 16) {
+      return createHash('sha256').update(explicit, 'utf8').digest()
+    }
+  }
+
+  const authSecret = String(process.env.AUTH_SESSION_SECRET ?? '').trim()
+  if (authSecret.length >= 16) {
+    return createHash('sha256').update(`auth:${authSecret}`, 'utf8').digest()
+  }
+  const xmtpDbKey = String(process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
+  const xmtpNormalized = xmtpDbKey.startsWith('0x') ? xmtpDbKey.slice(2) : xmtpDbKey
+  if (/^[a-fA-F0-9]{64}$/.test(xmtpNormalized)) {
+    return Buffer.from(xmtpNormalized, 'hex')
+  }
+  return null
+}
+
+function normalizeArchiveKeyHint(value: unknown): Buffer | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const normalized = raw.startsWith('0x') ? raw.slice(2) : raw
+  if (/^[a-fA-F0-9]{64}$/.test(normalized)) {
+    return Buffer.from(normalized, 'hex')
+  }
+  try {
+    const decoded = Buffer.from(raw, 'base64')
+    if (decoded.length === 32) return decoded
+  } catch {
+    // Ignore invalid base64 archive key hints.
+  }
+  return null
+}
+
+function deriveConversationArchiveKey(params: {
+  conversationId: string
+  xmtpConversationKeyHint?: string | null
+}): Buffer | null {
+  const fromHint = normalizeArchiveKeyHint(params.xmtpConversationKeyHint ?? null)
+  if (fromHint) return fromHint
+  const seed = readArchiveEncryptionKeySeed()
+  if (!seed) return null
+  return createHmac('sha256', seed).update(`eliza-grove:${params.conversationId}`, 'utf8').digest()
+}
+
+function base64UrlEncode(input: Buffer): string {
+  return input
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function base64UrlDecode(input: string): Buffer | null {
+  try {
+    const normalized = String(input ?? '').replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized + '==='.slice((normalized.length + 3) % 4)
+    return Buffer.from(padded, 'base64')
+  } catch {
+    return null
+  }
+}
+
+function buildEncryptedArchiveEnvelope(params: {
+  conversationId: string
+  chunkHash: string
+  payload: ArchiveChunkPayload
+  xmtpConversationKeyHint?: string | null
+}): EncryptedArchiveEnvelope | null {
+  const key = deriveConversationArchiveKey({
+    conversationId: params.conversationId,
+    xmtpConversationKeyHint: params.xmtpConversationKeyHint,
+  })
+  if (!key) return null
+  const iv = randomBytes(12)
+  const aad = `conv:${params.conversationId}:hash:${params.chunkHash}:v1`
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  cipher.setAAD(Buffer.from(aad, 'utf8'))
+  const plaintext = Buffer.from(JSON.stringify(params.payload), 'utf8')
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return {
+    schema: '4626.eliza.archive.chunk.v1',
+    conversationId: params.conversationId,
+    chunkHash: params.chunkHash,
+    encrypted: true,
+    payload: {
+      alg: 'aes-256-gcm',
+      iv: base64UrlEncode(iv),
+      tag: base64UrlEncode(tag),
+      ciphertext: base64UrlEncode(ciphertext),
+      aad,
+      keyDerivation: 'hmac-sha256-conversation',
+    },
+  }
+}
+
+function decryptArchiveEnvelope(params: {
+  envelope: unknown
+  xmtpConversationKeyHint?: string | null
+}): ArchiveChunkPayload | null {
+  const envelope = params.envelope
+  if (!envelope || typeof envelope !== 'object') return null
+  const record = envelope as Record<string, any>
+  if (record.schema !== '4626.eliza.archive.chunk.v1' || record.encrypted !== true) return null
+  const conversationId = String(record.conversationId ?? '').trim()
+  if (!conversationId) return null
+  const key = deriveConversationArchiveKey({
+    conversationId,
+    xmtpConversationKeyHint: params.xmtpConversationKeyHint,
+  })
+  if (!key) return null
+  const payload = record.payload && typeof record.payload === 'object' ? record.payload : null
+  if (!payload) return null
+  const iv = base64UrlDecode(String(payload.iv ?? ''))
+  const tag = base64UrlDecode(String(payload.tag ?? ''))
+  const ciphertext = base64UrlDecode(String(payload.ciphertext ?? ''))
+  const aad = String(payload.aad ?? '')
+  if (!iv || !tag || !ciphertext || !aad) return null
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', key, iv)
+    decipher.setAAD(Buffer.from(aad, 'utf8'))
+    decipher.setAuthTag(tag)
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')
+    const parsed = JSON.parse(plaintext) as ArchiveChunkPayload
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.turns)) return null
+    return {
+      conversationId: String(parsed.conversationId ?? conversationId),
+      turns: parsed.turns.map((turn: any) => ({
+        id: String(turn?.id ?? ''),
+        role: String(turn?.role ?? 'user'),
+        content: String(turn?.content ?? ''),
+        createdAt: String(turn?.createdAt ?? new Date().toISOString()),
+      })),
+    }
+  } catch {
+    return null
+  }
+}
+
+function normalizeArchiveTurns(input: unknown): ArchiveTurn[] {
+  if (!Array.isArray(input)) return []
+  return input
+    .map((turn) => ({
+      id: String((turn as any)?.id ?? ''),
+      role: String((turn as any)?.role ?? 'user'),
+      content: String((turn as any)?.content ?? ''),
+      createdAt: String((turn as any)?.createdAt ?? new Date().toISOString()),
+    }))
+    .filter((turn) => Boolean(turn.content))
+}
+
+function parseArchiveChunkFromPayload(params: {
+  json: unknown
+  expectedChunkHash: string | null
+  xmtpConversationKeyHint?: string | null
+}): ArchiveChunkPayload | null {
+  const normalizedExpectedHash =
+    params.expectedChunkHash && /^[a-f0-9]{64}$/i.test(params.expectedChunkHash)
+      ? params.expectedChunkHash.toLowerCase()
+      : null
+  if (!params.json || typeof params.json !== 'object') return null
+  const record = params.json as Record<string, any>
+  const decrypted = decryptArchiveEnvelope({
+    envelope: record,
+    xmtpConversationKeyHint: params.xmtpConversationKeyHint,
+  })
+  if (decrypted) {
+    const hash = createHash('sha256').update(JSON.stringify(decrypted), 'utf8').digest('hex')
+    if (normalizedExpectedHash && hash !== normalizedExpectedHash) return null
+    return decrypted
+  }
+
+  const turns = normalizeArchiveTurns(record.turns)
+  if (turns.length === 0) return null
+  const conversationId = String(record.conversationId ?? '')
+  const fallbackPayload: ArchiveChunkPayload = {
+    conversationId: conversationId || 'unknown',
+    turns,
+  }
+  if (normalizedExpectedHash) {
+    const hash = createHash('sha256').update(JSON.stringify(fallbackPayload), 'utf8').digest('hex')
+    if (hash !== normalizedExpectedHash) return null
+  }
+  return fallbackPayload
+}
+
+function resolveArchiveChunkUrl(chunk: Record<string, any>): string {
+  const primary = String(chunk.cid ?? chunk.uri ?? chunk.lensUri ?? '').trim()
+  const gateway = String(chunk.gatewayUrl ?? chunk.gateway_url ?? '').trim()
+  const candidate = primary || gateway
+  if (!candidate) return ''
+  if (candidate.startsWith('lens://')) {
+    return resolveLensUri(candidate)
+  }
+  if (/^https?:\/\//i.test(candidate)) return candidate
+  return ''
+}
+
+function archiveTurnToMemory(params: {
+  turn: ArchiveTurn
+  conversationId: string
+  runtimeAgentId: string
+}): Memory {
+  const role = String(params.turn.role ?? 'user').toLowerCase() === 'assistant' ? 'assistant' : 'user'
+  const createdAtMs = Number.isFinite(Date.parse(params.turn.createdAt)) ? Date.parse(params.turn.createdAt) : Date.now()
+  return {
+    id: (params.turn.id || randomUUID()) as any,
+    entityId: (role === 'assistant' ? params.runtimeAgentId : toEntityId(null)) as any,
+    agentId: params.runtimeAgentId as any,
+    roomId: toRoomId(params.conversationId) as any,
+    content: {
+      text: String(params.turn.content ?? ''),
+      role,
+      source: 'xmtp',
+      metadata: {
+        conversationId: params.conversationId,
+        conversationType: 'unknown',
+        senderAddress: null,
+        restoredFrom: 'grove_manifest',
+      },
+    } as any,
+    createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
+  } as Memory
+}
+
+async function hydrateConversationHistoryFromGrove(params: {
+  db: Db
+  conversationId: string
+  runtimeAgentId: string
+  maxMessagesPerConversation: number
+  xmtpConversationKeyHint?: string | null
+}): Promise<Memory[]> {
+  if (!readArchiveEnabled()) return []
+  const fetchImpl = (globalThis as any).fetch
+  if (typeof fetchImpl !== 'function') return []
+
+  const manifestResult = await params.db.sql`
+    SELECT chunk_list
+    FROM grove_chat_manifests
+    WHERE conversation_id = ${params.conversationId}
+    LIMIT 1;
+  `
+  const manifestRow = (manifestResult.rows?.[0] ?? null) as any
+  const chunkList = Array.isArray(manifestRow?.chunk_list) ? (manifestRow.chunk_list as Array<Record<string, any>>) : []
+  if (chunkList.length === 0) return []
+
+  const recallChunks = chunkList.slice(-readArchiveRecallMaxChunks())
+  const restoredTurns: ArchiveTurn[] = []
+  for (const chunk of recallChunks) {
+    const url = resolveArchiveChunkUrl(chunk)
+    if (!url) continue
+    try {
+      const response = await fetchImpl(url, { method: 'GET' })
+      if (!response?.ok) continue
+      const json = await response.json()
+      const expectedChunkHash = String(chunk?.hash ?? '').trim() || null
+      const parsed = parseArchiveChunkFromPayload({
+        json,
+        expectedChunkHash,
+        xmtpConversationKeyHint: params.xmtpConversationKeyHint,
+      })
+      if (!parsed || parsed.turns.length === 0) continue
+      restoredTurns.push(...parsed.turns)
+    } catch (error) {
+      logger.warn('[eliza/runtime] failed restoring grove chunk (non-blocking)', {
+        conversationId: params.conversationId,
+        url,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  if (restoredTurns.length === 0) return []
+  const dedupe = new Map<string, ArchiveTurn>()
+  for (const turn of restoredTurns) {
+    const key = `${turn.id}:${turn.createdAt}:${turn.role}`
+    if (!dedupe.has(key)) dedupe.set(key, turn)
+  }
+  const sortedTurns = [...dedupe.values()].sort((a, b) => {
+    const left = Date.parse(a.createdAt)
+    const right = Date.parse(b.createdAt)
+    if (!Number.isFinite(left) && !Number.isFinite(right)) return 0
+    if (!Number.isFinite(left)) return -1
+    if (!Number.isFinite(right)) return 1
+    return left - right
+  })
+  return sortedTurns
+    .slice(-Math.max(10, Math.min(60, params.maxMessagesPerConversation)))
+    .map((turn) =>
+      archiveTurnToMemory({
+        turn,
+        conversationId: params.conversationId,
+        runtimeAgentId: params.runtimeAgentId,
+      }),
+    )
+}
+
+function shouldTrackMemoryRole(role: string): boolean {
+  return role === 'user' || role === 'assistant'
+}
+
+function toSqlStatement(sql: string): TemplateStringsArray {
+  const stmt = [sql] as unknown as TemplateStringsArray
+  ;(stmt as any).raw = [sql]
+  return stmt
+}
+
+async function executeSchemaStatement(db: any, sql: string): Promise<void> {
+  if (typeof db?.query === 'function') {
+    await db.query(sql)
+    return
+  }
+  await db.sql(toSqlStatement(sql))
+}
+
+async function executeOptionalSchemaStatement(db: any, sql: string): Promise<void> {
+  try {
+    await executeSchemaStatement(db, sql)
+  } catch {
+    // Ignore optional schema statements that are unsupported in constrained runtimes.
+  }
+}
+
 async function ensureMemorySchema(): Promise<void> {
   if (memorySchemaEnsured) return
   const db = await getDb()
   if (!db) return
-  if (typeof (db as any).query === 'function') {
-    await (db as any).query(AGENT_MEMORY_TABLE_SQL)
-    try {
-      await (db as any).query(AGENT_MEMORY_RLS_SQL)
-    } catch {
-      // Ignore if RLS cannot be enabled in this runtime.
-    }
-    try {
-      await (db as any).query(AGENT_MEMORY_POLICY_SQL)
-    } catch {
-      // Ignore if policy creation is unavailable in this runtime.
-    }
-    await (db as any).query(AGENT_MEMORY_INDEX_SQL)
-  } else {
-    const tableStmt = [AGENT_MEMORY_TABLE_SQL] as unknown as TemplateStringsArray
-    ;(tableStmt as any).raw = [AGENT_MEMORY_TABLE_SQL]
-    const rlsStmt = [AGENT_MEMORY_RLS_SQL] as unknown as TemplateStringsArray
-    ;(rlsStmt as any).raw = [AGENT_MEMORY_RLS_SQL]
-    const policyStmt = [AGENT_MEMORY_POLICY_SQL] as unknown as TemplateStringsArray
-    ;(policyStmt as any).raw = [AGENT_MEMORY_POLICY_SQL]
-    const indexStmt = [AGENT_MEMORY_INDEX_SQL] as unknown as TemplateStringsArray
-    ;(indexStmt as any).raw = [AGENT_MEMORY_INDEX_SQL]
-    await (db as any).sql(tableStmt)
-    try {
-      await (db as any).sql(rlsStmt)
-    } catch {
-      // Ignore if RLS cannot be enabled in this runtime.
-    }
-    try {
-      await (db as any).sql(policyStmt)
-    } catch {
-      // Ignore if policy creation is unavailable in this runtime.
-    }
-    await (db as any).sql(indexStmt)
-  }
+
+  await executeSchemaStatement(db, AGENT_MEMORY_TABLE_SQL)
+  await executeSchemaStatement(db, EPISODIC_SUMMARIES_TABLE_SQL)
+  await executeSchemaStatement(db, FACT_CARDS_TABLE_SQL)
+  await executeSchemaStatement(db, TASK_LOOPS_TABLE_SQL)
+  await executeSchemaStatement(db, GROVE_CHAT_MANIFESTS_TABLE_SQL)
+  await executeSchemaStatement(db, MEMORY_SNAPSHOTS_TABLE_SQL)
+
+  await executeOptionalSchemaStatement(db, AGENT_MEMORY_RLS_SQL)
+  await executeOptionalSchemaStatement(db, AGENT_MEMORY_POLICY_SQL)
+
+  await executeSchemaStatement(db, AGENT_MEMORY_INDEX_SQL)
+  await executeSchemaStatement(db, FACT_CARDS_ENTITY_INDEX_SQL)
+  await executeSchemaStatement(db, FACT_CARDS_CONVERSATION_ENTITY_UNIQUE_SQL)
+  await executeSchemaStatement(db, TASK_LOOPS_CONVERSATION_STATUS_INDEX_SQL)
+  await executeSchemaStatement(db, GROVE_MANIFEST_CONVERSATION_INDEX_SQL)
+
   memorySchemaEnsured = true
+}
+
+function extractFactCardsFromText(text: string, senderAddress: string | null): WarmFactCard[] {
+  const normalizedText = String(text ?? '').trim()
+  if (!normalizedText) return []
+  const cards: WarmFactCard[] = []
+
+  const walletMatches = normalizedText.match(/0x[a-fA-F0-9]{40}/g) ?? []
+  if (senderAddress) {
+    cards.push({
+      entity: 'sender_wallet',
+      fact: `sender wallet ${normalizeAddressLower(senderAddress)}`,
+      confidence: 0.99,
+    })
+  }
+  const firstWallet = walletMatches[0]
+  if (firstWallet) {
+    cards.push({
+      entity: 'user_wallet',
+      fact: `primary wallet ${normalizeAddressLower(firstWallet)}`,
+      confidence: 0.97,
+    })
+  }
+
+  const preferenceMatch = normalizedText.match(/\bi\s+prefer\s+([^.!?\n]+)/i)
+  if (preferenceMatch?.[1]) {
+    cards.push({
+      entity: 'user_preference',
+      fact: `prefers ${truncateForSummary(preferenceMatch[1], 120)}`,
+      confidence: 0.9,
+    })
+  }
+
+  const toneMatch = normalizedText.match(/\b(be|keep)\s+(it\s+)?(brief|short|concise)\b/i)
+  if (toneMatch) {
+    cards.push({
+      entity: 'response_style',
+      fact: 'prefers concise responses',
+      confidence: 0.86,
+    })
+  }
+
+  const nameMatch = normalizedText.match(/\bmy\s+name\s+is\s+([^.!?\n]+)/i)
+  if (nameMatch?.[1]) {
+    cards.push({
+      entity: 'user_name',
+      fact: `name ${truncateForSummary(nameMatch[1], 80)}`,
+      confidence: 0.84,
+    })
+  }
+
+  const byEntity = new Map<string, WarmFactCard>()
+  for (const card of cards) {
+    if (!card.entity || !card.fact) continue
+    const existing = byEntity.get(card.entity)
+    if (!existing || card.confidence > existing.confidence) {
+      byEntity.set(card.entity, card)
+    }
+  }
+  return [...byEntity.values()]
+}
+
+function extractTaskLoopsFromText(text: string): string[] {
+  const normalizedText = String(text ?? '')
+  if (!normalizedText.trim()) return []
+
+  const tasks: string[] = []
+  const lines = normalizedText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  for (const line of lines) {
+    const todoMatch = line.match(/^(?:[-*]\s*)?(?:todo|task)\s*:\s*(.+)$/i)
+    if (todoMatch?.[1]) {
+      tasks.push(truncateForSummary(todoMatch[1], 160))
+    }
+  }
+
+  const inlineTodoRegex = /(?:^|[\s;,.])(?:todo|task)\s*:\s*([^.!?\n]+)/gi
+  let inlineTodoMatch = inlineTodoRegex.exec(normalizedText)
+  while (inlineTodoMatch) {
+    if (inlineTodoMatch[1]) {
+      tasks.push(truncateForSummary(inlineTodoMatch[1], 160))
+    }
+    inlineTodoMatch = inlineTodoRegex.exec(normalizedText)
+  }
+
+  const needToMatch = normalizedText.match(/\bneed to\s+([^.!?\n]+)/i)
+  if (needToMatch?.[1]) {
+    tasks.push(truncateForSummary(needToMatch[1], 160))
+  }
+
+  const unique = new Set<string>()
+  for (const task of tasks) {
+    const normalized = task.trim()
+    if (!normalized) continue
+    unique.add(normalized)
+    if (unique.size >= 3) break
+  }
+  return [...unique]
+}
+
+function buildEpisodicSummary(rows: Array<{ role: string; content: string }>): string {
+  const userTurns = rows
+    .filter((row) => row.role === 'user')
+    .map((row) => truncateForSummary(row.content, 180))
+    .filter(Boolean)
+  const assistantTurns = rows
+    .filter((row) => row.role === 'assistant')
+    .map((row) => truncateForSummary(row.content, 180))
+    .filter(Boolean)
+
+  const goals = userTurns.slice(-3)
+  const outcomes = assistantTurns.slice(-2)
+  const lines: string[] = []
+  if (goals.length > 0) {
+    lines.push(`Recent user goals: ${goals.join(' | ')}`)
+  }
+  if (outcomes.length > 0) {
+    lines.push(`Recent assistant outcomes: ${outcomes.join(' | ')}`)
+  }
+  if (lines.length === 0 && rows.length > 0) {
+    lines.push(`Recent exchange: ${truncateForSummary(rows[rows.length - 1]?.content ?? '', 220)}`)
+  }
+  return lines.join('\n')
+}
+
+function buildHistoryBlock(recentMessages: Array<{ text: string; role: string; createdAt: number }>): string {
+  const entries = recentMessages
+    .map((entry) => {
+      const iso = Number.isFinite(entry.createdAt) ? new Date(entry.createdAt).toISOString() : new Date().toISOString()
+      return `<turn role="${entry.role}" ts="${iso}">${truncateForSummary(entry.text, 280)}</turn>`
+    })
+    .join('\n')
+  return `<history>\n${entries}\n</history>`
+}
+
+function buildFactCardsBlock(factCards: WarmFactCard[]): string {
+  const entries = factCards
+    .map((card) => `<fact entity="${card.entity}" confidence="${Number(card.confidence).toFixed(2)}">${card.fact}</fact>`)
+    .join('\n')
+  return `<fact_cards>\n${entries}\n</fact_cards>`
+}
+
+function buildOpenTasksBlock(tasks: WarmTaskLoop[]): string {
+  const entries = tasks
+    .map((task) => `<task id="${task.id}" status="${task.status}">${task.task}</task>`)
+    .join('\n')
+  return `<open_tasks>\n${entries}\n</open_tasks>`
+}
+
+function buildMemorySnapshotBlock(snapshot: WarmMemorySnapshot | null): string {
+  if (!snapshot) return '<memory_snapshot />'
+  const goals = snapshot.currentGoals.map((goal) => `<goal>${goal}</goal>`).join('\n')
+  const prefs = snapshot.userPreferences.map((pref) => `<preference>${pref}</preference>`).join('\n')
+  const decisions = snapshot.recentDecisions.map((decision) => `<decision>${decision}</decision>`).join('\n')
+  return [
+    '<memory_snapshot>',
+    `<summary>${snapshot.summary}</summary>`,
+    `<generated_at>${snapshot.generatedAt}</generated_at>`,
+    '<current_goals>',
+    goals,
+    '</current_goals>',
+    '<user_preferences>',
+    prefs,
+    '</user_preferences>',
+    '<recent_decisions>',
+    decisions,
+    '</recent_decisions>',
+    '</memory_snapshot>',
+  ].join('\n')
+}
+
+async function upsertEpisodicSummary(params: {
+  db: Db
+  runtimeAgentId: string
+  conversationId: string
+}): Promise<string | null> {
+  const result = await params.db.sql`
+    SELECT role, content
+    FROM agent_message_memory
+    WHERE agent_id = ${params.runtimeAgentId}
+      AND conversation_id = ${params.conversationId}
+    ORDER BY created_at DESC
+    LIMIT 20;
+  `
+  const rows = ((result.rows ?? []) as any[]).slice().reverse().map((row) => ({
+    role: String(row?.role ?? 'user').toLowerCase(),
+    content: String(row?.content ?? ''),
+  }))
+  if (rows.length === 0) return null
+  const summary = buildEpisodicSummary(rows)
+  if (!summary.trim()) return null
+  await params.db.sql`
+    INSERT INTO episodic_summaries (conversation_id, summary, last_updated, version)
+    VALUES (${params.conversationId}, ${summary}, NOW(), 1)
+    ON CONFLICT (conversation_id)
+    DO UPDATE SET
+      summary = EXCLUDED.summary,
+      last_updated = NOW(),
+      version = episodic_summaries.version + 1;
+  `
+  return summary
+}
+
+async function upsertFactCards(params: {
+  db: Db
+  conversationId: string
+  cards: WarmFactCard[]
+}): Promise<void> {
+  if (!params.cards.length) return
+  for (const card of params.cards) {
+    await params.db.sql`
+      INSERT INTO fact_cards (
+        conversation_id,
+        entity,
+        fact,
+        confidence,
+        source_turn_id,
+        updated_at
+      )
+      VALUES (
+        ${params.conversationId},
+        ${card.entity},
+        ${card.fact},
+        ${card.confidence},
+        ${null},
+        NOW()
+      )
+      ON CONFLICT (conversation_id, entity)
+      DO UPDATE SET
+        fact = EXCLUDED.fact,
+        confidence = EXCLUDED.confidence,
+        source_turn_id = EXCLUDED.source_turn_id,
+        updated_at = NOW();
+    `
+  }
+}
+
+async function upsertTaskLoops(params: {
+  db: Db
+  conversationId: string
+  tasks: string[]
+}): Promise<void> {
+  if (!params.tasks.length) return
+  for (const task of params.tasks) {
+    await params.db.sql`
+      INSERT INTO task_loops (conversation_id, task, status, created_at)
+      VALUES (${params.conversationId}, ${task}, 'open', NOW())
+      ON CONFLICT DO NOTHING;
+    `
+  }
+}
+
+async function upsertMemorySnapshot(params: {
+  db: Db
+  conversationId: string
+  summary: string | null
+  factCards: WarmFactCard[]
+  tasks: string[]
+  recentAssistantMessages: string[]
+}): Promise<void> {
+  const snapshot: WarmMemorySnapshot = {
+    summary: truncateForSummary(params.summary ?? '', 600),
+    currentGoals: params.tasks.slice(0, 3),
+    userPreferences: params.factCards
+      .filter((card) => card.entity.includes('preference') || card.entity.includes('style'))
+      .map((card) => card.fact)
+      .slice(0, 3),
+    recentDecisions: params.recentAssistantMessages.slice(-3).map((entry) => truncateForSummary(entry, 220)),
+    generatedAt: new Date().toISOString(),
+  }
+  await params.db.sql`
+    INSERT INTO memory_snapshots (conversation_id, snapshot_json, updated_at)
+    VALUES (${params.conversationId}, ${JSON.stringify(snapshot)}::jsonb, NOW())
+    ON CONFLICT (conversation_id)
+    DO UPDATE SET
+      snapshot_json = EXCLUDED.snapshot_json,
+      updated_at = NOW();
+  `
+}
+
+async function maybeAppendGroveManifestChunk(params: {
+  db: Db
+  runtimeAgentId: string
+  conversationId: string
+  senderAddress: string | null
+  xmtpConversationKeyHint?: string | null
+}): Promise<void> {
+  if (!readArchiveEnabled()) return
+  const turnThreshold = parsePositiveInt(process.env.ELIZA_GROVE_ARCHIVE_TURN_THRESHOLD, 200)
+  const archiveIntervalMinutes = parsePositiveInt(process.env.ELIZA_GROVE_ARCHIVE_INTERVAL_MINUTES, 60)
+
+  const countResult = await params.db.sql`
+    SELECT COUNT(*)::int AS total_count
+    FROM agent_message_memory
+    WHERE agent_id = ${params.runtimeAgentId}
+      AND conversation_id = ${params.conversationId};
+  `
+  const totalCount = Number((countResult.rows?.[0] as any)?.total_count ?? 0)
+  if (!Number.isFinite(totalCount) || totalCount <= 0 || totalCount % turnThreshold !== 0) return
+
+  const manifestResult = await params.db.sql`
+    SELECT chunk_list, root_hash, encryption_pubkey, last_archived_at, lens_profile_id
+    FROM grove_chat_manifests
+    WHERE conversation_id = ${params.conversationId}
+    LIMIT 1;
+  `
+  const existingManifest = (manifestResult.rows?.[0] ?? null) as any
+  const lastArchivedAtMs = existingManifest?.last_archived_at
+    ? new Date(existingManifest.last_archived_at).getTime()
+    : null
+  if (Number.isFinite(lastArchivedAtMs)) {
+    const minNextArchiveAt = Number(lastArchivedAtMs) + archiveIntervalMinutes * 60_000
+    if (Date.now() < minNextArchiveAt) return
+  }
+
+  const chunkRowsResult = await params.db.sql`
+    SELECT id, role, content, created_at
+    FROM agent_message_memory
+    WHERE agent_id = ${params.runtimeAgentId}
+      AND conversation_id = ${params.conversationId}
+    ORDER BY created_at DESC
+    LIMIT ${turnThreshold};
+  `
+  const chunkRows = ((chunkRowsResult.rows ?? []) as any[]).slice().reverse()
+  if (chunkRows.length === 0) return
+
+  const chunkPayload = {
+    conversationId: params.conversationId,
+    turns: chunkRows.map((row) => ({
+      id: String(row?.id ?? ''),
+      role: String(row?.role ?? 'user'),
+      content: String(row?.content ?? ''),
+      createdAt: row?.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    })),
+  } satisfies ArchiveChunkPayload
+  const chunkHash = createHash('sha256').update(JSON.stringify(chunkPayload), 'utf8').digest('hex')
+  const existingChunks = Array.isArray(existingManifest?.chunk_list) ? existingManifest.chunk_list : []
+  if (existingChunks.some((entry: any) => String(entry?.hash ?? '') === chunkHash)) return
+
+  const startTs = chunkRows[0]?.created_at ? new Date(chunkRows[0].created_at).toISOString() : new Date().toISOString()
+  const endTs =
+    chunkRows[chunkRows.length - 1]?.created_at
+      ? new Date(chunkRows[chunkRows.length - 1].created_at).toISOString()
+      : new Date().toISOString()
+  const encryptedEnvelope = buildEncryptedArchiveEnvelope({
+    conversationId: params.conversationId,
+    chunkHash,
+    payload: chunkPayload,
+    xmtpConversationKeyHint: params.xmtpConversationKeyHint,
+  })
+  if (!encryptedEnvelope) {
+    logger.warn('[eliza/runtime] grove archive skipped: encryption key unavailable', {
+      conversationId: params.conversationId,
+    })
+    return
+  }
+
+  const upload = await tryUploadImmutableJson(encryptedEnvelope, getGroveChainId())
+  const uploadOk = upload.ok
+  const uploadedLensUri = uploadOk ? String(upload.result.lensUri ?? '').trim() : ''
+  const uploadedGatewayUrl = uploadOk ? String(upload.result.gatewayUrl ?? '').trim() : ''
+
+  const newChunk = {
+    cid: uploadOk ? uploadedLensUri : `pending:${chunkHash}`,
+    uri: uploadOk ? uploadedLensUri : null,
+    gatewayUrl: uploadOk ? uploadedGatewayUrl : null,
+    storageKey: uploadOk ? String(upload.result.storageKey ?? '') : null,
+    time_range: { start: startTs, end: endTs },
+    hash: chunkHash,
+    version: 1,
+    state: uploadOk ? 'uploaded' : 'upload_failed',
+    uploadedAt: uploadOk ? new Date().toISOString() : null,
+    uploadError: uploadOk ? null : String(upload.error ?? 'upload_failed'),
+  }
+  const nextChunkList = [...existingChunks, newChunk]
+  const previousRoot = String(existingManifest?.root_hash ?? '')
+  const nextRoot = createHash('sha256')
+    .update(previousRoot ? `${previousRoot}:${chunkHash}` : chunkHash, 'utf8')
+    .digest('hex')
+
+  await params.db.sql`
+    INSERT INTO grove_chat_manifests (
+      conversation_id,
+      chunk_list,
+      root_hash,
+      encryption_pubkey,
+      last_archived_at,
+      lens_profile_id
+    )
+    VALUES (
+      ${params.conversationId},
+      ${JSON.stringify(nextChunkList)}::jsonb,
+      ${nextRoot},
+      ${params.senderAddress},
+      NOW(),
+      ${existingManifest?.lens_profile_id ? String(existingManifest.lens_profile_id) : null}
+    )
+    ON CONFLICT (conversation_id)
+    DO UPDATE SET
+      chunk_list = EXCLUDED.chunk_list,
+      root_hash = EXCLUDED.root_hash,
+      encryption_pubkey = COALESCE(EXCLUDED.encryption_pubkey, grove_chat_manifests.encryption_pubkey),
+      last_archived_at = NOW(),
+      lens_profile_id = COALESCE(EXCLUDED.lens_profile_id, grove_chat_manifests.lens_profile_id);
+  `
+}
+
+async function persistWarmMemoryArtifacts(params: {
+  db: Db
+  runtimeAgentId: string
+  conversationId: string
+  role: string
+  content: string
+  senderAddress: string | null
+  xmtpConversationKeyHint?: string | null
+}): Promise<void> {
+  const role = String(params.role ?? '').toLowerCase()
+  if (!shouldTrackMemoryRole(role)) return
+
+  const summary = await upsertEpisodicSummary({
+    db: params.db,
+    runtimeAgentId: params.runtimeAgentId,
+    conversationId: params.conversationId,
+  })
+  const extractedFactCards = role === 'user' ? extractFactCardsFromText(params.content, params.senderAddress) : []
+  const extractedTasks = role === 'user' ? extractTaskLoopsFromText(params.content) : []
+  await upsertFactCards({
+    db: params.db,
+    conversationId: params.conversationId,
+    cards: extractedFactCards,
+  })
+  await upsertTaskLoops({
+    db: params.db,
+    conversationId: params.conversationId,
+    tasks: extractedTasks,
+  })
+  const recentAssistantMessagesResult = await params.db.sql`
+    SELECT content
+    FROM agent_message_memory
+    WHERE agent_id = ${params.runtimeAgentId}
+      AND conversation_id = ${params.conversationId}
+      AND role = 'assistant'
+    ORDER BY created_at DESC
+    LIMIT 3;
+  `
+  const recentAssistantMessages = ((recentAssistantMessagesResult.rows ?? []) as any[])
+    .map((row) => String(row?.content ?? ''))
+    .filter(Boolean)
+    .reverse()
+  await upsertMemorySnapshot({
+    db: params.db,
+    conversationId: params.conversationId,
+    summary,
+    factCards: extractedFactCards,
+    tasks: extractedTasks,
+    recentAssistantMessages,
+  })
+  await maybeAppendGroveManifestChunk({
+    db: params.db,
+    runtimeAgentId: params.runtimeAgentId,
+    conversationId: params.conversationId,
+    senderAddress: params.senderAddress,
+    xmtpConversationKeyHint: params.xmtpConversationKeyHint,
+  })
+}
+
+async function loadWarmMemoryState(params: {
+  db: Db | null
+  conversationId: string
+}): Promise<{
+  summary: string | null
+  factCards: WarmFactCard[]
+  openTasks: WarmTaskLoop[]
+  memorySnapshot: WarmMemorySnapshot | null
+}> {
+  if (!params.db) {
+    return {
+      summary: null,
+      factCards: [],
+      openTasks: [],
+      memorySnapshot: null,
+    }
+  }
+
+  const summaryResult = await params.db.sql`
+    SELECT summary
+    FROM episodic_summaries
+    WHERE conversation_id = ${params.conversationId}
+    LIMIT 1;
+  `
+  const summary = summaryResult.rows?.[0]?.summary ? String(summaryResult.rows[0].summary) : null
+
+  const factsResult = await params.db.sql`
+    SELECT entity, fact, confidence
+    FROM fact_cards
+    WHERE conversation_id = ${params.conversationId}
+    ORDER BY confidence DESC NULLS LAST, updated_at DESC
+    LIMIT 20;
+  `
+  const factCards: WarmFactCard[] = ((factsResult.rows ?? []) as any[])
+    .map((row) => ({
+      entity: String(row?.entity ?? ''),
+      fact: String(row?.fact ?? ''),
+      confidence: Number(row?.confidence ?? 0),
+    }))
+    .filter((card) => card.entity && card.fact)
+
+  const taskResult = await params.db.sql`
+    SELECT id, task, status
+    FROM task_loops
+    WHERE conversation_id = ${params.conversationId}
+      AND status = 'open'
+    ORDER BY created_at DESC
+    LIMIT 20;
+  `
+  const openTasks: WarmTaskLoop[] = ((taskResult.rows ?? []) as any[])
+    .map((row) => ({
+      id: Number(row?.id ?? 0),
+      task: String(row?.task ?? ''),
+      status: String(row?.status ?? 'open'),
+    }))
+    .filter((row) => Number.isFinite(row.id) && row.id > 0 && row.task)
+
+  const snapshotResult = await params.db.sql`
+    SELECT snapshot_json
+    FROM memory_snapshots
+    WHERE conversation_id = ${params.conversationId}
+    LIMIT 1;
+  `
+  const rawSnapshotValue = snapshotResult.rows?.[0]?.snapshot_json
+  const rawSnapshot =
+    rawSnapshotValue && typeof rawSnapshotValue === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(rawSnapshotValue)
+          } catch {
+            return null
+          }
+        })()
+      : rawSnapshotValue
+  const memorySnapshot =
+    rawSnapshot && typeof rawSnapshot === 'object'
+      ? ({
+          summary: String((rawSnapshot as any).summary ?? summary ?? ''),
+          currentGoals: Array.isArray((rawSnapshot as any).currentGoals)
+            ? (rawSnapshot as any).currentGoals.map((entry: unknown) => String(entry))
+            : [],
+          userPreferences: Array.isArray((rawSnapshot as any).userPreferences)
+            ? (rawSnapshot as any).userPreferences.map((entry: unknown) => String(entry))
+            : [],
+          recentDecisions: Array.isArray((rawSnapshot as any).recentDecisions)
+            ? (rawSnapshot as any).recentDecisions.map((entry: unknown) => String(entry))
+            : [],
+          generatedAt: String((rawSnapshot as any).generatedAt ?? new Date().toISOString()),
+        } satisfies WarmMemorySnapshot)
+      : summary
+        ? {
+            summary,
+            currentGoals: openTasks.slice(0, 3).map((task) => task.task),
+            userPreferences: factCards
+              .filter((card) => card.entity.includes('preference') || card.entity.includes('style'))
+              .map((card) => card.fact)
+              .slice(0, 3),
+            recentDecisions: [],
+            generatedAt: new Date().toISOString(),
+          }
+        : null
+
+  return {
+    summary,
+    factCards,
+    openTasks,
+    memorySnapshot,
+  }
 }
 
 function actionScoreFromMessage(actionName: string, text: string): { score: number; reason: string } {
@@ -232,6 +1276,7 @@ export function createRuntimeBridge(params: {
   }
 }): RuntimeBridge {
   const inMemoryHistory = new Map<string, Memory[]>()
+  const conversationArchiveKeyHints = new Map<string, string>()
   const maxConversations = Math.max(1, Math.floor(params.history?.maxConversations ?? 250))
   const maxMessagesPerConversation = Math.max(1, Math.floor(params.history?.maxMessagesPerConversation ?? 30))
   const runtimeAgentId = formatAsUuid(shortHash(`agent:${params.agentKey}`))
@@ -245,6 +1290,7 @@ export function createRuntimeBridge(params: {
       const oldestKey = inMemoryHistory.keys().next().value
       if (!oldestKey) break
       inMemoryHistory.delete(oldestKey)
+      conversationArchiveKeyHints.delete(oldestKey)
     }
   }
 
@@ -252,6 +1298,12 @@ export function createRuntimeBridge(params: {
     inMemoryHistory.delete(conversationId)
     inMemoryHistory.set(conversationId, entries.slice(-maxMessagesPerConversation))
     trimHistoryBuckets()
+  }
+
+  const rememberConversationArchiveKeyHint = (conversationId: string, hint: unknown) => {
+    const normalized = normalizeArchiveKeyHint(hint)
+    if (!normalized) return
+    conversationArchiveKeyHints.set(conversationId, `0x${normalized.toString('hex')}`)
   }
 
   const runtime = {
@@ -265,6 +1317,12 @@ export function createRuntimeBridge(params: {
     createMemory: async (memory: Memory) => {
       await ensureMemorySchema()
       const conversationId = String((memory.content as any)?.metadata?.conversationId ?? memory.roomId ?? 'unknown')
+      const metadata = (memory.content as any)?.metadata ?? {}
+      const archiveKeyHintRaw = String(metadata?.xmtpConversationKey ?? '').trim() || null
+      if (archiveKeyHintRaw) {
+        rememberConversationArchiveKeyHint(conversationId, archiveKeyHintRaw)
+      }
+      const resolvedArchiveKeyHint = archiveKeyHintRaw ?? conversationArchiveKeyHints.get(conversationId) ?? null
       const existing = inMemoryHistory.get(conversationId) ?? []
       existing.push(memory)
       setConversationHistory(conversationId, existing)
@@ -289,6 +1347,15 @@ export function createRuntimeBridge(params: {
           )
           ON CONFLICT (id) DO NOTHING;
         `
+        await persistWarmMemoryArtifacts({
+          db: db as any,
+          runtimeAgentId,
+          conversationId,
+          role: String((memory.content as any)?.role ?? 'user'),
+          content: String((memory.content as any)?.text ?? ''),
+          senderAddress: String((memory.content as any)?.metadata?.senderAddress ?? '') || null,
+          xmtpConversationKeyHint: resolvedArchiveKeyHint,
+        })
       } catch (error) {
         logger.warn('[eliza/runtime] failed to persist memory (non-blocking)', {
           agentKey: params.agentKey,
@@ -300,7 +1367,10 @@ export function createRuntimeBridge(params: {
     },
   } as unknown as IAgentRuntime
 
-  async function hydrateConversationHistoryFromDb(conversationId: string): Promise<Memory[]> {
+  async function hydrateConversationHistoryFromDb(
+    conversationId: string,
+    xmtpConversationKeyHint?: string | null,
+  ): Promise<Memory[]> {
     const db = await getDb()
     if (!db) return []
     try {
@@ -320,33 +1390,43 @@ export function createRuntimeBridge(params: {
         WHERE agent_id = ${runtimeAgentId}
           AND conversation_id = ${conversationId}
         ORDER BY created_at DESC
-        LIMIT 20;
+        LIMIT ${Math.max(20, Math.min(60, maxMessagesPerConversation))};
       `
       const rows = ((result.rows ?? []) as any[]).slice().reverse()
-      return rows.map((row) => {
-        const metadata =
-          row?.metadata_json && typeof row.metadata_json === 'object'
-            ? row.metadata_json
-            : {}
-        const createdAtMs = row?.created_at ? new Date(row.created_at).getTime() : Date.now()
-        return {
-          id: String(row?.id ?? randomUUID()) as any,
-          entityId: String(row?.entity_id ?? '') as any,
-          agentId: runtimeAgentId as any,
-          roomId: String(row?.room_id ?? toRoomId(conversationId)) as any,
-          content: {
-            text: String(row?.content ?? ''),
-            role: String(row?.role ?? 'user'),
-            source: 'xmtp',
-            metadata: {
-              ...metadata,
-              conversationId: String(row?.conversation_id ?? conversationId),
-              conversationType: String(row?.conversation_type ?? metadata?.conversationType ?? 'unknown'),
-              senderAddress: row?.sender_address ? String(row.sender_address) : null,
-            },
-          } as any,
-          createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
-        } as Memory
+      if (rows.length > 0) {
+        return rows.map((row) => {
+          const metadata =
+            row?.metadata_json && typeof row.metadata_json === 'object'
+              ? row.metadata_json
+              : {}
+          rememberConversationArchiveKeyHint(conversationId, (metadata as any)?.xmtpConversationKey)
+          const createdAtMs = row?.created_at ? new Date(row.created_at).getTime() : Date.now()
+          return {
+            id: String(row?.id ?? randomUUID()) as any,
+            entityId: String(row?.entity_id ?? '') as any,
+            agentId: runtimeAgentId as any,
+            roomId: String(row?.room_id ?? toRoomId(conversationId)) as any,
+            content: {
+              text: String(row?.content ?? ''),
+              role: String(row?.role ?? 'user'),
+              source: 'xmtp',
+              metadata: {
+                ...metadata,
+                conversationId: String(row?.conversation_id ?? conversationId),
+                conversationType: String(row?.conversation_type ?? metadata?.conversationType ?? 'unknown'),
+                senderAddress: row?.sender_address ? String(row.sender_address) : null,
+              },
+            } as any,
+            createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
+          } as Memory
+        })
+      }
+      return await hydrateConversationHistoryFromGrove({
+        db: db as any,
+        conversationId,
+        runtimeAgentId,
+        maxMessagesPerConversation,
+        xmtpConversationKeyHint: xmtpConversationKeyHint ?? conversationArchiveKeyHints.get(conversationId) ?? null,
       })
     } catch (error) {
       logger.warn('[eliza/runtime] failed loading persisted history (non-blocking)', {
@@ -361,21 +1441,49 @@ export function createRuntimeBridge(params: {
   async function composeState(memory: Memory): Promise<Record<string, unknown>> {
     const metadata = (memory.content as any)?.metadata ?? {}
     const conversationId = String(metadata.conversationId ?? memory.roomId ?? 'unknown')
+    const xmtpConversationKeyHint = String(metadata.xmtpConversationKey ?? '').trim() || null
+    if (xmtpConversationKeyHint) {
+      rememberConversationArchiveKeyHint(conversationId, xmtpConversationKeyHint)
+    }
     let history = inMemoryHistory.get(conversationId) ?? []
     if (history.length === 0) {
-      const restored = await hydrateConversationHistoryFromDb(conversationId)
+      const restored = await hydrateConversationHistoryFromDb(
+        conversationId,
+        xmtpConversationKeyHint ?? conversationArchiveKeyHints.get(conversationId) ?? null,
+      )
       if (restored.length > 0) {
         history = restored
         setConversationHistory(conversationId, restored)
       }
     }
-    const recentMessages = history.slice(-12).map((entry) => {
+    const recentMessages = history.slice(-Math.max(10, Math.min(30, maxMessagesPerConversation))).map((entry) => {
       return {
         text: String((entry.content as any)?.text ?? ''),
         role: String((entry.content as any)?.role ?? 'user'),
         createdAt: Number(entry.createdAt ?? Date.now()),
       }
     })
+    const db = await getDb()
+    const warmState = await loadWarmMemoryState({
+      db,
+      conversationId,
+    }).catch((error) => {
+      logger.warn('[eliza/runtime] warm memory load failed (non-blocking)', {
+        agentKey: params.agentKey,
+        conversationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return {
+        summary: null,
+        factCards: [],
+        openTasks: [],
+        memorySnapshot: null,
+      }
+    })
+    const historyBlock = buildHistoryBlock(recentMessages)
+    const factCardsBlock = buildFactCardsBlock(warmState.factCards)
+    const openTasksBlock = buildOpenTasksBlock(warmState.openTasks)
+    const memorySnapshotBlock = buildMemorySnapshotBlock(warmState.memorySnapshot)
     const senderAddress = asAddress(metadata.senderAddress)
     const session = buildRuntimeSessionContext(senderAddress)
     return {
@@ -383,6 +1491,13 @@ export function createRuntimeBridge(params: {
       conversationId,
       conversationType: metadata.conversationType ?? 'unknown',
       recentMessages,
+      historyBlock,
+      factCardsBlock,
+      openTasksBlock,
+      memorySnapshotBlock,
+      factCards: warmState.factCards,
+      openTasks: warmState.openTasks,
+      memorySnapshot: warmState.memorySnapshot,
       session,
       character: {
         systemPrompt: params.character?.systemPrompt ?? '',
@@ -514,6 +1629,10 @@ export function createRuntimeBridge(params: {
   }
 
   function createInboundMemory(msg: InboundMessage): Memory {
+    const xmtpConversationKey = String(msg.xmtpConversationKey ?? '').trim() || null
+    if (xmtpConversationKey) {
+      rememberConversationArchiveKeyHint(msg.conversationId, xmtpConversationKey)
+    }
     return {
       id: randomUUID() as any,
       entityId: toEntityId(msg.senderAddress) as any,
@@ -527,6 +1646,7 @@ export function createRuntimeBridge(params: {
           conversationId: msg.conversationId,
           conversationType: msg.conversationType,
           senderAddress: msg.senderAddress,
+          ...(xmtpConversationKey ? { xmtpConversationKey } : {}),
         },
       } as any,
       createdAt: Date.now(),
@@ -534,6 +1654,7 @@ export function createRuntimeBridge(params: {
   }
 
   function createOutboundMemory(conversationId: string, conversationType: string, content: string): Memory {
+    const xmtpConversationKey = conversationArchiveKeyHints.get(conversationId) ?? null
     return {
       id: randomUUID() as any,
       entityId: runtimeAgentId as any,
@@ -547,6 +1668,7 @@ export function createRuntimeBridge(params: {
           conversationId,
           conversationType,
           senderAddress: null,
+          ...(xmtpConversationKey ? { xmtpConversationKey } : {}),
         },
       } as any,
       createdAt: Date.now(),

@@ -166,15 +166,32 @@ function readOptionalSetting(key: string): string | undefined {
   return value || undefined
 }
 
+const MEMORY_CONTINUITY_GUARDRAIL = `You are a stateful agent with perfect memory of this conversation.
+- The full message history for this conversation_id is ALWAYS provided below in the <history> section.
+- NEVER claim "I have no memory" or "I don't remember" when <history> is present.
+- ALWAYS reference prior turns, user facts, preferences, and open tasks from the provided history and memory summaries.
+- If the history feels incomplete, use the separate <memory_snapshot> and <fact_cards> sections to fill gaps.
+- Maintain perfect continuity across Telegram and XMTP sessions.`
+
+function withMemoryContinuityGuardrail(systemPrompt: string): string {
+  const trimmedPrompt = String(systemPrompt ?? '').trim()
+  if (!trimmedPrompt) return MEMORY_CONTINUITY_GUARDRAIL
+  if (trimmedPrompt.includes('You are a stateful agent with perfect memory of this conversation.')) {
+    return trimmedPrompt
+  }
+  return `${MEMORY_CONTINUITY_GUARDRAIL}\n\n${trimmedPrompt}`
+}
+
 /**
  * Runtime-facing character projection used by the Eliza runtime bridge.
  * This keeps prompt/model policy as first-class runtime input and allows
  * env-level overrides without mutating the static character definition.
  */
 export function resolveCharacterRuntimeConfig(): CharacterRuntimeConfig {
-  const systemPrompt =
+  const baseSystemPrompt =
     readOptionalSetting('ELIZA_CHARACTER_SYSTEM_PROMPT') ??
     creatorVaultCharacter.system
+  const systemPrompt = withMemoryContinuityGuardrail(baseSystemPrompt)
 
   const defaultModel = String(creatorVaultCharacter.settings?.model ?? '').trim()
   const preferredModel =

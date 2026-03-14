@@ -139,10 +139,90 @@ export type TelegramLinkStartTokenPayload = {
   expiresAt: string
 }
 
+export type TelegramLinkStartTokenReadResult =
+  | {
+      ok: true
+      payload: TelegramLinkStartTokenPayload
+    }
+  | {
+      ok: false
+      reason: 'invalid' | 'expired'
+    }
+
+export type TelegramFunnelMetrics = {
+  windowHours: number
+  since: string
+  chatId: string | null
+  counts: {
+    linkStart: number
+    linkCompleteSuccess: number
+    linkCompleteFailed: number
+    tradeFlowStarted: number
+    tradePreviewReady: number
+    tradeConfirmed: number
+    tradeConfirmFailed: number
+  }
+  conversion: {
+    linkCompletionRatePct: number | null
+    tradePreviewToConfirmRatePct: number | null
+  }
+}
+
 let telegramTradingSchemaEnsured = false
 
 function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function parseBoolean(value: unknown, defaultValue: boolean): boolean {
+  const raw = asTrimmed(value).toLowerCase()
+  if (!raw) return defaultValue
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') return true
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return defaultValue
+}
+
+function parseCsvSet(raw: string): Set<string> {
+  return new Set(
+    raw
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )
+}
+
+function readTelegramFunnelRolloutChatIds(): Set<string> {
+  return parseCsvSet(asTrimmed(process.env.TELEGRAM_FUNNEL_EVENTS_CHAT_IDS ?? ''))
+}
+
+function readTelegramFunnelMetricsRolloutChatIds(): Set<string> {
+  const explicit = asTrimmed(process.env.TELEGRAM_FUNNEL_METRICS_CHAT_IDS ?? '')
+  if (explicit) return parseCsvSet(explicit)
+  return readTelegramFunnelRolloutChatIds()
+}
+
+export function isTelegramFunnelEventsEnabled(): boolean {
+  return parseBoolean(process.env.TELEGRAM_FUNNEL_EVENTS_ENABLED, true)
+}
+
+export function isTelegramFunnelEventsEnabledForChat(chatId?: string | null): boolean {
+  if (!isTelegramFunnelEventsEnabled()) return false
+  const allowedChatIds = readTelegramFunnelRolloutChatIds()
+  if (allowedChatIds.size === 0) return true
+  const normalizedChatId = asTrimmed(chatId ?? '')
+  return normalizedChatId ? allowedChatIds.has(normalizedChatId) : false
+}
+
+export function isTelegramFunnelMetricsEnabled(): boolean {
+  return parseBoolean(process.env.TELEGRAM_FUNNEL_METRICS_ENABLED, false)
+}
+
+export function isTelegramFunnelMetricsEnabledForChat(chatId?: string | null): boolean {
+  if (!isTelegramFunnelMetricsEnabled()) return false
+  const allowedChatIds = readTelegramFunnelMetricsRolloutChatIds()
+  if (allowedChatIds.size === 0) return true
+  const normalizedChatId = asTrimmed(chatId ?? '')
+  return normalizedChatId ? allowedChatIds.has(normalizedChatId) : false
 }
 
 function normalizeTelegramUserId(value: string | number | bigint): bigint | null {
@@ -247,6 +327,54 @@ function signTelegramLinkPayload(payloadB64: string): string {
   return base64UrlEncode(signature)
 }
 
+type TelegramLinkStartTokenRawPayload = {
+  telegramUserId: string
+  chatId: string
+  issuedAtMs: number
+  expiresAtMs: number
+}
+
+function parseTelegramLinkStartTokenRaw(token: string): TelegramLinkStartTokenRawPayload | null {
+  const raw = asTrimmed(token)
+  if (!raw) return null
+  const parts = raw.split('.')
+  if (parts.length !== 2) return null
+  const [payloadB64, sigB64] = parts
+  if (!payloadB64 || !sigB64) return null
+
+  const expectedSig = signTelegramLinkPayload(payloadB64)
+  try {
+    const left = Buffer.from(sigB64, 'utf8')
+    const right = Buffer.from(expectedSig, 'utf8')
+    if (left.length !== right.length) return null
+    if (!timingSafeEqual(left, right)) return null
+  } catch {
+    return null
+  }
+
+  const payloadRaw = base64UrlDecodeToString(payloadB64)
+  if (!payloadRaw) return null
+  let parsed: any
+  try {
+    parsed = JSON.parse(payloadRaw)
+  } catch {
+    return null
+  }
+  const telegramUserId = asTrimmed(parsed?.tg)
+  const chatId = asTrimmed(parsed?.c)
+  const issuedAtMs = typeof parsed?.iat === 'number' ? parsed.iat : Number(parsed?.iat)
+  const expiresAtMs = typeof parsed?.exp === 'number' ? parsed.exp : Number(parsed?.exp)
+  if (!/^\d+$/.test(telegramUserId) || !chatId || !Number.isFinite(issuedAtMs) || !Number.isFinite(expiresAtMs)) {
+    return null
+  }
+  return {
+    telegramUserId,
+    chatId,
+    issuedAtMs,
+    expiresAtMs,
+  }
+}
+
 export function createTelegramLinkStartToken(params: {
   telegramUserId: string | number | bigint
   chatId: string
@@ -275,43 +403,33 @@ export function createTelegramLinkStartToken(params: {
 }
 
 export function readTelegramLinkStartToken(token: string): TelegramLinkStartTokenPayload | null {
-  const raw = asTrimmed(token)
-  if (!raw) return null
-  const parts = raw.split('.')
-  if (parts.length !== 2) return null
-  const [payloadB64, sigB64] = parts
-  if (!payloadB64 || !sigB64) return null
-
-  const expectedSig = signTelegramLinkPayload(payloadB64)
-  try {
-    const left = Buffer.from(sigB64, 'utf8')
-    const right = Buffer.from(expectedSig, 'utf8')
-    if (left.length !== right.length) return null
-    if (!timingSafeEqual(left, right)) return null
-  } catch {
-    return null
-  }
-
-  const payloadRaw = base64UrlDecodeToString(payloadB64)
-  if (!payloadRaw) return null
-  let parsed: any
-  try {
-    parsed = JSON.parse(payloadRaw)
-  } catch {
-    return null
-  }
-  const telegramUserId = asTrimmed(parsed?.tg)
-  const chatId = asTrimmed(parsed?.c)
-  const iat = typeof parsed?.iat === 'number' ? parsed.iat : Number(parsed?.iat)
-  const exp = typeof parsed?.exp === 'number' ? parsed.exp : Number(parsed?.exp)
-  if (!/^\d+$/.test(telegramUserId) || !chatId || !Number.isFinite(iat) || !Number.isFinite(exp)) return null
-  if (exp <= Date.now()) return null
-
+  const parsed = parseTelegramLinkStartTokenRaw(token)
+  if (!parsed) return null
+  if (parsed.expiresAtMs <= Date.now()) return null
   return {
-    telegramUserId,
-    chatId,
-    issuedAt: new Date(iat).toISOString(),
-    expiresAt: new Date(exp).toISOString(),
+    telegramUserId: parsed.telegramUserId,
+    chatId: parsed.chatId,
+    issuedAt: new Date(parsed.issuedAtMs).toISOString(),
+    expiresAt: new Date(parsed.expiresAtMs).toISOString(),
+  }
+}
+
+export function readTelegramLinkStartTokenStatus(token: string): TelegramLinkStartTokenReadResult {
+  const parsed = parseTelegramLinkStartTokenRaw(token)
+  if (!parsed) {
+    return { ok: false, reason: 'invalid' }
+  }
+  if (parsed.expiresAtMs <= Date.now()) {
+    return { ok: false, reason: 'expired' }
+  }
+  return {
+    ok: true,
+    payload: {
+      telegramUserId: parsed.telegramUserId,
+      chatId: parsed.chatId,
+      issuedAt: new Date(parsed.issuedAtMs).toISOString(),
+      expiresAt: new Date(parsed.expiresAtMs).toISOString(),
+    },
   }
 }
 
@@ -472,6 +590,40 @@ export async function logTelegramActionAudit(params: {
   `
 }
 
+export async function logTelegramFunnelEvent(params: {
+  db: Db
+  telegramUserId?: string | number | bigint | null
+  chatId?: string | null
+  eventName: string
+  actionType?: string | null
+  context?: Record<string, any> | null
+}): Promise<void> {
+  const eventName = asTrimmed(params.eventName).toLowerCase()
+  if (!eventName) return
+  const userId =
+    typeof params.telegramUserId === 'undefined' || params.telegramUserId === null
+      ? null
+      : normalizeTelegramUserId(params.telegramUserId)
+  const chatId = asTrimmed(params.chatId ?? '') || null
+  const actionType = asTrimmed(params.actionType ?? '').toLowerCase() || null
+  await params.db.sql`
+    INSERT INTO telegram_funnel_events (
+      telegram_user_id,
+      chat_id,
+      event_name,
+      action_type,
+      context_json
+    )
+    VALUES (
+      ${userId ? userId : null},
+      ${chatId},
+      ${eventName},
+      ${actionType},
+      ${params.context ?? {}}
+    );
+  `
+}
+
 export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
   if (telegramTradingSchemaEnsured) return
   try {
@@ -524,6 +676,17 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
         error_message TEXT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_funnel_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        telegram_user_id BIGINT NULL,
+        chat_id TEXT NULL,
+        event_name TEXT NOT NULL,
+        action_type TEXT NULL,
+        context_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
     await db.sql`
@@ -599,6 +762,22 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_action_audit_user_created_idx
       ON telegram_action_audit (telegram_user_id, created_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_funnel_events_created_idx
+      ON telegram_funnel_events (created_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_funnel_events_name_created_idx
+      ON telegram_funnel_events (event_name, created_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_funnel_events_chat_created_idx
+      ON telegram_funnel_events (chat_id, created_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_funnel_events_user_created_idx
+      ON telegram_funnel_events (telegram_user_id, created_at DESC);
     `
     await db.sql`
       CREATE UNIQUE INDEX IF NOT EXISTS telegram_holder_room_policies_room_chat_uidx
@@ -1361,5 +1540,68 @@ export async function listTelegramUserBids(params: {
     txHash: asTrimmed(row.tx_hash) || null,
     createdAt: toIso(row.created_at) ?? new Date(0).toISOString(),
   }))
+}
+
+function parseCount(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.trunc(value))
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return Math.max(0, Math.trunc(parsed))
+  }
+  return 0
+}
+
+function computePercent(numerator: number, denominator: number): number | null {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null
+  return Number(((numerator / denominator) * 100).toFixed(2))
+}
+
+export async function getTelegramFunnelMetrics(params: {
+  db: Db
+  chatId?: string | null
+  windowHours?: number
+}): Promise<TelegramFunnelMetrics> {
+  const chatId = asTrimmed(params.chatId ?? '') || null
+  const chatFilter = chatId ?? ''
+  const windowHours = Math.max(1, Math.min(24 * 30, Math.floor(Number(params.windowHours ?? 24))))
+  const since = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString()
+
+  const result = await params.db.sql`
+    SELECT
+      COUNT(*) FILTER (WHERE event_name = 'link_start') AS link_start_count,
+      COUNT(*) FILTER (WHERE event_name = 'link_complete_success') AS link_complete_success_count,
+      COUNT(*) FILTER (WHERE event_name = 'link_complete_failed') AS link_complete_failed_count,
+      COUNT(*) FILTER (WHERE event_name = 'trade_flow_started') AS trade_flow_started_count,
+      COUNT(*) FILTER (WHERE event_name = 'trade_preview_ready') AS trade_preview_ready_count,
+      COUNT(*) FILTER (WHERE event_name = 'trade_confirmed') AS trade_confirmed_count,
+      COUNT(*) FILTER (
+        WHERE event_name IN ('trade_confirm_failed', 'trade_confirm_token_invalid')
+      ) AS trade_confirm_failed_count
+    FROM telegram_funnel_events
+    WHERE created_at >= ${since}
+      AND (${chatFilter} = '' OR chat_id = ${chatFilter});
+  `
+
+  const row = result.rows?.[0] ?? {}
+  const counts = {
+    linkStart: parseCount((row as any).link_start_count),
+    linkCompleteSuccess: parseCount((row as any).link_complete_success_count),
+    linkCompleteFailed: parseCount((row as any).link_complete_failed_count),
+    tradeFlowStarted: parseCount((row as any).trade_flow_started_count),
+    tradePreviewReady: parseCount((row as any).trade_preview_ready_count),
+    tradeConfirmed: parseCount((row as any).trade_confirmed_count),
+    tradeConfirmFailed: parseCount((row as any).trade_confirm_failed_count),
+  }
+
+  return {
+    windowHours,
+    since,
+    chatId,
+    counts,
+    conversion: {
+      linkCompletionRatePct: computePercent(counts.linkCompleteSuccess, counts.linkStart),
+      tradePreviewToConfirmRatePct: computePercent(counts.tradeConfirmed, counts.tradePreviewReady),
+    },
+  }
 }
 

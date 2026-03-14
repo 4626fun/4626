@@ -8,6 +8,7 @@
 import { Agent, createUser, createSigner, filter, getInstallationInfo } from '@xmtp/agent-sdk'
 import type { MessageContext, ConversationContext } from '@xmtp/agent-sdk'
 import type { Plugin } from '@elizaos/core'
+import { createHash } from 'node:crypto'
 import { AgentError } from '../../_errors.js'
 
 const ETHEREUM_IDENTIFIER_KIND = 0
@@ -53,6 +54,41 @@ function readErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message || error.name || 'unknown_error'
   if (typeof error === 'string' && error.trim()) return error
   return 'unknown_error'
+}
+
+function normalizeHexSignature(value: unknown): string | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const normalized = raw.startsWith('0x') ? raw.slice(2) : raw
+  if (!/^[a-fA-F0-9]{64,}$/.test(normalized)) return null
+  return normalized.toLowerCase()
+}
+
+async function signConversationKeyMaterial(
+  signer: any,
+  conversationId: string,
+): Promise<string | null> {
+  if (!signer || typeof signer !== 'object') return null
+  const payload = `4626:xmtp:archive:key:v1:${conversationId}`
+  const signMessage = (signer as any).signMessage
+  if (typeof signMessage !== 'function') return null
+  const attempts = [
+    () => signMessage(payload),
+    () => signMessage({ message: payload }),
+    () => signMessage({ text: payload }),
+    () => signMessage({ data: payload }),
+    () => signMessage(Buffer.from(payload, 'utf8')),
+  ]
+  for (const trySign of attempts) {
+    try {
+      const signature = await Promise.resolve(trySign())
+      const normalized = normalizeHexSignature(signature)
+      if (normalized) return normalized
+    } catch {
+      // Try the next signer shape.
+    }
+  }
+  return null
 }
 
 function isRetryableError(error: unknown): boolean {
@@ -151,6 +187,7 @@ export type XmtpMessage = {
   content: string
   sentAt: Date
   isSelf: boolean
+  conversationArchiveKey?: string | null
 }
 
 export type OnMessageCallback = (msg: XmtpMessage) => Promise<string | null>
@@ -165,6 +202,8 @@ export class XmtpService {
   private agent: Agent | null = null
   private onMessage: OnMessageCallback | null = null
   private config: XmtpConfig
+  private signerForArchive: any = null
+  private conversationArchiveKeyCache = new Map<string, string>()
   private lifecycleState: XmtpLifecycleState = 'idle'
   private lastStartedAtMs: number | null = null
   private lastMessageAtMs: number | null = null
@@ -221,6 +260,7 @@ export class XmtpService {
     } else {
       throw new Error('Either privateKey or signer must be provided')
     }
+    this.signerForArchive = signer
 
     const createOpts: Record<string, unknown> = {
       env: this.config.env ?? 'production',
@@ -341,6 +381,8 @@ export class XmtpService {
         } catch {}
       }
       this.agent = null
+      this.signerForArchive = null
+      this.conversationArchiveKeyCache.clear()
       this.lifecycleState = 'error'
       this.lastError = error instanceof Error ? error.message : String(error)
       throw error
@@ -354,6 +396,8 @@ export class XmtpService {
       await this.agent.stop()
     } catch {}
     this.agent = null
+    this.signerForArchive = null
+    this.conversationArchiveKeyCache.clear()
     this.lifecycleState = 'stopped'
     console.log('[xmtp-service] Agent stopped')
   }
@@ -385,6 +429,23 @@ export class XmtpService {
     }
   }
 
+  /**
+   * Derive a stable, conversation-scoped archive key from the XMTP signer.
+   * This avoids using app-level env secrets for Grove archive encryption.
+   */
+  async deriveConversationArchiveKey(conversationId: string): Promise<string | null> {
+    const key = String(conversationId ?? '').trim()
+    if (!key) return null
+    const cached = this.conversationArchiveKeyCache.get(key)
+    if (cached) return cached
+    const signature = await signConversationKeyMaterial(this.signerForArchive, key)
+    if (!signature) return null
+    const digest = createHash('sha256').update(signature, 'utf8').digest('hex')
+    const derived = `0x${digest}`
+    this.conversationArchiveKeyCache.set(key, derived)
+    return derived
+  }
+
   // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
@@ -400,6 +461,7 @@ export class XmtpService {
       const conversationId = ctx.conversation.id
       const senderInboxId = ctx.message.senderInboxId
       const conversationType = ctx.isDm() ? 'dm' : 'group'
+      const conversationArchiveKey = await this.deriveConversationArchiveKey(conversationId)
 
       // Resolve sender address
       const senderAddress = await this.resolveInboxAddress(senderInboxId)
@@ -412,6 +474,7 @@ export class XmtpService {
         content,
         sentAt: ctx.message.sentAt ?? new Date(),
         isSelf: false,
+        conversationArchiveKey,
       }
 
       if (this.onMessage) {

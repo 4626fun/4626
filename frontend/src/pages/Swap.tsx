@@ -477,11 +477,14 @@ export function Swap() {
       const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteResponse> | null
       if (!res.ok || !json?.success || json?.data?.linked !== true) {
         const message = typeof json?.error === 'string' && json.error.trim() ? json.error.trim() : 'Telegram linking failed.'
+        if (res.status === 410 || /expired/i.test(message)) {
+          throw new Error('Telegram link expired. Go back to Telegram, tap Refresh Link, then open Mini App again.')
+        }
         throw new Error(message)
       }
 
       setTelegramLinkState('linked')
-      setTelegramLinkMessage('Telegram linked successfully. Return to Telegram and run /linked.')
+      setTelegramLinkMessage('Telegram linked successfully. Return to Telegram, tap Check Link Status, then pick Buy, Sell, or Bid.')
       const cleaned = stripTelegramMiniAppLinkParams(searchParams)
       const next = cleaned.toString()
       navigate(
@@ -1256,6 +1259,8 @@ export function Swap() {
     if (Array.isArray(data)) return data as LpPosition[]
     return []
   }, [lpPositionsQuery.data])
+  const telegramLinkExpiredError =
+    telegramLinkState === 'error' && /expired/i.test(String(telegramLinkMessage ?? ''))
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -1380,13 +1385,17 @@ export function Swap() {
             {telegramLinkMessage ?? 'Finalizing your Telegram + 4626 account link.'}
             {telegramLinkState === 'error' ? (
               <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={retryTelegramLink}
-                  className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white transition hover:bg-white/10"
-                >
-                  Retry link
-                </button>
+                {telegramLinkExpiredError ? (
+                  <div className="text-xs text-zinc-300">Open a fresh /link from Telegram, then tap Open Mini App again.</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={retryTelegramLink}
+                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white transition hover:bg-white/10"
+                  >
+                    Retry link
+                  </button>
+                )}
               </div>
             ) : null}
           </Alert>

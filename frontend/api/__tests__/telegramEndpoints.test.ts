@@ -10,7 +10,13 @@ const {
   getTelegramLinkStatusMock,
   revokeTelegramLinkMock,
   getTelegramPortfolioSummaryMock,
+  getTelegramFunnelMetricsMock,
+  isTelegramFunnelEventsEnabledForChatMock,
+  isTelegramFunnelMetricsEnabledMock,
+  isTelegramFunnelMetricsEnabledForChatMock,
+  logTelegramFunnelEventMock,
   createTelegramLinkStartTokenMock,
+  readTelegramLinkStartTokenStatusMock,
   readTelegramLinkStartTokenMock,
   upsertTelegramUserLinkMock,
   bootstrapCanonicalDelegationStateMock,
@@ -25,7 +31,13 @@ const {
   getTelegramLinkStatusMock: vi.fn(),
   revokeTelegramLinkMock: vi.fn(),
   getTelegramPortfolioSummaryMock: vi.fn(),
+  getTelegramFunnelMetricsMock: vi.fn(),
+  isTelegramFunnelEventsEnabledForChatMock: vi.fn(),
+  isTelegramFunnelMetricsEnabledMock: vi.fn(),
+  isTelegramFunnelMetricsEnabledForChatMock: vi.fn(),
+  logTelegramFunnelEventMock: vi.fn(),
   createTelegramLinkStartTokenMock: vi.fn(),
+  readTelegramLinkStartTokenStatusMock: vi.fn(),
   readTelegramLinkStartTokenMock: vi.fn(),
   upsertTelegramUserLinkMock: vi.fn(),
   bootstrapCanonicalDelegationStateMock: vi.fn(),
@@ -48,7 +60,13 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   getTelegramLinkStatus: getTelegramLinkStatusMock,
   revokeTelegramLink: revokeTelegramLinkMock,
   getTelegramPortfolioSummary: getTelegramPortfolioSummaryMock,
+  getTelegramFunnelMetrics: getTelegramFunnelMetricsMock,
+  isTelegramFunnelEventsEnabledForChat: isTelegramFunnelEventsEnabledForChatMock,
+  isTelegramFunnelMetricsEnabled: isTelegramFunnelMetricsEnabledMock,
+  isTelegramFunnelMetricsEnabledForChat: isTelegramFunnelMetricsEnabledForChatMock,
+  logTelegramFunnelEvent: logTelegramFunnelEventMock,
   createTelegramLinkStartToken: createTelegramLinkStartTokenMock,
+  readTelegramLinkStartTokenStatus: readTelegramLinkStartTokenStatusMock,
   readTelegramLinkStartToken: readTelegramLinkStartTokenMock,
   upsertTelegramUserLink: upsertTelegramUserLinkMock,
 }))
@@ -72,11 +90,34 @@ describe('telegram endpoint handlers', () => {
       TELEGRAM_LINK_API_SECRET: undefined,
       TELEGRAM_MINI_APP_URL: 'https://app.4626.fun',
       TELEGRAM_BOT_TOKEN: 'test-bot-token',
+      TELEGRAM_FUNNEL_METRICS_ENABLED: 'true',
     })
     getDbMock.mockResolvedValue({ sql: vi.fn() })
     ensureWaitlistSchemaMock.mockResolvedValue(undefined)
     ensureTelegramTradingSchemaMock.mockResolvedValue(undefined)
     getTelegramLinkStatusMock.mockImplementation(async (...args: any[]) => getTelegramLinkByUserIdMock(...args))
+    isTelegramFunnelEventsEnabledForChatMock.mockReturnValue(true)
+    isTelegramFunnelMetricsEnabledMock.mockReturnValue(true)
+    isTelegramFunnelMetricsEnabledForChatMock.mockReturnValue(true)
+    getTelegramFunnelMetricsMock.mockResolvedValue({
+      windowHours: 24,
+      since: '2026-03-12T00:00:00.000Z',
+      chatId: '-100123',
+      counts: {
+        linkStart: 5,
+        linkCompleteSuccess: 3,
+        linkCompleteFailed: 1,
+        tradeFlowStarted: 8,
+        tradePreviewReady: 6,
+        tradeConfirmed: 4,
+        tradeConfirmFailed: 1,
+      },
+      conversion: {
+        linkCompletionRatePct: 60,
+        tradePreviewToConfirmRatePct: 66.67,
+      },
+    })
+    logTelegramFunnelEventMock.mockResolvedValue(undefined)
     createTelegramLinkStartTokenMock.mockReturnValue({
       token: 'token-abc',
       expiresAt: '2026-03-13T00:10:00.000Z',
@@ -86,6 +127,15 @@ describe('telegram endpoint handlers', () => {
       chatId: '-100123',
       issuedAt: '2026-03-13T00:00:00.000Z',
       expiresAt: '2026-03-13T00:10:00.000Z',
+    })
+    readTelegramLinkStartTokenStatusMock.mockReturnValue({
+      ok: true,
+      payload: {
+        telegramUserId: '42',
+        chatId: '-100123',
+        issuedAt: '2026-03-13T00:00:00.000Z',
+        expiresAt: '2026-03-13T00:10:00.000Z',
+      },
     })
     bootstrapCanonicalDelegationStateMock.mockResolvedValue({
       profileId: 11,
@@ -237,7 +287,7 @@ describe('telegram endpoint handlers', () => {
 
   it('POST /api/telegram/link/complete rejects invalid or expired token', async () => {
     const { default: handler } = await import('../_handlers/telegram/_link-complete.ts')
-    readTelegramLinkStartTokenMock.mockReturnValueOnce(null)
+    readTelegramLinkStartTokenStatusMock.mockReturnValueOnce({ ok: false, reason: 'invalid' })
     const req = createMockReq({
       method: 'POST',
       headers: { 'x-privy-token': 'privy-token' },
@@ -249,6 +299,23 @@ describe('telegram endpoint handlers', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.success).toBe(false)
+  })
+
+  it('POST /api/telegram/link/complete returns 410 for expired token', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_link-complete.ts')
+    readTelegramLinkStartTokenStatusMock.mockReturnValueOnce({ ok: false, reason: 'expired' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { token: 'expired-token' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(410)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('expired')
   })
 
   it('POST /api/telegram/link/complete links telegram to canonical csw', async () => {
@@ -285,11 +352,61 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.data?.linked).toBe(false)
   })
 
+  it('GET /api/telegram/metrics returns funnel summary for a chat', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_metrics.ts')
+    const req = createMockReq({
+      method: 'GET',
+      query: { chatId: '-100123', windowHours: '24' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(getTelegramFunnelMetricsMock).toHaveBeenCalledTimes(1)
+    expect(res.body?.data?.counts?.tradeFlowStarted).toBe(8)
+    expect(res.body?.data?.conversion?.tradePreviewToConfirmRatePct).toBe(66.67)
+  })
+
+  it('GET /api/telegram/metrics returns 404 when rollout flag is disabled', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_metrics.ts')
+    isTelegramFunnelMetricsEnabledMock.mockReturnValueOnce(false)
+    const req = createMockReq({
+      method: 'GET',
+      query: { chatId: '-100123' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(404)
+    expect(res.body?.success).toBe(false)
+    expect(getDbMock).not.toHaveBeenCalled()
+  })
+
+  it('GET /api/telegram/metrics returns 403 when chat is outside rollout cohort', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_metrics.ts')
+    isTelegramFunnelMetricsEnabledForChatMock.mockReturnValueOnce(false)
+    const req = createMockReq({
+      method: 'GET',
+      query: { chatId: '-100123' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.success).toBe(false)
+    expect(getDbMock).not.toHaveBeenCalled()
+  })
+
   it('route map registers telegram link endpoints', async () => {
     const { getApiHandler } = await import('../_handlers/_routes.ts')
     expect(await getApiHandler('telegram/link/start')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/link/complete')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/link/status')).toBeTypeOf('function')
+    expect(await getApiHandler('telegram/metrics')).toBeTypeOf('function')
   })
 
   it('POST /api/telegram/bot-config syncs commands and menu button', async () => {
