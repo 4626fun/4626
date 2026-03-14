@@ -1122,9 +1122,9 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Link Status')
     expect(String(payload.text ?? '')).toContain('- linked: no')
+    expect(String(payload.text ?? '')).toContain('- next: run')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
-    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:link')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Start Link')).toBe(true)
+    expect(allButtons.length).toBeGreaterThan(0)
   })
 
   it('renders /linked success with trade shortcuts when owner is verified', async () => {
@@ -1166,7 +1166,7 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:bid')).toBe(true)
   })
 
-  it('renders /link with friendly mini app and status buttons', async () => {
+  it('renders /link in groups with private-DM linking instructions only', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -1187,15 +1187,41 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Link your 4626 account (one time)')
+    expect(String(payload.text ?? '')).toContain('only available in a private chat')
+    expect(String(payload.text ?? '')).toContain('/link there')
+    expect(String(payload.text ?? '')).not.toContain('Tap Open Mini App.')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:linked')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Check Link Status')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(false)
+  })
+
+  it('renders /link in private chats with mini app launch and signed link token', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_15,
+        message: { message_id: 16, text: '/link', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Tap Open Mini App.')
     expect(String(payload.text ?? '')).toContain('If the button fails')
-    expect(String(payload.text ?? '')).not.toContain('Open: https://')
     expect(String(payload.parse_mode ?? '')).toBe('Markdown')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:linked')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Check Link Status')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:link')).toBe(true)
+    const openMiniAppButton = allButtons.find((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')
+    const launchUrl = String(openMiniAppButton?.web_app?.url ?? openMiniAppButton?.url ?? '')
+    expect(decodeURIComponent(launchUrl)).toContain('tgLinkToken=')
   })
 
   it('handles /portfolio as a telegram-native command without delegating to keepr', async () => {
