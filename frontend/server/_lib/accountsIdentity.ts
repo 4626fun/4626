@@ -223,7 +223,8 @@ function valuesForProviderFromPrivy(user: PrivyUserLike, provider: AccountLinkPr
     google: (type) => type.includes('google'),
     apple: (type) => type.includes('apple'),
     twitter: (type) => type.includes('twitter') || type === 'x',
-    telegram: (type) => type.includes('telegram'),
+    // Only accept the current Privy Telegram account type.
+    telegram: (type) => type === 'telegram',
     tiktok: (type) => type.includes('tiktok'),
   }
 

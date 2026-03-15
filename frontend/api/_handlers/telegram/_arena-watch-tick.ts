@@ -110,6 +110,37 @@ async function fetchArenaState(config: ArenaConfig): Promise<{ ok: true; payload
   }
 }
 
+async function fetchArenaMatchResult(config: ArenaConfig): Promise<{ ok: true; payload: any } | { ok: false; error: string }> {
+  try {
+    const response = await fetch(`${config.baseUrl}/match/result`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+    })
+    const rawText = await response.text()
+    let payload: any = null
+    try {
+      payload = rawText ? JSON.parse(rawText) : null
+    } catch {
+      payload = rawText
+    }
+    if (!response.ok) {
+      const detail =
+        cleanApiMessage(payload?.error) ||
+        cleanApiMessage(payload?.detail) ||
+        cleanApiMessage(payload?.message) ||
+        cleanApiMessage(rawText) ||
+        response.statusText
+      return { ok: false, error: `Arena result request failed (${response.status}): ${detail || 'unknown error'}` }
+    }
+    return { ok: true, payload }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: `Arena result request failed: ${cleanApiMessage(message) || 'network error'}` }
+  }
+}
+
 function readStateFingerprint(payload: any): {
   phase: string
   gameTime: string
@@ -247,7 +278,18 @@ async function processWatch(params: {
   }
 
   const summary = readStateFingerprint(stateResult.payload)
-  const currentMatchId = normalizeMatchId(summary.matchId)
+  let currentMatchId = normalizeMatchId(summary.matchId)
+  let resolvedMatchId = summary.matchId
+  if (!currentMatchId) {
+    const resultResponse = await fetchArenaMatchResult(params.arenaConfig)
+    if (resultResponse.ok) {
+      const fallbackMatchId = asTrimmed(resultResponse.payload?.match_id)
+      if (fallbackMatchId) {
+        currentMatchId = normalizeMatchId(fallbackMatchId)
+        resolvedMatchId = fallbackMatchId
+      }
+    }
+  }
   if (!currentMatchId) {
     const errorMessage = `watch bound to ${expectedMatchId}, but state payload had no match_id`
     await updateTelegramArenaWatchPoll({
@@ -255,7 +297,7 @@ async function processWatch(params: {
       chatId: params.watch.chatId,
       phase: summary.phase,
       gameTime: summary.gameTime,
-      matchId: summary.matchId,
+      matchId: resolvedMatchId,
       errorMessage,
       pushed: false,
       pollIntervalSeconds: params.pollSeconds,
@@ -268,7 +310,7 @@ async function processWatch(params: {
       chatId: params.watch.chatId,
       phase: summary.phase,
       gameTime: summary.gameTime,
-      matchId: summary.matchId,
+      matchId: resolvedMatchId,
       errorMessage: null,
       pushed: false,
       pollIntervalSeconds: params.pollSeconds,
@@ -301,7 +343,7 @@ async function processWatch(params: {
     phase: summary.phase,
     gameTime: summary.gameTime,
     stateHash: summary.stateHash,
-    matchId: summary.matchId,
+    matchId: resolvedMatchId,
     errorMessage: sendError,
     pushed: sent,
     pollIntervalSeconds: params.pollSeconds,
