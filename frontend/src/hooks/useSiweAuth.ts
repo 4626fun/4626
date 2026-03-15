@@ -41,6 +41,13 @@ function shouldSkipAutoPrivyBridge(): boolean {
 
   // Back off harder on terminal-ish failures (e.g. user has no Base Account linked).
   const reason = String(lastPrivyBridgeFailureReason || '').toLowerCase()
+  if (
+    reason.includes('recovery required') ||
+    reason.includes('already linked to another account') ||
+    reason.includes('recovery_required_email_bound')
+  ) {
+    return now - lastPrivyBridgeFailureAt < 10 * 60_000
+  }
   if (reason.includes('no base account wallet is linked') || reason.includes('link coinbase smart wallet')) {
     return now - lastPrivyBridgeFailureAt < 5 * 60_000
   }
@@ -236,9 +243,23 @@ export function useSiweAuth() {
           headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
         })
         const json = (await res.json().catch(() => null)) as ApiEnvelope<PrivySessionResponse> | null
+        const recoveryRequired =
+          res.status === 409 ||
+          Boolean((json as any)?.recoveryRequired) ||
+          String((json as any)?.code ?? '')
+            .toUpperCase()
+            .includes('RECOVERY_REQUIRED')
         if (!res.ok || !json?.success) {
           const apiErr = coerceErrorMessage((json as any)?.error, '')
-          const message = apiErr || 'Privy sign-in failed'
+          const message =
+            apiErr ||
+            (recoveryRequired
+              ? 'Recovery required: this email is already linked to another account. Use account recovery to continue.'
+              : 'Privy sign-in failed')
+          if (recoveryRequired) {
+            // Keep manual sign-in available, but stop background auto-bridge retry storms.
+            autoPrivyGlobalAttemptRef.current = true
+          }
           lastPrivyBridgeFailureAt = Date.now()
           lastPrivyBridgeFailureReason = message
           throw new Error(message)
