@@ -40,6 +40,66 @@ import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { handleKeeprCommand } from '../../../server/keepr/commands.js'
 import { handleTwitterCommand } from '../../../server/twitter/commands.js'
+import { getTelegramWebhookConfig } from './webhook/config.js'
+import {
+  areHolderRoomsEnabled as areHolderRoomsEnabledShared,
+  areStarsTipsEnabled as areStarsTipsEnabledShared,
+  getBaseRpcUrl as getBaseRpcUrlShared,
+  getBundlerAndPaymasterUrl as getBundlerAndPaymasterUrlShared,
+  isPrivateChatId as isPrivateChatIdShared,
+  isStarsTipsEnabledForChat as isStarsTipsEnabledForChatShared,
+  isTelegramAiFollowupEnabled as isTelegramAiFollowupEnabledShared,
+  isTelegramInlineGrowthModeEnabled as isTelegramInlineGrowthModeEnabledShared,
+  isTelegramPrivateDmEnabled as isTelegramPrivateDmEnabledShared,
+  isTradeMembershipCheckEnabled as isTradeMembershipCheckEnabledShared,
+  parseAdminUserIds as parseAdminUserIdsShared,
+  parseAllowedChatIds as parseAllowedChatIdsShared,
+  readEthUsdPrice as readEthUsdPriceShared,
+  readInlineQueryResultCap as readInlineQueryResultCapShared,
+  readShareUsdFallback as readShareUsdFallbackShared,
+  resolveGroupId as resolveGroupIdShared,
+  resolveSenderWallet as resolveSenderWalletShared,
+  resolveSignalsDestination as resolveSignalsDestinationShared,
+  resolveTelegramMiniAppUrl as resolveTelegramMiniAppUrlShared,
+} from './webhook/env.js'
+import { buildMiniAppLaunchButton as buildMiniAppLaunchButtonShared, buildTelegramLinkSwapNextPath as buildTelegramLinkSwapNextPathShared, buildTelegramMiniAppUrl as buildTelegramMiniAppUrlShared } from './webhook/miniApp.js'
+import {
+  resolveHelpCallbackCommand as resolveHelpCallbackCommandShared,
+  resolveImmediateCallbackToast as resolveImmediateCallbackToastShared,
+  resolveNavigationCallbackToast as resolveNavigationCallbackToastShared,
+} from './webhook/parsers/callbackMenu.js'
+import { isTelegramNativeCommand as isTelegramNativeCommandShared, normalizeTelegramCommand as normalizeTelegramCommandShared, shouldAutoRouteToAi as shouldAutoRouteToAiShared } from './webhook/parsers/command.js'
+import { parseDeployCallbackData as parseDeployCallbackDataShared, parseTelegramDeployIntent as parseTelegramDeployIntentShared } from './webhook/parsers/deploy.js'
+import { parseHolderRoomIdentifier as parseHolderRoomIdentifierShared } from './webhook/parsers/holderRooms.js'
+import { parseTipCallbackData as parseTipCallbackDataShared, parseTipInvoicePayload as parseTipInvoicePayloadShared } from './webhook/parsers/tips.js'
+import {
+  commandHasArguments as commandHasArgumentsShared,
+  parseTelegramTradeIntent as parseTelegramTradeIntentShared,
+  parseTradeCallbackData as parseTradeCallbackDataShared,
+  parseTradeFlowCallbackData as parseTradeFlowCallbackDataShared,
+  resolveTradeTarget as resolveTradeTargetShared,
+} from './webhook/parsers/trade.js'
+import { reduceTradeFlowState, TRADE_FLOW_IDLE_STATE } from './webhook/trade/fsm.js'
+import type { TradeFlowState } from './webhook/trade/types.js'
+import { createTelegramHolderRoomInviteLink as createTelegramHolderRoomInviteLinkShared, readTelegramChatMemberStatus as readTelegramChatMemberStatusShared } from './webhook/telegramApi/chats.js'
+import { answerTelegramCallbackQuery as answerTelegramCallbackQueryShared, answerTelegramPreCheckoutQuery as answerTelegramPreCheckoutQueryShared } from './webhook/telegramApi/interactions.js'
+import { answerTelegramInlineQuery as answerTelegramInlineQueryShared } from './webhook/telegramApi/inline.js'
+import { deleteTelegramMessage as deleteTelegramMessageShared, editTelegramMessage as editTelegramMessageShared, replaceTelegramMenuMessage as replaceTelegramMenuMessageShared, sendTelegramMessage as sendTelegramMessageShared } from './webhook/telegramApi/messaging.js'
+import { sendTelegramStarsInvoice as sendTelegramStarsInvoiceShared } from './webhook/telegramApi/payments.js'
+import { isTelegramContextAllowed } from './webhook/services/access.js'
+import { emitTelegramFunnelEvent as emitTelegramFunnelEventShared } from './webhook/services/funnel.js'
+import { buildDeployCommandFromIntent as buildDeployCommandFromIntentShared, formatDeployTokenFailure as formatDeployTokenFailureShared } from './webhook/services/deploy.js'
+import { checkTelegramTradeRateLimit as checkTelegramTradeRateLimitShared } from './webhook/services/trade.js'
+import {
+  collectPrivyWalletRows as collectPrivyWalletRowsShared,
+  extractPrivyWalletAddressCandidate as extractPrivyWalletAddressCandidateShared,
+  extractPrivyWalletIdCandidate as extractPrivyWalletIdCandidateShared,
+} from './webhook/services/privyWallet.js'
+import { normalizeCallbackQuery } from './webhook/updates/callbackQuery.js'
+import { extractUpdateMessage as extractUpdateMessageShared, normalizeMessageContext } from './webhook/updates/message.js'
+import { handleInlineQueryUpdate } from './webhook/updates/inlineQuery.js'
+import { handlePreCheckoutUpdate } from './webhook/updates/preCheckout.js'
+import { handleSuccessfulPaymentUpdate } from './webhook/updates/successfulPayment.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -122,16 +182,7 @@ function emitTelegramFunnelEvent(params: {
   actionType?: string | null
   context?: Record<string, unknown> | null
 }) {
-  if (!params.db) return
-  if (!isTelegramFunnelEventsEnabledForChat(params.chatId)) return
-  void logTelegramFunnelEvent({
-    db: params.db as any,
-    telegramUserId: params.telegramUserId,
-    chatId: params.chatId,
-    eventName: params.eventName,
-    actionType: params.actionType,
-    context: params.context ?? {},
-  }).catch(() => {})
+  emitTelegramFunnelEventShared(params)
 }
 
 function parseBoolean(value: unknown, defaultValue: boolean): boolean {
@@ -158,40 +209,15 @@ function parseJsonObject(raw: string | undefined): Record<string, unknown> {
 }
 
 function parseAdminUserIds(): Set<string> {
-  const raw = asTrimmed(process.env.TELEGRAM_ADMIN_USER_IDS ?? '')
-  if (!raw) return new Set()
-  return new Set(
-    raw
-      .split(/[\s,]+/g)
-      .map((part) => part.trim())
-      .filter(Boolean),
-  )
+  return parseAdminUserIdsShared()
 }
 
 function parseAllowedChatIds(): Set<string> {
-  const explicit = asTrimmed(process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
-  if (explicit) {
-    return new Set(
-      explicit
-        .split(/[\s,]+/g)
-        .map((part) => part.trim())
-        .filter(Boolean),
-    )
-  }
-
-  const fallback = asTrimmed(process.env.TELEGRAM_TARGET_CHAT_ID ?? '')
-  return fallback ? new Set([fallback]) : new Set()
+  return parseAllowedChatIdsShared()
 }
 
 function isTelegramPrivateDmEnabled(): boolean {
-  // Preferred flag:
-  // - TELEGRAM_ALLOW_PRIVATE_DMS=true
-  // Backward-compatible alias:
-  // - TELEGRAM_ALLOW_ALL_PRIVATE_DMS=true
-  return (
-    parseBoolean(process.env.TELEGRAM_ALLOW_PRIVATE_DMS, false) ||
-    parseBoolean(process.env.TELEGRAM_ALLOW_ALL_PRIVATE_DMS, false)
-  )
+  return isTelegramPrivateDmEnabledShared()
 }
 
 function parseOptionalPositiveInteger(value: unknown): number | null {
@@ -218,90 +244,39 @@ function parseTipStars(raw: unknown): number | null {
 }
 
 function parseTipCallbackData(rawData: string): { stars: number; context: string } | null {
-  const data = asTrimmed(rawData)
-  const match = data.match(/^tip:(\d+):([a-z0-9-]{1,24})$/i)
-  if (!match) return null
-  const stars = parseTipStars(match[1])
-  const context = asTrimmed(match[2]).toLowerCase()
-  if (!stars || !context) return null
-  return { stars, context }
+  return parseTipCallbackDataShared(rawData)
 }
 
 function parseTipInvoicePayload(rawPayload: unknown): { stars: number; context: string } | null {
-  const payload = asTrimmed(rawPayload)
-  const match = payload.match(/^tip:(\d+):([a-z0-9-]{1,24})(?::.*)?$/i)
-  if (!match) return null
-  const stars = parseTipStars(match[1])
-  const context = asTrimmed(match[2]).toLowerCase()
-  if (!stars || !context) return null
-  return { stars, context }
+  return parseTipInvoicePayloadShared(rawPayload)
 }
 
 function areStarsTipsEnabled(): boolean {
-  return parseBoolean(process.env.TELEGRAM_STARS_TIPS_ENABLED, false)
+  return areStarsTipsEnabledShared()
 }
 
 function isStarsTipsEnabledForChat(chatId: string): boolean {
-  if (!areStarsTipsEnabled()) return false
-  const allowedRaw = asTrimmed(process.env.TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS ?? '')
-  if (!allowedRaw) return true
-  const allowed = parseDelimitedSet(allowedRaw)
-  return allowed.has(chatId)
+  return isStarsTipsEnabledForChatShared(chatId)
 }
 
 function resolveSignalsDestination(sourceChatId: string): { chatId: string; messageThreadId?: number } {
-  const destinationChatId = asTrimmed(process.env.TELEGRAM_SIGNALS_CHAT_ID ?? '') || sourceChatId
-  const byChat = parseJsonObject(process.env.TELEGRAM_SIGNALS_THREAD_BY_CHAT_JSON)
-  const mapped =
-    byChat[sourceChatId] ??
-    byChat[destinationChatId] ??
-    byChat[String(sourceChatId)] ??
-    byChat[String(destinationChatId)]
-  const threadId =
-    parseOptionalPositiveInteger(String(mapped ?? '')) ??
-    parseOptionalPositiveInteger(process.env.TELEGRAM_SIGNALS_THREAD_ID) ??
-    parseOptionalPositiveInteger(process.env.TELEGRAM_SIGNALS_TOPIC_ID)
-  return {
-    chatId: destinationChatId,
-    ...(threadId ? { messageThreadId: threadId } : {}),
-  }
+  return resolveSignalsDestinationShared(sourceChatId)
 }
 
 function isPrivateChatId(chatId: string): boolean {
-  // Telegram groups/channels are negative, private chats are positive.
-  return !chatId.startsWith('-')
+  return isPrivateChatIdShared(chatId)
 }
 
 function resolveSenderWallet(userId: string): `0x${string}` {
-  const userWalletMap = parseJsonObject(process.env.TELEGRAM_USER_WALLET_MAP_JSON)
-  const mapped = asTrimmed(userWalletMap[userId])
-  if (isAddressLike(mapped)) return mapped.toLowerCase() as `0x${string}`
-
-  const fallback = asTrimmed(process.env.TELEGRAM_DEFAULT_SENDER_WALLET ?? '')
-  if (isAddressLike(fallback)) return fallback.toLowerCase() as `0x${string}`
-
-  return ZERO_ADDRESS
+  return resolveSenderWalletShared(userId)
 }
 
 function resolveGroupId(chatId: string): string {
-  const groupMap = parseJsonObject(process.env.TELEGRAM_GROUP_ID_MAP_JSON)
-  const mapped = asTrimmed(groupMap[chatId])
-  if (mapped) return mapped
-
-  const fallback = asTrimmed(process.env.TELEGRAM_DEFAULT_GROUP_ID ?? '')
-  if (fallback) return fallback
-
-  return `telegram:${chatId}`
+  return resolveGroupIdShared(chatId)
 }
 
 function extractUpdateMessage(update: TelegramUpdate): TelegramMessage | null {
-  const m = update?.message
-  if (m && typeof m === 'object') return m
-  const em = update?.edited_message
-  if (em && typeof em === 'object') return em
-  const cp = update?.channel_post
-  if (cp && typeof cp === 'object') return cp
-  return null
+  return extractUpdateMessageShared(update)
 }
 
 function splitTelegramMessage(text: string, maxLen = 3500): string[] {
@@ -639,69 +614,7 @@ function formatDeployUsageText(reason?: string): string {
 }
 
 function parseTelegramDeployIntent(rawText: string): ParsedTelegramDeployIntent | null {
-  const tokenized = tokenizeTelegramCommand(rawText)
-  const prefix = asTrimmed(tokenized[0] ?? '')
-    .replace(/^\//, '')
-    .toLowerCase()
-  if (prefix !== 'deploy') return null
-  const sub = asTrimmed(tokenized[1] ?? '').toLowerCase()
-  if (!sub) return { kind: 'menu' }
-  if (sub === 'zora' || sub === 'signup' || sub === 'sign-up' || sub === 'sign_up') {
-    return { kind: 'zora' }
-  }
-  if (sub === 'trend') {
-    const ticker = asTrimmed(tokenized[2] ?? '').toUpperCase()
-    if (!ticker) {
-      return { kind: 'usage', text: formatDeployUsageText('Missing trend ticker.') }
-    }
-    if (!/^[A-Z0-9._-]{2,24}$/.test(ticker)) {
-      return { kind: 'usage', text: formatDeployUsageText('Ticker must be 2-24 chars: A-Z, 0-9, ., _, -.') }
-    }
-    return { kind: 'trend', ticker }
-  }
-  if (sub !== 'content' && sub !== 'creator') {
-    return { kind: 'usage', text: formatDeployUsageText(`Unknown deploy target: ${sub}`) }
-  }
-
-  const coinType = sub as Exclude<DeployWizardType, 'trend'>
-  const name = asTrimmed(tokenized[2] ?? '')
-  const symbol = normalizeDeploySymbol(tokenized[3] ?? '')
-  if (!name || !symbol) {
-    return { kind: 'usage', text: formatDeployUsageText('Missing name or symbol for coin deploy.') }
-  }
-  if (name.length < 1 || name.length > 48) {
-    return { kind: 'usage', text: formatDeployUsageText('Coin name must be between 1 and 48 characters.') }
-  }
-  if (!/^[A-Z0-9_]{2,10}$/.test(symbol)) {
-    return { kind: 'usage', text: formatDeployUsageText('Symbol must be 2-10 chars: A-Z, 0-9, _.') }
-  }
-
-  let metadataCandidate = asTrimmed(tokenized[4] ?? '')
-  let currencyCandidate = asTrimmed(tokenized[5] ?? '').toUpperCase()
-  if (metadataCandidate && isDeployCurrencyInput(metadataCandidate)) {
-    currencyCandidate = metadataCandidate.toUpperCase()
-    metadataCandidate = ''
-  }
-
-  if (currencyCandidate && !isDeployCurrencyInput(currencyCandidate)) {
-    return { kind: 'usage', text: formatDeployUsageText(`Unsupported currency: ${currencyCandidate}`) }
-  }
-  if (metadataCandidate && !isSupportedMetadataUri(metadataCandidate)) {
-    return { kind: 'usage', text: formatDeployUsageText('metadataUri must start with https://, ipfs://, ar://, or data:.') }
-  }
-
-  const currencyInput = (currencyCandidate || defaultDeployCurrency(coinType)) as DeployCurrencyInput
-  const metadataUri = metadataCandidate || buildDefaultCoinMetadataUri({ coinType, name, symbol })
-
-  return {
-    kind: 'coin',
-    coinType,
-    name,
-    symbol,
-    metadataUri,
-    currencyInput,
-    commandCurrency: mapDeployCurrencyToCommandCurrency(currencyInput),
-  }
+  return parseTelegramDeployIntentShared(rawText)
 }
 
 type CcaAuctionQuote = {
@@ -791,30 +704,23 @@ function isLikelyCommandText(rawText: string): boolean {
 }
 
 function isTelegramAiFollowupEnabled(): boolean {
-  return parseBoolean(process.env.TELEGRAM_AI_FOLLOWUP_ENABLED, true)
+  return isTelegramAiFollowupEnabledShared()
 }
 
 function shouldAutoRouteToAi(params: { chatId: string; text: string; message: TelegramMessage }): boolean {
-  if (!isTelegramAiFollowupEnabled()) return false
-  const text = asTrimmed(params.text)
-  if (!text) return false
-  if (text.startsWith('/')) return false
-  if (isLikelyCommandText(text)) return false
-  if (isPrivateChatId(params.chatId)) return true
-  return Boolean(params.message.reply_to_message?.from?.is_bot)
+  return shouldAutoRouteToAiShared({
+    ...params,
+    aiFollowupEnabled: isTelegramAiFollowupEnabled(),
+    isPrivateChatId,
+  })
 }
 
 function isTelegramNativeCommand(rawText: string): boolean {
-  return TELEGRAM_NATIVE_COMMANDS.has(getCommandHead(rawText))
+  return isTelegramNativeCommandShared(rawText)
 }
 
 function normalizeTelegramCommand(rawText: string): string {
-  const text = asTrimmed(rawText).replace(/^\/([a-z0-9_]+)@[\w_]+(?=\s|$)/i, '/$1')
-  // Treat /start (and /start payloads) as a quick help entrypoint in DMs/groups.
-  if (/^\/start(?:\s+.*)?$/i.test(text)) {
-    return '/help'
-  }
-  return text
+  return normalizeTelegramCommandShared(rawText)
 }
 
 function formatAmount(value: number, digits = 4): string {
@@ -823,36 +729,19 @@ function formatAmount(value: number, digits = 4): string {
 }
 
 function readEthUsdPrice(): number {
-  const direct = Number(asTrimmed(process.env.TELEGRAM_ETH_USD ?? ''))
-  if (Number.isFinite(direct) && direct > 0) return direct
-  const fallback = Number(asTrimmed(process.env.TELEGRAM_BID_ETH_USD ?? ''))
-  if (Number.isFinite(fallback) && fallback > 0) return fallback
-  return 3000
+  return readEthUsdPriceShared()
 }
 
 function readShareUsdFallback(): number {
-  const value = Number(asTrimmed(process.env.TELEGRAM_SHARE_USD_FALLBACK ?? ''))
-  if (Number.isFinite(value) && value > 0) return value
-  return 1
+  return readShareUsdFallbackShared()
 }
 
 function getBaseRpcUrl(): string {
-  const raw = asTrimmed(process.env.BASE_RPC_URL ?? '')
-  if (!raw) return 'https://mainnet.base.org'
-  return raw.split(',')[0]?.trim() || 'https://mainnet.base.org'
+  return getBaseRpcUrlShared()
 }
 
 function getBundlerAndPaymasterUrl(): string {
-  const direct =
-    asTrimmed(process.env.CDP_PAYMASTER_URL ?? '') ||
-    asTrimmed(process.env.CDP_PAYMASTER_AND_BUNDLER_URL ?? '') ||
-    asTrimmed(process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT ?? '') ||
-    asTrimmed(process.env.PAYMASTER_URL ?? '') ||
-    asTrimmed(process.env.BUNDLER_URL ?? '')
-  if (!direct) {
-    throw new Error('cdp_paymaster_url_missing')
-  }
-  return direct
+  return getBundlerAndPaymasterUrlShared()
 }
 
 function applyBps(value: bigint, bps: bigint): bigint {
@@ -879,72 +768,18 @@ function toBigIntStrict(value: unknown): bigint {
 }
 
 function parseTelegramTradeIntent(rawText: string): ParsedTelegramTradeIntent | null {
-  const text = asTrimmed(rawText)
-  if (!text) return null
-
-  const buySell = text.match(/^\/?(buy|sell)\s+(\S+)\s+([0-9]+(?:\.[0-9]+)?)\s*(?:--confirm)?\s*$/i)
-  if (buySell) {
-    const action = buySell[1]?.toLowerCase()
-    const identifier = asTrimmed(buySell[2] ?? '')
-    const amountInput = asTrimmed(buySell[3] ?? '')
-    const amount = Number(amountInput)
-    if ((action === 'buy' || action === 'sell') && identifier && Number.isFinite(amount) && amount > 0) {
-      return {
-        actionType: action,
-        identifier,
-        amountInput,
-        amount,
-        amountUnit: action === 'buy' ? 'ETH' : 'SHARE',
-      }
-    }
-  }
-
-  const bid = text.match(/^\/?bid\s+(\S+)\s+\$?([0-9]+(?:\.[0-9]+)?)\s*(?:--confirm)?\s*$/i)
-  if (bid) {
-    const identifier = asTrimmed(bid[1] ?? '')
-    const amountInput = asTrimmed(bid[2] ?? '')
-    const amount = Number(amountInput)
-    if (identifier && Number.isFinite(amount) && amount > 0) {
-      return {
-        actionType: 'bid',
-        identifier,
-        amountInput,
-        amount,
-        amountUnit: 'USD',
-      }
-    }
-  }
-  return null
+  return parseTelegramTradeIntentShared(rawText)
 }
 
 function commandHasArguments(rawText: string, head: InteractiveTradeAction): boolean {
-  const text = asTrimmed(rawText)
-  if (!text) return false
-  const pattern = new RegExp(`^/?${head}(?:\\s+(.+))?$`, 'i')
-  const match = text.match(pattern)
-  const argTail = asTrimmed(match?.[1] ?? '')
-  return Boolean(argTail)
+  return commandHasArgumentsShared(rawText, head)
 }
 
 function resolveTradeTarget(
   scopedVaults: Awaited<ReturnType<typeof listTelegramScopedVaults>>,
   identifier: string,
 ): (Awaited<ReturnType<typeof listTelegramScopedVaults>>)[number] | null {
-  const token = asTrimmed(identifier).toLowerCase()
-  if (!token) return null
-  if (scopedVaults.length === 0) return null
-  if (token === 'vault' || token === 'default') return scopedVaults[0] ?? null
-
-  const isAddress = /^0x[a-fA-F0-9]{40}$/.test(token)
-  if (isAddress) {
-    const byVault = scopedVaults.find((row) => row.vaultAddress.toLowerCase() === token)
-    if (byVault) return byVault
-    const byCoin = scopedVaults.find((row) => row.creatorCoinAddress.toLowerCase() === token)
-    if (byCoin) return byCoin
-    return null
-  }
-  if (scopedVaults.length === 1) return scopedVaults[0]
-  return null
+  return resolveTradeTargetShared(scopedVaults as any, identifier) as any
 }
 
 function parseTradeFlowCallbackData(rawData: string):
@@ -952,90 +787,27 @@ function parseTradeFlowCallbackData(rawData: string):
   | { kind: 'percent'; actionType: InteractiveTradeAction; vaultAddress: `0x${string}`; percentBps: number }
   | { kind: 'custom'; actionType: InteractiveTradeAction; vaultAddress: `0x${string}` }
   | null {
-  const data = asTrimmed(rawData)
-  const vaultMatch = data.match(/^tradeflow:v:(buy|sell|bid):(0x[a-fA-F0-9]{40})$/)
-  if (vaultMatch) {
-    return {
-      kind: 'vault',
-      actionType: vaultMatch[1].toLowerCase() as InteractiveTradeAction,
-      vaultAddress: vaultMatch[2].toLowerCase() as `0x${string}`,
-    }
-  }
-  const percentMatch = data.match(/^tradeflow:p:(buy|sell|bid):(0x[a-fA-F0-9]{40}):(\d{1,4})$/)
-  if (percentMatch) {
-    const percentBps = Number(percentMatch[3] ?? 0)
-    if (!Number.isFinite(percentBps) || percentBps < 100 || percentBps > 9_999) return null
-    return {
-      kind: 'percent',
-      actionType: percentMatch[1].toLowerCase() as InteractiveTradeAction,
-      vaultAddress: percentMatch[2].toLowerCase() as `0x${string}`,
-      percentBps: Math.floor(percentBps),
-    }
-  }
-  const customMatch = data.match(/^tradeflow:c:(buy|sell|bid):(0x[a-fA-F0-9]{40})$/)
-  if (customMatch) {
-    return {
-      kind: 'custom',
-      actionType: customMatch[1].toLowerCase() as InteractiveTradeAction,
-      vaultAddress: customMatch[2].toLowerCase() as `0x${string}`,
-    }
-  }
-  return null
+  return parseTradeFlowCallbackDataShared(rawData)
 }
 
 function parseTradeCallbackData(rawData: string):
   | { kind: 'accept' | 'decline'; token: string }
   | { kind: 'edit'; actionType: 'buy' | 'sell' | 'bid' }
   | null {
-  const data = asTrimmed(rawData)
-  if (!data.startsWith('trade:')) return null
-  const parts = data.split(':')
-  const kind = asTrimmed(parts[1]).toLowerCase()
-  if (kind === 'accept' || kind === 'confirm' || kind === 'decline' || kind === 'cancel') {
-    const token = asTrimmed(parts[2])
-    if (!token) return null
-    return { kind: kind === 'accept' || kind === 'confirm' ? 'accept' : 'decline', token }
-  }
-  if (kind === 'edit') {
-    const actionType = asTrimmed(parts[2]).toLowerCase()
-    if (actionType === 'buy' || actionType === 'sell' || actionType === 'bid') {
-      return { kind: 'edit', actionType }
-    }
-  }
-  return null
+  return parseTradeCallbackDataShared(rawData)
 }
 
 function parseDeployCallbackData(rawData: string):
   | { kind: 'type'; deployType: DeployWizardType | 'zora' }
   | { kind: 'confirm' | 'decline'; token: string }
   | null {
-  const data = asTrimmed(rawData)
-  const typeMatch = data.match(/^deploy:type:(trend|content|creator|zora)$/)
-  if (typeMatch) {
-    const deployType = asTrimmed(typeMatch[1]).toLowerCase()
-    if (deployType === 'trend' || deployType === 'content' || deployType === 'creator' || deployType === 'zora') {
-      return {
-        kind: 'type',
-        deployType,
-      }
-    }
-  }
-  const actionMatch = data.match(/^deploy:(confirm|accept|decline|cancel):([a-zA-Z0-9._-]+)$/)
-  if (actionMatch) {
-    const action = asTrimmed(actionMatch[1]).toLowerCase()
-    const token = asTrimmed(actionMatch[2])
-    if (!token) return null
-    return {
-      kind: action === 'confirm' || action === 'accept' ? 'confirm' : 'decline',
-      token,
-    }
-  }
-  return null
+  return parseDeployCallbackDataShared(rawData)
 }
 
 function getPrivyServerAuth(): { appId: string; appSecret: string } {
-  const appId = asTrimmed(process.env.PRIVY_APP_ID ?? '')
-  const appSecret = asTrimmed(process.env.PRIVY_APP_SECRET ?? '')
+  const config = getTelegramWebhookConfig()
+  const appId = config.privyAppId
+  const appSecret = config.privyAppSecret
   if (!appId || !appSecret) {
     throw new Error('privy_server_auth_not_configured')
   }
@@ -1043,47 +815,15 @@ function getPrivyServerAuth(): { appId: string; appSecret: string } {
 }
 
 function extractPrivyWalletIdCandidate(raw: any): string | null {
-  const candidates = [
-    raw?.walletId,
-    raw?.wallet_id,
-    raw?.id,
-    raw?.wallet?.id,
-    raw?.wallet?.walletId,
-    raw?.wallet?.wallet_id,
-  ]
-  for (const c of candidates) {
-    const value = asTrimmed(c)
-    if (value) return value
-  }
-  return null
+  return extractPrivyWalletIdCandidateShared(raw)
 }
 
 function extractPrivyWalletAddressCandidate(raw: any): `0x${string}` | null {
-  const candidates = [raw?.address, raw?.walletAddress, raw?.wallet_address, raw?.wallet?.address]
-  for (const c of candidates) {
-    const value = asTrimmed(c)
-    if (isAddressLike(value)) return value.toLowerCase() as `0x${string}`
-  }
-  return null
+  return extractPrivyWalletAddressCandidateShared(raw)
 }
 
 function collectPrivyWalletRows(user: any): any[] {
-  const roots: any[] = []
-  if (user && typeof user === 'object') roots.push(user)
-  if (Array.isArray(user?.wallets)) roots.push(...user.wallets)
-  if (user?.wallet && typeof user.wallet === 'object') roots.push(user.wallet)
-  const linked = Array.isArray(user?.linkedAccounts)
-    ? user.linkedAccounts
-    : Array.isArray(user?.linked_accounts)
-      ? user.linked_accounts
-      : []
-  roots.push(...linked)
-  for (const account of linked) {
-    if (Array.isArray(account?.embedded_wallets)) roots.push(...account.embedded_wallets)
-    if (Array.isArray(account?.embeddedWallets)) roots.push(...account.embeddedWallets)
-    if (Array.isArray(account?.wallets)) roots.push(...account.wallets)
-  }
-  return roots
+  return collectPrivyWalletRowsShared(user)
 }
 
 function resolvePrivyWalletOwnerContextFromUser(params: {
@@ -1315,13 +1055,11 @@ function inferMarketSymbol(rawQuery: string): string {
 }
 
 function readInlineQueryResultCap(): number {
-  const configured = Number(asTrimmed(process.env.TELEGRAM_INLINE_MAX_RESULTS ?? ''))
-  if (Number.isFinite(configured) && configured >= 3 && configured <= 20) return Math.floor(configured)
-  return 8
+  return readInlineQueryResultCapShared()
 }
 
 function isTelegramInlineGrowthModeEnabled(): boolean {
-  return parseBoolean(process.env.TELEGRAM_INLINE_GROWTH_MODE, false)
+  return isTelegramInlineGrowthModeEnabledShared()
 }
 
 async function buildInlineQueryResults(params: {
@@ -1540,9 +1278,7 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
 }
 
 function resolveTelegramMiniAppUrl(): string {
-  const configured = asTrimmed(process.env.TELEGRAM_MINI_APP_URL ?? '')
-  if (configured && /^https?:\/\//i.test(configured)) return configured
-  return 'https://app.4626.fun'
+  return resolveTelegramMiniAppUrlShared()
 }
 
 function buildTelegramMiniAppUrl(params: {
@@ -1550,20 +1286,7 @@ function buildTelegramMiniAppUrl(params: {
   pathname?: string
   query?: Record<string, string>
 }): string {
-  try {
-    const url = new URL(params.baseUrl)
-    if (params.pathname) {
-      url.pathname = params.pathname
-    }
-    const query = params.query ?? {}
-    for (const [key, value] of Object.entries(query)) {
-      if (!asTrimmed(value)) continue
-      url.searchParams.set(key, value)
-    }
-    return url.toString()
-  } catch {
-    return params.baseUrl
-  }
+  return buildTelegramMiniAppUrlShared(params)
 }
 
 function buildTelegramLinkSwapNextPath(params: {
@@ -1571,18 +1294,7 @@ function buildTelegramLinkSwapNextPath(params: {
   chatId: string
   telegramUsername?: string | null
 }): string {
-  const query = new URLSearchParams({
-    tgMiniApp: '1',
-    tgEntry: 'link',
-    chatAction: 'link-account',
-    tgChatId: params.chatId,
-    tgLinkToken: params.token,
-  })
-  const username = asTrimmed(params.telegramUsername ?? '')
-  if (username) {
-    query.set('tgUsername', username)
-  }
-  return `/swap?${query.toString()}`
+  return buildTelegramLinkSwapNextPathShared(params)
 }
 
 function buildTelegramLinkFlowResponse(params: {
@@ -1686,10 +1398,7 @@ function buildMiniAppLaunchButton(params: {
   text: string
   url: string
 }): Record<string, unknown> {
-  if (isPrivateChatId(params.chatId)) {
-    return { text: params.text, web_app: { url: params.url } }
-  }
-  return { text: params.text, url: params.url }
+  return buildMiniAppLaunchButtonShared(params)
 }
 
 function buildHelpReplyMarkup(chatId: string): Record<string, unknown> {
@@ -1793,71 +1502,11 @@ function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
 }
 
 function resolveHelpCallbackCommand(rawData: string): string | null {
-  const token = asTrimmed(rawData).toLowerCase()
-  if (token.startsWith('menu:')) {
-    const action = token.slice(5)
-    if (action === 'link') return '/link'
-    if (action === 'linked') return '/linked'
-    if (action === 'unlink') return '/unlink'
-    if (action === 'buy') return '/buy'
-    if (action === 'sell') return '/sell'
-    if (action === 'bid') return '/bid'
-    if (action === 'join') return '/join'
-    if (action === 'eligibility') return '/eligibility'
-    if (action === 'rooms') return '/rooms'
-    if (action === 'portfolio') return '/portfolio'
-    if (action === 'vaults') return '/vaults'
-    if (action === 'auctions') return '/auctions'
-    if (action === 'mybids') return '/mybids'
-    if (action === 'signals') return '/signals'
-    if (action === 'deploy') return '/deploy'
-    if (action === 'zora') return '/zora'
-    if (action === 'help') return '/help'
-    return null
-  }
-  if (!token.startsWith('help:')) return null
-  const action = token.slice(5)
-  if (!action || action === 'quick' || action === 'start') return '/help'
-  if (action === 'inline') return '/inline'
-  if (action === 'all') return '/help all'
-  if (
-    action === 'core' ||
-    action === 'coin' ||
-    action === 'market' ||
-    action === 'social' ||
-    action === 'ops' ||
-    action === 'bankr' ||
-    action === 'wallet'
-  ) {
-    return `/help ${action}`
-  }
-  return null
+  return resolveHelpCallbackCommandShared(rawData)
 }
 
 function resolveNavigationCallbackToast(rawData: string, mappedCommand: string | null): string {
-  const token = asTrimmed(rawData).toLowerCase()
-  if (token === 'menu:more') return 'More tools'
-  if (token === 'menu:topics') return 'Help topics'
-  if (token === 'menu:portfolio') return 'Portfolio ready'
-  if (token === 'menu:vaults') return 'Vaults ready'
-  if (token === 'menu:auctions') return 'Auctions ready'
-  if (token === 'menu:mybids') return 'Bids ready'
-  if (token === 'menu:signals') return 'Signals ready'
-  if (token === 'menu:buy') return 'Buy flow'
-  if (token === 'menu:sell') return 'Sell flow'
-  if (token === 'menu:bid') return 'Bid flow'
-  if (token === 'menu:deploy') return 'Deploy wizard'
-  if (token === 'menu:zora') return 'Zora setup'
-  if (token === 'menu:link') return 'Link flow'
-  if (token === 'menu:linked') return 'Link status'
-  if (token === 'menu:unlink') return 'Unlink flow'
-  if (token === 'menu:join') return 'Join flow'
-  if (token === 'menu:eligibility') return 'Eligibility check'
-  if (token === 'menu:rooms') return 'Rooms list'
-  if (token === 'help:inline') return 'Inline shortcuts'
-  if (token.startsWith('help:')) return 'Help topic'
-  if (mappedCommand === '/help' || mappedCommand?.startsWith('/help ')) return 'Help'
-  return ''
+  return resolveNavigationCallbackToastShared(rawData, mappedCommand)
 }
 
 function resolveStaticMenuCallbackResponse(params: {
@@ -1887,26 +1536,7 @@ function resolveImmediateCallbackToast(params: {
   callbackData: string
   mappedCommand: string | null
 }): string {
-  const tradeFlow = params.parsedTradeFlowCallback
-  if (tradeFlow) {
-    if (tradeFlow.kind === 'vault') return 'Loading sizes...'
-    if (tradeFlow.kind === 'percent') return 'Building preview...'
-    return 'Send custom %'
-  }
-  const trade = params.parsedTradeCallback
-  if (trade) {
-    if (trade.kind === 'accept') return 'Processing...'
-    if (trade.kind === 'decline') return 'Declining...'
-    return 'Edit command'
-  }
-  const deploy = params.parsedDeployCallback
-  if (deploy) {
-    if (deploy.kind === 'confirm') return 'Deploying...'
-    if (deploy.kind === 'decline') return 'Deploy declined'
-    if (deploy.kind === 'type') return deploy.deployType === 'zora' ? 'Zora setup' : 'Preparing template...'
-    return ''
-  }
-  return resolveNavigationCallbackToast(params.callbackData, params.mappedCommand)
+  return resolveImmediateCallbackToastShared(params as any)
 }
 
 function shouldUseTelegramMarkdown(text: string): boolean {
@@ -1923,51 +1553,7 @@ async function sendTelegramMessage(params: {
   messageThreadId?: number
   replyMarkup?: Record<string, unknown>
 }): Promise<void> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/sendMessage`
-  const textWithHints = appendCommandMicroHints(params.text)
-  const formattedText = wrapCommandListingsWithBackticks(textWithHints)
-  const useMarkdown = shouldUseTelegramMarkdown(formattedText)
-  const sendOnce = async (replyToMessageId?: number): Promise<Response> => {
-    const payload: Record<string, unknown> = {
-      chat_id: params.chatId,
-      text: formattedText,
-      disable_web_page_preview: true,
-      ...(useMarkdown ? { parse_mode: 'Markdown' } : {}),
-    }
-    if (typeof replyToMessageId === 'number') {
-      payload.reply_to_message_id = replyToMessageId
-    }
-    if (typeof params.messageThreadId === 'number') {
-      payload.message_thread_id = params.messageThreadId
-    }
-    if (params.replyMarkup && typeof params.replyMarkup === 'object') {
-      payload.reply_markup = params.replyMarkup
-    }
-    return fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-  }
-
-  const firstResponse = await sendOnce(params.replyToMessageId)
-  if (firstResponse.ok) return
-
-  const firstDetails = await firstResponse.text().catch(() => '')
-  const firstDetailsLower = firstDetails.toLowerCase()
-  const retryWithoutReplyTarget =
-    typeof params.replyToMessageId === 'number' &&
-    firstResponse.status === 400 &&
-    firstDetailsLower.includes('message to be replied not found')
-
-  if (retryWithoutReplyTarget) {
-    const retryResponse = await sendOnce(undefined)
-    if (retryResponse.ok) return
-    const retryDetails = await retryResponse.text().catch(() => '')
-    throw new Error(`telegram_send_failed_${retryResponse.status}:${retryDetails.slice(0, 180)}`)
-  }
-
-  throw new Error(`telegram_send_failed_${firstResponse.status}:${firstDetails.slice(0, 180)}`)
+  return sendTelegramMessageShared(params)
 }
 
 async function editTelegramMessage(params: {
@@ -1977,35 +1563,7 @@ async function editTelegramMessage(params: {
   text: string
   replyMarkup?: Record<string, unknown>
 }): Promise<boolean> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/editMessageText`
-  const textWithHints = appendCommandMicroHints(params.text)
-  const formattedText = wrapCommandListingsWithBackticks(textWithHints)
-  const useMarkdown = shouldUseTelegramMarkdown(formattedText)
-  const payload: Record<string, unknown> = {
-    chat_id: params.chatId,
-    message_id: params.messageId,
-    text: formattedText,
-    disable_web_page_preview: true,
-    ...(useMarkdown ? { parse_mode: 'Markdown' } : {}),
-  }
-  if (params.replyMarkup && typeof params.replyMarkup === 'object') {
-    payload.reply_markup = params.replyMarkup
-  }
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (response.ok) return true
-  const details = await response.text().catch(() => '')
-  const detailsLower = details.toLowerCase()
-  if (response.status === 400 && detailsLower.includes('message is not modified')) {
-    return true
-  }
-  if (response.status === 400 && detailsLower.includes("message can't be edited")) {
-    return false
-  }
-  throw new Error(`telegram_edit_failed_${response.status}:${details.slice(0, 180)}`)
+  return editTelegramMessageShared(params)
 }
 
 async function deleteTelegramMessage(params: {
@@ -2013,23 +1571,7 @@ async function deleteTelegramMessage(params: {
   chatId: string
   messageId: number
 }): Promise<void> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/deleteMessage`
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: params.chatId,
-      message_id: params.messageId,
-    }),
-  })
-  if (!response.ok) {
-    const details = await response.text().catch(() => '')
-    const detailsLower = details.toLowerCase()
-    if (response.status === 400 && (detailsLower.includes('message to delete not found') || detailsLower.includes("message can't be deleted"))) {
-      return
-    }
-    throw new Error(`telegram_delete_failed_${response.status}:${details.slice(0, 180)}`)
-  }
+  return deleteTelegramMessageShared(params)
 }
 
 async function replaceTelegramMenuMessage(params: {
@@ -2039,43 +1581,7 @@ async function replaceTelegramMenuMessage(params: {
   text: string
   replyMarkup?: Record<string, unknown>
 }): Promise<void> {
-  const chunks = splitTelegramMessage(params.text)
-  const firstChunk = chunks[0] ?? 'Command received.'
-  let edited = false
-  try {
-    edited = await editTelegramMessage({
-      botToken: params.botToken,
-      chatId: params.chatId,
-      messageId: params.messageId,
-      text: firstChunk,
-      replyMarkup: params.replyMarkup,
-    })
-  } catch {
-    edited = false
-  }
-  if (!edited) {
-    await sendTelegramMessage({
-      botToken: params.botToken,
-      chatId: params.chatId,
-      text: firstChunk,
-      replyMarkup: params.replyMarkup,
-    })
-    await deleteTelegramMessage({
-      botToken: params.botToken,
-      chatId: params.chatId,
-      messageId: params.messageId,
-    }).catch(() => {})
-  }
-
-  for (let idx = 1; idx < chunks.length; idx += 1) {
-    const chunk = chunks[idx]
-    if (!chunk) continue
-    await sendTelegramMessage({
-      botToken: params.botToken,
-      chatId: params.chatId,
-      text: chunk,
-    })
-  }
+  return replaceTelegramMenuMessageShared(params)
 }
 
 async function answerTelegramInlineQuery(params: {
@@ -2085,26 +1591,18 @@ async function answerTelegramInlineQuery(params: {
   userId: string
   chatId: string
 }): Promise<void> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/answerInlineQuery`
-  const payload = {
-    inline_query_id: params.inlineQueryId,
-    cache_time: 5,
-    is_personal: true,
-    results: await buildInlineQueryResults({
-      rawQuery: params.query,
-      userId: params.userId,
-      chatId: params.chatId,
-    }),
-  }
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const results = await buildInlineQueryResults({
+    rawQuery: params.query,
+    userId: params.userId,
+    chatId: params.chatId,
   })
-  if (!response.ok) {
-    const details = await response.text().catch(() => '')
-    throw new Error(`telegram_inline_answer_failed_${response.status}:${details.slice(0, 180)}`)
-  }
+  return answerTelegramInlineQueryShared({
+    botToken: params.botToken,
+    inlineQueryId: params.inlineQueryId,
+    results,
+    cacheTime: 5,
+    isPersonal: true,
+  })
 }
 
 async function answerTelegramCallbackQuery(params: {
@@ -2113,25 +1611,7 @@ async function answerTelegramCallbackQuery(params: {
   text?: string
   showAlert?: boolean
 }): Promise<void> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/answerCallbackQuery`
-  const payload: Record<string, unknown> = {
-    callback_query_id: params.callbackQueryId,
-  }
-  if (asTrimmed(params.text).length > 0) {
-    payload.text = asTrimmed(params.text)
-  }
-  if (typeof params.showAlert === 'boolean') {
-    payload.show_alert = params.showAlert
-  }
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    const details = await response.text().catch(() => '')
-    throw new Error(`telegram_callback_answer_failed_${response.status}:${details.slice(0, 180)}`)
-  }
+  return answerTelegramCallbackQueryShared(params)
 }
 
 async function answerTelegramPreCheckoutQuery(params: {
@@ -2140,23 +1620,7 @@ async function answerTelegramPreCheckoutQuery(params: {
   ok: boolean
   errorMessage?: string
 }): Promise<void> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/answerPreCheckoutQuery`
-  const payload: Record<string, unknown> = {
-    pre_checkout_query_id: params.preCheckoutQueryId,
-    ok: params.ok,
-  }
-  if (!params.ok) {
-    payload.error_message = asTrimmed(params.errorMessage ?? '') || 'Tip is not available right now.'
-  }
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    const details = await response.text().catch(() => '')
-    throw new Error(`telegram_precheckout_answer_failed_${response.status}:${details.slice(0, 180)}`)
-  }
+  return answerTelegramPreCheckoutQueryShared(params)
 }
 
 async function sendTelegramStarsInvoice(params: {
@@ -2166,29 +1630,7 @@ async function sendTelegramStarsInvoice(params: {
   stars: number
   context: string
 }): Promise<void> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/sendInvoice`
-  const payload: Record<string, unknown> = {
-    chat_id: params.chatId,
-    title: `Tip ${params.stars} Stars`,
-    description: 'Support this 4626 signal with Telegram Stars.',
-    payload: `tip:${params.stars}:${params.context}:${params.userId}:${Date.now()}`,
-    currency: 'XTR',
-    prices: [{ label: `Tip ${params.stars} Stars`, amount: params.stars }],
-    start_parameter: 'tip-stars',
-  }
-  const providerToken = asTrimmed(process.env.TELEGRAM_STARS_PROVIDER_TOKEN ?? '')
-  if (providerToken) {
-    payload.provider_token = providerToken
-  }
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    const details = await response.text().catch(() => '')
-    throw new Error(`telegram_send_invoice_failed_${response.status}:${details.slice(0, 180)}`)
-  }
+  return sendTelegramStarsInvoiceShared(params)
 }
 
 function truncateAddress(value: string): string {
@@ -2297,15 +1739,11 @@ function formatSignalsText(title: string, rows: Awaited<ReturnType<typeof listTe
 }
 
 function areHolderRoomsEnabled(): boolean {
-  return parseBoolean(process.env.TELEGRAM_HOLDER_ROOMS_ENABLED, false)
+  return areHolderRoomsEnabledShared()
 }
 
 function parseHolderRoomIdentifier(rawText: string, head: 'join' | 'eligibility'): string {
-  const text = asTrimmed(rawText)
-  if (!text) return ''
-  const pattern = new RegExp(`^/?${head}(?:\\s+(\\S+))?`, 'i')
-  const match = text.match(pattern)
-  return asTrimmed(match?.[1] ?? '')
+  return parseHolderRoomIdentifierShared(rawText, head)
 }
 
 function formatHolderRoomUsageText(): string {
@@ -2348,26 +1786,7 @@ async function createTelegramHolderRoomInviteLink(params: {
   roomChatId: string
   ttlSeconds?: number
 }): Promise<string | null> {
-  const endpoint = `https://api.telegram.org/bot${params.botToken}/createChatInviteLink`
-  const ttl = Math.max(60, Math.min(3600, Math.floor(Number(params.ttlSeconds ?? 60 * 10))))
-  const payload: Record<string, unknown> = {
-    chat_id: params.roomChatId,
-    member_limit: 1,
-    creates_join_request: false,
-    expire_date: Math.floor(Date.now() / 1000) + ttl,
-  }
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    const details = await response.text().catch(() => '')
-    throw new Error(`telegram_create_invite_failed_${response.status}:${details.slice(0, 180)}`)
-  }
-  const body = (await response.json().catch(() => null)) as any
-  const inviteLink = asTrimmed(body?.result?.invite_link ?? '')
-  return inviteLink || null
+  return createTelegramHolderRoomInviteLinkShared(params)
 }
 
 function readTradeLimitFromEnv(key: string, fallback: number): number {
@@ -2394,31 +1813,7 @@ function checkTelegramTradeRateLimit(params: {
   userId: string
   actionType: 'buy' | 'sell' | 'bid'
 }): { ok: true } | { ok: false; reason: 'rate_limit_user' | 'rate_limit_chat'; retryAfterSeconds: number } {
-  const limits = tradeRateLimitForAction(params.actionType)
-  const userWindow = checkRateLimit(rateLimitKey('telegram', 'trade', 'user', params.actionType, params.userId), {
-    windowMs: 60_000,
-    maxRequests: limits.userLimit,
-  })
-  if (!userWindow.allowed) {
-    return {
-      ok: false,
-      reason: 'rate_limit_user',
-      retryAfterSeconds: Math.max(1, Math.ceil((userWindow.resetAt - Date.now()) / 1000)),
-    }
-  }
-
-  const chatWindow = checkRateLimit(rateLimitKey('telegram', 'trade', 'chat', params.actionType, params.chatId), {
-    windowMs: 60_000,
-    maxRequests: limits.chatLimit,
-  })
-  if (!chatWindow.allowed) {
-    return {
-      ok: false,
-      reason: 'rate_limit_chat',
-      retryAfterSeconds: Math.max(1, Math.ceil((chatWindow.resetAt - Date.now()) / 1000)),
-    }
-  }
-  return { ok: true }
+  return checkTelegramTradeRateLimitShared(params)
 }
 
 function buildTradeCommandTemplate(actionType: 'buy' | 'sell' | 'bid'): string {
@@ -2657,28 +2052,18 @@ async function buildTradeIntentFromPercent(params: {
 }
 
 function isTradeMembershipCheckEnabled(): boolean {
-  return parseBoolean(process.env.TELEGRAM_REQUIRE_TRADE_MEMBERSHIP, false)
+  return isTradeMembershipCheckEnabledShared()
 }
 
 async function readTelegramChatMemberStatus(params: {
   chatId: string
   userId: string
 }): Promise<string | null> {
-  const botToken = asTrimmed(process.env.TELEGRAM_BOT_TOKEN ?? '')
-  if (!botToken) return null
-  const endpoint = `https://api.telegram.org/bot${botToken}/getChatMember`
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: params.chatId,
-      user_id: params.userId,
-    }),
+  return readTelegramChatMemberStatusShared({
+    botToken: getTelegramWebhookConfig().botToken,
+    chatId: params.chatId,
+    userId: params.userId,
   })
-  if (!response.ok) return null
-  const payload = (await response.json().catch(() => null)) as any
-  const status = asTrimmed(payload?.result?.status ?? '').toLowerCase()
-  return status || null
 }
 
 async function verifyTradeMembership(params: {
@@ -2966,6 +2351,10 @@ async function executeTelegramNativeCommand(params: {
 
   if (head === 'buy' || head === 'sell' || head === 'bid') {
     const actionType = head as InteractiveTradeAction
+    const flowStartState = reduceTradeFlowState(TRADE_FLOW_IDLE_STATE, {
+      type: 'START',
+      actionType,
+    })
     const hasArgs = commandHasArguments(params.text, actionType)
     if (hasArgs && !params.allowTradeArgs) {
       return {
@@ -3076,10 +2465,15 @@ async function executeTelegramNativeCommand(params: {
           messageId: typeof params.messageId === 'number' ? params.messageId : null,
         },
       })
+      if (flowStartState.status !== 'VaultSelect') {
+        return {
+          text: 'Trade flow unavailable. Please retry /buy, /sell, or /bid.',
+        }
+      }
       return {
-        text: `Step 1/3 • Pick a vault to ${actionType.toUpperCase()}`,
+        text: `Step 1/3 • Pick a vault to ${flowStartState.actionType.toUpperCase()}`,
         replyMarkup: buildTradeVaultPickerReplyMarkup({
-          actionType,
+          actionType: flowStartState.actionType,
           scopedVaults,
         }),
       }
@@ -3236,7 +2630,7 @@ async function executeTelegramNativeCommand(params: {
     }
 
     const inviteLink = await createTelegramHolderRoomInviteLink({
-      botToken: asTrimmed(process.env.TELEGRAM_BOT_TOKEN ?? ''),
+      botToken: getTelegramWebhookConfig().botToken,
       roomChatId: policy.roomChatId,
       ttlSeconds: 60 * 10,
     })
@@ -3658,6 +3052,10 @@ async function handleTelegramTradeFlowCallback(params: {
 }): Promise<TelegramCommandResponse | null> {
   const callback = parseTradeFlowCallbackData(params.callbackData)
   if (!callback) return null
+  let tradeFlowState: TradeFlowState = reduceTradeFlowState(TRADE_FLOW_IDLE_STATE, {
+    type: 'START',
+    actionType: callback.actionType,
+  })
 
   const db = await getDb()
   if (!db) {
@@ -3693,37 +3091,82 @@ async function handleTelegramTradeFlowCallback(params: {
   }
 
   if (callback.kind === 'vault') {
+    tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+      type: 'VAULT_SELECTED',
+      actionType: callback.actionType,
+      vaultAddress: callback.vaultAddress,
+    })
+    if (tradeFlowState.status !== 'SizeSelect') {
+      return {
+        text: 'Trade flow state invalid. Please restart with /buy, /sell, or /bid.',
+        callbackToast: 'Flow reset',
+      }
+    }
     return {
-      text: `Step 2/3 • Pick size for ${callback.actionType.toUpperCase()} ${truncateAddress(target.vaultAddress)}`,
+      text: `Step 2/3 • Pick size for ${tradeFlowState.actionType.toUpperCase()} ${truncateAddress(target.vaultAddress)}`,
       replyMarkup: buildTradePercentPickerReplyMarkup({
-        actionType: callback.actionType,
-        vaultAddress: callback.vaultAddress,
+        actionType: tradeFlowState.actionType,
+        vaultAddress: tradeFlowState.vaultAddress,
       }),
       callbackToast: 'Vault selected',
     }
   }
 
   if (callback.kind === 'custom') {
+    tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+      type: 'VAULT_SELECTED',
+      actionType: callback.actionType,
+      vaultAddress: callback.vaultAddress,
+    })
+    tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+      type: 'CUSTOM_SELECTED',
+      actionType: callback.actionType,
+      vaultAddress: callback.vaultAddress,
+    })
+    if (tradeFlowState.status !== 'CustomPercentAwaitingInput') {
+      return {
+        text: 'Trade flow state invalid. Please restart with /buy, /sell, or /bid.',
+        callbackToast: 'Flow reset',
+      }
+    }
     await upsertTelegramTradePercentPrompt({
       db: db as any,
       chatId: params.chatId,
       telegramUserId: params.userId,
-      actionType: callback.actionType,
-      vaultAddress: callback.vaultAddress,
+      actionType: tradeFlowState.actionType,
+      vaultAddress: tradeFlowState.vaultAddress,
       ttlSeconds: 60 * 3,
     })
     return {
       text: [
-        `Step 2/3 • Custom ${callback.actionType.toUpperCase()} size`,
+        `Step 2/3 • Custom ${tradeFlowState.actionType.toUpperCase()} size`,
         '',
         `Vault: ${truncateAddress(target.vaultAddress)}`,
         '- send a percent between 1 and 99.99 (example: 42%)',
       ].join('\n'),
       replyMarkup: buildTradeCustomPercentReplyMarkup({
-        actionType: callback.actionType,
-        vaultAddress: callback.vaultAddress,
+        actionType: tradeFlowState.actionType,
+        vaultAddress: tradeFlowState.vaultAddress,
       }),
       callbackToast: 'Send percent',
+    }
+  }
+
+  tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+    type: 'VAULT_SELECTED',
+    actionType: callback.actionType,
+    vaultAddress: callback.vaultAddress,
+  })
+  tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+    type: 'PERCENT_SELECTED',
+    actionType: callback.actionType,
+    vaultAddress: callback.vaultAddress,
+    percentBps: callback.percentBps,
+  })
+  if (tradeFlowState.status !== 'PreviewReady') {
+    return {
+      text: 'Trade flow state invalid. Please restart with /buy, /sell, or /bid.',
+      callbackToast: 'Flow reset',
     }
   }
 
@@ -3752,10 +3195,10 @@ async function handleTelegramTradeFlowCallback(params: {
   }
 
   const intentResult = await buildTradeIntentFromPercent({
-    actionType: callback.actionType,
+    actionType: tradeFlowState.actionType,
     vault: target,
     canonicalCswAddress: link.canonicalCswAddress.toLowerCase() as `0x${string}`,
-    percentBps: callback.percentBps,
+    percentBps: tradeFlowState.percentBps,
   })
   if (!intentResult.ok) {
     return {
@@ -3805,9 +3248,29 @@ async function maybeHandlePendingTradePercentInput(params: {
     telegramUserId: params.userId,
   })
   if (!prompt) return null
+  let tradeFlowState: TradeFlowState = reduceTradeFlowState(TRADE_FLOW_IDLE_STATE, {
+    type: 'START',
+    actionType: prompt.actionType,
+  })
+  tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+    type: 'VAULT_SELECTED',
+    actionType: prompt.actionType,
+    vaultAddress: prompt.vaultAddress as `0x${string}`,
+  })
+  tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+    type: 'CUSTOM_SELECTED',
+    actionType: prompt.actionType,
+    vaultAddress: prompt.vaultAddress as `0x${string}`,
+  })
 
   const percentBps = parsePercentInputToBps(params.text)
   if (!percentBps) {
+    reduceTradeFlowState(tradeFlowState, {
+      type: 'CUSTOM_INPUT_INVALID',
+      actionType: prompt.actionType,
+      vaultAddress: prompt.vaultAddress as `0x${string}`,
+      reason: 'invalid_custom_percent',
+    })
     return {
       text: [
         `Step 2/3 • Custom ${prompt.actionType.toUpperCase()} size`,
@@ -3819,6 +3282,17 @@ async function maybeHandlePendingTradePercentInput(params: {
         actionType: prompt.actionType,
         vaultAddress: prompt.vaultAddress as `0x${string}`,
       }),
+    }
+  }
+  tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+    type: 'CUSTOM_INPUT_VALID',
+    actionType: prompt.actionType,
+    vaultAddress: prompt.vaultAddress as `0x${string}`,
+    percentBps,
+  })
+  if (tradeFlowState.status !== 'PreviewReady') {
+    return {
+      text: 'Trade flow state invalid. Please restart with /buy, /sell, or /bid.',
     }
   }
 
@@ -3858,16 +3332,16 @@ async function maybeHandlePendingTradePercentInput(params: {
   }
 
   const intentResult = await buildTradeIntentFromPercent({
-    actionType: prompt.actionType,
+    actionType: tradeFlowState.actionType,
     vault: target,
     canonicalCswAddress: link.canonicalCswAddress.toLowerCase() as `0x${string}`,
-    percentBps,
+    percentBps: tradeFlowState.percentBps,
   })
   if (!intentResult.ok) {
     return {
       text: intentResult.text,
       replyMarkup: buildTradeCustomPercentReplyMarkup({
-        actionType: prompt.actionType,
+        actionType: tradeFlowState.actionType,
         vaultAddress: prompt.vaultAddress as `0x${string}`,
       }),
     }
@@ -3900,7 +3374,7 @@ async function maybeHandlePendingTradePercentInput(params: {
 }
 
 function buildReusableCommandButton(label: string, command: string): Record<string, unknown> {
-  const useCopyText = parseBoolean(process.env.TELEGRAM_COPY_TEXT_BUTTONS, true)
+  const useCopyText = getTelegramWebhookConfig().copyTextButtons
   if (useCopyText) {
     return { text: label, copy_text: { text: command } }
   }
@@ -4038,39 +3512,7 @@ function buildDeployCommandFromIntent(intent: Record<string, unknown>): {
   deployLabel: string
   detailLines: string[]
 } | null {
-  const deployType = asTrimmed(intent.deployType ?? '').toLowerCase()
-  if (deployType === 'trend') {
-    const ticker = asTrimmed(intent.ticker ?? '').toUpperCase()
-    if (!/^[A-Z0-9._-]{2,24}$/.test(ticker)) return null
-    return {
-      commandText: `/coin trend reserve ${ticker}`,
-      deployLabel: 'TREND',
-      detailLines: [`- Ticker: ${ticker}`],
-    }
-  }
-
-  if (deployType === 'content' || deployType === 'creator') {
-    const name = asTrimmed(intent.name ?? '').replace(/"/g, '')
-    const symbol = normalizeDeploySymbol(asTrimmed(intent.symbol ?? ''))
-    const metadataUri = asTrimmed(intent.metadataUri ?? '')
-    const currencyInputRaw = asTrimmed(intent.currencyInput ?? '').toUpperCase()
-    if (!name || !/^[A-Z0-9_]{2,10}$/.test(symbol) || !isSupportedMetadataUri(metadataUri) || !isDeployCurrencyInput(currencyInputRaw)) {
-      return null
-    }
-    const commandCurrency = mapDeployCurrencyToCommandCurrency(currencyInputRaw)
-    return {
-      commandText: `/coin create "${name}" ${symbol} ${metadataUri} ${commandCurrency}`,
-      deployLabel: deployType === 'content' ? 'CONTENT_COIN' : 'CREATOR_COIN',
-      detailLines: [
-        `- Name: ${name}`,
-        `- Symbol: ${symbol}`,
-        `- Metadata URI: ${metadataUri}`,
-        `- Currency label: ${currencyInputRaw}`,
-        `- Command currency: ${commandCurrency}`,
-      ],
-    }
-  }
-  return null
+  return buildDeployCommandFromIntentShared(intent)
 }
 
 function formatDeployPreviewText(params: {
@@ -4090,10 +3532,7 @@ function formatDeployPreviewText(params: {
 }
 
 function formatDeployTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {
-  if (reason === 'expired') return 'Deploy confirmation expired. Start a new `/deploy` preview.'
-  if (reason === 'consumed') return 'This deploy preview was already confirmed or cancelled.'
-  if (reason === 'scope_mismatch') return 'Deploy confirmation scope mismatch. Use a fresh preview from this chat.'
-  return 'Deploy confirmation token not found. Start a new `/deploy` preview.'
+  return formatDeployTokenFailureShared(reason)
 }
 
 async function handleTelegramDeployCallback(params: {
@@ -4365,7 +3804,7 @@ function buildTradeSignalReplyMarkup(params: {
 
   const command = params.actionType === 'buy' ? '/buy' : params.actionType === 'sell' ? '/sell' : '/bid'
   const reuseLabel = params.actionType === 'buy' ? 'Start Buy' : params.actionType === 'sell' ? 'Start Sell' : 'Start Bid'
-  const useCopyText = parseBoolean(process.env.TELEGRAM_COPY_TEXT_BUTTONS, true)
+  const useCopyText = getTelegramWebhookConfig().copyTextButtons
   const reuseButton = useCopyText
     ? { text: reuseLabel, copy_text: { text: command } }
     : { text: reuseLabel, switch_inline_query_current_chat: command }
@@ -4407,6 +3846,7 @@ async function handleTelegramTradeCallback(params: {
 }): Promise<TelegramCommandResponse | null> {
   const callback = parseTradeCallbackData(params.callbackData)
   if (!callback) return null
+  let tradeFlowState: TradeFlowState = TRADE_FLOW_IDLE_STATE
 
   if (callback.kind === 'edit') {
     return {
@@ -4434,6 +3874,11 @@ async function handleTelegramTradeCallback(params: {
     chatId: params.chatId,
   })
   if (!consumed.ok) {
+    tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+      type: 'TOKEN_INVALID',
+      actionType: 'buy',
+      reason: consumed.reason,
+    })
     const callbackToast =
       consumed.reason === 'expired'
         ? 'Preview expired'
@@ -4461,6 +3906,10 @@ async function handleTelegramTradeCallback(params: {
   const actionType = asTrimmed(consumed.actionType).toLowerCase()
   const actionTypeSafe: 'buy' | 'sell' | 'bid' =
     actionType === 'buy' || actionType === 'sell' || actionType === 'bid' ? actionType : 'buy'
+  tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+    type: 'START',
+    actionType: actionTypeSafe,
+  })
   const intent = consumed.intentPayload ?? {}
   const creatorCoinAddress = asTrimmed(intent.creatorCoinAddress ?? '').toLowerCase()
   const vaultAddress = asTrimmed(intent.vaultAddress ?? '').toLowerCase()
@@ -4500,6 +3949,11 @@ async function handleTelegramTradeCallback(params: {
   }
 
   if (callback.kind === 'decline') {
+    tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+      type: 'DECLINE',
+      actionType: actionTypeSafe,
+      token: callback.token,
+    })
     emitTelegramFunnelEvent({
       db,
       telegramUserId: params.userId,
@@ -4590,6 +4044,11 @@ async function handleTelegramTradeCallback(params: {
   }
 
   if ((actionTypeSafe === 'buy' || actionTypeSafe === 'sell') && isAddressLike(creatorCoinAddress) && amountInput) {
+    tradeFlowState = reduceTradeFlowState(tradeFlowState, {
+      type: 'ACCEPT',
+      actionType: actionTypeSafe,
+      token: callback.token,
+    })
     const commandText = `/coin ${actionTypeSafe} ${creatorCoinAddress} ${amountInput}`
     const execution = await handleKeeprCommand({
       groupId: params.groupId,
@@ -4953,12 +4412,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const botToken = asTrimmed(process.env.TELEGRAM_BOT_TOKEN ?? '')
+  const webhookConfig = getTelegramWebhookConfig()
+  const botToken = webhookConfig.botToken
   if (!botToken) {
     return res.status(503).json({ success: false, error: 'Telegram bot is not configured' } satisfies ApiEnvelope<never>)
   }
 
-  const configuredSecret = asTrimmed(process.env.TELEGRAM_WEBHOOK_SECRET ?? '')
+  const configuredSecret = webhookConfig.webhookSecret
   if (configuredSecret) {
     const providedSecret = asTrimmed(req.headers?.['x-telegram-bot-api-secret-token'])
     if (providedSecret !== configuredSecret) {
@@ -4971,130 +4431,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<never>)
   }
 
-  const inlineQuery = update.inline_query
-  if (inlineQuery && typeof inlineQuery === 'object') {
-    const inlineQueryId = String(inlineQuery.id ?? '').trim()
-    if (!inlineQueryId) {
-      return res.status(200).json({
-        success: true,
-        data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
-      } satisfies ApiEnvelope<TelegramWebhookOk>)
-    }
-
-    try {
-      await answerTelegramInlineQuery({
-        botToken,
-        inlineQueryId,
-        query: asTrimmed(inlineQuery.query ?? ''),
-        userId: String(inlineQuery.from?.id ?? '').trim(),
-        chatId: asTrimmed(process.env.TELEGRAM_TARGET_CHAT_ID ?? ''),
-      })
-    } catch (error) {
+  const inlineResult = await handleInlineQueryUpdate({
+    updateId: update.update_id,
+    inlineQuery: update.inline_query,
+    botToken,
+    targetChatId: webhookConfig.targetChatId,
+    answerInlineQuery: answerTelegramInlineQuery,
+    onError: (error, meta) => {
       console.error('[telegram/webhook] inline query failed', {
-        updateId: update.update_id ?? null,
-        inlineQueryId,
+        updateId: meta.updateId,
+        inlineQueryId: meta.inlineQueryId,
         err: error instanceof Error ? error.message : String(error),
       })
-    }
-
+    },
+  })
+  if (inlineResult) {
     return res.status(200).json({
       success: true,
-      data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      data: inlineResult satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 
-  const preCheckoutQuery = update.pre_checkout_query
-  if (preCheckoutQuery && typeof preCheckoutQuery === 'object') {
-    const preCheckoutQueryId = asTrimmed(preCheckoutQuery.id ?? '')
-    const invoicePayload = parseTipInvoicePayload(preCheckoutQuery.invoice_payload)
-    const preCheckoutCurrency = asTrimmed(preCheckoutQuery.currency ?? '').toUpperCase()
-    const canProceed = areStarsTipsEnabled() && preCheckoutCurrency === 'XTR' && !!invoicePayload
-    if (preCheckoutQueryId) {
-      await answerTelegramPreCheckoutQuery({
-        botToken,
-        preCheckoutQueryId,
-        ok: canProceed,
-        errorMessage: canProceed ? undefined : 'Tip could not be validated. Please try again.',
-      }).catch((error) => {
-        console.error('[telegram/webhook] pre-checkout answer failed', {
-          updateId: update.update_id ?? null,
-          preCheckoutQueryId,
-          err: error instanceof Error ? error.message : String(error),
-        })
+  const preCheckoutResult = await handlePreCheckoutUpdate({
+    updateId: update.update_id,
+    preCheckoutQuery: update.pre_checkout_query,
+    parseTipInvoicePayload,
+    areStarsTipsEnabled,
+    answerPreCheckoutQuery: answerTelegramPreCheckoutQuery,
+    botToken,
+    onAnswerError: (error, meta) => {
+      console.error('[telegram/webhook] pre-checkout answer failed', {
+        updateId: meta.updateId,
+        preCheckoutQueryId: meta.preCheckoutQueryId,
+        err: error instanceof Error ? error.message : String(error),
       })
-    }
+    },
+  })
+  if (preCheckoutResult) {
     return res.status(200).json({
       success: true,
-      data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      data: preCheckoutResult satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 
-  const paymentMessage = update.message && typeof update.message === 'object' ? update.message : null
-  const successfulPayment = paymentMessage?.successful_payment
-  if (paymentMessage && successfulPayment && typeof successfulPayment === 'object') {
-    const paymentChatId = String(paymentMessage.chat?.id ?? '').trim()
-    const paymentUserId = String(paymentMessage.from?.id ?? '').trim()
-    const paymentMessageId = typeof paymentMessage.message_id === 'number' ? paymentMessage.message_id : undefined
-    const tipPayload = parseTipInvoicePayload(successfulPayment.invoice_payload)
-    const paymentCurrency = asTrimmed(successfulPayment.currency ?? '').toUpperCase()
-    if (paymentChatId && tipPayload && paymentCurrency === 'XTR' && isStarsTipsEnabledForChat(paymentChatId)) {
-      const db = await getDb()
-      if (db && paymentUserId) {
-        const link = await getTelegramLinkByUserId({ db, telegramUserId: paymentUserId }).catch(() => null)
-        if (link && link.profileId > 0 && isAddressLike(link.canonicalCswAddress)) {
-          await logTelegramActionAudit({
-            db,
-            telegramUserId: paymentUserId,
-            chatId: paymentChatId,
-            messageId: paymentMessageId,
-            profileId: link.profileId,
-            canonicalCswAddress: link.canonicalCswAddress,
-            actionType: 'tip',
-            intent: {
-              source: 'telegram_stars',
-              stars: tipPayload.stars,
-              context: tipPayload.context,
-              invoicePayload: successfulPayment.invoice_payload,
-            },
-            quote: {
-              currency: paymentCurrency,
-              totalAmount: parseOptionalPositiveInteger(successfulPayment.total_amount),
-            },
-            execution: {
-              telegramPaymentChargeId: asTrimmed(successfulPayment.telegram_payment_charge_id ?? ''),
-              providerPaymentChargeId: asTrimmed(successfulPayment.provider_payment_charge_id ?? ''),
-            },
-            status: 'paid',
-          }).catch(() => {})
-        }
-      }
-      await sendTelegramMessage({
-        botToken,
-        chatId: paymentChatId,
-        text: `Thanks for the tip! ${tipPayload.stars} ⭐ received.`,
-        replyToMessageId: paymentMessageId,
-      }).catch((error) => {
-        console.error('[telegram/webhook] tip thank-you message failed', {
-          updateId: update.update_id ?? null,
-          chatId: paymentChatId,
-          err: error instanceof Error ? error.message : String(error),
-        })
+  const successfulPaymentResult = await handleSuccessfulPaymentUpdate({
+    updateId: update.update_id,
+    message: update.message && typeof update.message === 'object' ? update.message : null,
+    successfulPayment: update.message?.successful_payment ?? null,
+    parseTipInvoicePayload,
+    isStarsTipsEnabledForChat,
+    getDb,
+    getTelegramLinkByUserId: ({ db, telegramUserId }) => getTelegramLinkByUserId({ db, telegramUserId }),
+    logTelegramActionAudit,
+    sendTelegramMessage,
+    botToken,
+    onMessageError: (error, meta) => {
+      console.error('[telegram/webhook] tip thank-you message failed', {
+        updateId: meta.updateId,
+        chatId: meta.chatId,
+        err: error instanceof Error ? error.message : String(error),
       })
-    }
+    },
+  })
+  if (successfulPaymentResult) {
     return res.status(200).json({
       success: true,
-      data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      data: successfulPaymentResult satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 
   const callbackQuery = update.callback_query
   if (callbackQuery && typeof callbackQuery === 'object') {
-    const callbackQueryId = String(callbackQuery.id ?? '').trim()
-    const callbackData = asTrimmed(callbackQuery.data ?? '')
-    const callbackMessage = callbackQuery.message && typeof callbackQuery.message === 'object' ? callbackQuery.message : null
-    const chatId = String(callbackMessage?.chat?.id ?? '').trim()
-    const callbackMessageId = typeof callbackMessage?.message_id === 'number' ? callbackMessage.message_id : undefined
-    const userId = String(callbackQuery.from?.id ?? '').trim()
+    const normalizedCallback = normalizeCallbackQuery(callbackQuery)
+    if (!normalizedCallback) {
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
+    const { callbackQueryId, callbackData, chatId, callbackMessageId, userId } = normalizedCallback
     const parsedTradeFlowCallback = parseTradeFlowCallbackData(callbackData)
     const parsedTradeCallback = parseTradeCallbackData(callbackData)
     const parsedDeployCallback = parseDeployCallbackData(callbackData)
@@ -5102,23 +4517,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const mappedCommand = resolveHelpCallbackCommand(callbackData)
     const isMenuNavigationCallback = callbackData.startsWith('menu:') || callbackData.startsWith('help:')
     const canReplaceMenuMessage = isMenuNavigationCallback && typeof callbackMessageId === 'number'
-    if (!callbackQueryId || !chatId) {
-      return res.status(200).json({
-        success: true,
-        data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
-      } satisfies ApiEnvelope<TelegramWebhookOk>)
-    }
-
     const adminUserIds = parseAdminUserIds()
     const isAdmin = userId ? adminUserIds.has(userId) : false
-    const allowAdminDm = parseBoolean(process.env.TELEGRAM_ALLOW_ADMIN_DM, true)
-    const allowPrivateDm = isTelegramPrivateDmEnabled()
-    const allowedChatIds = parseAllowedChatIds()
-    const signalsChatId = asTrimmed(process.env.TELEGRAM_SIGNALS_CHAT_ID ?? '')
-    const allowedByChat = allowedChatIds.size === 0 || allowedChatIds.has(chatId) || (signalsChatId !== '' && chatId === signalsChatId)
-    const allowedByPrivateDm = allowPrivateDm && isPrivateChatId(chatId)
-    const allowedByAdminDm = allowAdminDm && isAdmin && isPrivateChatId(chatId)
-    if (!allowedByChat && !allowedByPrivateDm && !allowedByAdminDm) {
+
+    const isAllowedContext = isTelegramContextAllowed({
+      chatId,
+      userId,
+      allowAdminDm: webhookConfig.allowAdminDm,
+      allowPrivateDm: isTelegramPrivateDmEnabled(),
+      signalsChatId: webhookConfig.signalsChatId,
+    })
+    if (!isAllowedContext) {
       return res.status(200).json({
         success: true,
         data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
@@ -5191,7 +4600,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         callbackData,
         chatId,
         userId,
-        messageId: callbackMessage?.message_id,
+        messageId: callbackMessageId,
         groupId,
         senderWallet,
       })) ??
@@ -5199,13 +4608,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         callbackData,
         chatId,
         userId,
-        messageId: callbackMessage?.message_id,
+        messageId: callbackMessageId,
       })) ??
       (await handleTelegramTradeCallback({
         callbackData,
         chatId,
         userId,
-        messageId: callbackMessage?.message_id,
+        messageId: callbackMessageId,
         groupId,
         senderWallet,
       }))
@@ -5247,7 +4656,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           botToken,
           chatId,
           text: chunk,
-          replyToMessageId: idx === 0 && startIdx === 0 ? callbackMessage?.message_id : undefined,
+          replyToMessageId: idx === 0 && startIdx === 0 ? callbackMessageId : undefined,
           replyMarkup: idx === 0 && startIdx === 0 ? callbackResponse.replyMarkup : undefined,
         })
       }
@@ -5288,7 +4697,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           botToken,
           chatId,
           text: staticMenuResponse.text,
-          replyToMessageId: callbackMessage?.message_id,
+          replyToMessageId: callbackMessageId,
           replyMarkup: staticMenuResponse.replyMarkup,
         })
       }
@@ -5312,7 +4721,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           botToken,
           chatId,
           text: 'Unknown menu action. Send /help to reopen the menu.',
-          replyToMessageId: callbackMessage?.message_id,
+          replyToMessageId: callbackMessageId,
           replyMarkup: buildHelpReplyMarkup(chatId),
         })
       }
@@ -5338,7 +4747,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           chatId,
           text:
             'Inline shortcuts are ready. Tap a button below to pre-fill a draft in this chat, then send it.',
-          replyToMessageId: callbackMessage?.message_id,
+          replyToMessageId: callbackMessageId,
           replyMarkup: buildInlineLauncherReplyMarkup(),
         })
       }
@@ -5357,7 +4766,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         groupId,
         senderWallet,
         isAdmin,
-        messageId: callbackMessage?.message_id,
+        messageId: callbackMessageId,
       })
     } catch (error) {
       console.error('[telegram/webhook] callback command handling failed', {
@@ -5396,7 +4805,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           botToken,
           chatId,
           text: chunk,
-          replyToMessageId: idx === 0 ? callbackMessage?.message_id : undefined,
+          replyToMessageId: idx === 0 ? callbackMessageId : undefined,
           replyMarkup: idx === 0 ? helpMarkup : undefined,
         })
       }
@@ -5415,15 +4824,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
-
-  const chatId = String(message?.chat?.id ?? '').trim()
-  const userId = String(message?.from?.id ?? '').trim()
-  const fromBot = Boolean(message?.from?.is_bot)
-  const text = asTrimmed(message.text ?? message.caption ?? '')
+  const normalizedMessage = normalizeMessageContext(message)
+  if (!normalizedMessage) {
+    return res.status(200).json({
+      success: true,
+      data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+    } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+  const { chatId, userId, fromBot, text, messageId } = normalizedMessage
   const isStartCommand = /^\/start(?:\s+.*)?$/i.test(text)
   const normalizedText = normalizeTelegramCommand(text)
   const commandText = shouldAutoRouteToAi({ chatId, text, message }) ? normalizeTelegramCommand(`/ai ${text}`) : normalizedText
-  if (!chatId || !text) {
+  if (!text) {
     return res.status(200).json({
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
@@ -5439,13 +4851,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const adminUserIds = parseAdminUserIds()
   const isAdmin = userId ? adminUserIds.has(userId) : false
-  const allowAdminDm = parseBoolean(process.env.TELEGRAM_ALLOW_ADMIN_DM, true)
-  const allowPrivateDm = isTelegramPrivateDmEnabled()
-  const allowedChatIds = parseAllowedChatIds()
-  const allowedByChat = allowedChatIds.size === 0 || allowedChatIds.has(chatId)
-  const allowedByPrivateDm = allowPrivateDm && isPrivateChatId(chatId)
-  const allowedByAdminDm = allowAdminDm && isAdmin && isPrivateChatId(chatId)
-  if (!allowedByChat && !allowedByPrivateDm && !allowedByAdminDm) {
+  const isAllowedContext = isTelegramContextAllowed({
+    chatId,
+    userId,
+    allowAdminDm: webhookConfig.allowAdminDm,
+    allowPrivateDm: isTelegramPrivateDmEnabled(),
+  })
+  if (!isAllowedContext) {
     return res.status(200).json({
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
@@ -5458,7 +4870,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chatId,
       text:
         'Inline shortcuts are ready. Tap a button below to pre-fill a draft in this chat, then send it.',
-      replyToMessageId: message.message_id,
+      replyToMessageId: messageId,
       replyMarkup: buildInlineLauncherReplyMarkup(),
     })
     return res.status(200).json({
@@ -5479,7 +4891,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       groupId,
       senderWallet,
       isAdmin,
-      messageId: message.message_id,
+      messageId,
     })
   } catch (error) {
     console.error('[telegram/webhook] command handling failed', {

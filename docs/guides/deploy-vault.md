@@ -204,9 +204,15 @@ Acceptance checks:
 - `pnpm -C frontend exec vitest run api/__tests__/deploySession.test.ts api/__tests__/deploySessionOwnership.test.ts`
 - paymaster accepts split selectors (no `batcher_selector_not_allowed`)
 - deploy-session path advances:
-  - `created -> phase1_sent -> phase1_finalize_sent -> phase2_core_sent -> phase2_sent -> phase3_sent -> completed`
+  - `created -> phase1_sent -> phase1_finalize_sent -> phase2_core_sent -> phase2_sent -> phase3_sent -> phase4_sent -> completed`
+  - no `phase4 image gate failed:*` error in session status
 - `/deploy` shows no bytecode infra blocker and no `deployment batcher not configured`
 - `/status?vault=0x...` shows Ajna as an adapter-backed inner vault and surfaces auth/min-bucket/buffer metadata
+- `GET /api/v1/auction/status?ccaStrategy=0x...` returns:
+  - `auctionTokenImagePath` using `/api/v1/token/<auctionToken>/image?chain=8453&format=png`
+  - `auctionTokenImageUrl` as an absolute URL
+- `GET /api/v1/token/<shareOFT>/image?chain=8453&format=png` returns `200` with a non-empty image body
+- Vault CCA panel renders the generated ShareOFT image (fallback logo is not shown under normal launch conditions)
 
 ### Important: Zora cross-app is read-only here
 

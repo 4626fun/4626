@@ -417,6 +417,98 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     expect((globalThis.fetch as any).mock.calls.length).toBe(1)
   })
 
+  it('accepts launchDeferredAuction with current selector', async () => {
+    const BATCHER_ABI = [
+      {
+        type: 'function',
+        name: 'launchDeferredAuction',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'creatorToken', type: 'address' },
+              { name: 'owner', type: 'address' },
+              { name: 'shareOFT', type: 'address' },
+              { name: 'version', type: 'string' },
+              { name: 'floorPriceQ96', type: 'uint256' },
+              { name: 'requiredRaise', type: 'uint128' },
+              { name: 'auctionSteps', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [{ name: 'auction', type: 'address' }],
+      },
+    ] as const
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const launchData = encodeFunctionData({
+      abi: BATCHER_ABI,
+      functionName: 'launchDeferredAuction',
+      args: [
+        {
+          creatorToken,
+          owner: sender,
+          shareOFT,
+          version: 'v1',
+          floorPriceQ96: 1_000_000n,
+          requiredRaise: 100_000_000_000_000_000n,
+          auctionSteps: '0x',
+        },
+      ],
+    })
+
+    expect(launchData.slice(0, 10).toLowerCase()).toBe('0x02afdbcb')
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [creatorVaultBatcher, 0n, launchData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = responseBody?.error?.message ?? ''
+
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(1)
+  })
+
   it('accepts phase3 runtime vault calls after deployPhase3Strategies', async () => {
     const BATCHER_ABI = [
       {

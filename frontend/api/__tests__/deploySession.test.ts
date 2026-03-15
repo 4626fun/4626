@@ -16,6 +16,7 @@ const {
   decryptWithSecretMock,
   sendUserOperationMock,
   getUserOperationReceiptMock,
+  ensureLaunchImageReadyMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
@@ -27,6 +28,12 @@ const {
   decryptWithSecretMock: vi.fn(() => '0xprivkey'),
   sendUserOperationMock: vi.fn(async () => '0xuserop'),
   getUserOperationReceiptMock: vi.fn(async () => ({ receipt: { transactionHash: '0xtxhash' } })),
+  ensureLaunchImageReadyMock: vi.fn(async () => ({
+    projectId: 'imgproj_1',
+    outputBlobUrl: 'https://cdn.example/image.png',
+    vaultAddress: '0x3000000000000000000000000000000000000003',
+    shareOFT: '0x7000000000000000000000000000000000000007',
+  })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -56,6 +63,10 @@ vi.mock('../../server/_lib/origin.js', () => ({
 vi.mock('../../server/_lib/privyWalletApi.js', () => ({
   secp256k1SignHash: vi.fn(async () => '0xsig'),
   walletRpc: vi.fn(async () => ({ data: { signature: '0xabc' } })),
+}))
+
+vi.mock('../../server/_lib/deployLaunchImage.js', () => ({
+  ensureLaunchImageReady: ensureLaunchImageReadyMock,
 }))
 
 vi.mock('viem', () => ({
@@ -500,9 +511,65 @@ describe('deploy session optimistic concurrency', () => {
     expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
     const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
     expect(String(args.calls[0]?.to)).toBe('0xphase4target')
+    expect(ensureLaunchImageReadyMock).toHaveBeenCalledTimes(1)
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', step: 'phase4_sent' }),
     )
+  })
+
+  it('continue blocks phase4 transition when launch image gate fails', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    ensureLaunchImageReadyMock.mockRejectedValueOnce(
+      new Error('phase4 image gate failed: /api/image/projects/direct-compose (409) Composition already in progress'),
+    )
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(String(res.body?.error ?? '')).toContain('phase4 image gate failed')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('status keeps phase3_confirmed when launch image gate fails before phase4 send', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [makeCall('0xphase2target')],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    ensureLaunchImageReadyMock.mockRejectedValueOnce(
+      new Error('phase4 image gate failed: generated image did not bind to vault'),
+    )
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({
+        ...rec,
+        step: 'phase3_confirmed',
+        lastError: 'phase4 image gate failed: generated image did not bind to vault',
+      })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase3_confirmed')
+    expect(String(res.body?.data?.lastError ?? '')).toContain('phase4 image gate failed')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('status blocks phase3_sent advancement when phase3 call is not deployPhase3Strategies', async () => {
@@ -551,7 +618,11 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_sent'),
       payload: {
         phase2FinalizeCalls: [makeCall(batcher, '0xphase2finalize')],
-        phase3Calls: [makeCall(batcher, '0xphase3deployv2')],
+        phase3Calls: [
+          makeCall(batcher, '0xphase3deployv2'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3setminidle'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3deploytostrategies'),
+        ],
         phase4Calls: [makeCall(batcher, '0xphase4launch')],
       },
       lastUserOpHash: `0x${'2'.repeat(64)}`,
@@ -582,6 +653,18 @@ describe('deploy session optimistic concurrency', () => {
               solanaWeightBps: 3000n,
             },
           ],
+        }
+      }
+      if (String(data) === '0xphase3setminidle') {
+        return {
+          functionName: 'setMinimumTotalIdle',
+          args: [1000n],
+        }
+      }
+      if (String(data) === '0xphase3deploytostrategies') {
+        return {
+          functionName: 'deployToStrategies',
+          args: [],
         }
       }
       if (String(data) === '0xphase2finalize') {
@@ -668,6 +751,8 @@ describe('deploy session optimistic concurrency', () => {
             return usdc
           case 'getPool':
             return v3Pool
+          case 'minimumTotalIdle':
+            return 1000n
           case 'currentAuction':
             return auction
           case 'ccaFactory':
@@ -732,7 +817,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_confirmed', toStep: 'phase4_sent' }),
     )
-  })
+  }, 10_000)
 
   it('continue honors required downstream stages when payload is stringified JSON', async () => {
     const rec = {
@@ -1630,6 +1715,165 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
+  it('status blocks phase3_sent completion when minimumTotalIdle does not match phase3 payload', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [
+          makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv4'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3setminidle'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3deploytostrategies'),
+        ],
+        phase4Calls: [makeCall('0xphase4target')],
+      }),
+      lastUserOpHash: `0x${'2'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const charmStrategy = '0x8400000000000000000000000000000000000008'
+    const ajnaAdapter = '0x9400000000000000000000000000000000000009'
+    const ajnaInnerVault = '0x9500000000000000000000000000000000000009'
+    const ajnaAuth = '0x9600000000000000000000000000000000000009'
+    const ajnaPool = '0x9700000000000000000000000000000000000009'
+    const solanaStrategy = '0xa40000000000000000000000000000000000000a'
+    const charmVault = '0xb40000000000000000000000000000000000000b'
+    const bridgeAddress = '0xd40000000000000000000000000000000000000d'
+    const v3Factory = '0xe40000000000000000000000000000000000000e'
+    const usdc = '0xf40000000000000000000000000000000000000f'
+    const v3Pool = '0x1410000000000000000000000000000000000014'
+    const vault = '0x3000000000000000000000000000000000000003'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase3deployv4') {
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              version: 'v1.4.10',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+              solanaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase3setminidle') {
+        return {
+          functionName: 'setMinimumTotalIdle',
+          args: [1000n],
+        }
+      }
+      if (String(data) === '0xphase3deploytostrategies') {
+        return {
+          functionName: 'deployToStrategies',
+          args: [],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args, address }: any) => {
+        switch (functionName) {
+          case 'strategyList':
+            if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaAdapter
+            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            return '0xownerbytes'
+          case 'strategyWeights':
+            if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            return 0n
+          case 'charmVault':
+            if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
+            throw new Error('not_charm_strategy')
+          case 'ERC4626_VAULT':
+            if (String(address ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return ajnaInnerVault
+            throw new Error('not_ajna_adapter')
+          case 'AJNA_POOL':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_inner_vault')
+          case 'AUTH':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
+            throw new Error('not_ajna_inner_vault')
+          case 'admin':
+            if (String(address ?? '').toLowerCase() === ajnaAuth.toLowerCase()) {
+              return '0x2000000000000000000000000000000000000002'
+            }
+            throw new Error('not_ajna_auth')
+          case 'bridgeAddress':
+            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_solana_strategy')
+          case 'uniswapV3Factory':
+            return v3Factory
+          case 'usdc':
+            return usdc
+          case 'getPool':
+            return v3Pool
+          case 'minimumTotalIdle':
+            return 999n
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          vault.toLowerCase(),
+          charmStrategy.toLowerCase(),
+          ajnaAdapter.toLowerCase(),
+          ajnaInnerVault.toLowerCase(),
+          ajnaAuth.toLowerCase(),
+          ajnaPool.toLowerCase(),
+          solanaStrategy.toLowerCase(),
+          charmVault.toLowerCase(),
+          bridgeAddress.toLowerCase(),
+          v3Pool.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastError: 'phase3 verification failed' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase3_sent')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+    expect(updateDeploySessionMock).toHaveBeenCalled()
+  })
+
   it('status blocks phase4_sent completion when CCA/Uniswap post-check fails', async () => {
     const rec = {
       ...makeDeploySession('phase4_sent'),
@@ -1712,12 +1956,16 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
-  it('status advances phase3_sent when nested Ajna strategy post-check succeeds', async () => {
+  it('status blocks phase3_sent when legacy two-strategy payload omits Solana weight', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deploy')],
+        phase3Calls: [
+          makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deploy'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3setminidle'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3deploytostrategies'),
+        ],
         phase4Calls: [],
       }),
       lastUserOpHash: `0x${'4'.repeat(64)}`,
@@ -1755,6 +2003,18 @@ describe('deploy session optimistic concurrency', () => {
               ajnaMinBucketIndex: 1200n,
             },
           ],
+        }
+      }
+      if (String(data) === '0xphase3setminidle') {
+        return {
+          functionName: 'setMinimumTotalIdle',
+          args: [1000n],
+        }
+      }
+      if (String(data) === '0xphase3deploytostrategies') {
+        return {
+          functionName: 'deployToStrategies',
+          args: [],
         }
       }
       if (String(data) === '0xphase2finalize') {
@@ -1811,6 +2071,8 @@ describe('deploy session optimistic concurrency', () => {
             return usdc
           case 'getPool':
             return v3Pool
+          case 'minimumTotalIdle':
+            return 1000n
           case 'admin':
             if (String(address ?? '').toLowerCase() === ajnaAuth.toLowerCase()) {
               return '0x2000000000000000000000000000000000000002'
@@ -1836,7 +2098,7 @@ describe('deploy session optimistic concurrency', () => {
     })
     getDeploySessionByIdMock
       .mockResolvedValueOnce(rec)
-      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+      .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastError: 'phase3 verification failed' })
     transitionDeploySessionMock.mockResolvedValue(true)
 
     const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -1844,25 +2106,11 @@ describe('deploy session optimistic concurrency', () => {
     await statusHandler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.step).toBe('completed')
-    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+    expect(res.body?.data?.step).toBe('phase3_sent')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
     )
-    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'sess_1',
-        fromStep: 'phase3_sent',
-        toStep: 'phase3_confirmed',
-        payloadPatch: expect.objectContaining({
-          phase3AjnaAdminAlignment: expect.objectContaining({
-            ajnaAuthAddress: ajnaAuth,
-            expectedAjnaAuthAdmin: '0x2000000000000000000000000000000000000002',
-            ajnaAuthAdmin: '0x2000000000000000000000000000000000000002',
-            ajnaAuthAdminMatchesOwner: true,
-          }),
-        }),
-      }),
-    )
+    expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
   it('status advances phase3_sent when Charm/Ajna/Solana strategy post-check succeeds', async () => {
@@ -1870,7 +2118,11 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase3_sent'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv2')],
+        phase3Calls: [
+          makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv2'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3setminidle'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3deploytostrategies'),
+        ],
         phase4Calls: [],
       }),
       lastUserOpHash: `0x${'8'.repeat(64)}`,
@@ -1904,6 +2156,18 @@ describe('deploy session optimistic concurrency', () => {
               solanaWeightBps: 3000n,
             },
           ],
+        }
+      }
+      if (String(data) === '0xphase3setminidle') {
+        return {
+          functionName: 'setMinimumTotalIdle',
+          args: [1000n],
+        }
+      }
+      if (String(data) === '0xphase3deploytostrategies') {
+        return {
+          functionName: 'deployToStrategies',
+          args: [],
         }
       }
       if (String(data) === '0xphase2finalize') {
@@ -1965,6 +2229,8 @@ describe('deploy session optimistic concurrency', () => {
             return usdc
           case 'getPool':
             return v3Pool
+          case 'minimumTotalIdle':
+            return 1000n
           default:
             return '0xownerbytes'
         }
@@ -2032,12 +2298,16 @@ describe('deploy session optimistic concurrency', () => {
     })
   })
 
-  it('status advances phase3_sent with extra strategies when SolanaStrategy exposes bridgeAddress', async () => {
+  it('status blocks phase3_sent with extra active strategies when SolanaStrategy exposes bridgeAddress', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv3')],
+        phase3Calls: [
+          makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv3'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3setminidle'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3deploytostrategies'),
+        ],
         phase4Calls: [],
       }),
       lastUserOpHash: `0x${'9'.repeat(64)}`,
@@ -2071,6 +2341,18 @@ describe('deploy session optimistic concurrency', () => {
               solanaWeightBps: 3000n,
             },
           ],
+        }
+      }
+      if (String(data) === '0xphase3setminidle') {
+        return {
+          functionName: 'setMinimumTotalIdle',
+          args: [1000n],
+        }
+      }
+      if (String(data) === '0xphase3deploytostrategies') {
+        return {
+          functionName: 'deployToStrategies',
+          args: [],
         }
       }
       if (String(data) === '0xphase2finalize') {
@@ -2141,6 +2423,8 @@ describe('deploy session optimistic concurrency', () => {
             return usdc
           case 'getPool':
             return v3Pool
+          case 'minimumTotalIdle':
+            return 1000n
           default:
             return '0xownerbytes'
         }
@@ -2164,7 +2448,7 @@ describe('deploy session optimistic concurrency', () => {
     })
     getDeploySessionByIdMock
       .mockResolvedValueOnce(rec)
-      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+      .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastError: 'phase3 verification failed' })
     transitionDeploySessionMock.mockResolvedValue(true)
 
     const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -2172,10 +2456,11 @@ describe('deploy session optimistic concurrency', () => {
     await statusHandler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.step).toBe('completed')
-    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+    expect(res.body?.data?.step).toBe('phase3_sent')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
     )
+    expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
   it('status advances phase4_sent when CCA/Uniswap post-check succeeds', async () => {

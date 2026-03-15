@@ -17,4 +17,15 @@ describe('DeployVault dry run wiring', () => {
     expect(pageSource).toContain('Run dry-run')
     expect(pageSource).toContain('Dry-run is local-fork-only.')
   })
+
+  it('keeps canonical 3-strategy + idle-reserve defaults in deploy-session payload construction', () => {
+    const pageSource = fs.readFileSync(path.resolve(__dirname, './DeployVault.tsx'), 'utf8')
+
+    expect(pageSource).toContain('const DEFAULT_CHARM_WEIGHT_BPS = 3_000n')
+    expect(pageSource).toContain('const DEFAULT_AJNA_WEIGHT_BPS = 3_000n')
+    expect(pageSource).toContain('const DEFAULT_SOLANA_WEIGHT_BPS = 3_000n')
+    expect(pageSource).toContain('const DEFAULT_IDLE_PERCENT_BPS = 1_000n')
+    expect(pageSource).toContain("functionName: 'setMinimumTotalIdle'")
+    expect(pageSource).toContain("functionName: 'deployToStrategies'")
+  })
 })

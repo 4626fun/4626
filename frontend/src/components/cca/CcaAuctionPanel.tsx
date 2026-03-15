@@ -4,6 +4,7 @@ import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteCont
 import type { Address } from 'viem'
 import { formatUnits, isAddress, parseEther, parseEventLogs } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
+import { apiFetch } from '@/lib/apiBase'
 
 import {
   MAX_UINT128,
@@ -92,6 +93,8 @@ export function CcaAuctionPanel({
   const [spendEth, setSpendEth] = useState('')
   const [maxPriceEthPerToken, setMaxPriceEthPerToken] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [auctionTokenImageUrl, setAuctionTokenImageUrl] = useState<string | null>(null)
+  const [tokenImageBroken, setTokenImageBroken] = useState(false)
 
   const { data: auctionStatus } = useReadContract({
     address: ccaStrategy,
@@ -150,6 +153,36 @@ export function CcaAuctionPanel({
   const tokenDecimals = typeof tokenDecimalsRaw === 'number' ? tokenDecimalsRaw : Number(tokenDecimalsRaw ?? 18)
   const tokenSymbol = typeof tokenSymbolRaw === 'string' && tokenSymbolRaw.trim().length > 0 ? tokenSymbolRaw : wsSymbol
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiFetch(`/api/v1/auction/status?ccaStrategy=${ccaStrategy}`)
+        if (!res.ok) return
+        const json = (await res.json()) as {
+          data?: {
+            auctionTokenImageUrl?: string | null
+            auctionTokenImagePath?: string | null
+          }
+        }
+        const absoluteUrl =
+          typeof json.data?.auctionTokenImageUrl === 'string' && json.data.auctionTokenImageUrl.trim()
+            ? json.data.auctionTokenImageUrl.trim()
+            : null
+        const relativePath =
+          typeof json.data?.auctionTokenImagePath === 'string' && json.data.auctionTokenImagePath.trim()
+            ? json.data.auctionTokenImagePath.trim()
+            : null
+        if (!cancelled) setAuctionTokenImageUrl(absoluteUrl ?? relativePath ?? null)
+      } catch {
+        if (!cancelled) setAuctionTokenImageUrl(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [ccaStrategy])
+
   const auctionAddress = (auctionStatus?.[0] ?? ZERO_ADDRESS) as Address
   const isActive = Boolean(auctionStatus?.[1] ?? false)
   const isGraduated = Boolean(auctionStatus?.[2] ?? false)
@@ -158,6 +191,18 @@ export function CcaAuctionPanel({
 
   const isEthAuction = (currencyAddress ?? ZERO_ADDRESS) === ZERO_ADDRESS
   const hasAuction = auctionAddress !== ZERO_ADDRESS
+
+  const tokenImageSrc = useMemo(() => {
+    if (auctionTokenImageUrl) return auctionTokenImageUrl
+    if (auctionTokenAddress && isAddress(auctionTokenAddress)) {
+      return `/api/v1/token/${String(auctionTokenAddress).toLowerCase()}/image?chain=8453&format=png`
+    }
+    return '/logo.svg'
+  }, [auctionTokenAddress, auctionTokenImageUrl])
+
+  useEffect(() => {
+    setTokenImageBroken(false)
+  }, [tokenImageSrc])
 
   const clearingPriceWeiPerToken = useMemo(() => {
     if (!clearingPriceQ96) return 0n
@@ -349,7 +394,18 @@ export function CcaAuctionPanel({
               )}
             </div>
             
-            <h3 className="headline text-3xl sm:text-4xl mb-3">{tokenSymbol} Price Discovery</h3>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-black/50 shrink-0">
+                <img
+                  src={tokenImageBroken ? '/logo.svg' : tokenImageSrc}
+                  alt={`${tokenSymbol} token image`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={() => setTokenImageBroken(true)}
+                />
+              </div>
+              <h3 className="headline text-3xl sm:text-4xl">{tokenSymbol} Price Discovery</h3>
+            </div>
             
             <div className="flex items-center gap-2 text-zinc-600 text-sm font-light">
               <img

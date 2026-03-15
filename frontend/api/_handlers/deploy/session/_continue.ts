@@ -15,6 +15,7 @@ import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { ensureLaunchImageReady } from '../../../../server/_lib/deployLaunchImage.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -777,6 +778,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return null
     }
     const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
+      if (toStep === 'phase4_sent') {
+        const deploySig = signDeployToken(rec.deployToken)
+        await ensureLaunchImageReady({
+          req,
+          sessionId: rec.id,
+          sessionAddress: getAddress(rec.sessionAddress),
+          payload,
+          phase2FinalizeCalls,
+          phase4Calls,
+          deployToken: rec.deployToken,
+          deployTokenSignature: deploySig,
+          persistPayloadPatch: async (patch) => {
+            await updateDeploySession({ id: rec.id, payloadPatch: patch })
+            Object.assign(payload, patch)
+          },
+        })
+      }
+
       const calls = [...stageCalls]
       const shouldAttachCleanup = attachCleanup && !persistSessionOwner
       if (shouldAttachCleanup) calls.push(removeOwnerCall)
@@ -1059,6 +1078,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: false,
         error:
           'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
+      } satisfies ApiEnvelope<null>)
+    }
+    if (msg.startsWith('phase4 image gate failed:')) {
+      return res.status(409).json({
+        success: false,
+        error: msg,
       } satisfies ApiEnvelope<null>)
     }
     if (revertLike) {

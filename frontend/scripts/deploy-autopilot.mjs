@@ -228,8 +228,11 @@ async function main() {
   }
 
   const sessionId = String(started.json.data.sessionId)
-  const sessionOwner = requireAddress('sessionOwner', started.json.data.sessionOwner)
-  console.log(`session created id=${sessionId} owner=${sessionOwner} next=${started.json.data.nextAction}`)
+  const sessionSignerRaw = String(
+    started.json.data.sessionSignerAddress || started.json.data.sessionOwner || '',
+  ).trim()
+  const sessionSigner = requireAddress('sessionSignerAddress', sessionSignerRaw)
+  console.log(`session created id=${sessionId} signer=${sessionSigner} next=${started.json.data.nextAction}`)
 
   const startedAt = Date.now()
   const deadline = startedAt + timeoutMs
@@ -237,7 +240,7 @@ async function main() {
   if (started.json.data.nextAction === 'wait_for_owner_install' && waitOwnerInstall) {
     console.log('waiting for owner install (addOwnerAddress)...')
     while (Date.now() < deadline) {
-      const installed = await isOwnerInstalled({ client, smartWallet, ownerAddress: sessionOwner, maxScan: 256 })
+      const installed = await isOwnerInstalled({ client, smartWallet, ownerAddress: sessionSigner, maxScan: 256 })
       if (installed) {
         console.log('owner installed; triggering continue')
         const continued = await apiPost({

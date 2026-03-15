@@ -26,6 +26,21 @@ Before launching, verify the deploy session completed through phase 3:
 - Idle reserve: **1000 bps** (10% of the launch deposit via `setMinimumTotalIdle`)
 - Solana preflight succeeded before phase 3 started
 
+### Image Gate + CCA Render Readiness
+
+Before accepting a launch as production-ready, verify image generation is part of the deploy-session gate:
+
+1. `POST /api/deploy/session/status` for the active session id and confirm:
+   - session advances through `phase3_sent -> phase4_sent -> completed`
+   - `lastError` does **not** contain `phase4 image gate failed`
+2. Read auction status:
+   - `GET /api/v1/auction/status?ccaStrategy=<address>`
+   - response includes `auctionTokenImagePath` and `auctionTokenImageUrl`
+3. Verify canonical image endpoint for ShareOFT:
+   - `GET /api/v1/token/<shareOFT>/image?chain=8453&format=png`
+   - returns `200` and non-empty image bytes
+4. Open the vault CCA panel and confirm the generated ShareOFT image is rendered in the price-discovery header (no fallback logo under healthy conditions).
+
 ### Canonical Ajna Verification (Current Deploy Path)
 
 The Ajna sleeve is the nested adapter-backed bundle:
@@ -118,7 +133,8 @@ Users launch via the frontend AA flow, which now prefers Permit2 for the deposit
 3. Phase 2 finalize uses Permit2 when available, otherwise approval + `finalizePhase2(...)`.
 4. After phase 2 confirms, the server performs Solana preflight and registration.
 5. Phase 3 deploys Charm, Ajna, and `SolanaStrategy`, sets the idle reserve, and calls `vault.deployToStrategies()`.
-6. Phase 4 launches the deferred auction.
+6. Before phase 4 send, deploy-session runs the ShareOFT image gate (generate/compose/associate).
+7. Phase 4 launches the deferred auction only after image gate readiness succeeds.
 
 ### Fallback path
 

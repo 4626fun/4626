@@ -13,6 +13,17 @@ const tokenURIAbi = [
   },
 ] as const
 
+// ABI for ERC-7572 contract-level metadata (used by ShareOFT)
+const contractURIAbi = [
+  {
+    inputs: [],
+    name: 'contractURI',
+    outputs: [{ internalType: 'string', name: '', type: 'string' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
+
 interface TokenMetadata {
   name?: string
   description?: string
@@ -73,6 +84,10 @@ function ipfsToHttp(uri: string): string {
   return uri
 }
 
+function buildCanonicalTokenImageUrl(tokenAddress: `0x${string}`): string {
+  return `/api/v1/token/${tokenAddress.toLowerCase()}/image?chain=8453&format=png`
+}
+
 export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
   const [metadata, setMetadata] = useState<TokenMetadata | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -91,15 +106,47 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
     },
   })
 
+  // ShareOFT exposes ERC-7572 metadata via contractURI()
+  const { data: contractURI, refetch: refetchContractURI } = useReadContract({
+    address: tokenAddress,
+    abi: contractURIAbi,
+    functionName: 'contractURI',
+    query: {
+      enabled: !!tokenAddress,
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 10,
+    },
+  })
+
   useEffect(() => {
     async function fetchMetadata() {
-      if (!tokenURI) return
+      if (!tokenAddress) {
+        setMetadata(null)
+        setImageUrl(null)
+        setError(null)
+        setIsLoading(false)
+        return
+      }
+
+      const metadataSourceRaw =
+        (typeof tokenURI === 'string' && tokenURI.trim()) ||
+        (typeof contractURI === 'string' && contractURI.trim()) ||
+        ''
+      const metadataSource = metadataSourceRaw ? metadataSourceRaw : null
+      if (!metadataSource) {
+        // Fall back to canonical token image endpoint while metadata is unavailable.
+        setMetadata(null)
+        setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
+        setError(null)
+        setIsLoading(false)
+        return
+      }
 
       setIsLoading(true)
       setError(null)
 
       try {
-        const metadataUrl = normalizeUrl(ipfsToHttp(tokenURI))
+        const metadataUrl = normalizeUrl(ipfsToHttp(metadataSource))
         if (!metadataUrl) {
           throw new Error('Empty tokenURI')
         }
@@ -148,35 +195,41 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
         if (data.image) {
           setImageUrl(normalizeImageUrl(ipfsToHttp(data.image)))
         } else {
-          setImageUrl(null)
+          setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
         }
       } catch (err) {
         // If JSON parse fails, the URI might be a direct image link
-        // Try using the tokenURI directly as an image
-        const directUrl = normalizeImageUrl(ipfsToHttp(tokenURI))
+        // Try using metadata source directly as an image.
+        const directUrl = normalizeImageUrl(ipfsToHttp(metadataSource))
         if (directUrl) {
           setImageUrl(directUrl)
           setMetadata({ image: directUrl })
           logger.debug('Using tokenURI directly as image', { directUrl })
         } else {
-          setImageUrl(null)
+          setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
           setMetadata(null)
         }
+        setError(err instanceof Error ? err.message : 'Failed to load token metadata')
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchMetadata()
-  }, [tokenURI])
+  }, [tokenAddress, tokenURI, contractURI])
+
+  const refetchMetadata = async () => {
+    await Promise.allSettled([refetch(), refetchContractURI()])
+  }
 
   return {
     metadata,
     imageUrl,
     tokenURI,
+    contractURI,
     isLoading,
     error,
-    refetch, // Allow manual refresh
+    refetch: refetchMetadata, // Allow manual refresh
   }
 }
 
@@ -185,6 +238,3 @@ export function useTokenImage(tokenAddress: `0x${string}` | undefined) {
   const { imageUrl, isLoading, error } = useTokenMetadata(tokenAddress)
   return { imageUrl, isLoading, error }
 }
-
-
-// ABI for tokenURI function (common to CreatorCoin contracts)

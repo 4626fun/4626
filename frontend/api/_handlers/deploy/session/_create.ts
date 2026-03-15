@@ -456,6 +456,25 @@ function isVercelDeploymentOrigin(origin: string): boolean {
   }
 }
 
+function checkDeploySessionSecretsReady(origin: string): { ok: boolean; error?: string } {
+  const isVercelEnv = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+  if (!isVercelEnv || !isVercelDeploymentOrigin(origin)) return { ok: true }
+
+  const missing: string[] = []
+  if (!(process.env.DEPLOY_SESSION_SECRET ?? '').trim()) {
+    missing.push('DEPLOY_SESSION_SECRET')
+  }
+  if (!(process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET ?? '').trim()) {
+    missing.push('DEPLOY_SESSION_TOKEN_HMAC_SECRET')
+  }
+  if (missing.length === 0) return { ok: true }
+
+  return {
+    ok: false,
+    error: `Deploy session signing is not configured for this Vercel deployment. Set ${missing.join(', ')}.`,
+  }
+}
+
 function getDirectCdpEndpoint(): string {
   return (
     (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
@@ -938,6 +957,10 @@ export async function validateDeploySessionRequest(params: {
   const infra = await checkDeployInfraReady(origin)
   if (!infra.ok) {
     throw new DeploySessionRequestError(503, infra.error || 'Deploy infrastructure unavailable')
+  }
+  const signing = checkDeploySessionSecretsReady(origin)
+  if (!signing.ok) {
+    throw new DeploySessionRequestError(503, signing.error || 'Deploy session signing is unavailable')
   }
 
   const ownership = await checkCanonicalWalletOwnership({

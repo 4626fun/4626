@@ -13,6 +13,7 @@ import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { ensureLaunchImageReady } from '../../../../server/_lib/deployLaunchImage.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -469,6 +470,33 @@ const CREATOR_OVAULT_STRATEGY_VIEW_ABI = [
     name: 'strategyWeights',
     stateMutability: 'view',
     inputs: [{ name: 'strategy', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
+const CREATOR_OVAULT_RUNTIME_CONFIG_ABI = [
+  {
+    type: 'function',
+    name: 'setMinimumTotalIdle',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployToStrategies',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_OVAULT_RUNTIME_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'minimumTotalIdle',
+    stateMutability: 'view',
+    inputs: [],
     outputs: [{ type: 'uint256' }],
   },
 ] as const
@@ -945,6 +973,41 @@ function extractPhase3DeployInfo(calls: Array<{ to: Address; value: bigint; data
   return null
 }
 
+function extractPhase3RuntimeExpectations(params: {
+  calls: Array<{ to: Address; value: bigint; data: Hex }>
+  vault: Address
+}): {
+  expectedMinimumTotalIdle: bigint | null
+  sawDeployToStrategiesCall: boolean
+} {
+  let expectedMinimumTotalIdle: bigint | null = null
+  let sawDeployToStrategiesCall = false
+
+  for (const call of params.calls) {
+    if (call.to.toLowerCase() !== params.vault.toLowerCase()) continue
+    try {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_OVAULT_RUNTIME_CONFIG_ABI,
+        data: call.data,
+      })
+      if (decoded.functionName === 'setMinimumTotalIdle') {
+        const parsed = parseBigIntLike(decoded.args?.[0])
+        if (parsed != null) {
+          expectedMinimumTotalIdle = parsed
+        }
+        continue
+      }
+      if (decoded.functionName === 'deployToStrategies') {
+        sawDeployToStrategiesCall = true
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return { expectedMinimumTotalIdle, sawDeployToStrategiesCall }
+}
+
 function extractPhase4LaunchInfo(calls: Array<{ to: Address; value: bigint; data: Hex }>): {
   batcher: Address
   creatorToken: Address
@@ -1145,6 +1208,17 @@ async function verifyPhase3PostState(params: {
     throw new Error('phase3 verification failed: CREATOR/USDC v3 pool missing')
   }
 
+  if (info.charmWeightBps <= 0n || info.ajnaWeightBps <= 0n || info.solanaWeightBps <= 0n) {
+    throw new Error('phase3 verification failed: canonical launch requires non-zero Charm/Ajna/Solana weights')
+  }
+  const expectedTotalWeight = info.charmWeightBps + info.ajnaWeightBps + info.solanaWeightBps
+  if (expectedTotalWeight >= BPS_DENOMINATOR) {
+    throw new Error('phase3 verification failed: strategy weight sum must leave idle reserve')
+  }
+
+  const expectedStrategyCount =
+    (info.charmWeightBps > 0n ? 1 : 0) + (info.ajnaWeightBps > 0n ? 1 : 0) + (info.solanaWeightBps > 0n ? 1 : 0)
+
   const strategies = await readVaultActiveStrategies({
     publicClient: params.publicClient,
     vault: info.vault,
@@ -1152,6 +1226,17 @@ async function verifyPhase3PostState(params: {
   })
   if (strategies.length === 0) {
     throw new Error('phase3 verification failed: no active strategies found on vault')
+  }
+  if (strategies.length !== expectedStrategyCount) {
+    throw new Error(
+      `phase3 verification failed: unexpected active strategy count ${strategies.length} (expected ${expectedStrategyCount})`,
+    )
+  }
+  const observedTotalWeight = strategies.reduce((sum, entry) => sum + entry.weight, 0n)
+  if (observedTotalWeight !== expectedTotalWeight) {
+    throw new Error(
+      `phase3 verification failed: total strategy weight ${observedTotalWeight.toString()} does not match expected ${expectedTotalWeight.toString()}`,
+    )
   }
 
   const strategyDetails = await Promise.all(
@@ -1166,9 +1251,9 @@ async function verifyPhase3PostState(params: {
   if (!charm) {
     throw new Error('phase3 verification failed: charm strategy not registered on vault')
   }
-  if (charm.weight < info.charmWeightBps) {
+  if (charm.weight !== info.charmWeightBps) {
     throw new Error(
-      `phase3 verification failed: charm strategy weight ${charm.weight.toString()} below expected ${info.charmWeightBps.toString()}`,
+      `phase3 verification failed: charm strategy weight ${charm.weight.toString()} does not match expected ${info.charmWeightBps.toString()}`,
     )
   }
   if (!(await hasRuntimeCode(params.publicClient, charm.strategy))) {
@@ -1195,9 +1280,9 @@ async function verifyPhase3PostState(params: {
     if (!ajna.ajna.innerVault || !ajna.ajna.auth) {
       throw new Error('phase3 verification failed: nested ajna adapter is missing inner vault wiring')
     }
-    if (ajna.weight < info.ajnaWeightBps) {
+    if (ajna.weight !== info.ajnaWeightBps) {
       throw new Error(
-        `phase3 verification failed: ajna strategy weight ${ajna.weight.toString()} below expected ${info.ajnaWeightBps.toString()}`,
+        `phase3 verification failed: ajna strategy weight ${ajna.weight.toString()} does not match expected ${info.ajnaWeightBps.toString()}`,
       )
     }
     if (!(await hasRuntimeCode(params.publicClient, ajna.strategy))) {
@@ -1234,13 +1319,39 @@ async function verifyPhase3PostState(params: {
     if (!solana) {
       throw new Error('phase3 verification failed: solana strategy not registered on vault')
     }
-    if (solana.weight < info.solanaWeightBps) {
+    if (solana.weight !== info.solanaWeightBps) {
       throw new Error(
-        `phase3 verification failed: solana strategy weight ${solana.weight.toString()} below expected ${info.solanaWeightBps.toString()}`,
+        `phase3 verification failed: solana strategy weight ${solana.weight.toString()} does not match expected ${info.solanaWeightBps.toString()}`,
       )
     }
     if (!(await hasRuntimeCode(params.publicClient, solana.strategy))) {
       throw new Error(`phase3 verification failed: solana strategy code missing at ${solana.strategy}`)
+    }
+  }
+
+  const runtimeExpectations = extractPhase3RuntimeExpectations({
+    calls: params.phase3Calls,
+    vault: info.vault,
+  })
+  if (expectedTotalWeight > 0n && !runtimeExpectations.sawDeployToStrategiesCall) {
+    throw new Error('phase3 verification failed: deployToStrategies call missing from phase3 payload')
+  }
+  if (runtimeExpectations.expectedMinimumTotalIdle != null) {
+    const minimumTotalIdleRaw = await params.publicClient
+      .readContract({
+        address: info.vault,
+        abi: CREATOR_OVAULT_RUNTIME_VIEW_ABI,
+        functionName: 'minimumTotalIdle',
+      })
+      .catch(() => null)
+    const minimumTotalIdle = parseBigIntLike(minimumTotalIdleRaw)
+    if (minimumTotalIdle == null) {
+      throw new Error('phase3 verification failed: minimumTotalIdle is unreadable')
+    }
+    if (minimumTotalIdle !== runtimeExpectations.expectedMinimumTotalIdle) {
+      throw new Error(
+        `phase3 verification failed: minimumTotalIdle ${minimumTotalIdle.toString()} does not match expected ${runtimeExpectations.expectedMinimumTotalIdle.toString()}`,
+      )
     }
   }
 
@@ -1882,6 +1993,24 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     calls: Array<{ to: Address; value: bigint; data: Hex }>,
     attachCleanup: boolean,
   ) => {
+    if (toStep === 'phase4_sent') {
+      const deploySig = signDeployToken(rec.deployToken)
+      await ensureLaunchImageReady({
+        req,
+        sessionId: rec.id,
+        sessionAddress: getAddress(rec.sessionAddress),
+        payload,
+        phase2FinalizeCalls,
+        phase4Calls,
+        deployToken: rec.deployToken,
+        deployTokenSignature: deploySig,
+        persistPayloadPatch: async (patch) => {
+          await updateDeploySession({ id: rec.id, payloadPatch: patch })
+          Object.assign(payload, patch)
+        },
+      })
+    }
+
     const fullCalls = [...calls]
     const shouldAttachCleanup = attachCleanup && !persistSessionOwner
     if (shouldAttachCleanup) fullCalls.push((await getCtx()).removeOwnerCall)

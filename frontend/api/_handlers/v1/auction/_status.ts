@@ -27,6 +27,32 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function headerValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value.find((entry) => typeof entry === 'string' && entry.trim())?.trim() ?? ''
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function inferProtocol(host: string): 'http' | 'https' {
+  const normalized = host.toLowerCase()
+  if (
+    normalized.startsWith('localhost') ||
+    normalized.startsWith('127.0.0.1') ||
+    normalized.startsWith('0.0.0.0')
+  ) {
+    return 'http'
+  }
+  return 'https'
+}
+
+function getPublicOrigin(req: VercelRequest): string {
+  const forwardedHost = headerValue(req.headers['x-forwarded-host'] as string | string[] | undefined)
+  const host = forwardedHost || headerValue(req.headers.host as string | string[] | undefined) || 'app.4626.fun'
+  const forwardedProto = headerValue(req.headers['x-forwarded-proto'] as string | string[] | undefined)
+  const protocol =
+    forwardedProto === 'http' || forwardedProto === 'https' ? (forwardedProto as 'http' | 'https') : inferProtocol(host)
+  return `${protocol}://${host}`
+}
+
 function getStrategyParam(req: VercelRequest): string {
   const v =
     (typeof req.query?.ccaStrategy === 'string' ? req.query.ccaStrategy : typeof req.query?.address === 'string' ? req.query.address : '').trim()
@@ -95,6 +121,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const tokenAddr = typeof auctionToken === 'string' && isAddress(auctionToken) ? (auctionToken as `0x${string}`) : null
     const currencyAddr = typeof currency === 'string' && isAddressLike(currency) ? (currency as `0x${string}`) : null
+    const tokenAddressLower = tokenAddr ? tokenAddr.toLowerCase() : null
+    const tokenImagePath = tokenAddressLower ? `/api/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
+    const tokenImageUrl = tokenImagePath ? `${getPublicOrigin(req)}${tokenImagePath}` : null
     const [tokenDecimals, tokenSymbol, currencyDecimals] = await Promise.all([
       tokenAddr
         ? client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
@@ -121,9 +150,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         currencyRaised,
         currency: currencyAddr ? currencyAddr.toLowerCase() : null,
         currencyDecimals: typeof currencyDecimals === 'number' ? currencyDecimals : currencyDecimals === null ? null : Number(currencyDecimals),
-        auctionToken: tokenAddr ? tokenAddr.toLowerCase() : null,
+        auctionToken: tokenAddressLower,
         auctionTokenSymbol: typeof tokenSymbol === 'string' ? tokenSymbol : null,
         auctionTokenDecimals: typeof tokenDecimals === 'number' ? tokenDecimals : tokenDecimals === null ? null : Number(tokenDecimals),
+        auctionTokenImagePath: tokenImagePath,
+        auctionTokenImageUrl: tokenImageUrl,
       },
     })
   } catch (e: any) {
