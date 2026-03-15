@@ -18,7 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'TRADE', to: '/swap', activePrefixes: ['/swap'] },
   { label: 'EXPLORE', to: '/explore/creators', activePrefixes: ['/explore'] },
   { label: 'VAULT', to: '/deploy', activePrefixes: ['/deploy', '/status', '/vault'] },
-  { label: 'PORTFOLIO', to: '/portfolio', activePrefixes: ['/portfolio'] },
+  { label: 'WALLET', to: '/portfolio', activePrefixes: ['/portfolio'] },
 ]
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
@@ -63,52 +63,58 @@ export function VaultNavBar() {
 
       <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-brand-primary/25 to-transparent opacity-60" />
 
-      <div className="relative max-w-[1400px] mx-auto px-6 md:px-12 h-24 flex items-center justify-between">
-        <Link to={brandHref} className="flex items-center gap-4 group cursor-pointer">
+      <div className="relative max-w-[1400px] mx-auto px-4 md:px-8 lg:px-12 h-20 lg:h-24 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 lg:gap-6">
+        <Link to={brandHref} className="flex items-center gap-3 lg:gap-4 group cursor-pointer shrink-0">
           <Logo showText={false} width={40} height={40} />
           <div className="flex flex-col justify-center">
-            <span className="text-sm tracking-widest text-white font-medium transition-colors duration-300 leading-none">
+            <span className="text-[13px] lg:text-sm tracking-[0.2em] lg:tracking-widest text-white font-medium transition-colors duration-300 leading-none">
               4626
               <span className="text-transparent bg-clip-text bg-linear-to-r from-brand-primary to-brand-accent ml-0.5">.fun</span>
             </span>
-            <span className="mt-1 text-[9px] tracking-[0.22em] uppercase text-zinc-500 leading-none">
+            <span className="mt-1 hidden lg:block text-[9px] tracking-[0.22em] uppercase text-zinc-500 leading-none">
               Earn Together
             </span>
           </div>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
-          {items.map((item) => {
-            const active = isActiveLink(location, item)
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="relative py-4 px-2 group"
-              >
-                <span
-                  className={`text-[10px] tracking-[0.25em] font-medium transition-colors duration-300 relative z-10 ${
-                    active ? 'text-white' : 'text-zinc-500 group-hover:text-brand-accent'
-                  }`}
+        <nav className="hidden md:flex min-w-0 items-center justify-center">
+          <div className="flex min-w-0 items-center justify-center gap-1.5 lg:gap-4 xl:gap-8 overflow-x-auto whitespace-nowrap scrollbar-hide px-1">
+            {items.map((item) => {
+              const active = isActiveLink(location, item)
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className="relative py-3 lg:py-4 px-2 lg:px-2.5 group"
                 >
-                  {item.label}
-                </span>
+                  <span
+                    className={`text-[9px] lg:text-[10px] tracking-[0.18em] lg:tracking-[0.24em] font-medium transition-colors duration-300 relative z-10 ${
+                      active ? 'text-white' : 'text-zinc-500 group-hover:text-brand-accent'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
 
-                {active && (
-                  <motion.div
-                    layoutId="vaultNavActiveDot"
-                    className="absolute bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-brand-primary shadow-[0_0_10px_#0052FF]"
-                  />
-                )}
+                  {active && (
+                    <motion.div
+                      layoutId="vaultNavActiveDot"
+                      className="absolute bottom-1.5 lg:bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-brand-primary shadow-[0_0_10px_#0052FF]"
+                    />
+                  )}
 
-                <div className="absolute inset-0 -z-10 rounded-full bg-brand-primary/5 opacity-0 blur-lg transition-opacity duration-200 group-hover:opacity-100" />
-              </Link>
-            )
-          })}
+                  <div className="absolute inset-0 -z-10 rounded-full bg-brand-primary/5 opacity-0 blur-lg transition-opacity duration-200 group-hover:opacity-100" />
+                </Link>
+              )
+            })}
+          </div>
         </nav>
 
-        <div className="hidden md:flex items-center gap-3">
-          {showConnect ? <ConnectButton /> : null}
+        <div className="hidden md:flex items-center justify-end gap-2 shrink-0">
+          {showConnect ? (
+            <div className="origin-right md:scale-[0.9] lg:scale-100 transition-transform">
+              <ConnectButton />
+            </div>
+          ) : null}
         </div>
 
         <div className="md:hidden text-white/50 hover:text-white cursor-pointer" title="Menu">

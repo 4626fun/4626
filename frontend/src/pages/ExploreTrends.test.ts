@@ -4,8 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreTrends } from './ExploreTrends'
 
-const { useInfiniteQueryMock, fetchZoraExploreMock } = vi.hoisted(() => ({
+const { useInfiniteQueryMock, useQueryMock, fetchZoraExploreMock } = vi.hoisted(() => ({
   useInfiniteQueryMock: vi.fn(),
+  useQueryMock: vi.fn(),
   fetchZoraExploreMock: vi.fn(),
 }))
 
@@ -24,6 +25,7 @@ vi.mock('react-router-dom', () => ({
 }))
 
 vi.mock('@tanstack/react-query', () => ({
+  useQuery: useQueryMock,
   useInfiniteQuery: useInfiniteQueryMock,
 }))
 
@@ -47,6 +49,11 @@ vi.mock('@/hooks/useMigratedCoins', () => ({
 
 describe('ExploreTrends', () => {
   it('renders the trends page shell', () => {
+    useQueryMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isFetching: false,
+    })
     useInfiniteQueryMock.mockReturnValue({
       data: {
         pages: [{ edges: [], pageInfo: { hasNextPage: false, endCursor: null } }],
@@ -64,6 +71,11 @@ describe('ExploreTrends', () => {
   })
 
   it('maps default sort to TOP_VOLUME_TRENDS_24H and requests that list', async () => {
+    useQueryMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isFetching: false,
+    })
     let capturedOptions: any = null
     useInfiniteQueryMock.mockImplementation((options: any) => {
       capturedOptions = options

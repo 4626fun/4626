@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
+import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
 
@@ -41,10 +42,42 @@ function formatChange(delta: string | undefined): { positive: boolean } {
   return { positive: num >= 0 }
 }
 
-function toTimestamp(value: string | undefined): number {
-  if (!value) return 0
+function toTimestamp(value: unknown): number {
+  if (typeof value !== 'string' || !value) return 0
   const ms = Date.parse(value)
   return Number.isFinite(ms) ? ms : 0
+}
+
+function activityTimestamp(coin: ZoraCoin): number {
+  const raw = coin as unknown as { lastTradedAt?: string; lastTradeAt?: string; tradedAt?: string; createdAt?: string }
+  return (
+    toTimestamp(raw.lastTradedAt) ||
+    toTimestamp(raw.lastTradeAt) ||
+    toTimestamp(raw.tradedAt) ||
+    toTimestamp(raw.createdAt)
+  )
+}
+
+function activityDateString(coin: ZoraCoin): string | undefined {
+  const raw = coin as unknown as { lastTradedAt?: string; lastTradeAt?: string; tradedAt?: string; createdAt?: string }
+  return raw.lastTradedAt ?? raw.lastTradeAt ?? raw.tradedAt ?? raw.createdAt
+}
+
+function timeFilterWindowMs(filter: string): number | null {
+  switch (filter) {
+    case '1h':
+      return 60 * 60 * 1000
+    case '1d':
+      return 24 * 60 * 60 * 1000
+    case '1w':
+      return 7 * 24 * 60 * 60 * 1000
+    case '1m':
+      return 30 * 24 * 60 * 60 * 1000
+    case '1y':
+      return 365 * 24 * 60 * 60 * 1000
+    default:
+      return null
+  }
 }
 
 function ActivityRow({ coin }: { coin: ZoraCoin }) {
@@ -55,7 +88,7 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
   const symbol = coin.symbol || '???'
   const name = coin.name || 'Unknown'
   const volume = formatVolume(coin.volume24h)
-  const time = formatTimeAgo(coin.createdAt)
+  const time = formatTimeAgo(activityDateString(coin))
   const address = coin.address || ''
   const creatorAddress = coin.creatorAddress
 
@@ -81,9 +114,9 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
       {/* Token */}
       <div className="flex items-center gap-3 min-w-0 justify-center sm:justify-start">
         {avatarUrl ? (
-          <img src={avatarUrl} alt={name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+          <img src={avatarUrl} alt={name} className="w-8 h-8 rounded-full object-cover shrink-0" />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center shrink-0">
             <span className="text-xs font-medium text-zinc-400">{symbol.slice(0, 2).toUpperCase()}</span>
           </div>
         )}
@@ -128,7 +161,7 @@ function ActivityTableHeader() {
       <span>Type</span>
       <span>Token</span>
       <span className="text-center">Volume (24h)</span>
-      <span className="text-center">Time</span>
+      <span className="text-center">Time ↓</span>
       <span>Creator</span>
       <span></span>
     </div>
@@ -205,20 +238,27 @@ export function ExploreTransactions() {
         }
       }
     }
-    return [...items].sort((a, b) => toTimestamp(b.createdAt) - toTimestamp(a.createdAt))
+    return [...items].sort((a, b) => activityTimestamp(b) - activityTimestamp(a))
   }, [data])
 
   // Filter based on search query
   const filteredActivity = useMemo(() => {
-    if (!searchQuery.trim()) return allActivity
+    const windowMs = timeFilterWindowMs(currentTimeFilter)
+    const newestActivityMs = allActivity.length > 0 ? activityTimestamp(allActivity[0]) : 0
+    const cutoff = windowMs != null && newestActivityMs > 0 ? newestActivityMs - windowMs : null
+    const timeScoped = cutoff != null
+      ? allActivity.filter((coin) => activityTimestamp(coin) >= cutoff)
+      : allActivity
+
+    if (!searchQuery.trim()) return timeScoped
     const query = searchQuery.toLowerCase()
-    return allActivity.filter((coin) => {
+    return timeScoped.filter((coin) => {
       const name = (coin.name || '').toLowerCase()
       const symbol = (coin.symbol || '').toLowerCase()
       const address = (coin.address || '').toLowerCase()
       return name.includes(query) || symbol.includes(query) || address.includes(query)
     })
-  }, [allActivity, searchQuery])
+  }, [allActivity, currentTimeFilter, searchQuery])
 
   // Handle infinite scroll
   const handleScroll = useCallback(() => {
@@ -265,6 +305,8 @@ export function ExploreTransactions() {
           <p className="text-zinc-400 text-sm">
             Recently traded coins across the Zora ecosystem.
           </p>
+
+          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
         </motion.div>
 
         {/* Navigation & Filters */}

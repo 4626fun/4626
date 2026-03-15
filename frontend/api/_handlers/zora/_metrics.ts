@@ -30,6 +30,10 @@ type MetricsResponse = {
     partial: boolean
     sampledCreators: number
   }
+  history30d: Array<{
+    date: string
+    creatorCoinsMarketCapUsd: number | null
+  }>
 }
 
 const METRICS_CACHE_TTL_MS = 60 * 1000
@@ -64,6 +68,31 @@ function parseSyncStatus(v: unknown): SyncStatus {
   const s = typeof v === 'string' ? v : ''
   if (s === 'running' || s === 'error') return s
   return 'idle'
+}
+
+function mapHistoryRows(rows: any[]): Array<{ date: string; creatorCoinsMarketCapUsd: number | null }> {
+  return (rows ?? [])
+    .map((row) => {
+      const dayRaw = typeof row.day === 'string' ? row.day : String(row.day ?? '')
+      const dayMs = Date.parse(`${dayRaw}T00:00:00.000Z`)
+      if (!Number.isFinite(dayMs)) return null
+      return {
+        date: new Date(dayMs).toISOString(),
+        creatorCoinsMarketCapUsd: toNumber(row.creator_coins_market_cap_usd),
+      }
+    })
+    .filter((entry): entry is { date: string; creatorCoinsMarketCapUsd: number | null } => entry != null)
+}
+
+function hasMeaningfulHistory(points: Array<{ date: string; creatorCoinsMarketCapUsd: number | null }>): boolean {
+  if (points.length < 7) return false
+  const unique = new Set<number>()
+  for (const point of points) {
+    if (typeof point.creatorCoinsMarketCapUsd !== 'number' || !Number.isFinite(point.creatorCoinsMarketCapUsd)) continue
+    unique.add(Number(point.creatorCoinsMarketCapUsd.toFixed(2)))
+    if (unique.size > 1) return true
+  }
+  return false
 }
 
 function errorSignature(err: unknown): string {
@@ -122,6 +151,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
         partial: true,
         sampledCreators: 0,
       },
+      history30d: [],
     }
   }
 
@@ -177,6 +207,89 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const creatorCoinsVolume24hUsd = toNumber(agg.volume_24h_usd)
   const creatorCoinsFees24hUsd = toNumber(agg.fees_24h_usd)
 
+  // Persist one daily canonical snapshot and return the latest 30-day market-cap series.
+  // This keeps the dashboard trend independent from client-side sort/view state.
+  await db.sql`
+    INSERT INTO creator_metrics_daily_snapshots (
+      day,
+      creators_total,
+      creator_coins_market_cap_usd,
+      creator_coins_volume_24h_usd,
+      creator_coins_fees_24h_usd,
+      updated_at
+    )
+    VALUES (
+      CURRENT_DATE,
+      ${creatorsTotal},
+      ${creatorCoinsMarketCapUsd},
+      ${creatorCoinsVolume24hUsd},
+      ${creatorCoinsFees24hUsd},
+      NOW()
+    )
+    ON CONFLICT (day) DO UPDATE SET
+      creators_total = EXCLUDED.creators_total,
+      creator_coins_market_cap_usd = EXCLUDED.creator_coins_market_cap_usd,
+      creator_coins_volume_24h_usd = EXCLUDED.creator_coins_volume_24h_usd,
+      creator_coins_fees_24h_usd = EXCLUDED.creator_coins_fees_24h_usd,
+      updated_at = NOW();
+  `
+
+  const historyResult = await db.sql`
+    SELECT day::text AS day, creator_coins_market_cap_usd
+    FROM creator_metrics_daily_snapshots
+    WHERE day >= CURRENT_DATE - INTERVAL '29 days'
+    ORDER BY day ASC;
+  `
+  const snapshotHistory30d = mapHistoryRows(historyResult.rows ?? [])
+
+  // Bootstrap a non-flat, programmatic 30-day trend when daily snapshots are sparse.
+  // This uses creator coin creation dates + current market-cap state to derive a
+  // cumulative day-by-day series until enough canonical daily snapshots exist.
+  const derivedHistoryResult = await db.sql`
+    WITH bounds AS (
+      SELECT (CURRENT_DATE - INTERVAL '29 days')::date AS start_day
+    ),
+    days AS (
+      SELECT generate_series((SELECT start_day FROM bounds), CURRENT_DATE, INTERVAL '1 day')::date AS day
+    ),
+    base AS (
+      SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS base_market_cap
+      FROM creator_coins
+      WHERE chain_id = 8453
+        AND market_cap_usd IS NOT NULL
+        AND (created_at IS NULL OR created_at::date < (SELECT start_day FROM bounds))
+    ),
+    by_day AS (
+      SELECT created_at::date AS day, COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS day_market_cap
+      FROM creator_coins
+      WHERE chain_id = 8453
+        AND market_cap_usd IS NOT NULL
+        AND created_at::date >= (SELECT start_day FROM bounds)
+      GROUP BY created_at::date
+    ),
+    series AS (
+      SELECT
+        d.day,
+        (
+          (SELECT base_market_cap FROM base)
+          + COALESCE(
+              SUM(COALESCE(b.day_market_cap, 0)) OVER (
+                ORDER BY d.day
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+              ),
+              0
+            )
+        )::NUMERIC AS creator_coins_market_cap_usd
+      FROM days d
+      LEFT JOIN by_day b ON b.day = d.day
+    )
+    SELECT day::text AS day, creator_coins_market_cap_usd
+    FROM series
+    ORDER BY day ASC;
+  `
+  const derivedHistory30d = mapHistoryRows(derivedHistoryResult.rows ?? [])
+  const history30d = hasMeaningfulHistory(snapshotHistory30d) ? snapshotHistory30d : derivedHistory30d
+
   return {
     scope,
     updatedAt: lastFullSyncAt ?? lastSyncFinishedAt ?? new Date().toISOString(),
@@ -202,6 +315,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       partial: !exact,
       sampledCreators,
     },
+    history30d,
   }
 }
 

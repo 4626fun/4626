@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
+import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
+import { getExploreColumns } from '@/components/explore/tableColumns'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
@@ -23,6 +26,9 @@ export function ExploreTrends() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
 
   const currentTimeFilter = searchParams.get('time') || '1d'
   const currentSort = searchParams.get('sort') || 'volume'
@@ -101,6 +107,37 @@ export function ExploreTrends() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
 
+  const updateHorizontalControls = useCallback((el: HTMLElement | null) => {
+    if (!el) return
+    const overflow = el.scrollWidth > el.clientWidth + 1
+    const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+    const atLeftEdge = el.scrollLeft <= 1
+    const atRightEdge = el.scrollLeft >= maxLeft - 1
+    setHasHorizontalOverflow(overflow)
+    setCanScrollLeft(overflow && !atLeftEdge)
+    setCanScrollRight(overflow && !atRightEdge)
+  }, [])
+
+  useEffect(() => {
+    const body = document.getElementById('explore-trends-body')
+    if (!body) return
+
+    const updateHint = () => updateHorizontalControls(body)
+    updateHint()
+    window.addEventListener('resize', updateHint)
+
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(updateHint)
+      observer.observe(body)
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateHint)
+      observer?.disconnect()
+    }
+  }, [filteredCoins.length, currentTimeFilter, updateHorizontalControls])
+
   const handleTimeFilterChange = (filter: string) => {
     const newParams = new URLSearchParams(searchParams)
     newParams.set('time', filter)
@@ -112,6 +149,44 @@ export function ExploreTrends() {
     newParams.set('sort', sort)
     setSearchParams(newParams, { replace: true })
   }
+
+  const columnScrollStops = useMemo(() => {
+    const columns = getExploreColumns({ variant: 'content', timeframe: currentTimeFilter })
+    const nonStickyWidths = columns.filter((c) => !c.sticky).map((c) => c.widthPx)
+    const stops: number[] = [0]
+    let acc = 0
+    for (const width of nonStickyWidths) {
+      acc += width
+      stops.push(acc)
+    }
+    return stops
+  }, [currentTimeFilter])
+
+  const handleHorizontalArrowClick = (direction: 'left' | 'right') => {
+    const body = document.getElementById('explore-trends-body')
+    if (!body) return
+    const maxLeft = Math.max(0, body.scrollWidth - body.clientWidth)
+    const currentLeft = body.scrollLeft
+
+    if (direction === 'right') {
+      const nextStop = columnScrollStops.find((stop) => stop > currentLeft + 1) ?? maxLeft
+      body.scrollTo({ left: Math.min(maxLeft, nextStop), behavior: 'smooth' })
+      return
+    }
+
+    let prevStop = 0
+    for (let i = columnScrollStops.length - 1; i >= 0; i -= 1) {
+      const stop = columnScrollStops[i]
+      if (stop < currentLeft - 1) {
+        prevStop = stop
+        break
+      }
+    }
+    body.scrollTo({ left: Math.max(0, prevStop), behavior: 'smooth' })
+  }
+
+  const arrowButtonClass =
+    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-300/30 bg-blue-500/15 backdrop-blur-md text-blue-100 shadow-[0_10px_24px_-16px_rgba(37,99,235,0.9)] transition-all duration-200 hover:-translate-y-[1px] hover:border-blue-200/60 hover:bg-blue-500/25 hover:text-white hover:shadow-[0_14px_26px_-14px_rgba(59,130,246,0.95)] active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/40'
 
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
@@ -129,6 +204,8 @@ export function ExploreTrends() {
           <p className="text-zinc-400 text-[13px] sm:text-sm">
             Trend Coins ranked by trend velocity, volume, and market cap.
           </p>
+
+          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
         </motion.div>
 
         {/* Navigation & Filters */}
@@ -153,7 +230,7 @@ export function ExploreTrends() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+          className="relative rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
         >
           {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
           <div className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
@@ -164,6 +241,7 @@ export function ExploreTrends() {
               onScroll={(e) => {
                 const body = document.getElementById('explore-trends-body')
                 const scrolled = e.currentTarget.scrollLeft > 0
+                updateHorizontalControls(e.currentTarget)
                 e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
                 if (body) {
                   body.scrollLeft = e.currentTarget.scrollLeft
@@ -177,6 +255,32 @@ export function ExploreTrends() {
             </div>
           </div>
 
+          {hasHorizontalOverflow && canScrollLeft ? (
+            <div className="absolute left-2 top-10 z-60">
+              <button
+                type="button"
+                onClick={() => handleHorizontalArrowClick('left')}
+                aria-label="Scroll trends table left"
+                className={arrowButtonClass}
+              >
+                <ChevronLeft size={14} strokeWidth={2.4} aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+
+          {hasHorizontalOverflow && canScrollRight ? (
+            <div className="absolute right-2 top-10 z-60">
+              <button
+                type="button"
+                onClick={() => handleHorizontalArrowClick('right')}
+                aria-label="Scroll trends table right"
+                className={arrowButtonClass}
+              >
+                <ChevronRight size={14} strokeWidth={2.4} aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+
           {/* Table body with synced horizontal scroll */}
           <div
             className="overflow-x-auto scrollbar-hide"
@@ -185,6 +289,7 @@ export function ExploreTrends() {
             onScroll={(e) => {
               const header = document.getElementById('explore-trends-header')
               const scrolled = e.currentTarget.scrollLeft > 0
+              updateHorizontalControls(e.currentTarget)
               if (header) {
                 header.scrollLeft = e.currentTarget.scrollLeft
                 header.dataset.scrolled = scrolled ? '1' : '0'

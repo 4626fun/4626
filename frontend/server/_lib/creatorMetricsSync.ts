@@ -258,6 +258,18 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
   await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
 
   await db.sql`
+    CREATE TABLE IF NOT EXISTS creator_metrics_daily_snapshots (
+      day DATE PRIMARY KEY,
+      creators_total BIGINT,
+      creator_coins_market_cap_usd NUMERIC(38, 12),
+      creator_coins_volume_24h_usd NUMERIC(38, 12),
+      creator_coins_fees_24h_usd NUMERIC(38, 12),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `
+  await db.sql`CREATE INDEX IF NOT EXISTS creator_metrics_daily_snapshots_day_idx ON creator_metrics_daily_snapshots (day DESC);`
+
+  await db.sql`
     DO $$
     BEGIN
       IF NOT EXISTS (

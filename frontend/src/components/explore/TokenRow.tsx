@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { EXPLORE_TABLE_GROUPS, getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
+import { useIdentity } from '@/hooks/useIdentity'
 
 type TokenRowProps = {
   rank: number
@@ -108,6 +109,23 @@ function shortAddress(addr: string | undefined): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+function IdentityAddressChip({ address }: { address: string }) {
+  const identity = useIdentity(address)
+  const resolved = identity.source !== 'address'
+  const label = resolved ? identity.displayName : shortAddress(address)
+  const title = resolved
+    ? `${identity.displayName} · ${address}`
+    : address
+  return (
+    <span
+      className={`rounded-full border border-white/10 bg-white/3 px-2 py-1 text-[10px] ${resolved ? 'text-zinc-100' : 'font-mono text-zinc-200'}`}
+      title={title}
+    >
+      {label}
+    </span>
+  )
+}
+
 function formatDeltaPercentValue(value: number): { text: string; positive: boolean } {
   if (!Number.isFinite(value)) return { text: '-', positive: true }
   const positive = value >= 0
@@ -195,6 +213,18 @@ export function TokenRow({
   const payoutTo = coin.payoutRecipientAddress
   const marketCap = coin.marketCap
   const change = formatMarketCapDeltaPercent(coin.marketCapDelta24h, marketCap)
+  const payoutIdentity = useIdentity(payoutTo ?? null)
+  const payoutResolved = payoutIdentity.source !== 'address'
+  const payoutDisplay = payoutTo
+    ? payoutResolved
+      ? payoutIdentity.displayName
+      : shortAddress(payoutTo)
+    : '-'
+  const payoutTitle = payoutTo
+    ? payoutResolved
+      ? `${payoutIdentity.displayName} · ${payoutTo}`
+      : payoutTo
+    : undefined
   
   // Determine fee structure (checks migration status first, then creation date)
   const { isV4, isMigrated, feeRates } = getCoinFeeStatus(coin.address, coin.createdAt, migratedCoins)
@@ -305,14 +335,14 @@ export function TokenRow({
           style={{ left: stickyLeft.name }}
         >
           <div
-            className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
+            className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
             aria-hidden="true"
           />
           <div className="flex items-center gap-2.5 min-w-0 justify-start">
             {avatarUrl ? (
-              <img src={avatarUrl} alt={name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover flex-shrink-0" />
+              <img src={avatarUrl} alt={name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shrink-0" />
             ) : (
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center shrink-0">
                 <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
               </div>
             )}
@@ -334,9 +364,6 @@ export function TokenRow({
         {/* Holders */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
-        {/* Volume */}
-        <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volume)}</span>
-
         {/* Market cap */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(marketCap)}</span>
 
@@ -345,10 +372,13 @@ export function TokenRow({
           {change.text}
         </span>
 
+        {/* Volume */}
+        <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volume)}</span>
+
         {/* Fee % */}
         <div className="px-3 py-2 text-center">
           <span
-            className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+            className="inline-flex items-center rounded-md border border-white/10 bg-white/3 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
             title={feeTooltip}
           >
             {isV4 ? '1%' : '3%'}
@@ -377,8 +407,11 @@ export function TokenRow({
         </div>
 
         {/* Payout To */}
-        <span className="text-zinc-400 font-mono text-[10px] truncate px-3 py-2 text-center" title={payoutTo || undefined}>
-          {shortAddress(payoutTo)}
+        <span
+          className={`text-[10px] truncate px-3 py-2 text-center ${payoutResolved ? 'text-zinc-200' : 'font-mono text-zinc-400'}`}
+          title={payoutTitle}
+        >
+          {payoutDisplay}
         </span>
       </Link>
       {isExpanded ? (
@@ -427,12 +460,7 @@ export function TokenRow({
             ) : cswOwners.owners.length > 0 ? (
               <div className="mt-1 flex flex-wrap gap-2">
                 {cswOwners.owners.map((owner) => (
-                  <span
-                    key={owner}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-mono text-zinc-200"
-                  >
-                    {shortAddress(owner)}
-                  </span>
+                  <IdentityAddressChip key={owner} address={owner} />
                 ))}
               </div>
             ) : (
@@ -533,7 +561,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
               {c.id === 'name' ? (
                 <>
                   <div
-                    className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
+                    className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
                     aria-hidden="true"
                   />
                   <span className="explore-token-header-label">{label}</span>

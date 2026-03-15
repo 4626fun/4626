@@ -1,12 +1,57 @@
 export type HostMode = 'app' | 'marketing'
 
+type LoopbackOriginResolutionInput = {
+  configuredOrigin: string
+  currentOrigin: string
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const h = String(hostname || '').trim().toLowerCase()
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
+}
+
+/**
+ * Keep local dev redirects on the active loopback origin when only the port is stale.
+ * This avoids cross-origin bounces like localhost:5173 -> localhost:5174 when only one
+ * Vite server is running.
+ */
+export function resolveLoopbackOriginForCurrentWindow(input: LoopbackOriginResolutionInput): string {
+  try {
+    const configured = new URL(input.configuredOrigin)
+    const current = new URL(input.currentOrigin)
+
+    if (!isLoopbackHostname(configured.hostname) || !isLoopbackHostname(current.hostname)) {
+      return input.configuredOrigin
+    }
+
+    const sameHost = configured.hostname === current.hostname
+    if (!sameHost) return input.configuredOrigin
+
+    const sameScheme = configured.protocol === current.protocol
+    const samePort = configured.port === current.port
+    if (sameScheme && samePort) return input.configuredOrigin
+
+    return current.origin
+  } catch {
+    return input.configuredOrigin
+  }
+}
+
+function resolveConfiguredOrigin(rawOrigin: string): string {
+  if (typeof window === 'undefined') return rawOrigin
+  return resolveLoopbackOriginForCurrentWindow({
+    configuredOrigin: rawOrigin,
+    currentOrigin: window.location.origin,
+  })
+}
+
 /** Canonical marketing/waitlist domain origin. */
 export const MARKETING_ORIGIN =
-  (import.meta.env.VITE_MARKETING_ORIGIN as string)?.trim() || 'https://4626.fun'
+  resolveConfiguredOrigin((import.meta.env.VITE_MARKETING_ORIGIN as string)?.trim() || 'https://4626.fun')
 
 /** Canonical app domain origin (post-acceptance). */
 export const APP_ORIGIN =
-  (import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun'
+  resolveConfiguredOrigin((import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun')
 
 /**
  * Optional explicit base URL for waitlist referral links.

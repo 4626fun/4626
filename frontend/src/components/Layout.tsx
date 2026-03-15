@@ -19,7 +19,7 @@ const navItems: MobileNavItem[] = [
   { path: '/swap', icon: ArrowLeftRight, label: 'Trade', activePrefixes: ['/swap'] },
   { path: '/explore/creators', icon: Search, label: 'Explore', activePrefixes: ['/explore'] },
   { path: '/deploy', icon: Vault, label: 'Vault', activePrefixes: ['/deploy', '/status', '/vault'] },
-  { path: '/portfolio', icon: Wallet, label: 'Portfolio', activePrefixes: ['/portfolio'] },
+  { path: '/portfolio', icon: Wallet, label: 'Wallet', activePrefixes: ['/portfolio'] },
 ]
 
 const navItemsPublic: MobileNavItem[] = [

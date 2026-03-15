@@ -1,0 +1,130 @@
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+
+import { apiFetch } from '@/lib/apiBase'
+import { ExploreMetricSparkline, type ExploreMetricHistoryPoint } from './ExploreMetricSparkline'
+
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+
+type ExploreMetrics = {
+  scope: 'creators'
+  updatedAt: string
+  exact: boolean
+  syncStatus: 'idle' | 'running' | 'error'
+  totals: {
+    creatorsTotal: number | null
+    creatorsNew24h: number | null
+    creatorCoinsMarketCapUsd: number | null
+    creatorCoinsVolume24hUsd: number | null
+    creatorCoinsFees24hUsd: number | null
+  }
+  history30d: ExploreMetricHistoryPoint[]
+}
+
+type ExploreMetricsDashboardProps = {
+  className?: string
+}
+
+async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
+  try {
+    const res = await apiFetch('/api/zora/metrics?scope=creators', { method: 'GET' })
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreMetrics | null> | null
+    if (res.ok && json?.success) return json.data ?? null
+  } catch {
+    // Non-blocking metrics card.
+  }
+  return null
+}
+
+function formatCompactUsd(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return '—'
+  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(2)}B`
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(2)}K`
+  return `$${v.toFixed(2)}`
+}
+
+function joinClasses(...parts: Array<string | undefined | null | false>): string {
+  return parts.filter(Boolean).join(' ')
+}
+
+export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardProps) {
+  const metricsQuery = useQuery({
+    queryKey: ['explore', 'creators', 'metrics', 'shared-dashboard'],
+    queryFn: fetchExploreCreatorsMetrics,
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: true,
+    retry: 1,
+  })
+
+  const totals = metricsQuery.data?.totals
+  const updatedAt = metricsQuery.data?.updatedAt ?? null
+  const status = metricsQuery.data?.syncStatus ?? 'idle'
+  const exact = metricsQuery.data?.exact === true
+
+  const statusLine = useMemo(() => {
+    if (!updatedAt) return 'Loading canonical market totals...'
+    const time = new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (status === 'error') return `Metrics refresh error — showing last known values (${time})`
+    if (status === 'running' || !exact) return `Estimated totals refreshed ${time}`
+    return `Canonical totals refreshed ${time}`
+  }, [exact, status, updatedAt])
+
+  const creatorsTotal = totals?.creatorsTotal
+  const creatorsNew24h = totals?.creatorsNew24h
+  const marketCap = totals?.creatorCoinsMarketCapUsd
+  const volume24h = totals?.creatorCoinsVolume24hUsd
+  const fees24h = totals?.creatorCoinsFees24hUsd
+
+  return (
+    <div className={joinClasses('space-y-2', className)}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">Creators</div>
+          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
+            {creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
+          </div>
+          <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+            {creatorsNew24h != null ? `+${creatorsNew24h.toLocaleString()} today` : 'Tracking newly created creators'}
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-blue-300/20 bg-blue-950/10 px-3 sm:px-4 py-2.5 sm:py-3">
+          <ExploreMetricSparkline history={metricsQuery.data?.history30d} fallbackValue={marketCap} />
+          <div className="relative z-10">
+            <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">Market Cap</div>
+            <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
+              {formatCompactUsd(marketCap)}
+            </div>
+            <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+              30-day trend overlay (hover for daily value)
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
+          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
+            {formatCompactUsd(volume24h)}
+          </div>
+          <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+            24H trade volume across creator coins
+          </div>
+        </div>
+
+        <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
+          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
+            {formatCompactUsd(fees24h)}
+          </div>
+          <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+            24H fees from creator-coin trading
+          </div>
+        </div>
+      </div>
+
+      <div className="text-right text-[11px] text-zinc-500">{statusLine}</div>
+    </div>
+  )
+}

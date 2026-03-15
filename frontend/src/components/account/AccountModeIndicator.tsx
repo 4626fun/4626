@@ -73,6 +73,8 @@ export function AccountModeIndicator() {
     account.cswAddress ||
     (account.activeAccountType === 'SMART_WALLET' ? account.activeAccount || undefined : undefined)
   const atomicBadge = formatAtomicBadge(account.capabilities.atomicStatus)
+  const hasSignerChip = Boolean(account.signerAddress)
+  const hasActiveChip = Boolean(account.activeAccount)
 
   const handleModeClick = useCallback(
     async (mode: 'EOA' | 'SMART_WALLET') => {
@@ -96,54 +98,61 @@ export function AccountModeIndicator() {
 
   return (
     <div className="border-b border-vault-border/60 bg-black/45">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 min-h-[42px]">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-12 py-2.5 min-h-[42px]">
         <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-[11px] scrollbar-hide">
           {!showModeToggle ? (
             <>
-              <button
-                type="button"
-                onClick={() => void copyAddress(account.signerAddress)}
-                disabled={!account.signerAddress}
-                className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 disabled:cursor-default enabled:cursor-copy enabled:hover:text-white"
-                title={
-                  account.signerType === 'SMART_WALLET'
-                    ? `Smart Wallet ${shortAddress(account.signerAddress)} (click to copy)`
-                    : account.signerType === 'EOA'
-                      ? `User Wallet ${shortAddress(account.signerAddress)} (click to copy)`
-                      : 'Not connected'
-                }
-              >
-                <WalletProviderIcon
-                  provider={account.signerType === 'SMART_WALLET' ? 'coinbase' : undefined}
-                  walletType={account.signerType === 'SMART_WALLET' ? 'smart_wallet' : 'embedded_eoa'}
-                  connectorId={connector?.id}
-                  isCanonicalSmartWallet={account.signerType === 'SMART_WALLET'}
-                  size={12}
-                />
-                {account.signerType ? shortAddress(account.signerAddress) : '—'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void copyAddress(account.activeAccount)}
-                disabled={!account.activeAccount}
-                className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 disabled:cursor-default enabled:cursor-copy enabled:hover:text-white"
-                title={
-                  account.activeAccountType === 'SMART_WALLET'
-                    ? `Smart Wallet ${shortAddress(account.activeAccount)} (click to copy)`
-                    : account.activeAccountType === 'EOA'
-                      ? `User Wallet ${shortAddress(account.activeAccount)} (click to copy)`
-                      : 'Unavailable'
-                }
-              >
-                <WalletProviderIcon
-                  provider={account.activeAccountType === 'SMART_WALLET' ? 'coinbase' : undefined}
-                  walletType={account.activeAccountType === 'SMART_WALLET' ? 'smart_wallet' : 'embedded_eoa'}
-                  connectorId={connector?.id}
-                  isCanonicalSmartWallet={account.activeAccountType === 'SMART_WALLET'}
-                  size={12}
-                />
-                {account.activeAccountType !== 'UNKNOWN' ? shortAddress(account.activeAccount) : '—'}
-              </button>
+              {hasSignerChip ? (
+                <button
+                  type="button"
+                  onClick={() => void copyAddress(account.signerAddress)}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 cursor-copy hover:text-white"
+                  title={
+                    account.signerType === 'SMART_WALLET'
+                      ? `Smart Wallet ${shortAddress(account.signerAddress)} (click to copy)`
+                      : account.signerType === 'EOA'
+                        ? `User Wallet ${shortAddress(account.signerAddress)} (click to copy)`
+                        : 'Not connected'
+                  }
+                >
+                  <WalletProviderIcon
+                    provider={account.signerType === 'SMART_WALLET' ? 'coinbase' : undefined}
+                    walletType={account.signerType === 'SMART_WALLET' ? 'smart_wallet' : 'embedded_eoa'}
+                    connectorId={connector?.id}
+                    isCanonicalSmartWallet={account.signerType === 'SMART_WALLET'}
+                    size={12}
+                  />
+                  {account.signerType ? shortAddress(account.signerAddress) : '—'}
+                </button>
+              ) : null}
+              {hasActiveChip ? (
+                <button
+                  type="button"
+                  onClick={() => void copyAddress(account.activeAccount)}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 cursor-copy hover:text-white"
+                  title={
+                    account.activeAccountType === 'SMART_WALLET'
+                      ? `Smart Wallet ${shortAddress(account.activeAccount)} (click to copy)`
+                      : account.activeAccountType === 'EOA'
+                        ? `User Wallet ${shortAddress(account.activeAccount)} (click to copy)`
+                        : 'Unavailable'
+                  }
+                >
+                  <WalletProviderIcon
+                    provider={account.activeAccountType === 'SMART_WALLET' ? 'coinbase' : undefined}
+                    walletType={account.activeAccountType === 'SMART_WALLET' ? 'smart_wallet' : 'embedded_eoa'}
+                    connectorId={connector?.id}
+                    isCanonicalSmartWallet={account.activeAccountType === 'SMART_WALLET'}
+                    size={12}
+                  />
+                  {shortAddress(account.activeAccount)}
+                </button>
+              ) : null}
+              {!hasSignerChip && !hasActiveChip ? (
+                <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-500">
+                  Wallet unavailable
+                </span>
+              ) : null}
             </>
           ) : null}
           <span

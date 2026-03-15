@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { EXPLORE_TABLE_GROUPS, getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
+import { useIdentity } from '@/hooks/useIdentity'
 
 type PoolRowProps = {
   rank: number
@@ -175,6 +176,18 @@ export function PoolRow({
   const payoutTo = coin.payoutRecipientAddress
   const marketCap = coin.marketCap
   const change = formatMarketCapDeltaPercent(coin.marketCapDelta24h, marketCap)
+  const payoutIdentity = useIdentity(payoutTo ?? null)
+  const payoutResolved = payoutIdentity.source !== 'address'
+  const payoutDisplay = payoutTo
+    ? payoutResolved
+      ? payoutIdentity.displayName
+      : shortAddress(payoutTo)
+    : '-'
+  const payoutTitle = payoutTo
+    ? payoutResolved
+      ? `${payoutIdentity.displayName} · ${payoutTo}`
+      : payoutTo
+    : undefined
 
   // Determine fee structure (checks migration status first, then creation date)
   const { isV4, isMigrated, feeRates } = getCoinFeeStatus(coin.address, coin.createdAt, migratedCoins)
@@ -221,14 +234,14 @@ export function PoolRow({
       {/* Content Name */}
       <div className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`} style={{ left: stickyLeft.name }}>
         <div
-          className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
+          className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
           aria-hidden="true"
         />
         <div className="flex items-center gap-2 min-w-0 justify-start">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+            <img src={avatarUrl} alt={name} className="w-7 h-7 rounded-lg object-cover shrink-0" />
           ) : (
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center shrink-0">
               <span className="text-[10px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
             </div>
           )}
@@ -242,9 +255,6 @@ export function PoolRow({
       {/* Holders */}
       <span className="text-white tabular-nums px-3 py-2 text-right">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
-      {/* Volume */}
-      <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volume)}</span>
-
       {/* Market cap */}
       <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(marketCap)}</span>
 
@@ -253,10 +263,13 @@ export function PoolRow({
         {change.text}
       </span>
 
+      {/* Volume */}
+      <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volume)}</span>
+
       {/* Fee % */}
       <div className="px-3 py-2 text-center">
         <span
-          className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+          className="inline-flex items-center rounded-md border border-white/10 bg-white/3 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
           title={feeTooltip}
         >
           {isV4 ? '1%' : '3%'}
@@ -285,8 +298,11 @@ export function PoolRow({
       </div>
 
       {/* Payout To */}
-      <span className="text-zinc-400 font-mono text-[10px] truncate px-3 py-2 text-center" title={payoutTo || undefined}>
-        {shortAddress(payoutTo)}
+      <span
+        className={`text-[10px] truncate px-3 py-2 text-center ${payoutResolved ? 'text-zinc-200' : 'font-mono text-zinc-400'}`}
+        title={payoutTitle}
+      >
+        {payoutDisplay}
       </span>
     </Link>
     {isExpanded ? (
@@ -416,7 +432,7 @@ export function PoolTableHeader({ timeframe = '1d', currentSort, onSortChange }:
             >
               {c.id === 'name' ? (
                 <div
-                  className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
+                  className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
                   aria-hidden="true"
                 />
               ) : null}

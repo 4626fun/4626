@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
+import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
@@ -134,6 +135,8 @@ export function ExploreContent() {
           <p className="text-zinc-400 text-[13px] sm:text-sm">
             Content Coins ranked by volume, market cap, and more.
           </p>
+
+          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
         </motion.div>
 
         {/* Navigation & Filters */}
