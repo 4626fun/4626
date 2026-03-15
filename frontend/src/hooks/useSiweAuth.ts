@@ -28,6 +28,13 @@ const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 
 type PrivySessionResponse = { address: string; sessionToken: string; privyUserId?: string } | null
 
+/**
+ * Explicit user-initiated Privy sign-in should prefer identity-first methods.
+ * Wallet-first in this path can accidentally create a new Privy identity and
+ * then collide with an existing email-bound account.
+ */
+export const PRIVY_INTERACTIVE_LOGIN_METHODS = ['email', 'google', 'twitter', 'telegram', 'wallet'] as const
+
 // Prevent request storms:
 // `useSiweAuth()` can be mounted in multiple places; without a shared guard each instance can auto-bridge.
 let lastPrivyBridgeAttemptAt = 0
@@ -381,7 +388,7 @@ export function useSiweAuth() {
         if (privyReady && !privyAuthenticated && typeof login === 'function') {
           try {
             if (method === 'privy') {
-              await login({ loginMethods: ['wallet', 'email', 'google', 'apple', 'telegram'] })
+              await login({ loginMethods: [...PRIVY_INTERACTIVE_LOGIN_METHODS] })
             } else {
               // Auto path stays wallet-first to keep the primary onboarding flow one-tap.
               await login({ loginMethods: ['wallet'] })

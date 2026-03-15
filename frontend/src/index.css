@@ -349,6 +349,34 @@
   .particles {
     @apply absolute inset-0 pointer-events-none opacity-30;
   }
+
+  .guard-loading-bar {
+    position: relative;
+    overflow: hidden;
+    background: rgb(var(--vault-card-raised) / 0.72);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .guard-loading-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.06) 35%,
+      rgba(0, 82, 255, 0.36) 50%,
+      rgba(255, 255, 255, 0.06) 65%,
+      transparent 100%
+    );
+    background-size: 210% 100%;
+    animation: guard-shimmer 2.2s linear infinite;
+  }
+
+  .guard-loading-core {
+    animation: guard-core-breathe 1.9s ease-in-out infinite;
+    box-shadow: 0 0 16px rgba(0, 82, 255, 0.5);
+  }
 }
 
 /* Cinematic Animations - 140 BPM timing */
@@ -382,6 +410,27 @@
   50% {
     transform: translate(10px, -10px);
     opacity: 0.4;
+  }
+}
+
+@keyframes guard-shimmer {
+  0% {
+    background-position: 180% 0;
+  }
+  100% {
+    background-position: -180% 0;
+  }
+}
+
+@keyframes guard-core-breathe {
+  0%,
+  100% {
+    opacity: 0.52;
+    transform: scale(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -491,6 +540,60 @@ body {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Swap amount slider: explicit blue thumb + neutral grey track */
+.bv-amount-slider {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.bv-amount-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.bv-amount-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 9999px;
+  background: rgb(var(--brand-primary));
+  border: 1px solid rgb(255 255 255 / 0.68);
+  box-shadow: 0 0 0 3px rgb(var(--brand-primary) / 0.18);
+}
+
+.bv-amount-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.bv-amount-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgb(var(--brand-primary) / 0.9);
+}
+
+.bv-amount-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: rgb(var(--brand-primary));
+  border: 1px solid rgb(255 255 255 / 0.68);
+  box-shadow: 0 0 0 3px rgb(var(--brand-primary) / 0.18);
+}
+
+/* Shared small-value text style used for balance/slider/detail metadata */
+.app-meta-value {
+  font-size: 11px;
+  line-height: 1;
+  color: rgb(var(--vault-muted));
+  font-weight: 400;
+  font-family: inherit;
 }
 
 /* Tablet/mobile: keep Explore tables scrollable (show all columns) */

@@ -53,7 +53,14 @@ export function Layout() {
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const showTopNavBar = hostMode !== 'marketing'
-  const showAccountMode = hostMode !== 'marketing' && !publicMode
+  const showAccountMode =
+    hostMode !== 'marketing' &&
+    !publicMode &&
+    (
+      location.pathname.startsWith('/deploy') ||
+      location.pathname.startsWith('/accounts') ||
+      location.pathname.startsWith('/status')
+    )
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
 
@@ -117,7 +124,7 @@ export function Layout() {
           isMobileChatOverlayActive ? 'hidden' : ''
         }`}
       >
-        <div className="mx-auto flex max-w-[560px] items-center justify-start gap-2 overflow-x-auto scrollbar-hide py-3.5 px-3 sm:py-4 sm:px-6" role="list">
+        <div className="mx-auto flex max-w-[540px] items-center justify-center gap-1.5 overflow-x-auto scrollbar-hide py-2.5 px-2 sm:py-3 sm:px-4" role="list">
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
@@ -127,7 +134,7 @@ export function Layout() {
                 to={path}
                 aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex flex-col items-center justify-center gap-1.5 group min-h-11 min-w-[52px] sm:min-w-[56px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
+                className={`flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
                   isActive
                     ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
                     : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
@@ -136,11 +143,11 @@ export function Layout() {
               >
                 <Icon
                   aria-hidden="true"
-                  className={`w-5 h-5 transition-colors ${
+                  className={`h-4 w-4 transition-colors ${
                     isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
                   }`}
                 />
-                <span className={`text-[9px] font-medium uppercase tracking-[0.12em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
+                <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
                   {label}
                 </span>
               </Link>

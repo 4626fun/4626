@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 import { ConnectButton } from '@/components/ConnectButton'
@@ -5,6 +6,7 @@ import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { Logo } from './Logo'
+import { TextScramble } from './TextScramble'
 
 type NavItem = {
   label: string
@@ -50,30 +52,26 @@ export function VaultNavBar() {
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
+  const [brandHovered, setBrandHovered] = useState(false)
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const brandHref = hostMode === 'marketing' ? '/' : '/swap'
   const showConnect = !publicMode && hostMode !== 'marketing'
 
-  const renderNavLinks = (compact: boolean) =>
+  const renderNavLinks = () =>
     items.map((item) => {
       const active = isActiveLink(location, item)
       return (
         <Link
           key={item.to}
           to={item.to}
-          className={`group relative inline-flex items-center justify-center rounded-full border transition-all duration-200 ${
-            compact ? 'px-2 py-1.5 lg:px-2.5 lg:py-2' : 'px-3 py-2.5'
-          } ${
-            active
-              ? 'border-white/18 bg-white/12 shadow-[0_10px_22px_-16px_rgba(0,0,0,0.9)]'
-              : 'border-transparent hover:border-white/10 hover:bg-white/6'
-          }`}
+          aria-current={active ? 'page' : undefined}
+          className="group relative inline-flex h-8 items-center justify-center rounded-xl border-0 px-2.5 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25"
         >
           <span
-            className={`relative z-10 font-medium ${
-              compact ? 'text-[10px] tracking-[0.02em]' : 'text-[11px] tracking-[0.01em]'
-            } ${active ? 'text-white' : 'text-zinc-500 group-hover:text-brand-accent'}`}
+            className={`relative z-10 text-[10px] font-medium tracking-[0.01em] ${
+              active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'
+            }`}
           >
             {item.label}
           </span>
@@ -83,57 +81,35 @@ export function VaultNavBar() {
 
   return (
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
-      <div className="absolute inset-0 bg-vault-bg/70 backdrop-blur-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]" />
+      <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl shadow-[0_10px_34px_-12px_rgba(0,0,0,0.88)]" />
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-white/8" />
 
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-brand-primary/25 to-transparent opacity-60" />
+      <div className="relative max-w-[1400px] mx-auto h-14 px-4 md:px-6 lg:px-8 flex items-center gap-3">
+        <Link
+          to={brandHref}
+          className="flex items-center gap-2.5 group cursor-pointer shrink-0"
+          onMouseEnter={() => setBrandHovered(true)}
+          onMouseLeave={() => setBrandHovered(false)}
+          onFocus={() => setBrandHovered(true)}
+          onBlur={() => setBrandHovered(false)}
+        >
+          <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
+          <span className="text-[12px] tracking-[0.04em] text-white font-medium leading-none">
+            <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
+          </span>
+        </Link>
 
-      <div className="relative max-w-[1400px] mx-auto px-4 md:px-8 lg:px-10 xl:px-12 py-2 xl:py-0">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 lg:gap-5 xl:h-24">
-          <Link to={brandHref} className="flex items-center gap-3 lg:gap-4 group cursor-pointer shrink-0">
-            <Logo showText={false} width={40} height={40} />
-            <div className="flex flex-col justify-center">
-              <span className="text-[13px] lg:text-sm tracking-[0.2em] lg:tracking-widest text-white font-medium transition-colors duration-300 leading-none">
-                4626
-                <span className="text-transparent bg-clip-text bg-linear-to-r from-brand-primary to-brand-accent ml-0.5">.fun</span>
-              </span>
-              <span className="mt-1 hidden xl:block text-[9px] tracking-[0.22em] uppercase text-zinc-500 leading-none">
-                Earn Together
-              </span>
-            </div>
-          </Link>
-
-          <nav className="hidden xl:flex min-w-0 items-center justify-center">
-            <div className="flex min-w-0 items-center justify-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide px-1">
-              {renderNavLinks(false)}
-            </div>
-          </nav>
-
-          <div className="hidden md:flex items-center justify-end gap-2 shrink-0">
-            {showConnect ? (
-              <div className="origin-right scale-[0.78] lg:scale-[0.88] xl:scale-100 transition-transform">
-                <ConnectButton />
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <nav className="mt-2 lg:mt-1 hidden md:flex xl:hidden min-w-0 items-center">
-          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/10 bg-linear-to-b from-white/8 to-white/3 p-1 backdrop-blur-sm">
-            <div className="flex w-full min-w-0 items-center justify-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide px-0.5">
-              {renderNavLinks(true)}
-            </div>
+        <nav className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
+            {renderNavLinks()}
           </div>
         </nav>
 
-        {!showConnect ? (
-          <div className="mt-1 hidden md:block xl:hidden">
-            <div className="h-px w-full bg-linear-to-r from-transparent via-white/8 to-transparent" />
+        {showConnect ? (
+          <div className="shrink-0 origin-right scale-[0.72] lg:scale-[0.82] xl:scale-95 transition-transform">
+            <ConnectButton variant="nav" />
           </div>
-        ) : (
-          <div className="mt-1 hidden md:block xl:hidden">
-            <div className="h-px w-full bg-linear-to-r from-transparent via-brand-primary/15 to-transparent" />
-          </div>
-        )}
+        ) : null}
       </div>
     </header>
   )

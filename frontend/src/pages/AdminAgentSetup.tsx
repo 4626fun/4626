@@ -710,14 +710,12 @@ export function AdminAgentSetup() {
           <h2 className="text-lg font-display text-white">Agent Setup</h2>
           <p className="text-xs text-zinc-500 mt-1">Enable your XMTP agent, link a vault group, and configure gating.</p>
         </div>
-        {creatorAddress && (
-          <span className="text-[10px] font-mono text-zinc-600">{truncAddr(creatorAddress)}</span>
-        )}
+        {creatorAddress ? <span className="app-meta-value text-zinc-600">{truncAddr(creatorAddress)}</span> : null}
       </div>
 
       <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-3">
         <div className="text-xs font-medium text-indigo-200">How this stack is actually used right now</div>
-        <div className="mt-2 grid gap-2 text-[11px] text-zinc-300 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-2 grid gap-2 app-meta-value text-zinc-300 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <span className="text-indigo-300">Coinbase Smart Wallet:</span> canonical creator identity and ownership checks.
           </div>
@@ -737,10 +735,10 @@ export function AdminAgentSetup() {
             <span className="text-indigo-300">Lens + Grove:</span> discovery plus portable, content-addressed agent metadata.
           </div>
         </div>
-        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
+        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 app-meta-value text-zinc-400">
           <span className="text-zinc-200">Also in stack:</span> ElizaOS + skills are the orchestration layer for agent behaviors and tool workflows. They are optional runtime logic on top of this identity/auth/messaging foundation.
         </div>
-        <div className="mt-2 text-[11px] text-zinc-400">
+        <div className="mt-2 app-meta-value text-zinc-400">
           In short: <span className="text-zinc-200">CSW is identity</span>, <span className="text-zinc-200">ERC-4337/paymaster is execution</span>, <span className="text-zinc-200">SIWA is auth</span>, <span className="text-zinc-200">ERC-8004 + Lens/Grove are discoverability/reputation</span>, <span className="text-zinc-200">XMTP is communication</span>, and <span className="text-zinc-200">ElizaOS/skills are automation</span>.
         </div>
       </div>
@@ -769,7 +767,7 @@ export function AdminAgentSetup() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs font-medium text-emerald-200">Unified Agent Publish (Week 4)</div>
-            <div className="text-[11px] text-zinc-400">One click publishes ERC-8004 registration and stores deterministic Lens/Grove metadata.</div>
+            <div className="app-meta-value text-zinc-400">One click publishes ERC-8004 registration and stores deterministic Lens/Grove metadata.</div>
           </div>
           <button
             type="button"
@@ -782,12 +780,12 @@ export function AdminAgentSetup() {
           </button>
         </div>
         {publishMutation.data?.grove?.lensUri ? (
-          <a href={publishMutation.data.grove.gatewayUrl} target="_blank" rel="noreferrer" className="text-[11px] text-emerald-300 underline">
+          <a href={publishMutation.data.grove.gatewayUrl} target="_blank" rel="noreferrer" className="app-meta-value text-emerald-300 underline">
             Published URI: {publishMutation.data.grove.lensUri}
           </a>
         ) : null}
         {publishMutation.error ? (
-          <div className="text-[11px] text-red-300">{(publishMutation.error as Error).message}</div>
+          <div className="app-meta-value text-red-300">{(publishMutation.error as Error).message}</div>
         ) : null}
       </div>
 
@@ -799,7 +797,7 @@ export function AdminAgentSetup() {
           </div>
           <div>
             <div className="text-sm text-white font-medium">1. XMTP Agent</div>
-            <div className="text-[10px] text-zinc-500">Set up your creator agent identity</div>
+            <div className="app-meta-value text-zinc-500">Set up your creator agent identity</div>
           </div>
           <div className="ml-auto">
             {agentQuery.isLoading ? (
@@ -819,7 +817,7 @@ export function AdminAgentSetup() {
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Agent Address</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-zinc-300">{truncAddr(agent.xmtpAgentAddress)}</span>
+                    <span className="text-xs text-zinc-300">{truncAddr(agent.xmtpAgentAddress)}</span>
                     <CopyButton text={agent.xmtpAgentAddress} />
                   </div>
                 </div>
@@ -834,7 +832,7 @@ export function AdminAgentSetup() {
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Canonical Smart Wallet</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-emerald-400">{truncAddr(agent.cswAddress)}</span>
+                    <span className="text-xs text-emerald-400">{truncAddr(agent.cswAddress)}</span>
                     <CopyButton text={agent.cswAddress} />
                     <a
                       href={`https://basescan.org/address/${agent.cswAddress}`}
@@ -897,7 +895,7 @@ export function AdminAgentSetup() {
                     <Wallet className="w-4 h-4 text-emerald-400" />
                     <span className="text-xs font-medium text-white">Use my Zora Wallet</span>
                   </div>
-                  <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  <p className="app-meta-value text-zinc-500 leading-relaxed">
                     Your existing Coinbase Smart Wallet becomes the agent. Same address, same identity.
                   </p>
                   {agentMode === 'csw' && (
@@ -919,7 +917,7 @@ export function AdminAgentSetup() {
                     <Bot className="w-4 h-4 text-indigo-400" />
                     <span className="text-xs font-medium text-white">Generate new identity</span>
                   </div>
-                  <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  <p className="app-meta-value text-zinc-500 leading-relaxed">
                     Creates a separate XMTP identity. Agent wallet address will be different from yours.
                   </p>
                 </button>
@@ -947,7 +945,7 @@ export function AdminAgentSetup() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <div className="text-[11px] text-emerald-200 font-medium">One-click setup</div>
-                        <div className="text-[10px] text-zinc-400">
+                        <div className="app-meta-value text-zinc-400">
                           Provisions signer, links owner (if needed), enables CSW agent, and publishes profile.
                         </div>
                       </div>
@@ -962,13 +960,13 @@ export function AdminAgentSetup() {
                       </button>
                     </div>
                     {oneClickMutation.data?.ownerTxHash ? (
-                      <div className="mt-2 text-[10px] text-zinc-400">
-                        Owner tx: <span className="font-mono text-zinc-300">{truncAddr(oneClickMutation.data.ownerTxHash)}</span>
+                      <div className="app-meta-value mt-2 text-zinc-400">
+                        Owner tx: <span className="text-zinc-300">{truncAddr(oneClickMutation.data.ownerTxHash)}</span>
                       </div>
                     ) : null}
                     {oneClickMutation.data?.publish?.grove?.lensUri ? (
-                      <div className="mt-1 text-[10px] text-zinc-400">
-                        Published: <span className="font-mono text-zinc-300">{oneClickMutation.data.publish.grove.lensUri}</span>
+                      <div className="app-meta-value mt-1 text-zinc-400">
+                        Published: <span className="text-zinc-300">{oneClickMutation.data.publish.grove.lensUri}</span>
                       </div>
                     ) : null}
                     {oneClickMutation.error ? (
@@ -980,7 +978,7 @@ export function AdminAgentSetup() {
                     <div>
                       <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Your Smart Wallet</div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-emerald-400">{truncAddr(canonicalCswAddress)}</span>
+                        <span className="text-xs text-emerald-400">{truncAddr(canonicalCswAddress)}</span>
                         <CopyButton text={canonicalCswAddress} />
                       </div>
                     </div>
@@ -997,10 +995,10 @@ export function AdminAgentSetup() {
                       <div>
                         <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Keepr Signer</div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-zinc-300">{truncAddr(serverWallet.address)}</span>
+                          <span className="text-xs text-zinc-300">{truncAddr(serverWallet.address)}</span>
                           <CopyButton text={serverWallet.address} />
                         </div>
-                        <p className="text-[10px] text-zinc-600 mt-1">
+                        <p className="app-meta-value mt-1 text-zinc-600">
                           This address powers optional unattended XMTP automation for your Smart Wallet.
                         </p>
                       </div>
@@ -1120,7 +1118,7 @@ export function AdminAgentSetup() {
           </div>
           <div>
             <div className="text-sm text-white font-medium">2. Link Vault Group</div>
-            <div className="text-[10px] text-zinc-500">Connect your vault to XMTP chat and optional Lens group identity</div>
+            <div className="app-meta-value text-zinc-500">Connect your vault to XMTP chat and optional Lens group identity</div>
           </div>
         </div>
 
@@ -1167,7 +1165,7 @@ export function AdminAgentSetup() {
                   placeholder="Paste the XMTP conversation/group ID"
                   className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/30"
                 />
-                <p className="text-[10px] text-zinc-600 mt-1">
+                <p className="app-meta-value mt-1 text-zinc-600">
                   Find this in your XMTP client's group settings, or create a new group and copy its ID.
                 </p>
               </div>
@@ -1197,7 +1195,7 @@ export function AdminAgentSetup() {
                   />
                 </div>
               </div>
-              <p className="text-[10px] text-zinc-600">
+              <p className="app-meta-value text-zinc-600">
                 Lens groups are useful for membership/discovery. XMTP remains the active chat transport.
               </p>
             </>
@@ -1213,7 +1211,7 @@ export function AdminAgentSetup() {
           </div>
           <div>
             <div className="text-sm text-white font-medium">3. Access Gating</div>
-            <div className="text-[10px] text-zinc-500">Control who can join your vault group</div>
+            <div className="app-meta-value text-zinc-500">Control who can join your vault group</div>
           </div>
         </div>
 
@@ -1273,7 +1271,7 @@ export function AdminAgentSetup() {
                 </label>
                 <div>
                   <span className="text-xs text-zinc-300">Lock joins</span>
-                  <p className="text-[10px] text-zinc-600">Prevent new members from joining even if they pass gating checks</p>
+                  <p className="app-meta-value text-zinc-600">Prevent new members from joining even if they pass gating checks</p>
                 </div>
               </div>
             </>

@@ -84,10 +84,10 @@ export const ChainSelector = memo(function ChainSelector({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`Selected network: ${selected.name}`}
-        className={`inline-flex items-center gap-1.5 rounded-xl border transition ${
+        className={`inline-flex items-center gap-1.5 rounded-xl transition ${
           mismatch
-            ? 'border-amber-500/30 bg-amber-500/8 hover:bg-amber-500/12'
-            : 'border-[rgb(var(--vault-border-strong)/0.62)] bg-[rgb(var(--vault-card-raised)/0.72)] hover:bg-[rgb(var(--vault-card-raised)/0.9)]'
+            ? 'bg-amber-500/8 hover:bg-amber-500/12'
+            : 'bg-[rgb(var(--vault-card-raised)/0.72)] hover:bg-[rgb(var(--vault-card-raised)/0.9)]'
         } ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-xs'}`}
       >
         <ChainLogo src={selected.logoUrl} name={selected.name} size={compact ? 16 : 20} />

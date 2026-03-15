@@ -50,10 +50,9 @@ export function SwapDetails({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm transition-all duration-200 hover:-translate-y-px"
+        className="flex h-9 w-full items-center justify-between rounded-xl px-3 text-sm transition-all duration-200 hover:-translate-y-px"
         style={{
-          borderColor: 'rgb(var(--vault-border-strong) / 0.6)',
-          background: 'linear-gradient(160deg, rgb(var(--vault-card-raised) / 0.74), rgb(var(--vault-card) / 0.52))',
+          background: 'linear-gradient(160deg, rgb(var(--vault-card-raised) / 0.78), rgb(var(--vault-card) / 0.56))',
         }}
       >
         <span className="font-medium text-vault-text">Details</span>
@@ -63,7 +62,7 @@ export function SwapDetails({
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
-            className="mt-2 space-y-2"
+            className="mt-2 space-y-1.5"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -77,13 +76,12 @@ export function SwapDetails({
             />
 
             <div
-              className="rounded-xl border p-3 backdrop-blur-sm"
+              className="rounded-xl p-2.5 backdrop-blur-sm"
               style={{
-                borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
-                background: 'linear-gradient(160deg, rgb(var(--vault-card) / 0.5), rgb(var(--vault-card-raised) / 0.35))',
+                background: 'linear-gradient(165deg, rgb(var(--vault-card) / 0.54), rgb(var(--vault-card-raised) / 0.42))',
               }}
             >
-              <div className="mb-2 text-xs text-vault-subtext uppercase tracking-[0.12em]">Slippage</div>
+              <div className="mb-2 text-[10px] text-vault-subtext uppercase tracking-widest">Slippage</div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <input
                   type="text"
@@ -91,7 +89,7 @@ export function SwapDetails({
                   value={slippagePct}
                   onChange={(event) => onSetSlippagePct(event.target.value)}
                   className={cn(
-                    'h-9 w-20 rounded-lg border px-2 text-xs font-mono',
+                    'h-8 w-20 rounded-lg border px-2 text-[11px]',
                     'text-vault-text placeholder:text-vault-muted outline-none',
                     'bg-[rgb(var(--vault-card-raised)/0.82)]',
                     'border-[rgb(var(--vault-border-strong)/0.62)] focus:border-brand-primary/70',
@@ -106,7 +104,7 @@ export function SwapDetails({
                     key={preset}
                     onClick={() => onSetSlippagePct(preset)}
                     className={cn(
-                      'rounded-lg border px-2 py-1 text-[11px] font-medium',
+                      'rounded-lg border px-1.5 py-1 text-[10px] font-medium',
                       slippagePct === preset
                         ? 'border-brand-primary/45 bg-brand-primary/18 text-vault-text'
                         : 'border-[rgb(var(--vault-border-strong)/0.45)] bg-[rgb(var(--vault-card-raised)/0.72)] text-vault-subtext',
@@ -119,23 +117,22 @@ export function SwapDetails({
             </div>
 
             <div
-              className="grid gap-2 rounded-xl border p-3 text-sm backdrop-blur-sm"
+              className="grid gap-1.5 rounded-xl p-2.5 text-sm backdrop-blur-sm"
               style={{
-                borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
-                background: 'linear-gradient(160deg, rgb(var(--vault-card) / 0.5), rgb(var(--vault-card-raised) / 0.35))',
+                background: 'linear-gradient(165deg, rgb(var(--vault-card) / 0.54), rgb(var(--vault-card-raised) / 0.42))',
               }}
             >
               <div className="flex items-center justify-between text-vault-subtext">
                 <span>Estimated gas</span>
-                <span className="font-mono text-vault-text">{gasEstimateLabel ?? '—'}</span>
+                <span className="app-meta-value text-vault-text">{gasEstimateLabel ?? '—'}</span>
               </div>
               <div className="flex items-center justify-between text-vault-subtext">
                 <span>LP fee</span>
-                <span className="font-mono text-vault-text">{lpFeeUsd ?? '—'}</span>
+                <span className="app-meta-value text-vault-text">{lpFeeUsd ?? '—'}</span>
               </div>
               <div className="flex items-center justify-between text-vault-subtext">
                 <span>Protocol fee</span>
-                <span className="font-mono text-vault-text">{protocolFeeUsd ?? '—'}</span>
+                <span className="app-meta-value text-vault-text">{protocolFeeUsd ?? '—'}</span>
               </div>
               <div className="flex items-center justify-between text-vault-subtext">
                 <span>Price impact</span>
@@ -144,7 +141,7 @@ export function SwapDetails({
                 </span>
               </div>
               {quoteUpdatedAt && (
-                <div className="text-right text-[11px] text-vault-muted font-mono">Quote: {quoteUpdatedAt}</div>
+                <div className="text-right app-meta-value">Quote: {quoteUpdatedAt}</div>
               )}
             </div>
           </motion.div>

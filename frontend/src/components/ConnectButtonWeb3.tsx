@@ -26,6 +26,8 @@ export function deriveConnectButtonState(input: ConnectButtonStateInput): 'hydra
   return 'signed-out'
 }
 
+type ConnectButtonVariant = 'default' | 'nav'
+
 type ExternalWalletButtonsInput = {
   filteredConnectorCount: number
 }
@@ -106,30 +108,30 @@ function IdentityButton({
     <button
       type="button"
       onClick={onToggle}
-      className="group relative flex min-w-[196px] items-center gap-3 overflow-hidden rounded-2xl border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.06))] px-3 py-2.5 shadow-[0_14px_40px_-18px_rgba(0,0,0,0.9)] backdrop-blur-xl transition hover:border-white/18 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.08))]"
+      className="group relative flex h-9 min-w-[164px] items-center gap-2.5 overflow-hidden rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.1),rgba(255,255,255,0.04))] px-2.5 py-1 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-all duration-200 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.06))]"
     >
       <div className="relative shrink-0">
         {presentation.avatarUrl ? (
           <img
             src={presentation.avatarUrl}
             alt=""
-            className="h-9 w-9 rounded-full object-cover ring-1 ring-white/12"
+            className="h-7 w-7 rounded-full object-cover ring-1 ring-white/12"
           />
         ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(0,82,255,0.95),rgba(90,138,255,0.7))] text-sm font-semibold text-white ring-1 ring-white/12">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(0,82,255,0.95),rgba(90,138,255,0.7))] text-[11px] font-semibold text-white ring-1 ring-white/12">
             {presentation.avatarFallback}
           </div>
         )}
         <span
-          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[rgb(8,8,8)] ${connected ? 'bg-cyan-400' : 'bg-emerald-400'}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-[rgb(8,8,8)] ${connected ? 'bg-cyan-400' : 'bg-emerald-400'}`}
           aria-hidden="true"
         />
       </div>
-      <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm font-medium text-white">{presentation.primaryLabel}</span>
-        <span className="block truncate text-[11px] text-zinc-400">{presentation.secondaryLabel}</span>
+      <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium text-white">
+        {presentation.primaryLabel}
+        <span className="ml-1 text-[10px] font-normal text-zinc-500">{presentation.secondaryLabel}</span>
       </span>
-      <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+      <ChevronDown className={`h-3 w-3 shrink-0 text-zinc-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
     </button>
   )
 }
@@ -139,7 +141,7 @@ function IdentityButton({
  * 
  * Shows available connectors and handles connection.
  */
-export function ConnectButtonWeb3() {
+export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectButtonVariant }) {
   const { address, isConnected } = useAccount()
   const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
@@ -184,10 +186,14 @@ export function ConnectButtonWeb3() {
       <button
         type="button"
         disabled
-        className="btn-accent btn-no-icon disabled:opacity-50 flex min-w-[152px] items-center justify-center gap-2"
+        className={
+          variant === 'nav'
+            ? 'inline-flex h-9 min-w-[126px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-200 transition disabled:opacity-50'
+            : 'btn-accent btn-no-icon disabled:opacity-50 flex min-w-[152px] items-center justify-center gap-2'
+        }
       >
         <Wallet className="w-4 h-4" />
-        <span className="label">Checking session…</span>
+        <span className={variant === 'nav' ? 'tracking-[0.01em]' : 'label'}>Checking session…</span>
       </button>
     )
   }
@@ -233,12 +239,12 @@ export function ConnectButtonWeb3() {
                   className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
                 >
                   <span className="label block">{auth.busy ? 'Signing in…' : 'Sign in'}</span>
-                  <span className="text-[11px] text-zinc-600 block mt-1">No transaction.</span>
+                  <span className="app-meta-value text-zinc-600 block mt-1">No transaction.</span>
                 </button>
               ) : (
                 <div className="px-4 py-3">
                   <div className="label text-emerald-200">Signed in</div>
-                  <div className="text-[11px] text-zinc-600 mt-1">
+                  <div className="app-meta-value text-zinc-600 mt-1">
                     {auth.walletMatchesSession
                       ? 'Session matches connected wallet.'
                       : `4626 session is active as ${formatAddress(sessionAddress ?? address)}.`}
@@ -311,7 +317,7 @@ export function ConnectButtonWeb3() {
             <div className="absolute right-0 top-full mt-4 w-56 card p-4 z-50 space-y-2">
               <div className="px-4 py-3">
                 <div className="label text-emerald-200">Signed in</div>
-                <div className="text-[11px] text-zinc-600 mt-1">4626 session is active.</div>
+                <div className="app-meta-value text-zinc-600 mt-1">4626 session is active.</div>
               </div>
               <Link
                 to="/accounts"
@@ -329,7 +335,7 @@ export function ConnectButtonWeb3() {
                 className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
               >
                 <span className="label block text-zinc-300">Connect wallet</span>
-                <span className="text-[11px] text-zinc-600 block mt-1">Optional local wallet connection</span>
+                <span className="app-meta-value text-zinc-600 block mt-1">Optional local wallet connection</span>
               </button>
               <button
                 type="button"
@@ -355,11 +361,11 @@ export function ConnectButtonWeb3() {
             />
             <div className="absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1">
               {hasMultipleInjectedProviders ? (
-                <div className="px-4 py-2 text-[11px] text-zinc-500">
+                <div className="px-4 py-2 app-meta-value text-zinc-500">
                   Multiple wallet extensions detected. Use Coinbase Wallet.
                 </div>
               ) : lockedEthereumProviderGlobal ? (
-                <div className="px-4 py-2 text-[11px] text-zinc-500">
+                <div className="px-4 py-2 app-meta-value text-zinc-500">
                   Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
                 </div>
               ) : null}
@@ -402,10 +408,16 @@ export function ConnectButtonWeb3() {
             setShowOptions(!showOptions)
           }
         }}
-        className="btn-accent btn-no-icon disabled:opacity-50 flex min-w-[136px] items-center justify-center gap-2"
+        className={
+          variant === 'nav'
+            ? 'inline-flex h-9 min-w-[112px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-100 transition-all duration-200 hover:bg-white/12 disabled:opacity-50'
+            : 'btn-accent btn-no-icon disabled:opacity-50 flex min-w-[136px] items-center justify-center gap-2'
+        }
       >
         <Wallet className="w-4 h-4" />
-        <span className="label">{isPending || auth.busy ? 'Signing in…' : 'Sign in'}</span>
+        <span className={variant === 'nav' ? 'tracking-[0.01em]' : 'label'}>
+          {isPending || auth.busy ? 'Signing in…' : 'Sign in'}
+        </span>
       </button>
       {auth.error ? <div className="mt-2 max-w-[280px] text-[11px] text-red-400/90">{auth.error}</div> : null}
 
@@ -428,18 +440,18 @@ export function ConnectButtonWeb3() {
                   }}
                 >
                   <span className="label block">Sign in with email or social</span>
-                  <span className="text-[11px] text-zinc-500 block mt-1">Email, Google, or Apple</span>
+                  <span className="app-meta-value text-zinc-500 block mt-1">Email, Google, or Apple</span>
                 </button>
                 <div className="h-px bg-white/8 my-1" />
                 <div className="px-4 py-1 text-[10px] text-zinc-600 uppercase tracking-wider">External wallets</div>
               </>
             ) : null}
             {hasMultipleInjectedProviders ? (
-              <div className="px-4 py-2 text-[11px] text-zinc-500">
+              <div className="px-4 py-2 app-meta-value text-zinc-500">
                 Multiple wallet extensions detected. Use Coinbase Wallet.
               </div>
             ) : lockedEthereumProviderGlobal ? (
-              <div className="px-4 py-2 text-[11px] text-zinc-500">
+              <div className="px-4 py-2 app-meta-value text-zinc-500">
                 Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
               </div>
             ) : null}

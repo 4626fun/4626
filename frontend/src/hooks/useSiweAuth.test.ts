@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveSiweSessionState, shouldResetPrivyBridgeState } from './useSiweAuth'
+import { PRIVY_INTERACTIVE_LOGIN_METHODS, deriveSiweSessionState, shouldResetPrivyBridgeState } from './useSiweAuth'
+
+describe('PRIVY_INTERACTIVE_LOGIN_METHODS', () => {
+  it('prefers email/social before wallet for explicit Privy sign-in', () => {
+    expect(PRIVY_INTERACTIVE_LOGIN_METHODS).toEqual(['email', 'google', 'twitter', 'telegram', 'wallet'])
+  })
+})
 
 describe('shouldResetPrivyBridgeState', () => {
   it('resets for invalid or missing Privy auth tokens', () => {

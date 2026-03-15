@@ -99,7 +99,7 @@ export function AgentVerificationCard() {
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
             Verification is temporarily unavailable.
-            <div className="text-[11px] text-amber-200/80 mt-1">
+            <div className="app-meta-value mt-1 text-amber-200/80">
               {query.error instanceof Error ? query.error.message : 'Request failed.'}
             </div>
           </div>
@@ -133,23 +133,23 @@ export function AgentVerificationCard() {
 
           <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-              <div className="text-zinc-400">Agent ID</div>
-              <div className="font-mono text-zinc-200">#{query.data.agentId}</div>
+              <div className="app-meta-value text-zinc-400">Agent ID</div>
+              <div className="text-zinc-200">#{query.data.agentId}</div>
             </div>
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-              <div className="text-zinc-400">Chain</div>
+              <div className="app-meta-value text-zinc-400">Chain</div>
               <div className="text-zinc-200">
                 {chainLabel(query.data.chainId)} <span className="text-zinc-500">({query.data.chainId})</span>
               </div>
             </div>
 
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-              <div className="text-zinc-400">Registry</div>
+              <div className="app-meta-value text-zinc-400">Registry</div>
               <a
                 href={query.data.links.registry}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 font-mono text-zinc-200 hover:text-white hover:underline"
+                className="inline-flex items-center gap-1 text-zinc-200 hover:text-white hover:underline"
                 title={query.data.registryAddress}
               >
                 {shortAddress(query.data.registryAddress)}
@@ -157,61 +157,61 @@ export function AgentVerificationCard() {
               </a>
             </div>
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-              <div className="text-zinc-400">Canonical CSW</div>
+              <div className="app-meta-value text-zinc-400">Canonical CSW</div>
               {query.data.links.canonicalCsw ? (
                 <a
                   href={query.data.links.canonicalCsw}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-mono text-zinc-200 hover:text-white hover:underline"
+                  className="inline-flex items-center gap-1 text-zinc-200 hover:text-white hover:underline"
                   title={query.data.canonicalCsw ?? undefined}
                 >
                   {shortAddress(query.data.canonicalCsw)}
                   <ExternalLink className="w-3 h-3 text-zinc-500" />
                 </a>
               ) : (
-                <div className="font-mono text-zinc-200">{shortAddress(query.data.canonicalCsw)}</div>
+                <div className="text-zinc-200">{shortAddress(query.data.canonicalCsw)}</div>
               )}
             </div>
 
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-              <div className="text-zinc-400">On-chain owner</div>
+              <div className="app-meta-value text-zinc-400">On-chain owner</div>
               {query.data.links.ownerAddress ? (
                 <a
                   href={query.data.links.ownerAddress}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-mono text-zinc-200 hover:text-white hover:underline"
+                  className="inline-flex items-center gap-1 text-zinc-200 hover:text-white hover:underline"
                   title={query.data.ownerAddress ?? undefined}
                 >
                   {shortAddress(query.data.ownerAddress)}
                   <ExternalLink className="w-3 h-3 text-zinc-500" />
                 </a>
               ) : (
-                <div className="font-mono text-zinc-200">{shortAddress(query.data.ownerAddress)}</div>
+                <div className="text-zinc-200">{shortAddress(query.data.ownerAddress)}</div>
               )}
             </div>
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-              <div className="text-zinc-400">On-chain agentWallet</div>
+              <div className="app-meta-value text-zinc-400">On-chain agentWallet</div>
               {query.data.links.agentWallet ? (
                 <a
                   href={query.data.links.agentWallet}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-mono text-zinc-200 hover:text-white hover:underline"
+                  className="inline-flex items-center gap-1 text-zinc-200 hover:text-white hover:underline"
                   title={query.data.agentWallet ?? undefined}
                 >
                   {shortAddress(query.data.agentWallet)}
                   <ExternalLink className="w-3 h-3 text-zinc-500" />
                 </a>
               ) : (
-                <div className="font-mono text-zinc-200">{shortAddress(query.data.agentWallet)}</div>
+                <div className="text-zinc-200">{shortAddress(query.data.agentWallet)}</div>
               )}
             </div>
           </div>
 
           <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-xs text-zinc-300">
-            <div className="text-zinc-400">Metadata URI</div>
+            <div className="app-meta-value text-zinc-400">Metadata URI</div>
             {query.data.tokenUri ? (
               <a
                 href={query.data.tokenUri}
@@ -220,7 +220,7 @@ export function AgentVerificationCard() {
                 className="inline-flex items-center gap-1 text-zinc-200 hover:text-white hover:underline"
                 title={query.data.tokenUri}
               >
-                <span className="font-mono">{shortUri(query.data.tokenUri)}</span>
+                <span>{shortUri(query.data.tokenUri)}</span>
                 <ExternalLink className="w-3 h-3 text-zinc-500" />
               </a>
             ) : (

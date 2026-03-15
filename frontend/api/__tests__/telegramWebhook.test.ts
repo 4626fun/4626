@@ -1356,12 +1356,12 @@ describe('telegram webhook handler', () => {
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('◇ Explore')
+    expect(String(payload.text ?? '')).toContain('Explore')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === '▣ Vaults')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === '△ Auctions')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === '⇢ Signals')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === '↗ Signals')).toBe(false)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Vaults')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Auctions')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Signals')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '').includes('⇢'))).toBe(false)
   })
 
   it('handles /linked as a telegram-native command without delegating to keepr', async () => {

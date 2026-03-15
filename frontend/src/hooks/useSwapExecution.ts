@@ -789,11 +789,6 @@ export function useSwapExecution(params: {
       } else {
         setEstimatedOut('')
       }
-      setStatus(
-        `Quote ready for ${params.executionMode === 'canonical' ? 'canonical CSW' : 'connected EOA'} (routing=${String(
-          data.routing ?? 'unknown',
-        )})`,
-      )
       setTxState('review')
     } catch (e: any) {
       if (runId !== quoteRunRef.current) return

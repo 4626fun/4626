@@ -666,9 +666,7 @@ export function ExploreCreators() {
             </div>
           </div>
 
-          {metricsStatusLine ? (
-            <div className="mt-2 text-right text-[11px] text-zinc-500">{metricsStatusLine}</div>
-          ) : null}
+          {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}
         </motion.div>
 
         {/* Navigation & Filters */}

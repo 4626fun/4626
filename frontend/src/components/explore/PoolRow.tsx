@@ -298,15 +298,12 @@ export function PoolRow({
       </div>
 
       {/* Payout To */}
-      <span
-        className={`text-[10px] truncate px-3 py-2 text-center ${payoutResolved ? 'text-zinc-200' : 'font-mono text-zinc-400'}`}
-        title={payoutTitle}
-      >
+      <span className={`truncate px-3 py-2 text-center app-meta-value ${payoutResolved ? 'text-zinc-200' : 'text-zinc-400'}`} title={payoutTitle}>
         {payoutDisplay}
       </span>
     </Link>
     {isExpanded ? (
-      <div className="text-[11px] text-zinc-400 border-b border-white/8 bg-vault-bg/40 min-w-max">
+      <div className="app-meta-value border-b border-white/8 bg-vault-bg/40 min-w-max text-zinc-400">
         <div className="grid" style={{ gridTemplateColumns }}>
           <div
             className="px-3 py-3"

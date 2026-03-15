@@ -139,7 +139,7 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
       </div>
 
       {/* Account */}
-      <span className="hidden sm:block text-sm text-zinc-400 font-mono">{formatAddress(creatorAddress)}</span>
+      <span className="hidden sm:block text-sm text-zinc-400">{formatAddress(creatorAddress)}</span>
 
       {/* External link */}
       <a

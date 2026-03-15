@@ -354,12 +354,12 @@ function LpPositionCard(props: {
           </div>
         </div>
         {posId && (
-          <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 font-mono text-[10px] text-zinc-600 shrink-0">
+          <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 app-meta-value text-zinc-600 shrink-0">
             #{posId.slice(-6)}
           </span>
         )}
       </div>
-      <div className="mt-2 text-[11px] text-zinc-500">
+      <div className="app-meta-value mt-2 text-zinc-500">
         Unclaimed fees: <span className="text-zinc-400">{fees}</span>
       </div>
       {posId && (
@@ -1250,6 +1250,7 @@ export function Swap() {
   // request flood when the upstream API is unhealthy (e.g. 403/429).
   const busyRef = useRef(busy)
   busyRef.current = busy
+  const staleAutoRefreshAtRef = useRef(0)
 
   // Debounced auto-quote: only fires when actual swap inputs change.
   useEffect(() => {
@@ -1261,6 +1262,23 @@ export function Swap() {
     return () => window.clearTimeout(timer)
     // `busy` intentionally omitted — use busyRef to check at call-time.
   }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
+
+  // Auto-refresh stale quotes so users are never forced to click "Refresh".
+  useEffect(() => {
+    if (activePanel !== 'swap') return
+    if (!executionReady || !isReady) return
+    if (!quoteUpdatedAt || !quoteIsStale) return
+    if (typeof document !== 'undefined' && document.hidden) return
+    if (busyRef.current) return
+    const now = Date.now()
+    if (now - staleAutoRefreshAtRef.current < 12_000) return
+    const timer = window.setTimeout(() => {
+      if (busyRef.current) return
+      staleAutoRefreshAtRef.current = Date.now()
+      void handleQuote()
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [activePanel, executionReady, isReady, quoteUpdatedAt, quoteIsStale, handleQuote])
 
   // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
   useEffect(() => {
@@ -1390,7 +1408,6 @@ export function Swap() {
               busy={busy}
               status={status}
               error={error ?? canonicalSignerGuardError}
-              quoteIsStale={quoteIsStale}
               quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
               approvalRequired={approvalRequired}
               routeSummary={routeSummary}
@@ -1416,7 +1433,6 @@ export function Swap() {
                 if (unverifiedSelectionMode) return
                 void handleReviewTrade()
               }}
-              onRefreshQuote={() => void handleQuote()}
               onSetSlippagePct={setSlippagePct}
               onResetUnverified={() => {
                 setUnverifiedSelectionMode(false)

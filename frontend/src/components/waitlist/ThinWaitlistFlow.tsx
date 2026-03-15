@@ -12,7 +12,7 @@ import { StepIndicator } from '@/components/ui/StepIndicator'
 
 import type { Variant } from './waitlistTypes'
 import { shouldAutoStartWaitlistPrivyAuth } from './waitlistAuthState'
-import { buildWaitlistPrivyLoginOptions } from './waitlistLoginOptions'
+import { buildWaitlistPrivyLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import { canEnterAppFromAccountState, deriveWaitlistDoneUi, deriveWaitlistEmailUi, deriveWaitlistZoraUi } from './waitlistFlowUi'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -206,6 +206,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const [enterAppBusy, setEnterAppBusy] = useState(false)
   const [zoraAutoResolving, setZoraAutoResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [recoveryRequired, setRecoveryRequired] = useState(false)
 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [zoraSummary, setZoraSummary] = useState<ZoraResolveResponse | null>(null)
@@ -267,6 +268,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
     const nextAccount = payload.data
     setAccount(nextAccount)
+    setRecoveryRequired(false)
     setStep('zora')
   }, [email, emailIsValid, getAccessToken])
 
@@ -274,6 +276,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     if (!emailIsValid || busy) return
     setBusy(true)
     setError(null)
+    setRecoveryRequired(false)
     try {
       const response = await apiFetch('/api/waitlist/join', {
         method: 'POST',
@@ -300,6 +303,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
+    setRecoveryRequired(false)
     try {
       if (privyAuthed) {
         await runBootstrap()
@@ -311,11 +315,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
+        authAutoAttemptedRef.current = true
         await privyLogoutRef.current?.()
+        setRecoveryRequired(true)
       }
       setError(
         isRecoveryRequired
-          ? 'Recovery required: this email is already linked to another account. Complete account recovery, then sign in again.'
+          ? 'Recovery required: this email is already linked to another account. Sign in with your original email/social account to recover, then continue.'
           : typeof authError?.message === 'string'
             ? authError.message
             : 'Failed to start sign-in.',
@@ -325,12 +331,31 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
   }, [busy, login, privyAuthed, runBootstrap])
 
+  const onRecoverAccount = useCallback(async () => {
+    if (busy || authAttemptInFlightRef.current) return
+    authAttemptInFlightRef.current = true
+    setBusy(true)
+    setError(null)
+    setRecoveryRequired(false)
+    try {
+      await privyLogoutRef.current?.()
+      await login(buildWaitlistRecoveryLoginOptions() as any)
+    } catch (recoverError: any) {
+      setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
+      setRecoveryRequired(true)
+    } finally {
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    }
+  }, [busy, login])
+
   const onContinueWithTelegram = useCallback(async () => {
     if (step !== 'auth') return
     if (busy || authAttemptInFlightRef.current || telegramAuthLoading) return
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
+    setRecoveryRequired(false)
     try {
       if (privyAuthed) {
         if (telegramAlreadyLinked) {
@@ -516,11 +541,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
           await privyLogoutRef.current?.()
         }
         if (!cancelled) {
+          if (isRecoveryRequired) setRecoveryRequired(true)
           setError(
             isSessionMismatch
               ? 'Signed in as a different account. Click Continue to sign in again.'
               : isRecoveryRequired
-                ? 'Recovery required: this email is already linked to another account. Complete account recovery, then sign in again.'
+                ? 'Recovery required: this email is already linked to another account. Sign in with your original email/social account to recover, then continue.'
                 : message,
           )
         }
@@ -538,6 +564,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
+      setRecoveryRequired(false)
     }
   }, [step])
 
@@ -671,8 +698,18 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
             ) : null}
 
             {error ? (
-              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                {error}
+              <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                <div>{error}</div>
+                {recoveryRequired ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onRecoverAccount()}
+                    className="inline-flex items-center rounded-lg border border-rose-300/35 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
+                  >
+                    Recover account sign-in
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </motion.div>

@@ -130,7 +130,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
 
   if (vaultsQuery.isError) {
     return (
-      <div className="bv-panel vault-hover-lift p-4">
+      <div className="bv-panel border-0 vault-hover-lift p-4">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-vault-subtext">
           <AlertTriangle className="h-3.5 w-3.5" />
           Vaults unavailable
@@ -143,7 +143,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
   const list = effectiveTab === 'mine' ? userVaults : featuredVisibleVaults
 
   return (
-    <section className="bv-panel vault-hover-lift p-3">
+    <section className="bv-panel border-0 vault-hover-lift p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-vault-text">Creator Vaults</h2>

@@ -72,8 +72,8 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
       className={cn(
         'flex items-center gap-2.5 rounded-xl border px-3 py-2 text-xs',
         isSmartWalletMode
-          ? 'border-emerald-500/15 bg-emerald-400/[0.03] text-emerald-400/80'
-          : 'border-white/6 bg-white/[0.02] text-zinc-400',
+          ? 'border-emerald-500/15 bg-emerald-400/3 text-emerald-400/80'
+          : 'border-white/6 bg-white/2 text-zinc-400',
         className,
       )}
     >
@@ -96,7 +96,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
           </>
         )}
       </span>
-      <span className="hidden sm:block text-[10px] text-zinc-400">{activeIdentityHint}</span>
+      <span className="hidden sm:block app-meta-value text-zinc-400">{activeIdentityHint}</span>
       {isSmartWalletMode ? (
         account.uiFlags.aaAvailable ? (
           <span className="flex items-center gap-1 text-emerald-400/70">
@@ -104,7 +104,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
             <span>1-click</span>
           </span>
         ) : (
-          <span className="text-[11px] text-zinc-500">Limited mode</span>
+          <span className="app-meta-value text-zinc-500">Limited mode</span>
         )
       ) : (
         canSwitchToSmartWallet ? (
@@ -122,7 +122,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
             Unlock →
           </Link>
         ) : (
-          <span className="text-[11px] text-zinc-500">User Wallet</span>
+          <span className="app-meta-value text-zinc-500">User Wallet</span>
         )
       )}
     </div>

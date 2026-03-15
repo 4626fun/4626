@@ -103,7 +103,7 @@ export function VaultGaugeVotingPanel({ vaults = [], className = '' }: VaultGaug
   return (
     <div className={`bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden ${className}`}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-b border-zinc-800 p-6">
+      <div className="bg-linear-to-r from-brand-primary/10 to-brand-accent/10 border-b border-zinc-800 p-6">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-xl font-bold text-brand-primary">ve(3,3) Gauge Voting</h3>
@@ -190,7 +190,7 @@ export function VaultGaugeVotingPanel({ vaults = [], className = '' }: VaultGaug
               max="100"
               value={allocation.weight}
               onChange={(e) => handleWeightChange(allocation.vault, parseInt(e.target.value))}
-              className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-brand-primary"
+              className="bv-amount-slider w-full h-1 bg-zinc-700/60 rounded-full appearance-none cursor-pointer accent-brand-primary"
             />
           </div>
         ))}
@@ -208,7 +208,7 @@ export function VaultGaugeVotingPanel({ vaults = [], className = '' }: VaultGaug
           <button
             onClick={handleVote}
             disabled={isVoting || totalAllocation === 0 || !votingPowerInfo?.hasActiveLock}
-            className="flex-1 bg-gradient-to-r from-brand-primary to-brand-accent hover:opacity-90 disabled:from-zinc-600 disabled:to-zinc-700 text-white font-bold py-3 px-6 rounded-xl transition-all disabled:cursor-not-allowed"
+            className="flex-1 bg-linear-to-r from-brand-primary to-brand-accent hover:opacity-90 disabled:from-zinc-600 disabled:to-zinc-700 text-white font-bold py-3 px-6 rounded-xl transition-all disabled:cursor-not-allowed"
           >
             {isVoting ? 'Voting...' : 'Cast Vote'}
           </button>

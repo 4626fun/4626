@@ -66,17 +66,17 @@ function AgentCard({
             </div>
           </div>
         </div>
-        {!creatorIdentity.secondary && (
-          <div className="text-[10px] text-zinc-600 font-mono truncate">
+        {!creatorIdentity.secondary ? (
+          <div className="app-meta-value text-zinc-600 truncate">
             {agent.creatorAddress.slice(0, 6)}…{agent.creatorAddress.slice(-4)}
           </div>
-        )}
+        ) : null}
 
         {/* Agent info */}
         <div className="flex items-center gap-2 text-[10px] text-zinc-500">
           <Bot className="w-3 h-3 text-brand-primary/60" />
           <span className="truncate">
-            Agent: <span className="font-mono">{agentIdentity.displayName}</span>
+            Agent: <span>{agentIdentity.displayName}</span>
             {agentIdentity.secondary ? <span className="ml-1 text-zinc-600">({agentIdentity.secondary})</span> : null}
           </span>
         </div>

@@ -85,7 +85,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
           </div>
-          <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+          <div className="app-meta-value mt-0.5 hidden sm:block">
             {creatorsNew24h != null ? `+${creatorsNew24h.toLocaleString()} today` : 'Tracking newly created creators'}
           </div>
         </div>
@@ -97,7 +97,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
             <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
               {formatCompactUsd(marketCap)}
             </div>
-            <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+            <div className="app-meta-value mt-0.5 hidden sm:block">
               30-day trend overlay (hover for daily value)
             </div>
           </div>
@@ -108,7 +108,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {formatCompactUsd(volume24h)}
           </div>
-          <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+          <div className="app-meta-value mt-0.5 hidden sm:block">
             24H trade volume across creator coins
           </div>
         </div>
@@ -118,13 +118,13 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {formatCompactUsd(fees24h)}
           </div>
-          <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+          <div className="app-meta-value mt-0.5 hidden sm:block">
             24H fees from creator-coin trading
           </div>
         </div>
       </div>
 
-      <div className="text-right text-[11px] text-zinc-500/90">{statusLine}</div>
+      <div className="app-meta-value text-right text-zinc-500/90">{statusLine}</div>
     </div>
   )
 }

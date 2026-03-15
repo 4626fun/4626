@@ -231,7 +231,7 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
   return (
     <>
       <div className="hidden divide-y divide-zinc-800/70 sm:block">
-        <div className="grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 px-4 py-2.5 text-[11px] text-zinc-600">
+        <div className="grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 px-4 py-2.5 app-meta-value text-zinc-600">
           <div>Token</div>
           <div className="text-right">Price</div>
           <div className="text-right">Balance</div>
@@ -263,7 +263,7 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
                       {holding.coinType === 'CREATOR' ? 'Creator' : 'Content'}
                     </span>
                   </div>
-                  <div className="truncate font-mono text-[11px] text-zinc-600">{shortAddr(String(token.id || ''))}</div>
+                  <div className="app-meta-value truncate text-zinc-600">{shortAddr(String(token.id || ''))}</div>
                 </div>
               </div>
               <div className="text-right text-[12px] tabular-nums text-zinc-200">{price != null ? formatUsd(price) : '--'}</div>
@@ -294,7 +294,7 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
                     {holding.coinType === 'CREATOR' ? 'Creator' : 'Content'}
                   </Badge>
                 </div>
-                <div className="mt-0.5 text-[11px] text-zinc-600">
+                <div className="app-meta-value mt-0.5 text-zinc-600">
                   {price != null ? formatUsd(price) : '--'} · {formatAmount(token.amount)}
                 </div>
               </div>
@@ -561,11 +561,11 @@ export function Portfolio() {
       <div className="flex items-center justify-between border-b border-white/8 p-4">
         <div>
           <div className="text-[12px] text-white">Holdings</div>
-          <div className="text-[11px] text-zinc-600">
+          <div className="app-meta-value text-zinc-600">
             {effectiveAddress ? `${creatorHoldings.length} creator · ${contentHoldings.length} content` : '--'}
           </div>
         </div>
-        <div className="text-[11px] text-zinc-600">Base</div>
+        <div className="app-meta-value text-zinc-600">Base</div>
       </div>
 
       {tokenDataLoading ? (
@@ -610,7 +610,7 @@ export function Portfolio() {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-[12px] text-white">Connected wallets</div>
-          <div className="text-[11px] text-zinc-600">Canonical + embedded ownership</div>
+          <div className="app-meta-value text-zinc-600">Canonical + embedded ownership</div>
         </div>
         <Wallet className="h-4 w-4 text-zinc-500" />
       </div>
@@ -624,7 +624,7 @@ export function Portfolio() {
                 isCanonicalSmartWallet={wallet.isCanonicalSmartWallet}
                 size={12}
               />
-              <span className="font-mono text-zinc-300">{shortAddr(wallet.address)}</span>
+              <span className="text-zinc-300">{shortAddr(wallet.address)}</span>
               {wallet.isCanonicalSmartWallet ? <Badge variant="canonical" size="xs">Smart Wallet</Badge> : null}
               {wallet.isEmbeddedEoa ? <Badge variant="eoa" size="xs">User Wallet</Badge> : null}
               {wallet.isPrimary ? <Badge variant="warning" size="xs">Primary</Badge> : null}
@@ -632,7 +632,7 @@ export function Portfolio() {
           ))}
         </div>
       ) : (
-        <div className="text-[11px] text-zinc-500">No linked wallets yet.</div>
+        <div className="app-meta-value text-zinc-500">No linked wallets yet.</div>
       )}
       {!isPublicMode ? (
         <Button
@@ -654,7 +654,7 @@ export function Portfolio() {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-[12px] text-white">Recent activity</div>
-          <div className="text-[11px] text-zinc-600">Last 7 days</div>
+          <div className="app-meta-value text-zinc-600">Last 7 days</div>
         </div>
         <BarChart3 className="h-4 w-4 text-zinc-500" />
       </div>
@@ -676,7 +676,7 @@ export function Portfolio() {
             <div className="vault-surface vault-hover-lift p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                  <div className="rounded-full border border-white/10 bg-black/35 px-3 py-1.5 font-mono text-[12px] text-zinc-200">
+                  <div className="rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[12px] text-zinc-200">
                     {effectiveAddress ? shortAddr(effectiveAddress) : 'Sign in'}
                   </div>
                   <AccountModeIndicator compact />
@@ -700,7 +700,7 @@ export function Portfolio() {
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+              <div className="app-meta-value mt-3 flex flex-wrap items-center gap-2 text-zinc-500">
                 <span className="rounded-full border border-white/8 bg-white/5 px-2 py-1">
                   Status: {portfolioQuery.isLoading ? 'Syncing...' : portfolioQuery.data ? 'Synced' : 'Not synced'}
                 </span>
@@ -777,7 +777,7 @@ export function Portfolio() {
                       <div className="text-[2.15rem] font-semibold tracking-tight text-white tabular-nums">
                         {formatUsd(creatorContentUsd)}
                       </div>
-                      <div className="text-right text-[11px] text-zinc-500">Creator + content holdings on Base</div>
+                      <div className="app-meta-value text-right text-zinc-500">Creator + content holdings on Base</div>
                     </div>
                   </div>
                   <div className="px-3 pt-2">
@@ -800,7 +800,7 @@ export function Portfolio() {
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-zinc-600">
+                    <div className="app-meta-value flex items-center gap-2 text-zinc-600">
                       <span className="rounded-full border border-zinc-800 bg-zinc-900/50 px-2 py-0.5 text-[10px]">
                         Simulated trend
                       </span>
@@ -819,7 +819,7 @@ export function Portfolio() {
                     <div className="mb-3 flex items-center justify-between">
                       <div>
                         <div className="text-[12px] text-white">AMOE Free Entry</div>
-                        <div className="text-[11px] text-zinc-600">No-purchase path with credit-based check-ins</div>
+                        <div className="app-meta-value text-zinc-600">No-purchase path with credit-based check-ins</div>
                       </div>
                       {selectedAmoeCreatorCoin ? (
                         <a
@@ -832,7 +832,7 @@ export function Portfolio() {
                     </div>
 
                     <div className="mb-3">
-                      <label className="mb-1 block text-[11px] text-zinc-500">Creator coin for AMOE entry</label>
+                      <label className="app-meta-value mb-1 block text-zinc-500">Creator coin for AMOE entry</label>
                       <select
                         value={selectedAmoeCreatorCoin ?? ''}
                         onChange={(event) => {
@@ -889,7 +889,7 @@ export function Portfolio() {
                       ))}
                     </div>
                     <div className="mt-3 rounded-xl border border-zinc-800 bg-black/30 p-3">
-                      <div className="text-[11px] text-zinc-600">Swapped this week</div>
+                      <div className="app-meta-value text-zinc-600">Swapped this week</div>
                       <div className="mt-1 text-[16px] tabular-nums text-white">--</div>
                     </div>
                   </motion.div>
@@ -919,7 +919,7 @@ export function Portfolio() {
                             Source: <span className="text-zinc-200">{onchainIdentity.source === 'ens' ? 'ENS' : 'Basename'}</span>
                           </div>
                           <div>
-                            Address: <span className="font-mono text-zinc-200">{shortAddr(onchainIdentity.address)}</span>
+                            Address: <span className="text-zinc-200">{shortAddr(onchainIdentity.address)}</span>
                           </div>
                           <div>
                             Name: <span className="text-zinc-200">{onchainIdentity.displayName ?? '--'}</span>
@@ -929,7 +929,7 @@ export function Portfolio() {
                           </div>
                         </div>
                       ) : (
-                        <div className="mt-2 text-[11px] text-zinc-500">No ENS/Basename profile detected yet.</div>
+                        <div className="app-meta-value mt-2 text-zinc-500">No ENS/Basename profile detected yet.</div>
                       )}
                     </div>
 
@@ -964,7 +964,7 @@ export function Portfolio() {
                             Avatar Lens gateway: {avatarLensPreviewUrl}
                           </a>
                         ) : (
-                          <div className="text-[11px] text-zinc-600">Avatar Lens gateway: --</div>
+                          <div className="app-meta-value text-zinc-600">Avatar Lens gateway: --</div>
                         )}
                         {bannerLensPreviewUrl ? (
                           <a
@@ -976,7 +976,7 @@ export function Portfolio() {
                             Banner Lens gateway: {bannerLensPreviewUrl}
                           </a>
                         ) : (
-                          <div className="text-[11px] text-zinc-600">Banner Lens gateway: --</div>
+                          <div className="app-meta-value text-zinc-600">Banner Lens gateway: --</div>
                         )}
                       </div>
                     ) : null}
@@ -1032,7 +1032,7 @@ export function Portfolio() {
                     {Object.keys(profileFields).length > 0 ? (
                       <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
                         <div className="mb-2 text-[10px] font-medium text-zinc-500">Field provenance</div>
-                        <div className="grid gap-1 text-[11px] text-zinc-500 md:grid-cols-2">
+                        <div className="app-meta-value grid gap-1 text-zinc-500 md:grid-cols-2">
                           {Object.entries(profileFields).map(([key, field]) => (
                             <div key={key}>
                               {key}: <span className="text-zinc-300">{field.source || 'manual'}</span>

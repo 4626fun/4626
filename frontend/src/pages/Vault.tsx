@@ -92,7 +92,7 @@ function TokenAvatar({
 
       {badge ? (
         <div
-          className="absolute -bottom-1 -right-1 rounded-full backdrop-blur-md border border-brand-primary/20 bg-black/70 text-brand-accent font-mono leading-none text-[10px] px-2 py-0.5"
+          className="absolute -bottom-1 -right-1 rounded-full backdrop-blur-md border border-brand-primary/20 bg-black/70 text-brand-accent leading-none text-[10px] px-2 py-0.5"
           aria-label={badge === SHARE_SYMBOL_PREFIX ? `Share token (${SHARE_SYMBOL_PREFIX}TOKEN)` : badge}
           title={badge === SHARE_SYMBOL_PREFIX ? `Share token (${SHARE_SYMBOL_PREFIX}TOKEN)` : badge}
         >
@@ -536,7 +536,7 @@ export function Vault() {
                   ? 'We could not resolve this vault from the onchain registry right now.'
                   : 'This address is not recognized by the onchain registry.'}
               </p>
-              <div className="mt-3 text-[11px] font-mono text-zinc-600 break-all">{addressParam}</div>
+              <div className="app-meta-value mt-3 text-zinc-600 break-all">{addressParam}</div>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <Link to="/explore/creators" className="btn-accent btn-compact inline-flex items-center justify-center rounded-full text-xs">
                   Back to Explore
@@ -634,7 +634,7 @@ export function Vault() {
                   </OrbBorder>
 
                   {/* Corner mark */}
-                  <div className="absolute -bottom-2 -right-2 rounded-full backdrop-blur-md border border-brand-primary/20 bg-black/75 text-brand-accent font-mono leading-none text-xs px-2.5 py-1 min-w-[40px] text-center shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+                  <div className="absolute -bottom-2 -right-2 rounded-full backdrop-blur-md border border-brand-primary/20 bg-black/75 text-brand-accent leading-none text-xs px-2.5 py-1 min-w-[40px] text-center shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
                     {shareSymbol || SHARE_SYMBOL_PREFIX}
                   </div>
                 </div>
@@ -664,10 +664,10 @@ export function Vault() {
                         Vault
                       </span>
                     </h1>
-                    <p className="mt-4 max-w-[40ch] text-sm font-light leading-relaxed text-zinc-500 mono">
+                    <p className="mt-4 max-w-[40ch] text-sm font-light leading-relaxed text-zinc-500">
                       Deposit {underlyingSymbol || 'underlying token'} to mint {shareSymbol || 'vault shares'}
                     </p>
-                    <p className="mt-1 max-w-[40ch] text-xs font-light leading-relaxed text-zinc-600 mono">
+                    <p className="mt-1 max-w-[40ch] text-xs font-light leading-relaxed text-zinc-600">
                       Redeem {shareSymbol || 'vault shares'} to withdraw {underlyingSymbol || 'underlying token'}
                     </p>
                   </div>
@@ -675,7 +675,7 @@ export function Vault() {
                   <div className="shrink-0 hidden sm:flex flex-col items-end gap-3">
                   <div className="vault-pill normal-case tracking-[0.02em] px-3 py-1.5 gap-2">
                       <ShieldCheck className="w-3.5 h-3.5 text-brand-primary" />
-                    <span className="text-[10px] font-mono text-zinc-300">ERC-4626 • Base</span>
+                    <span className="app-meta-value text-zinc-300">ERC-4626 • Base</span>
                     </div>
                   </div>
                 </div>
@@ -754,7 +754,7 @@ export function Vault() {
                   <span className="label">
                     {isAuctionActive ? 'Committed' : tvlUsdDisplay ? 'TVL' : 'Assets in vault'}
                   </span>
-                  <div className="value mono text-2xl sm:text-3xl">
+                  <div className="value text-2xl sm:text-3xl">
                     {isAuctionActive
                       ? committedDisplay ?? '—'
                       : totalAssets !== undefined
@@ -762,14 +762,14 @@ export function Vault() {
                       : <Skeleton className="h-8 w-24 mt-1" />}
                   </div>
                   {!isAuctionActive && tvlUsdDisplay && totalAssetsDisplay ? (
-                    <div className="text-[11px] text-zinc-500">
+                    <div className="app-meta-value text-zinc-500">
                       {totalAssetsDisplay} {underlyingSymbol} in vault
                     </div>
                   ) : null}
                 </div>
                 <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Total Supply</span>
-                  <div className="value mono text-2xl sm:text-3xl">
+                  <div className="value text-2xl sm:text-3xl">
                     {totalShareSupply !== undefined
                       ? formatAmount(totalShareSupply, shareTokenDecimals)
                       : <Skeleton className="h-8 w-24 mt-1" />}
@@ -777,13 +777,13 @@ export function Vault() {
                 </div>
                 <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Global Jackpot</span>
-                  <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
+                  <div className="value text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
                     —
                   </div>
                 </div>
                 <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Trade Fee</span>
-                  <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
+                  <div className="value text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
                     —
                   </div>
                 </div>
@@ -937,7 +937,7 @@ export function Vault() {
                 {amount && !amountError && (
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-3 border-y border-white/8">
                     <span className="label">You will receive</span>
-                    <div className="value mono text-lg sm:text-xl glow-cyan sm:text-right whitespace-nowrap">
+                    <div className="value text-lg sm:text-xl glow-cyan sm:text-right whitespace-nowrap">
                       {amount} {activeTab === 'Deposit' ? shareSymbol : underlyingSymbol}
                     </div>
                   </div>
@@ -1014,10 +1014,10 @@ export function Vault() {
                       <div className="text-right">
                         {shareBalance !== undefined ? (
                           <>
-                            <div className="font-mono text-xl sm:text-2xl text-zinc-200 tabular-nums glow-cyan">
+                            <div className="text-xl sm:text-2xl text-zinc-200 tabular-nums glow-cyan">
                               {formatAmount(shareBalance, shareTokenDecimals)}
                             </div>
-                            <div className="text-[10px] text-zinc-700 mt-1">Balance</div>
+                            <div className="app-meta-value mt-1 text-zinc-700">Balance</div>
                           </>
                         ) : (
                           <Skeleton className="h-7 w-20" />
@@ -1036,10 +1036,10 @@ export function Vault() {
                       <div className="text-right">
                         {tokenBalance !== undefined ? (
                           <>
-                            <div className="font-mono text-lg sm:text-xl text-zinc-200 tabular-nums">
+                            <div className="text-lg sm:text-xl text-zinc-200 tabular-nums">
                               {formatAmount(tokenBalance, creatorDecimals)}
                             </div>
-                            <div className="text-[10px] text-zinc-700 mt-1">Balance</div>
+                            <div className="app-meta-value mt-1 text-zinc-700">Balance</div>
                           </>
                         ) : (
                           <Skeleton className="h-6 w-20" />

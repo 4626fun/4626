@@ -1,4 +1,4 @@
-import { ArrowDownUp, RefreshCw } from 'lucide-react'
+import { ArrowDownUp } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import { SwapDetails } from '@/components/swap/SwapDetails'
@@ -26,7 +26,6 @@ type SwapCardProps = {
   busy: string | null
   status?: string | null
   error?: string | null
-  quoteIsStale: boolean
   quoteUpdatedAt?: string | null
   approvalRequired?: boolean
   tokenInAddress: string
@@ -45,7 +44,6 @@ type SwapCardProps = {
   onQuickPercent: (pct: number, tokenBalance?: string | null) => void
   onSwitchTokens: () => void
   onReviewTrade: () => void
-  onRefreshQuote: () => void
   onSetSlippagePct: (pct: string) => void
   onConfirmUnverified: () => void
   executionMode: 'canonical' | 'eoa'
@@ -57,10 +55,10 @@ type SwapCardProps = {
 
 export function SwapCard(props: SwapCardProps) {
   return (
-    <div className="bv-panel vault-hover-lift p-4">
+    <div className="bv-panel border-0 vault-hover-lift p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="text-sm text-vault-subtext space-y-1">
-          <div className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] text-vault-subtext" style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.65)', background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
+          <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] text-vault-subtext" style={{ background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
             <span>Powered by</span>
             <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
           </div>
@@ -73,7 +71,7 @@ export function SwapCard(props: SwapCardProps) {
             compact
           />
           {props.fallbackActive ? (
-            <div className="inline-flex items-center rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-amber-200">
+            <div className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-amber-200">
               Fallback active
             </div>
           ) : null}
@@ -116,6 +114,7 @@ export function SwapCard(props: SwapCardProps) {
           amount={props.estimatedOut}
           readOnly
           amountUsd={props.estimatedOutUsd || undefined}
+          balanceLabel={props.tokenOutBalanceLabel}
           token={props.tokenOutDisplay}
           tokenAddress={props.tokenOutAddress}
           isLoadingToken={props.tokenOutIdentityLoading}
@@ -159,18 +158,6 @@ export function SwapCard(props: SwapCardProps) {
 
       {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
       {props.status && <div className="mt-2 text-xs text-vault-subtext">{props.status}</div>}
-      <div className="mt-3 flex items-center justify-between text-xs text-vault-subtext">
-        <span className="font-mono">Quote {props.quoteIsStale ? '(stale)' : '(fresh)'}</span>
-        <button
-          type="button"
-          onClick={props.onRefreshQuote}
-          className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-vault-text transition-all duration-200 hover:-translate-y-px hover:bg-white/6"
-          style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.62)' }}
-        >
-          <RefreshCw className="h-3 w-3" />
-          Refresh
-        </button>
-      </div>
 
       <SwapDetails
         routeSummary={props.routeSummary}

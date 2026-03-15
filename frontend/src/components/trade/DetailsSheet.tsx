@@ -128,7 +128,7 @@ export function DetailsSheet(props: DetailsSheetProps) {
                 href="https://docs.uniswap.org/concepts/protocol/swaps"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-400 transition"
+                className="inline-flex items-center gap-1 app-meta-value text-zinc-600 hover:text-zinc-400 transition"
               >
                 About routing
                 <ExternalLink className="h-3 w-3" />

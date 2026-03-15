@@ -215,10 +215,10 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
                 Creator
               </span>
             </div>
-            <div className="mt-1 text-[11px] leading-4 text-zinc-500 break-all">
+            <div className="app-meta-value mt-1 leading-4 text-zinc-500 break-all">
               Share token: {shareOFT ?? 'Unavailable'}
             </div>
-            <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-[11px] text-zinc-400">
+            <div className="app-meta-value mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-zinc-400">
               <img alt="Base" className="h-3.5 w-3.5 rounded-full object-contain shrink-0" loading="lazy" src={BASE_BRANDMARK_BLUE} />
               <span>Base</span>
             </div>
@@ -227,11 +227,11 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
         <div className="text-right text-xs text-zinc-500">
           <div>{tvlUsd != null ? 'TVL' : 'Assets in vault'}</div>
           <div className="text-sm text-zinc-200">{tvlUsd != null ? formatCompactUsd(tvlUsd) : tvlLabel}</div>
-          {tvlUsd != null ? <div className="mt-1 text-[10px] text-zinc-500">{tvlLabel} in vault</div> : null}
+          {tvlUsd != null ? <div className="app-meta-value mt-1 text-zinc-500">{tvlLabel} in vault</div> : null}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+      <div className="app-meta-value flex flex-wrap items-center gap-2 text-zinc-500">
         {auctionLive && auctionUrl ? (
           <a
             href={auctionUrl}

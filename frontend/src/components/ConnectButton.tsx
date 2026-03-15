@@ -5,7 +5,5 @@ import { ConnectButtonWeb3 } from './ConnectButtonWeb3'
  * Web3 is always available since providers are loaded at app startup.
  */
 export function ConnectButton({ variant }: { variant?: string }) {
-  // variant is ignored for now - kept for API compatibility
-  void variant
-  return <ConnectButtonWeb3 />
+  return <ConnectButtonWeb3 variant={variant === 'nav' ? 'nav' : 'default'} />
 }

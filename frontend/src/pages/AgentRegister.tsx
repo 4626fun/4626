@@ -790,15 +790,15 @@ export function AgentRegister() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/5 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-          Registry: <span className="font-mono text-zinc-300">{registryAddress}</span> (Base)
+        <div className="rounded-lg border border-white/5 bg-black/20 px-3 py-2 app-meta-value text-zinc-500">
+          Registry: <span className="text-zinc-300">{registryAddress}</span> (Base)
         </div>
         {!canOperateCanonicalCsw ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
             Registration is locked to your canonical Zora CSW so the agent owner is your existing smart wallet.
             {canonicalSmartWalletAddress ? (
               <>
-                {' '}Expected wallet: <span className="font-mono">{canonicalSmartWalletAddress}</span>.
+                {' '}Expected wallet: <span>{canonicalSmartWalletAddress}</span>.
               </>
             ) : (
               <> Connect/sync your canonical CSW first.</>
@@ -872,12 +872,12 @@ export function AgentRegister() {
 
         <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
           <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-            <div className="text-zinc-400">Canonical CSW</div>
-            <div className="font-mono text-zinc-200">{canonicalSmartWalletAddress ? shortAddress(canonicalSmartWalletAddress) : 'Not detected'}</div>
+            <div className="app-meta-value text-zinc-400">Canonical CSW</div>
+            <div className="text-zinc-200">{canonicalSmartWalletAddress ? shortAddress(canonicalSmartWalletAddress) : 'Not detected'}</div>
           </div>
           <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-            <div className="text-zinc-400">XMTP Agent</div>
-            <div className="font-mono text-zinc-200">{xmtpAgentAddress ? shortAddress(xmtpAgentAddress) : 'Not enabled yet'}</div>
+            <div className="app-meta-value text-zinc-400">XMTP Agent</div>
+            <div className="text-zinc-200">{xmtpAgentAddress ? shortAddress(xmtpAgentAddress) : 'Not enabled yet'}</div>
           </div>
         </div>
 
@@ -963,7 +963,7 @@ export function AgentRegister() {
               Issue SIWA Receipt
             </button>
           </div>
-          <div className="text-[11px] text-zinc-500">
+          <div className="app-meta-value text-zinc-500">
             SIWA enables authenticated agent API calls. Use the same canonical owner context as your ERC-8004 identity.
           </div>
         </div>
@@ -985,7 +985,7 @@ export function AgentRegister() {
           </a>
         ) : null}
 
-        <div className="text-[11px] text-zinc-500">
+        <div className="app-meta-value text-zinc-500">
           Note: ERC-8128 and EIP-7702 are surfaced as readiness/status checks from current app state and wallet capability.
         </div>
       </div>

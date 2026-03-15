@@ -119,16 +119,16 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 const TELEGRAM_MENU_LABELS = {
   connect: '■ Connect',
   wallet: '■ Wallet',
-  trade: '⇄ Trade',
-  explore: '◇ Explore',
-  help: '? Help',
-  vaults: '▣ Vaults',
-  auctions: '△ Auctions',
-  signals: '⇢ Signals',
-  buy: '+ Buy',
-  sell: '- Sell',
-  bid: '• Bid',
-  back: '< Back',
+  trade: 'Trade',
+  explore: 'Explore',
+  help: 'Help',
+  vaults: 'Vaults',
+  auctions: 'Auctions',
+  signals: 'Signals',
+  buy: 'Buy',
+  sell: 'Sell',
+  bid: 'Bid',
+  back: 'Back',
 } as const
 
 function sanitizeTelegramLabel(label: string): string {
