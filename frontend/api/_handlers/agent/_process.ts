@@ -61,6 +61,14 @@ const CONVERSATION_CHECKPOINTS_INDEX_SQL = `
     ON creator_xmtp_agent_conversation_checkpoints (creator_address, updated_at DESC);
 `
 
+export function readStrictUnsupportedRetryEnabled(raw = process.env.AGENT_PROCESS_STRICT_UNSUPPORTED_RETRY): boolean {
+  const normalized = String(raw ?? '').trim().toLowerCase()
+  if (!normalized) return true
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+const AGENT_PROCESS_STRICT_UNSUPPORTED_RETRY = readStrictUnsupportedRetryEnabled()
+
 export function getCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): number {
   if (lastProcessedAt) {
     const parsed = new Date(lastProcessedAt as any).getTime()
@@ -125,6 +133,13 @@ export function resolveFallbackCommandReply(params: {
     ].join('\n'),
     fallbackGenerated: true,
   }
+}
+
+export function shouldDeferFallbackCommand(params: {
+  fallbackGenerated: boolean
+  strictUnsupportedRetry: boolean
+}): boolean {
+  return params.fallbackGenerated && params.strictUnsupportedRetry
 }
 
 export function parseConversationCheckpointRows(rows: Array<Record<string, unknown>>): Map<string, number> {
@@ -266,6 +281,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let totalReplied = 0
   let agentsProcessed = 0
   let totalFallbackReplies = 0
+  let totalDeferredUnsupported = 0
 
   try {
     const db = await getDb()
@@ -363,6 +379,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (Date.now() - startTime > EXECUTION_TIMEOUT_MS) break
           const conversationCheckpointMs = conversationCheckpoints.get(convo.id) ?? fallbackConversationCheckpointMs
           let newestConversationTimestamp = conversationCheckpointMs
+          let deferredUnsupportedInConversation = false
 
           try {
             await convo.sync()
@@ -411,6 +428,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 text: content.trim(),
                 result,
               })
+              const deferUnsupported = shouldDeferFallbackCommand({
+                fallbackGenerated: reply.fallbackGenerated,
+                strictUnsupportedRetry: AGENT_PROCESS_STRICT_UNSUPPORTED_RETRY,
+              })
+              if (deferUnsupported) {
+                totalDeferredUnsupported++
+                deferredUnsupportedInConversation = true
+                logger.warn('[agent/process] deferring unsupported command until realtime runtime is online', {
+                  creator: creatorAddress.slice(0, 10),
+                  convo: convo.id.slice(0, 16),
+                  command: content.trim().slice(0, 64),
+                })
+                break
+              }
+
               await convo.sendText(reply.replyText)
               totalReplied++
               if (reply.fallbackGenerated) {
@@ -438,6 +470,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               conversationCheckpoints.set(convo.id, newestConversationTimestamp)
               newestTimestamp = mergeCheckpointMs(newestTimestamp, newestConversationTimestamp)
             }
+            if (deferredUnsupportedInConversation) continue
             if (shouldStopAgentLoop) break
           } catch (err) {
             logger.error('[agent/process] Conversation error', {
@@ -479,6 +512,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       totalProcessed,
       totalReplied,
       totalFallbackReplies,
+      totalDeferredUnsupported,
       elapsed,
     })
 
@@ -489,6 +523,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         processed: totalProcessed,
         replied: totalReplied,
         fallbackReplies: totalFallbackReplies,
+        deferredUnsupported: totalDeferredUnsupported,
         elapsedMs: elapsed,
       },
     } satisfies ApiEnvelope<any>)

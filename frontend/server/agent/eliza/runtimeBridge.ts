@@ -2077,7 +2077,7 @@ export function createRuntimeBridge(params: {
       rememberConversationArchiveKeyHint(msg.conversationId, xmtpConversationKey)
     }
     return {
-      id: toInboundMessageMemoryId(msg) as any,
+      id: toInboundMessageMemoryId({ ...msg, sentAtMs }) as any,
       entityId: toEntityId(msg.senderAddress) as any,
       agentId: runtimeAgentId as any,
       roomId: toRoomId(msg.conversationId) as any,

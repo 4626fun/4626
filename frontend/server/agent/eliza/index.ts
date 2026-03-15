@@ -1062,7 +1062,10 @@ async function acquireRuntimeLeaseOrExit(): Promise<void> {
             AND owner_id = ${runtimeLeaseState.ownerId}
           RETURNING owner_id;
         `
-        const rowCount = Number((refreshed as any)?.rowCount ?? 0)
+        const refreshedRows = Array.isArray((refreshed as any)?.rows)
+          ? (refreshed as any).rows.length
+          : 0
+        const rowCount = Number((refreshed as any)?.rowCount ?? refreshedRows)
         if (!Number.isFinite(rowCount) || rowCount <= 0) {
           logger.error('[eliza/runtime-lock] runtime lease lost; refusing split-brain. Exiting.')
           process.exit(1)

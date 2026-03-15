@@ -524,6 +524,8 @@ export class XmtpService {
   }
 
   private async handleIncoming(ctx: MessageContext<string>): Promise<void> {
+    let claimedDedupeKey: string | null = null
+    let shouldRetainDedupe = false
     try {
       if (!this.agent) return
       if (filter.fromSelf(ctx.message, ctx.client)) return
@@ -552,6 +554,7 @@ export class XmtpService {
         console.warn(`[xmtp-service] Duplicate inbound message dropped (${dedupeKey.slice(0, 28)}...)`)
         return
       }
+      claimedDedupeKey = dedupeKey
       const conversationArchiveKey = await this.deriveConversationArchiveKey(conversationId)
 
       // Resolve sender address
@@ -577,8 +580,14 @@ export class XmtpService {
           await ctx.conversation.sendText(reply)
         }
       }
+      shouldRetainDedupe = true
     } catch (err) {
       console.error('[xmtp-service] Message handler error:', err)
+    } finally {
+      if (!shouldRetainDedupe && claimedDedupeKey) {
+        // Allow transient handler failures to be retried by a later redelivery.
+        this.seenInboundMessages.delete(claimedDedupeKey)
+      }
     }
   }
 }

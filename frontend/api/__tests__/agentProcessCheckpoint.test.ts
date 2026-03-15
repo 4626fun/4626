@@ -9,7 +9,9 @@ import {
   getEthereumAddressFromInboxState,
   mergeCheckpointMs,
   parseConversationCheckpointRows,
+  readStrictUnsupportedRetryEnabled,
   resolveFallbackCommandReply,
+  shouldDeferFallbackCommand,
 } from '../_handlers/agent/_process.ts'
 
 describe('agent/process checkpoints', () => {
@@ -100,5 +102,19 @@ describe('agent/process checkpoints', () => {
     expect(resolved.fallbackGenerated).toBe(true)
     expect(resolved.replyText).toContain('/cre')
     expect(resolved.replyText).toContain('fallback mode')
+  })
+
+  it('reads strict unsupported retry mode from env-like values', () => {
+    expect(readStrictUnsupportedRetryEnabled('true')).toBe(true)
+    expect(readStrictUnsupportedRetryEnabled('1')).toBe(true)
+    expect(readStrictUnsupportedRetryEnabled('yes')).toBe(true)
+    expect(readStrictUnsupportedRetryEnabled('false')).toBe(false)
+    expect(readStrictUnsupportedRetryEnabled('')).toBe(true)
+  })
+
+  it('defers fallback commands only in strict mode', () => {
+    expect(shouldDeferFallbackCommand({ fallbackGenerated: false, strictUnsupportedRetry: true })).toBe(false)
+    expect(shouldDeferFallbackCommand({ fallbackGenerated: true, strictUnsupportedRetry: false })).toBe(false)
+    expect(shouldDeferFallbackCommand({ fallbackGenerated: true, strictUnsupportedRetry: true })).toBe(true)
   })
 })

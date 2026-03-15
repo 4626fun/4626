@@ -96,15 +96,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rawBytes = fetched?.bytes
         if (rawBytes && rawBytes.length > 0) {
           res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
-          const processed = await postProcessAiOverrideIcon(rawBytes, size)
+          const sourceContentType =
+            typeof fetched?.contentType === 'string' && fetched.contentType.startsWith('image/')
+              ? fetched.contentType
+              : 'image/png'
+          const processed = await postProcessAiOverrideIcon(rawBytes, size).catch((error) => {
+            console.warn('[token/image] AI override post-process failed; using source bytes:', error)
+            return null
+          })
+          const outputBytes = processed && processed.length > 0 ? processed : Buffer.from(rawBytes)
+          const outputContentType = processed ? 'image/png' : sourceContentType
           if (format === 'svg') {
-            const b64 = Buffer.from(processed).toString('base64')
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}"/></svg>`
+            const b64 = Buffer.from(outputBytes).toString('base64')
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:${outputContentType};base64,${b64}" width="${size}" height="${size}"/></svg>`
             res.setHeader('Content-Type', 'image/svg+xml')
             return res.status(200).send(svg)
           }
-          res.setHeader('Content-Type', 'image/png')
-          return res.status(200).send(processed)
+          res.setHeader('Content-Type', outputContentType)
+          return res.status(200).send(outputBytes)
         }
       }
     }
@@ -205,7 +214,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         size,
         bytes: sourceBytes,
       })
-      const frameOverlayImage = await getFrameOverlayAssetDataUri()
       const glowLayout = getTokenIconLayout(size, prepared.recipe)
       const glowLayerImage = await renderGlowLayerDataUri(size, glowLayout)
       const svg = generateFramedSvg({
@@ -220,7 +228,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ? `data:image/png;base64,${Buffer.from(prepared.breakoutLayerBytes).toString('base64')}`
             : null,
         glowLayerImage,
-        frameOverlayImage,
         recipe: prepared.recipe,
       })
 
@@ -307,13 +314,11 @@ interface FramedSvgParams {
   baseLayerImage?: string | null
   breakoutLayerImage?: string | null
   glowLayerImage?: string | null
-  frameOverlayImage?: string
   recipe?: TokenIconRecipe
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 23
-const FRAME_ASSET_URL = new URL('../../../public/app-icon.svg', import.meta.url)
+const FRAME_STYLE_V = 30
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -343,14 +348,12 @@ const TOKEN_ICON_RECIPES: Record<LayoutMode, Omit<TokenIconRecipe, 'breakout'>> 
 const BREAKOUT_CONFIG = {
   enabled: true,
   riseAboveFrameRatio: 0.11,
-  visibleBelowFrameRatio: 0.006,
-  fadeBelowFrameRatio: 0.016,
+  visibleBelowFrameRatio: 0.045,
+  fadeBelowFrameRatio: 0.10,
   minForegroundCoverage: 0.03,
   rembgTimeoutMs: 30_000,
   rembgBin: process.env.REMBG_BIN || '/tmp/rembg-env/bin/rembg',
 } as const
-
-let frameOverlayAssetPromise: Promise<string> | null = null
 
 function getDefaultRecipe(): TokenIconRecipe {
   return { ...TOKEN_ICON_RECIPES.contain, breakout: false }
@@ -420,7 +423,7 @@ function deriveTokenIconRecipe(
 
 async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Promise<string> {
   const { r, g, b } = hexToRgb(TOKEN_ICON_STYLE.glowColor)
-  const outerStrokeW = Math.round(layout.frameStrokeWidth * 4)
+  const outerStrokeW = Math.round(layout.frameStrokeWidth * 5)
   const svgSize = size
   const ocx = layout.panelX + outerStrokeW / 2
   const ocy = layout.panelY + outerStrokeW / 2
@@ -431,9 +434,20 @@ async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Pr
     <rect x="${ocx}" y="${ocy}" width="${orw}" height="${orh}" rx="${orr}" fill="none" stroke="rgb(${r},${g},${b})" stroke-width="${outerStrokeW}"/>
   </svg>`
   const strokePng = await sharp(Buffer.from(strokeSvg)).png().toBuffer()
-  const sigma = Math.max(1, Math.round(size * 0.04))
+  const sigma = Math.max(1, Math.round(size * 0.045))
   const blurred = await sharp(strokePng)
     .blur(sigma)
+    .png()
+    .toBuffer()
+  const tight = await sharp(strokePng)
+    .blur(Math.max(1, sigma * 0.55))
+    .png()
+    .toBuffer()
+  const boosted = await sharp(blurred)
+    .composite([
+      { input: blurred, blend: 'screen' },
+      { input: tight, blend: 'screen' },
+    ])
     .png()
     .toBuffer()
   // Keep glow outside the inner frame opening to prevent top-band bleed inside.
@@ -441,7 +455,7 @@ async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Pr
     <rect x="${layout.panelX}" y="${layout.panelY}" width="${layout.panelSize}" height="${layout.panelSize}" rx="${layout.panelRadius}" fill="white"/>
   </svg>`
   const innerHoleMask = await sharp(Buffer.from(innerHoleSvg)).png().toBuffer()
-  const outsideOnly = await sharp(blurred)
+  const outsideOnly = await sharp(boosted)
     .ensureAlpha()
     .composite([{ input: innerHoleMask, blend: 'dest-out' }])
     .png()
@@ -452,16 +466,6 @@ async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Pr
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace('#', '')
   return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) }
-}
-
-async function getFrameOverlayAssetDataUri(): Promise<string> {
-  frameOverlayAssetPromise ??= readFile(FRAME_ASSET_URL, 'utf8').then((svg) => {
-    const stripped = svg
-      .replace(/<rect[^>]*width="256"[^>]*height="256"[^>]*fill="#000000"[^>]*\/>\s*/i, '')
-      .trim()
-    return `data:image/svg+xml;base64,${Buffer.from(stripped).toString('base64')}`
-  })
-  return frameOverlayAssetPromise
 }
 
 async function analyzeTokenImageBytes(bytes: Uint8Array): Promise<TokenImageMetrics> {
@@ -755,10 +759,13 @@ async function renderPlacedArtworkLayer(params: {
     .png()
     .toBuffer()
 
+  const coverTopBias = params.fit === 'cover' ? Math.round(params.layout.panelSize * 0.052) : 0
+  const compositeTop = Math.max(0, params.layout.artY - coverTopBias)
+
   const canvas = await sharp({
     create: { width: params.size, height: params.size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
-    .composite([{ input: placed, left: params.layout.artX, top: params.layout.artY }])
+    .composite([{ input: placed, left: params.layout.artX, top: compositeTop }])
     .png()
     .toBuffer()
 
@@ -885,10 +892,15 @@ async function buildDominantBreakoutComponentMask(params: {
 
   const pixelCount = width * height
   const visited = new Uint8Array(pixelCount)
-  const bestMask = new Uint8Array(pixelCount)
+  const selectedMask = new Uint8Array(pixelCount)
   let bestScore = 0
   const centerX = rLeft + regionWidth / 2
   const minArea = Math.max(42, Math.round(regionWidth * regionHeight * 0.0022))
+  type Candidate = {
+    score: number
+    indices: number[]
+  }
+  const candidates: Candidate[] = []
 
   const neighbors = [
     [1, 0],
@@ -951,18 +963,26 @@ async function buildDominantBreakoutComponentMask(params: {
       const stripPenalty = widthRatio >= 0.92 && compHeight <= Math.round(regionHeight * 0.4) ? 0.42 : 1
 
       const score = area * (0.44 + 0.36 * topAffinity + 0.2 * centerAffinity) * stripPenalty
-      if (score <= bestScore) continue
-
-      bestScore = score
-      bestMask.fill(0)
-      for (const idx of indices) bestMask[idx] = 255
+      if (score > bestScore) bestScore = score
+      candidates.push({ score, indices })
     }
   }
 
-  if (bestScore <= 0) return null
+  if (bestScore <= 0 || candidates.length === 0) return null
+  const scoreFloor = bestScore * 0.26
+  const kept = candidates
+    .filter((c) => c.score >= scoreFloor)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
 
-  return await sharp(Buffer.from(bestMask), { raw: { width, height, channels: 1 } })
-    .blur(1.0)
+  if (kept.length === 0) return null
+  for (const candidate of kept) {
+    for (const idx of candidate.indices) selectedMask[idx] = 255
+  }
+
+  return await sharp(Buffer.from(selectedMask), { raw: { width, height, channels: 1 } })
+    .dilate(2)
+    .blur(1.15)
     .png()
     .toBuffer()
 }
@@ -986,7 +1006,7 @@ async function applyBreakoutAlphaMask(params: {
   const horizontalPad = Math.round(layout.panelSize * 0.04)
   let zoneLeft = alphaBounds ? Math.max(layout.panelX, alphaBounds.left - horizontalPad) : layout.panelX
   let zoneRight = alphaBounds ? Math.min(layout.panelX + layout.panelSize, alphaBounds.right + horizontalPad) : layout.panelX + layout.panelSize
-  const maxZoneWidth = Math.max(1, Math.round(layout.panelSize * 0.64))
+  const maxZoneWidth = Math.max(1, Math.round(layout.panelSize * 0.8))
   if (zoneRight - zoneLeft > maxZoneWidth) {
     const center = alphaBounds
       ? (alphaBounds.left + alphaBounds.right) / 2
@@ -1078,7 +1098,6 @@ async function getOrCreatePng(params: {
     size: params.size,
     bytes: sourceBytes,
   })
-  const frameOverlayImage = await getFrameOverlayAssetDataUri()
   const glowLayout = getTokenIconLayout(params.size, prepared.recipe)
   const glowLayerImage = await renderGlowLayerDataUri(params.size, glowLayout)
   const svg = generateFramedSvg({
@@ -1093,7 +1112,6 @@ async function getOrCreatePng(params: {
         ? `data:image/png;base64,${Buffer.from(prepared.breakoutLayerBytes).toString('base64')}`
         : null,
     glowLayerImage,
-    frameOverlayImage,
     recipe: prepared.recipe,
   })
   const pngBuf = await sharp(Buffer.from(svg)).png().toBuffer()
@@ -1118,11 +1136,9 @@ function generateFramedSvg({
   baseLayerImage,
   breakoutLayerImage,
   glowLayerImage,
-  frameOverlayImage,
   recipe = getDefaultRecipe(),
 }: FramedSvgParams): string {
   const resolvedBaseLayerImage = baseLayerImage ?? creatorCoinImage ?? null
-  const resolvedFrameOverlay = frameOverlayImage ?? ''
   const layout = getTokenIconLayout(size, recipe)
 
   const safeSymbol = symbol
@@ -1168,29 +1184,31 @@ function generateFramedSvg({
         />`
       : ''
 
-  const frameElement = resolvedFrameOverlay
-    ? `<image
-        data-frame='inner'
-        href="${resolvedFrameOverlay}"
-        x="0"
-        y="0"
-        width="${size}"
-        height="${size}"
-        preserveAspectRatio="none"
-      />`
-    : `<rect
-        data-frame='inner'
-        x="${layout.panelX}"
-        y="${layout.panelY}"
-        width="${layout.panelSize}"
-        height="${layout.panelSize}"
-        rx="${layout.panelRadius}"
-        fill="none"
-        stroke="#7da8ff"
-        stroke-opacity="0.9"
-        stroke-width="${layout.frameStrokeWidth}"
-        stroke-linejoin="round"
-      />`
+  const frameElement = `<rect
+      data-frame='inner'
+      x="${layout.panelX}"
+      y="${layout.panelY}"
+      width="${layout.panelSize}"
+      height="${layout.panelSize}"
+      rx="${layout.panelRadius}"
+      fill="none"
+      stroke="#6ea2ff"
+      stroke-opacity="0.86"
+      stroke-width="${layout.frameStrokeWidth}"
+      stroke-linejoin="round"
+    />
+    <rect
+      x="${layout.panelX}"
+      y="${layout.panelY}"
+      width="${layout.panelSize}"
+      height="${layout.panelSize}"
+      rx="${layout.panelRadius}"
+      fill="none"
+      stroke="#dbeafe"
+      stroke-opacity="0.26"
+      stroke-width="${Math.max(1, Math.round(layout.frameStrokeWidth * 0.42))}"
+      stroke-linejoin="round"
+    />`
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -1222,9 +1240,7 @@ function generateFramedSvg({
   <rect width="${size}" height="${size}" fill="${TOKEN_ICON_STYLE.backgroundOuter}" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bg)" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#vignette)" />
-  ${glowLayerImage
-    ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="${resolvedFrameOverlay ? '0.65' : '0.9'}"/>`
-    : ''}
+  ${glowLayerImage ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="0.94"/>` : ''}
   <rect
     x="${layout.panelX}"
     y="${layout.panelY}"

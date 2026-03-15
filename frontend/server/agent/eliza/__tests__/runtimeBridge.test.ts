@@ -242,6 +242,39 @@ describe('runtime bridge', () => {
     expect(String((state as any).recentMessages[0]?.text ?? '')).toContain('hello once')
   })
 
+  it('uses resolved sentAtMs for fallback inbound memory ids', async () => {
+    const { createRuntimeBridge } = await import('../runtimeBridge.ts')
+    const bridge = createRuntimeBridge({
+      agentKey: 'creator-fallback-id',
+      plugins: [],
+    })
+
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-03-15T10:00:00.000Z'))
+      const first = bridge.createInboundMemory({
+        conversationId: 'conv-fallback-id',
+        conversationType: 'dm',
+        senderAddress: '0x1111111111111111111111111111111111111111',
+        content: 'same content',
+      })
+
+      vi.setSystemTime(new Date('2026-03-15T10:00:05.000Z'))
+      const second = bridge.createInboundMemory({
+        conversationId: 'conv-fallback-id',
+        conversationType: 'dm',
+        senderAddress: '0x1111111111111111111111111111111111111111',
+        content: 'same content',
+      })
+
+      expect(first.id).not.toEqual(second.id)
+      expect(first.createdAt).toBe(1_773_568_800_000)
+      expect(second.createdAt).toBe(1_773_568_805_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('hydrates warm memory artifacts into composed state', async () => {
     const db = {
       sql: vi.fn(async (strings: TemplateStringsArray) => {

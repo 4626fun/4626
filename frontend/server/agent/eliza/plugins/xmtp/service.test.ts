@@ -211,12 +211,93 @@ describe('xmtp service lifecycle', () => {
       client: {},
     }
 
-    await textHandler?.(ctx as any)
-    await textHandler?.(ctx as any)
+    textHandler?.(ctx as any)
+    textHandler?.(ctx as any)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(messageHandler).toHaveBeenCalledTimes(1)
     expect(sendTextMock).toHaveBeenCalledTimes(1)
+
+    await service.stop()
+  })
+
+  it('retries duplicate key after transient handler failure', async () => {
+    let textHandler: ((ctx: any) => Promise<void>) | null = null
+    const sendTextMock = vi.fn(async () => {})
+    const onMock = vi.fn((event: string, handler: (ctx: any) => Promise<void>) => {
+      if (event === 'text') textHandler = handler
+    })
+
+    const agent = {
+      address: '0x3333333333333333333333333333333333333333',
+      client: {
+        revokeAllOtherInstallations: vi.fn(async () => {}),
+        preferences: {
+          fetchInboxStates: vi.fn(async () => [
+            {
+              identifiers: [
+                {
+                  identifierKind: 0,
+                  identifier: '0x4444444444444444444444444444444444444444',
+                },
+              ],
+            },
+          ]),
+        },
+      },
+      on: onMock,
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+    }
+    AgentCreateMock.mockResolvedValue(agent as any)
+
+    const { XmtpService } = await import('./service.ts')
+    const service = new XmtpService({
+      signer: { id: 'mock-signer' } as any,
+      env: 'production',
+      dbPath: null,
+    })
+
+    const messageHandler = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary downstream failure'))
+      .mockResolvedValueOnce('retry succeeded')
+    service.setMessageHandler(messageHandler)
+
+    await service.start()
+    expect(textHandler).toBeTypeOf('function')
+
+    const ctx = {
+      message: {
+        id: 'msg-retry',
+        content: '/keepr status',
+        senderInboxId: 'inbox-1',
+        sentAt: new Date('2026-03-15T10:00:00.000Z'),
+      },
+      conversation: {
+        id: 'conv-1',
+        sendText: sendTextMock,
+      },
+      isDm: () => true,
+      client: {},
+    }
+
+    textHandler?.(ctx as any)
+    await vi.waitFor(() => {
+      expect(messageHandler).toHaveBeenCalledTimes(1)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    textHandler?.(ctx as any)
+    await vi.waitFor(() => {
+      expect(messageHandler).toHaveBeenCalledTimes(2)
+    })
+    await vi.waitFor(() => {
+      expect(sendTextMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(messageHandler).toHaveBeenCalledTimes(2)
+    expect(sendTextMock).toHaveBeenCalledTimes(1)
+    expect(sendTextMock).toHaveBeenCalledWith('retry succeeded')
 
     await service.stop()
   })

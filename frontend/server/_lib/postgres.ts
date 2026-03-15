@@ -119,7 +119,7 @@ function sslOptionsForConnection(connectionString: string): any | undefined {
   return { rejectUnauthorized: false }
 }
 
-type DbResult = { rows: any[] }
+type DbResult = { rows: any[]; rowCount?: number }
 type DbPool = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<DbResult>
   // Preferred: explicit query API (helps satisfy scanners and is unambiguous parameterization).
@@ -379,7 +379,13 @@ export async function getDb(): Promise<DbPool | null> {
             return withSessionRetry(
               async () => {
                 const res = await pool.query(text, values)
-                return { rows: res.rows ?? [] }
+                const rows = res.rows ?? []
+                return {
+                  rows,
+                  rowCount: Number.isFinite(Number(res.rowCount))
+                    ? Number(res.rowCount)
+                    : rows.length,
+                }
               },
               db,
               queryRetries,
@@ -389,7 +395,13 @@ export async function getDb(): Promise<DbPool | null> {
             return withSessionRetry(
               async () => {
                 const res = await pool.query(text, params)
-                return { rows: res.rows ?? [] }
+                const rows = res.rows ?? []
+                return {
+                  rows,
+                  rowCount: Number.isFinite(Number(res.rowCount))
+                    ? Number(res.rowCount)
+                    : rows.length,
+                }
               },
               db,
               queryRetries,

@@ -26,6 +26,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/agent/process",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/telegram/arena/watch-tick",
       "schedule": "* * * * *"
     }
