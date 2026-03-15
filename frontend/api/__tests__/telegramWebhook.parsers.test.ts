@@ -178,7 +178,7 @@ describe('telegram webhook parsers', () => {
 
   it('uses media variants when configured and falls back to article', () => {
     const answer = buildInlineQueryAnswer({
-      rawQuery: 'start trading',
+      rawQuery: 'market quote btc',
       queryOffset: '',
       userId: '42',
       chatId: '-100123',

@@ -533,12 +533,14 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(payload.inline_query_id).toBe('iq-1')
     expect(Array.isArray(payload.results)).toBe(true)
-    expect(typeof payload.next_offset).toBe('string')
+    if (Object.prototype.hasOwnProperty.call(payload, 'next_offset')) {
+      expect(typeof payload.next_offset).toBe('string')
+    }
     const resultTexts = payload.results
       .map((entry: any) => String(entry?.input_message_content?.message_text ?? ''))
       .filter(Boolean)
       .join('\n')
-    expect(resultTexts).toContain('/x post ship update --confirm')
+    expect(resultTexts).toContain('/link')
     expect(resultTexts).toContain('/help')
   })
 
@@ -602,7 +604,7 @@ describe('telegram webhook handler', () => {
       expect(titles.some((title: string) => title.includes('Unlock trading'))).toBe(true)
       expect(descriptions.some((description: string) => description.includes('One-time setup -> buy, sell, bid'))).toBe(true)
       expect(titles.some((title: string) => title.includes('Quick start (30 sec)'))).toBe(true)
-      expect(titles.some((title: string) => title.includes('Ask Keepr AI'))).toBe(true)
+      expect(titles.some((title: string) => title.includes('Ask Keepr AI'))).toBe(false)
       expect(titles.join(' ')).not.toContain('🚀')
       expect(descriptions.join(' ')).not.toContain('🚀')
     } finally {

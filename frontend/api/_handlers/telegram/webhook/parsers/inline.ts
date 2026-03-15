@@ -252,6 +252,8 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const normalizedQuery = query.replace(/\s+/g, ' ')
   const queryClass = classifyInlineQuery(normalizedQuery)
   const cap = clampInlineResultCap(params.inlineResultCap)
+  const isDefaultDiscovery = queryClass === 'discovery' || queryClass === 'general'
+  const effectiveCap = isDefaultDiscovery ? Math.min(cap, 8) : cap
   const offset = parseInlineOffset(params.queryOffset)
   const growthMode = params.growthMode
   const mediaByKey = params.mediaByKey ?? {}
@@ -261,6 +263,12 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const aiPrompt = normalizedQuery ? `/ai ${normalizedQuery}` : '/ai What should I do next?'
   const marketQuote = `/mkt quote ${inferMarketSymbol(normalizedQuery)}`
   const copy = buildCommonCopy(growthMode)
+  const lowerQuery = normalizedQuery.toLowerCase()
+  const wantsDeploy = queryClass === 'deploy' || /\b(deploy|launch|create)\b/.test(lowerQuery)
+  const wantsStatus = /\b(status|health|permissions)\b/.test(lowerQuery)
+  const wantsSocial = /\b(x|tweet|post)\b/.test(lowerQuery)
+  const wantsAi = queryClass === 'ai'
+  const wantsMarket = queryClass === 'market'
 
   const templates: InlineResultTemplate[] = []
   const pushTemplate = (template: InlineResultTemplate) => {
@@ -368,15 +376,6 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
     mediaKey: 'card:signals',
   })
   pushTemplate({
-    key: 'deploy',
-    title: 'Deploy your vault',
-    description: 'Launch directly from Telegram',
-    command: '/deploy',
-    baseScore: 76,
-    intentTags: ['deploy', 'discovery'],
-    mediaKey: 'card:deploy',
-  })
-  pushTemplate({
     key: 'link-status',
     title: 'Link status',
     description: 'Check Telegram <-> wallet state',
@@ -394,42 +393,63 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
     intentTags: ['general'],
     mediaKey: 'card:help',
   })
-  pushTemplate({
-    key: 'status',
-    title: copy.statusTitle,
-    description: copy.statusDescription,
-    command: '/keepr status',
-    baseScore: 71,
-    intentTags: ['discovery', 'general'],
-    mediaKey: 'card:status',
-  })
-  pushTemplate({
-    key: 'xpost',
-    title: copy.xPostTitle,
-    description: copy.xPostDescription,
-    command: xPostCommand,
-    baseScore: 68,
-    intentTags: ['general', 'deploy'],
-    mediaKey: 'card:xpost',
-  })
-  pushTemplate({
-    key: 'ai',
-    title: copy.aiTitle,
-    description: copy.aiDescription,
-    command: aiPrompt,
-    baseScore: 67,
-    intentTags: ['ai', 'general', 'market'],
-    mediaKey: 'card:ai',
-  })
-  pushTemplate({
-    key: 'market',
-    title: copy.marketTitle,
-    description: copy.marketDescription,
-    command: marketQuote,
-    baseScore: 66,
-    intentTags: ['market', 'general'],
-    mediaKey: 'card:market',
-  })
+  // Keep inline discovery laser-focused on link + trade + portfolio.
+  // Show advanced tools only when the user explicitly asks for them.
+  if (wantsStatus) {
+    pushTemplate({
+      key: 'status',
+      title: copy.statusTitle,
+      description: copy.statusDescription,
+      command: '/keepr status',
+      baseScore: 71,
+      intentTags: ['discovery', 'general'],
+      mediaKey: 'card:status',
+    })
+  }
+  if (wantsDeploy || wantsSocial) {
+    pushTemplate({
+      key: 'xpost',
+      title: copy.xPostTitle,
+      description: copy.xPostDescription,
+      command: xPostCommand,
+      baseScore: 68,
+      intentTags: ['general', 'deploy'],
+      mediaKey: 'card:xpost',
+    })
+  }
+  if (wantsAi) {
+    pushTemplate({
+      key: 'ai',
+      title: copy.aiTitle,
+      description: copy.aiDescription,
+      command: aiPrompt,
+      baseScore: 67,
+      intentTags: ['ai', 'general', 'market'],
+      mediaKey: 'card:ai',
+    })
+  }
+  if (wantsMarket) {
+    pushTemplate({
+      key: 'market',
+      title: copy.marketTitle,
+      description: copy.marketDescription,
+      command: marketQuote,
+      baseScore: 66,
+      intentTags: ['market', 'general'],
+      mediaKey: 'card:market',
+    })
+  }
+  if (wantsDeploy) {
+    pushTemplate({
+      key: 'deploy',
+      title: 'Deploy your vault',
+      description: 'Launch directly from Telegram',
+      command: '/deploy',
+      baseScore: 76,
+      intentTags: ['deploy', 'discovery'],
+      mediaKey: 'card:deploy',
+    })
+  }
 
   const rankedTemplates = templates
     .map((template) => ({
@@ -446,7 +466,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       return left.template.key.localeCompare(right.template.key)
     })
 
-  const pagedTemplates = rankedTemplates.slice(offset, offset + cap)
+  const pagedTemplates = rankedTemplates.slice(offset, offset + effectiveCap)
   const results = pagedTemplates.map(({ template }, idx) => {
     const absoluteRank = offset + idx
     const result = materializeInlineResult({ template, id: 'pending', mediaByKey })
@@ -458,7 +478,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
     }
   })
   const totalResults = rankedTemplates.length
-  const nextOffset = offset + cap < totalResults ? String(offset + cap) : ''
+  const nextOffset = offset + effectiveCap < totalResults ? String(offset + effectiveCap) : ''
 
   const shouldShowPmHandoff = params.enablePmHandoff && !params.isLinked
   const pmParameter = sanitizeStartParameter(`inline_link_${queryClass}`)
