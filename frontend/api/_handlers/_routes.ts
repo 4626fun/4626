@@ -180,7 +180,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'social/talent': () => import('./social/_talent.js'),
   'social/twitter': () => import('./social/_twitter.js'),
   'telegram/bot-config': () => import('./telegram/_bot-config.js'),
-  'telegram/link/complete': () => import('./telegram/_link-complete.js'),
+  'telegram/miniapp/link': () => import('./telegram/_miniapp-link.js'),
   'telegram/merge-preflight': () => import('./telegram/_merge-preflight.js'),
   'telegram/discovery': () => import('./telegram/_discovery.js'),
   'telegram/miniapp/session': () => import('./telegram/_miniapp-session.js'),

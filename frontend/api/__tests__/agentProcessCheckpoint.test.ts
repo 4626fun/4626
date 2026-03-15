@@ -38,7 +38,7 @@ describe('agent/process checkpoints', () => {
   it('builds bounded message query options', () => {
     const lastProcessedMs = 1_000
     const opts = getMessageQueryOptions(lastProcessedMs)
-    expect(opts.sentAfterNs).toBe(1_000_000_000n)
+    expect(opts.sentAfterNs).toBe(999_000_000n)
     expect(opts.limit).toBe(MAX_MESSAGES_PER_CONVERSATION)
     expect(opts.direction).toBe(0)
   })

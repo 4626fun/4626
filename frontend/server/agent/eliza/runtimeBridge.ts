@@ -400,7 +400,7 @@ function isArchiveChunkUrlAllowed(rawUrl: string): boolean {
   } catch {
     return false
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+  if (parsed.protocol !== 'https:') return false
   if (isPrivateOrLocalHostname(parsed.hostname)) return false
 
   const allowedHosts = readArchiveAllowedHosts()
@@ -705,7 +705,15 @@ async function hydrateConversationHistoryFromGrove(params: {
     const url = resolveArchiveChunkUrl(chunk)
     if (!url) continue
     try {
-      const response = await fetchImpl(url, { method: 'GET' })
+      const response = await fetchImpl(url, { method: 'GET', redirect: 'manual' })
+      if (Number(response?.status ?? 0) >= 300 && Number(response?.status ?? 0) < 400) {
+        logger.warn('[eliza/runtime] blocked archive chunk redirect (manual policy)', {
+          conversationId: params.conversationId,
+          url,
+          status: response?.status ?? null,
+        })
+        continue
+      }
       if (!response?.ok) continue
       const json = await response.json()
       const expectedChunkHash = String(chunk?.hash ?? '').trim() || null
