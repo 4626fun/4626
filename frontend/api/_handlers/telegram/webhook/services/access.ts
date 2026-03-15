@@ -25,14 +25,14 @@ export function isTelegramContextAllowed(params: {
 
 export function verifyBotConfigSecret(req: Pick<VercelRequest, 'headers'>): boolean {
   const configured = getTelegramWebhookConfig().botConfigSecret
-  if (!configured) return true
+  if (!configured) return false
   const provided = asTrimmed(req.headers['x-telegram-link-secret'])
   return provided === configured
 }
 
 export function verifyTelegramLinkApiSecret(req: Pick<VercelRequest, 'headers'>): boolean {
   const configured = getTelegramWebhookConfig().linkApiSecret
-  if (!configured) return true
+  if (!configured) return false
   const provided = asTrimmed(req.headers['x-telegram-link-secret'])
   return provided === configured
 }

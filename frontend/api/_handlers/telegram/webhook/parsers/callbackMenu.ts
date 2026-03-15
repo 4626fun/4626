@@ -37,7 +37,8 @@ export function resolveHelpCallbackCommand(rawData: string): string | null {
     action === 'social' ||
     action === 'ops' ||
     action === 'bankr' ||
-    action === 'wallet'
+    action === 'wallet' ||
+    action === 'arena'
   ) {
     return `/help ${action}`
   }

@@ -18,6 +18,11 @@ import {
 import { handleTwitterCommand } from '../twitter/commands.js'
 import { handleCoinCommand } from '../zora/commands.js'
 import { handleBankrCommand } from '../bankr/commands.js'
+import {
+  formatClashArenaHelpTopic,
+  handleClashArenaCommandWithContext,
+  isClashArenaCommand,
+} from './clashArenaCommands.js'
 import { handleSendCommand } from './sendCommand.js'
 import { handleWhoisCommand } from './whoisCommand.js'
 import { generateLlmResponse } from '../ai/chat.js'
@@ -30,7 +35,7 @@ export type KeeprCommandResult =
   | { ok: true; response: string; action?: any }
   | { ok: false; response: string }
 
-type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 'ops' | 'bankr' | 'wallet'
+type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 'ops' | 'bankr' | 'wallet' | 'arena'
 
 function formatHelpCommandRow(command: string, description: string, permission?: 'OWNER' | 'ADMIN/OWNER'): string {
   const safeCommand = escapeTelegramHtml(command)
@@ -52,7 +57,9 @@ function escapeTelegramHtml(value: string): string {
 }
 
 function formatKeeprHelpTopics(): string[] {
-  return ['<blockquote>Need more? <code>/help core|coin|market|social|ops|bankr|wallet</code> • <code>/help all</code></blockquote>']
+  return [
+    '<blockquote>Need more? <code>/help core|coin|market|social|ops|bankr|wallet|arena</code> • <code>/help all</code></blockquote>',
+  ]
 }
 
 function formatHelpSection(title: string, rows: string[]): string[] {
@@ -90,6 +97,7 @@ function formatKeeprHelpFull(): string {
       formatHelpCommandRow('/mkt ratios <symbol>', 'fundamentals'),
       formatHelpCommandRow('/mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]', 'macro calendar'),
       formatHelpCommandRow('/mkt chart <symbol> <range>', 'price history'),
+      formatHelpCommandRow('/arena state | /arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6', 'RTS arena controls'),
       formatHelpCommandRow('/coin trend check <ticker>', 'trend preflight'),
       formatHelpCommandRow('/whois | /intel | /reputation | /feedback', 'identity + intel'),
     ]),
@@ -129,6 +137,7 @@ function formatKeeprHelpFull(): string {
       '<code>/help x</code> — X / Twitter commands',
       '<code>/help cre</code> — CRE Keeper commands',
       '<code>/help bankr</code> — Bankr commands',
+      '<code>/help arena</code> — Clash of Claw controls',
     ]),
     '<blockquote>Tip: keep short help in groups, and use full help in DMs/admin flows.</blockquote>',
   ].join('\n');
@@ -152,6 +161,7 @@ function formatKeeprQuickHelp(unknownTopic: string | null = null): string {
     formatHelpCommandRow('/ai <question>', 'ask in plain English'),
     formatHelpCommandRow('/mkt quote <symbol>', 'fast market quote'),
     formatHelpCommandRow('/coin trend check <ticker>', 'trend preflight check'),
+    formatHelpCommandRow('/arena state', 'Clash of Claw game snapshot'),
     formatHelpCommandRow('/x post <message> --confirm', 'publish a post', 'ADMIN/OWNER'),
     '<blockquote>symbol example: <code>BTC</code></blockquote>',
     '',
@@ -198,6 +208,11 @@ function resolveKeeprHelpTopic(rawTopic: string | null | undefined): { topic: Ke
     case 'identity':
     case 'reputation':
       return { topic: 'wallet', unknownTopic: null }
+    case 'arena':
+    case 'bar':
+    case 'clash':
+    case 'rts':
+      return { topic: 'arena', unknownTopic: null }
     default:
       return { topic: 'quick', unknownTopic: token }
   }
@@ -296,6 +311,10 @@ function formatKeeprHelp(rawTopic: string | null = null): string {
       '',
       '<blockquote>Need everything? <code>/help all</code></blockquote>',
     ].join('\n')
+  }
+
+  if (topic === 'arena') {
+    return formatClashArenaHelpTopic()
   }
 
   return [
@@ -825,6 +844,8 @@ export async function handleKeeprCommand(params: {
   groupId: string
   senderWallet: Address
   text: string
+  chatId?: string
+  userId?: string
 }): Promise<KeeprCommandResult> {
   const raw = (params.text ?? '').trim()
   try {
@@ -864,6 +885,14 @@ export async function handleKeeprCommand(params: {
   // Market data commands should work even when vault config/DB is unavailable.
   if (isMarketCommand(rawLower)) {
     return handleMarketCommand(raw)
+  }
+
+  // Clash of Claw controls should work without vault config/DB.
+  if (isClashArenaCommand(rawLower)) {
+    return handleClashArenaCommandWithContext(raw, {
+      chatId: params.chatId,
+      userId: params.userId,
+    })
   }
 
   // Handle Twitter/X commands (/x, x, /tweet, tweet)

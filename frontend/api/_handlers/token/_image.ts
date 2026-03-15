@@ -96,20 +96,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rawBytes = fetched?.bytes
         if (rawBytes && rawBytes.length > 0) {
           res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
+          const processed = await postProcessAiOverrideIcon(rawBytes, size)
           if (format === 'svg') {
-            const b64 = Buffer.from(rawBytes).toString('base64')
+            const b64 = Buffer.from(processed).toString('base64')
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}"/></svg>`
             res.setHeader('Content-Type', 'image/svg+xml')
             return res.status(200).send(svg)
           }
-          const resized = await sharp(Buffer.from(rawBytes))
-            .resize(size, size, { fit: 'cover' })
-            // Keep icon corners opaque/dark across wallets and image viewers.
-            .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
-            .png()
-            .toBuffer()
           res.setHeader('Content-Type', 'image/png')
-          return res.status(200).send(resized)
+          return res.status(200).send(processed)
         }
       }
     }
@@ -317,7 +312,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 10
+const FRAME_STYLE_V = 21
 const FRAME_ASSET_URL = new URL('../../../public/app-icon.svg', import.meta.url)
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
@@ -452,7 +447,17 @@ async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Pr
     .composite([{ input: blurred, blend: 'add' }])
     .png()
     .toBuffer()
-  return `data:image/png;base64,${boosted.toString('base64')}`
+  // Keep glow outside the inner frame opening to prevent top-band bleed inside.
+  const innerHoleSvg = `<svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="${layout.panelX}" y="${layout.panelY}" width="${layout.panelSize}" height="${layout.panelSize}" rx="${layout.panelRadius}" fill="white"/>
+  </svg>`
+  const innerHoleMask = await sharp(Buffer.from(innerHoleSvg)).png().toBuffer()
+  const outsideOnly = await sharp(boosted)
+    .ensureAlpha()
+    .composite([{ input: innerHoleMask, blend: 'dest-out' }])
+    .png()
+    .toBuffer()
+  return `data:image/png;base64,${outsideOnly.toString('base64')}`
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -591,11 +596,16 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
   const recipe = deriveTokenIconRecipe(classification, breakoutEvaluation)
   const layout = getTokenIconLayout(params.size, recipe)
   const fit: ArtworkFitMode = recipe.mode === 'cover' ? 'cover' : 'contain'
-  const baseLayerBytes = await renderPlacedArtworkLayer({
+  const baseLayerBytesRaw = await renderPlacedArtworkLayer({
     sourceBytes: params.bytes,
     size: params.size,
     layout,
     fit,
+  })
+  const baseLayerBytes = await clipLayerToInnerPanel({
+    layerBytes: baseLayerBytesRaw,
+    size: params.size,
+    layout,
   })
 
   let breakoutLayerBytes: Uint8Array | null = null
@@ -612,11 +622,6 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
       })
       breakoutLayerBytes = await applyBreakoutAlphaMask({
         foregroundBytes: fgCanvas,
-        layout,
-      })
-    } else {
-      breakoutLayerBytes = await applyHeuristicBreakoutMask({
-        baseLayerBytes,
         layout,
       })
     }
@@ -640,6 +645,88 @@ async function normalizeImageToPng(bytes: Uint8Array): Promise<Uint8Array> {
     .png()
     .toBuffer()
   return new Uint8Array(normalized)
+}
+
+async function postProcessAiOverrideIcon(rawBytes: Uint8Array, size: number): Promise<Buffer> {
+  const resized = await sharp(Buffer.from(rawBytes))
+    .resize(size, size, { fit: 'cover' })
+    .ensureAlpha()
+    .png()
+    .toBuffer()
+  const layout = getTokenIconLayout(size, { ...TOKEN_ICON_RECIPES.cover, breakout: true })
+  const baseRaw = await sharp(resized).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const baseData = Buffer.from(baseRaw.data)
+
+  // Subject-agnostic breakout spill suppression:
+  // Use rembg foreground (when available) to preserve true overlap details and
+  // damp non-subject background that leaks above the top frame edge.
+  let dominantMaskData: Buffer | null = null
+  const fg = await extractForeground(new Uint8Array(resized))
+  if (fg && (await isForegroundUsable(fg))) {
+    const refinedFg = await refineForegroundCutout(fg)
+    const fgRaw = await sharp(Buffer.from(refinedFg))
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const dominantMask = await buildDominantBreakoutComponentMask({
+      rgba: Buffer.from(fgRaw.data),
+      width: fgRaw.info.width,
+      height: fgRaw.info.height,
+      channels: fgRaw.info.channels,
+      region: {
+        left: layout.panelX + layout.panelSize * 0.16,
+        right: layout.panelX + layout.panelSize * 0.84,
+        top: layout.panelY - layout.panelSize * 0.26,
+        bottom: layout.panelY + layout.panelSize * 0.08,
+      },
+    })
+    if (dominantMask) {
+      const maskRaw = await sharp(dominantMask).raw().toBuffer({ resolveWithObject: true })
+      dominantMaskData = Buffer.from(maskRaw.data)
+    }
+  }
+
+  const cleanupTop = Math.max(0, Math.round(layout.panelY - layout.panelSize * 0.24))
+  const cleanupBottom = Math.min(size, Math.round(layout.panelY + layout.panelSize * 0.05))
+  const cleanupLeft = Math.max(0, Math.round(layout.panelX))
+  const cleanupRight = Math.min(size, Math.round(layout.panelX + layout.panelSize))
+  const cleanupHeight = Math.max(1, cleanupBottom - cleanupTop)
+  const targetR = 7
+  const targetG = 12
+  const targetB = 22
+  for (let y = cleanupTop; y < cleanupBottom; y += 1) {
+    const vertical = 1 - (y - cleanupTop) / cleanupHeight
+    for (let x = cleanupLeft; x < cleanupRight; x += 1) {
+      const idx = (y * baseRaw.info.width + x) * baseRaw.info.channels
+      const alpha = baseData[idx + 3]
+      if (alpha <= 0) continue
+      const keep = dominantMaskData ? dominantMaskData[y * baseRaw.info.width + x] / 255 : 0
+      const suppress = Math.max(0, Math.min(1, vertical * (1 - keep)))
+      if (suppress <= 0) continue
+      const mix = 0.9 * suppress
+      baseData[idx] = Math.max(0, Math.min(255, Math.round(baseData[idx] * (1 - mix) + targetR * mix)))
+      baseData[idx + 1] = Math.max(0, Math.min(255, Math.round(baseData[idx + 1] * (1 - mix) + targetG * mix)))
+      baseData[idx + 2] = Math.max(0, Math.min(255, Math.round(baseData[idx + 2] * (1 - mix) + targetB * mix)))
+    }
+  }
+
+  const cleaned = await sharp(baseData, {
+    raw: {
+      width: baseRaw.info.width,
+      height: baseRaw.info.height,
+      channels: baseRaw.info.channels,
+    },
+  })
+    .png()
+    .toBuffer()
+  const glowUri = await renderGlowLayerDataUri(size, layout)
+  const glowBytes = Buffer.from(glowUri.split(',')[1] ?? '', 'base64')
+
+  return await sharp(cleaned)
+    .composite([{ input: glowBytes, blend: 'screen', opacity: 0.32 }])
+    .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
+    .png()
+    .toBuffer()
 }
 
 async function renderPlacedArtworkLayer(params: {
@@ -669,12 +756,32 @@ async function renderPlacedArtworkLayer(params: {
   return new Uint8Array(canvas)
 }
 
+async function clipLayerToInnerPanel(params: {
+  layerBytes: Uint8Array
+  size: number
+  layout: TokenIconLayout
+}): Promise<Uint8Array> {
+  const { layerBytes, size, layout } = params
+  const clipSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="${layout.panelX}" y="${layout.panelY}" width="${layout.panelSize}" height="${layout.panelSize}" rx="${layout.panelRadius}" fill="white" />
+  </svg>`
+  const clipMask = await sharp(Buffer.from(clipSvg)).png().toBuffer()
+  const clipped = await sharp(Buffer.from(layerBytes))
+    .ensureAlpha()
+    .composite([{ input: clipMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+  return new Uint8Array(clipped)
+}
+
 async function refineForegroundCutout(foregroundBytes: Uint8Array): Promise<Uint8Array> {
   const alphaMask = await sharp(Buffer.from(foregroundBytes))
     .ensureAlpha()
     .extractChannel('alpha')
-    .threshold(24)
-    .blur(1)
+    .threshold(48)
+    .erode(1)
+    .dilate(1)
+    .blur(0.8)
     .png()
     .toBuffer()
 
@@ -744,6 +851,113 @@ async function getAlphaBounds(imageBytes: Uint8Array, threshold = 24): Promise<{
   return { left, top, right, bottom }
 }
 
+type BreakoutRegion = {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
+async function buildDominantBreakoutComponentMask(params: {
+  rgba: Buffer
+  width: number
+  height: number
+  channels: number
+  region: BreakoutRegion
+  alphaThreshold?: number
+}): Promise<Buffer | null> {
+  const { rgba, width, height, channels, region, alphaThreshold = 36 } = params
+  const rLeft = Math.max(0, Math.min(width - 1, Math.floor(region.left)))
+  const rRight = Math.max(rLeft + 1, Math.min(width, Math.ceil(region.right)))
+  const rTop = Math.max(0, Math.min(height - 1, Math.floor(region.top)))
+  const rBottom = Math.max(rTop + 1, Math.min(height, Math.ceil(region.bottom)))
+  const regionWidth = Math.max(1, rRight - rLeft)
+  const regionHeight = Math.max(1, rBottom - rTop)
+
+  const pixelCount = width * height
+  const visited = new Uint8Array(pixelCount)
+  const bestMask = new Uint8Array(pixelCount)
+  let bestScore = 0
+  const centerX = rLeft + regionWidth / 2
+  const minArea = Math.max(42, Math.round(regionWidth * regionHeight * 0.0022))
+
+  const neighbors = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const
+
+  const alphaAt = (x: number, y: number) => rgba[(y * width + x) * channels + 3]
+
+  for (let y = rTop; y < rBottom; y += 1) {
+    for (let x = rLeft; x < rRight; x += 1) {
+      const root = y * width + x
+      if (visited[root]) continue
+      if (alphaAt(x, y) < alphaThreshold) continue
+
+      const stack: number[] = [root]
+      visited[root] = 1
+      const indices: number[] = []
+      let area = 0
+      let minX = x
+      let maxX = x
+      let minY = y
+      let maxY = y
+      let sumX = 0
+
+      while (stack.length > 0) {
+        const idx = stack.pop() as number
+        indices.push(idx)
+        area += 1
+
+        const cy = Math.floor(idx / width)
+        const cx = idx - cy * width
+        sumX += cx
+        if (cx < minX) minX = cx
+        if (cx > maxX) maxX = cx
+        if (cy < minY) minY = cy
+        if (cy > maxY) maxY = cy
+
+        for (const [dx, dy] of neighbors) {
+          const nx = cx + dx
+          const ny = cy + dy
+          if (nx < rLeft || nx >= rRight || ny < rTop || ny >= rBottom) continue
+          const nIdx = ny * width + nx
+          if (visited[nIdx]) continue
+          if (alphaAt(nx, ny) < alphaThreshold) continue
+          visited[nIdx] = 1
+          stack.push(nIdx)
+        }
+      }
+
+      if (area < minArea) continue
+
+      const compWidth = maxX - minX + 1
+      const compHeight = maxY - minY + 1
+      const topAffinity = 1 - (minY - rTop) / Math.max(1, regionHeight)
+      const centerAffinity =
+        1 - Math.min(1, Math.abs(sumX / Math.max(1, area) - centerX) / Math.max(1, regionWidth / 2))
+      const widthRatio = compWidth / Math.max(1, regionWidth)
+      const stripPenalty = widthRatio >= 0.92 && compHeight <= Math.round(regionHeight * 0.4) ? 0.42 : 1
+
+      const score = area * (0.44 + 0.36 * topAffinity + 0.2 * centerAffinity) * stripPenalty
+      if (score <= bestScore) continue
+
+      bestScore = score
+      bestMask.fill(0)
+      for (const idx of indices) bestMask[idx] = 255
+    }
+  }
+
+  if (bestScore <= 0) return null
+
+  return await sharp(Buffer.from(bestMask), { raw: { width, height, channels: 1 } })
+    .blur(1.0)
+    .png()
+    .toBuffer()
+}
+
 async function applyBreakoutAlphaMask(params: {
   foregroundBytes: Uint8Array
   layout: TokenIconLayout
@@ -761,11 +975,22 @@ async function applyBreakoutAlphaMask(params: {
   )
   const alphaBounds = await getAlphaBounds(foregroundBytes)
   const horizontalPad = Math.round(layout.panelSize * 0.04)
-  const zoneLeft = alphaBounds ? Math.max(layout.panelX, alphaBounds.left - horizontalPad) : layout.panelX
-  const zoneRight = alphaBounds ? Math.min(layout.panelX + layout.panelSize, alphaBounds.right + horizontalPad) : layout.panelX + layout.panelSize
+  let zoneLeft = alphaBounds ? Math.max(layout.panelX, alphaBounds.left - horizontalPad) : layout.panelX
+  let zoneRight = alphaBounds ? Math.min(layout.panelX + layout.panelSize, alphaBounds.right + horizontalPad) : layout.panelX + layout.panelSize
+  const maxZoneWidth = Math.max(1, Math.round(layout.panelSize * 0.64))
+  if (zoneRight - zoneLeft > maxZoneWidth) {
+    const center = alphaBounds
+      ? (alphaBounds.left + alphaBounds.right) / 2
+      : layout.panelX + layout.panelSize / 2
+    const minLeft = layout.panelX
+    const maxLeft = layout.panelX + layout.panelSize - maxZoneWidth
+    zoneLeft = Math.min(maxLeft, Math.max(minLeft, Math.round(center - maxZoneWidth / 2)))
+    zoneRight = zoneLeft + maxZoneWidth
+  }
   const zoneTop = Math.max(0, layout.panelY - riseAboveFrame)
   const solidBottom = Math.min(height, layout.panelY + visibleBelowFrame)
   const fadeBottom = Math.min(height, layout.panelY + fadeBelowFrame)
+  const zoneBottom = fadeBottom
   const zoneHeight = Math.max(1, fadeBottom - zoneTop)
   const zoneWidth = Math.max(1, zoneRight - zoneLeft)
   const gradientSolidEnd = zoneHeight > 0 ? Math.max(0, (solidBottom - zoneTop) / zoneHeight) : 0
@@ -793,66 +1018,27 @@ async function applyBreakoutAlphaMask(params: {
     .composite([{ input: maskBuf, blend: 'dest-in' }])
     .png()
     .toBuffer()
-  return new Uint8Array(masked)
-}
+  const breakout = await sharp(masked).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const dominantMask = await buildDominantBreakoutComponentMask({
+    rgba: Buffer.from(breakout.data),
+    width: breakout.info.width,
+    height: breakout.info.height,
+    channels: breakout.info.channels,
+    region: {
+      left: zoneLeft,
+      right: zoneRight,
+      top: zoneTop,
+      bottom: zoneBottom,
+    },
+  })
+  if (!dominantMask) return new Uint8Array(masked)
 
-async function applyHeuristicBreakoutMask(params: {
-  baseLayerBytes: Uint8Array
-  layout: TokenIconLayout
-}): Promise<Uint8Array | null> {
-  const { baseLayerBytes, layout } = params
-  const meta = await sharp(Buffer.from(baseLayerBytes)).metadata()
-  const width = meta.width ?? 0
-  const height = meta.height ?? 0
-  if (width <= 0 || height <= 0) return null
-
-  const riseAboveFrame = Math.round(layout.panelSize * Math.max(BREAKOUT_CONFIG.riseAboveFrameRatio, 0.09))
-  const visibleBelowFrame = Math.round(layout.panelSize * 0.008)
-  const fadeBelowFrame = Math.max(visibleBelowFrame + 1, Math.round(layout.panelSize * 0.02))
-
-  const zoneTop = Math.max(0, layout.panelY - riseAboveFrame)
-  const zoneBottom = Math.min(height, layout.panelY + fadeBelowFrame)
-  const zoneHeight = Math.max(1, zoneBottom - zoneTop)
-  const solidBottom = Math.min(height, layout.panelY + visibleBelowFrame)
-  const gradientSolidEnd = zoneHeight > 0 ? Math.max(0, (solidBottom - zoneTop) / zoneHeight) : 0
-
-  // Fallback when rembg is unavailable: keep breakout focused around the
-  // subject head area so we avoid lifting the entire background above frame.
-  const centerWidth = Math.max(1, Math.round(layout.panelSize * 0.62))
-  const zoneLeft = Math.max(0, Math.round(layout.panelX + (layout.panelSize - centerWidth) / 2))
-  const zoneWidth = Math.min(centerWidth, width - zoneLeft)
-  const zoneRadius = Math.max(1, Math.round(zoneWidth * 0.33))
-
-  const maskSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="fallback-breakout-zone" x1="0" y1="${zoneTop}" x2="0" y2="${zoneBottom}">
-        <stop offset="0" stop-color="white" stop-opacity="1"/>
-        <stop offset="${gradientSolidEnd}" stop-color="white" stop-opacity="1"/>
-        <stop offset="1" stop-color="white" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <rect
-      x="${zoneLeft}"
-      y="${zoneTop}"
-      width="${zoneWidth}"
-      height="${zoneHeight}"
-      rx="${zoneRadius}"
-      fill="url(#fallback-breakout-zone)"
-    />
-  </svg>`
-
-  const maskBuf = await sharp(Buffer.from(maskSvg))
-    .resize(width, height)
+  const cleaned = await sharp(masked)
     .ensureAlpha()
-    .blur(2)
+    .composite([{ input: dominantMask, blend: 'dest-in' }])
     .png()
     .toBuffer()
-  const masked = await sharp(Buffer.from(baseLayerBytes))
-    .ensureAlpha()
-    .composite([{ input: maskBuf, blend: 'dest-in' }])
-    .png()
-    .toBuffer()
-  return new Uint8Array(masked)
+  return new Uint8Array(cleaned)
 }
 
 async function getOrCreatePng(params: {
@@ -1027,8 +1213,8 @@ function generateFramedSvg({
   <rect width="${size}" height="${size}" fill="${TOKEN_ICON_STYLE.backgroundOuter}" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bg)" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#vignette)" />
-  ${glowLayerImage && !resolvedFrameOverlay
-    ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="0.9"/>`
+  ${glowLayerImage
+    ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="${resolvedFrameOverlay ? '0.65' : '0.9'}"/>`
     : ''}
   <rect
     x="${layout.panelX}"

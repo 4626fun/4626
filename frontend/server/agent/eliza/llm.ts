@@ -46,6 +46,7 @@ type GenerateParams = {
   vaultContext: string
   correlationId: string
   preferredModel?: string
+  abortSignal?: AbortSignal
 }
 
 const PROVIDERS: LlmProvider[] = [
@@ -96,6 +97,12 @@ function sleep(ms: number): Promise<void> {
 
 function shouldRetryStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500
+}
+
+function isAbortError(error: unknown): boolean {
+  const name = String((error as any)?.name ?? '').trim().toLowerCase()
+  const message = String((error as any)?.message ?? '').trim().toLowerCase()
+  return name === 'aborterror' || message.includes('abort')
 }
 
 function parsePriority(raw: string | undefined): string[] {
@@ -312,10 +319,17 @@ class ElizaLlmService {
     apiKey: string
     body: unknown
     correlationId: string
+    abortSignal?: AbortSignal
   }): Promise<string> {
     let lastError = 'request_failed'
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       const controller = new AbortController()
+      const upstreamSignal = params.abortSignal
+      const onAbort = () => controller.abort()
+      if (upstreamSignal) {
+        if (upstreamSignal.aborted) controller.abort()
+        else upstreamSignal.addEventListener('abort', onAbort, { once: true })
+      }
       const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
       try {
         const response = await fetch(params.provider.apiUrl, {
@@ -348,9 +362,19 @@ class ElizaLlmService {
         }
         return String(content).trim()
       } catch (error) {
+        const externalCancelled = params.abortSignal?.aborted === true
+        if (externalCancelled) {
+          throw new AgentError('UPSTREAM_ERROR', 'request_cancelled', {
+            retryable: false,
+            details: {
+              provider: params.provider.name,
+              correlationId: params.correlationId,
+            },
+          })
+        }
         const message = error instanceof Error ? error.message : String(error)
         lastError = message
-        const aborted = message.toLowerCase().includes('abort')
+        const aborted = isAbortError(error)
         const retryable = aborted || message.includes('provider_status_429') || message.includes('provider_status_5')
         if (attempt < this.maxRetries && retryable) {
           const waitMs = this.retryBaseMs * Math.pow(2, attempt)
@@ -366,12 +390,16 @@ class ElizaLlmService {
         throw error
       } finally {
         clearTimeout(timeout)
+        if (upstreamSignal) upstreamSignal.removeEventListener('abort', onAbort)
       }
     }
     throw new AgentError('UPSTREAM_ERROR', lastError, { retryable: true })
   }
 
   async generateResponse(params: GenerateParams): Promise<LlmGenerateResult> {
+    if (params.abortSignal?.aborted) {
+      throw new AgentError('UPSTREAM_ERROR', 'request_cancelled', { retryable: false })
+    }
     const providers = this.providersForMessage(params.userMessage)
     if (providers.length === 0) {
       return { text: null, provider: null, attempts: [] }
@@ -393,6 +421,9 @@ class ElizaLlmService {
 
     const attempts: ProviderAttempt[] = []
     for (const provider of providers) {
+      if (params.abortSignal?.aborted) {
+        throw new AgentError('UPSTREAM_ERROR', 'request_cancelled', { retryable: false })
+      }
       if (this.providerIsCircuitOpen(provider)) {
         attempts.push({
           provider: provider.name,
@@ -413,6 +444,7 @@ class ElizaLlmService {
           apiKey,
           body,
           correlationId: params.correlationId,
+          abortSignal: params.abortSignal,
         })
         const outputTokens = estimateTokens(text)
         const estimatedUsd = ((inputTokens + outputTokens) / 1_000) * provider.estimateUsdPer1kTokens
@@ -442,6 +474,9 @@ class ElizaLlmService {
           attempts,
         }
       } catch (error) {
+        if (error instanceof AgentError && error.message === 'request_cancelled') {
+          throw error
+        }
         const message = error instanceof Error ? error.message : String(error)
         this.markProviderFailure(provider, message)
         attempts.push({ provider: provider.name, model: selectedModel, ok: false, error: message })
@@ -474,7 +509,9 @@ class ElizaLlmService {
   }
 
   async *streamResponse(params: GenerateParams): AsyncGenerator<{ type: string; data: unknown }, void, void> {
+    if (params.abortSignal?.aborted) return
     const result = await this.generateResponse(params)
+    if (params.abortSignal?.aborted) return
     yield {
       type: 'meta',
       data: {
@@ -491,6 +528,7 @@ class ElizaLlmService {
     const chunks = text.split(/\s+/g)
     let cumulative = ''
     for (const chunk of chunks) {
+      if (params.abortSignal?.aborted) return
       cumulative = cumulative ? `${cumulative} ${chunk}` : chunk
       yield { type: 'delta', data: { text: `${chunk} ` } }
       await sleep(20)

@@ -3,12 +3,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { creatorVaultCharacter } from '../../../server/agent/eliza/character.js'
 import { getElizaLlmService } from '../../../server/agent/eliza/llm.js'
 import { createCorrelationId, logger } from '../../../server/_lib/logger.js'
-import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
 
 function firstQueryValue(value: string | string[] | undefined): string {
   if (typeof value === 'string') return value
   if (Array.isArray(value) && value.length > 0) return String(value[0] ?? '')
   return ''
+}
+
+function isAddressLike(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -18,6 +22,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const session = readSessionFromRequest(req)
+  const sessionAddress = String(session?.address ?? '').trim().toLowerCase()
+  if (!isAddressLike(sessionAddress)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
 
   const queryMessage = firstQueryValue(req.query.message as any).trim()
@@ -47,9 +57,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.flushHeaders?.()
 
   let clientClosed = false
+  const streamAbort = new AbortController()
   if (typeof (req as any).on === 'function') {
     ;(req as any).on('close', () => {
       clientClosed = true
+      streamAbort.abort()
     })
   }
 
@@ -81,12 +93,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       vaultContext,
       correlationId,
       preferredModel: String(creatorVaultCharacter.settings?.model ?? '').trim() || undefined,
+      abortSignal: streamAbort.signal,
     })) {
       if (clientClosed) break
       writeEvent(event.type, event.data)
     }
     writeEvent('close', { ok: true })
   } catch (error) {
+    if (clientClosed || streamAbort.signal.aborted) return
     logger.warn('[api/agent/stream] streaming error', {
       correlationId,
       error: error instanceof Error ? error.message : String(error),

@@ -1,7 +1,21 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { applyEnv, createMockReq, createMockRes } from './helpers'
+import { applyEnv, createMockReq as createBaseMockReq, createMockRes } from './helpers'
+
+const TELEGRAM_LINK_SECRET = 'test-link-secret'
+
+type MockReqOptions = Parameters<typeof createBaseMockReq>[0]
+
+function createMockReq(options: MockReqOptions = {}) {
+  return createBaseMockReq({
+    ...options,
+    headers: {
+      'x-telegram-link-secret': TELEGRAM_LINK_SECRET,
+      ...(options.headers ?? {}),
+    },
+  })
+}
 
 const {
   getDbMock,
@@ -141,7 +155,7 @@ describe('telegram endpoint handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      TELEGRAM_LINK_API_SECRET: undefined,
+      TELEGRAM_LINK_API_SECRET: TELEGRAM_LINK_SECRET,
       TELEGRAM_MINI_APP_URL: 'https://app.4626.fun',
       TELEGRAM_BOT_TOKEN: 'test-bot-token',
       TELEGRAM_FUNNEL_METRICS_ENABLED: 'true',
@@ -290,6 +304,29 @@ describe('telegram endpoint handlers', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.success).toBe(false)
+  })
+
+  it('POST /api/telegram/link/start returns 401 when link secret is not configured', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_link-start.ts')
+    const restoreSecrets = applyEnv({
+      TELEGRAM_LINK_API_SECRET: undefined,
+      TELEGRAM_BOT_CONFIG_SECRET: undefined,
+    })
+    try {
+      const req = createBaseMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-link-secret': TELEGRAM_LINK_SECRET },
+        body: { telegramUserId: '42', chatId: '-100123' },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(401)
+      expect(res.body?.success).toBe(false)
+    } finally {
+      restoreSecrets()
+    }
   })
 
   it('POST /api/telegram/unlink revokes an existing link', async () => {

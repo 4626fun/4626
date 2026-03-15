@@ -395,7 +395,23 @@ async function buildBreakoutLayer(params: {
     layout,
     riseAboveFrame,
   )
-  const breakoutAllowed = forceBreakout ? true : await shouldApplyBreakout(renderedForeground)
+  // Clean rembg fringes/noise so only coherent subject details break out.
+  const cleanedAlphaMask = await sharp(renderedForeground)
+    .ensureAlpha()
+    .extractChannel('alpha')
+    .threshold(52)
+    .erode(1)
+    .dilate(1)
+    .blur(0.8)
+    .png()
+    .toBuffer()
+  const cleanedForeground = await sharp(renderedForeground)
+    .ensureAlpha()
+    .composite([{ input: cleanedAlphaMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+
+  const breakoutAllowed = forceBreakout ? true : await shouldApplyBreakout(cleanedForeground)
 
   if (!breakoutAllowed) {
     return null
@@ -405,7 +421,7 @@ async function buildBreakoutLayer(params: {
   const shiftedForeground = await sharp({
     create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
-    .composite([{ input: renderedForeground, left: contentBox.left, top: shiftedTop }])
+    .composite([{ input: cleanedForeground, left: contentBox.left, top: shiftedTop }])
     .png()
     .toBuffer()
 

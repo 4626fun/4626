@@ -43,6 +43,22 @@ export const DEFAULT_CHECKPOINT_WINDOW_MS = 120_000
 const EXECUTION_TIMEOUT_MS = 55_000 // Leave 5s buffer for Vercel's 60s limit
 
 const ETHEREUM_IDENTIFIER_KIND = 0
+let conversationCheckpointSchemaEnsured = false
+
+const CONVERSATION_CHECKPOINTS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS creator_xmtp_agent_conversation_checkpoints (
+    creator_address TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    last_processed_message_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (creator_address, conversation_id)
+  );
+`
+
+const CONVERSATION_CHECKPOINTS_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS creator_xmtp_agent_conversation_checkpoints_creator_updated_idx
+    ON creator_xmtp_agent_conversation_checkpoints (creator_address, updated_at DESC);
+`
 
 export function getCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): number {
   if (lastProcessedAt) {
@@ -50,6 +66,12 @@ export function getCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): n
     if (Number.isFinite(parsed)) return parsed
   }
   return nowMs - DEFAULT_CHECKPOINT_WINDOW_MS
+}
+
+export function getInitialConversationCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): number {
+  const legacyCheckpointMs = getCheckpointMs(lastProcessedAt, nowMs)
+  const rollingWindowCheckpointMs = nowMs - DEFAULT_CHECKPOINT_WINDOW_MS
+  return Math.max(0, Math.min(legacyCheckpointMs, rollingWindowCheckpointMs))
 }
 
 export function getMessageQueryOptions(lastProcessedMs: number): {
@@ -79,6 +101,85 @@ export function getEthereumAddressFromInboxState(state: any): string | null {
 
 export function mergeCheckpointMs(previousMs: number, candidateMs: number): number {
   return Math.max(previousMs, candidateMs)
+}
+
+export function parseConversationCheckpointRows(rows: Array<Record<string, unknown>>): Map<string, number> {
+  const checkpoints = new Map<string, number>()
+  for (const row of rows) {
+    const conversationId = String(row.conversation_id ?? '').trim()
+    if (!conversationId) continue
+    const parsedMs = new Date(row.last_processed_message_at as any).getTime()
+    if (!Number.isFinite(parsedMs)) continue
+    checkpoints.set(conversationId, parsedMs)
+  }
+  return checkpoints
+}
+
+async function ensureConversationCheckpointSchema(db: any): Promise<void> {
+  if (conversationCheckpointSchemaEnsured) return
+  if (typeof db?.query === 'function') {
+    await db.query(CONVERSATION_CHECKPOINTS_TABLE_SQL)
+    await db.query(CONVERSATION_CHECKPOINTS_INDEX_SQL)
+  } else {
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS creator_xmtp_agent_conversation_checkpoints (
+        creator_address TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        last_processed_message_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (creator_address, conversation_id)
+      );
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS creator_xmtp_agent_conversation_checkpoints_creator_updated_idx
+        ON creator_xmtp_agent_conversation_checkpoints (creator_address, updated_at DESC);
+    `
+  }
+  conversationCheckpointSchemaEnsured = true
+}
+
+async function loadConversationCheckpointMap(params: {
+  db: any
+  creatorAddress: string
+}): Promise<Map<string, number>> {
+  const result = await params.db.sql`
+    SELECT
+      conversation_id,
+      last_processed_message_at
+    FROM creator_xmtp_agent_conversation_checkpoints
+    WHERE LOWER(creator_address) = ${params.creatorAddress};
+  `
+  const rows = Array.isArray(result?.rows) ? (result.rows as Array<Record<string, unknown>>) : []
+  return parseConversationCheckpointRows(rows)
+}
+
+async function upsertConversationCheckpoint(params: {
+  db: any
+  creatorAddress: string
+  conversationId: string
+  checkpointMs: number
+}): Promise<void> {
+  const checkpointIso = new Date(params.checkpointMs).toISOString()
+  await params.db.sql`
+    INSERT INTO creator_xmtp_agent_conversation_checkpoints (
+      creator_address,
+      conversation_id,
+      last_processed_message_at,
+      updated_at
+    ) VALUES (
+      ${params.creatorAddress},
+      ${params.conversationId},
+      ${checkpointIso}::timestamptz,
+      NOW()
+    )
+    ON CONFLICT (creator_address, conversation_id)
+    DO UPDATE SET
+      last_processed_message_at = GREATEST(
+        creator_xmtp_agent_conversation_checkpoints.last_processed_message_at,
+        EXCLUDED.last_processed_message_at
+      ),
+      updated_at = NOW();
+  `
 }
 
 export function readCronSecretFromHeaders(req: VercelRequest): string {
@@ -147,6 +248,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(503).json({ success: false, error: 'DB connection failed' } satisfies ApiEnvelope<never>)
     }
     await ensureCreatorXmtpAgentsSchema(db as any)
+    await ensureConversationCheckpointSchema(db as any)
 
     // Load agents
     const agentRows = await db.sql`
@@ -220,23 +322,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await client.conversations.sync()
         const conversations = await client.conversations.list()
 
-        const lastProcessed = getCheckpointMs(row.last_processed_message_at)
+        const nowMs = Date.now()
+        const lastProcessed = getCheckpointMs(row.last_processed_message_at, nowMs)
+        const fallbackConversationCheckpointMs = getInitialConversationCheckpointMs(row.last_processed_message_at, nowMs)
+        const conversationCheckpoints = await loadConversationCheckpointMap({
+          db: db as any,
+          creatorAddress,
+        })
         let newestTimestamp = lastProcessed
         let messagesThisAgent = 0
+        let shouldStopAgentLoop = false
 
         for (const convo of conversations) {
           if (messagesThisAgent >= MAX_MESSAGES_PER_AGENT) break
           if (Date.now() - startTime > EXECUTION_TIMEOUT_MS) break
+          const conversationCheckpointMs = conversationCheckpoints.get(convo.id) ?? fallbackConversationCheckpointMs
+          let newestConversationTimestamp = conversationCheckpointMs
 
           try {
             await convo.sync()
             // Query only recent messages to bound serverless work.
-            const messages = await convo.messages(getMessageQueryOptions(lastProcessed))
+            const messages = await convo.messages(getMessageQueryOptions(conversationCheckpointMs))
 
             for (const msg of messages) {
+              if (messagesThisAgent >= MAX_MESSAGES_PER_AGENT) {
+                shouldStopAgentLoop = true
+                break
+              }
+              if (Date.now() - startTime > EXECUTION_TIMEOUT_MS) {
+                shouldStopAgentLoop = true
+                break
+              }
               // Only process messages newer than our last checkpoint
               const msgTs = msg.sentAt?.getTime() ?? 0
-              if (msgTs <= lastProcessed) continue
+              if (msgTs <= conversationCheckpointMs) continue
               // Skip self messages
               if (msg.senderInboxId === client.inboxId) continue
 
@@ -272,8 +391,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               totalProcessed++
               messagesThisAgent++
 
-              newestTimestamp = mergeCheckpointMs(newestTimestamp, msgTs)
+              newestConversationTimestamp = mergeCheckpointMs(newestConversationTimestamp, msgTs)
             }
+
+            if (newestConversationTimestamp > conversationCheckpointMs) {
+              await upsertConversationCheckpoint({
+                db: db as any,
+                creatorAddress,
+                conversationId: convo.id,
+                checkpointMs: newestConversationTimestamp,
+              })
+              conversationCheckpoints.set(convo.id, newestConversationTimestamp)
+              newestTimestamp = mergeCheckpointMs(newestTimestamp, newestConversationTimestamp)
+            }
+            if (shouldStopAgentLoop) break
           } catch (err) {
             logger.error('[agent/process] Conversation error', {
               creator: creatorAddress.slice(0, 10),

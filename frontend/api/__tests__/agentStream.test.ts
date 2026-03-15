@@ -2,21 +2,52 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
 
-const { streamResponseMock, getElizaLlmServiceMock } = vi.hoisted(() => ({
+const { streamResponseMock, getElizaLlmServiceMock, readSessionFromRequestMock } = vi.hoisted(() => ({
   streamResponseMock: vi.fn(),
   getElizaLlmServiceMock: vi.fn(),
+  readSessionFromRequestMock: vi.fn(),
 }))
 
 vi.mock('../../server/agent/eliza/llm.js', () => ({
   getElizaLlmService: getElizaLlmServiceMock,
 }))
 
+vi.mock('../../server/auth/_shared.js', async () => {
+  const actual = await vi.importActual<typeof import('../../server/auth/_shared.js')>('../../server/auth/_shared.js')
+  return {
+    ...actual,
+    readSessionFromRequest: readSessionFromRequestMock,
+  }
+})
+
 describe('agent stream handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    readSessionFromRequestMock.mockReturnValue({
+      address: '0x1111111111111111111111111111111111111111',
+    })
     getElizaLlmServiceMock.mockReturnValue({
       streamResponse: streamResponseMock,
     })
+  })
+
+  it('returns 401 when auth session is missing', async () => {
+    readSessionFromRequestMock.mockReturnValueOnce(null)
+    const mod = await import('../_handlers/agent/_stream.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { message: 'hi' },
+      url: '/api/agent/stream',
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body).toEqual({ success: false, error: 'Unauthorized' })
+    expect(streamResponseMock).not.toHaveBeenCalled()
   })
 
   it('returns SSE events for a valid message', async () => {
@@ -45,6 +76,9 @@ describe('agent stream handler', () => {
     await handler(req, res)
 
     const payload = chunks.join('')
+    expect(streamResponseMock).toHaveBeenCalledWith(expect.objectContaining({
+      abortSignal: expect.any(Object),
+    }))
     expect(String(res.getHeader('content-type'))).toContain('text/event-stream')
     expect(payload).toContain('event: open')
     expect(payload).toContain('event: meta')

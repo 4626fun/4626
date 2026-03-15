@@ -16,7 +16,7 @@ describe('keepr help commands', () => {
     expect(result.response).toContain('<b>Keepr — Quick Start</b>')
     expect(result.response).toContain('<u>start</u>')
     expect(result.response).toContain('/buy | /sell | /bid')
-    expect(result.response).toContain('/help core|coin|market|social|ops|bankr|wallet')
+    expect(result.response).toContain('/help core|coin|market|social|ops|bankr|wallet|arena')
     expect(result.response).toContain('/help all')
     expect(result.response).toContain('/wallet')
     expect(result.response).not.toContain('/coin trend funnel')
@@ -36,6 +36,20 @@ describe('keepr help commands', () => {
     expect(result.response).not.toContain('/coin create')
   })
 
+  it('returns arena topic help from /help arena', async () => {
+    const result = await handleKeeprCommand({
+      groupId: 'group-help-2b',
+      senderWallet: TEST_WALLET,
+      text: '/help arena',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('<b>Keepr — arena</b>')
+    expect(result.response).toContain('/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6')
+    expect(result.response).toContain('/arena watch on | off | status')
+    expect(result.response).toContain('CLASH_OF_CLAW_API_KEY')
+  })
+
   it('returns full help with /help all', async () => {
     const result = await handleKeeprCommand({
       groupId: 'group-help-3',
@@ -52,6 +66,7 @@ describe('keepr help commands', () => {
     expect(result.response).toContain('<code>/coin create &lt;name&gt; &lt;symbol&gt; &lt;uri&gt;</code>')
     expect(result.response).toContain('<code>/coin trend funnel &lt;ticker&gt; &lt;eth-amount&gt;</code>')
     expect(result.response).toContain('<code>/mkt news &lt;symbol&gt; [limit]</code>')
+    expect(result.response).toContain('<code>/help arena</code> — Clash of Claw controls')
     expect(result.response).toContain('<code>/cre auction | /cre solana | /cre tend | /cre report | /cre flush-fees</code>')
     expect(result.response).toContain('<code>/bankr status | /bankr me | /bankr balances</code>')
     expect(result.response).toContain('/reputation')

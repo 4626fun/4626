@@ -241,6 +241,12 @@ function isAddressLike(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function toCanonicalWalletOrNull(value: unknown): `0x${string}` | null {
+  const normalized = asTrimmed(value).toLowerCase()
+  if (!isAddressLike(normalized)) return null
+  return normalized as `0x${string}`
+}
+
 function parseJsonObject(raw: string | undefined): Record<string, unknown> {
   const source = asTrimmed(raw ?? '')
   if (!source) return {}
@@ -409,6 +415,7 @@ const TELEGRAM_COMMAND_HEADS = [
   'ai',
   'mkt',
   'coin',
+  'arena',
 ] as const
 const TELEGRAM_COMMAND_HEADS_PATTERN = TELEGRAM_COMMAND_HEADS.join('|')
 
@@ -1173,6 +1180,7 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
       ],
       [
         { text: menuLabel('wallet'), callback_data: 'help:wallet' },
+        { text: 'Arena', callback_data: 'help:arena' },
         { text: 'Help', callback_data: 'help:all' },
       ],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
@@ -1352,9 +1360,10 @@ function buildFocusedHelpText(): string {
     '<code>/wallet</code> — wallet, positions, and actions',
     '<code>/signals</code> — recent trade feed',
     '<code>/vaults</code> — browse vaults',
+    '<code>/arena help</code> — Clash of Claw controls',
     '',
     '<u>Need more?</u>',
-    '<code>/help coin|market|social|ops|bankr|wallet</code> — focused guides',
+    '<code>/help coin|market|social|ops|bankr|wallet|arena</code> — focused guides',
     '<code>/help all</code> — complete command catalog',
   ].join('\n')
 }
@@ -3738,12 +3747,37 @@ async function handleTelegramDeployCallback(params: {
     }
   }
 
+  const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+  if (!canonicalSenderWallet) {
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: 'deploy',
+      intent,
+      execution: {
+        mode: 'keepr_coin_command',
+        commandText: deployBuild.commandText,
+      },
+      status: 'failed',
+      errorMessage: 'canonical_wallet_missing',
+    })
+    return {
+      text: 'Deploy blocked: canonical wallet is not available.',
+      callbackToast: 'Canonical wallet missing',
+      replyMarkup: buildDeployMenuReplyMarkup(),
+    }
+  }
+
   const execution = await handleKeeprCommand({
     groupId: params.groupId,
-    senderWallet: isAddressLike(link.canonicalCswAddress)
-      ? (link.canonicalCswAddress as `0x${string}`)
-      : params.senderWallet,
+    senderWallet: canonicalSenderWallet,
     text: deployBuild.commandText,
+    chatId: params.chatId,
+    userId: params.userId,
   })
 
   const status = execution.ok ? 'executed' : 'failed'
@@ -3825,6 +3859,8 @@ async function executeTelegramCommand(params: {
     groupId: params.groupId,
     senderWallet: params.senderWallet,
     text: params.text,
+    chatId: params.chatId,
+    userId: params.userId,
   })
   return { text: asTrimmed(keeprResult?.response ?? '') || 'Command received.' }
 }
@@ -4134,6 +4170,25 @@ async function handleTelegramTradeCallback(params: {
     }
   }
 
+  const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+  if (!canonicalSenderWallet) {
+    emitTelegramFunnelEvent({
+      db,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      eventName: 'trade_confirm_failed',
+      actionType: actionTypeSafe,
+      context: {
+        reason: 'canonical_wallet_missing',
+      },
+    })
+    return {
+      text: 'Trade blocked: canonical wallet is not available.',
+      callbackToast: 'Canonical wallet missing',
+      replyMarkup: buildTradeRecoveryReplyMarkup(),
+    }
+  }
+
   if ((actionTypeSafe === 'buy' || actionTypeSafe === 'sell') && isAddressLike(creatorCoinAddress) && amountInput) {
     tradeFlowState = reduceTradeFlowState(tradeFlowState, {
       type: 'ACCEPT',
@@ -4143,10 +4198,10 @@ async function handleTelegramTradeCallback(params: {
     const commandText = `/coin ${actionTypeSafe} ${creatorCoinAddress} ${amountInput}`
     const execution = await handleKeeprCommand({
       groupId: params.groupId,
-      senderWallet: isAddressLike(link.canonicalCswAddress)
-        ? (link.canonicalCswAddress as `0x${string}`)
-        : params.senderWallet,
+      senderWallet: canonicalSenderWallet,
       text: commandText,
+      chatId: params.chatId,
+      userId: params.userId,
     })
     const status = execution.ok ? 'executed' : 'failed'
     await logTelegramActionAudit({
@@ -4224,23 +4279,6 @@ async function handleTelegramTradeCallback(params: {
   }
 
   if (actionTypeSafe === 'bid') {
-    if (!isAddressLike(link.canonicalCswAddress)) {
-      emitTelegramFunnelEvent({
-        db,
-        telegramUserId: params.userId,
-        chatId: params.chatId,
-        eventName: 'trade_confirm_failed',
-        actionType: actionTypeSafe,
-        context: {
-          reason: 'canonical_wallet_missing',
-        },
-      })
-      return {
-        text: 'Bid blocked: canonical wallet is not available.',
-        callbackToast: 'Canonical wallet missing',
-        replyMarkup: buildTradeRecoveryReplyMarkup(),
-      }
-    }
     const strategyAddressRaw = asTrimmed(intent.ccaStrategyAddress ?? '')
     const auctionAddressRaw = asTrimmed((intent as any)?.bid?.auctionAddress ?? '')
     const maxPriceQ96Raw = asTrimmed((intent as any)?.bid?.maxPriceQ96 ?? '')
@@ -4510,11 +4548,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const configuredSecret = webhookConfig.webhookSecret
-  if (configuredSecret) {
-    const providedSecret = asTrimmed(req.headers?.['x-telegram-bot-api-secret-token'])
-    if (providedSecret !== configuredSecret) {
-      return res.status(401).json({ success: false, error: 'Invalid Telegram webhook secret' } satisfies ApiEnvelope<never>)
-    }
+  if (!configuredSecret) {
+    return res.status(503).json({
+      success: false,
+      error: 'Telegram webhook secret is not configured',
+    } satisfies ApiEnvelope<never>)
+  }
+  const providedSecret = asTrimmed(req.headers?.['x-telegram-bot-api-secret-token'])
+  if (providedSecret !== configuredSecret) {
+    return res.status(401).json({ success: false, error: 'Invalid Telegram webhook secret' } satisfies ApiEnvelope<never>)
   }
 
   const update = await readJsonBody<TelegramUpdate>(req, { maxBytes: 512_000 })

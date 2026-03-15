@@ -111,6 +111,24 @@ export type TelegramTradePercentPrompt = {
   updatedAt: string | null
 }
 
+export type TelegramArenaWatch = {
+  chatId: string
+  enabled: boolean
+  threadId: number | null
+  watchMatchId: string | null
+  lastPhase: string | null
+  lastGameTime: string | null
+  lastStateHash: string | null
+  lastMatchId: string | null
+  lastError: string | null
+  lastRequestedByUserId: string | null
+  lastPolledAt: string | null
+  lastPushedAt: string | null
+  nextPollAfter: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export type TelegramSignalRow = {
   telegramUserId: string
   actionType: string
@@ -950,6 +968,29 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
         PRIMARY KEY (chat_id, telegram_user_id)
       );
     `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_arena_watchers (
+        chat_id TEXT PRIMARY KEY,
+        enabled BOOLEAN NOT NULL DEFAULT false,
+        thread_id BIGINT NULL,
+        watch_match_id TEXT NULL,
+        last_phase TEXT NULL,
+        last_game_time TEXT NULL,
+        last_state_hash TEXT NULL,
+        last_match_id TEXT NULL,
+        last_error TEXT NULL,
+        last_requested_by_user_id BIGINT NULL,
+        last_polled_at TIMESTAMPTZ NULL,
+        last_pushed_at TIMESTAMPTZ NULL,
+        next_poll_after TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`
+      ALTER TABLE telegram_arena_watchers
+      ADD COLUMN IF NOT EXISTS watch_match_id TEXT NULL;
+    `
 
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_user_links_csw_idx
@@ -1030,6 +1071,10 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_trade_percent_prompts_active_idx
       ON telegram_trade_percent_prompts (expires_at, consumed_at);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_arena_watchers_enabled_poll_idx
+      ON telegram_arena_watchers (enabled, next_poll_after);
     `
 
     telegramTradingSchemaEnsured = true
@@ -1425,6 +1470,26 @@ function mapTradePercentPromptRow(row: any): TelegramTradePercentPrompt {
   }
 }
 
+function mapTelegramArenaWatchRow(row: any): TelegramArenaWatch {
+  return {
+    chatId: asTrimmed(row.chat_id),
+    enabled: Boolean(row.enabled),
+    threadId: Number.isFinite(Number(row.thread_id)) ? Number(row.thread_id) : null,
+    watchMatchId: asTrimmed(row.watch_match_id) || null,
+    lastPhase: asTrimmed(row.last_phase) || null,
+    lastGameTime: asTrimmed(row.last_game_time) || null,
+    lastStateHash: asTrimmed(row.last_state_hash) || null,
+    lastMatchId: asTrimmed(row.last_match_id) || null,
+    lastError: asTrimmed(row.last_error) || null,
+    lastRequestedByUserId: row.last_requested_by_user_id ? String(row.last_requested_by_user_id) : null,
+    lastPolledAt: toIso(row.last_polled_at),
+    lastPushedAt: toIso(row.last_pushed_at),
+    nextPollAfter: toIso(row.next_poll_after),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  }
+}
+
 export async function getHolderRoomPolicyByVault(params: {
   db: Db
   chatId: string
@@ -1712,6 +1777,259 @@ export async function clearTelegramTradePercentPrompt(params: {
     WHERE chat_id = ${chatId}
       AND telegram_user_id = ${userId};
   `
+}
+
+export async function getTelegramArenaWatchByChatId(params: {
+  db: Db
+  chatId: string
+}): Promise<TelegramArenaWatch | null> {
+  const chatId = asTrimmed(params.chatId)
+  if (!chatId) return null
+  const result = await params.db.sql`
+    SELECT
+      chat_id,
+      enabled,
+      thread_id,
+      watch_match_id,
+      last_phase,
+      last_game_time,
+      last_state_hash,
+      last_match_id,
+      last_error,
+      last_requested_by_user_id,
+      last_polled_at,
+      last_pushed_at,
+      next_poll_after,
+      created_at,
+      updated_at
+    FROM telegram_arena_watchers
+    WHERE chat_id = ${chatId}
+    LIMIT 1;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramArenaWatchRow(row) : null
+}
+
+export async function setTelegramArenaWatch(params: {
+  db: Db
+  chatId: string
+  enabled: boolean
+  threadId?: number | null
+  requestedByUserId?: string | number | bigint | null
+}): Promise<TelegramArenaWatch | null> {
+  const chatId = asTrimmed(params.chatId)
+  if (!chatId) return null
+  const threadIdRaw = Number(params.threadId)
+  const threadId = Number.isFinite(threadIdRaw) && threadIdRaw > 0 ? Math.floor(threadIdRaw) : null
+  const requestedByUserId =
+    params.requestedByUserId === null || typeof params.requestedByUserId === 'undefined'
+      ? null
+      : normalizeTelegramUserId(params.requestedByUserId)
+
+  const result = await params.db.sql`
+    INSERT INTO telegram_arena_watchers (
+      chat_id,
+      enabled,
+      thread_id,
+      watch_match_id,
+      last_requested_by_user_id,
+      next_poll_after,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${chatId},
+      ${Boolean(params.enabled)},
+      ${threadId},
+      ${null},
+      ${requestedByUserId},
+      ${params.enabled ? new Date().toISOString() : null},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (chat_id) DO UPDATE
+    SET
+      enabled = EXCLUDED.enabled,
+      thread_id = COALESCE(EXCLUDED.thread_id, telegram_arena_watchers.thread_id),
+      watch_match_id = NULL,
+      last_requested_by_user_id = COALESCE(EXCLUDED.last_requested_by_user_id, telegram_arena_watchers.last_requested_by_user_id),
+      next_poll_after = CASE
+        WHEN EXCLUDED.enabled THEN NOW()
+        ELSE NULL
+      END,
+      updated_at = NOW()
+    RETURNING
+      chat_id,
+      enabled,
+      thread_id,
+      watch_match_id,
+      last_phase,
+      last_game_time,
+      last_state_hash,
+      last_match_id,
+      last_error,
+      last_requested_by_user_id,
+      last_polled_at,
+      last_pushed_at,
+      next_poll_after,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramArenaWatchRow(row) : null
+}
+
+export async function bindTelegramArenaWatchMatch(params: {
+  db: Db
+  chatId: string
+  matchId: string
+  requestedByUserId?: string | number | bigint | null
+}): Promise<TelegramArenaWatch | null> {
+  const chatId = asTrimmed(params.chatId)
+  const matchId = asTrimmed(params.matchId)
+  if (!chatId || !matchId) return null
+  const requestedByUserId =
+    params.requestedByUserId === null || typeof params.requestedByUserId === 'undefined'
+      ? null
+      : normalizeTelegramUserId(params.requestedByUserId)
+  const result = await params.db.sql`
+    INSERT INTO telegram_arena_watchers (
+      chat_id,
+      enabled,
+      watch_match_id,
+      last_requested_by_user_id,
+      next_poll_after,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${chatId},
+      true,
+      ${matchId},
+      ${requestedByUserId},
+      NOW(),
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (chat_id) DO UPDATE
+    SET
+      enabled = true,
+      watch_match_id = EXCLUDED.watch_match_id,
+      last_requested_by_user_id = COALESCE(EXCLUDED.last_requested_by_user_id, telegram_arena_watchers.last_requested_by_user_id),
+      last_error = NULL,
+      next_poll_after = NOW(),
+      updated_at = NOW()
+    RETURNING
+      chat_id,
+      enabled,
+      thread_id,
+      watch_match_id,
+      last_phase,
+      last_game_time,
+      last_state_hash,
+      last_match_id,
+      last_error,
+      last_requested_by_user_id,
+      last_polled_at,
+      last_pushed_at,
+      next_poll_after,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramArenaWatchRow(row) : null
+}
+
+export async function listDueTelegramArenaWatches(params: {
+  db: Db
+  limit?: number
+}): Promise<TelegramArenaWatch[]> {
+  const limit = Math.max(1, Math.min(200, Math.floor(Number(params.limit ?? 25))))
+  const result = await params.db.sql`
+    SELECT
+      chat_id,
+      enabled,
+      thread_id,
+      watch_match_id,
+      last_phase,
+      last_game_time,
+      last_state_hash,
+      last_match_id,
+      last_error,
+      last_requested_by_user_id,
+      last_polled_at,
+      last_pushed_at,
+      next_poll_after,
+      created_at,
+      updated_at
+    FROM telegram_arena_watchers
+    WHERE enabled = true
+      AND COALESCE(next_poll_after, TO_TIMESTAMP(0)) <= NOW()
+    ORDER BY COALESCE(last_polled_at, TO_TIMESTAMP(0)) ASC
+    LIMIT ${limit};
+  `
+  return (result.rows ?? []).map(mapTelegramArenaWatchRow)
+}
+
+export async function updateTelegramArenaWatchPoll(params: {
+  db: Db
+  chatId: string
+  enabled?: boolean
+  phase?: string | null
+  gameTime?: string | null
+  stateHash?: string | null
+  matchId?: string | null
+  errorMessage?: string | null
+  pushed?: boolean
+  pollIntervalSeconds?: number
+}): Promise<TelegramArenaWatch | null> {
+  const chatId = asTrimmed(params.chatId)
+  if (!chatId) return null
+  const pollIntervalSeconds = Math.max(15, Math.min(60 * 60, Math.floor(Number(params.pollIntervalSeconds ?? 60))))
+  const enabledOverride = typeof params.enabled === 'boolean' ? params.enabled : null
+  const result = await params.db.sql`
+    UPDATE telegram_arena_watchers
+    SET
+      enabled = COALESCE(${enabledOverride}, enabled),
+      watch_match_id = CASE
+        WHEN COALESCE(${enabledOverride}, enabled) THEN watch_match_id
+        ELSE NULL
+      END,
+      last_phase = COALESCE(${asTrimmed(params.phase ?? '') || null}, last_phase),
+      last_game_time = COALESCE(${asTrimmed(params.gameTime ?? '') || null}, last_game_time),
+      last_state_hash = COALESCE(${asTrimmed(params.stateHash ?? '') || null}, last_state_hash),
+      last_match_id = COALESCE(${asTrimmed(params.matchId ?? '') || null}, last_match_id),
+      last_error = ${asTrimmed(params.errorMessage ?? '') || null},
+      last_polled_at = NOW(),
+      last_pushed_at = CASE
+        WHEN ${Boolean(params.pushed)} THEN NOW()
+        ELSE last_pushed_at
+      END,
+      next_poll_after = CASE
+        WHEN COALESCE(${enabledOverride}, enabled) THEN NOW() + (${pollIntervalSeconds} * INTERVAL '1 second')
+        ELSE NULL
+      END,
+      updated_at = NOW()
+    WHERE chat_id = ${chatId}
+    RETURNING
+      chat_id,
+      enabled,
+      thread_id,
+      watch_match_id,
+      last_phase,
+      last_game_time,
+      last_state_hash,
+      last_match_id,
+      last_error,
+      last_requested_by_user_id,
+      last_polled_at,
+      last_pushed_at,
+      next_poll_after,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramArenaWatchRow(row) : null
 }
 
 export async function listHolderRoomMembersNeedingRecheck(params: {

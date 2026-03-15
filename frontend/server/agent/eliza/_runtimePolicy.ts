@@ -4,6 +4,8 @@ const NON_IDEMPOTENT_ACTIONS = new Set([
   'KEEPR_COMMAND',
   'ZORA_COIN',
   'CRE_TRIGGER',
+  'BANKR_SKILL',
+  'UNISWAP_SKILL',
 ])
 
 export function getActionRetryBudget(actionName: string, defaultRetries: number): number {

@@ -53,6 +53,7 @@ export const TELEGRAM_COMMAND_HEADS = [
   'ai',
   'mkt',
   'coin',
+  'arena',
 ] as const
 
 export const TELEGRAM_COMMAND_HEADS_PATTERN = TELEGRAM_COMMAND_HEADS.join('|')
@@ -86,6 +87,10 @@ export const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string
     pattern: /\/eligibility\s+<vault\|ticker>/i,
     hint: 'checks holder-room threshold for a scoped vault',
   },
+  {
+    pattern: /\/arena\s+rules\s+ECO:\d+/i,
+    hint: 'dials: ECO/TECH/DEF/AIR/ASSIST on a 0-10 scale',
+  },
 ]
 
 export type TelegramBotMenuCommand = {
@@ -103,6 +108,7 @@ export const TELEGRAM_PRIVATE_BOT_COMMANDS: TelegramBotMenuCommand[] = [
   { command: 'bid', description: 'Guided bid flow' },
   { command: 'wallet', description: 'Your wallet, positions, and actions' },
   { command: 'signals', description: 'Recent trade feed' },
+  { command: 'arena', description: 'Clash of Claw controls' },
 ]
 
 export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
@@ -113,6 +119,7 @@ export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
   { command: 'sell', description: 'Guided sell flow' },
   { command: 'bid', description: 'Guided bid flow' },
   { command: 'signals', description: 'Recent trade feed' },
+  { command: 'arena', description: 'Clash of Claw controls' },
 ]
 
 export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = [
@@ -125,6 +132,7 @@ export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = [
   { command: 'wallet', description: 'Linked wallet activity' },
   { command: 'signals', description: 'Recent trade feed' },
   { command: 'deploy', description: 'Deploy a vault' },
+  { command: 'arena', description: 'Clash of Claw controls' },
 ]
 
 export const DEPLOY_CURRENCY_VALUES: DeployCurrencyInput[] = ['ETH', 'ZORA', 'CREATOR_COIN', 'CONTENT_COIN']

@@ -4,9 +4,11 @@ import {
   DEFAULT_CHECKPOINT_WINDOW_MS,
   MAX_MESSAGES_PER_CONVERSATION,
   getCheckpointMs,
+  getInitialConversationCheckpointMs,
   getMessageQueryOptions,
   getEthereumAddressFromInboxState,
   mergeCheckpointMs,
+  parseConversationCheckpointRows,
 } from '../_handlers/agent/_process.ts'
 
 describe('agent/process checkpoints', () => {
@@ -23,6 +25,13 @@ describe('agent/process checkpoints', () => {
     expect(ms).toBe(now - DEFAULT_CHECKPOINT_WINDOW_MS)
   })
 
+  it('caps first per-conversation checkpoint to rolling window when legacy checkpoint is too recent', () => {
+    const now = new Date('2026-02-08T12:00:00.000Z').getTime()
+    const recentLegacyCheckpoint = new Date('2026-02-08T11:59:45.000Z').toISOString()
+    const ms = getInitialConversationCheckpointMs(recentLegacyCheckpoint, now)
+    expect(ms).toBe(now - DEFAULT_CHECKPOINT_WINDOW_MS)
+  })
+
   it('builds bounded message query options', () => {
     const lastProcessedMs = 1_000
     const opts = getMessageQueryOptions(lastProcessedMs)
@@ -34,6 +43,27 @@ describe('agent/process checkpoints', () => {
   it('merges checkpoints monotonically', () => {
     expect(mergeCheckpointMs(1000, 999)).toBe(1000)
     expect(mergeCheckpointMs(1000, 1500)).toBe(1500)
+  })
+
+  it('parses conversation checkpoint rows into a map', () => {
+    const checkpoints = parseConversationCheckpointRows([
+      {
+        conversation_id: 'conv-a',
+        last_processed_message_at: '2026-02-08T11:58:30.000Z',
+      },
+      {
+        conversation_id: 'conv-b',
+        last_processed_message_at: 'invalid',
+      },
+      {
+        conversation_id: '',
+        last_processed_message_at: '2026-02-08T11:59:00.000Z',
+      },
+    ])
+
+    expect(checkpoints.size).toBe(1)
+    expect(checkpoints.get('conv-a')).toBe(new Date('2026-02-08T11:58:30.000Z').getTime())
+    expect(checkpoints.has('conv-b')).toBe(false)
   })
 
   it('resolves ethereum address from inbox state identifiers', () => {
