@@ -642,6 +642,27 @@ function parseEnvBoolean(value: string | undefined, fallback: boolean): boolean 
   return fallback
 }
 
+function firstHeaderValue(value: string | string[] | undefined): string {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && value.length > 0) return String(value[0] ?? '')
+  return ''
+}
+
+const ELIZA_HEALTH_VERBOSE = parseEnvBoolean(process.env.ELIZA_HEALTH_VERBOSE, false)
+const ELIZA_HEALTH_DETAIL_TOKEN = String(process.env.ELIZA_HEALTH_DETAIL_TOKEN ?? '').trim()
+
+function hasDetailedHealthAccess(req: http.IncomingMessage): boolean {
+  if (ELIZA_HEALTH_VERBOSE) return true
+  if (!ELIZA_HEALTH_DETAIL_TOKEN) return false
+  const headerToken = firstHeaderValue(req.headers['x-health-token'] as string | string[] | undefined).trim()
+  const authHeader = firstHeaderValue(req.headers.authorization as string | string[] | undefined).trim()
+  const bearerToken = authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice('bearer '.length).trim()
+    : ''
+  const provided = headerToken || bearerToken
+  return provided === ELIZA_HEALTH_DETAIL_TOKEN
+}
+
 function xmlEscape(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -1096,6 +1117,8 @@ async function handleMessage(
     senderAddress: string | null
     content: string
     xmtpConversationKey?: string | null
+    messageId?: string | null
+    sentAtMs?: number | null
   },
   ctx: {
     agentKey: string
@@ -1138,6 +1161,13 @@ async function handleMessage(
 
   const memory = ctx.runtimeBridge.createInboundMemory(msg)
   await ctx.runtimeBridge.runtime.createMemory(memory as any, 'messages' as any)
+  if ((memory as any)?.__xmtpDuplicate === true) {
+    reqLogger.info('[eliza] duplicate inbound message ignored', {
+      messageId: msg.messageId ?? null,
+      conversationId: msg.conversationId,
+    })
+    return null
+  }
   const state = await ctx.runtimeBridge.composeState(memory)
 
   if (queueEnabled) {
@@ -1504,6 +1534,8 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
         senderAddress: msg.senderAddress,
         content: msg.content,
         xmtpConversationKey: msg.conversationArchiveKey ?? null,
+        messageId: msg.messageId ?? null,
+        sentAtMs: msg.sentAtMs ?? msg.sentAt?.getTime?.() ?? null,
       },
       {
         agentKey: row.creatorAddress,
@@ -1566,10 +1598,18 @@ async function syncAgents() {
           creatorAddress: row.creatorAddress,
         })
         try {
+          await existing.xmtp.stop()
+          runningAgents.delete(row.creatorAddress)
+        } catch (err) {
+          syncLogger.error('[eliza] Failed stopping existing agent before restart; replacement skipped to avoid split-brain', {
+            correlationId,
+            creatorAddress: row.creatorAddress,
+            error: toErrorDetails(err),
+          })
+          continue
+        }
+        try {
           const replacement = await startAgent(row, desiredFingerprint)
-          try {
-            await existing.xmtp.stop()
-          } catch {}
           runningAgents.set(row.creatorAddress, replacement)
         } catch (err) {
           syncLogger.error(`[eliza] Failed to restart changed agent for ${row.creatorAddress}`, {
@@ -1598,8 +1638,14 @@ async function syncAgents() {
           logger.info(`[eliza] Stopping agent for ${key}`)
           try {
             await running.xmtp.stop()
-          } catch {}
-          runningAgents.delete(key)
+            runningAgents.delete(key)
+          } catch (err) {
+            syncLogger.error('[eliza] Failed to stop removed agent; keeping registration to avoid orphaned runtime', {
+              correlationId,
+              creatorAddress: key,
+              error: toErrorDetails(err),
+            })
+          }
         }
       }
     }
@@ -1680,6 +1726,8 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
         senderAddress: msg.senderAddress,
         content: msg.content,
         xmtpConversationKey: msg.conversationArchiveKey ?? null,
+        messageId: msg.messageId ?? null,
+        sentAtMs: msg.sentAtMs ?? msg.sentAt?.getTime?.() ?? null,
       },
       {
         agentKey: 'single-agent',
@@ -1761,6 +1809,8 @@ async function startSingleAgentCsw(params: {
         senderAddress: msg.senderAddress,
         content: msg.content,
         xmtpConversationKey: msg.conversationArchiveKey ?? null,
+        messageId: msg.messageId ?? null,
+        sentAtMs: msg.sentAtMs ?? msg.sentAt?.getTime?.() ?? null,
       },
       {
         agentKey: 'single-agent-csw',
@@ -1806,6 +1856,8 @@ async function startSingleAgentCsw(params: {
             senderAddress: m.senderAddress,
             content: m.content,
             xmtpConversationKey: m.conversationArchiveKey ?? null,
+            messageId: m.messageId ?? null,
+            sentAtMs: m.sentAtMs ?? m.sentAt?.getTime?.() ?? null,
           },
           { agentKey: 'single-agent-csw', runtimeBridge },
         )
@@ -2236,46 +2288,66 @@ function startHealthServer() {
           : agentCount === 0
             ? 'no_agents'
             : 'degraded'
-    const payload = {
-      status,
-      uptimeMs: Date.now() - runtimeStartedAtMs,
-      agents: agentCount,
-      readinessReasons,
-      runtime: {
-        role: AGENT_RUNTIME_ROLE,
-        consumeXmtp: AGENT_CONSUME_XMTP,
-        lockRequired: AGENT_RUNTIME_LOCK_REQUIRED,
-        lockKey: AGENT_RUNTIME_LOCK_REQUIRED ? AGENT_RUNTIME_LOCK_KEY : null,
-        lockOwner: runtimeLeaseState?.ownerId ?? null,
-      },
-      dependencies: {
-        db: {
-          configured: dbConfigured,
-          required: shouldCheckDb,
-          connected: shouldCheckDb ? db !== null : null,
-          initError: dbInitError,
-        },
-        llm: llmHealth,
-        xmtp: {
-          ready: xmtpReady,
-          runningAgents: xmtpStates.filter((entry) => entry.running).length,
-          states: xmtpStates,
-        },
-        queueWorker: {
-          running: Boolean(backgroundWorker),
-          stats: queueStats,
-        },
-      },
-      validation: latestEnvValidation,
-    }
-
+    const probePath = url as '/healthz' | '/readyz'
+    const detailedHealthAccess = hasDetailedHealthAccess(_req)
     const statusCode = getHealthProbeStatusCode({
-      probe: url as '/healthz' | '/readyz',
+      probe: probePath,
       ready,
       agentBooted,
       agentCount,
       xmtpReady,
     })
+    const payload = detailedHealthAccess
+      ? {
+          probe: probePath,
+          detailed: true,
+          status,
+          uptimeMs: Date.now() - runtimeStartedAtMs,
+          agents: agentCount,
+          readinessReasons,
+          runtime: {
+            role: AGENT_RUNTIME_ROLE,
+            consumeXmtp: AGENT_CONSUME_XMTP,
+            lockRequired: AGENT_RUNTIME_LOCK_REQUIRED,
+            lockKey: AGENT_RUNTIME_LOCK_REQUIRED ? AGENT_RUNTIME_LOCK_KEY : null,
+            lockOwner: runtimeLeaseState?.ownerId ?? null,
+          },
+          dependencies: {
+            db: {
+              configured: dbConfigured,
+              required: shouldCheckDb,
+              connected: shouldCheckDb ? db !== null : null,
+              initError: dbInitError,
+            },
+            llm: llmHealth,
+            xmtp: {
+              ready: xmtpReady,
+              runningAgents: xmtpStates.filter((entry) => entry.running).length,
+              totalAgents: xmtpStates.length,
+              states: xmtpStates,
+            },
+            queueWorker: {
+              running: Boolean(backgroundWorker),
+              stats: queueStats,
+            },
+          },
+          validation: latestEnvValidation,
+        }
+      : {
+          probe: probePath,
+          detailed: false,
+          status:
+            probePath === '/readyz'
+              ? ready
+                ? 'ready'
+                : 'not_ready'
+              : statusCode >= 500
+                ? 'degraded'
+                : agentBooted
+                  ? 'alive'
+                  : 'booting',
+          uptimeMs: Date.now() - runtimeStartedAtMs,
+        }
     res.writeHead(statusCode, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(payload))
   })

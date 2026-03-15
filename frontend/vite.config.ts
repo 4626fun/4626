@@ -82,6 +82,23 @@ function makeVercelCompatRes(res: ServerResponse): any {
     return r
   }
   r.send = (body: any) => {
+    if (body === undefined || body === null) {
+      res.end()
+      return r
+    }
+    if (Buffer.isBuffer(body)) {
+      res.end(body)
+      return r
+    }
+    if (body instanceof Uint8Array) {
+      res.end(Buffer.from(body))
+      return r
+    }
+    if (typeof body === 'object') {
+      if (!res.headersSent) res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify(body))
+      return r
+    }
     res.end(typeof body === 'string' ? body : String(body))
     return r
   }
@@ -253,6 +270,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/v1/chat/command-preflight': () => import('./api/_handlers/v1/chat/_commandPreflight'),
         '/api/v1/chat/telemetry': () => import('./api/_handlers/v1/chat/_telemetry'),
       }
+      const catchAllApiRoute = () => import('./api/[...path]')
 
       server.middlewares.use(async (req, res, next) => {
         try {
@@ -260,7 +278,10 @@ function localApiRoutesPlugin(): Plugin {
           const url = new URL(req.url ?? '/', `http://${host}`)
           // Support the `/__api/*` alias in local dev (the client prefers it to avoid adblock rules).
           const pathname = url.pathname.startsWith('/__api/') ? `/api/${url.pathname.slice('/__api/'.length)}` : url.pathname
-          const loader = routes[pathname]
+          const isApiPath = pathname === '/api' || pathname.startsWith('/api/')
+          let loader = routes[pathname]
+          const useCatchAll = !loader && isApiPath
+          if (useCatchAll) loader = catchAllApiRoute
           if (!loader) return next()
 
           const body = await readRequestBody(req as IncomingMessage)
@@ -268,7 +289,13 @@ function localApiRoutesPlugin(): Plugin {
           const handler = mod.default
           if (typeof handler !== 'function') return next()
 
-          await handler(makeVercelCompatReq(req as any, body), makeVercelCompatRes(res as any))
+          const compatReq = makeVercelCompatReq(req as any, body)
+          if (useCatchAll) {
+            const subpath = pathname === '/api' ? '' : pathname.slice('/api/'.length)
+            compatReq.query = compatReq.query ?? Object.create(null)
+            compatReq.query.path = subpath ? subpath.split('/').filter(Boolean) : []
+          }
+          await handler(compatReq, makeVercelCompatRes(res as any))
         } catch (e) {
           // Structured error logging for dev server
           const err = e instanceof Error ? e : new Error(String(e))

@@ -32,7 +32,7 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — market</b>')
-    expect(result.response).toContain('<code>/mkt quote <symbol></code>')
+    expect(result.response).toContain('<code>/mkt quote &lt;symbol&gt;</code>')
     expect(result.response).not.toContain('/coin create')
   })
 
@@ -45,18 +45,20 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — Help</b>')
-    expect(result.response).toContain('<blockquote>Use <code>/help</code> for the short version')
+    expect(result.response).toContain('<blockquote>Use <code>/help</code> for quick mode')
     expect(result.response).toContain('<u>start</u>')
     expect(result.response).toContain('<u>advanced</u>')
-    expect(result.response).toContain('<code>/wallet</code> — wallet, positions, and recent actions')
-    expect(result.response).toContain('<code>/coin create <name> <symbol> <uri></code>')
-    expect(result.response).toContain('<code>/coin trend funnel <ticker> <eth-amount></code>')
-    expect(result.response).toContain('<code>/mkt news <symbol> [limit]</code>')
-    expect(result.response).toContain('<code>/cre tend vault</code>')
-    expect(result.response).toContain('<code>/bankr balances base,solana</code>')
-    expect(result.response).toContain('<code>/reputation <agentId></code>')
+    expect(result.response).toContain('<code>/wallet</code> — wallet + positions')
+    expect(result.response).toContain('<code>/coin create &lt;name&gt; &lt;symbol&gt; &lt;uri&gt;</code>')
+    expect(result.response).toContain('<code>/coin trend funnel &lt;ticker&gt; &lt;eth-amount&gt;</code>')
+    expect(result.response).toContain('<code>/mkt news &lt;symbol&gt; [limit]</code>')
+    expect(result.response).toContain('<code>/cre auction | /cre solana | /cre tend | /cre report | /cre flush-fees</code>')
+    expect(result.response).toContain('<code>/bankr status | /bankr me | /bankr balances</code>')
+    expect(result.response).toContain('/reputation')
     expect(result.response).toContain('/coin trend funnel')
-    expect(result.response).toContain('/bankr exec <instruction> --confirm')
+    expect(result.response).toContain('/bankr exec &lt;instruction&gt; --confirm')
+    expect(result.response).toContain('/ai &lt;question&gt;')
+    expect(result.response).not.toContain('/ai <question>')
   })
 
   it('falls back to quick help with an unknown topic', async () => {

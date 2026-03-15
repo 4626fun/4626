@@ -8,6 +8,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { getAppBaseUrl } from '@/lib/host'
+import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 
 import type { Variant } from './waitlistTypes'
@@ -64,6 +65,8 @@ type TelegramAuthFlowState =
   | { status: 'loading' }
   | { status: 'done' }
   | { status: 'error'; error: Error | null }
+
+type PrivyTelegramLinkWithLaunchParams = (options?: { launchParams: { initDataRaw?: string } }) => void
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDOFF_QUERY_KEY = 'cv_handoff'
@@ -213,6 +216,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const pendingTelegramMiniAppLinkRef = useRef(false)
   const zoraAutoResolvedRef = useRef(false)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
@@ -356,25 +360,35 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setBusy(true)
     setError(null)
     setRecoveryRequired(false)
+    pendingTelegramMiniAppLinkRef.current = false
     try {
       if (privyAuthed) {
         if (telegramAlreadyLinked) {
           await runBootstrap()
         } else {
-          await loginWithTelegram()
-          await runBootstrap()
+          const launchParams = readPrivyTelegramLaunchParams()
+          const linkTelegram =
+            typeof (privy as any)?.linkTelegram === 'function'
+              ? ((privy as any).linkTelegram as PrivyTelegramLinkWithLaunchParams)
+              : null
+          if (launchParams?.initDataRaw && linkTelegram) {
+            pendingTelegramMiniAppLinkRef.current = true
+            linkTelegram({ launchParams })
+          } else {
+            await loginWithTelegram()
+            await runBootstrap()
+          }
         }
       } else {
         await loginWithTelegram()
       }
-      authAttemptInFlightRef.current = false
-      setBusy(false)
     } catch (authError: any) {
       setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start Telegram sign-in.')
+    } finally {
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, loginWithTelegram, privyAuthed, runBootstrap, step, telegramAlreadyLinked, telegramAuthLoading])
+  }, [busy, loginWithTelegram, privy, privyAuthed, runBootstrap, step, telegramAlreadyLinked, telegramAuthLoading])
 
   useEffect(() => {
     if (step !== 'auth') return
@@ -387,6 +401,33 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setBusy(false)
     authAttemptInFlightRef.current = false
   }, [step, telegramAuthState])
+
+  useEffect(() => {
+    if (step !== 'auth') return
+    if (!privyAuthed) return
+    if (!pendingTelegramMiniAppLinkRef.current) return
+    if (!telegramAlreadyLinked) return
+    if (busy) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        setBusy(true)
+        setError(null)
+        await runBootstrap()
+      } catch (bootstrapError: any) {
+        if (cancelled) return
+        setError(
+          typeof bootstrapError?.message === 'string' ? bootstrapError.message : 'Failed to load account state.',
+        )
+      } finally {
+        pendingTelegramMiniAppLinkRef.current = false
+        if (!cancelled) setBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [busy, privyAuthed, runBootstrap, step, telegramAlreadyLinked])
 
   const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
     const response = await apiFetch('/api/zora/resolve', {
@@ -564,6 +605,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
+      pendingTelegramMiniAppLinkRef.current = false
       setRecoveryRequired(false)
     }
   }, [step])

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ensureTelegramMiniAppSession } from './telegramWebApp'
+import { ensureTelegramMiniAppSession, readPrivyTelegramLaunchParams } from './telegramWebApp'
 
 type MockWindowState = {
   Telegram?: { WebApp?: { initData?: string } }
@@ -90,5 +90,17 @@ describe('telegramWebApp mini app session bootstrap', () => {
       expect(result.statusCode).toBe(400)
     }
     expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('builds Privy launch params from Telegram initData', () => {
+    restoreWindow = installMockWindow('auth_date=1710000000&user=%7B%22id%22%3A42%7D&hash=abc')
+    expect(readPrivyTelegramLaunchParams()).toEqual({
+      initDataRaw: 'auth_date=1710000000&user=%7B%22id%22%3A42%7D&hash=abc',
+    })
+  })
+
+  it('returns null launch params when Telegram initData is missing', () => {
+    restoreWindow = installMockWindow('')
+    expect(readPrivyTelegramLaunchParams()).toBeNull()
   })
 })

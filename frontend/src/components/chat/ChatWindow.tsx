@@ -118,6 +118,15 @@ function baseAllowedGuard(): CommandGuardResult {
   }
 }
 
+function preflightUnavailableGuard(): CommandGuardResult {
+  return {
+    allowed: false,
+    reason: 'Write guard is temporarily unavailable. Please retry.',
+    guardCategory: 'runtime_unavailable',
+    checking: false,
+  }
+}
+
 /** Inline sender label that resolves inboxId → address → display name */
 function SenderLabel({ inboxId }: { inboxId: string }) {
   const { resolveInboxAddress } = useXmtp()
@@ -678,8 +687,7 @@ export function ChatWindow({
                 checking: false,
               }
             : {
-                ...baseAllowedGuard(),
-                checking: false,
+                ...preflightUnavailableGuard(),
               }
           if (cancelled) return
           setCommandGuards((prev) => ({ ...prev, [command.id]: guard }))
@@ -695,8 +703,7 @@ export function ChatWindow({
           setCommandGuards((prev) => ({
             ...prev,
             [command.id]: {
-              ...baseAllowedGuard(),
-              checking: false,
+              ...preflightUnavailableGuard(),
             },
           }))
         }

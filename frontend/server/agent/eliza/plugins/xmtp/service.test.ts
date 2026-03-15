@@ -153,5 +153,72 @@ describe('xmtp service lifecycle', () => {
     expect(service.isRunning).toBe(true)
     await service.stop()
   })
+
+  it('drops duplicate inbound messages before invoking command handler', async () => {
+    let textHandler: ((ctx: any) => Promise<void>) | null = null
+    const sendTextMock = vi.fn(async () => {})
+    const onMock = vi.fn((event: string, handler: (ctx: any) => Promise<void>) => {
+      if (event === 'text') textHandler = handler
+    })
+
+    const agent = {
+      address: '0x3333333333333333333333333333333333333333',
+      client: {
+        revokeAllOtherInstallations: vi.fn(async () => {}),
+        preferences: {
+          fetchInboxStates: vi.fn(async () => [
+            {
+              identifiers: [
+                {
+                  identifierKind: 0,
+                  identifier: '0x4444444444444444444444444444444444444444',
+                },
+              ],
+            },
+          ]),
+        },
+      },
+      on: onMock,
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+    }
+    AgentCreateMock.mockResolvedValue(agent as any)
+
+    const { XmtpService } = await import('./service.ts')
+    const service = new XmtpService({
+      signer: { id: 'mock-signer' } as any,
+      env: 'production',
+      dbPath: null,
+    })
+    const messageHandler = vi.fn(async () => 'pong')
+    service.setMessageHandler(messageHandler)
+
+    await service.start()
+    expect(textHandler).toBeTypeOf('function')
+
+    const ctx = {
+      message: {
+        id: 'msg-abc',
+        content: '/keepr status',
+        senderInboxId: 'inbox-1',
+        sentAt: new Date('2026-03-15T10:00:00.000Z'),
+      },
+      conversation: {
+        id: 'conv-1',
+        sendText: sendTextMock,
+      },
+      isDm: () => true,
+      client: {},
+    }
+
+    await textHandler?.(ctx as any)
+    await textHandler?.(ctx as any)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(messageHandler).toHaveBeenCalledTimes(1)
+    expect(sendTextMock).toHaveBeenCalledTimes(1)
+
+    await service.stop()
+  })
 })
 

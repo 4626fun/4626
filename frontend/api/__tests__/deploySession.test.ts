@@ -455,6 +455,149 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
+  it('continue retries phase4 without inline cleanup when cleanup call fails', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+    sendUserOperationMock
+      .mockRejectedValueOnce(new Error('removeOwnerAtIndex reverted'))
+      .mockResolvedValueOnce(`0x${'a'.repeat(64)}`)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(2)
+    const firstOptions = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    const secondOptions = (sendUserOperationMock.mock.calls as any[])[1]?.[1] as any
+    expect(Array.isArray(firstOptions?.calls)).toBe(true)
+    expect(Array.isArray(secondOptions?.calls)).toBe(true)
+    expect(firstOptions.calls).toHaveLength(2)
+    expect(secondOptions.calls).toHaveLength(1)
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'phase4_sent',
+        payloadPatch: expect.objectContaining({
+          cleanupDeferredAt: expect.any(String),
+          cleanupDeferredReason: expect.any(String),
+        }),
+      }),
+    )
+  })
+
+  it('status retries phase4 without inline cleanup when cleanup call fails', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({
+        ...rec,
+        step: 'phase4_sent',
+        lastUserOpHash: `0x${'b'.repeat(64)}`,
+      })
+    transitionDeploySessionMock.mockResolvedValue(true)
+    sendUserOperationMock
+      .mockRejectedValueOnce(new Error('removeOwnerAtIndex reverted'))
+      .mockResolvedValueOnce(`0x${'b'.repeat(64)}`)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(2)
+    const firstOptions = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    const secondOptions = (sendUserOperationMock.mock.calls as any[])[1]?.[1] as any
+    expect(firstOptions.calls).toHaveLength(2)
+    expect(secondOptions.calls).toHaveLength(1)
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'phase4_sent',
+        payloadPatch: expect.objectContaining({
+          cleanupDeferredAt: expect.any(String),
+          cleanupDeferredReason: expect.any(String),
+        }),
+      }),
+    )
+  })
+
+  it('status keeps cleanup_sent pending until cleanup receipt is available', async () => {
+    const rec = {
+      ...makeDeploySession('cleanup_sent'),
+      payload: {
+        phase2FinalizeCalls: [],
+        phase3Calls: [],
+      },
+      lastUserOpHash: `0x${'1'.repeat(64)}`,
+    }
+    getDeploySessionByIdMock.mockResolvedValueOnce(rec).mockResolvedValueOnce(rec)
+    getUserOperationReceiptMock.mockResolvedValueOnce(null)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('cleanup_sent')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'cleanup_sent', toStep: 'cancelled' }),
+    )
+  })
+
+  it('status transitions cleanup_sent to cancelled once cleanup receipt is confirmed', async () => {
+    const txHash = `0x${'9'.repeat(64)}`
+    const rec = {
+      ...makeDeploySession('cleanup_sent'),
+      payload: {
+        phase2FinalizeCalls: [],
+        phase3Calls: [],
+      },
+      lastUserOpHash: `0x${'1'.repeat(64)}`,
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({
+        ...rec,
+        step: 'cancelled',
+        lastTxHash: txHash,
+      })
+    transitionDeploySessionMock.mockResolvedValue(true)
+    getUserOperationReceiptMock.mockResolvedValueOnce({ receipt: { transactionHash: txHash } })
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('cancelled')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        fromStep: 'cleanup_sent',
+        toStep: 'cancelled',
+        lastTxHash: txHash,
+      }),
+    )
+  })
+
   it('status remains readable when owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),

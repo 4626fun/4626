@@ -8,6 +8,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import { selectZoraCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -296,6 +297,18 @@ export function AccountsPage(props: {
         const called = await maybeCallMethod(privy, ['linkWallet'])
         if (!called && typeof login === 'function') await login()
         return
+      }
+
+      if (provider === 'telegram') {
+        const launchParams = readPrivyTelegramLaunchParams()
+        if (launchParams?.initDataRaw) {
+          const calledWithLaunchParams = await maybeCallMethod(
+            privy,
+            ['linkTelegram', 'linkTelegramAccount'],
+            [{ launchParams }],
+          )
+          if (calledWithLaunchParams) return
+        }
       }
 
       const linkMethods: Record<AccountLinkProvider, string[]> = {

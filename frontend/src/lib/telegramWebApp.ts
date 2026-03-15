@@ -173,6 +173,16 @@ export function isTelegramMiniAppContext(): boolean {
   return readTelegramMiniAppInitData().length > 0
 }
 
+export type PrivyTelegramLaunchParams = {
+  initDataRaw?: string
+}
+
+export function readPrivyTelegramLaunchParams(): PrivyTelegramLaunchParams | null {
+  const initDataRaw = readTelegramMiniAppInitData()
+  if (!initDataRaw) return null
+  return { initDataRaw }
+}
+
 export async function loadTelegramWebApp(): Promise<TelegramWebAppLike | null> {
   const existing = readTelegramWebAppUnsafe()
   if (existing) return existing

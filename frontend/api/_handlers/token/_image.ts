@@ -102,7 +102,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             res.setHeader('Content-Type', 'image/svg+xml')
             return res.status(200).send(svg)
           }
-          const resized = await sharp(Buffer.from(rawBytes)).resize(size, size, { fit: 'cover' }).png().toBuffer()
+          const resized = await sharp(Buffer.from(rawBytes))
+            .resize(size, size, { fit: 'cover' })
+            // Keep icon corners opaque/dark across wallets and image viewers.
+            .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
+            .png()
+            .toBuffer()
           res.setHeader('Content-Type', 'image/png')
           return res.status(200).send(resized)
         }
@@ -187,7 +192,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           res.setHeader('Content-Type', 'image/svg+xml')
           return res.status(200).send(svg)
         }
-        const resized = await sharp(Buffer.from(rawBytes)).resize(size, size, { fit: 'cover' }).png().toBuffer()
+        const resized = await sharp(Buffer.from(rawBytes))
+          .resize(size, size, { fit: 'cover' })
+          // Keep icon corners opaque/dark across wallets and image viewers.
+          .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
+          .png()
+          .toBuffer()
         res.setHeader('Content-Type', 'image/png')
         return res.status(200).send(resized)
       }
@@ -307,7 +317,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 7
+const FRAME_STYLE_V = 10
 const FRAME_ASSET_URL = new URL('../../../public/app-icon.svg', import.meta.url)
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
@@ -337,7 +347,7 @@ const TOKEN_ICON_RECIPES: Record<LayoutMode, Omit<TokenIconRecipe, 'breakout'>> 
 
 const BREAKOUT_CONFIG = {
   enabled: true,
-  riseAboveFrameRatio: 0.07,
+  riseAboveFrameRatio: 0.11,
   visibleBelowFrameRatio: 0.006,
   fadeBelowFrameRatio: 0.016,
   minForegroundCoverage: 0.03,
@@ -405,7 +415,7 @@ function deriveTokenIconRecipe(
     classification.layoutMode === 'cover' &&
     classification.allowBreakout &&
     breakoutEvaluation.hasUsableBreakoutMask &&
-    breakoutEvaluation.breakoutCoverage >= 0.05
+    breakoutEvaluation.breakoutCoverage >= 0.015
 
   return {
     ...base,
@@ -574,7 +584,7 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
     size: params.size,
     hasUsableBreakoutMask:
       classification.allowBreakout &&
-      metrics.topOccupancy > 0.05 &&
+      metrics.topOccupancy > 0.015 &&
       (metrics.hasTransparency || metrics.opaquePhotoLikelihood >= 0.55),
     breakoutCoverage: metrics.topOccupancy,
   }
@@ -602,6 +612,11 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
       })
       breakoutLayerBytes = await applyBreakoutAlphaMask({
         foregroundBytes: fgCanvas,
+        layout,
+      })
+    } else {
+      breakoutLayerBytes = await applyHeuristicBreakoutMask({
+        baseLayerBytes,
         layout,
       })
     }
@@ -637,7 +652,8 @@ async function renderPlacedArtworkLayer(params: {
     .rotate()
     .resize(params.layout.artSize, params.layout.artSize, {
       fit: params.fit,
-      position: params.fit === 'cover' ? sharp.strategy.attention : 'centre',
+      // Anchor portraits upward so breakout subjects intersect the top frame edge.
+      position: params.fit === 'cover' ? 'top' : 'centre',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png()
@@ -773,6 +789,65 @@ async function applyBreakoutAlphaMask(params: {
   const maskBuf = await sharp(Buffer.from(maskSvg)).resize(width, height).ensureAlpha().png().toBuffer()
   const masked = await sharp(Buffer.from(foregroundBytes))
     .resize(width, height, { fit: 'fill' })
+    .ensureAlpha()
+    .composite([{ input: maskBuf, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+  return new Uint8Array(masked)
+}
+
+async function applyHeuristicBreakoutMask(params: {
+  baseLayerBytes: Uint8Array
+  layout: TokenIconLayout
+}): Promise<Uint8Array | null> {
+  const { baseLayerBytes, layout } = params
+  const meta = await sharp(Buffer.from(baseLayerBytes)).metadata()
+  const width = meta.width ?? 0
+  const height = meta.height ?? 0
+  if (width <= 0 || height <= 0) return null
+
+  const riseAboveFrame = Math.round(layout.panelSize * Math.max(BREAKOUT_CONFIG.riseAboveFrameRatio, 0.09))
+  const visibleBelowFrame = Math.round(layout.panelSize * 0.008)
+  const fadeBelowFrame = Math.max(visibleBelowFrame + 1, Math.round(layout.panelSize * 0.02))
+
+  const zoneTop = Math.max(0, layout.panelY - riseAboveFrame)
+  const zoneBottom = Math.min(height, layout.panelY + fadeBelowFrame)
+  const zoneHeight = Math.max(1, zoneBottom - zoneTop)
+  const solidBottom = Math.min(height, layout.panelY + visibleBelowFrame)
+  const gradientSolidEnd = zoneHeight > 0 ? Math.max(0, (solidBottom - zoneTop) / zoneHeight) : 0
+
+  // Fallback when rembg is unavailable: keep breakout focused around the
+  // subject head area so we avoid lifting the entire background above frame.
+  const centerWidth = Math.max(1, Math.round(layout.panelSize * 0.62))
+  const zoneLeft = Math.max(0, Math.round(layout.panelX + (layout.panelSize - centerWidth) / 2))
+  const zoneWidth = Math.min(centerWidth, width - zoneLeft)
+  const zoneRadius = Math.max(1, Math.round(zoneWidth * 0.33))
+
+  const maskSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="fallback-breakout-zone" x1="0" y1="${zoneTop}" x2="0" y2="${zoneBottom}">
+        <stop offset="0" stop-color="white" stop-opacity="1"/>
+        <stop offset="${gradientSolidEnd}" stop-color="white" stop-opacity="1"/>
+        <stop offset="1" stop-color="white" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <rect
+      x="${zoneLeft}"
+      y="${zoneTop}"
+      width="${zoneWidth}"
+      height="${zoneHeight}"
+      rx="${zoneRadius}"
+      fill="url(#fallback-breakout-zone)"
+    />
+  </svg>`
+
+  const maskBuf = await sharp(Buffer.from(maskSvg))
+    .resize(width, height)
+    .ensureAlpha()
+    .blur(2)
+    .png()
+    .toBuffer()
+  const masked = await sharp(Buffer.from(baseLayerBytes))
     .ensureAlpha()
     .composite([{ input: maskBuf, blend: 'dest-in' }])
     .png()
@@ -949,9 +1024,12 @@ function generateFramedSvg({
     </clipPath>
   </defs>
 
+  <rect width="${size}" height="${size}" fill="${TOKEN_ICON_STYLE.backgroundOuter}" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bg)" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#vignette)" />
-  ${glowLayerImage ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="1.0"/>` : ''}
+  ${glowLayerImage && !resolvedFrameOverlay
+    ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="0.9"/>`
+    : ''}
   <rect
     x="${layout.panelX}"
     y="${layout.panelY}"

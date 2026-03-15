@@ -1888,18 +1888,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   let txHash: Hex | undefined
   const payload = asPayloadObject(rec.payload)
 
-  if (step === 'cleanup_sent') {
-    const transitioned = await transitionDeploySession({
-      id: rec.id,
-      fromStep: 'cleanup_sent',
-      toStep: 'cancelled',
-      lastTxHash: txHash,
-      lastError: null,
-    })
-    if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
-    return
-  }
-
   const deploySignerWalletId =
     typeof payload?.deploySignerWalletId === 'string'
       ? payload.deploySignerWalletId.trim()
@@ -2072,6 +2060,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
     const fullCalls = [...calls]
     const shouldAttachCleanup = attachCleanup && !persistSessionOwner
+    const allowCleanupFallback = shouldAttachCleanup && toStep === 'phase4_sent'
     if (shouldAttachCleanup) fullCalls.push((await getCtx()).removeOwnerCall)
 
     const permissionCheck = validateCallsAgainstGrant({
@@ -2095,18 +2084,37 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
     const { bundler, paymasterClient, account } = await getCtx()
     try {
-      const nextHash = await sendUserOperation(bundler, {
-        account,
-        calls: fullCalls,
-        paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
-      })
+      let nextHash: Hex
+      let payloadPatch: Record<string, unknown> = { [stageKey]: null }
+      try {
+        nextHash = await sendUserOperation(bundler, {
+          account,
+          calls: fullCalls,
+          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+        })
+      } catch (err) {
+        if (!allowCleanupFallback) throw err
+        const cleanupFailureReason = String(err instanceof Error ? err.message : err ?? 'inline_cleanup_failed')
+          .trim()
+          .slice(0, 220)
+        nextHash = await sendUserOperation(bundler, {
+          account,
+          calls,
+          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+        })
+        payloadPatch = {
+          [stageKey]: null,
+          cleanupDeferredAt: new Date().toISOString(),
+          cleanupDeferredReason: cleanupFailureReason || 'inline_cleanup_failed',
+        }
+      }
       await updateDeploySession({
         id: rec.id,
         step: toStep as any,
         lastUserOpHash: nextHash,
         lastTxHash: null,
         lastError: null,
-        payloadPatch: { [stageKey]: nextHash },
+        payloadPatch: { ...payloadPatch, [stageKey]: nextHash },
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err ?? 'send_userop_failed')
@@ -2363,6 +2371,18 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   if (needsReceipt) {
     txHash = await resolveReceiptTxHash()
     if (!txHash) return
+  }
+
+  if (step === 'cleanup_sent') {
+    const transitioned = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'cleanup_sent',
+      toStep: 'cancelled',
+      lastTxHash: txHash,
+      lastError: null,
+    })
+    if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
+    return
   }
 
   if (step === 'phase1_sent') {

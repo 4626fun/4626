@@ -1,6 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  readSessionFromRequest,
+  setCors,
+  setNoStore,
+} from '../../../../server/auth/_shared.js'
 import { getKeeprVaultByGroupId } from '../../../../server/_lib/keeprRegistry.js'
 import { isBankrWriteCommandText } from '../../../../server/bankr/agentSkills.js'
 import { probeBankrCanonicalWalletMatch } from '../../../../server/bankr/probe.js'
@@ -83,6 +90,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }))
   }
 
+  const session = readSessionFromRequest(req)
+  const sessionAddress = String(session?.address ?? '').trim().toLowerCase()
+  if (!isAddressLike(sessionAddress)) {
+    return res.status(200).json(ok({
+      allowed: false,
+      reason: 'auth_session_required',
+      guardCategory: 'auth_required',
+      role: null,
+      walletMatch: null,
+    }))
+  }
+  if (sessionAddress !== senderWallet) {
+    return res.status(200).json(ok({
+      allowed: false,
+      reason: 'sender_wallet_mismatch_session',
+      guardCategory: 'wallet_session_mismatch',
+      role: null,
+      walletMatch: null,
+    }))
+  }
+
   try {
     const vault = await getKeeprVaultByGroupId(conversationId)
     if (!vault) {
@@ -146,9 +174,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }))
   } catch {
     return res.status(200).json(ok({
-      allowed: true,
-      reason: 'preflight_unavailable_backend_checks_apply',
-      guardCategory: 'runtime_fallback',
+      allowed: false,
+      reason: 'preflight_unavailable_retry',
+      guardCategory: 'runtime_unavailable',
       role: null,
       walletMatch: null,
     }))

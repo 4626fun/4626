@@ -156,8 +156,16 @@ describe('runtime bridge', () => {
     const indexCall = (db.query.mock.calls as any[]).find((call: any[]) =>
       String(call?.[0] ?? '').includes('agent_message_memory_agent_conversation_idx'),
     )
+    const episodicRlsCall = (db.query.mock.calls as any[]).find((call: any[]) =>
+      String(call?.[0] ?? '').includes('ALTER TABLE episodic_summaries ENABLE ROW LEVEL SECURITY'),
+    )
+    const manifestPolicyCall = (db.query.mock.calls as any[]).find((call: any[]) =>
+      String(call?.[0] ?? '').includes('grove_chat_manifests_deny_all'),
+    )
     expect(db.query).toHaveBeenCalled()
     expect(indexCall).toBeTruthy()
+    expect(episodicRlsCall).toBeTruthy()
+    expect(manifestPolicyCall).toBeTruthy()
     expect(insertCall).toBeTruthy()
   })
 
@@ -199,6 +207,39 @@ describe('runtime bridge', () => {
     const debug = (bridge as any).getDebugState?.()
     expect(debug?.trackedConversations).toBe(2)
     expect(debug?.conversationIds).toEqual(['conv-2', 'conv-3'])
+  })
+
+  it('marks duplicate inbound memories when XMTP message ids repeat', async () => {
+    const { createRuntimeBridge } = await import('../runtimeBridge.ts')
+    const bridge = createRuntimeBridge({
+      agentKey: 'creator-dedupe',
+      plugins: [],
+    })
+
+    const first = bridge.createInboundMemory({
+      conversationId: 'conv-dedupe',
+      conversationType: 'dm',
+      senderAddress: '0x1111111111111111111111111111111111111111',
+      content: 'hello once',
+      messageId: 'msg-1',
+      sentAtMs: 1_700_000_000_000,
+    })
+    await bridge.runtime.createMemory(first as any, 'messages' as any)
+
+    const duplicate = bridge.createInboundMemory({
+      conversationId: 'conv-dedupe',
+      conversationType: 'dm',
+      senderAddress: '0x1111111111111111111111111111111111111111',
+      content: 'hello duplicate',
+      messageId: 'msg-1',
+      sentAtMs: 1_700_000_000_000,
+    })
+    await bridge.runtime.createMemory(duplicate as any, 'messages' as any)
+
+    expect((duplicate as any).__xmtpDuplicate).toBe(true)
+    const state = await bridge.composeState(duplicate as any)
+    expect((state as any).recentMessages).toHaveLength(1)
+    expect(String((state as any).recentMessages[0]?.text ?? '')).toContain('hello once')
   })
 
   it('hydrates warm memory artifacts into composed state', async () => {
@@ -320,6 +361,9 @@ describe('runtime bridge', () => {
   it('extracts durable fact cards and tasks from user messages', async () => {
     const sqlMock = vi.fn(async (strings: TemplateStringsArray) => {
       const query = String(strings?.[0] ?? '')
+      if (query.includes('INSERT INTO agent_message_memory')) {
+        return { rows: [{ id: 'mem-facts-1' }], rowCount: 1 }
+      }
       if (query.includes('SELECT role, content') && query.includes('FROM agent_message_memory')) {
         return {
           rows: [
@@ -376,7 +420,7 @@ describe('runtime bridge', () => {
           content: String(values[8] ?? ''),
           created_at: new Date().toISOString(),
         })
-        return { rows: [] }
+        return { rows: [{ id: String(values[0] ?? '') }], rowCount: 1 }
       }
       if (query.includes('SELECT role, content') && query.includes('FROM agent_message_memory')) {
         return {
@@ -486,7 +530,7 @@ describe('runtime bridge', () => {
           content: String(values[8] ?? ''),
           created_at: new Date().toISOString(),
         })
-        return { rows: [] }
+        return { rows: [{ id: String(values[0] ?? '') }], rowCount: 1 }
       }
       if (query.includes('SELECT role, content') && query.includes('FROM agent_message_memory')) {
         return { rows: memoryRows.map((row) => ({ role: row.role, content: row.content })) }
@@ -676,6 +720,71 @@ describe('runtime bridge', () => {
     vi.unstubAllGlobals()
     if (typeof previousEnabled === 'string') process.env.ELIZA_GROVE_ARCHIVE_ENABLED = previousEnabled
     else delete process.env.ELIZA_GROVE_ARCHIVE_ENABLED
+  })
+
+  it('blocks archive hydration fetches for URLs outside the allowlist', async () => {
+    const previousEnabled = process.env.ELIZA_GROVE_ARCHIVE_ENABLED
+    const previousAllowedHosts = process.env.ELIZA_GROVE_ARCHIVE_ALLOWED_HOSTS
+    process.env.ELIZA_GROVE_ARCHIVE_ENABLED = 'true'
+    process.env.ELIZA_GROVE_ARCHIVE_ALLOWED_HOSTS = 'api.grove.storage'
+    resolveLensUriMock.mockReturnValue('https://evil.example/chunk.json')
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        turns: [
+          {
+            id: 'turn-evil',
+            role: 'user',
+            content: 'this should never be restored',
+            createdAt: '2026-03-14T00:00:00.000Z',
+          },
+        ],
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const sqlMock = vi.fn(async (strings: TemplateStringsArray) => {
+      const query = String(strings?.[0] ?? '')
+      if (query.includes('FROM agent_message_memory') && query.includes('ORDER BY created_at DESC')) {
+        return { rows: [] }
+      }
+      if (query.includes('SELECT chunk_list') && query.includes('FROM grove_chat_manifests')) {
+        return {
+          rows: [
+            {
+              chunk_list: [{ cid: 'lens://evil-chunk', hash: 'abc', version: 1 }],
+              root_hash: 'root-evil',
+            },
+          ],
+        }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue({ sql: sqlMock } as any)
+
+    const { createRuntimeBridge } = await import('../runtimeBridge.ts')
+    const bridge = createRuntimeBridge({
+      agentKey: 'creator-allowlist',
+      plugins: [],
+    })
+    const inbound = bridge.createInboundMemory({
+      conversationId: 'conv-allowlist',
+      conversationType: 'dm',
+      senderAddress: '0x1111111111111111111111111111111111111111',
+      content: 'hydrate with blocked URL',
+    })
+    const state = await bridge.composeState(inbound as any)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect((state as any).recentMessages).toEqual([])
+
+    vi.unstubAllGlobals()
+    if (typeof previousEnabled === 'string') process.env.ELIZA_GROVE_ARCHIVE_ENABLED = previousEnabled
+    else delete process.env.ELIZA_GROVE_ARCHIVE_ENABLED
+    if (typeof previousAllowedHosts === 'string') process.env.ELIZA_GROVE_ARCHIVE_ALLOWED_HOSTS = previousAllowedHosts
+    else delete process.env.ELIZA_GROVE_ARCHIVE_ALLOWED_HOSTS
   })
 })
 

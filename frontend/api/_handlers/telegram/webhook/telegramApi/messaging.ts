@@ -1,6 +1,25 @@
 import { formatTelegramOutboundText } from '../markdown.js'
 import { splitTelegramMessage } from '../utils.js'
 
+function shouldRetryWithoutParseMode(status: number, detailsLower: string): boolean {
+  if (status !== 400) return false
+  return (
+    detailsLower.includes("can't parse entities") ||
+    detailsLower.includes('unsupported start tag') ||
+    detailsLower.includes("can't find end tag")
+  )
+}
+
+function stripTelegramFormatting(value: string): string {
+  return value
+    .replace(/<\/?(?:b|strong|i|em|u|s|code|pre|a|blockquote)\b[^>]*>/gi, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
 export async function sendTelegramMessage(params: {
   botToken: string
   chatId: string
@@ -11,15 +30,19 @@ export async function sendTelegramMessage(params: {
 }): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/sendMessage`
   const formatted = formatTelegramOutboundText(params.text)
-  const sendOnce = async (replyToMessageId?: number): Promise<Response> => {
+  const sendOnce = async (input?: {
+    replyToMessageId?: number
+    text?: string
+    parseMode?: string | null
+  }): Promise<Response> => {
     const payload: Record<string, unknown> = {
       chat_id: params.chatId,
-      text: formatted.text,
+      text: input?.text ?? formatted.text,
       disable_web_page_preview: true,
-      ...(formatted.parseMode ? { parse_mode: formatted.parseMode } : {}),
+      ...(input?.parseMode ? { parse_mode: input.parseMode } : {}),
     }
-    if (typeof replyToMessageId === 'number') {
-      payload.reply_to_message_id = replyToMessageId
+    if (typeof input?.replyToMessageId === 'number') {
+      payload.reply_to_message_id = input.replyToMessageId
     }
     if (typeof params.messageThreadId === 'number') {
       payload.message_thread_id = params.messageThreadId
@@ -34,24 +57,44 @@ export async function sendTelegramMessage(params: {
     })
   }
 
-  const firstResponse = await sendOnce(params.replyToMessageId)
-  if (firstResponse.ok) return
+  let replyToMessageId = params.replyToMessageId
+  let response = await sendOnce({
+    replyToMessageId,
+    parseMode: formatted.parseMode,
+  })
+  if (response.ok) return
 
-  const firstDetails = await firstResponse.text().catch(() => '')
-  const firstDetailsLower = firstDetails.toLowerCase()
+  let details = await response.text().catch(() => '')
+  let detailsLower = details.toLowerCase()
   const retryWithoutReplyTarget =
-    typeof params.replyToMessageId === 'number' &&
-    firstResponse.status === 400 &&
-    firstDetailsLower.includes('message to be replied not found')
+    typeof replyToMessageId === 'number' &&
+    response.status === 400 &&
+    detailsLower.includes('message to be replied not found')
 
   if (retryWithoutReplyTarget) {
-    const retryResponse = await sendOnce(undefined)
-    if (retryResponse.ok) return
-    const retryDetails = await retryResponse.text().catch(() => '')
-    throw new Error(`telegram_send_failed_${retryResponse.status}:${retryDetails.slice(0, 180)}`)
+    replyToMessageId = undefined
+    response = await sendOnce({
+      replyToMessageId,
+      parseMode: formatted.parseMode,
+    })
+    if (response.ok) return
+    details = await response.text().catch(() => '')
+    detailsLower = details.toLowerCase()
   }
 
-  throw new Error(`telegram_send_failed_${firstResponse.status}:${firstDetails.slice(0, 180)}`)
+  if (formatted.parseMode && shouldRetryWithoutParseMode(response.status, detailsLower)) {
+    const plainText = stripTelegramFormatting(formatted.text)
+    const retryWithoutParseMode = await sendOnce({
+      replyToMessageId,
+      text: plainText,
+      parseMode: null,
+    })
+    if (retryWithoutParseMode.ok) return
+    const retryDetails = await retryWithoutParseMode.text().catch(() => '')
+    throw new Error(`telegram_send_failed_${retryWithoutParseMode.status}:${retryDetails.slice(0, 180)}`)
+  }
+
+  throw new Error(`telegram_send_failed_${response.status}:${details.slice(0, 180)}`)
 }
 
 export async function editTelegramMessage(params: {

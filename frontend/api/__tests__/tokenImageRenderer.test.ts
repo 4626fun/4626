@@ -26,6 +26,16 @@ describe('token image renderer', () => {
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"')
   })
 
+  it('renders an opaque canvas matte behind the rounded icon', () => {
+    const svg = __testables.generateFramedSvg({
+      size: 512,
+      symbol: 'AKITA',
+      creatorCoinImage: 'data:image/png;base64,ZmFrZQ==',
+    })
+
+    expect(svg).toContain('<rect width="512" height="512" fill="#000000" />')
+  })
+
   it('allocates a larger artwork footprint for the crop-first layout', () => {
     const layout = __testables.getTokenIconLayout(1024)
 

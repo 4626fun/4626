@@ -798,6 +798,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const calls = [...stageCalls]
       const shouldAttachCleanup = attachCleanup && !persistSessionOwner
+      const allowCleanupFallback = shouldAttachCleanup && toStep === 'phase4_sent'
       if (shouldAttachCleanup) calls.push(removeOwnerCall)
 
       const permissionCheck = validateCallsAgainstGrant({
@@ -827,18 +828,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       attemptedStage = toStep
       attemptedCalls = calls
-      const lastUserOpHash = await sendUserOperation(bundlerClient, {
-        account,
-        calls,
-        paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
-      })
+      const stageHashKey = stageUserOpHashKey(toStep)
+      let lastUserOpHash: Hex
+      let payloadPatch: Record<string, unknown> = { [stageHashKey]: null }
+      try {
+        lastUserOpHash = await sendUserOperation(bundlerClient, {
+          account,
+          calls,
+          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+        })
+      } catch (err) {
+        if (!allowCleanupFallback) throw err
+        const cleanupFailureReason = truncateMessage(normalizeErrorMessage(err), 220)
+        attemptedCalls = stageCalls
+        lastUserOpHash = await sendUserOperation(bundlerClient, {
+          account,
+          calls: stageCalls,
+          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+        })
+        payloadPatch = {
+          [stageHashKey]: null,
+          cleanupDeferredAt: new Date().toISOString(),
+          cleanupDeferredReason: cleanupFailureReason,
+        }
+      }
       await updateDeploySession({
         id: rec.id,
         step: toStep as any,
         lastUserOpHash,
         lastTxHash: null,
         lastError: null,
-        payloadPatch: { [stageUserOpHashKey(toStep)]: lastUserOpHash },
+        payloadPatch: { ...payloadPatch, [stageHashKey]: lastUserOpHash },
       })
       return res.status(200).json({ success: true, data: { id: rec.id, step: toStep, lastUserOpHash } } satisfies ApiEnvelope<any>)
     }

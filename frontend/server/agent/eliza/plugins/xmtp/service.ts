@@ -50,6 +50,35 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Math.floor(n)
 }
 
+function normalizeMessageId(value: unknown): string | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  return raw.toLowerCase()
+}
+
+export function deriveInboundMessageDedupeKey(input: {
+  conversationId: string
+  senderInboxId: string
+  content: string
+  sentAtMs?: number | null
+  messageId?: string | null
+}): string {
+  const conversationId = String(input.conversationId ?? '').trim()
+  const senderInboxId = String(input.senderInboxId ?? '').trim().toLowerCase()
+  const messageId = normalizeMessageId(input.messageId)
+  if (messageId) {
+    return `xmtp:${conversationId}:${messageId}`
+  }
+  const sentAtMs =
+    Number.isFinite(input.sentAtMs) && Number(input.sentAtMs) > 0
+      ? Math.floor(Number(input.sentAtMs))
+      : 0
+  const contentHash = createHash('sha256')
+    .update(String(input.content ?? ''), 'utf8')
+    .digest('hex')
+  return `xmtp:fallback:${conversationId}:${senderInboxId}:${sentAtMs}:${contentHash}`
+}
+
 function readErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message || error.name || 'unknown_error'
   if (typeof error === 'string' && error.trim()) return error
@@ -143,6 +172,15 @@ async function withRetry<T>(input: {
   )
 }
 
+const INBOUND_DEDUPE_TTL_MS = Math.max(
+  30_000,
+  parsePositiveInt(process.env.ELIZA_XMTP_INBOUND_DEDUPE_TTL_MS, 6 * 60 * 60 * 1000),
+)
+const INBOUND_DEDUPE_MAX_KEYS = Math.max(
+  1_000,
+  parsePositiveInt(process.env.ELIZA_XMTP_INBOUND_DEDUPE_MAX_KEYS, 50_000),
+)
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -184,8 +222,10 @@ export type XmtpMessage = {
   conversationType: 'dm' | 'group'
   senderInboxId: string
   senderAddress: string | null
+  messageId: string
   content: string
   sentAt: Date
+  sentAtMs: number
   isSelf: boolean
   conversationArchiveKey?: string | null
 }
@@ -204,6 +244,9 @@ export class XmtpService {
   private config: XmtpConfig
   private signerForArchive: any = null
   private conversationArchiveKeyCache = new Map<string, string>()
+  private readonly seenInboundMessages = new Map<string, number>()
+  private readonly inboundDedupeTtlMs = INBOUND_DEDUPE_TTL_MS
+  private readonly inboundDedupeMaxKeys = INBOUND_DEDUPE_MAX_KEYS
   private lifecycleState: XmtpLifecycleState = 'idle'
   private lastStartedAtMs: number | null = null
   private lastMessageAtMs: number | null = null
@@ -383,6 +426,7 @@ export class XmtpService {
       this.agent = null
       this.signerForArchive = null
       this.conversationArchiveKeyCache.clear()
+      this.seenInboundMessages.clear()
       this.lifecycleState = 'error'
       this.lastError = error instanceof Error ? error.message : String(error)
       throw error
@@ -398,6 +442,7 @@ export class XmtpService {
     this.agent = null
     this.signerForArchive = null
     this.conversationArchiveKeyCache.clear()
+    this.seenInboundMessages.clear()
     this.lifecycleState = 'stopped'
     console.log('[xmtp-service] Agent stopped')
   }
@@ -450,6 +495,34 @@ export class XmtpService {
   // Internal
   // -------------------------------------------------------------------------
 
+  private pruneInboundDedupe(nowMs: number): void {
+    const cutoff = nowMs - this.inboundDedupeTtlMs
+    for (const [key, seenAtMs] of this.seenInboundMessages.entries()) {
+      if (seenAtMs < cutoff) {
+        this.seenInboundMessages.delete(key)
+      }
+    }
+    while (this.seenInboundMessages.size > this.inboundDedupeMaxKeys) {
+      const oldestKey = this.seenInboundMessages.keys().next().value
+      if (!oldestKey) break
+      this.seenInboundMessages.delete(oldestKey)
+    }
+  }
+
+  private markInboundMessageSeen(dedupeKey: string, nowMs = Date.now()): boolean {
+    this.pruneInboundDedupe(nowMs)
+    const existing = this.seenInboundMessages.get(dedupeKey)
+    if (typeof existing === 'number' && nowMs - existing <= this.inboundDedupeTtlMs) {
+      // Refresh insertion order for the LRU-like cap.
+      this.seenInboundMessages.delete(dedupeKey)
+      this.seenInboundMessages.set(dedupeKey, existing)
+      return true
+    }
+    this.seenInboundMessages.set(dedupeKey, nowMs)
+    this.pruneInboundDedupe(nowMs)
+    return false
+  }
+
   private async handleIncoming(ctx: MessageContext<string>): Promise<void> {
     try {
       if (!this.agent) return
@@ -461,6 +534,24 @@ export class XmtpService {
       const conversationId = ctx.conversation.id
       const senderInboxId = ctx.message.senderInboxId
       const conversationType = ctx.isDm() ? 'dm' : 'group'
+      const sentAt = ctx.message.sentAt ?? new Date()
+      const sentAtMs = sentAt.getTime()
+      const messageId =
+        normalizeMessageId((ctx.message as any).id ?? (ctx.message as any).messageId) ??
+        `fallback:${createHash('sha256')
+          .update(`${conversationId}|${senderInboxId}|${sentAtMs}|${content}`, 'utf8')
+          .digest('hex')}`
+      const dedupeKey = deriveInboundMessageDedupeKey({
+        conversationId,
+        senderInboxId,
+        content,
+        sentAtMs,
+        messageId,
+      })
+      if (this.markInboundMessageSeen(dedupeKey, Date.now())) {
+        console.warn(`[xmtp-service] Duplicate inbound message dropped (${dedupeKey.slice(0, 28)}...)`)
+        return
+      }
       const conversationArchiveKey = await this.deriveConversationArchiveKey(conversationId)
 
       // Resolve sender address
@@ -471,8 +562,10 @@ export class XmtpService {
         conversationType,
         senderInboxId,
         senderAddress,
+        messageId,
         content,
-        sentAt: ctx.message.sentAt ?? new Date(),
+        sentAt,
+        sentAtMs,
         isSelf: false,
         conversationArchiveKey,
       }

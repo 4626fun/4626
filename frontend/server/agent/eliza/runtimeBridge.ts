@@ -18,6 +18,8 @@ type InboundMessage = {
   senderAddress: string | null
   content: string
   xmtpConversationKey?: string | null
+  messageId?: string | null
+  sentAtMs?: number | null
 }
 
 type RankedAction = {
@@ -240,9 +242,54 @@ const AGENT_MEMORY_POLICY_SQL = `
   $$;
 `
 
+function buildDenyAllPolicySql(tableName: string, policyName: string): {
+  rlsSql: string
+  policySql: string
+} {
+  return {
+    rlsSql: `ALTER TABLE ${tableName} ENABLE ROW LEVEL SECURITY;`,
+    policySql: `
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = '${tableName}'
+            AND policyname = '${policyName}'
+        ) THEN
+          CREATE POLICY ${policyName}
+            ON ${tableName}
+            FOR ALL
+            TO public
+            USING (false)
+            WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `,
+  }
+}
+
+const EPISODIC_SUMMARIES_RLS = buildDenyAllPolicySql(
+  'episodic_summaries',
+  'episodic_summaries_deny_all',
+)
+const FACT_CARDS_RLS = buildDenyAllPolicySql('fact_cards', 'fact_cards_deny_all')
+const TASK_LOOPS_RLS = buildDenyAllPolicySql('task_loops', 'task_loops_deny_all')
+const GROVE_CHAT_MANIFESTS_RLS = buildDenyAllPolicySql(
+  'grove_chat_manifests',
+  'grove_chat_manifests_deny_all',
+)
+const MEMORY_SNAPSHOTS_RLS = buildDenyAllPolicySql(
+  'memory_snapshots',
+  'memory_snapshots_deny_all',
+)
+
 let memorySchemaEnsured = false
 let semanticEmbeddingColumnChecked = false
 let semanticEmbeddingColumnAvailable = false
+const DUPLICATE_MEMORY_MARKER = '__xmtpDuplicate'
 const embeddingService = getElizaEmbeddingService()
 
 function shortHash(value: string): string {
@@ -261,6 +308,20 @@ function toEntityId(senderAddress: string | null): string {
 
 function toRoomId(conversationId: string): string {
   return formatAsUuid(shortHash(conversationId))
+}
+
+function toInboundMessageMemoryId(msg: InboundMessage): string {
+  const explicitMessageId = String(msg.messageId ?? '').trim().toLowerCase()
+  if (explicitMessageId) {
+    return formatAsUuid(shortHash(`xmtp:msg:${msg.conversationId}:${explicitMessageId}`))
+  }
+  const sentAtMs =
+    Number.isFinite(msg.sentAtMs) && Number(msg.sentAtMs) > 0
+      ? Math.floor(Number(msg.sentAtMs))
+      : 0
+  const sender = String(msg.senderAddress ?? '').trim().toLowerCase() || 'unknown'
+  const fallback = `${msg.conversationId}:${sender}:${sentAtMs}:${msg.content}`
+  return formatAsUuid(shortHash(`xmtp:fallback:${fallback}`))
 }
 
 function asAddress(value: string | null | undefined): `0x${string}` | null {
@@ -299,6 +360,59 @@ function readArchiveEnabled(): boolean {
 
 function readArchiveRecallMaxChunks(): number {
   return parsePositiveInt(process.env.ELIZA_GROVE_RECALL_MAX_CHUNKS, 5)
+}
+
+const DEFAULT_ARCHIVE_ALLOWED_HOSTS = ['api.grove.storage'] as const
+
+function readArchiveAllowedHosts(): string[] {
+  const raw = String(process.env.ELIZA_GROVE_ARCHIVE_ALLOWED_HOSTS ?? '').trim()
+  const configured = raw
+    ? raw
+      .split(/[,\s]+/g)
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean)
+    : []
+  const out = new Set<string>([...DEFAULT_ARCHIVE_ALLOWED_HOSTS, ...configured])
+  return [...out]
+}
+
+function isPrivateOrLocalHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase()
+  if (!host) return true
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true
+  if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return true
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    const parts = host.split('.').map((part) => Number(part))
+    if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255)) return true
+    const [a, b] = parts
+    if (a === 10 || a === 127 || a === 0) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+  }
+  return false
+}
+
+function isArchiveChunkUrlAllowed(rawUrl: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+  if (isPrivateOrLocalHostname(parsed.hostname)) return false
+
+  const allowedHosts = readArchiveAllowedHosts()
+  const host = parsed.hostname.toLowerCase()
+  return allowedHosts.some((entry) => {
+    if (!entry) return false
+    if (entry.startsWith('*.')) {
+      const suffix = entry.slice(1)
+      return host.endsWith(suffix)
+    }
+    return host === entry
+  })
 }
 
 function readSemanticRecallEnabled(): boolean {
@@ -519,11 +633,22 @@ function resolveArchiveChunkUrl(chunk: Record<string, any>): string {
   const gateway = String(chunk.gatewayUrl ?? chunk.gateway_url ?? '').trim()
   const candidate = primary || gateway
   if (!candidate) return ''
-  if (candidate.startsWith('lens://')) {
-    return resolveLensUri(candidate)
+  const resolved = candidate.startsWith('lens://') ? resolveLensUri(candidate) : candidate
+  if (!/^https?:\/\//i.test(resolved)) return ''
+  if (!isArchiveChunkUrlAllowed(resolved)) {
+    logger.warn('[eliza/runtime] blocked archive chunk URL outside allowlist', {
+      host: (() => {
+        try {
+          return new URL(resolved).hostname
+        } catch {
+          return null
+        }
+      })(),
+      source: candidate,
+    })
+    return ''
   }
-  if (/^https?:\/\//i.test(candidate)) return candidate
-  return ''
+  return resolved
 }
 
 function archiveTurnToMemory(params: {
@@ -667,6 +792,16 @@ async function ensureMemorySchema(): Promise<void> {
 
   await executeOptionalSchemaStatement(db, AGENT_MEMORY_RLS_SQL)
   await executeOptionalSchemaStatement(db, AGENT_MEMORY_POLICY_SQL)
+  await executeOptionalSchemaStatement(db, EPISODIC_SUMMARIES_RLS.rlsSql)
+  await executeOptionalSchemaStatement(db, EPISODIC_SUMMARIES_RLS.policySql)
+  await executeOptionalSchemaStatement(db, FACT_CARDS_RLS.rlsSql)
+  await executeOptionalSchemaStatement(db, FACT_CARDS_RLS.policySql)
+  await executeOptionalSchemaStatement(db, TASK_LOOPS_RLS.rlsSql)
+  await executeOptionalSchemaStatement(db, TASK_LOOPS_RLS.policySql)
+  await executeOptionalSchemaStatement(db, GROVE_CHAT_MANIFESTS_RLS.rlsSql)
+  await executeOptionalSchemaStatement(db, GROVE_CHAT_MANIFESTS_RLS.policySql)
+  await executeOptionalSchemaStatement(db, MEMORY_SNAPSHOTS_RLS.rlsSql)
+  await executeOptionalSchemaStatement(db, MEMORY_SNAPSHOTS_RLS.policySql)
 
   await executeSchemaStatement(db, AGENT_MEMORY_INDEX_SQL)
   await executeSchemaStatement(db, AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL)
@@ -1566,6 +1701,7 @@ export function createRuntimeBridge(params: {
       return typeof fromEnv === 'string' ? fromEnv : undefined
     },
     createMemory: async (memory: Memory) => {
+      const memoryRecord = memory as Memory & Record<string, unknown>
       await ensureMemorySchema()
       const conversationId = String((memory.content as any)?.metadata?.conversationId ?? memory.roomId ?? 'unknown')
       const metadata = (memory.content as any)?.metadata ?? {}
@@ -1575,13 +1711,19 @@ export function createRuntimeBridge(params: {
       }
       const resolvedArchiveKeyHint = archiveKeyHintRaw ?? conversationArchiveKeyHints.get(conversationId) ?? null
       const existing = inMemoryHistory.get(conversationId) ?? []
-      existing.push(memory)
-      setConversationHistory(conversationId, existing)
+      const duplicateInMemory = existing.some((entry) => String(entry.id) === String(memory.id))
+      if (duplicateInMemory) {
+        memoryRecord[DUPLICATE_MEMORY_MARKER] = true
+      } else {
+        existing.push(memory)
+        setConversationHistory(conversationId, existing)
+      }
 
       const db = await getDb()
       if (!db) return memory
+      if (duplicateInMemory) return memory
       try {
-        await db.sql`
+        const insertResult = await db.sql`
           INSERT INTO agent_message_memory (
             id, agent_id, room_id, entity_id, role, conversation_id, conversation_type, sender_address, content, metadata_json
           ) VALUES (
@@ -1596,8 +1738,17 @@ export function createRuntimeBridge(params: {
             ${String((memory.content as any)?.text ?? '')},
             ${JSON.stringify((memory.content as any)?.metadata ?? {})}::jsonb
           )
-          ON CONFLICT (id) DO NOTHING;
+          ON CONFLICT (id) DO NOTHING
+          RETURNING id;
         `
+        const insertedRows =
+          Array.isArray((insertResult as any)?.rows)
+            ? (insertResult as any).rows.length
+            : Number((insertResult as any)?.rowCount ?? 0)
+        if (!Number.isFinite(insertedRows) || insertedRows <= 0) {
+          memoryRecord[DUPLICATE_MEMORY_MARKER] = true
+          return memory
+        }
         void maybePersistMessageEmbedding({
           db: db as any,
           memoryId: String(memory.id),
@@ -1917,11 +2068,16 @@ export function createRuntimeBridge(params: {
 
   function createInboundMemory(msg: InboundMessage): Memory {
     const xmtpConversationKey = String(msg.xmtpConversationKey ?? '').trim() || null
+    const messageId = String(msg.messageId ?? '').trim() || null
+    const sentAtMs =
+      Number.isFinite(msg.sentAtMs) && Number(msg.sentAtMs) > 0
+        ? Math.floor(Number(msg.sentAtMs))
+        : Date.now()
     if (xmtpConversationKey) {
       rememberConversationArchiveKeyHint(msg.conversationId, xmtpConversationKey)
     }
     return {
-      id: randomUUID() as any,
+      id: toInboundMessageMemoryId(msg) as any,
       entityId: toEntityId(msg.senderAddress) as any,
       agentId: runtimeAgentId as any,
       roomId: toRoomId(msg.conversationId) as any,
@@ -1933,10 +2089,11 @@ export function createRuntimeBridge(params: {
           conversationId: msg.conversationId,
           conversationType: msg.conversationType,
           senderAddress: msg.senderAddress,
+          ...(messageId ? { messageId } : {}),
           ...(xmtpConversationKey ? { xmtpConversationKey } : {}),
         },
       } as any,
-      createdAt: Date.now(),
+      createdAt: sentAtMs,
     } as Memory
   }
 

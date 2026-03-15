@@ -33,10 +33,13 @@ export type KeeprCommandResult =
 type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 'ops' | 'bankr' | 'wallet'
 
 function formatHelpCommandRow(command: string, description: string, permission?: 'OWNER' | 'ADMIN/OWNER'): string {
+  const safeCommand = escapeTelegramHtml(command)
+  const safeDescription = escapeTelegramHtml(description)
   if (permission) {
-    return `<code>${command}</code> — ${description} <i>(${permission})</i>`
+    const safePermission = escapeTelegramHtml(permission)
+    return `<code>${safeCommand}</code> — ${safeDescription} <i>(${safePermission})</i>`
   }
-  return `<code>${command}</code> — ${description}`
+  return `<code>${safeCommand}</code> — ${safeDescription}`
 }
 
 function escapeTelegramHtml(value: string): string {
@@ -52,92 +55,82 @@ function formatKeeprHelpTopics(): string[] {
   return ['<blockquote>Need more? <code>/help core|coin|market|social|ops|bankr|wallet</code> • <code>/help all</code></blockquote>']
 }
 
+function formatHelpSection(title: string, rows: string[]): string[] {
+  return [`<u>${escapeTelegramHtml(title)}</u>`, `<blockquote>${rows.join('\n')}</blockquote>`, '']
+}
+
 function formatKeeprHelpFull(): string {
   return [
     '<b>Keepr — Help</b>',
     '',
-    '<blockquote>Use <code>/help</code> for the short version, or <code>/help &lt;topic&gt;</code> for focused help.</blockquote>',
+    '<blockquote>Use <code>/help</code> for quick mode, or <code>/help &lt;topic&gt;</code> for sections.</blockquote>',
     '',
-    '<u>start</u>',
-    formatHelpCommandRow('/start', 'open the compact landing menu'),
-    formatHelpCommandRow('/help', 'open the command guide'),
-    formatHelpCommandRow('/link', 'connect Telegram to 4626 Privy + Zora CSW'),
-    formatHelpCommandRow('/linked', 'check wallet link status'),
-    formatHelpCommandRow('/wallet', 'wallet, positions, and recent actions'),
-    formatHelpCommandRow('/buy', 'guided buy flow'),
-    formatHelpCommandRow('/sell', 'guided sell flow'),
-    formatHelpCommandRow('/bid', 'guided bid flow'),
-    formatHelpCommandRow('/vaults', 'browse scoped vaults'),
-    formatHelpCommandRow('/auctions', 'browse active auctions'),
-    formatHelpCommandRow('/signals', 'recent trade feed'),
-    '',
-    '<u>manage</u>',
-    formatHelpCommandRow('/keepr status', 'view current vault status'),
-    formatHelpCommandRow('/keepr rules', 'show active operating rules'),
-    formatHelpCommandRow('/keepr check', 'run a vault health check'),
-    formatHelpCommandRow('/keepr check 0x...', 'inspect a specific address', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/keepr lock', 'lock vault actions', 'OWNER'),
-    formatHelpCommandRow('/keepr unlock', 'unlock vault actions', 'OWNER'),
-    formatHelpCommandRow('/keepr sync', 'sync vault state and config', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/coin help', 'show all coin commands'),
-    formatHelpCommandRow('/cre status', 'view keeper status'),
-    formatHelpCommandRow('/cre health', 'combined health check'),
-    '',
-    '<u>analyze</u>',
-    formatHelpCommandRow('/ai <question>', 'ask Keepr in plain English'),
-    formatHelpCommandRow('/mkt quote <symbol>', 'latest quote'),
-    formatHelpCommandRow('/mkt news <symbol> [limit]', 'recent headlines'),
-    formatHelpCommandRow('/mkt ratios <symbol>', 'fundamentals ratios'),
-    formatHelpCommandRow('/mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]', 'macro event calendar'),
-    formatHelpCommandRow('/mkt chart <symbol> <range>', 'price history summary'),
-    formatHelpCommandRow('/coin trend check <ticker>', 'run trend preflight checks'),
-    formatHelpCommandRow('/whois <address>', 'resolve ENS / Basename identity'),
-    formatHelpCommandRow('/intel <address>', 'wallet intelligence report'),
-    formatHelpCommandRow('/reputation <agentId>', 'ERC-8004 reputation graph'),
-    formatHelpCommandRow('/feedback <agentId>', 'feedback summary'),
-    '',
-    '<u>publish</u>',
-    formatHelpCommandRow('/x status', 'check X integration status'),
-    formatHelpCommandRow('/x post <message> --confirm', 'publish a post', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/tweet <message> --confirm', 'alias for posting', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/coin trend reserve <ticker>', 'deploy a trend coin', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/coin trend status <ticker>', 'view trend operation status'),
-    formatHelpCommandRow('/coin trend funnel <ticker> <eth-amount>', 'run guarded flywheel action', 'ADMIN/OWNER'),
-    '',
-    '<u>transfer</u>',
-    formatHelpCommandRow('/send <amount> USDC to <address>', 'send USDC', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/send <amount> ETH to <address>', 'send ETH', 'ADMIN/OWNER'),
-    '<blockquote>Example: <code>/send 25 USDC to 0xabc...123</code></blockquote>',
-    '',
-    '<u>advanced</u>',
-    formatHelpCommandRow('/coin create <name> <symbol> <uri>', 'create a Content Coin', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/coin buy <address> <eth-amount>', 'buy a coin with ETH'),
-    formatHelpCommandRow('/coin sell <address> <amount>', 'sell a coin for ETH'),
-    formatHelpCommandRow('/coin balance', 'view agent wallet balance'),
-    formatHelpCommandRow('/coin info <address>', 'view coin details'),
-    formatHelpCommandRow('/cre auction', 'view CCA auction states'),
-    formatHelpCommandRow('/cre solana', 'Solana price and health'),
-    formatHelpCommandRow('/cre tend vault', 'deploy idle funds', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/cre report vault', 'harvest yields', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/cre flush-fees', 'flush Solana fees', 'ADMIN/OWNER'),
-    formatHelpCommandRow('/bankr status', 'show Bankr status'),
-    formatHelpCommandRow('/bankr me', 'show your Bankr profile'),
-    formatHelpCommandRow('/bankr balances base,solana', 'check balances by chain'),
-    formatHelpCommandRow('/bankr ask <question>', 'ask Bankr'),
-    formatHelpCommandRow('/bankr exec <instruction> --confirm', 'execute instruction', 'ADMIN/OWNER'),
-    '<blockquote><b>Create requirements</b>\nname: 1–24 chars\nsymbol: 2–6 chars\nuri: full <code>https://...</code> URL</blockquote>',
-    '',
-    '<u>Permissions</u>',
-    '<blockquote><b>OWNER</b> — highest privilege\n<b>ADMIN</b> — management actions\nSome commands are restricted and will fail without the required role.</blockquote>',
-    '',
-    '<u>Help by topic</u>',
-    '<code>/help coin</code> — Zora Coin commands',
-    '<code>/help mkt</code> — market data commands',
-    '<code>/help x</code> — X / Twitter commands',
-    '<code>/help cre</code> — CRE Keeper commands',
-    '<code>/help bankr</code> — Bankr commands',
-    '',
-    '<blockquote>Tip: keep the short help in group chats, and use the full help in DMs or private admin flows.</blockquote>',
+    ...formatHelpSection('start', [
+      formatHelpCommandRow('/start', 'menu'),
+      formatHelpCommandRow('/help', 'command guide'),
+      formatHelpCommandRow('/link', 'connect Telegram + Zora CSW'),
+      formatHelpCommandRow('/linked', 'link status'),
+      formatHelpCommandRow('/wallet', 'wallet + positions'),
+      formatHelpCommandRow('/buy | /sell | /bid', 'guided trade flow'),
+      formatHelpCommandRow('/vaults | /auctions | /signals', 'discovery + monitoring'),
+    ]),
+    ...formatHelpSection('manage', [
+      formatHelpCommandRow('/keepr status', 'vault status'),
+      formatHelpCommandRow('/keepr rules', 'active rules'),
+      formatHelpCommandRow('/keepr check', 'health check'),
+      formatHelpCommandRow('/keepr check 0x...', 'inspect specific address', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/keepr lock | /keepr unlock', 'toggle vault actions', 'OWNER'),
+      formatHelpCommandRow('/keepr sync', 'resync vault config', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/coin help | /cre status | /cre health', 'coin + keeper health'),
+    ]),
+    ...formatHelpSection('analyze', [
+      formatHelpCommandRow('/ai <question>', 'ask Keepr'),
+      formatHelpCommandRow('/mkt quote <symbol>', 'latest quote'),
+      formatHelpCommandRow('/mkt news <symbol> [limit]', 'recent headlines'),
+      formatHelpCommandRow('/mkt ratios <symbol>', 'fundamentals'),
+      formatHelpCommandRow('/mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]', 'macro calendar'),
+      formatHelpCommandRow('/mkt chart <symbol> <range>', 'price history'),
+      formatHelpCommandRow('/coin trend check <ticker>', 'trend preflight'),
+      formatHelpCommandRow('/whois | /intel | /reputation | /feedback', 'identity + intel'),
+    ]),
+    ...formatHelpSection('publish', [
+      formatHelpCommandRow('/x status', 'X integration'),
+      formatHelpCommandRow('/x post <message> --confirm', 'publish a post', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/tweet <message> --confirm', 'alias for posting', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/coin trend reserve <ticker>', 'deploy trend coin', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/coin trend status <ticker>', 'trend status'),
+      formatHelpCommandRow('/coin trend funnel <ticker> <eth-amount>', 'guarded flywheel', 'ADMIN/OWNER'),
+    ]),
+    ...formatHelpSection('transfer', [
+      formatHelpCommandRow('/send <amount> USDC to <address>', 'send USDC', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/send <amount> ETH to <address>', 'send ETH', 'ADMIN/OWNER'),
+      'Example: <code>/send 25 USDC to 0xabc...123</code>',
+    ]),
+    ...formatHelpSection('advanced', [
+      formatHelpCommandRow('/coin create <name> <symbol> <uri>', 'create content coin', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/coin buy | /coin sell | /coin balance | /coin info', 'coin ops'),
+      formatHelpCommandRow('/cre auction | /cre solana | /cre tend | /cre report | /cre flush-fees', 'keeper ops'),
+      formatHelpCommandRow('/bankr status | /bankr me | /bankr balances', 'Bankr status + balances'),
+      formatHelpCommandRow('/bankr ask <question>', 'ask Bankr'),
+      formatHelpCommandRow('/bankr exec <instruction> --confirm', 'execute instruction', 'ADMIN/OWNER'),
+      '<b>Create requirements</b>',
+      'name: 1–24 chars',
+      'symbol: 2–6 chars',
+      'uri: full <code>https://...</code> URL',
+    ]),
+    ...formatHelpSection('permissions', [
+      '<b>OWNER</b> — highest privilege',
+      '<b>ADMIN</b> — management actions',
+      'Restricted commands fail without required role',
+    ]),
+    ...formatHelpSection('help by topic', [
+      '<code>/help coin</code> — Zora Coin commands',
+      '<code>/help mkt</code> — market data commands',
+      '<code>/help x</code> — X / Twitter commands',
+      '<code>/help cre</code> — CRE Keeper commands',
+      '<code>/help bankr</code> — Bankr commands',
+    ]),
+    '<blockquote>Tip: keep short help in groups, and use full help in DMs/admin flows.</blockquote>',
   ].join('\n');
 }
 
