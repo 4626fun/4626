@@ -3772,7 +3772,7 @@ async function executeTelegramCommand(params: {
     senderWallet: params.senderWallet,
     text: params.text,
   })
-  return { text: asTrimmed(keeprResult.response) }
+  return { text: asTrimmed(keeprResult?.response ?? '') || 'Command received.' }
 }
 
 function formatTradeTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {

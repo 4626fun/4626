@@ -39,6 +39,15 @@ function formatHelpCommandRow(command: string, description: string, permission?:
   return `<code>${command}</code> — ${description}`
 }
 
+function escapeTelegramHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 function formatKeeprHelpTopics(): string[] {
   return ['<blockquote>Need more? <code>/help core|coin|market|social|ops|bankr|wallet</code> • <code>/help all</code></blockquote>']
 }
@@ -135,7 +144,7 @@ function formatKeeprHelpFull(): string {
 function formatKeeprQuickHelp(unknownTopic: string | null = null): string {
   const lines: string[] = ['<b>Keepr — Quick Start</b>', '']
   if (unknownTopic) {
-    lines.push(`<blockquote>Unknown help topic: <code>${unknownTopic}</code></blockquote>`)
+    lines.push(`<blockquote>Unknown help topic: <code>${escapeTelegramHtml(unknownTopic)}</code></blockquote>`)
     lines.push('')
   }
   lines.push(

@@ -178,10 +178,10 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
   },
   {
     id: 'portfolio-template',
-    label: 'Portfolio Lookup',
-    description: 'Prefill portfolio command template.',
+    label: 'Wallet Lookup',
+    description: 'Prefill wallet command template.',
     category: 'wallet',
-    command: '/portfolio 0x...',
+    command: '/wallet 0x...',
     risk: 'read',
     mode: 'prefill',
     followUpIds: ['intel-template'],

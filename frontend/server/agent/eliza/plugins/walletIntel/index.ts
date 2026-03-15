@@ -7,7 +7,7 @@
  *
  *   /intel <address>      → Full wallet intelligence report
  *   /funder <address>     → Recursive funder tracing
- *   /portfolio <address>  → Portfolio breakdown (net worth, tokens, DeFi)
+ *   /wallet <address>     → Wallet portfolio breakdown (net worth, tokens, DeFi)
  *   /labels <address>     → Entity labels (exchange, DeFi, mixer, etc.)
  */
 
@@ -295,12 +295,12 @@ const funderTraceAction: Action = {
 
 const portfolioAction: Action = {
   name: 'WALLET_PORTFOLIO',
-  similes: ['portfolio', 'net worth', 'balance'],
+  similes: ['wallet', 'portfolio', 'net worth', 'balance'],
   description: 'Portfolio breakdown: net worth, top tokens, active chains, DeFi positions.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
-    return text.startsWith('/portfolio') || text.startsWith('/networth') || text.startsWith('/balance')
+    return text.startsWith('/wallet') || text.startsWith('/portfolio') || text.startsWith('/networth') || text.startsWith('/balance')
   },
 
   handler: async (
@@ -316,7 +316,7 @@ const portfolioAction: Action = {
     })
     if (!address) {
       await callback?.({
-        text: 'Usage: /portfolio <address>\nIf omitted, defaults to your wallet when available.',
+        text: 'Usage: /wallet <address>\nIf omitted, defaults to your wallet when available.',
       } as Content)
       return
     }
@@ -331,7 +331,7 @@ const portfolioAction: Action = {
 
   examples: [
     [
-      { name: 'user', content: { text: '/portfolio 0x1234567890abcdef1234567890abcdef12345678' } },
+      { name: 'user', content: { text: '/wallet 0x1234567890abcdef1234567890abcdef12345678' } },
       { name: 'agent', content: { text: 'Portfolio for 0x1234...\nNet Worth: $42K\n...' } },
     ],
   ],

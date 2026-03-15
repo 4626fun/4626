@@ -113,9 +113,9 @@ describe('walletIntel plugin sender defaults', () => {
     expect(traceFundersMultiChainMock).toHaveBeenCalledWith(sender)
   })
 
-  it('defaults /portfolio to sender wallet when address is omitted', async () => {
+  it('defaults /wallet to sender wallet when address is omitted', async () => {
     const action = getAction('WALLET_PORTFOLIO')
-    await runAction({ action, text: '/portfolio', senderAddress: sender })
+    await runAction({ action, text: '/wallet', senderAddress: sender })
     expect(getWalletPortfolioMock).toHaveBeenCalledWith(sender)
   })
 

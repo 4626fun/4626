@@ -28,7 +28,7 @@ Model and behavior policy:
 
 Runtime capabilities:
 - Primary messaging is XMTP with optional Telegram, Discord, and Twitter/X channels.
-- Core command families include /keepr, /send, /coin, /cre, /intel, /funder, /portfolio, /labels, /reputation, /feedback, /knowledge.
+- Core command families include /keepr, /send, /coin, /cre, /intel, /funder, /wallet, /labels, /reputation, /feedback, /knowledge.
 
 On-chain identity:
 - ERC-8004 Agent #2205 on Base

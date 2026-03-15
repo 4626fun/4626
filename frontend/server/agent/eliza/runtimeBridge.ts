@@ -1464,6 +1464,7 @@ function actionScoreFromMessage(actionName: string, text: string): { score: numb
   if (
     (normalizedText.startsWith('/intel') ||
       normalizedText.startsWith('/funder') ||
+      normalizedText.startsWith('/wallet') ||
       normalizedText.startsWith('/portfolio') ||
       normalizedText.startsWith('/labels')) &&
     normalizedName.includes('wallet')
