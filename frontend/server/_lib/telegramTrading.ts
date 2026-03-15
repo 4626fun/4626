@@ -157,6 +157,10 @@ export type TelegramFunnelMetrics = {
     linkStart: number
     linkCompleteSuccess: number
     linkCompleteFailed: number
+    inlineQueryAnswered: number
+    inlineResultChosen: number
+    inlinePmHandoff: number
+    inlinePreparedSent: number
     tradeFlowStarted: number
     tradePreviewReady: number
     tradeConfirmed: number
@@ -165,8 +169,35 @@ export type TelegramFunnelMetrics = {
   conversion: {
     linkCompletionRatePct: number | null
     tradePreviewToConfirmRatePct: number | null
+    inlineChosenRatePct: number | null
+    inlineChosenToLinkStartRatePct: number | null
+    inlineChosenToTradeFlowStartRatePct: number | null
   }
 }
+
+export type TelegramMiniAppSession = {
+  telegramUserId: string
+  telegramUsername: string | null
+  chatId: string | null
+  chatType: string | null
+  chatInstance: string | null
+  initDataHash: string
+  authDate: number
+  expiresAt: string
+  createdAt: string | null
+  lastUsedAt: string | null
+  revokedAt: string | null
+}
+
+export type TelegramMiniAppSessionReadResult =
+  | {
+      ok: true
+      session: TelegramMiniAppSession
+    }
+  | {
+      ok: false
+      reason: 'invalid' | 'expired' | 'revoked'
+    }
 
 let telegramTradingSchemaEnsured = false
 
@@ -322,6 +353,10 @@ function hashTelegramActionToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex')
 }
 
+function hashTelegramMiniAppSessionToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex')
+}
+
 function signTelegramLinkPayload(payloadB64: string): string {
   const signature = createHmac('sha256', getTelegramLinkTokenSecret()).update(payloadB64).digest()
   return base64UrlEncode(signature)
@@ -431,6 +466,158 @@ export function readTelegramLinkStartTokenStatus(token: string): TelegramLinkSta
       expiresAt: new Date(parsed.expiresAtMs).toISOString(),
     },
   }
+}
+
+function mapTelegramMiniAppSessionRow(row: any): TelegramMiniAppSession {
+  return {
+    telegramUserId: String(row.telegram_user_id),
+    telegramUsername: asTrimmed(row.telegram_username) || null,
+    chatId: asTrimmed(row.chat_id) || null,
+    chatType: asTrimmed(row.chat_type) || null,
+    chatInstance: asTrimmed(row.chat_instance) || null,
+    initDataHash: asTrimmed(row.init_data_hash).toLowerCase(),
+    authDate: Math.max(0, Math.trunc(Number(row.auth_date || 0))),
+    expiresAt: toIso(row.expires_at) ?? new Date(0).toISOString(),
+    createdAt: toIso(row.created_at),
+    lastUsedAt: toIso(row.last_used_at),
+    revokedAt: toIso(row.revoked_at),
+  }
+}
+
+export async function claimTelegramMiniAppReplayNonce(params: {
+  db: Db
+  initDataHash: string
+  telegramUserId: string | number | bigint
+  authDate: number
+  ttlSeconds?: number
+}): Promise<boolean> {
+  const initDataHash = asTrimmed(params.initDataHash).toLowerCase()
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  const authDate = Math.trunc(Number(params.authDate))
+  if (!/^[a-f0-9]{64}$/.test(initDataHash) || !userId || !Number.isInteger(authDate) || authDate <= 0) {
+    return false
+  }
+  const ttlSeconds = Math.max(30, Math.min(60 * 60, Math.floor(Number(params.ttlSeconds ?? 60 * 15))))
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
+  await params.db.sql`
+    DELETE FROM telegram_miniapp_replay_nonces
+    WHERE expires_at <= NOW();
+  `
+  const claimed = await params.db.sql`
+    INSERT INTO telegram_miniapp_replay_nonces (
+      init_data_hash,
+      telegram_user_id,
+      auth_date,
+      expires_at
+    )
+    VALUES (
+      ${initDataHash},
+      ${userId},
+      ${authDate},
+      ${expiresAt}
+    )
+    ON CONFLICT (init_data_hash) DO NOTHING
+    RETURNING init_data_hash;
+  `
+  return Boolean(claimed.rows?.[0]?.init_data_hash)
+}
+
+export async function createTelegramMiniAppSession(params: {
+  db: Db
+  telegramUserId: string | number | bigint
+  telegramUsername?: string | null
+  chatId?: string | null
+  chatType?: string | null
+  chatInstance?: string | null
+  initDataHash: string
+  authDate: number
+  ttlSeconds?: number
+}): Promise<{ sessionToken: string; expiresAt: string; session: TelegramMiniAppSession } | null> {
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  const telegramUsername = asTrimmed(params.telegramUsername ?? '') || null
+  const chatId = asTrimmed(params.chatId ?? '') || null
+  const chatType = asTrimmed(params.chatType ?? '') || null
+  const chatInstance = asTrimmed(params.chatInstance ?? '') || null
+  const initDataHash = asTrimmed(params.initDataHash).toLowerCase()
+  const authDate = Math.trunc(Number(params.authDate))
+  if (!userId || !/^[a-f0-9]{64}$/.test(initDataHash) || !Number.isInteger(authDate) || authDate <= 0) {
+    return null
+  }
+  const ttlSeconds = Math.max(60, Math.min(60 * 60, Math.floor(Number(params.ttlSeconds ?? 60 * 10))))
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
+  const sessionToken = randomBytes(24).toString('base64url')
+  const tokenHash = hashTelegramMiniAppSessionToken(sessionToken)
+  await params.db.sql`
+    DELETE FROM telegram_miniapp_sessions
+    WHERE revoked_at IS NOT NULL OR expires_at <= NOW();
+  `
+  const inserted = await params.db.sql`
+    INSERT INTO telegram_miniapp_sessions (
+      token_hash,
+      telegram_user_id,
+      telegram_username,
+      chat_id,
+      chat_type,
+      chat_instance,
+      init_data_hash,
+      auth_date,
+      expires_at
+    )
+    VALUES (
+      ${tokenHash},
+      ${userId},
+      ${telegramUsername},
+      ${chatId},
+      ${chatType},
+      ${chatInstance},
+      ${initDataHash},
+      ${authDate},
+      ${expiresAt}
+    )
+    RETURNING telegram_user_id, telegram_username, chat_id, chat_type, chat_instance, init_data_hash, auth_date, expires_at, created_at, last_used_at, revoked_at;
+  `
+  const row = inserted.rows?.[0]
+  if (!row) return null
+  return {
+    sessionToken,
+    expiresAt: toIso(row.expires_at) ?? expiresAt,
+    session: mapTelegramMiniAppSessionRow(row),
+  }
+}
+
+export async function readTelegramMiniAppSession(params: {
+  db: Db
+  sessionToken: string
+}): Promise<TelegramMiniAppSessionReadResult> {
+  const sessionToken = asTrimmed(params.sessionToken)
+  if (!sessionToken) return { ok: false, reason: 'invalid' }
+  const tokenHash = hashTelegramMiniAppSessionToken(sessionToken)
+  const active = await params.db.sql`
+    UPDATE telegram_miniapp_sessions
+    SET last_used_at = NOW()
+    WHERE token_hash = ${tokenHash}
+      AND revoked_at IS NULL
+      AND expires_at > NOW()
+    RETURNING telegram_user_id, telegram_username, chat_id, chat_type, chat_instance, init_data_hash, auth_date, expires_at, created_at, last_used_at, revoked_at;
+  `
+  const row = active.rows?.[0]
+  if (row) {
+    return { ok: true, session: mapTelegramMiniAppSessionRow(row) }
+  }
+  const lookup = await params.db.sql`
+    SELECT telegram_user_id, telegram_username, chat_id, chat_type, chat_instance, init_data_hash, auth_date, expires_at, created_at, last_used_at, revoked_at
+    FROM telegram_miniapp_sessions
+    WHERE token_hash = ${tokenHash}
+    LIMIT 1;
+  `
+  const existing = lookup.rows?.[0]
+  if (!existing) return { ok: false, reason: 'invalid' }
+  if (existing.revoked_at) return { ok: false, reason: 'revoked' }
+  const expiresAtMs = Date.parse(String(existing.expires_at ?? ''))
+  if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+    return { ok: false, reason: 'expired' }
+  }
+  return { ok: false, reason: 'invalid' }
 }
 
 export async function createTelegramActionToken(params: {
@@ -690,6 +877,31 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       );
     `
     await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_miniapp_replay_nonces (
+        init_data_hash TEXT PRIMARY KEY,
+        telegram_user_id BIGINT NOT NULL,
+        auth_date INTEGER NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_miniapp_sessions (
+        token_hash TEXT PRIMARY KEY,
+        telegram_user_id BIGINT NOT NULL,
+        telegram_username TEXT NULL,
+        chat_id TEXT NULL,
+        chat_type TEXT NULL,
+        chat_instance TEXT NULL,
+        init_data_hash TEXT NOT NULL,
+        auth_date INTEGER NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        last_used_at TIMESTAMPTZ NULL,
+        revoked_at TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`
       CREATE TABLE IF NOT EXISTS telegram_chat_vault_scope (
         chat_id TEXT PRIMARY KEY,
         allowed_vault_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -778,6 +990,26 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_funnel_events_user_created_idx
       ON telegram_funnel_events (telegram_user_id, created_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_miniapp_replay_nonces_expires_idx
+      ON telegram_miniapp_replay_nonces (expires_at);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_expires_idx
+      ON telegram_miniapp_sessions (expires_at);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_user_expires_idx
+      ON telegram_miniapp_sessions (telegram_user_id, expires_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_chat_expires_idx
+      ON telegram_miniapp_sessions (chat_id, expires_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_init_hash_idx
+      ON telegram_miniapp_sessions (init_data_hash);
     `
     await db.sql`
       CREATE UNIQUE INDEX IF NOT EXISTS telegram_holder_room_policies_room_chat_uidx
@@ -1571,6 +1803,10 @@ export async function getTelegramFunnelMetrics(params: {
       COUNT(*) FILTER (WHERE event_name = 'link_start') AS link_start_count,
       COUNT(*) FILTER (WHERE event_name = 'link_complete_success') AS link_complete_success_count,
       COUNT(*) FILTER (WHERE event_name = 'link_complete_failed') AS link_complete_failed_count,
+      COUNT(*) FILTER (WHERE event_name = 'inline_query_answered') AS inline_query_answered_count,
+      COUNT(*) FILTER (WHERE event_name = 'inline_result_chosen') AS inline_result_chosen_count,
+      COUNT(*) FILTER (WHERE event_name = 'inline_pm_handoff') AS inline_pm_handoff_count,
+      COUNT(*) FILTER (WHERE event_name = 'inline_prepared_sent') AS inline_prepared_sent_count,
       COUNT(*) FILTER (WHERE event_name = 'trade_flow_started') AS trade_flow_started_count,
       COUNT(*) FILTER (WHERE event_name = 'trade_preview_ready') AS trade_preview_ready_count,
       COUNT(*) FILTER (WHERE event_name = 'trade_confirmed') AS trade_confirmed_count,
@@ -1587,6 +1823,10 @@ export async function getTelegramFunnelMetrics(params: {
     linkStart: parseCount((row as any).link_start_count),
     linkCompleteSuccess: parseCount((row as any).link_complete_success_count),
     linkCompleteFailed: parseCount((row as any).link_complete_failed_count),
+    inlineQueryAnswered: parseCount((row as any).inline_query_answered_count),
+    inlineResultChosen: parseCount((row as any).inline_result_chosen_count),
+    inlinePmHandoff: parseCount((row as any).inline_pm_handoff_count),
+    inlinePreparedSent: parseCount((row as any).inline_prepared_sent_count),
     tradeFlowStarted: parseCount((row as any).trade_flow_started_count),
     tradePreviewReady: parseCount((row as any).trade_preview_ready_count),
     tradeConfirmed: parseCount((row as any).trade_confirmed_count),
@@ -1601,6 +1841,9 @@ export async function getTelegramFunnelMetrics(params: {
     conversion: {
       linkCompletionRatePct: computePercent(counts.linkCompleteSuccess, counts.linkStart),
       tradePreviewToConfirmRatePct: computePercent(counts.tradeConfirmed, counts.tradePreviewReady),
+      inlineChosenRatePct: computePercent(counts.inlineResultChosen, counts.inlineQueryAnswered),
+      inlineChosenToLinkStartRatePct: computePercent(counts.linkStart, counts.inlineResultChosen),
+      inlineChosenToTradeFlowStartRatePct: computePercent(counts.tradeFlowStarted, counts.inlineResultChosen),
     },
   }
 }

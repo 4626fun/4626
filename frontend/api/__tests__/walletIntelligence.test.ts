@@ -215,7 +215,7 @@ describe('wallet-intelligence API handler', () => {
     expect(summary.ensName).toBe('test.eth')
     expect(summary.lensHandle).toBe('testuser')
     expect(groveStatus).toBe('stored')
-    expect(provenance.farcasterProviderMode).toBe('hybrid')
+    expect(provenance.farcasterProviderMode).toBe('disabled')
     expect(provenance.cacheStatus).toBe('miss')
     expect(provenance.graphSource).toBe('wallet-intelligence.v1')
   })

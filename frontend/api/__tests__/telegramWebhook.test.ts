@@ -533,6 +533,7 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(payload.inline_query_id).toBe('iq-1')
     expect(Array.isArray(payload.results)).toBe(true)
+    expect(typeof payload.next_offset).toBe('string')
     const resultTexts = payload.results
       .map((entry: any) => String(entry?.input_message_content?.message_text ?? ''))
       .filter(Boolean)
@@ -565,9 +566,9 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(payload.inline_query_id).toBe('iq-trade')
     expect(Array.isArray(payload.results)).toBe(true)
-    const first = payload.results[0]
-    expect(String(first?.title ?? '')).toContain('Start BUY')
-    expect(String(first?.input_message_content?.message_text ?? '')).toBe('/buy')
+    const tradeResult = payload.results.find((entry: any) => String(entry?.input_message_content?.message_text ?? '').trim() === '/buy')
+    expect(tradeResult).toBeTruthy()
+    expect(String(tradeResult?.title ?? '').toLowerCase()).toContain('buy')
   })
 
   it('uses brand-style inline growth copy when TELEGRAM_INLINE_GROWTH_MODE is enabled', async () => {
@@ -635,6 +636,7 @@ describe('telegram webhook handler', () => {
       .map((entry: any) => String(entry?.input_message_content?.message_text ?? ''))
       .filter(Boolean)
     expect(resultTexts.some((text: string) => text.startsWith('/link'))).toBe(true)
+    expect(Boolean(payload.switch_pm_parameter || payload.button?.start_parameter)).toBe(true)
   })
 
   it('adds scoped vault shortcuts to inline results and keeps deterministic caps', async () => {
@@ -706,6 +708,102 @@ describe('telegram webhook handler', () => {
       .filter(Boolean)
     expect(resultTexts.some((text: string) => text.trim() === '/buy')).toBe(true)
     expect(resultTexts.some((text: string) => text.trim() === '/bid')).toBe(true)
+    expect(typeof payload.next_offset).toBe('string')
+  })
+
+  it('respects inline query offset when paginating results', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_31,
+        inline_query: {
+          id: 'iq-offset',
+          from: { id: 42 },
+          query: 'vault picks',
+          offset: '4',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(Array.isArray(payload.results)).toBe(true)
+    const firstId = String(payload.results[0]?.id ?? '')
+    expect(firstId.startsWith('r4:')).toBe(true)
+  })
+
+  it('hides PM handoff when TELEGRAM_INLINE_PM_HANDOFF_ENABLED is off', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    const restoreInlineEnv = applyEnv({
+      TELEGRAM_INLINE_PM_HANDOFF_ENABLED: 'false',
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 5_32,
+          inline_query: {
+            id: 'iq-no-pm',
+            from: { id: 777 },
+            query: 'start trading',
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+      expect(payload.switch_pm_parameter).toBeUndefined()
+      expect(payload.button).toBeUndefined()
+    } finally {
+      restoreInlineEnv()
+    }
+  })
+
+  it('handles chosen_inline_result updates and logs inline attribution context', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_4,
+        chosen_inline_result: {
+          result_id: 'r2:photo:link-account',
+          from: { id: 777 },
+          query: 'buy now',
+          inline_message_id: 'inline-msg-1',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(0)
+    expect(logTelegramFunnelEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventName: 'inline_result_chosen',
+        actionType: 'inline',
+        context: expect.objectContaining({
+          source: 'inline',
+          resultType: 'photo',
+          rankPosition: 3,
+          queryClass: 'trade',
+        }),
+      }),
+    )
   })
 
   it('returns inline shortcut launcher with prefill buttons', async () => {

@@ -178,7 +178,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'paymaster': () => import('./_paymaster.js'),
   'revert-finance': () => import('./_revert-finance.js'),
 
-  'social/farcaster': () => import('./social/_farcaster.js'),
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
   'social/twitter': () => import('./social/_twitter.js'),
@@ -186,6 +185,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'telegram/link/start': () => import('./telegram/_link-start.js'),
   'telegram/link/complete': () => import('./telegram/_link-complete.js'),
   'telegram/link/status': () => import('./telegram/_link-status.js'),
+  'telegram/discovery': () => import('./telegram/_discovery.js'),
+  'telegram/miniapp/session': () => import('./telegram/_miniapp-session.js'),
+  'telegram/inline/prepared': () => import('./telegram/_inline-prepared.js'),
   'telegram/metrics': () => import('./telegram/_metrics.js'),
   'telegram/portfolio': () => import('./telegram/_portfolio.js'),
   'telegram/unlink': () => import('./telegram/_unlink.js'),

@@ -29,7 +29,29 @@ export type TelegramMessage = {
 export type TelegramInlineQuery = {
   id?: string | number
   query?: string
+  offset?: string
+  chat_type?: TelegramInlineQueryChatType
   from?: TelegramFrom
+  location?: TelegramLocation
+}
+
+export type TelegramInlineQueryChatType = 'sender' | 'private' | 'group' | 'supergroup' | 'channel'
+
+export type TelegramLocation = {
+  latitude?: number
+  longitude?: number
+  horizontal_accuracy?: number
+  live_period?: number
+  heading?: number
+  proximity_alert_radius?: number
+}
+
+export type TelegramChosenInlineResult = {
+  result_id?: string
+  from?: TelegramFrom
+  location?: TelegramLocation
+  inline_message_id?: string
+  query?: string
 }
 
 export type TelegramCallbackQuery = {
@@ -53,6 +75,7 @@ export type TelegramUpdate = {
   edited_message?: TelegramMessage
   channel_post?: TelegramMessage
   inline_query?: TelegramInlineQuery
+  chosen_inline_result?: TelegramChosenInlineResult
   callback_query?: TelegramCallbackQuery
   pre_checkout_query?: TelegramPreCheckoutQuery
 }

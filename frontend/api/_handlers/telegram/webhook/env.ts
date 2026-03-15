@@ -2,6 +2,16 @@ import { ZERO_ADDRESS } from './constants.js'
 import { getBundlerAndPaymasterUrlFromConfig, getTelegramWebhookConfig } from './config.js'
 import { asTrimmed, isAddressLike, parseDelimitedSet, parseJsonObject, parseOptionalPositiveInteger } from './utils.js'
 
+export type TelegramInlineMediaAsset = {
+  photoUrl?: string
+  thumbnailUrl?: string
+  videoUrl?: string
+  mpeg4GifUrl?: string
+  documentUrl?: string
+  documentMimeType?: string
+  videoMimeType?: string
+}
+
 export function parseAdminUserIds(): Set<string> {
   const raw = getTelegramWebhookConfig().adminUserIdsRaw
   if (!raw) return new Set()
@@ -123,6 +133,46 @@ export function readInlineQueryResultCap(): number {
 
 export function isTelegramInlineGrowthModeEnabled(): boolean {
   return getTelegramWebhookConfig().inlineGrowthMode
+}
+
+export function isTelegramInlinePmHandoffEnabled(): boolean {
+  return getTelegramWebhookConfig().inlinePmHandoffEnabled
+}
+
+export function isTelegramInlinePreparedEnabled(): boolean {
+  return getTelegramWebhookConfig().inlinePreparedEnabled
+}
+
+function readInlineMediaUrl(value: unknown): string | undefined {
+  const parsed = asTrimmed(value)
+  if (!/^https?:\/\/[^\s]+$/i.test(parsed)) return undefined
+  return parsed
+}
+
+export function readInlineMediaAssetMap(): Record<string, TelegramInlineMediaAsset> {
+  const raw = asTrimmed(getTelegramWebhookConfig().inlineMediaJsonRaw)
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const output: Record<string, TelegramInlineMediaAsset> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const media = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+      if (!media) continue
+      output[key] = {
+        ...(readInlineMediaUrl(media.photoUrl) ? { photoUrl: readInlineMediaUrl(media.photoUrl) } : {}),
+        ...(readInlineMediaUrl(media.thumbnailUrl) ? { thumbnailUrl: readInlineMediaUrl(media.thumbnailUrl) } : {}),
+        ...(readInlineMediaUrl(media.videoUrl) ? { videoUrl: readInlineMediaUrl(media.videoUrl) } : {}),
+        ...(readInlineMediaUrl(media.mpeg4GifUrl) ? { mpeg4GifUrl: readInlineMediaUrl(media.mpeg4GifUrl) } : {}),
+        ...(readInlineMediaUrl(media.documentUrl) ? { documentUrl: readInlineMediaUrl(media.documentUrl) } : {}),
+        ...(asTrimmed(media.documentMimeType) ? { documentMimeType: asTrimmed(media.documentMimeType) } : {}),
+        ...(asTrimmed(media.videoMimeType) ? { videoMimeType: asTrimmed(media.videoMimeType) } : {}),
+      }
+    }
+    return output
+  } catch {
+    return {}
+  }
 }
 
 export function resolveTelegramMiniAppUrl(): string {

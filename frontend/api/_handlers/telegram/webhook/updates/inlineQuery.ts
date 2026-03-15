@@ -25,6 +25,8 @@ export async function handleInlineQueryUpdate(params: {
     botToken: string
     inlineQueryId: string
     query: string
+    queryOffset: string
+    chatType: string
     userId: string
     chatId: string
   }) => Promise<void>
@@ -43,6 +45,8 @@ export async function handleInlineQueryUpdate(params: {
       botToken: params.botToken,
       inlineQueryId,
       query: asTrimmed(inlineQuery.query ?? ''),
+      queryOffset: asTrimmed(inlineQuery.offset ?? ''),
+      chatType: asTrimmed(inlineQuery.chat_type ?? ''),
       userId: String(inlineQuery.from?.id ?? '').trim(),
       chatId: params.targetChatId,
     })

@@ -11,7 +11,6 @@
 import { getDb, isDbConfigured } from './postgres.js'
 import { getOrCreateCreatorAgentWallet } from './creatorAgentWallets.js'
 import { logger } from './logger.js'
-import { resolveFarcasterProfile } from './farcasterProvider.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -66,19 +65,10 @@ async function resolveFarcaster(address: string): Promise<{
   username: string | null
   pfpUrl: string | null
 } | null> {
-  try {
-    const { profile, source } = await resolveFarcasterProfile({ address })
-    if (source !== 'none') {
-      logger.info('[preprovision] Farcaster profile source', { source, address: address.slice(0, 10) })
-    }
-    if (!profile) return null
-    return {
-      username: profile.username,
-      pfpUrl: profile.avatar,
-    }
-  } catch {
-    return null
-  }
+  // Farcaster provider integration has been retired from server preprovisioning.
+  // Keep this as an explicit no-op for stable downstream behavior.
+  void address
+  return null
 }
 
 async function findCreatorCoin(

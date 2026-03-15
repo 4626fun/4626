@@ -5,7 +5,6 @@ import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
 import { buildWalletIntelligence, type WalletIntelligenceOptions } from '../../../../server/_lib/walletIntelligence.js'
 import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
 import { getCachedWalletIntelligence, cacheWalletIntelligence } from '../../../../server/_lib/walletIntelligenceCache.js'
-import { getFarcasterProviderMode } from '../../../../server/_lib/farcasterProvider.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -90,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const effectiveChainIds = chainIds ?? [8453, 1]
   const noCache = (req.method === 'GET' && req.query.noCache === 'true') ||
     (req.method === 'POST' && (req.body as any)?.noCache === true)
-  const farcasterProviderMode = getFarcasterProviderMode()
+  const farcasterProviderMode = 'disabled' as const
 
   try {
     // ── Cache read (Supabase) ──

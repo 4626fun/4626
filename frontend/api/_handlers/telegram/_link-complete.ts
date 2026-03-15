@@ -4,6 +4,7 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { bootstrapCanonicalDelegationState } from '../../../server/_lib/canonicalCswDelegation.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import {
+  readTelegramMiniAppSession,
   ensureTelegramTradingSchema,
   isTelegramFunnelEventsEnabledForChat,
   logTelegramFunnelEvent,
@@ -12,12 +13,15 @@ import {
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
-import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
+import { readTelegramMiniAppSessionToken } from './webhook/miniAppAuth.js'
+import { isTelegramMiniAppSessionEnabled, verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 import { asTrimmed, resolveTelegramLinkErrorStatusCode } from './webhook/utils.js'
 
 type LinkCompleteBody = {
   token?: string
   telegramUsername?: string | null
+  miniAppSessionToken?: string
+  sessionToken?: string
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -47,6 +51,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const parsed = tokenStatus.payload
   const shouldEmitFunnelEvent = isTelegramFunnelEventsEnabledForChat(parsed.chatId)
+  const miniAppSessionRequired = isTelegramMiniAppSessionEnabled({
+    chatId: parsed.chatId,
+    userId: parsed.telegramUserId,
+  })
 
   const db = await getDb()
   if (!db) {
@@ -56,6 +64,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await ensureWaitlistSchema(db as any)
     await ensureTelegramTradingSchema(db as any)
+
+    if (miniAppSessionRequired) {
+      const miniAppSessionToken = readTelegramMiniAppSessionToken({
+        req,
+        bodyToken: asTrimmed(body.miniAppSessionToken ?? body.sessionToken ?? ''),
+      })
+      if (!miniAppSessionToken) {
+        return res.status(401).json({
+          success: false,
+          error: 'Telegram Mini App session token is required. Re-open the Mini App from Telegram and retry.',
+        } satisfies ApiEnvelope<never>)
+      }
+      const miniAppSession = await readTelegramMiniAppSession({
+        db: db as any,
+        sessionToken: miniAppSessionToken,
+      })
+      if (!miniAppSession.ok) {
+        const isExpired = miniAppSession.reason === 'expired'
+        return res.status(isExpired ? 410 : 401).json({
+          success: false,
+          error: isExpired
+            ? 'Telegram Mini App session expired. Re-open the Mini App from Telegram and retry.'
+            : 'Invalid Telegram Mini App session. Re-open the Mini App from Telegram and retry.',
+        } satisfies ApiEnvelope<never>)
+      }
+      if (miniAppSession.session.telegramUserId !== parsed.telegramUserId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Telegram Mini App session user mismatch. Start /link again from Telegram.',
+        } satisfies ApiEnvelope<never>)
+      }
+      if (miniAppSession.session.chatId && miniAppSession.session.chatId !== parsed.chatId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Telegram Mini App session chat mismatch. Start /link again from Telegram.',
+        } satisfies ApiEnvelope<never>)
+      }
+    }
 
     const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
     const link = await upsertTelegramUserLink({

@@ -21,6 +21,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { readTelegramMiniAppLinkContext, stripTelegramMiniAppLinkParams } from '@/lib/telegramMiniAppLink'
+import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 import {
   claimLiquidityFees,
   createPosition,
@@ -103,6 +104,48 @@ type QuoteShape = Record<string, unknown>
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type TelegramLinkCompleteResponse = {
   linked: boolean
+}
+type TelegramDiscoveryData = {
+  telegramUserId: string
+  chatId: string | null
+  linked: boolean
+  linkStatus: string
+  ownerVerified: boolean
+  canonicalCswAddress: string | null
+  portfolio: {
+    successfulActions: number
+    buyCount: number
+    sellCount: number
+    bidCount: number
+    recentActions: Array<{
+      actionType: string
+      status: string
+      txHash: string | null
+      createdAt: string
+    }>
+  } | null
+  vaults: Array<{
+    vaultAddress: string
+    creatorCoinAddress: string
+    chainId: number
+    groupId: string
+    isSettled: boolean
+    ccaStrategyAddress: string | null
+  }>
+  auctions: Array<{
+    vaultAddress: string
+    ccaStrategyAddress: string
+    creatorCoinAddress: string
+    chainId: number
+    isSettled: boolean
+  }>
+  signals: Array<{
+    telegramUserId: string
+    actionType: string
+    status: string
+    txHash: string | null
+    createdAt: string
+  }>
 }
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
   {
@@ -421,6 +464,56 @@ export function Swap() {
   const [telegramLinkMessage, setTelegramLinkMessage] = useState<string | null>(null)
   const telegramLinkAttemptRef = useRef<string>('')
   const telegramLinkFlowActive = Boolean(telegramLinkContext)
+  const telegramMiniAppFlag = useMemo(() => String(searchParams.get('tgMiniApp') ?? '').trim().toLowerCase(), [searchParams])
+  const telegramEntry = useMemo(() => String(searchParams.get('tgEntry') ?? '').trim().toLowerCase(), [searchParams])
+  const telegramDiscoveryEnabled = telegramEntry.length > 0 && telegramEntry !== 'link'
+  const likelyTelegramMiniAppFlow =
+    telegramMiniAppFlag === '1' ||
+    telegramEntry.length > 0 ||
+    telegramLinkFlowActive ||
+    (typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp))
+
+  const telegramDiscoveryQuery = useQuery({
+    queryKey: ['telegram-miniapp-discovery', telegramEntry],
+    enabled: telegramDiscoveryEnabled,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const miniAppSession = await ensureTelegramMiniAppSession()
+      if (!miniAppSession.ok) {
+        throw new Error('Telegram Mini App session unavailable')
+      }
+      const res = await apiFetch('/api/telegram/discovery?limit=6', {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'x-telegram-miniapp-session': miniAppSession.session.sessionToken,
+        },
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramDiscoveryData> | null
+      if (!res.ok || !json?.success || !json.data) {
+        const errorMessage = typeof json?.error === 'string' && json.error.trim() ? json.error.trim() : 'Discovery request failed'
+        throw new Error(errorMessage)
+      }
+      return json.data
+    },
+  })
+
+  useEffect(() => {
+    if (!likelyTelegramMiniAppFlow) return
+    let isCancelled = false
+    let teardown: (() => void) | null = null
+    void (async () => {
+      await loadTelegramWebApp().catch(() => null)
+      if (isCancelled) return
+      teardown = setupTelegramMiniAppUi({ requestExpand: true })
+      if (!isTelegramMiniAppContext()) return
+      await ensureTelegramMiniAppSession().catch(() => null)
+    })()
+    return () => {
+      isCancelled = true
+      teardown?.()
+    }
+  }, [likelyTelegramMiniAppFlow])
 
   const retryTelegramLink = useCallback(() => {
     telegramLinkAttemptRef.current = ''
@@ -448,7 +541,15 @@ export function Swap() {
 
     void (async () => {
       setTelegramLinkState('linking')
-      setTelegramLinkMessage('Linking Telegram to your canonical 4626 wallet…')
+      setTelegramLinkMessage('Verifying Telegram Mini App session…')
+
+      const miniAppSession = await ensureTelegramMiniAppSession()
+      if (!miniAppSession.ok) {
+        if (miniAppSession.statusCode === 409) {
+          throw new Error('Telegram session was already consumed. Close and reopen the Mini App from Telegram, then retry.')
+        }
+        throw new Error('Could not verify Telegram Mini App session. Re-open the app from Telegram and retry linking.')
+      }
 
       let accessToken = ''
       if (privyAuthenticated) {
@@ -471,7 +572,8 @@ export function Swap() {
         },
         body: JSON.stringify({
           token: telegramLinkContext.linkToken,
-          telegramUsername: telegramLinkContext.telegramUsername,
+          telegramUsername: telegramLinkContext.telegramUsername ?? miniAppSession.session.telegramUsername,
+          miniAppSessionToken: miniAppSession.session.sessionToken,
         }),
       })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteResponse> | null
@@ -1399,6 +1501,62 @@ export function Swap() {
               </div>
             ) : null}
           </Alert>
+        </div>
+      ) : null}
+
+      {telegramDiscoveryEnabled ? (
+        <div className="mx-auto mt-4 max-w-4xl rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-wide text-zinc-100">Telegram Discovery</h2>
+            {telegramDiscoveryQuery.isFetching ? <span className="text-xs text-zinc-400">Refreshing…</span> : null}
+          </div>
+          {telegramDiscoveryQuery.isLoading ? (
+            <div className="text-sm text-zinc-400">Loading your Telegram-linked discovery snapshot…</div>
+          ) : telegramDiscoveryQuery.isError ? (
+            <div className="text-sm text-rose-300">
+              {(telegramDiscoveryQuery.error as Error | undefined)?.message || 'Could not load Telegram discovery data.'}
+            </div>
+          ) : telegramDiscoveryQuery.data ? (
+            <div className="space-y-3 text-sm text-zinc-300">
+              <div className="grid gap-2 md:grid-cols-4">
+                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Link</div>
+                  <div className="font-medium text-zinc-100">
+                    {telegramDiscoveryQuery.data.linked ? 'Linked' : 'Not linked'}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Portfolio Actions</div>
+                  <div className="font-medium text-zinc-100">
+                    {telegramDiscoveryQuery.data.portfolio?.successfulActions ?? 0}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Scoped Vaults</div>
+                  <div className="font-medium text-zinc-100">{telegramDiscoveryQuery.data.vaults.length}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Active Signals</div>
+                  <div className="font-medium text-zinc-100">{telegramDiscoveryQuery.data.signals.length}</div>
+                </div>
+              </div>
+              {telegramDiscoveryQuery.data.vaults.length > 0 ? (
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-500">Vault Discovery</div>
+                  <div className="flex flex-wrap gap-2">
+                    {telegramDiscoveryQuery.data.vaults.slice(0, 4).map((vault) => (
+                      <span
+                        key={vault.vaultAddress}
+                        className="rounded-md border border-white/10 bg-black/40 px-2 py-1 font-mono text-[11px] text-zinc-200"
+                      >
+                        {vault.vaultAddress.slice(0, 8)}...{vault.vaultAddress.slice(-4)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

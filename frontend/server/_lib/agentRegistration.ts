@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { resolveFarcasterProfile } from './farcasterProvider.js'
 import { getDb, isDbConfigured } from './postgres.js'
 
 export type RegistrationService = {
@@ -446,13 +445,8 @@ export async function enrichAgentRegistrationWithFarcaster(params: {
   if (!isAddressLike(owner)) return params.payload
 
   const profileHint = await resolveProfileFarcasterByAddress(owner).catch(() => null)
-  const providerResolved = await resolveFarcasterProfile({
-    address: owner,
-    fid: profileHint?.fid ?? null,
-  }).catch(() => null)
-
-  const fid = parsePositiveInt(providerResolved?.profile?.fid) ?? profileHint?.fid ?? null
-  const username = normalizeHandle(providerResolved?.profile?.username) ?? profileHint?.username ?? null
+  const fid = profileHint?.fid ?? null
+  const username = profileHint?.username ?? null
   const profileUrl = warpcastProfileUrl({ fid, username })
   if (!profileUrl) return params.payload
 

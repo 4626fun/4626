@@ -234,7 +234,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/referrals/me': () => import('./api/_handlers/referrals/_me'),
         '/api/referrals/leaderboard': () => import('./api/_handlers/referrals/_leaderboard'),
         // Social proxies
-        '/api/social/farcaster': () => import('./api/_handlers/social/_farcaster'),
         '/api/social/recipient': () => import('./api/_handlers/social/_recipient'),
         '/api/social/twitter': () => import('./api/_handlers/social/_twitter'),
         '/api/social/talent': () => import('./api/_handlers/social/_talent'),

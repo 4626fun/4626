@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { shouldAutoRouteToAi } from '../_handlers/telegram/webhook/parsers/command.js'
 import { parseDeployCallbackData, parseTelegramDeployIntent } from '../_handlers/telegram/webhook/parsers/deploy.js'
 import { parseHolderRoomIdentifier } from '../_handlers/telegram/webhook/parsers/holderRooms.js'
+import { buildInlineQueryAnswer, classifyInlineQuery } from '../_handlers/telegram/webhook/parsers/inline.js'
 import { commandHasArguments, parseTelegramTradeIntent, parseTradeCallbackData, parseTradeFlowCallbackData } from '../_handlers/telegram/webhook/parsers/trade.js'
 
 describe('telegram webhook parsers', () => {
@@ -113,5 +114,94 @@ describe('telegram webhook parsers', () => {
         isPrivateChatId,
       }),
     ).toBe(false)
+  })
+
+  it('classifies inline query intent for ranking', () => {
+    expect(classifyInlineQuery('/buy vault 0.1')).toBe('trade')
+    expect(classifyInlineQuery('mkt quote btc')).toBe('market')
+    expect(classifyInlineQuery('ask ai')).toBe('ai')
+    expect(classifyInlineQuery('')).toBe('discovery')
+  })
+
+  it('builds paginated inline answers with deterministic next_offset', () => {
+    const scopedVaults = [
+      {
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+        creatorCoinAddress: '0x2222222222222222222222222222222222222222',
+        chainId: 8453,
+        groupId: 'g1',
+        isSettled: false,
+        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+      },
+      {
+        vaultAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        creatorCoinAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        chainId: 8453,
+        groupId: 'g2',
+        isSettled: false,
+        ccaStrategyAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      },
+    ] as const
+
+    const firstPage = buildInlineQueryAnswer({
+      rawQuery: 'start trading',
+      queryOffset: '',
+      userId: '42',
+      chatId: '-100123',
+      isLinked: false,
+      scopedVaults: [...scopedVaults],
+      inlineResultCap: 4,
+      growthMode: true,
+      enablePmHandoff: true,
+    })
+
+    expect(firstPage.results.length).toBe(4)
+    expect(firstPage.nextOffset).toBe('4')
+    expect(firstPage.switchPmParameter).toMatch(/^inline_link_/)
+
+    const secondPage = buildInlineQueryAnswer({
+      rawQuery: 'start trading',
+      queryOffset: firstPage.nextOffset,
+      userId: '42',
+      chatId: '-100123',
+      isLinked: false,
+      scopedVaults: [...scopedVaults],
+      inlineResultCap: 4,
+      growthMode: true,
+      enablePmHandoff: true,
+    })
+
+    expect(secondPage.offset).toBe(4)
+    expect(secondPage.results.length).toBeGreaterThan(0)
+    expect(secondPage.results[0]?.id).not.toBe(firstPage.results[0]?.id)
+  })
+
+  it('uses media variants when configured and falls back to article', () => {
+    const answer = buildInlineQueryAnswer({
+      rawQuery: 'start trading',
+      queryOffset: '',
+      userId: '42',
+      chatId: '-100123',
+      isLinked: false,
+      scopedVaults: [],
+      inlineResultCap: 8,
+      growthMode: true,
+      enablePmHandoff: true,
+      mediaByKey: {
+        'card:link': {
+          photoUrl: 'https://example.com/link.png',
+          thumbnailUrl: 'https://example.com/thumb.png',
+        },
+        'card:market': {
+          videoUrl: 'https://example.com/market.mp4',
+          thumbnailUrl: 'https://example.com/market.png',
+        },
+      },
+    })
+
+    const resultTypes = answer.results.map((entry: any) => String(entry?.type ?? ''))
+    expect(resultTypes).toContain('photo')
+    expect(resultTypes).toContain('video')
+    expect(resultTypes).toContain('article')
   })
 })

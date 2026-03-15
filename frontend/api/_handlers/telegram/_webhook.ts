@@ -8,6 +8,7 @@ import type { TelegramWebhookOk, TelegramUpdate } from './webhook/types.js'
 import * as messageHandler from './webhook/updates/message.js'
 import * as callbackHandler from './webhook/updates/callbackQuery.js'
 import * as inlineHandler from './webhook/updates/inlineQuery.js'
+import * as chosenInlineResultHandler from './webhook/updates/chosenInlineResult.js'
 import * as preCheckoutHandler from './webhook/updates/preCheckout.js'
 import * as paymentHandler from './webhook/updates/successfulPayment.js'
 
@@ -39,6 +40,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (update.inline_query) {
     return inlineHandler.handle(req, res, update, config)
+  }
+  if (update.chosen_inline_result) {
+    return chosenInlineResultHandler.handle(req, res, update, config)
   }
   if (update.pre_checkout_query) {
     return preCheckoutHandler.handle(req, res, update, config)

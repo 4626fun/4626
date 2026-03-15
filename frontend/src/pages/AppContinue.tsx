@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { shouldNavigateAfterWaitlistHandoff } from '@/lib/auth/appContinueGate'
 import { readSafeNextPath } from '@/lib/auth/appEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 
@@ -67,6 +68,11 @@ export function AppContinue() {
   const autoLogin = autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes'
   const fromWaitlist = fromRaw === 'waitlist'
   const handoffCode = (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim()
+  const likelyTelegramMiniAppFlow = useMemo(() => {
+    if (typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp)) return true
+    const nextRaw = searchParams.get('next') ?? ''
+    return nextRaw.includes('tgMiniApp=1') || nextRaw.includes('tgEntry=') || nextRaw.includes('tgWebAppStartParam')
+  }, [searchParams])
 
   const canNavigate = useMemo(
     () =>
@@ -85,6 +91,23 @@ export function AppContinue() {
   const [handoffError, setHandoffError] = useState<string | null>(null)
   const autoLoginAttemptRef = useRef(false)
   const autoHandoffRedeemAttemptRef = useRef(false)
+
+  useEffect(() => {
+    if (!likelyTelegramMiniAppFlow) return
+    let isCancelled = false
+    let teardown: (() => void) | null = null
+    void (async () => {
+      await loadTelegramWebApp().catch(() => null)
+      if (isCancelled) return
+      teardown = setupTelegramMiniAppUi({ requestExpand: true })
+      if (!isTelegramMiniAppContext()) return
+      await ensureTelegramMiniAppSession().catch(() => null)
+    })()
+    return () => {
+      isCancelled = true
+      teardown?.()
+    }
+  }, [likelyTelegramMiniAppFlow])
 
   const restartHandoff = async () => {
     const retry = getAppContinueRetryDirective({ privyAuthenticated })

@@ -2,7 +2,7 @@ import type { VercelRequest } from '@vercel/node'
 
 import { getTelegramWebhookConfig } from '../config.js'
 import { isPrivateChatId, parseAdminUserIds, parseAllowedChatIds } from '../env.js'
-import { asTrimmed } from '../utils.js'
+import { asTrimmed, parseDelimitedSet } from '../utils.js'
 
 export function isTelegramContextAllowed(params: {
   chatId: string
@@ -35,4 +35,18 @@ export function verifyTelegramLinkApiSecret(req: Pick<VercelRequest, 'headers'>)
   if (!configured) return true
   const provided = asTrimmed(req.headers['x-telegram-link-secret'])
   return provided === configured
+}
+
+export function isTelegramMiniAppSessionEnabled(params: { chatId?: string | null; userId?: string | null }): boolean {
+  const config = getTelegramWebhookConfig()
+  if (!config.miniAppSessionEnabled) return false
+
+  const userId = asTrimmed(params.userId ?? '')
+  const chatId = asTrimmed(params.chatId ?? '')
+  const allowedChatIds = parseDelimitedSet(config.miniAppSessionChatIdsRaw)
+  const allowedUserIds = parseDelimitedSet(config.miniAppSessionUserIdsRaw)
+
+  if (allowedUserIds.size > 0 && (!userId || !allowedUserIds.has(userId))) return false
+  if (allowedChatIds.size > 0 && (!chatId || !allowedChatIds.has(chatId))) return false
+  return true
 }

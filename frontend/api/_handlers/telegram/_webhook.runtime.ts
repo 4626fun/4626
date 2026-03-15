@@ -51,11 +51,13 @@ import {
   isStarsTipsEnabledForChat as isStarsTipsEnabledForChatShared,
   isTelegramAiFollowupEnabled as isTelegramAiFollowupEnabledShared,
   isTelegramInlineGrowthModeEnabled as isTelegramInlineGrowthModeEnabledShared,
+  isTelegramInlinePmHandoffEnabled as isTelegramInlinePmHandoffEnabledShared,
   isTelegramPrivateDmEnabled as isTelegramPrivateDmEnabledShared,
   isTradeMembershipCheckEnabled as isTradeMembershipCheckEnabledShared,
   parseAdminUserIds as parseAdminUserIdsShared,
   parseAllowedChatIds as parseAllowedChatIdsShared,
   readEthUsdPrice as readEthUsdPriceShared,
+  readInlineMediaAssetMap as readInlineMediaAssetMapShared,
   readInlineQueryResultCap as readInlineQueryResultCapShared,
   readShareUsdFallback as readShareUsdFallbackShared,
   resolveGroupId as resolveGroupIdShared,
@@ -73,6 +75,13 @@ import { isTelegramNativeCommand as isTelegramNativeCommandShared, normalizeTele
 import { parseDeployCallbackData as parseDeployCallbackDataShared, parseTelegramDeployIntent as parseTelegramDeployIntentShared } from './webhook/parsers/deploy.js'
 import { parseHolderRoomIdentifier as parseHolderRoomIdentifierShared } from './webhook/parsers/holderRooms.js'
 import { parseTipCallbackData as parseTipCallbackDataShared, parseTipInvoicePayload as parseTipInvoicePayloadShared } from './webhook/parsers/tips.js'
+import {
+  buildInlineQueryAnswer,
+  classifyInlineQuery,
+  type InlineMediaAsset,
+  type InlineQueryAnswer,
+  type InlineQueryClass,
+} from './webhook/parsers/inline.js'
 import {
   commandHasArguments as commandHasArgumentsShared,
   parseTelegramTradeIntent as parseTelegramTradeIntentShared,
@@ -98,6 +107,7 @@ import {
 } from './webhook/services/privyWallet.js'
 import { normalizeCallbackQuery } from './webhook/updates/callbackQuery.js'
 import { extractUpdateMessage as extractUpdateMessageShared, normalizeMessageContext } from './webhook/updates/message.js'
+import { handleChosenInlineResultUpdate } from './webhook/updates/chosenInlineResult.js'
 import { handleInlineQueryUpdate } from './webhook/updates/inlineQuery.js'
 import { handlePreCheckoutUpdate } from './webhook/updates/preCheckout.js'
 import { handleSuccessfulPaymentUpdate } from './webhook/updates/successfulPayment.js'
@@ -129,7 +139,16 @@ type TelegramMessage = {
 type TelegramInlineQuery = {
   id?: string | number
   query?: string
+  offset?: string
+  chat_type?: 'sender' | 'private' | 'group' | 'supergroup' | 'channel'
   from?: TelegramFrom
+}
+
+type TelegramChosenInlineResult = {
+  result_id?: string
+  from?: TelegramFrom
+  inline_message_id?: string
+  query?: string
 }
 
 type TelegramCallbackQuery = {
@@ -161,6 +180,7 @@ type TelegramUpdate = {
   edited_message?: TelegramMessage
   channel_post?: TelegramMessage
   inline_query?: TelegramInlineQuery
+  chosen_inline_result?: TelegramChosenInlineResult
   callback_query?: TelegramCallbackQuery
   pre_checkout_query?: TelegramPreCheckoutQuery
 }
@@ -1039,22 +1059,6 @@ function tradeEditHint(actionType: 'buy' | 'sell' | 'bid'): string {
   return 'Start again with /bid'
 }
 
-function normalizeInlineDraft(rawQuery: string): string {
-  const compact = asTrimmed(rawQuery).replace(/\s+/g, ' ')
-  const stripped = compact
-    .replace(/^\/?x\s+post\s+/i, '')
-    .replace(/^\/?tweet\s+/i, '')
-    .replace(/\s*--confirm\b/gi, '')
-    .trim()
-  const truncated = stripped.slice(0, 240).trim()
-  return truncated || 'your update here'
-}
-
-function inferMarketSymbol(rawQuery: string): string {
-  const token = asTrimmed(rawQuery).split(/\s+/g)[0] ?? ''
-  return /^[a-zA-Z]{1,10}$/.test(token) ? token.toUpperCase() : 'BTC'
-}
-
 function readInlineQueryResultCap(): number {
   return readInlineQueryResultCapShared()
 }
@@ -1063,75 +1067,22 @@ function isTelegramInlineGrowthModeEnabled(): boolean {
   return isTelegramInlineGrowthModeEnabledShared()
 }
 
+function isTelegramInlinePmHandoffEnabled(): boolean {
+  return isTelegramInlinePmHandoffEnabledShared()
+}
+
+function readInlineMediaAssetMap(): Record<string, InlineMediaAsset> {
+  return readInlineMediaAssetMapShared()
+}
+
 async function buildInlineQueryResults(params: {
   rawQuery: string
+  queryOffset: string
   userId: string
   chatId: string
-}): Promise<Array<Record<string, unknown>>> {
-  const query = asTrimmed(params.rawQuery)
+}): Promise<InlineQueryAnswer> {
   const userId = asTrimmed(params.userId)
   const chatId = asTrimmed(params.chatId)
-  const growthMode = isTelegramInlineGrowthModeEnabled()
-  const xPostCommand = `/x post ${normalizeInlineDraft(query)} --confirm`
-  const aiPrompt = query ? `/ai ${query}` : '/ai What should I do next?'
-  const marketQuote = `/mkt quote ${inferMarketSymbol(query)}`
-  const tradeIntent = parseTelegramTradeIntent(query.startsWith('/') ? query : `/${query}`)
-  const tradeFlowHint = growthMode ? '3 taps -> vault, size, Accept' : '3 taps: vault -> size -> Accept'
-  const copy = growthMode
-    ? {
-        linkTitle: 'Unlock trading -> link wallet',
-        linkDescription: 'One-time setup -> buy, sell, bid',
-        portfolioTitle: 'Portfolio pulse',
-        portfolioDescription: 'Positions + recent activity',
-        helpTitle: 'Quick start (30 sec)',
-        helpDescription: 'Beginner-first commands',
-        statusTitle: 'Vault health',
-        statusDescription: 'Live config + permissions',
-        xPostTitle: 'Draft X post',
-        xPostDescription: 'Template ready to send',
-        aiTitle: 'Ask Keepr AI',
-        aiDescription: 'Get one clear next action',
-        marketTitle: 'Market quote',
-        marketDescription: 'Fast BTC/ETH check',
-      }
-    : {
-        linkTitle: 'Link wallet to unlock trading',
-        linkDescription: 'One-time setup, then buy/sell/bid instantly',
-        portfolioTitle: 'My portfolio snapshot',
-        portfolioDescription: 'Positions, recent actions, and status',
-        helpTitle: 'Quick start guide',
-        helpDescription: 'Beginner-friendly commands and shortcuts',
-        statusTitle: 'Vault health check',
-        statusDescription: 'Config, permissions, and live status',
-        xPostTitle: 'Draft X post',
-        xPostDescription: 'Pre-filled and confirm-ready',
-        aiTitle: 'Ask Keepr AI',
-        aiDescription: 'Get next actions in plain English',
-        marketTitle: 'Market quote',
-        marketDescription: 'Fast quote for BTC/ETH and more',
-      }
-  const results: Record<string, unknown>[] = []
-  const seenIds = new Set<string>()
-  const pushResult = (entry: Record<string, unknown>): void => {
-    const id = asTrimmed(entry.id ?? '')
-    if (!id || seenIds.has(id)) return
-    seenIds.add(id)
-    results.push(entry)
-  }
-
-  if (tradeIntent) {
-    const tradeCommand = tradeIntent.actionType === 'buy' ? '/buy' : tradeIntent.actionType === 'sell' ? '/sell' : '/bid'
-    pushResult({
-      type: 'article',
-      id: 'trade-copy',
-      title: growthMode
-        ? `${tradeIntent.actionType.toUpperCase()} now -> guided`
-        : `Start ${tradeIntent.actionType.toUpperCase()} now`,
-      description: tradeFlowHint,
-      input_message_content: { message_text: tradeCommand },
-    })
-  }
-
   let link: Awaited<ReturnType<typeof getTelegramLinkByUserId>> | null = null
   let scopedVaults: Awaited<ReturnType<typeof listTelegramScopedVaults>> = []
   const db = await getDb().catch(() => null)
@@ -1154,92 +1105,18 @@ async function buildInlineQueryResults(params: {
       scopedVaults = []
     }
   }
-
-  if (!link || link.linkStatus !== 'active') {
-    pushResult({
-      type: 'article',
-      id: 'link-account',
-      title: copy.linkTitle,
-      description: copy.linkDescription,
-      input_message_content: { message_text: '/link' },
-    })
-  } else {
-    pushResult({
-      type: 'article',
-      id: 'trade-quickstart',
-      title: growthMode ? 'Buy now -> 3 taps' : 'Buy in 3 taps',
-      description: tradeFlowHint,
-      input_message_content: { message_text: '/buy' },
-    })
-    pushResult({
-      type: 'article',
-      id: 'portfolio',
-      title: copy.portfolioTitle,
-      description: copy.portfolioDescription,
-      input_message_content: { message_text: '/portfolio' },
-    })
-  }
-
-  const sortedVaults = [...scopedVaults].sort((left, right) => left.vaultAddress.localeCompare(right.vaultAddress))
-  for (let idx = 0; idx < sortedVaults.length; idx += 1) {
-    const vault = sortedVaults[idx]
-    const vaultAddress = asTrimmed(vault?.vaultAddress ?? '').toLowerCase()
-    if (!isAddressLike(vaultAddress)) continue
-    pushResult({
-      type: 'article',
-      id: `vault-buy-${idx}`,
-      title: `Buy ${truncateAddress(vaultAddress)}`,
-      description: tradeFlowHint,
-      input_message_content: { message_text: '/buy' },
-    })
-    if (isAddressLike(vault.ccaStrategyAddress) && !vault.isSettled) {
-      pushResult({
-        type: 'article',
-        id: `vault-bid-${idx}`,
-        title: `Bid ${truncateAddress(vaultAddress)}`,
-        description: growthMode ? 'Auction flow -> ETH % sizing' : 'Auction mode with ETH % sizing',
-        input_message_content: { message_text: '/bid' },
-      })
-    }
-  }
-
-  pushResult({
-      type: 'article',
-      id: 'help',
-      title: copy.helpTitle,
-      description: copy.helpDescription,
-      input_message_content: { message_text: '/help' },
-    })
-  pushResult({
-      type: 'article',
-      id: 'status',
-      title: copy.statusTitle,
-      description: copy.statusDescription,
-      input_message_content: { message_text: '/keepr status' },
-    })
-  pushResult({
-      type: 'article',
-      id: 'xpost',
-      title: copy.xPostTitle,
-      description: copy.xPostDescription,
-      input_message_content: { message_text: xPostCommand },
-    })
-  pushResult({
-      type: 'article',
-      id: 'ai',
-      title: copy.aiTitle,
-      description: copy.aiDescription,
-      input_message_content: { message_text: aiPrompt },
-    })
-  pushResult({
-      type: 'article',
-      id: 'mkt',
-      title: copy.marketTitle,
-      description: copy.marketDescription,
-      input_message_content: { message_text: marketQuote },
-    })
-
-  return results.slice(0, readInlineQueryResultCap())
+  return buildInlineQueryAnswer({
+    rawQuery: params.rawQuery,
+    queryOffset: params.queryOffset,
+    userId,
+    chatId,
+    isLinked: Boolean(link && link.linkStatus === 'active'),
+    scopedVaults,
+    inlineResultCap: readInlineQueryResultCap(),
+    growthMode: isTelegramInlineGrowthModeEnabled(),
+    enablePmHandoff: isTelegramInlinePmHandoffEnabled(),
+    mediaByKey: readInlineMediaAssetMap(),
+  })
 }
 
 function buildInlineLauncherReplyMarkup(): Record<string, unknown> {
@@ -1589,21 +1466,66 @@ async function answerTelegramInlineQuery(params: {
   botToken: string
   inlineQueryId: string
   query: string
+  queryOffset: string
+  chatType: string
   userId: string
   chatId: string
 }): Promise<void> {
-  const results = await buildInlineQueryResults({
+  const queryOffset = asTrimmed(params.queryOffset)
+  const chatType = asTrimmed(params.chatType).toLowerCase()
+  const inlineAnswer = await buildInlineQueryResults({
     rawQuery: params.query,
+    queryOffset,
     userId: params.userId,
     chatId: params.chatId,
   })
-  return answerTelegramInlineQueryShared({
+  await answerTelegramInlineQueryShared({
     botToken: params.botToken,
     inlineQueryId: params.inlineQueryId,
-    results,
+    results: inlineAnswer.results,
     cacheTime: 5,
     isPersonal: true,
+    ...(inlineAnswer.nextOffset ? { nextOffset: inlineAnswer.nextOffset } : {}),
+    ...(inlineAnswer.button ? { button: inlineAnswer.button } : {}),
+    ...(inlineAnswer.switchPmText ? { switchPmText: inlineAnswer.switchPmText } : {}),
+    ...(inlineAnswer.switchPmParameter ? { switchPmParameter: inlineAnswer.switchPmParameter } : {}),
   })
+
+  const db = await getDb().catch(() => null)
+  if (!db) return
+  await ensureTelegramTradingSchema(db as any).catch(() => {})
+  emitTelegramFunnelEvent({
+    db: db as any,
+    telegramUserId: asTrimmed(params.userId),
+    chatId: asTrimmed(params.chatId),
+    eventName: 'inline_query_answered',
+    actionType: 'inline',
+    context: {
+      source: 'inline',
+      query: asTrimmed(params.query) || null,
+      queryClass: inlineAnswer.queryClass,
+      queryOffset: queryOffset || '',
+      chatType: chatType || null,
+      resultCount: inlineAnswer.results.length,
+      totalResults: inlineAnswer.totalResults,
+      nextOffset: inlineAnswer.nextOffset || '',
+      pmHandoffEnabled: Boolean(inlineAnswer.switchPmParameter),
+    },
+  })
+  if (inlineAnswer.switchPmParameter) {
+    emitTelegramFunnelEvent({
+      db: db as any,
+      telegramUserId: asTrimmed(params.userId),
+      chatId: asTrimmed(params.chatId),
+      eventName: 'inline_pm_handoff',
+      actionType: 'inline',
+      context: {
+        source: 'inline',
+        queryClass: inlineAnswer.queryClass,
+        switchPmParameter: inlineAnswer.switchPmParameter,
+      },
+    })
+  }
 }
 
 async function answerTelegramCallbackQuery(params: {
@@ -4450,6 +4372,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: inlineResult satisfies TelegramWebhookOk,
+    } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+
+  const chosenInlineResult = await handleChosenInlineResultUpdate({
+    updateId: update.update_id,
+    chosenInlineResult: update.chosen_inline_result,
+    onChosenInlineResult: async ({ resultId, userId, query, inlineMessageId }) => {
+      const resultMatch = resultId.match(/^r(\d+):([a-z0-9_]+):(.+)$/i)
+      const rankPosition = resultMatch ? Number(resultMatch[1]) + 1 : null
+      const resultType = resultMatch ? asTrimmed(resultMatch[2]).toLowerCase() : null
+      const resultKey = resultMatch ? asTrimmed(resultMatch[3]) : null
+      const queryClass: InlineQueryClass = classifyInlineQuery(query)
+      const db = await getDb().catch(() => null)
+      if (!db) return
+      await ensureTelegramTradingSchema(db as any).catch(() => {})
+      emitTelegramFunnelEvent({
+        db: db as any,
+        telegramUserId: userId || null,
+        chatId: webhookConfig.targetChatId || null,
+        eventName: 'inline_result_chosen',
+        actionType: 'inline',
+        context: {
+          source: 'inline',
+          resultId,
+          resultType,
+          resultKey,
+          rankPosition,
+          queryClass,
+          query: query || null,
+          inlineMessageId: inlineMessageId || null,
+        },
+      })
+    },
+    onError: (error, meta) => {
+      console.error('[telegram/webhook] chosen inline result handling failed', {
+        updateId: meta.updateId,
+        resultId: meta.resultId,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+  if (chosenInlineResult) {
+    return res.status(200).json({
+      success: true,
+      data: chosenInlineResult satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 

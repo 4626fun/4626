@@ -1,7 +1,7 @@
 /**
  * useIdentity — resolve an Ethereum address to a human-readable display name.
  *
- * Resolution order: Farcaster → Lens → ENS → Base Name → truncated address
+ * Resolution order: Lens -> ENS -> Base Name -> truncated address
  * Results are cached in-memory for the session.
  */
 
@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react'
 import { createPublicClient, fallback, http } from 'viem'
 import { mainnet } from 'viem/chains'
 import { getBasenameProfile, formatBasename } from '@/lib/basename-api'
-import { apiFetch } from '@/lib/apiBase'
 
 export type IdentitySource = 'farcaster' | 'lens' | 'ens' | 'basename' | 'address'
 
@@ -69,12 +68,6 @@ function compactUnique(parts: Array<string | null | undefined>): string | null {
   return out.length > 0 ? out.join(' · ') : null
 }
 
-type FarcasterUser = {
-  displayName: string
-  username: string | null
-  avatar: string | null
-}
-
 type LensUser = {
   displayName: string
   handle: string | null
@@ -86,31 +79,9 @@ type LensUser = {
 
 export function pickIdentityAvatar(params: {
   basenameAvatar: string | null
-  farcasterAvatar?: string | null
   lensAvatar?: string | null
 }): string | null {
-  return params.basenameAvatar ?? params.farcasterAvatar ?? params.lensAvatar ?? null
-}
-
-async function fetchFarcasterUser(address: string): Promise<FarcasterUser | null> {
-  // Prefer our server-side resolver so we don't require a client-exposed Neynar key.
-  // This also allows environments like desktop web to resolve avatars consistently.
-  const res = await apiFetch(`/api/social/farcaster?address=${encodeURIComponent(address)}`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  }).catch(() => null)
-  if (!res || !res.ok) return null
-
-  const json = (await res.json().catch(() => null)) as any
-  const profile = json?.success === true ? json?.data : null
-  if (!profile) return null
-
-  const username = typeof profile?.username === 'string' && profile.username.trim() ? profile.username.trim() : null
-  const displayNameRaw = typeof profile?.displayName === 'string' ? profile.displayName.trim() : ''
-  const displayName = displayNameRaw || (username ? `@${username}` : truncate(address))
-  const avatar = typeof profile?.avatar === 'string' && profile.avatar.trim() ? profile.avatar.trim() : null
-
-  return { displayName, username, avatar }
+  return params.basenameAvatar ?? params.lensAvatar ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -254,8 +225,7 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
   if (pending) return pending
 
   const promise = (async () => {
-    const [farcaster, lens, ensName, basenameProfile] = await Promise.all([
-      fetchFarcasterUser(address).catch(() => null),
+    const [lens, ensName, basenameProfile] = await Promise.all([
       fetchLensUser(address).catch(() => null),
       ensClient.getEnsName({ address: address as `0x${string}` }).catch(() => null),
       getBasenameProfile(address).catch(() => null),
@@ -265,38 +235,6 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
     const basename = basenameRaw ? (formatBasename(basenameRaw) || basenameRaw) : null
     const basenameDisplayName = (basenameProfile?.displayName ?? '').trim() || basename
     const basenameAvatar = basenameProfile?.avatar ?? null
-
-    if (farcaster) {
-      const handle = farcaster.username ? `@${farcaster.username}` : null
-      const lensHandle = lens?.handle ? `@${lens.handle}` : null
-      const secondary = compactUnique([
-        lc(farcaster.displayName) === lc(handle) ? null : handle,
-        lensHandle && lc(lensHandle) !== lc(farcaster.displayName) ? lensHandle : null,
-        ensName && lc(ensName) !== lc(farcaster.displayName) ? ensName : null,
-        basename && lc(basename) !== lc(farcaster.displayName) ? basename : null,
-      ])
-      const result: IdentityCacheEntry = {
-        displayName: farcaster.displayName,
-        avatar: pickIdentityAvatar({
-          basenameAvatar,
-          farcasterAvatar: farcaster.avatar,
-          lensAvatar: lens?.avatar ?? null,
-        }),
-        source: 'farcaster',
-        secondary,
-        farcasterHandle: farcaster.username,
-        lensHandle: lens?.handle ?? null,
-        lensUsername: lens?.username ?? null,
-        lensAccountAddress: lens?.accountAddress ?? null,
-        lensOwnerAddress: lens?.ownerAddress ?? null,
-        ensName,
-        basename,
-        basenameDisplayName: basenameDisplayName ?? null,
-        basenameAvatar,
-      }
-      identityCache.set(address.toLowerCase(), result)
-      return result
-    }
 
     if (lens) {
       const lensHandle = lens.handle ? `@${lens.handle}` : null

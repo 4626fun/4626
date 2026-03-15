@@ -39,11 +39,20 @@ const RawTelegramWebhookEnvSchema = z
     PRIVY_APP_SECRET: z.string().optional(),
     TELEGRAM_INLINE_MAX_RESULTS: z.string().optional(),
     TELEGRAM_INLINE_GROWTH_MODE: z.string().optional(),
+    TELEGRAM_INLINE_PM_HANDOFF_ENABLED: z.string().optional(),
+    TELEGRAM_INLINE_MEDIA_JSON: z.string().optional(),
+    TELEGRAM_INLINE_PREPARED_ENABLED: z.string().optional(),
     TELEGRAM_MINI_APP_URL: z.string().optional(),
     TELEGRAM_MENU_BUTTON_MODE: z.string().optional(),
     TELEGRAM_MENU_BUTTON_TEXT: z.string().optional(),
     TELEGRAM_BOT_CONFIG_SECRET: z.string().optional(),
     TELEGRAM_LINK_API_SECRET: z.string().optional(),
+    TELEGRAM_MINIAPP_SESSION_ENABLED: z.string().optional(),
+    TELEGRAM_MINIAPP_SESSION_CHAT_IDS: z.string().optional(),
+    TELEGRAM_MINIAPP_SESSION_USER_IDS: z.string().optional(),
+    TELEGRAM_MINIAPP_INITDATA_MAX_AGE_SECONDS: z.string().optional(),
+    TELEGRAM_MINIAPP_SESSION_TTL_SECONDS: z.string().optional(),
+    TELEGRAM_MINIAPP_REPLAY_TTL_SECONDS: z.string().optional(),
     TELEGRAM_HOLDER_ROOMS_ENABLED: z.string().optional(),
     TELEGRAM_REQUIRE_TRADE_MEMBERSHIP: z.string().optional(),
     TELEGRAM_COPY_TEXT_BUTTONS: z.string().optional(),
@@ -79,11 +88,20 @@ export type TelegramWebhookConfig = {
   privyAppSecret: string
   inlineMaxResults: number
   inlineGrowthMode: boolean
+  inlinePmHandoffEnabled: boolean
+  inlineMediaJsonRaw: string
+  inlinePreparedEnabled: boolean
   miniAppUrl: string
   menuButtonMode: 'web_app' | 'commands'
   menuButtonText: string
   botConfigSecret: string
   linkApiSecret: string
+  miniAppSessionEnabled: boolean
+  miniAppSessionChatIdsRaw: string
+  miniAppSessionUserIdsRaw: string
+  miniAppInitDataMaxAgeSeconds: number
+  miniAppSessionTtlSeconds: number
+  miniAppReplayTtlSeconds: number
   holderRoomsEnabled: boolean
   requireTradeMembership: boolean
   copyTextButtons: boolean
@@ -101,6 +119,18 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     Number.isFinite(inlineCapRaw) && inlineCapRaw >= 3 && inlineCapRaw <= 20 ? Math.floor(inlineCapRaw) : 8
   const menuButtonModeRaw = asTrimmed(raw.TELEGRAM_MENU_BUTTON_MODE ?? '').toLowerCase()
   const menuButtonMode: 'web_app' | 'commands' = menuButtonModeRaw === 'commands' ? 'commands' : 'web_app'
+  const miniAppInitDataMaxAgeSeconds = Math.max(
+    30,
+    Math.min(60 * 60, parseOptionalPositiveInteger(raw.TELEGRAM_MINIAPP_INITDATA_MAX_AGE_SECONDS ?? '') ?? 60 * 15),
+  )
+  const miniAppSessionTtlSeconds = Math.max(
+    60,
+    Math.min(60 * 60, parseOptionalPositiveInteger(raw.TELEGRAM_MINIAPP_SESSION_TTL_SECONDS ?? '') ?? 60 * 10),
+  )
+  const miniAppReplayTtlSeconds = Math.max(
+    60,
+    Math.min(60 * 60, parseOptionalPositiveInteger(raw.TELEGRAM_MINIAPP_REPLAY_TTL_SECONDS ?? '') ?? 60 * 15),
+  )
 
   const paymasterUrlCandidates = [
     asTrimmed(raw.CDP_PAYMASTER_URL ?? ''),
@@ -139,11 +169,20 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     privyAppSecret: asTrimmed(raw.PRIVY_APP_SECRET ?? ''),
     inlineMaxResults,
     inlineGrowthMode: parseBoolean(raw.TELEGRAM_INLINE_GROWTH_MODE, false),
+    inlinePmHandoffEnabled: parseBoolean(raw.TELEGRAM_INLINE_PM_HANDOFF_ENABLED, true),
+    inlineMediaJsonRaw: asTrimmed(raw.TELEGRAM_INLINE_MEDIA_JSON ?? ''),
+    inlinePreparedEnabled: parseBoolean(raw.TELEGRAM_INLINE_PREPARED_ENABLED, true),
     miniAppUrl: asTrimmed(raw.TELEGRAM_MINI_APP_URL ?? ''),
     menuButtonMode,
     menuButtonText: asTrimmed(raw.TELEGRAM_MENU_BUTTON_TEXT ?? ''),
     botConfigSecret: asTrimmed(raw.TELEGRAM_BOT_CONFIG_SECRET ?? raw.TELEGRAM_LINK_API_SECRET ?? ''),
     linkApiSecret: asTrimmed(raw.TELEGRAM_LINK_API_SECRET ?? raw.TELEGRAM_BOT_CONFIG_SECRET ?? ''),
+    miniAppSessionEnabled: parseBoolean(raw.TELEGRAM_MINIAPP_SESSION_ENABLED, true),
+    miniAppSessionChatIdsRaw: asTrimmed(raw.TELEGRAM_MINIAPP_SESSION_CHAT_IDS ?? ''),
+    miniAppSessionUserIdsRaw: asTrimmed(raw.TELEGRAM_MINIAPP_SESSION_USER_IDS ?? ''),
+    miniAppInitDataMaxAgeSeconds,
+    miniAppSessionTtlSeconds,
+    miniAppReplayTtlSeconds,
     holderRoomsEnabled: parseBoolean(raw.TELEGRAM_HOLDER_ROOMS_ENABLED, false),
     requireTradeMembership: parseBoolean(raw.TELEGRAM_REQUIRE_TRADE_MEMBERSHIP, false),
     copyTextButtons: parseBoolean(raw.TELEGRAM_COPY_TEXT_BUTTONS, true),
