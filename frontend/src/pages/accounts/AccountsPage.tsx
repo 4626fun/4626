@@ -5,6 +5,7 @@ import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
 
 import { apiFetch } from '@/lib/apiBase'
+import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { selectZoraCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
@@ -13,7 +14,12 @@ import { PageMeta } from '@/components/seo/PageMeta'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
-type AccountLinkProvider = 'google' | 'apple' | 'twitter' | 'tiktok' | 'external_eoa' | 'email' | 'zora_cross_app'
+type OwnerDelegationFlags = {
+  needsConnectedOwnerWallet?: boolean
+  needsZoraIdentitySignal?: boolean
+}
+
+type AccountLinkProvider = 'google' | 'apple' | 'twitter' | 'telegram' | 'tiktok' | 'external_eoa' | 'email' | 'zora_cross_app'
 
 type AccountsMeResponse = {
   privyUserId: string
@@ -73,6 +79,7 @@ const PROVIDER_ROWS: ProviderRow[] = [
   { provider: 'google', label: 'Google', hint: 'OAuth identity' },
   { provider: 'apple', label: 'Apple', hint: 'OAuth identity' },
   { provider: 'twitter', label: 'Twitter/X', hint: 'Social identity' },
+  { provider: 'telegram', label: 'Telegram', hint: 'Social identity' },
   { provider: 'tiktok', label: 'TikTok', hint: 'Creator social signal' },
   { provider: 'external_eoa', label: 'Wallet connect (EOA)', hint: 'External signer wallet' },
 ]
@@ -95,6 +102,29 @@ function readApiError(payload: unknown, fallback: string): string {
     if (typeof maybeError === 'string' && maybeError.trim()) return maybeError
   }
   return fallback
+}
+
+function readOwnerDelegationFlags(payload: unknown): OwnerDelegationFlags {
+  if (!payload || typeof payload !== 'object') return {}
+  const record = payload as Record<string, unknown>
+  return {
+    ...(record.needsConnectedOwnerWallet === true ? { needsConnectedOwnerWallet: true } : null),
+    ...(record.needsZoraIdentitySignal === true ? { needsZoraIdentitySignal: true } : null),
+  }
+}
+
+function buildOwnerDelegationError(payload: unknown, fallback: string): Error & OwnerDelegationFlags {
+  const flags = readOwnerDelegationFlags(payload)
+  const hint = flags.needsZoraIdentitySignal
+    ? 'Link Zora first so we can resolve your canonical CSW.'
+    : flags.needsConnectedOwnerWallet
+      ? 'Connect an owner wallet (for example Coinbase Wallet) and retry.'
+      : ''
+  const message = hint ? `${readApiError(payload, fallback)} ${hint}` : readApiError(payload, fallback)
+  const error = new Error(message) as Error & OwnerDelegationFlags
+  if (flags.needsConnectedOwnerWallet) error.needsConnectedOwnerWallet = true
+  if (flags.needsZoraIdentitySignal) error.needsZoraIdentitySignal = true
+  return error
 }
 
 function useSafePrivy() {
@@ -177,6 +207,7 @@ export function AccountsPage(props: {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [advancedBusy, setAdvancedBusy] = useState(false)
   const [advancedOwnerAddress, setAdvancedOwnerAddress] = useState('')
+  const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
 
   const canonicalCswAddress = me?.zora?.canonicalCswAddress ?? null
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.zora?.linked)
@@ -203,7 +234,15 @@ export function AccountsPage(props: {
     setLoading(true)
     setError(null)
     try {
-      const headers = await authHeaders()
+      const token = await getAccessToken()
+      if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
+      await runCanonicalizationPipeline({
+        privyToken: token,
+      })
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Privy-Token': token,
+      }
       const [meRes, zoraRes] = await Promise.all([
         apiFetch('/api/accounts/me', { method: 'GET', headers }),
         apiFetch('/api/zora/link/status', { method: 'POST', headers, body: JSON.stringify({}) }),
@@ -226,7 +265,7 @@ export function AccountsPage(props: {
     } finally {
       setLoading(false)
     }
-  }, [authHeaders, privyAuthed])
+  }, [getAccessToken, privyAuthed])
 
   useEffect(() => {
     if (props.initialData) return
@@ -264,6 +303,7 @@ export function AccountsPage(props: {
         google: ['linkGoogle', 'linkGoogleAccount'],
         apple: ['linkApple', 'linkAppleAccount'],
         twitter: ['linkTwitter', 'linkTwitterAccount'],
+        telegram: ['linkTelegram', 'linkTelegramAccount'],
         tiktok: ['linkTiktok', 'linkTikTok', 'linkTiktokAccount', 'linkTikTokAccount'],
         external_eoa: ['linkWallet'],
         zora_cross_app: [],
@@ -282,6 +322,7 @@ export function AccountsPage(props: {
       google: ['unlinkGoogle', 'unlinkGoogleAccount'],
       apple: ['unlinkApple', 'unlinkAppleAccount'],
       twitter: ['unlinkTwitter', 'unlinkTwitterAccount'],
+      telegram: ['unlinkTelegram', 'unlinkTelegramAccount'],
       tiktok: ['unlinkTiktok', 'unlinkTikTok', 'unlinkTiktokAccount', 'unlinkTikTokAccount'],
       external_eoa: ['unlinkWallet'],
       zora_cross_app: [],
@@ -450,8 +491,19 @@ export function AccountsPage(props: {
     setAdvancedBusy(true)
     setError(null)
     setNotice(null)
+    setOwnerDelegationFlags(null)
     try {
       const headers = await authHeaders()
+      const preflightRes = await apiFetch('/api/onboarding/bootstrap', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      })
+      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+      if (!preflightRes.ok || !preflightPayload?.success) {
+        throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
+      }
+
       const prepareRes = await apiFetch('/api/wallet/prepare-add-privy-owner', {
         method: 'POST',
         headers,
@@ -459,7 +511,7 @@ export function AccountsPage(props: {
       })
       const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
       if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
-        throw new Error(readApiError(preparePayload, 'Failed to prepare owner install.'))
+        throw buildOwnerDelegationError(preparePayload, 'Failed to prepare owner install.')
       }
       if (preparePayload.data.alreadyOwner) {
         setNotice('4626 signing is already enabled.')
@@ -469,6 +521,11 @@ export function AccountsPage(props: {
       setNotice('4626 signing is enabled on your canonical CSW.')
       await loadMe()
     } catch (ownerError: any) {
+      const flags = {
+        ...(ownerError?.needsConnectedOwnerWallet === true ? { needsConnectedOwnerWallet: true } : null),
+        ...(ownerError?.needsZoraIdentitySignal === true ? { needsZoraIdentitySignal: true } : null),
+      }
+      setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
       setError(typeof ownerError?.message === 'string' ? ownerError.message : 'Failed to enable 4626 signing.')
     } finally {
       setAdvancedBusy(false)
@@ -489,8 +546,19 @@ export function AccountsPage(props: {
     setAdvancedBusy(true)
     setError(null)
     setNotice(null)
+    setOwnerDelegationFlags(null)
     try {
       const headers = await authHeaders()
+      const preflightRes = await apiFetch('/api/onboarding/bootstrap', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      })
+      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+      if (!preflightRes.ok || !preflightPayload?.success) {
+        throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
+      }
+
       const prepareRes = await apiFetch('/api/wallet/prepare-add-rabby-owner', {
         method: 'POST',
         headers,
@@ -501,7 +569,7 @@ export function AccountsPage(props: {
       })
       const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
       if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
-        throw new Error(readApiError(preparePayload, 'Failed to prepare Rabby co-owner transaction.'))
+        throw buildOwnerDelegationError(preparePayload, 'Failed to prepare Rabby co-owner transaction.')
       }
       if (preparePayload.data.alreadyOwner) {
         setNotice('Rabby address is already an owner.')
@@ -511,6 +579,11 @@ export function AccountsPage(props: {
       setNotice('Rabby co-owner added.')
       await loadMe()
     } catch (rabbyError: any) {
+      const flags = {
+        ...(rabbyError?.needsConnectedOwnerWallet === true ? { needsConnectedOwnerWallet: true } : null),
+        ...(rabbyError?.needsZoraIdentitySignal === true ? { needsZoraIdentitySignal: true } : null),
+      }
+      setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
       setError(typeof rabbyError?.message === 'string' ? rabbyError.message : 'Failed to add Rabby co-owner.')
     } finally {
       setAdvancedBusy(false)
@@ -660,6 +733,16 @@ export function AccountsPage(props: {
                     </div>
                   ) : (
                     <>
+                      {ownerDelegationFlags ? (
+                        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
+                          {ownerDelegationFlags.needsZoraIdentitySignal ? (
+                            <div>Link Zora first so we can resolve your canonical CSW before signer setup.</div>
+                          ) : null}
+                          {ownerDelegationFlags.needsConnectedOwnerWallet ? (
+                            <div>Connect an owner EOA wallet and retry signer setup.</div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
                         <div className="text-sm font-medium">Enable 4626 signing (add Privy embedded EOA as CSW owner)</div>
                         <p className="text-xs text-zinc-500">

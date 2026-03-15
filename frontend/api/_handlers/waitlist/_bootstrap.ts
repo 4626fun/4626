@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import {
   buildAccountsMePayload,
@@ -75,7 +76,7 @@ async function upsertBootstrapProfile(params: {
       INSERT INTO profiles (email, privy_user_id, created_at, updated_at)
       VALUES (${email}, ${privyUserId}, NOW(), NOW())
       ON CONFLICT (email) DO UPDATE
-        SET privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+        SET privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
             updated_at = NOW();
     `
     return
@@ -147,6 +148,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // to pre-auth input if Privy doesn't expose an email.
     const emailToPersist = privyEmail ?? email
     if (emailToPersist) {
+      await assertNoEmailPrivyCollision({
+        db: db as any,
+        email: emailToPersist,
+        privyUserId: context.privyUserId,
+      })
       await upsertAccount({
         db: db as any,
         privyUserId: context.privyUserId,
@@ -174,6 +180,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies WaitlistBootstrapResponse,
     } satisfies ApiEnvelope<WaitlistBootstrapResponse>)
   } catch (error: any) {
+    if (isIdentityRecoveryRequiredError(error)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',
+        code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & {
+        code: string
+        recoveryRequired: true
+      })
+    }
     const message = typeof error?.message === 'string' ? error.message : 'Failed to bootstrap waitlist account'
     const lower = message.toLowerCase()
     const isEmailMismatch =

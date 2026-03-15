@@ -14,6 +14,7 @@ import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 import { classifyLinkedAccounts } from '../../../server/_lib/walletMapping.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
+import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
 
 import { PrivyClient } from '@privy-io/server-auth'
 
@@ -194,7 +195,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           lastPrivyAuthDbSyncAtMs = now
         }
       }
-    } catch {
+    } catch (dbSyncError) {
+      if (isIdentityRecoveryRequiredError(dbSyncError)) throw dbSyncError
       // best-effort: auth should succeed even if DB is unavailable
     }
 
@@ -213,6 +215,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: { address: sessionAddress, sessionToken, privyUserId: claims.userId } satisfies PrivyVerifyResponse,
     } satisfies ApiEnvelope<PrivyVerifyResponse>)
   } catch (e: unknown) {
+    if (isIdentityRecoveryRequiredError(e)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',
+        code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
+
     const msg = e instanceof Error ? e.message : 'Privy verification failed'
     const lower = String(msg || '').toLowerCase()
     const isAuthish =

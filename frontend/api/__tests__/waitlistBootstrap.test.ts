@@ -11,6 +11,7 @@ const {
   syncEmailIdentityMock,
   upsertAccountMock,
   buildAccountsMePayloadMock,
+  assertNoEmailPrivyCollisionMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(),
@@ -19,6 +20,7 @@ const {
   syncEmailIdentityMock: vi.fn(),
   upsertAccountMock: vi.fn(),
   buildAccountsMePayloadMock: vi.fn(),
+  assertNoEmailPrivyCollisionMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -37,10 +39,16 @@ vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   buildAccountsMePayload: buildAccountsMePayloadMock,
 }))
 
+vi.mock('../../server/_lib/identityRecovery.js', () => ({
+  assertNoEmailPrivyCollision: assertNoEmailPrivyCollisionMock,
+  isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
+}))
+
 describe('POST /api/waitlist/bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
+    assertNoEmailPrivyCollisionMock.mockResolvedValue(undefined)
     verifyPrivyForAccountsMock.mockResolvedValue({
       privyUserId: 'did:privy:test-user',
       privyUser: { id: 'did:privy:test-user', email: { address: 'user@example.com' } },
@@ -72,5 +80,26 @@ describe('POST /api/waitlist/bootstrap', () => {
         emailVerified: true,
       }),
     )
+  })
+
+  it('returns deterministic recovery-required error on email collision', async () => {
+    const error = Object.assign(new Error('collision'), {
+      code: 'IDENTITY_RECOVERY_REQUIRED',
+      reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+    })
+    assertNoEmailPrivyCollisionMock.mockRejectedValueOnce(error)
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
+    expect(res.body?.recoveryRequired).toBe(true)
   })
 })

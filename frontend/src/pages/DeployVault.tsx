@@ -62,7 +62,8 @@ import {
 } from '@/lib/aa/coinbaseErc4337'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 
-const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
+const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 5_000_000n
+const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
 const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
@@ -199,6 +200,19 @@ function parseUint8(value: unknown): number | null {
     if (!v) return null
     const n = Number(v)
     if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
+  }
+  return null
+}
+
+function parsePositiveTokenAmount(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value > 0n ? value : null
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return BigInt(Math.floor(value))
+  if (typeof value === 'string') {
+    const cleaned = value.trim().replace(/,/g, '')
+    if (!cleaned) return null
+    if (!/^\d+$/.test(cleaned)) return null
+    const parsed = BigInt(cleaned)
+    return parsed > 0n ? parsed : null
   }
   return null
 }
@@ -5939,6 +5953,15 @@ function DeployVaultMain() {
   const deploymentVersion = useMemo(() => resolveDeploymentVersionFromRuntime(), [])
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
+  const minFirstDepositTokens = useMemo(() => {
+    const env = parsePositiveTokenAmount(
+      (import.meta.env.VITE_MIN_FIRST_DEPOSIT_TOKENS as string | undefined) ?? '',
+    )
+    if (typeof window === 'undefined') return env ?? DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+    const params = new URLSearchParams(window.location.search)
+    const query = parsePositiveTokenAmount(params.get('minFirstDepositTokens'))
+    return query ?? env ?? DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+  }, [])
   const shareOftSaltOverride = useMemo(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SHARE_OFT_SALT_OVERRIDE as string | undefined)
     if (typeof window === 'undefined') return env
@@ -7099,10 +7122,22 @@ function DeployVaultMain() {
 
   const minFirstDeposit = useMemo(() => {
     if (typeof resolvedTokenDecimals === 'number' && resolvedTokenDecimals >= 0) {
-      return 5_000_000n * 10n ** BigInt(resolvedTokenDecimals)
+      return minFirstDepositTokens * 10n ** BigInt(resolvedTokenDecimals)
     }
     return MIN_FIRST_DEPOSIT
-  }, [resolvedTokenDecimals])
+  }, [minFirstDepositTokens, resolvedTokenDecimals])
+
+  const minFirstDepositDisplay = useMemo(() => {
+    const decimals =
+      typeof resolvedTokenDecimals === 'number' && resolvedTokenDecimals >= 0
+        ? resolvedTokenDecimals
+        : 18
+    const raw = formatUnits(minFirstDeposit, decimals)
+    const [whole, fraction = ''] = raw.split('.')
+    const groupedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    const trimmedFraction = fraction.replace(/0+$/, '')
+    return trimmedFraction ? `${groupedWhole}.${trimmedFraction}` : groupedWhole
+  }, [minFirstDeposit, resolvedTokenDecimals])
 
   const walletHasMinDeposit =
     typeof deploySenderTokenBalance === 'bigint' && deploySenderTokenBalance >= minFirstDeposit
@@ -7356,7 +7391,7 @@ function DeployVaultMain() {
       hint: authReady
         ? fundingReady
           ? 'ready'
-          : `needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'}`
+          : `needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'}`
         : 'not authorized',
     },
     {
@@ -7399,7 +7434,7 @@ function DeployVaultMain() {
                   : !isAuthorizedDeployerOrOperator
                     ? 'Connect the creator or payout recipient wallet.'
                     : !fundingGateOk
-                      ? `Needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
+                      ? `Needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
                       : strictNoEoaEnforced && !strictNoEoaEligibility
                         ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
@@ -7964,7 +7999,7 @@ function DeployVaultMain() {
                   disabled
                   className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
                 >
-                  {`Creator smart wallet needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch`}
+                  {`Creator smart wallet needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch`}
                 </button>
               ) : oneTimePrivyOwnerApprovalNeeded ? (
                 <button
@@ -8076,7 +8111,7 @@ function DeployVaultMain() {
               ) : null}
 
               <div className="text-xs text-zinc-600">
-                Requires a 5,000,000 {underlyingSymbolUpper || 'TOKENS'} deposit. Some wallets may prompt multiple confirmations.
+                Requires a {minFirstDepositDisplay} {underlyingSymbolUpper || 'TOKENS'} deposit. Some wallets may prompt multiple confirmations.
               </div>
             </div>
             </>

@@ -59,6 +59,9 @@ export function resolveTelegramLinkErrorStatusCode(error: unknown): number {
   if (lower.includes('canonical') || lower.includes('no privy')) {
     return 409
   }
+  if (lower.includes('recovery required')) {
+    return 409
+  }
   if (lower.includes('not configured')) return 503
   return 500
 }

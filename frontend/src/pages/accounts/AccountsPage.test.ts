@@ -65,6 +65,7 @@ describe('AccountsPage', () => {
     expect(html).toContain('Identity management')
     expect(html).toContain('Notifications')
     expect(html).toContain('Linked identities')
+    expect(html).toContain('Telegram')
     expect(html).toContain('Zora')
     expect(html).toContain('Advanced')
     expect(html).toContain('Points:')

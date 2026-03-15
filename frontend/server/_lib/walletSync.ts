@@ -1,6 +1,7 @@
 import { type ClassifiedLinkedAccounts, classifyLinkedAccounts, type MappedWallet, type PrivyUserLike } from './walletMapping.js'
 import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 import { fetchZoraProfile } from './zoraProfile.js'
+import { assertNoEmailPrivyCollision } from './identityRecovery.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -545,6 +546,7 @@ async function insertOrUpdateProfile(params: {
   classification: ClassifiedLinkedAccounts
 }): Promise<number> {
   const { db, existing, privyUserId, email, classification } = params
+  await assertNoEmailPrivyCollision({ db, email, privyUserId })
   const canonical = classification.canonicalSmartWallet?.address ?? null
   const activeOwner = classification.activeOwnerWallet?.address ?? null
   const canonicalSolana = classification.canonicalSolanaWallet?.address ?? null
@@ -557,7 +559,7 @@ async function insertOrUpdateProfile(params: {
       UPDATE profiles
       SET
         email = COALESCE(profiles.email, ${email}),
-        privy_user_id = COALESCE(${privyUserId}, privy_user_id),
+        privy_user_id = COALESCE(privy_user_id, ${privyUserId}),
         primary_smart_wallet = COALESCE(${canonical}, primary_smart_wallet),
         primary_embedded_eoa = ${embedded},
         primary_wallet = COALESCE(${primary}, primary_wallet),
@@ -639,7 +641,7 @@ async function insertOrUpdateProfile(params: {
       ON CONFLICT (email) DO UPDATE
       SET
         email = COALESCE(profiles.email, EXCLUDED.email),
-        privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+        privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
         primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
         primary_embedded_eoa = EXCLUDED.primary_embedded_eoa,
         primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),

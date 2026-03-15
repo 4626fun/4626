@@ -11,6 +11,7 @@ const {
   upsertAccountMock,
   verifyPrivyForAccountsMock,
   buildAccountsMePayloadMock,
+  assertNoEmailPrivyCollisionMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -39,6 +40,7 @@ const {
     },
     score: { points: 0, tier: 0 },
   })),
+  assertNoEmailPrivyCollisionMock: vi.fn(async () => {}),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -55,6 +57,11 @@ vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   upsertAccount: upsertAccountMock,
   verifyPrivyForAccounts: verifyPrivyForAccountsMock,
   buildAccountsMePayload: buildAccountsMePayloadMock,
+}))
+
+vi.mock('../../server/_lib/identityRecovery.js', () => ({
+  assertNoEmailPrivyCollision: assertNoEmailPrivyCollisionMock,
+  isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))
 
 describe('waitlist bootstrap privy profile upsert', () => {

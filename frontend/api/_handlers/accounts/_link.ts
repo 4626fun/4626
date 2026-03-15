@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
@@ -22,6 +23,7 @@ const ALLOWED_PROVIDERS = new Set<AccountLinkProvider>([
   'google',
   'apple',
   'twitter',
+  'telegram',
   'tiktok',
   'external_eoa',
   'email',
@@ -72,6 +74,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<AccountsLinkResponse>)
   } catch (error: any) {
+    if (isIdentityRecoveryRequiredError(error)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',
+        code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
     const message = typeof error?.message === 'string' ? error.message : 'Failed to link provider'
     const status = /token|unauthorized|forbidden|privy/i.test(message) ? 401 : /no linked value|not linked/i.test(message) ? 409 : 500
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)

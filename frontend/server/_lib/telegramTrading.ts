@@ -1092,6 +1092,51 @@ export async function getTelegramLinkStatus(params: {
   return getTelegramLinkByUserId(params)
 }
 
+export type TelegramMergePreflightResult =
+  | { ok: true }
+  | {
+      ok: false
+      reason: 'TELEGRAM_LINKED_TO_DIFFERENT_PRIVY'
+      existingPrivyUserId: string
+      existingProfileId: number | null
+      existingLinkStatus: string
+    }
+
+export async function runTelegramMergePreflight(params: {
+  db: Db
+  telegramUserId: string | number | bigint
+  privyUserId: string
+}): Promise<TelegramMergePreflightResult> {
+  const requestedPrivyUserId = asTrimmed(params.privyUserId)
+  if (!requestedPrivyUserId) {
+    return {
+      ok: false,
+      reason: 'TELEGRAM_LINKED_TO_DIFFERENT_PRIVY',
+      existingPrivyUserId: '',
+      existingProfileId: null,
+      existingLinkStatus: 'unknown',
+    }
+  }
+
+  const existing = await getTelegramLinkByUserId({
+    db: params.db,
+    telegramUserId: params.telegramUserId,
+  })
+  if (!existing) return { ok: true }
+
+  if (existing.privyUserId.toLowerCase() === requestedPrivyUserId.toLowerCase()) {
+    return { ok: true }
+  }
+
+  return {
+    ok: false,
+    reason: 'TELEGRAM_LINKED_TO_DIFFERENT_PRIVY',
+    existingPrivyUserId: existing.privyUserId,
+    existingProfileId: existing.profileId,
+    existingLinkStatus: existing.linkStatus,
+  }
+}
+
 export async function upsertTelegramUserLink(params: {
   db: Db
   telegramUserId: string | number | bigint
@@ -1108,6 +1153,23 @@ export async function upsertTelegramUserLink(params: {
   const privyUserId = asTrimmed(params.privyUserId)
   const canonicalCswAddress = asTrimmed(params.canonicalCswAddress).toLowerCase()
   if (!privyUserId || !/^0x[a-fA-F0-9]{40}$/.test(canonicalCswAddress)) return null
+
+  const mergePreflight = await runTelegramMergePreflight({
+    db: params.db,
+    telegramUserId: userId,
+    privyUserId,
+  })
+  if (!mergePreflight.ok) {
+    const error = new Error(
+      'Recovery required: this Telegram account is already linked to another account.',
+    ) as Error & {
+      code?: string
+      reason?: string
+    }
+    error.code = 'IDENTITY_RECOVERY_REQUIRED'
+    error.reason = 'TELEGRAM_LINKED_TO_DIFFERENT_PRIVY'
+    throw error
+  }
 
   const telegramUsername = asTrimmed(params.telegramUsername ?? '') || null
   await params.db.sql`

@@ -9,6 +9,7 @@ import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.
 import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 import { isCswOwner } from '../../server/_lib/cswOwner.js'
+import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../server/_lib/identityRecovery.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -879,7 +880,7 @@ export default async function handler(req: any, res: any) {
             primary_wallet = COALESCE(${walletForDedup}, primary_wallet),
             solana_wallet = COALESCE(${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null}, solana_wallet),
             canonical_solana_wallet = COALESCE(${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null}, canonical_solana_wallet),
-            privy_user_id = COALESCE(${privyUserIdForPersistence}, privy_user_id),
+            privy_user_id = COALESCE(privy_user_id, ${privyUserIdForPersistence}),
             embedded_wallet = COALESCE(${embeddedWalletForPersistence}, embedded_wallet),
             embedded_wallet_chain = COALESCE(${embeddedWalletChainForPersistence}, embedded_wallet_chain),
             embedded_wallet_client_type = COALESCE(${embeddedWalletClientTypeForPersistence}, embedded_wallet_client_type),
@@ -902,6 +903,12 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    await assertNoEmailPrivyCollision({
+      db: db as any,
+      email,
+      privyUserId: privyUserIdForPersistence,
+    })
+
     // If we already adopted an existing profile, use that instead of inserting.
     if (adoptedExistingId) {
       const adopted = await db.sql`
@@ -1054,7 +1061,7 @@ export default async function handler(req: any, res: any) {
         SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
             solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
             canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
-            privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+            privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
             embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
             embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
             embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
@@ -1219,6 +1226,15 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistResponse>)
   } catch (err: unknown) {
+    if (isIdentityRecoveryRequiredError(err)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',
+        code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
+
     const msg = err instanceof Error ? err.message : 'Waitlist insert failed'
     const lower = String(msg).toLowerCase()
 
@@ -1226,6 +1242,11 @@ export default async function handler(req: any, res: any) {
     if (lower.includes('relation') && lower.includes('profiles')) {
       try {
         await ensureWaitlistSchema(db as any)
+        await assertNoEmailPrivyCollision({
+          db: db as any,
+          email,
+          privyUserId: privyUserIdForPersistence,
+        })
         const rRetry = await db.sql`
           INSERT INTO profiles (
             email,
@@ -1265,7 +1286,7 @@ export default async function handler(req: any, res: any) {
             SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
                 solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
                 canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
-                privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+                privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
                 embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
                 embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
                 embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
@@ -1282,6 +1303,14 @@ export default async function handler(req: any, res: any) {
         const dataRetry: WaitlistResponse = { created: Boolean(rowRetry.created), email: String(rowRetry.email ?? '') }
         return res.status(200).json({ success: true, data: dataRetry } satisfies ApiEnvelope<WaitlistResponse>)
       } catch (eRetry: any) {
+        if (isIdentityRecoveryRequiredError(eRetry)) {
+          return res.status(409).json({
+            success: false,
+            error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',
+            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+            recoveryRequired: true,
+          } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+        }
         const msgRetry = eRetry instanceof Error ? eRetry.message : msg
         return res.status(500).json({ success: false, error: String(msgRetry) } satisfies ApiEnvelope<never>)
       }
@@ -1300,6 +1329,11 @@ export default async function handler(req: any, res: any) {
         lower.includes('base_sub_account'))
     ) {
       try {
+        await assertNoEmailPrivyCollision({
+          db: db as any,
+          email,
+          privyUserId: privyUserIdForPersistence,
+        })
         const r2 = await db.sql`
           INSERT INTO profiles (email, primary_wallet, privy_user_id, embedded_wallet, created_at, updated_at)
           VALUES (
@@ -1312,7 +1346,7 @@ export default async function handler(req: any, res: any) {
           )
           ON CONFLICT (email) DO UPDATE
             SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
-                privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+                privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
                 embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
                 updated_at = NOW()
           RETURNING (xmax = 0) AS created, email;
@@ -1322,6 +1356,14 @@ export default async function handler(req: any, res: any) {
         const data2: WaitlistResponse = { created: Boolean(row2.created), email: String(row2.email ?? '') }
         return res.status(200).json({ success: true, data: data2 } satisfies ApiEnvelope<WaitlistResponse>)
       } catch (e2: any) {
+        if (isIdentityRecoveryRequiredError(e2)) {
+          return res.status(409).json({
+            success: false,
+            error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',
+            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+            recoveryRequired: true,
+          } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+        }
         const msg2 = e2 instanceof Error ? e2.message : msg
         return res.status(500).json({ success: false, error: String(msg2) } satisfies ApiEnvelope<never>)
       }

@@ -1,3 +1,5 @@
+import { assertNoEmailPrivyCollision } from './identityRecovery.js'
+
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 function isValidEvmAddress(v: string): boolean {
@@ -47,6 +49,7 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
   const walletSeed = primaryWallet || embeddedWallet || cswAddress || baseSubAccount
   if (!walletSeed) return
   const privyUserId = input.privyUserId ?? null
+  await assertNoEmailPrivyCollision({ db, email, privyUserId })
 
   let existing: { id: number; email?: string | null } | null = null
   // Check privy_user_id first — it's the strongest identity signal.
@@ -118,7 +121,7 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
         embedded_wallet = COALESCE(${embeddedWallet}, embedded_wallet),
         embedded_wallet_chain = COALESCE(${embeddedWalletChain}, embedded_wallet_chain),
         embedded_wallet_client_type = COALESCE(${embeddedWalletClientType}, embedded_wallet_client_type),
-        privy_user_id = COALESCE(${privyUserId}, privy_user_id),
+        privy_user_id = COALESCE(privy_user_id, ${privyUserId}),
         csw_address = COALESCE(${cswAddress}, csw_address),
         base_sub_account = COALESCE(${baseSubAccount}, base_sub_account),
         primary_smart_wallet = COALESCE(${cswAddress}, primary_smart_wallet),
@@ -185,7 +188,7 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
         embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
         embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
         embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
-        privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+        privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
         csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
         base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
         primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),

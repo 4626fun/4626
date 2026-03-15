@@ -183,6 +183,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'telegram/link/start': () => import('./telegram/_link-start.js'),
   'telegram/link/complete': () => import('./telegram/_link-complete.js'),
   'telegram/link/status': () => import('./telegram/_link-status.js'),
+  'telegram/merge-preflight': () => import('./telegram/_merge-preflight.js'),
   'telegram/discovery': () => import('./telegram/_discovery.js'),
   'telegram/miniapp/session': () => import('./telegram/_miniapp-session.js'),
   'telegram/inline/prepared': () => import('./telegram/_inline-prepared.js'),

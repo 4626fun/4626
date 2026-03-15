@@ -23,10 +23,12 @@ const {
   readTelegramLinkStartTokenStatusMock,
   readTelegramLinkStartTokenMock,
   upsertTelegramUserLinkMock,
+  runTelegramMergePreflightMock,
   listTelegramScopedVaultsMock,
   listTelegramAuctionsMock,
   listTelegramSignalsMock,
   bootstrapCanonicalDelegationStateMock,
+  verifyPrivyForAccountsMock,
   setTelegramMyCommandsMock,
   setTelegramChatMenuButtonMock,
   resolveTelegramBotTokenMock,
@@ -50,10 +52,12 @@ const {
   readTelegramLinkStartTokenStatusMock: vi.fn(),
   readTelegramLinkStartTokenMock: vi.fn(),
   upsertTelegramUserLinkMock: vi.fn(),
+  runTelegramMergePreflightMock: vi.fn(),
   listTelegramScopedVaultsMock: vi.fn(),
   listTelegramAuctionsMock: vi.fn(),
   listTelegramSignalsMock: vi.fn(),
   bootstrapCanonicalDelegationStateMock: vi.fn(),
+  verifyPrivyForAccountsMock: vi.fn(),
   setTelegramMyCommandsMock: vi.fn(),
   setTelegramChatMenuButtonMock: vi.fn(),
   resolveTelegramBotTokenMock: vi.fn(),
@@ -85,6 +89,7 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   readTelegramLinkStartTokenStatus: readTelegramLinkStartTokenStatusMock,
   readTelegramLinkStartToken: readTelegramLinkStartTokenMock,
   upsertTelegramUserLink: upsertTelegramUserLinkMock,
+  runTelegramMergePreflight: runTelegramMergePreflightMock,
   listTelegramScopedVaults: listTelegramScopedVaultsMock,
   listTelegramAuctions: listTelegramAuctionsMock,
   listTelegramSignals: listTelegramSignalsMock,
@@ -92,6 +97,10 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
 
 vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
   bootstrapCanonicalDelegationState: bootstrapCanonicalDelegationStateMock,
+}))
+
+vi.mock('../../server/_lib/accountsIdentity.js', () => ({
+  verifyPrivyForAccounts: verifyPrivyForAccountsMock,
 }))
 
 vi.mock('../../server/_lib/telegramBotApi.js', () => ({
@@ -232,6 +241,10 @@ describe('telegram endpoint handlers', () => {
       privyEmbeddedEoaAddress: '0x2222222222222222222222222222222222222222',
       chainId: 8453,
     })
+    verifyPrivyForAccountsMock.mockResolvedValue({
+      privyUserId: 'did:privy:11',
+      privyUser: { id: 'did:privy:11' },
+    })
     upsertTelegramUserLinkMock.mockResolvedValue({
       telegramUserId: '42',
       profileId: 11,
@@ -247,6 +260,7 @@ describe('telegram endpoint handlers', () => {
       lastFailureReason: null,
       unlinkRequestedAt: null,
     })
+    runTelegramMergePreflightMock.mockResolvedValue({ ok: true })
     listTelegramScopedVaultsMock.mockResolvedValue([
       {
         vaultAddress: '0x00000000000000000000000000000000000000aa',
@@ -542,6 +556,30 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.data?.canonicalCswAddress).toBe('0x1111111111111111111111111111111111111111')
   })
 
+  it('POST /api/telegram/link/complete returns recovery-required on merge conflict', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_link-complete.ts')
+    runTelegramMergePreflightMock.mockResolvedValueOnce({
+      ok: false,
+      reason: 'TELEGRAM_LINKED_TO_DIFFERENT_PRIVY',
+      existingPrivyUserId: 'did:privy:other',
+      existingProfileId: 999,
+      existingLinkStatus: 'active',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { token: 'token-abc', telegramUsername: 'akita', miniAppSessionToken: 'mini-session-token' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_TELEGRAM_BOUND')
+    expect(upsertTelegramUserLinkMock).not.toHaveBeenCalled()
+  })
+
   it('GET /api/telegram/discovery returns mini app discovery data', async () => {
     const { default: handler } = await import('../_handlers/telegram/_discovery.ts')
     getTelegramLinkByUserIdMock.mockResolvedValueOnce({
@@ -587,6 +625,46 @@ describe('telegram endpoint handlers', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.linked).toBe(false)
+  })
+
+  it('POST /api/telegram/merge-preflight returns ok when no collision exists', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_merge-preflight.ts')
+    runTelegramMergePreflightMock.mockResolvedValueOnce({ ok: true })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { telegramUserId: '42' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.ok).toBe(true)
+  })
+
+  it('POST /api/telegram/merge-preflight returns recovery-required on collision', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_merge-preflight.ts')
+    runTelegramMergePreflightMock.mockResolvedValueOnce({
+      ok: false,
+      reason: 'TELEGRAM_LINKED_TO_DIFFERENT_PRIVY',
+      existingPrivyUserId: 'did:privy:other',
+      existingProfileId: 999,
+      existingLinkStatus: 'active',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { telegramUserId: '42' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_TELEGRAM_BOUND')
   })
 
   it('GET /api/telegram/metrics returns funnel summary for a chat', async () => {
@@ -685,6 +763,7 @@ describe('telegram endpoint handlers', () => {
     expect(await getApiHandler('telegram/link/start')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/link/complete')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/link/status')).toBeTypeOf('function')
+    expect(await getApiHandler('telegram/merge-preflight')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/miniapp/session')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/discovery')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/inline/prepared')).toBeTypeOf('function')

@@ -22,6 +22,7 @@ const ALLOWED_PROVIDERS = new Set<AccountLinkProvider>([
   'google',
   'apple',
   'twitter',
+  'telegram',
   'tiktok',
   'external_eoa',
   'email',

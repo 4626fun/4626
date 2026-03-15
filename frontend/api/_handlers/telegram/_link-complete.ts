@@ -9,6 +9,7 @@ import {
   isTelegramFunnelEventsEnabledForChat,
   logTelegramFunnelEvent,
   readTelegramLinkStartTokenStatus,
+  runTelegramMergePreflight,
   upsertTelegramUserLink,
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
@@ -104,6 +105,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
+    const mergePreflight = await runTelegramMergePreflight({
+      db: db as any,
+      telegramUserId: parsed.telegramUserId,
+      privyUserId: bootstrap.privyUserId,
+    })
+    if (!mergePreflight.ok) {
+      return res.status(409).json({
+        success: false,
+        error: 'Recovery required: this Telegram account is already linked to another account. Use account recovery to continue.',
+        code: 'RECOVERY_REQUIRED_TELEGRAM_BOUND',
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
+
     const link = await upsertTelegramUserLink({
       db: db as any,
       telegramUserId: parsed.telegramUserId,
@@ -153,6 +168,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       linkedAt: string | null
     }>)
   } catch (error) {
+    if ((error as any)?.code === 'IDENTITY_RECOVERY_REQUIRED') {
+      return res.status(409).json({
+        success: false,
+        error: 'Recovery required: this Telegram account is already linked to another account. Use account recovery to continue.',
+        code: 'RECOVERY_REQUIRED_TELEGRAM_BOUND',
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
     const message = error instanceof Error ? error.message : 'Failed to complete Telegram link'
     if (shouldEmitFunnelEvent) {
       await logTelegramFunnelEvent({

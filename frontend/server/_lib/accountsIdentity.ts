@@ -3,6 +3,7 @@ import type { VercelRequest } from '@vercel/node'
 import { getAddress } from 'viem'
 
 import { verifyPrivyRequest } from './canonicalCswDelegation.js'
+import { assertNoEmailPrivyCollision } from './identityRecovery.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
 import { resolveCanonicalZoraCSW } from './canonicalCswDelegation.js'
@@ -16,6 +17,7 @@ export type AccountLinkProvider =
   | 'google'
   | 'apple'
   | 'twitter'
+  | 'telegram'
   | 'tiktok'
   | 'external_eoa'
   | 'email'
@@ -83,6 +85,7 @@ const LINK_POINTS: Partial<Record<AccountLinkProvider, number>> = {
   apple: 20,
   external_eoa: 10,
   twitter: 15,
+  telegram: 15,
   tiktok: 15,
 }
 
@@ -220,6 +223,7 @@ function valuesForProviderFromPrivy(user: PrivyUserLike, provider: AccountLinkPr
     google: (type) => type.includes('google'),
     apple: (type) => type.includes('apple'),
     twitter: (type) => type.includes('twitter') || type === 'x',
+    telegram: (type) => type.includes('telegram'),
     tiktok: (type) => type.includes('tiktok'),
   }
 
@@ -267,7 +271,7 @@ export function extractZoraCrossAppAccounts(user: PrivyUserLike): Array<{ addres
 }
 
 export function deriveLinkedMethodsFromPrivyUser(user: PrivyUserLike): Record<string, string[]> {
-  const providers: AccountLinkProvider[] = ['email', 'google', 'apple', 'twitter', 'tiktok', 'external_eoa', 'zora_cross_app']
+  const providers: AccountLinkProvider[] = ['email', 'google', 'apple', 'twitter', 'telegram', 'tiktok', 'external_eoa', 'zora_cross_app']
   const out: Record<string, string[]> = {}
   for (const provider of providers) {
     const values = valuesForProviderFromPrivy(user, provider)
@@ -351,6 +355,11 @@ export async function upsertAccount(params: {
   const { db, privyUserId, email, emailVerified } = params
   const normalizedEmail = normalizeEmail(email) ?? null
   const verified = emailVerified === true
+  await assertNoEmailPrivyCollision({
+    db,
+    email: normalizedEmail,
+    privyUserId,
+  })
   await db.sql`
     INSERT INTO accounts (
       privy_user_id,
@@ -828,6 +837,8 @@ function toEventType(provider: AccountLinkProvider): string {
       return 'link_apple'
     case 'twitter':
       return 'link_twitter'
+    case 'telegram':
+      return 'link_telegram'
     case 'tiktok':
       return 'link_tiktok'
     case 'external_eoa':

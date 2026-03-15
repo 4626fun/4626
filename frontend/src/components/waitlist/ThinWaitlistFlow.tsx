@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
+import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { getAppBaseUrl } from '@/lib/host'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 
@@ -202,7 +203,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const runBootstrap = useCallback(async () => {
     const token = await getAccessToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (token) headers['X-Privy-Token'] = token
+    if (token) {
+      headers['X-Privy-Token'] = token
+      await runCanonicalizationPipeline({
+        privyToken: token,
+      })
+    }
     const emailForBootstrap = !token && emailIsValid ? normalizeEmail(email) : undefined
 
     const response = await apiFetch('/api/waitlist/bootstrap', {
@@ -323,20 +329,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const applyZoraResult = useCallback((data: ZoraResolveResponse) => {
     setZoraSummary(data)
-    setAccount((prev) =>
-      prev
-        ? {
-            ...prev,
-            zora: {
-              ...prev.zora,
-              linked: true,
-              canonicalCswAddress: data.canonicalCswAddress,
-              creatorCoin: data.creatorCoin ? { address: data.creatorCoin.address } : null,
-              zoraHandle: data.zoraHandle,
-            },
-          }
-        : prev,
-    )
   }, [])
 
   const onLinkZora = useCallback(async () => {
@@ -355,16 +347,29 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       const data = await resolveZora(token)
       if (!data) throw new Error('Could not find a Zora profile for that wallet.')
       applyZoraResult(data)
+      await runBootstrap()
     } catch (zoraError: any) {
       setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link wallet.')
     } finally {
       setBusy(false)
     }
-  }, [applyZoraResult, busy, getAccessToken, privy, resolveZora])
+  }, [applyZoraResult, busy, getAccessToken, privy, resolveZora, runBootstrap])
 
-  const onFinish = useCallback(() => {
-    setStep('done')
-  }, [])
+  const onFinish = useCallback(async () => {
+    if (busy) return
+    setError(null)
+    try {
+      if (privyAuthed) {
+        setBusy(true)
+        await runBootstrap()
+      }
+      setStep('done')
+    } catch (finishError: any) {
+      setError(typeof finishError?.message === 'string' ? finishError.message : 'Failed to refresh account state.')
+    } finally {
+      if (privyAuthed) setBusy(false)
+    }
+  }, [busy, privyAuthed, runBootstrap])
 
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
@@ -491,7 +496,10 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         const data = await resolveZora(token)
         if (cancelled || !data) return
         const hasProfile = !!(data.zoraHandle || data.canonicalCswAddress || data.creatorCoin)
-        if (hasProfile) applyZoraResult(data)
+        if (hasProfile) {
+          applyZoraResult(data)
+          await runBootstrap()
+        }
       } catch {
         // best-effort
       } finally {
@@ -499,7 +507,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       }
     })()
     return () => { cancelled = true }
-  }, [applyZoraResult, getAccessToken, resolveZora, step, zoraSummary])
+  }, [applyZoraResult, getAccessToken, resolveZora, runBootstrap, step, zoraSummary])
 
   const zoraStatus = useMemo(() => {
     const summary: ZoraResolveResponse | null = zoraSummary ?? (account ? {
