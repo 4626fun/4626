@@ -1,19 +1,15 @@
 import type { Address } from 'viem'
 
-import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
+import type { ZoraCoin } from '@/lib/zora/types'
 
 export type CreatorIdentitySource =
   | 'zoraCoinCreatorAddress'
   | 'privySmartWallet'
-  | 'farcasterCustody'
-  | 'zoraProfilePublicWallet'
   | 'connectedWallet'
   | 'unknown'
 
 export type CreatorIdentityWarningCode =
-  | 'CUSTODY_MISMATCH'
   | 'CONNECTED_WALLET_MISMATCH'
-  | 'CUSTODY_UNAVAILABLE'
 
 export type CreatorIdentityResolution = {
   /** Canonical creator identity wallet (the identity that must not fragment). */
@@ -54,16 +50,11 @@ export function resolveCreatorIdentity(params: {
   connectedWallet: Address | null
   privySmartWallet?: Address | null
   zoraCoin?: ZoraCoin | null
-  farcasterZoraProfile?: ZoraProfile | null
-  farcasterCustodyAddress?: Address | null
 }): CreatorIdentityResolution {
   const privyWallet = normalizeAddress(params.privySmartWallet)
   const connectedWallet = normalizeAddress(params.connectedWallet)
   const zoraCoinCreator = normalizeAddress(params.zoraCoin?.creatorAddress)
   const zoraCoinPayoutRecipient = normalizeAddress(params.zoraCoin?.payoutRecipientAddress)
-
-  const farcasterPublicWallet = normalizeAddress(params.farcasterZoraProfile?.publicWallet?.walletAddress)
-  const farcasterCustody = normalizeAddress(params.farcasterCustodyAddress)
 
   const warnings: CreatorIdentityWarningCode[] = []
 
@@ -108,10 +99,6 @@ export function resolveCreatorIdentity(params: {
       blockingReason = `Sign in to continue.`
     }
 
-    if (farcasterCustody && farcasterCustody.toLowerCase() !== canonical.toLowerCase()) {
-      warnings.push('CUSTODY_MISMATCH')
-    }
-
     return {
       canonicalIdentity: { address: canonical, source: 'zoraCoinCreatorAddress' },
       execution: { address: connectedWallet },
@@ -123,8 +110,7 @@ export function resolveCreatorIdentity(params: {
 
   // 2) No existing coin: never infer canonical identity from Privy/EOA/custody fallbacks.
   //    These can be execution/session wallets, but canonical deploy identity must be explicit.
-  const executionFallback = privyWallet ?? connectedWallet ?? farcasterCustody ?? farcasterPublicWallet ?? null
-  if (!executionFallback) warnings.push('CUSTODY_UNAVAILABLE')
+  const executionFallback = privyWallet ?? connectedWallet ?? null
 
   return {
     canonicalIdentity: { address: null, source: 'unknown' },

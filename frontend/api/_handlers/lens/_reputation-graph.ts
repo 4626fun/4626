@@ -55,7 +55,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const tag2 = String(body.tag2 ?? req.query.tag2 ?? '').trim()
   const includeRevoked = body.includeRevoked !== false && String(req.query.includeRevoked ?? '').trim() !== 'false'
   const shouldStore = body.store !== false && String(req.query.store ?? '').trim() !== 'false'
-  const farcasterProviderMode = 'disabled' as const
 
   const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
   if (shouldStore && !hasAuthPrincipal) {
@@ -103,7 +102,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         provenance: {
           graphSource: graph.source,
           generatedAt: graph.generatedAt,
-          farcasterProviderMode,
           storeRequested: shouldStore,
         },
       },

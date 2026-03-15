@@ -6,7 +6,6 @@ import { logger } from '../_lib/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../keepr/commands.js'
-import { fireAutocast } from '../farcaster/autocast.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -319,17 +318,6 @@ async function handleCreate(params: {
 
     recordExecution(params.groupId)
 
-    // Fire auto-cast for new coin creation
-    fireAutocast({
-      type: 'zora.coin.created',
-      coinAddress: callResult.predictedCoinAddress,
-      name: name.replace(/^"|"$/g, ''),
-      symbol: symbol.replace(/^"|"$/g, ''),
-      currency,
-      creatorAddress: agentWalletAddress,
-      vaultAddress: params.vault.vaultAddress,
-    })
-
     return {
       ok: true,
       response: [
@@ -441,15 +429,6 @@ async function handleBuy(params: {
 
     const txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
     recordExecution(params.groupId)
-
-    // Fire auto-cast for coin purchase (opt-in via AUTOCAST_TRADES)
-    fireAutocast({
-      type: 'zora.coin.bought',
-      coinAddress,
-      ethAmount,
-      buyerAddress: agentWalletAddress,
-      vaultAddress: params.vault.vaultAddress,
-    })
 
     return {
       ok: true,
@@ -630,15 +609,6 @@ async function handleSell(params: {
 
     const txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
     recordExecution(params.groupId)
-
-    // Fire auto-cast for coin sale (opt-in via AUTOCAST_TRADES)
-    fireAutocast({
-      type: 'zora.coin.sold',
-      coinAddress,
-      amount,
-      sellerAddress: agentWalletAddress,
-      vaultAddress: params.vault.vaultAddress,
-    })
 
     return {
       ok: true,

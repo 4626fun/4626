@@ -48,7 +48,6 @@ export interface TalentPassport {
     github?: string
     discord?: string
     telegram?: string
-    farcaster?: string
     lens?: string
   }
   // Enhanced social accounts with follower counts
@@ -69,7 +68,6 @@ export interface TalentPassport {
 export interface CreatorSocials {
   twitter?: string
   github?: string
-  farcaster?: string
   lens?: string
   linkedin?: string
   instagram?: string
@@ -285,9 +283,6 @@ function extractSocials(profile: any): Record<string, string> {
         case 'linkedin':
           socials.linkedin = `https://linkedin.com/in/${identifier}`
           break
-        case 'farcaster':
-          socials.farcaster = `https://warpcast.com/${identifier}`
-          break
         case 'instagram':
           socials.instagram = `https://instagram.com/${identifier}`
           break
@@ -333,10 +328,6 @@ function extractSocialAccounts(profile: any): SocialAccount[] {
         case 'x':
           platform = 'twitter'
           url = `https://x.com/${identifier}`
-          break
-        case 'farcaster':
-          platform = 'farcaster'
-          url = `https://warpcast.com/${identifier}`
           break
         case 'tiktok':
           platform = 'tiktok'
@@ -425,8 +416,6 @@ export async function getTalentSocials(walletAddress: string): Promise<CreatorSo
 
       if (source === 'twitter' || source === 'x') {
         putIfMissing('twitter', profileUrl, handle ? `https://x.com/${handle}` : null)
-      } else if (source === 'farcaster') {
-        putIfMissing('farcaster', profileUrl, handle ? `https://warpcast.com/${handle}` : null)
       } else if (source === 'instagram') {
         putIfMissing('instagram', profileUrl, handle ? `https://instagram.com/${handle}` : null)
       } else if (source === 'tiktok') {

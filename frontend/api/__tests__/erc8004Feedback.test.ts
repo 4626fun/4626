@@ -386,7 +386,6 @@ describe('lens/reputation-graph', () => {
     expect(res.body.data.provenance).toEqual({
       graphSource: 'erc8004.reputation.graph',
       generatedAt: '2026-01-01T00:00:00Z',
-      farcasterProviderMode: 'disabled',
       storeRequested: true,
     })
     expect(buildReputationGraphMock).toHaveBeenCalledWith({

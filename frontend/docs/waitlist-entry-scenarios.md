@@ -21,7 +21,7 @@ We have multiple entry points (web, Base app, CSW-first) and multiple identity s
 | Marketing waitlist (`/#waitlist`) with typed email | no wallet required | `email` | Real email required | Signup succeeds with real email |
 | Marketing waitlist, wallet-only continuation | wallet/csw linked, no email typed | `wallet` | Real email **not** required | Client submits synthetic `@wallet.4626.fun` email |
 | Base app / CSW direct entry, no email | CSW present, email absent | `wallet` | Real email **not** required | Signup allowed with synthetic email and wallet signal |
-| Creator flow with verification signal | wallet/farcaster/solana/verifications present | `wallet` or `email` | If `email`, real required; otherwise optional | Creator signup proceeds if verification exists |
+| Creator flow with verification signal | wallet/social/solana/verifications present | `wallet` or `email` | If `email`, real required; otherwise optional | Creator signup proceeds if verification exists |
 | Any flow with `contactPreference === email` | any | `email` | Real email required | Synthetic email must be rejected |
 | Synthetic email + no verification signal | none | not meaningful | Real email required | Request rejected to prevent anonymous synthetic-only rows |
 

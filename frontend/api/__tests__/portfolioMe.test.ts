@@ -23,7 +23,7 @@ vi.mock('../../server/_lib/onchainIdentityProfile.js', () => ({
 }))
 
 function createPortfolioDb(
-  source: 'manual' | 'farcaster',
+  source: 'manual' | 'external',
   extraProfileFields: Record<string, { value: string | null; source: string; updated_at: string }> = {},
   profileOverrides: Record<string, unknown> = {},
 ) {
@@ -216,7 +216,7 @@ describe('portfolio /api/portfolio/me', () => {
   })
 
   it('rejects patching externally sourced fields', async () => {
-    getDbMock.mockResolvedValue(createPortfolioDb('farcaster'))
+    getDbMock.mockResolvedValue(createPortfolioDb('external'))
     const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
     const req = createMockReq({
       method: 'PATCH',
@@ -271,7 +271,7 @@ describe('portfolio /api/portfolio/me', () => {
   it('rejects patching externally sourced Lens URI fields', async () => {
     getDbMock.mockResolvedValue(
       createPortfolioDb('manual', {
-        avatar_lens_uri: { value: 'lens://old', source: 'farcaster', updated_at: new Date().toISOString() },
+        avatar_lens_uri: { value: 'lens://old', source: 'external', updated_at: new Date().toISOString() },
       }),
     )
     const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })

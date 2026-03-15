@@ -11,7 +11,6 @@ const {
   checkRateLimitMock,
   rateLimitKeyMock,
   getClientIpMock,
-  readNeynarApiKeyMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -21,7 +20,6 @@ const {
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   rateLimitKeyMock: vi.fn(() => 'rl-key'),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
-  readNeynarApiKeyMock: vi.fn(() => null),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -47,12 +45,8 @@ vi.mock('../../server/_lib/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 
-vi.mock('../../server/_lib/neynarConfig.js', () => ({
-  readNeynarApiKey: readNeynarApiKeyMock,
-}))
-
 vi.mock('../../server/_lib/waitlistPoints.js', () => ({
-  WAITLIST_POINTS: { farcaster: 100, discord: 25, telegram: 25 },
+  WAITLIST_POINTS: { discord: 25, telegram: 25 },
   awardWaitlistPoints: awardWaitlistPointsMock,
 }))
 
@@ -71,7 +65,6 @@ function createDb() {
           rows: [
             {
               id: 1,
-              farcaster_fid: null,
               primary_wallet: '0x00000000000000000000000000000000000000aa',
               embedded_wallet: null,
               csw_address: null,

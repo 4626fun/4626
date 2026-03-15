@@ -6393,8 +6393,6 @@ function DeployVaultMain() {
       connectedWallet: connectedWalletAddress,
       privySmartWallet: privySmartWalletAddress,
       zoraCoin: zoraCoin ?? null,
-      farcasterZoraProfile: null,
-      farcasterCustodyAddress: null,
     })
   }, [connectedWalletAddress, privySmartWalletAddress, zoraCoin])
 

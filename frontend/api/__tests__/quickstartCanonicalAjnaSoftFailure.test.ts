@@ -91,8 +91,6 @@ describe('v1/creators/quickstart canonical Ajna hinting', () => {
     })
     restoreEnv = applyEnv({
       ZORA_SERVER_API_KEY: undefined,
-      NEYNAR_API_KEY: undefined,
-      VITE_NEYNAR_API_KEY: undefined,
     })
   })
 

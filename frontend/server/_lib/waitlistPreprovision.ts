@@ -61,16 +61,6 @@ async function resolveZoraProfile(address: string): Promise<{
   }
 }
 
-async function resolveFarcaster(address: string): Promise<{
-  username: string | null
-  pfpUrl: string | null
-} | null> {
-  // Farcaster provider integration has been retired from server preprovisioning.
-  // Keep this as an explicit no-op for stable downstream behavior.
-  void address
-  return null
-}
-
 async function findCreatorCoin(
   address: string,
   zoraCoins: Array<{ address: string; name: string; symbol: string }>,
@@ -105,8 +95,6 @@ export type PreprovisionResult = {
   serverWalletAddress: string | null
   coinAddress: string | null
   coinSymbol: string | null
-  farcasterUsername: string | null
-  farcasterPfp: string | null
   zoraHandle: string | null
 }
 
@@ -151,10 +139,7 @@ export async function preprovisionWaitlistUser(
   logger.info('[preprovision] Starting for signup', { signupId, wallet: addr.slice(0, 10) })
 
   // 1. Resolve identities in parallel
-  const [zoraProfile, farcaster] = await Promise.all([
-    resolveZoraProfile(addr),
-    resolveFarcaster(addr),
-  ])
+  const zoraProfile = await resolveZoraProfile(addr)
 
   // 2. Find creator coin
   let coinAddress: string | null = null
@@ -192,8 +177,6 @@ export async function preprovisionWaitlistUser(
     serverWalletAddress,
     coinAddress,
     coinSymbol,
-    farcasterUsername: farcaster?.username ?? null,
-    farcasterPfp: farcaster?.pfpUrl ?? null,
     zoraHandle: zoraProfile?.handle ?? null,
   }
 
@@ -205,8 +188,6 @@ export async function preprovisionWaitlistUser(
           preprov_server_wallet_address = ${serverWalletAddress},
           preprov_coin_address = ${coinAddress},
           preprov_coin_symbol = ${coinSymbol},
-          preprov_farcaster_username = ${farcaster?.username ?? null},
-          preprov_farcaster_pfp = ${farcaster?.pfpUrl ?? null},
           preprov_zora_handle = ${zoraProfile?.handle ?? null},
           updated_at = NOW()
       WHERE id = ${signupId};
@@ -215,7 +196,6 @@ export async function preprovisionWaitlistUser(
       signupId,
       serverWallet: serverWalletAddress?.slice(0, 10) ?? 'none',
       coin: coinAddress?.slice(0, 10) ?? 'none',
-      fc: farcaster?.username ?? 'none',
       zora: zoraProfile?.handle ?? 'none',
     })
   } catch (err) {

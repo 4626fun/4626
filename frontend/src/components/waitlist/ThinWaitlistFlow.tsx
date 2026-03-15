@@ -117,6 +117,15 @@ function useSafeLoginWithTelegram() {
   }
 }
 
+function hasLinkedTelegramAccount(user: unknown): boolean {
+  const record = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
+  if (!record) return false
+  const camel = Array.isArray(record.linkedAccounts) ? (record.linkedAccounts as any[]) : []
+  const snake = Array.isArray(record.linked_accounts) ? (record.linked_accounts as any[]) : []
+  const linked = [...camel, ...snake]
+  return linked.some((account) => String((account as any)?.type ?? '').trim().toLowerCase().includes('telegram'))
+}
+
 function shortAddress(value: string | null | undefined): string {
   if (!value) return '—'
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
@@ -180,6 +189,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
   const telegramAuthLoading = telegramAuthState.status === 'loading'
+  const telegramAlreadyLinked = useMemo(() => hasLinkedTelegramAccount((privy as any)?.user), [privy])
 
   const isPage = variant === 'page'
 
@@ -270,7 +280,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setError(null)
     try {
       if (privyAuthed) {
-        await runBootstrap()
+        if (telegramAlreadyLinked) {
+          await runBootstrap()
+        } else {
+          await loginWithTelegram()
+          await runBootstrap()
+        }
       } else {
         await loginWithTelegram()
       }
@@ -281,7 +296,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, loginWithTelegram, privyAuthed, runBootstrap, step, telegramAuthLoading])
+  }, [busy, loginWithTelegram, privyAuthed, runBootstrap, step, telegramAlreadyLinked, telegramAuthLoading])
 
   useEffect(() => {
     if (step !== 'auth') return

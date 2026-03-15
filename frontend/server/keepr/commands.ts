@@ -15,7 +15,6 @@ import {
   type EquityQuoteData,
   type FinancialRatiosData,
 } from '../_lib/openbbClient.js'
-import { handleFarcasterCommand } from '../farcaster/commands.js'
 import { handleTwitterCommand } from '../twitter/commands.js'
 import { handleCoinCommand } from '../zora/commands.js'
 import { handleBankrCommand } from '../bankr/commands.js'
@@ -93,13 +92,6 @@ function formatKeeprHelpFull(): string {
     '- /mkt ratios <symbol> — fundamentals ratios (provider dependent)',
     '- /mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD] — macro events',
     '- /mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD] — price history summary',
-    '',
-    'Farcaster commands (type /fc help for more):',
-    '',
-    '- /fc profile <address|fid>',
-    '- /fc cast <message> (ADMIN/OWNER)',
-    '- /fc gallery',
-    '- /fc stats',
     '',
     'Twitter/X commands (type /x help for more):',
     '',
@@ -185,8 +177,6 @@ function resolveKeeprHelpTopic(rawTopic: string | null | undefined): { topic: Ke
     case 'mkt':
       return { topic: 'market', unknownTopic: null }
     case 'social':
-    case 'fc':
-    case 'farcaster':
     case 'x':
     case 'twitter':
       return { topic: 'social', unknownTopic: null }
@@ -262,10 +252,6 @@ function formatKeeprHelp(rawTopic: string | null = null): string {
     return [
       'Keepr help - social',
       '',
-      '- /fc profile <address|fid>',
-      '- /fc cast <message> (ADMIN/OWNER)',
-      '- /fc gallery',
-      '- /fc stats',
       '- /x status',
       '- /x post <message> --confirm (ADMIN/OWNER)',
       '- /tweet <message> --confirm (ADMIN/OWNER)',
@@ -869,26 +855,6 @@ export async function handleKeeprCommand(params: {
   // Market data commands should work even when vault config/DB is unavailable.
   if (isMarketCommand(rawLower)) {
     return handleMarketCommand(raw)
-  }
-
-  // Handle Farcaster commands (/fc or fc)
-  const looksLikeFc = raw.toLowerCase().startsWith('/fc') || raw.toLowerCase().startsWith('fc ')
-  if (looksLikeFc) {
-    // Determine role for Farcaster commands
-    const v = await getKeeprVaultByGroupId(params.groupId)
-    let role: KeeprRole = 'MEMBER'
-    if (v) {
-      const owner = v.canonicalOwnerAddress
-      const admins = Array.isArray(v.config?.roles?.admins) ? v.config.roles.admins : []
-      const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
-      role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
-    }
-    return handleFarcasterCommand({
-      groupId: params.groupId,
-      senderWallet: params.senderWallet,
-      text: raw,
-      role,
-    })
   }
 
   // Handle Twitter/X commands (/x, x, /tweet, tweet)

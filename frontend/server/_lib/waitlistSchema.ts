@@ -23,7 +23,6 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
         base_sub_account TEXT NULL,
         persona TEXT NULL,
         has_creator_coin BOOLEAN NULL,
-        farcaster_fid BIGINT NULL,
         contact_preference TEXT NULL,
         border_tier INT NOT NULL DEFAULT 0,
         x_follow_verified_at TIMESTAMPTZ NULL,
@@ -42,7 +41,6 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
     try {
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS persona TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS has_creator_coin BOOLEAN NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS farcaster_fid BIGINT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS privy_user_id TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS embedded_wallet TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS embedded_wallet_chain TEXT NULL;`
@@ -76,8 +74,6 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_server_wallet_address TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_coin_address TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_coin_symbol TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_farcaster_username TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_farcaster_pfp TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_zora_handle TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS erc8004_agent_id BIGINT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS erc8128_agent_id TEXT NULL;`

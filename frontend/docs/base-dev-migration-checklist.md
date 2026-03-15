@@ -12,7 +12,7 @@ This checklist covers the remaining operational steps after removing miniapp run
 ## 2) Distribution and links
 
 - Confirm all public links in docs and campaign surfaces point to the web app URL.
-- Keep optional Farcaster distribution surfaces only where intentionally supported (for example mention tooling), without miniapp host assumptions.
+- Remove any remaining Farcaster-specific distribution assumptions from user-facing surfaces.
 
 ## 3) Notifications migration follow-up
 

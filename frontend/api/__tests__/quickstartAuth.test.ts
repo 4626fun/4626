@@ -135,8 +135,6 @@ describe('v1/creators/quickstart auth parity', () => {
     readSiwaAgentFromRequestMock.mockReturnValue(null)
     restoreEnv = applyEnv({
       ZORA_SERVER_API_KEY: undefined,
-      NEYNAR_API_KEY: undefined,
-      VITE_NEYNAR_API_KEY: undefined,
     })
   })
 

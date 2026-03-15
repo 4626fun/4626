@@ -223,7 +223,6 @@ CREATE TABLE IF NOT EXISTS users (
   base_sub_account TEXT NULL,
   persona TEXT NULL,
   has_creator_coin BOOLEAN NULL,
-  farcaster_fid BIGINT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

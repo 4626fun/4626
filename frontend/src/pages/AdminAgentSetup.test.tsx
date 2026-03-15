@@ -301,10 +301,6 @@ describe('AdminAgentSetup Ajna automation', () => {
         if (queryKey[0] === 'admin' && queryKey[1] === 'ajna-automation') {
           return { data: null, isLoading: false, error: null, isError: false }
         }
-        if (queryKey[0] === 'admin' && queryKey[1] === 'farcaster') {
-          return { data: null, isLoading: false, error: null, isError: false }
-        }
-
         return { data: null, isLoading: false, error: null, isError: false }
       }),
       useMutation: vi.fn(() => ({
@@ -441,10 +437,6 @@ describe('AdminAgentSetup Ajna automation', () => {
             isLoading: false,
           }
         }
-        if (queryKey[0] === 'admin' && queryKey[1] === 'farcaster') {
-          return { data: null, isLoading: false }
-        }
-
         return { data: null, isLoading: false }
       }),
       useMutation: vi.fn(() => ({

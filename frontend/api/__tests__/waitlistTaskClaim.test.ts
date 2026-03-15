@@ -76,7 +76,7 @@ describe('waitlist/task-claim hardening', () => {
   it('rejects non-bonus tasks and requires verifier endpoints', async () => {
     const req = createMockReq({
       method: 'POST',
-      body: { email: 'user@example.com', taskKey: 'farcaster' },
+      body: { email: 'user@example.com', taskKey: 'telegram' },
     })
     const res = createMockRes()
     await handler(req as any, res as any)

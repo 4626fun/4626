@@ -17,7 +17,6 @@ export type AccountLinkProvider =
   | 'apple'
   | 'twitter'
   | 'tiktok'
-  | 'farcaster'
   | 'external_eoa'
   | 'email'
   | 'zora_cross_app'
@@ -80,7 +79,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const LINK_POINTS: Partial<Record<AccountLinkProvider, number>> = {
   email: 10,
   zora_cross_app: 40,
-  farcaster: 25,
   google: 20,
   apple: 20,
   external_eoa: 10,
@@ -223,7 +221,6 @@ function valuesForProviderFromPrivy(user: PrivyUserLike, provider: AccountLinkPr
     apple: (type) => type.includes('apple'),
     twitter: (type) => type.includes('twitter') || type === 'x',
     tiktok: (type) => type.includes('tiktok'),
-    farcaster: (type) => type.includes('farcaster'),
   }
 
   const matches = typeMatchers[provider]
@@ -270,7 +267,7 @@ export function extractZoraCrossAppAccounts(user: PrivyUserLike): Array<{ addres
 }
 
 export function deriveLinkedMethodsFromPrivyUser(user: PrivyUserLike): Record<string, string[]> {
-  const providers: AccountLinkProvider[] = ['email', 'google', 'apple', 'twitter', 'tiktok', 'farcaster', 'external_eoa', 'zora_cross_app']
+  const providers: AccountLinkProvider[] = ['email', 'google', 'apple', 'twitter', 'tiktok', 'external_eoa', 'zora_cross_app']
   const out: Record<string, string[]> = {}
   for (const provider of providers) {
     const values = valuesForProviderFromPrivy(user, provider)
@@ -833,8 +830,6 @@ function toEventType(provider: AccountLinkProvider): string {
       return 'link_twitter'
     case 'tiktok':
       return 'link_tiktok'
-    case 'farcaster':
-      return 'link_farcaster'
     case 'external_eoa':
       return 'link_external_eoa'
     case 'email':

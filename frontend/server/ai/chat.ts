@@ -40,7 +40,6 @@ function platformLabelForPrompt(conversationType: string): string {
   if (conversationType === 'telegram') return 'Telegram'
   if (conversationType === 'xmtp') return 'XMTP'
   if (conversationType === 'discord') return 'Discord'
-  if (conversationType === 'farcaster') return 'Farcaster'
   return 'group chat'
 }
 
@@ -81,8 +80,6 @@ function buildSystemPrompt(vault: KeeprVaultRow | null, conversationType: string
       '- /keepr help — vault commands',
       '- /keepr status — vault info',
       '- /keepr check — share eligibility',
-      '- /fc profile <user> — Farcaster lookup',
-      '- /fc stats — Farcaster stats',
       '- /send <amount> USDC to <address> — token transfer (ADMIN/OWNER)',
     )
   }
@@ -209,7 +206,6 @@ function resolveConversationType(groupId: string): string {
   const normalized = groupId.trim().toLowerCase()
   if (normalized.startsWith('telegram:')) return 'telegram'
   if (normalized.startsWith('discord:')) return 'discord'
-  if (normalized.startsWith('farcaster:')) return 'farcaster'
   if (normalized.startsWith('xmtp')) return 'xmtp'
   return 'group'
 }

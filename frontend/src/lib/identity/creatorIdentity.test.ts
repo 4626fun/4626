@@ -4,7 +4,6 @@ import { resolveCreatorIdentity } from './creatorIdentity'
 
 const A = '0x00000000000000000000000000000000000000a1'
 const B = '0x00000000000000000000000000000000000000b2'
-const C = '0x00000000000000000000000000000000000000c3'
 
 describe('resolveCreatorIdentity', () => {
   it('does not promote Privy wallet to canonical when no creator coin exists', () => {
@@ -12,8 +11,6 @@ describe('resolveCreatorIdentity', () => {
       connectedWallet: B as any,
       privySmartWallet: A as any,
       zoraCoin: null,
-      farcasterZoraProfile: null,
-      farcasterCustodyAddress: C as any,
     })
 
     expect(identity.canonicalIdentity.address).toBeNull()
@@ -29,8 +26,6 @@ describe('resolveCreatorIdentity', () => {
         creatorAddress: B,
         payoutRecipientAddress: B,
       } as any,
-      farcasterZoraProfile: null,
-      farcasterCustodyAddress: null,
     })
 
     expect(identity.canonicalIdentity.address).toBe(B.toLowerCase())

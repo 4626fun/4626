@@ -107,7 +107,6 @@ function isCommandLike(text: string): boolean {
   return (
     t.startsWith('/') ||
     t.startsWith('keepr') ||
-    t.startsWith('fc ') ||
     t.startsWith('send ') ||
     t.startsWith('@keepr') ||
     t.startsWith('@bot')

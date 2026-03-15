@@ -4,7 +4,7 @@
  * Delegates all vault commands to the production handleKeeprCommand()
  * instead of reimplementing them. This gives ElizaOS access to the full
  * command set: vault status, rules, lock/unlock, check, sync, send,
- * Farcaster commands, and LLM /ai responses.
+ * social commands, and LLM /ai responses.
  *
  * Also provides a vault-info provider that injects vault context
  * into the LLM prompt so the agent can answer vault-related questions.
@@ -48,8 +48,6 @@ function isKeeprCommand(text: string): boolean {
     t === 'mkt' ||
     t.startsWith('/send') ||
     t.startsWith('send ') ||
-    t.startsWith('/fc') ||
-    t.startsWith('fc ') ||
     t.startsWith('/x') ||
     t === 'x' ||
     t.startsWith('x ') ||
@@ -102,11 +100,11 @@ const keeprCommandAction: Action = {
   name: 'KEEPR_COMMAND',
   similes: [
     'keepr status', 'vault status', 'send', 'transfer',
-    'keepr help', 'help', 'commands', 'farcaster',
+    'keepr help', 'help', 'commands',
     'ai', 'ask keepr',
   ],
   description:
-    'Route vault commands (status, send, lock, unlock, check, sync, farcaster, AI) through the production Keepr handler.',
+    'Route vault commands (status, send, lock, unlock, check, sync, social, AI) through the production Keepr handler.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim()
@@ -250,7 +248,7 @@ const vaultInfoProvider: Provider = {
 export const keeprPlugin: Plugin = {
   name: '@4626/plugin-keepr',
   description:
-    '4626 Keepr commands — delegates to the production handleKeeprCommand() for vault status, send, lock/unlock, check, sync, Farcaster, and AI.',
+    '4626 Keepr commands — delegates to the production handleKeeprCommand() for vault status, send, lock/unlock, check, sync, social, and AI.',
 
   actions: [keeprCommandAction],
   providers: [vaultInfoProvider],

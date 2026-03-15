@@ -89,7 +89,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const effectiveChainIds = chainIds ?? [8453, 1]
   const noCache = (req.method === 'GET' && req.query.noCache === 'true') ||
     (req.method === 'POST' && (req.body as any)?.noCache === true)
-  const farcasterProviderMode = 'disabled' as const
 
   try {
     // ── Cache read (Supabase) ──
@@ -119,7 +118,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             provenance: {
               graphSource: graph.source ?? 'wallet-intelligence.unknown',
               generatedAt: graph.generatedAt ?? null,
-              farcasterProviderMode,
               cacheStatus: 'hit',
             },
           },
@@ -187,7 +185,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         provenance: {
           graphSource: graph.source,
           generatedAt: graph.generatedAt,
-          farcasterProviderMode,
           cacheStatus: 'miss',
         },
       },

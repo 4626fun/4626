@@ -13,7 +13,6 @@ export const WAITLIST_POINTS = {
   qualifiedReferral: 150,    // When referred user completes profile
   
   // Social actions - verified
-  farcaster: 75,
   baseApp: 50,
   zora: 50,
   x: 50,
@@ -40,7 +39,6 @@ export type WaitlistPointSource =
   | 'csw_link'
   | 'referral_signup'
   | 'referral_csw_link'
-  | 'social_farcaster'
   | 'social_base_app'
   | 'social_zora'
   | 'social_x'
