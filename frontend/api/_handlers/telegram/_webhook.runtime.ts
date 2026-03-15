@@ -116,6 +116,29 @@ declare const process: { env: Record<string, string | undefined> }
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 
+const TELEGRAM_MENU_LABELS = {
+  connect: '■ Connect',
+  wallet: '■ Wallet',
+  trade: '⇄ Trade',
+  explore: '◇ Explore',
+  help: '? Help',
+  vaults: '▣ Vaults',
+  auctions: '△ Auctions',
+  signals: '⇢ Signals',
+  buy: '+ Buy',
+  sell: '- Sell',
+  bid: '• Bid',
+  back: '< Back',
+} as const
+
+function sanitizeTelegramLabel(label: string): string {
+  return label.replace(/\uFE0F/g, '')
+}
+
+function menuLabel(key: keyof typeof TELEGRAM_MENU_LABELS): string {
+  return sanitizeTelegramLabel(TELEGRAM_MENU_LABELS[key])
+}
+
 type TelegramFrom = {
   id?: number | string
   is_bot?: boolean
@@ -1149,10 +1172,10 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
         { text: 'Bankr', callback_data: 'help:bankr' },
       ],
       [
-        { text: '■ Wallet', callback_data: 'help:wallet' },
+        { text: menuLabel('wallet'), callback_data: 'help:wallet' },
         { text: 'Help', callback_data: 'help:all' },
       ],
-      [{ text: '< Back', callback_data: 'menu:start' }],
+      [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
 }
@@ -1293,7 +1316,7 @@ function buildStartLandingText(params: { isLinked: boolean }): string {
     return [
       '<b>4626 on Telegram</b>',
       '',
-      '<blockquote>Connected and ready. Convert attention into onchain action: ⇄ Trade -> ■ Wallet -> Repeat.</blockquote>',
+      `<blockquote>Connected and ready. Convert attention into onchain action: ${menuLabel('trade')} -> ${menuLabel('wallet')} -> Repeat.</blockquote>`,
       '',
       '<u>Fast path</u>',
       '<code>/buy</code> — guided buy flow',
@@ -1318,7 +1341,7 @@ function buildFocusedHelpText(): string {
   return [
     '<b>4626 Command Guide</b>',
     '',
-    '<blockquote>Core loop: ■ Connect -> ⇄ Trade -> ■ Wallet -> Repeat.</blockquote>',
+    `<blockquote>Core loop: ${menuLabel('connect')} -> ${menuLabel('trade')} -> ${menuLabel('wallet')} -> Repeat.</blockquote>`,
     '',
     '<u>Core commands</u>',
     '<code>/link</code> — connect Telegram to your 4626 Privy + Zora CSW',
@@ -1366,20 +1389,20 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
   })
   const keyboard: Array<Array<Record<string, unknown>>> = params.isLinked
     ? [
-        [buildMiniAppLaunchButton({ chatId: params.chatId, text: '■ Wallet', url: walletAppUrl })],
+        [buildMiniAppLaunchButton({ chatId: params.chatId, text: menuLabel('wallet'), url: walletAppUrl })],
         [
-          { text: '⇄ Trade', callback_data: 'menu:trade' },
-          { text: '◇ Explore', callback_data: 'menu:explore' },
-          { text: '? Help', callback_data: 'menu:topics' },
+          { text: menuLabel('trade'), callback_data: 'menu:trade' },
+          { text: menuLabel('explore'), callback_data: 'menu:explore' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
         [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
       ]
     : [
-        [buildMiniAppLaunchButton({ chatId: params.chatId, text: '■ Connect', url: connectAppUrl })],
+        [buildMiniAppLaunchButton({ chatId: params.chatId, text: menuLabel('connect'), url: connectAppUrl })],
         [
-          { text: '◇ Explore', callback_data: 'menu:explore' },
-          { text: '? Help', callback_data: 'menu:topics' },
+          { text: menuLabel('explore'), callback_data: 'menu:explore' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
         [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
@@ -1394,11 +1417,11 @@ function buildExploreReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: '▣ Vaults', callback_data: 'menu:vaults' },
-        { text: '△ Auctions', callback_data: 'menu:auctions' },
-        { text: '↗ Signals', callback_data: 'menu:signals' },
+        { text: menuLabel('vaults'), callback_data: 'menu:vaults' },
+        { text: menuLabel('auctions'), callback_data: 'menu:auctions' },
+        { text: menuLabel('signals'), callback_data: 'menu:signals' },
       ],
-      [{ text: '< Back', callback_data: 'menu:start' }],
+      [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
 }
@@ -1407,15 +1430,15 @@ function buildTradeMenuReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: '+ Buy', callback_data: 'menu:buy' },
-        { text: '- Sell', callback_data: 'menu:sell' },
-        { text: '• Bid', callback_data: 'menu:bid' },
+        { text: menuLabel('buy'), callback_data: 'menu:buy' },
+        { text: menuLabel('sell'), callback_data: 'menu:sell' },
+        { text: menuLabel('bid'), callback_data: 'menu:bid' },
       ],
       [
-        { text: '■ Wallet', callback_data: 'menu:wallet' },
-        { text: '◇ Explore', callback_data: 'menu:explore' },
+        { text: menuLabel('wallet'), callback_data: 'menu:wallet' },
+        { text: menuLabel('explore'), callback_data: 'menu:explore' },
       ],
-      [{ text: '< Back', callback_data: 'menu:start' }],
+      [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
 }
@@ -1490,19 +1513,19 @@ function resolveStaticMenuCallbackResponse(params: {
   }
   if (token === 'menu:explore') {
     return {
-      text: ['◇ Explore', '', 'Pick where you want to scan next.'].join('\n'),
+      text: [menuLabel('explore'), '', 'Pick where you want to scan next.'].join('\n'),
       replyMarkup: buildExploreReplyMarkup(),
     }
   }
   if (token === 'menu:trade') {
     if (!params.isLinked) {
       return {
-        text: ['Trade requires ■ Connect first.', '', 'Tap ■ Connect to link Telegram and wallet.'].join('\n'),
+        text: [`Trade requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
         replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
       }
     }
     return {
-      text: ['⇄ Trade', '', 'Pick an action to start the guided flow.'].join('\n'),
+      text: [menuLabel('trade'), '', 'Pick an action to start the guided flow.'].join('\n'),
       replyMarkup: buildTradeMenuReplyMarkup(),
     }
   }
@@ -1514,7 +1537,7 @@ function resolveStaticMenuCallbackResponse(params: {
   }
   if (token === 'menu:topics') {
     return {
-      text: ['? Help Topics', '', 'Pick a focused command guide.'].join('\n'),
+      text: [`${menuLabel('help')} Topics`, '', 'Pick a focused command guide.'].join('\n'),
       replyMarkup: buildHelpCategoryReplyMarkup(),
     }
   }
@@ -2734,7 +2757,7 @@ async function executeTelegramNativeCommand(params: {
       const linkFlow = buildTelegramLinkFlowResponse({
         chatId: params.chatId,
         telegramUserId: params.userId,
-        linkButtonText: '■ Connect',
+        linkButtonText: menuLabel('connect'),
       })
       return {
         text: [formatLinkStatusText(link), '', 'Next step: start one-tap linking below.'].join('\n'),
@@ -2763,14 +2786,14 @@ async function executeTelegramNativeCommand(params: {
         formatLinkStatusText(link),
         '',
         'Ready actions:',
-        '- tap ■ Wallet, ⇄ Trade, or ◇ Explore below',
+        `- tap ${menuLabel('wallet')}, ${menuLabel('trade')}, or ${menuLabel('explore')} below`,
       ].join('\n'),
       replyMarkup: {
         inline_keyboard: [
           [
             buildMiniAppLaunchButton({
               chatId: params.chatId,
-              text: '■ Wallet',
+              text: menuLabel('wallet'),
               url: buildTelegramMiniAppUrl({
                 baseUrl: resolveTelegramMiniAppUrl(),
                 pathname: '/swap',
@@ -2782,9 +2805,9 @@ async function executeTelegramNativeCommand(params: {
             }),
           ],
           [
-            { text: '⇄ Trade', callback_data: 'menu:trade' },
-            { text: '◇ Explore', callback_data: 'menu:explore' },
-            { text: '? Help', callback_data: 'menu:topics' },
+            { text: menuLabel('trade'), callback_data: 'menu:trade' },
+            { text: menuLabel('explore'), callback_data: 'menu:explore' },
+            { text: menuLabel('help'), callback_data: 'menu:topics' },
           ],
         ],
       },
@@ -3817,12 +3840,12 @@ function buildTradeRecoveryReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: '+ Buy', callback_data: 'menu:buy' },
-        { text: '- Sell', callback_data: 'menu:sell' },
-        { text: '• Bid', callback_data: 'menu:bid' },
+        { text: menuLabel('buy'), callback_data: 'menu:buy' },
+        { text: menuLabel('sell'), callback_data: 'menu:sell' },
+        { text: menuLabel('bid'), callback_data: 'menu:bid' },
       ],
       [
-        { text: '■ Wallet', callback_data: 'menu:wallet' },
+        { text: menuLabel('wallet'), callback_data: 'menu:wallet' },
         { text: 'Link Status', callback_data: 'menu:linked' },
       ],
       [{ text: 'Main Menu', callback_data: 'menu:start' }],

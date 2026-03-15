@@ -1,6 +1,7 @@
 import { normalizeUniswapError } from './error'
 import type { components } from './generated/tradeApi'
 import { apiFetch } from '@/lib/apiBase'
+import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
 
@@ -72,13 +73,47 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function normalizeOrigin(raw: string): string | null {
+  try {
+    return new URL(raw).origin
+  } catch {
+    return null
+  }
+}
+
+function isLocalOrigin(origin: string): boolean {
+  const localHosts = ['localhost', '127.0.0.1']
+  try {
+    const { hostname } = new URL(origin)
+    return localHosts.includes(hostname)
+  } catch {
+    return false
+  }
+}
+
+function getUniswapApiBases(path: string): string[] | undefined {
+  if (typeof window === 'undefined') return undefined
+  if (!path.startsWith('/api/uniswap/')) return undefined
+
+  const currentOrigin = normalizeOrigin(window.location.origin)
+  if (!currentOrigin || isLocalOrigin(currentOrigin)) return undefined
+
+  const bases = new Set<string>()
+  for (const candidate of [currentOrigin, APP_ORIGIN, MARKETING_ORIGIN]) {
+    const origin = normalizeOrigin(candidate)
+    if (!origin) continue
+    bases.add(origin)
+  }
+  return bases.size > 0 ? [...bases] : undefined
+}
+
 async function requestApi(path: string, init?: RequestInit): Promise<Response> {
   // Keep node test runners stable: tests mock `global.fetch` with lightweight
   // objects that do not implement full Response headers.
   if (typeof window === 'undefined') {
     return fetch(path, init)
   }
-  return apiFetch(path, init)
+  return apiFetch(path, init, getUniswapApiBases(path))
 }
 
 async function post<T>(path: string, body: Record<string, unknown>, retries = DEFAULT_RETRIES): Promise<T> {

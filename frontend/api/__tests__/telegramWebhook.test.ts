@@ -1247,6 +1247,52 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(true)
   })
 
+  it('handles callback query for explore menu with non-emoji symbols', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 11_2,
+        callback_query: {
+          id: 'cbq-explore',
+          data: 'menu:explore',
+          from: { id: 99 },
+          message: { message_id: 16, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(2)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('◇ Explore')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === '▣ Vaults')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === '△ Auctions')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === '⇢ Signals')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === '↗ Signals')).toBe(false)
+  })
+
   it('handles /linked as a telegram-native command without delegating to keepr', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 

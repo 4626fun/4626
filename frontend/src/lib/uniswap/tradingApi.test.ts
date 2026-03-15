@@ -14,6 +14,7 @@ import {
   type TradeQuoteRequest,
   type TradeQuoteResponse,
 } from './tradingApi'
+import { MARKETING_ORIGIN } from '@/lib/host'
 
 const VALID_TX = {
   to: '0x0000000000000000000000000000000000000001',
@@ -156,6 +157,48 @@ describe('fetchTradeQuote', () => {
     const [firstBody, secondBody] = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body ?? '{}')))
     expect(firstBody.walletModeKey).toBeUndefined()
     expect(secondBody.walletModeKey).toBeUndefined()
+  })
+
+  it('falls back to marketing origin when app origin returns 404', async () => {
+    const originalWindow = (globalThis as any).window
+    ;(globalThis as any).window = { location: { origin: 'https://app.4626.fun' } }
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'Not found' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'Not found' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { ...quoteResponse('CLASSIC'), requestId: 'rq_cross_origin' } }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const result = await fetchTradeQuote(quoteRequest('791357'))
+      expect(result.requestId).toBe('rq_cross_origin')
+      const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+      expect(calledUrls[0]).toBe('https://app.4626.fun/__api/uniswap/quote')
+      expect(calledUrls[1]).toBe('https://app.4626.fun/api/uniswap/quote')
+      expect(calledUrls[2]).toBe(`${new URL(MARKETING_ORIGIN).origin}/__api/uniswap/quote`)
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as any).window
+      } else {
+        ;(globalThis as any).window = originalWindow
+      }
+    }
   })
 })
 
