@@ -25,7 +25,6 @@ type WaitlistRequestBody = {
   intent?: {
     persona?: 'creator' | 'user' | null
     hasCreatorCoin?: boolean | null
-    fid?: number | null
   } | null
 }
 
@@ -88,12 +87,12 @@ function isValidSolanaAddress(v: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]+$/.test(s)
 }
 
-type ContactPreference = 'wallet' | 'farcaster' | 'email' | 'solana'
+type ContactPreference = 'wallet' | 'email' | 'solana'
 type VerificationClaim = { method: string; subject: string; timestamp: string }
 
 function normalizeContactPreference(v: unknown): ContactPreference | null {
   const t = typeof v === 'string' ? v.trim().toLowerCase() : ''
-  if (t === 'wallet' || t === 'farcaster' || t === 'email' || t === 'solana') return t
+  if (t === 'wallet' || t === 'email' || t === 'solana') return t
   return null
 }
 
@@ -417,11 +416,6 @@ export default async function handler(req: any, res: any) {
     body.intent && typeof body.intent === 'object' && typeof (body.intent as any).hasCreatorCoin === 'boolean'
       ? Boolean((body.intent as any).hasCreatorCoin)
       : null
-  const farcasterFidRaw =
-    body.intent && typeof body.intent === 'object' && typeof (body.intent as any).fid === 'number'
-      ? Math.floor(Number((body.intent as any).fid))
-      : null
-  const farcasterFid = farcasterFidRaw && Number.isFinite(farcasterFidRaw) && farcasterFidRaw > 0 ? farcasterFidRaw : null
   const contactPreference = normalizeContactPreference(body.contactPreference)
   const syntheticEmail = isAnySyntheticEmail(email)
   const primaryWalletForPersistence = hasTrustedPrincipal ? primaryWallet : ''
@@ -430,7 +424,6 @@ export default async function handler(req: any, res: any) {
   // Only authenticated principals can mutate profile intent/contact metadata.
   const personaForPersistence = hasTrustedPrincipal ? persona : null
   const hasCreatorCoinForPersistence = hasTrustedPrincipal ? hasCreatorCoinRaw : null
-  const farcasterFidForPersistence = hasTrustedPrincipal ? farcasterFid : null
   const contactPreferenceForPersistence = hasTrustedPrincipal ? contactPreference : null
 
   // Wallet-only onboarding can submit a synthetic fallback email so long as the
@@ -450,8 +443,7 @@ export default async function handler(req: any, res: any) {
   const hasVerificationSignal =
     verifications.length > 0 ||
     (primaryWalletForPersistence.length > 0 && isValidEvmAddress(primaryWalletForPersistence)) ||
-    (solanaWallet.length > 0 && isValidSolanaAddress(solanaWallet)) ||
-    (typeof farcasterFid === 'number' && farcasterFid > 0)
+    (solanaWallet.length > 0 && isValidSolanaAddress(solanaWallet))
 
   if (syntheticEmail && !hasVerificationSignal) {
     return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
@@ -681,9 +673,6 @@ export default async function handler(req: any, res: any) {
           if (baseSubAccountForPersistence.length > 0) patch.base_sub_account = baseSubAccountForPersistence
           if (personaForPersistence) patch.persona = personaForPersistence
           if (typeof hasCreatorCoinForPersistence === 'boolean') patch.has_creator_coin = hasCreatorCoinForPersistence
-          if (typeof farcasterFidForPersistence === 'number' && farcasterFidForPersistence > 0) {
-            patch.farcaster_fid = farcasterFidForPersistence
-          }
           if (contactPreferenceForPersistence) patch.contact_preference = contactPreferenceForPersistence
           if (verifications.length > 0) patch.verifications = verifications
           if (cswAddressForPersistence.length > 0) {
@@ -717,7 +706,6 @@ export default async function handler(req: any, res: any) {
             csw_address: cswAddressForPersistence.length > 0 ? cswAddressForPersistence : null,
             persona: personaForPersistence,
             has_creator_coin: hasCreatorCoinForPersistence,
-            farcaster_fid: farcasterFidForPersistence,
             contact_preference: contactPreferenceForPersistence,
             verifications: verifications.length > 0 ? verifications : null,
             created_at: nowIso,
@@ -898,7 +886,6 @@ export default async function handler(req: any, res: any) {
             base_sub_account = COALESCE(${baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null}, base_sub_account),
             persona = COALESCE(${personaForPersistence}, persona),
             has_creator_coin = COALESCE(${hasCreatorCoinForPersistence}, has_creator_coin),
-            farcaster_fid = COALESCE(${farcasterFidForPersistence}, farcaster_fid),
             contact_preference = COALESCE(${contactPreferenceForPersistence}, contact_preference),
             verifications = COALESCE(${verifications.length > 0 ? JSON.stringify(verifications) : null}, verifications),
             updated_at = NOW()
@@ -1041,7 +1028,6 @@ export default async function handler(req: any, res: any) {
         base_sub_account,
         persona,
         has_creator_coin,
-        farcaster_fid,
         contact_preference,
         verifications,
         created_at,
@@ -1059,7 +1045,6 @@ export default async function handler(req: any, res: any) {
         ${baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null},
         ${personaForPersistence},
         ${hasCreatorCoinForPersistence},
-        ${farcasterFidForPersistence},
         ${contactPreferenceForPersistence},
         ${verifications.length > 0 ? JSON.stringify(verifications) : null},
         NOW(),
@@ -1076,7 +1061,6 @@ export default async function handler(req: any, res: any) {
             base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
             persona = COALESCE(EXCLUDED.persona, profiles.persona),
             has_creator_coin = COALESCE(EXCLUDED.has_creator_coin, profiles.has_creator_coin),
-            farcaster_fid = COALESCE(EXCLUDED.farcaster_fid, profiles.farcaster_fid),
             contact_preference = COALESCE(EXCLUDED.contact_preference, profiles.contact_preference),
             verifications = COALESCE(EXCLUDED.verifications, profiles.verifications),
             updated_at = NOW()
@@ -1255,7 +1239,6 @@ export default async function handler(req: any, res: any) {
             base_sub_account,
             persona,
             has_creator_coin,
-            farcaster_fid,
             contact_preference,
             verifications,
             created_at,
@@ -1273,7 +1256,6 @@ export default async function handler(req: any, res: any) {
             ${baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null},
             ${personaForPersistence},
             ${hasCreatorCoinForPersistence},
-            ${farcasterFidForPersistence},
             ${contactPreferenceForPersistence},
             ${verifications.length > 0 ? JSON.stringify(verifications) : null},
             NOW(),
@@ -1290,7 +1272,6 @@ export default async function handler(req: any, res: any) {
                 base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
                 persona = COALESCE(EXCLUDED.persona, profiles.persona),
                 has_creator_coin = COALESCE(EXCLUDED.has_creator_coin, profiles.has_creator_coin),
-                farcaster_fid = COALESCE(EXCLUDED.farcaster_fid, profiles.farcaster_fid),
                 contact_preference = COALESCE(EXCLUDED.contact_preference, profiles.contact_preference),
                 verifications = COALESCE(EXCLUDED.verifications, profiles.verifications),
                 updated_at = NOW()
@@ -1312,7 +1293,6 @@ export default async function handler(req: any, res: any) {
       lower.includes('column') &&
       (lower.includes('persona') ||
         lower.includes('has_creator_coin') ||
-        lower.includes('farcaster_fid') ||
         lower.includes('embedded_wallet_chain') ||
         lower.includes('embedded_wallet_client_type') ||
         lower.includes('contact_preference') ||

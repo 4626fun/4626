@@ -360,7 +360,7 @@ export function useSiweAuth() {
         if (privyReady && !privyAuthenticated && typeof login === 'function') {
           try {
             if (method === 'privy') {
-              await login({ loginMethods: ['wallet', 'email', 'google', 'apple'] })
+              await login({ loginMethods: ['wallet', 'email', 'google', 'apple', 'telegram'] })
             } else {
               // Auto path stays wallet-first to keep the primary onboarding flow one-tap.
               await login({ loginMethods: ['wallet'] })

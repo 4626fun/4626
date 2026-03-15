@@ -115,7 +115,7 @@ describe('waitlist unauthenticated mutation hardening', () => {
         claimReferralCode: 'mycustomcode',
         solanaWallet: '11111111111111111111111111111111',
         contactPreference: 'email',
-        intent: { persona: 'user', hasCreatorCoin: true, fid: 4242 },
+        intent: { persona: 'user', hasCreatorCoin: true },
       },
     })
     const res = createMockRes()
@@ -128,7 +128,7 @@ describe('waitlist unauthenticated mutation hardening', () => {
     expect(insertValues).toBeDefined()
 
     // Values order in INSERT is stable in handler:
-    // [ ..., base_sub_account, persona, has_creator_coin, farcaster_fid, contact_preference, verifications, ... ]
+    // [ ..., base_sub_account, persona, has_creator_coin, contact_preference, verifications, ... ]
     expect(insertValues?.[2]).toBeNull()
     expect(insertValues?.[9]).toBeNull()
     expect(insertValues?.[10]).toBeNull()

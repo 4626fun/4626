@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { useLogin, useLoginWithTelegram, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
@@ -58,6 +58,11 @@ type HandoffCreateResponse = {
 }
 
 type WaitlistStep = 'email' | 'auth' | 'zora' | 'done'
+type TelegramAuthFlowState =
+  | { status: 'initial' }
+  | { status: 'loading' }
+  | { status: 'done' }
+  | { status: 'error'; error: Error | null }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDOFF_QUERY_KEY = 'cv_handoff'
@@ -101,6 +106,17 @@ function useSafeLogin() {
   }
 }
 
+function useSafeLoginWithTelegram() {
+  try {
+    return useLoginWithTelegram() as { login: () => Promise<void>; state: TelegramAuthFlowState }
+  } catch {
+    return {
+      login: async () => {},
+      state: { status: 'initial' } as TelegramAuthFlowState,
+    }
+  }
+}
+
 function shortAddress(value: string | null | undefined): string {
   if (!value) return '—'
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
@@ -136,6 +152,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const privy = useSafePrivy()
   const { login } = useSafeLogin()
+  const { login: loginWithTelegram, state: telegramAuthState } = useSafeLoginWithTelegram()
 
   const privyReady = Boolean(privy?.ready)
   const privyAuthed = Boolean(privy?.authenticated)
@@ -162,6 +179,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const zoraAutoResolvedRef = useRef(false)
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
+  const telegramAuthLoading = telegramAuthState.status === 'loading'
 
   const isPage = variant === 'page'
 
@@ -243,6 +261,39 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setBusy(false)
     }
   }, [busy, login, privyAuthed, runBootstrap])
+
+  const onContinueWithTelegram = useCallback(async () => {
+    if (step !== 'auth') return
+    if (busy || authAttemptInFlightRef.current || telegramAuthLoading) return
+    authAttemptInFlightRef.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      if (privyAuthed) {
+        await runBootstrap()
+      } else {
+        await loginWithTelegram()
+      }
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    } catch (authError: any) {
+      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start Telegram sign-in.')
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    }
+  }, [busy, loginWithTelegram, privyAuthed, runBootstrap, step, telegramAuthLoading])
+
+  useEffect(() => {
+    if (step !== 'auth') return
+    if (telegramAuthState.status !== 'error') return
+    const errorMessage =
+      typeof telegramAuthState.error?.message === 'string' && telegramAuthState.error.message.trim()
+        ? telegramAuthState.error.message
+        : 'Telegram sign-in was cancelled. Try again.'
+    setError(errorMessage)
+    setBusy(false)
+    authAttemptInFlightRef.current = false
+  }, [step, telegramAuthState])
 
   const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
     const response = await apiFetch('/api/zora/resolve', {
@@ -516,6 +567,27 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 emailUi.ctaLabel
               )}
             </button>
+
+            {step === 'auth' ? (
+              <button
+                type="button"
+                disabled={busy || telegramAuthLoading}
+                onClick={() => void onContinueWithTelegram()}
+                className="w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-sm font-medium text-white transition hover:border-[#229ED9]/60 hover:bg-[#229ED9]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#229ED9]/40 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+              >
+                {telegramAuthLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Connecting Telegram…
+                  </>
+                ) : (
+                  <>
+                    <img src="/brands/telegram.svg" alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
+                    Continue with Telegram
+                  </>
+                )}
+              </button>
+            ) : null}
 
             {error ? (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

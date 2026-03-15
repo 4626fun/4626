@@ -92,40 +92,37 @@ export type TelegramBotMenuCommand = {
 }
 
 export const TELEGRAM_PRIVATE_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: menu and examples' },
-  { command: 'link', description: 'Connect Telegram to your wallet' },
+  { command: 'help', description: 'Start here: link, trade, portfolio' },
+  { command: 'link', description: 'Link Telegram to your wallet' },
   { command: 'linked', description: 'Check wallet link status' },
-  { command: 'buy', description: 'Buy in guided flow' },
-  { command: 'sell', description: 'Sell in guided flow' },
-  { command: 'bid', description: 'Bid in guided flow' },
-  { command: 'portfolio', description: 'View your positions and activity' },
-  { command: 'vaults', description: 'Browse active vaults' },
-  { command: 'auctions', description: 'View live auctions' },
-  { command: 'signals', description: 'See recent buy and sell signals' },
-  { command: 'deploy', description: 'Create your own vault' },
+  { command: 'vaults', description: 'Browse vaults' },
+  { command: 'buy', description: 'Guided buy flow' },
+  { command: 'sell', description: 'Guided sell flow' },
+  { command: 'bid', description: 'Guided bid flow' },
+  { command: 'portfolio', description: 'Your positions and actions' },
+  { command: 'signals', description: 'Recent trade feed' },
 ]
 
 export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: command menu' },
-  { command: 'link', description: 'Connect your wallet to trade' },
-  { command: 'buy', description: 'Buy in guided flow' },
-  { command: 'sell', description: 'Sell in guided flow' },
-  { command: 'bid', description: 'Bid in guided flow' },
-  { command: 'vaults', description: 'Browse vaults in this chat' },
-  { command: 'auctions', description: 'View active auctions in this chat' },
-  { command: 'signals', description: 'See recent trade signals' },
+  { command: 'help', description: 'Start here: link and trade' },
+  { command: 'link', description: 'Link wallet to trade' },
+  { command: 'vaults', description: 'Vaults in this chat' },
+  { command: 'buy', description: 'Guided buy flow' },
+  { command: 'sell', description: 'Guided sell flow' },
+  { command: 'bid', description: 'Guided bid flow' },
+  { command: 'signals', description: 'Recent trade feed' },
 ]
 
 export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: admin command menu' },
-  { command: 'deploy', description: 'Create a vault from Telegram' },
-  { command: 'inline', description: 'Open one-tap command templates' },
-  { command: 'vaults', description: 'Browse vaults in this chat' },
-  { command: 'auctions', description: 'View active auctions in this chat' },
-  { command: 'signals', description: 'See recent trade signals' },
-  { command: 'x', description: 'Draft and post to X (confirm required)' },
-  { command: 'tweet', description: 'Alias for /x post' },
-  { command: 'portfolio', description: 'View linked account activity' },
+  { command: 'help', description: 'Start here: admin quick actions' },
+  { command: 'link', description: 'Link wallet for admin actions' },
+  { command: 'vaults', description: 'Vaults in this chat' },
+  { command: 'buy', description: 'Guided buy flow' },
+  { command: 'sell', description: 'Guided sell flow' },
+  { command: 'bid', description: 'Guided bid flow' },
+  { command: 'portfolio', description: 'Linked account activity' },
+  { command: 'signals', description: 'Recent trade feed' },
+  { command: 'deploy', description: 'Deploy a vault' },
 ]
 
 export const DEPLOY_CURRENCY_VALUES: DeployCurrencyInput[] = ['ETH', 'ZORA', 'CREATOR_COIN', 'CONTENT_COIN']

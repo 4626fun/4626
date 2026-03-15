@@ -10,7 +10,7 @@ import { createPublicClient, fallback, http } from 'viem'
 import { mainnet } from 'viem/chains'
 import { getBasenameProfile, formatBasename } from '@/lib/basename-api'
 
-export type IdentitySource = 'farcaster' | 'lens' | 'ens' | 'basename' | 'address'
+export type IdentitySource = 'lens' | 'ens' | 'basename' | 'address'
 
 export type IdentityResult = {
   displayName: string
@@ -18,7 +18,6 @@ export type IdentityResult = {
   loading: boolean
   source: IdentitySource
   secondary: string | null
-  farcasterHandle: string | null
   lensHandle: string | null
   lensUsername: string | null
   lensAccountAddress: string | null
@@ -208,7 +207,6 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
     avatar: null,
     source: 'address',
     secondary: null,
-    farcasterHandle: null,
     lensHandle: null,
     lensUsername: null,
     lensAccountAddress: null,
@@ -251,7 +249,6 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
           basename && lc(basename) !== lc(lens.displayName) ? basename : null,
           truncate(address),
         ]),
-        farcasterHandle: null,
         lensHandle: lens.handle,
         lensUsername: lens.username,
         lensAccountAddress: lens.accountAddress,
@@ -274,7 +271,6 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
           basename && lc(basename) !== lc(ensName) ? basename : null,
           truncate(address),
         ]),
-        farcasterHandle: null,
         lensHandle: null,
         lensUsername: null,
         lensAccountAddress: null,
@@ -294,7 +290,6 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
         avatar: basenameAvatar,
         source: 'basename',
         secondary: truncate(address),
-        farcasterHandle: null,
         lensHandle: null,
         lensUsername: null,
         lensAccountAddress: null,
@@ -328,7 +323,6 @@ export function useIdentity(address: string | null | undefined): {
   loading: boolean
   source: IdentitySource
   secondary: string | null
-  farcasterHandle: string | null
   lensHandle: string | null
   lensUsername: string | null
   lensAccountAddress: string | null
@@ -346,7 +340,6 @@ export function useIdentity(address: string | null | undefined): {
         avatar: null,
         source: 'address',
         secondary: null,
-        farcasterHandle: null,
         lensHandle: null,
         lensUsername: null,
         lensAccountAddress: null,
@@ -361,7 +354,6 @@ export function useIdentity(address: string | null | undefined): {
         avatar: null,
         source: 'address',
         secondary: null,
-        farcasterHandle: null,
         lensHandle: null,
         lensUsername: null,
         lensAccountAddress: null,

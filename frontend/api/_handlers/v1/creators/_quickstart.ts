@@ -8,7 +8,6 @@
  * 3. Provisions a Privy server wallet (for CSW agent signing)
  * 4. Registers a CSW-based XMTP agent
  * 5. Creates a default Keepr vault config (if coin found)
- * 6. Resolves Farcaster identity
  *
  * Returns everything the frontend needs to show a confirmation modal
  * with a single remaining action: the addOwnerAddress UserOp.
@@ -40,8 +39,6 @@ declare const process: { env: Record<string, string | undefined> }
 type QuickstartResult = {
   // Identity
   creatorAddress: string
-  farcasterUsername: string | null
-  farcasterPfp: string | null
   zoraProfile: { displayName: string | null; handle: string | null } | null
 
   // Creator coin (auto-detected)
@@ -124,34 +121,6 @@ async function resolveZoraProfile(address: string): Promise<{
     }
   } catch (err) {
     logger.warn('[quickstart] Zora profile fetch failed', err)
-    return null
-  }
-}
-
-async function resolveFarcaster(address: string): Promise<{
-  username: string | null
-  pfpUrl: string | null
-} | null> {
-  try {
-    const neynarKey = (process.env.NEYNAR_API_KEY ?? process.env.VITE_NEYNAR_API_KEY ?? '').trim()
-    if (!neynarKey) return null
-
-    const res = await fetch(
-      `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${encodeURIComponent(address)}`,
-      { headers: { accept: 'application/json', api_key: neynarKey } },
-    )
-    if (!res.ok) return null
-
-    const json = (await res.json()) as any
-    const users = json?.[address.toLowerCase()] ?? json?.[address] ?? []
-    const user = Array.isArray(users) ? users[0] : null
-    if (!user) return null
-
-    return {
-      username: user.username ?? null,
-      pfpUrl: user.pfp_url ?? null,
-    }
-  } catch {
     return null
   }
 }
@@ -268,9 +237,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return null
     })
 
-    const [zoraProfile, farcaster, persistedWalletIdentity] = await Promise.all([
+    const [zoraProfile, persistedWalletIdentity] = await Promise.all([
       resolveZoraProfile(creatorAddress),
-      resolveFarcaster(creatorAddress),
       persistedWalletIdentityPromise,
     ])
 
@@ -439,8 +407,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ------------------------------------------------------------------
     const result: QuickstartResult = {
       creatorAddress,
-      farcasterUsername: farcaster?.username ?? null,
-      farcasterPfp: farcaster?.pfpUrl ?? null,
       zoraProfile: zoraProfile
         ? { displayName: zoraProfile.displayName, handle: zoraProfile.handle }
         : null,

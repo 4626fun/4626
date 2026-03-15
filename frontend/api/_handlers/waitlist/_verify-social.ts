@@ -1,7 +1,6 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getDb } from '../../../server/_lib/postgres.js'
-import { readNeynarApiKey } from '../../../server/_lib/neynarConfig.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -9,13 +8,12 @@ import { checkRateLimit, rateLimitKey, getClientIp } from '../../../server/_lib/
 
 declare const process: { env: Record<string, string | undefined> }
 
-type SocialPlatform = 'farcaster' | 'discord' | 'telegram'
+type SocialPlatform = 'discord' | 'telegram'
 
 type Body = {
   email?: string
   platform?: SocialPlatform
   // Platform-specific identifiers
-  fid?: number           // Farcaster FID
   discordUserId?: string // Discord user ID
   telegramUserId?: string // Telegram user ID
 }
@@ -28,55 +26,12 @@ type VerifySocialResponse = {
   points: number
 }
 
-// Our Farcaster FID for @4626
-const OUR_FARCASTER_FID = 2274738
-
 function normalizeEmail(v: string): string {
   return v.trim().toLowerCase()
 }
 
 function isValidEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
-}
-
-// Verify Farcaster follow using Neynar API
-async function verifyFarcasterFollow(userFid: number): Promise<boolean> {
-  const apiKey = readNeynarApiKey({ context: 'waitlist/verify-social' })
-  if (!apiKey) {
-    console.warn('NEYNAR_API_KEY not configured, using honor system for Farcaster')
-    return true // Honor system fallback
-  }
-
-  try {
-    // Check if user follows our account using the user/bulk endpoint with viewer_fid
-    // This returns follow relationship in the response
-    const url = `https://api.neynar.com/v2/farcaster/user/bulk?fids=${OUR_FARCASTER_FID}&viewer_fid=${userFid}`
-    const response = await fetch(url, {
-      headers: {
-        'accept': 'application/json',
-        'x-api-key': apiKey,
-      },
-    })
-
-    if (!response.ok) {
-      console.error('Neynar API error:', response.status)
-      // Don't auto-verify on API error - require successful verification
-      return false
-    }
-
-    const data = await response.json() as any
-    
-    // Check if the viewer (user) follows the target (us)
-    const profiles = Array.isArray(data?.profiles) ? data.profiles : []
-    const ourUser = profiles.find((u: any) => u?.fid === OUR_FARCASTER_FID)
-    
-    // viewer_context.following indicates if the viewer follows this user
-    return ourUser?.viewer_context?.following === true
-  } catch (e) {
-    console.error('Farcaster verification error:', e)
-    // Don't auto-verify on error - require successful verification
-    return false
-  }
 }
 
 // Discord verification would require a bot - use honor system for now
@@ -129,13 +84,11 @@ async function verifyTelegramMembership(telegramUserId: string): Promise<boolean
 }
 
 const PLATFORM_POINTS: Record<SocialPlatform, number> = {
-  farcaster: WAITLIST_POINTS.farcaster,
   discord: WAITLIST_POINTS.discord,
   telegram: WAITLIST_POINTS.telegram,
 }
 
 const PLATFORM_SOURCE: Record<SocialPlatform, string> = {
-  farcaster: 'social_farcaster',
   discord: 'social_discord',
   telegram: 'social_telegram',
 }
@@ -171,7 +124,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const platform = body?.platform as SocialPlatform
-  if (!platform || !['farcaster', 'discord', 'telegram'].includes(platform)) {
+  if (!platform || !['discord', 'telegram'].includes(platform)) {
     return res.status(400).json({ success: false, error: 'Invalid platform' } satisfies ApiEnvelope<never>)
   }
 
@@ -184,7 +137,7 @@ export default async function handler(req: any, res: any) {
 
   // Find the signup
   const me = await db.sql`
-    SELECT id, farcaster_fid, primary_wallet, embedded_wallet, csw_address
+    SELECT id, primary_wallet, embedded_wallet, csw_address
     FROM profiles
     WHERE email = ${email}
     LIMIT 1;
@@ -208,22 +161,6 @@ export default async function handler(req: any, res: any) {
   let verified = false
 
   switch (platform) {
-    case 'farcaster': {
-      const fid = typeof body?.fid === 'number' ? body.fid : null
-      if (!fid || fid <= 0) {
-        return res.status(400).json({ success: false, error: 'Farcaster FID is required' } satisfies ApiEnvelope<never>)
-      }
-      verified = await verifyFarcasterFollow(fid)
-      // Store the FID for future reference
-      if (verified) {
-        await db.sql`
-          UPDATE profiles
-          SET farcaster_fid = ${fid}, updated_at = NOW()
-          WHERE id = ${signupId} AND farcaster_fid IS NULL;
-        `
-      }
-      break
-    }
     case 'discord': {
       const discordUserId = typeof body?.discordUserId === 'string' ? body.discordUserId : ''
       verified = await verifyDiscordMembership(discordUserId)

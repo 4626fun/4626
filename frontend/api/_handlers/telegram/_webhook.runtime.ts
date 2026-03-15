@@ -1279,6 +1279,32 @@ function buildMiniAppLaunchButton(params: {
   return buildMiniAppLaunchButtonShared(params)
 }
 
+function isDefaultHelpCommand(rawText: string): boolean {
+  return isHelpCommand(rawText) && !isHelpCategoryCommand(rawText)
+}
+
+function buildFocusedHelpText(): string {
+  return [
+    '4626 on Telegram',
+    '',
+    'Quick start',
+    '1) /link',
+    '2) /buy (or /sell, /bid)',
+    '3) /portfolio',
+    '',
+    'Core commands',
+    '- /link',
+    '- /buy',
+    '- /sell',
+    '- /bid',
+    '- /portfolio',
+    '- /signals',
+    '- /vaults',
+    '',
+    'Need everything? /help all',
+  ].join('\n')
+}
+
 function buildHelpReplyMarkup(chatId: string): Record<string, unknown> {
   const miniAppUrl = resolveTelegramMiniAppUrl()
   const tradeAppUrl = buildTelegramMiniAppUrl({
@@ -1289,40 +1315,29 @@ function buildHelpReplyMarkup(chatId: string): Record<string, unknown> {
       tgEntry: 'trade',
     },
   })
-  const aiAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: '/swap',
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'ai',
-      chatAction: 'ai-assistant',
-      chatName: 'akita',
-    },
-  })
 
   const keyboard: Array<Array<Record<string, unknown>>> = [
     [
+      { text: 'Link', callback_data: 'menu:link' },
       { text: 'Buy', callback_data: 'menu:buy' },
       { text: 'Sell', callback_data: 'menu:sell' },
+    ],
+    [
       { text: 'Bid', callback_data: 'menu:bid' },
-    ],
-    [
       { text: 'Portfolio', callback_data: 'menu:portfolio' },
-      { text: 'Signals', callback_data: 'menu:signals' },
-      { text: 'Link', callback_data: 'menu:link' },
-    ],
-    [
       { text: 'Link Status', callback_data: 'menu:linked' },
-      { text: 'More Tools', callback_data: 'menu:more' },
-      { text: 'Help', callback_data: 'menu:help' },
     ],
     [
-      { text: 'Ask AI', switch_inline_query_current_chat: 'ai What should I do next?' },
+      { text: 'Signals', callback_data: 'menu:signals' },
+      { text: 'Vaults', callback_data: 'menu:vaults' },
+      { text: 'Auctions', callback_data: 'menu:auctions' },
+    ],
+    [
+      { text: 'Refresh Help', callback_data: 'menu:help' },
       { text: 'All Commands', callback_data: 'help:all' },
     ],
     [
-      buildMiniAppLaunchButton({ chatId, text: 'Mini App: Trade', url: tradeAppUrl }),
-      buildMiniAppLaunchButton({ chatId, text: 'Mini App: Ask AI', url: aiAppUrl }),
+      buildMiniAppLaunchButton({ chatId, text: 'Open Mini App', url: tradeAppUrl }),
     ],
   ]
 
@@ -4749,6 +4764,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!response.text) {
       response.text = 'Command received.'
     }
+    const shouldUseFocusedHelp = isDefaultHelpCommand(mappedCommand)
+    if (shouldUseFocusedHelp) {
+      response.text = buildFocusedHelpText()
+      if (!response.replyMarkup) {
+        response.replyMarkup = buildHelpReplyMarkup(chatId)
+      }
+    }
 
     const helpMarkup = response.replyMarkup
       ?? (isHelpCategoryCommand(mappedCommand)
@@ -4800,7 +4822,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
   const { chatId, userId, fromBot, text, messageId } = normalizedMessage
-  const isStartCommand = /^\/start(?:\s+.*)?$/i.test(text)
   const normalizedText = normalizeTelegramCommand(text)
   const commandText = shouldAutoRouteToAi({ chatId, text, message }) ? normalizeTelegramCommand(`/ai ${text}`) : normalizedText
   if (!text) {
@@ -4873,20 +4894,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!response.text) {
     response.text = 'Command received.'
   }
-  if (isStartCommand) {
-    response.text = [
-      'Welcome to 4626 on Telegram',
-      '',
-      'New user quick path: Link -> Trade -> Portfolio.',
-      'Use the menu buttons for one-tap actions.',
-      '',
-      response.text,
-    ].join('\n')
+  const shouldUseFocusedHelp = isDefaultHelpCommand(normalizedText)
+  if (shouldUseFocusedHelp) {
+    response.text = buildFocusedHelpText()
+    if (!response.replyMarkup) {
+      response.replyMarkup = buildHelpReplyMarkup(chatId)
+    }
   }
 
   const chunks = splitTelegramMessage(response.text)
-  const helpMarkup =
-    response.replyMarkup ?? (isHelpCommand(normalizedText) ? buildHelpReplyMarkup(chatId) : undefined)
+  const helpMarkup = response.replyMarkup
+    ?? (isHelpCategoryCommand(normalizedText)
+      ? buildHelpCategoryReplyMarkup()
+      : isHelpCommand(normalizedText)
+        ? buildHelpReplyMarkup(chatId)
+        : undefined)
   for (let idx = 0; idx < chunks.length; idx += 1) {
     const chunk = chunks[idx]
     if (!chunk) continue

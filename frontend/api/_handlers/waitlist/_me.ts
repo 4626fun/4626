@@ -39,11 +39,9 @@ type WaitlistMeResponse = {
   solanaWallet: string | null
   canonicalSolanaWallet: string | null
   operationalSolanaWallet: string | null
-  farcasterFid: number | null
   preprovCoinAddress: string | null
   preprovCoinSymbol: string | null
   erc8128AgentId: string | null
-  preprovFarcasterUsername: string | null
   preprovZoraHandle: string | null
   lensHandle: string | null
   lensAccountAddress: string | null
@@ -153,11 +151,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       solana_wallet,
       canonical_solana_wallet,
       operational_solana_wallet,
-      farcaster_fid,
       preprov_coin_address,
       preprov_coin_symbol,
       erc8128_agent_id,
-      preprov_farcaster_username,
       preprov_zora_handle,
       lens_handle,
       lens_account_address,
@@ -309,11 +305,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : typeof row.solana_wallet === 'string'
           ? row.solana_wallet
           : null,
-    farcasterFid: typeof row.farcaster_fid === 'number' ? row.farcaster_fid : row.farcaster_fid ? Number(row.farcaster_fid) : null,
     preprovCoinAddress: typeof row.preprov_coin_address === 'string' ? row.preprov_coin_address : null,
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
     erc8128AgentId: typeof row.erc8128_agent_id === 'string' ? row.erc8128_agent_id : null,
-    preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
     preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
     lensHandle: typeof row.lens_handle === 'string' ? row.lens_handle : null,
     lensAccountAddress: typeof row.lens_account_address === 'string' ? row.lens_account_address : null,

@@ -150,8 +150,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 
-  'farcaster/mention': () => import('./farcaster/_mention.js'),
-
   'bankr/status': () => import('./bankr/_status.js'),
   'bankr/profile': () => import('./bankr/_profile.js'),
 
@@ -237,10 +235,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   // Versioned API paths (v1/token/{address}/metadata and v1/token/{address}/image)
   // These are handled dynamically in getApiHandler below
 
-  // Farcaster Frames
-  'frames/vault': () => import('./frames/_vault.js'),
-  'frames/gallery': () => import('./frames/_gallery.js'),
-
   'lens/mapping': () => import('./lens/_mapping.js'),
   'lens/graph': () => import('./lens/_graph.js'),
   'lens/share-token-metadata': () => import('./lens/_share-token-metadata.js'),
@@ -274,7 +268,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/creator-access/restore': () => import('./admin/creator-access/_restore.js'),
   'admin/creator-access/revoke': () => import('./admin/creator-access/_revoke.js'),
   'admin/db/index-usage': () => import('./admin/db/_indexUsage.js'),
-  'admin/farcaster/provider-dashboard': () => import('./admin/farcaster/_provider-dashboard.js'),
   'admin/waitlist/detail': () => import('./admin/waitlist/_detail.js'),
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),

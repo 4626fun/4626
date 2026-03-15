@@ -358,7 +358,7 @@ describe('telegram webhook handler', () => {
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:help')).toBe(true)
-    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:more')).toBe(true)
+    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:vaults')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(false)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:deploy')).toBe(false)
   })
@@ -375,7 +375,7 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 3_0,
-        message: { message_id: 90, text: '/help', chat: { id: -100123 }, from: { id: 99 } },
+        message: { message_id: 90, text: '/help market', chat: { id: -100123 }, from: { id: 99 } },
       },
     })
     const res = createMockRes()
@@ -419,7 +419,7 @@ describe('telegram webhook handler', () => {
     expect(
       buttons.some(
         (button: any) =>
-          typeof button?.web_app?.url === 'string' && String(button.web_app.url).includes('chatAction=ai-assistant'),
+          typeof button?.web_app?.url === 'string' && String(button.web_app.url).includes('tgEntry=trade'),
       ),
     ).toBe(true)
   })

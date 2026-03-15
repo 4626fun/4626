@@ -2,7 +2,7 @@
  * AgentDirectory — browse and message creator XMTP agents.
  *
  * Fetches from /api/v1/agents/creators and displays a grid of creator agents
- * with identity resolution (Base Name / Farcaster / truncated address).
+ * with identity resolution (Base Name / Lens / truncated address).
  */
 
 import { useCallback, useState } from 'react'
@@ -58,11 +58,6 @@ function AgentCard({
               {creatorIdentity.secondary ?? `${agent.creatorAddress.slice(0, 6)}…${agent.creatorAddress.slice(-4)}`}
             </div>
             <div className="mt-1 flex items-center gap-1.5">
-              {creatorIdentity.farcasterHandle ? (
-                <span className="inline-flex items-center rounded-full border border-indigo-400/25 bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-indigo-200">
-                  FC @{creatorIdentity.farcasterHandle}
-                </span>
-              ) : null}
               {creatorIdentity.lensHandle ? (
                 <span className="inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-cyan-200">
                   Lens @{creatorIdentity.lensHandle}

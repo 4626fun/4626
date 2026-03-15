@@ -40,15 +40,6 @@ type VaultUpsertResponse = {
 }
 
 
-type ProviderDashboardData = {
-  windowHours: number
-  total: number
-  bySource: Array<{ source: string; count: number }>
-  byMode: Array<{ mode: string; count: number }>
-  protocolShare: number
-  recommendation: string
-}
-
 type PublishData = {
   registration: Record<string, unknown>
   groveStatus: 'stored' | 'unavailable' | 'skipped'
@@ -642,25 +633,8 @@ export function AdminAgentSetup() {
   const ajnaAutomationStatus = ajnaAutomationViewState.status
   const ajnaAutomationError = ajnaAutomationViewState.errorMessage
   const ajnaAutomationStatusUnavailable = ajnaAutomationViewState.statusUnavailable
-
-
-
-  const providerDashboardQuery = useQuery({
-    queryKey: ['admin', 'farcaster', 'provider-dashboard'],
-    queryFn: async (): Promise<ProviderDashboardData | null> => {
-      const res = await apiFetch('/api/admin/farcaster/provider-dashboard?hours=168')
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<ProviderDashboardData> | null
-      if (!res.ok || !json?.success || !json.data) return null
-      return json.data
-    },
-    staleTime: 60_000,
-  })
-
   const publishMutation = useMutation({
     mutationFn: async (): Promise<PublishData> => publishAgentProfile(),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'farcaster', 'provider-dashboard'] })
-    },
   })
 
   const oneClickMutation = useMutation({
@@ -721,7 +695,6 @@ export function AdminAgentSetup() {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'serverWallet'] })
       void queryClient.invalidateQueries({ queryKey: ['admin', 'isOwner'] })
       void queryClient.invalidateQueries({ queryKey: ['admin', 'agent'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'farcaster', 'provider-dashboard'] })
     },
   })
 
@@ -816,15 +789,6 @@ export function AdminAgentSetup() {
         {publishMutation.error ? (
           <div className="text-[11px] text-red-300">{(publishMutation.error as Error).message}</div>
         ) : null}
-
-        <div className="pt-2 border-t border-white/10">
-          <div className="text-[11px] text-zinc-300">Provider cutover dashboard (Week 3)</div>
-          <div className="mt-1 text-[11px] text-zinc-400">
-            {providerDashboardQuery.data
-              ? `7d protocol share: ${(providerDashboardQuery.data.protocolShare * 100).toFixed(1)}% · recommendation: ${providerDashboardQuery.data.recommendation}`
-              : 'No dashboard data yet.'}
-          </div>
-        </div>
       </div>
 
       {/* Step 1: Enable Agent */}

@@ -108,7 +108,7 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   }
 
   const appearance = createPrivyAppearance({ showWalletLoginFirst })
-  const loginMethods = ['wallet', 'email', 'google', 'twitter', 'farcaster'] as const
+  const loginMethods = ['wallet', 'email', 'google', 'twitter', 'telegram'] as const
 
   // Privy OAuth redirects are validated against an allowlist and must match exactly (no query params).
   // Our marketing waitlist commonly adds `?wl=1` / `?ref=...`, so defaulting to `window.location.href`

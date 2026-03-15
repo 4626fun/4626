@@ -71,7 +71,7 @@ describe('shouldAllowExternalWalletButtons', () => {
 })
 
 describe('deriveWalletIdentityPresentation', () => {
-  it('prefers Farcaster mini app identity when available', () => {
+  it('prefers mini app identity when available', () => {
     expect(
       deriveWalletIdentityPresentation({
         address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',

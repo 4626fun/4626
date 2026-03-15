@@ -1,14 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { buildAgentRegistration, enrichAgentRegistrationWithFarcaster } from '../../../../server/_lib/agentRegistration.js'
+import { buildAgentRegistration } from '../../../../server/_lib/agentRegistration.js'
 import {
   publishAgentRegistrationToGrove,
   resolveAgentRegistrationKey,
 } from '../../../../server/_lib/agentRegistrationPublisher.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { readRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
-import { trackFarcasterRolloutEvent } from '../../../../server/_lib/farcasterRolloutTelemetry.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }
 
@@ -23,11 +22,6 @@ type PublishResult = {
     storageKey: string
     statusUrl: string | null
   }
-}
-
-function ownerFromAgentKey(agentKey: string): string | null {
-  const match = String(agentKey).match(/^single-csw:(0x[a-fA-F0-9]{40})$/)
-  return match ? match[1].toLowerCase() : null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -64,14 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  // Keep registration payload deterministic across linked signer sessions by
-  // anchoring enrichment + state keying to canonical CSW identity.
-  const baseAgentKey = resolveAgentRegistrationKey(result.payload, 'single-agent')
-  const canonicalOwner = ownerFromAgentKey(baseAgentKey)
-  const registration = await enrichAgentRegistrationWithFarcaster({
-    payload: result.payload,
-    ownerAddress: canonicalOwner ?? principal.address,
-  })
+  const registration = result.payload
+  const baseAgentKey = resolveAgentRegistrationKey(registration, 'single-agent')
 
   let groveStatus: PublishResult['groveStatus'] = 'skipped'
   let grove: PublishResult['grove'] | undefined
@@ -93,15 +81,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       groveStatus = 'unavailable'
     }
   }
-
-  void trackFarcasterRolloutEvent({
-    category: 'agent_publish',
-    endpoint: '/api/v1/agents/publish',
-    mode: storeOnGrove ? 'store' : 'dry-run',
-    source: groveStatus,
-    statusCode: 200,
-    metadata: { hasLensUri: Boolean(grove?.lensUri) },
-  })
 
   return res.status(200).json({
     success: true,

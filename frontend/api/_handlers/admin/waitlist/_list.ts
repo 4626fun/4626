@@ -24,7 +24,6 @@ type WaitlistListItem = {
   updatedAt: string
   // Pre-provisioning status
   preprovisioned: boolean
-  preprovFarcasterUsername: string | null
   preprovZoraHandle: string | null
   preprovCoinSymbol: string | null
 }
@@ -80,7 +79,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
     preprovisioned: Boolean(row.preprovisioned_at),
-    preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
     preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
   })
@@ -118,7 +116,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          created_at,
          updated_at,
          preprovisioned_at,
-         preprov_farcaster_username,
          preprov_zora_handle,
          preprov_coin_symbol
        FROM profiles
@@ -150,7 +147,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'created_at',
           'updated_at',
           'preprovisioned_at',
-          'preprov_farcaster_username',
           'preprov_zora_handle',
           'preprov_coin_symbol',
         ].join(','),

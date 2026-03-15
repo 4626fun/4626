@@ -4,12 +4,12 @@ import { WAITLIST_PRIVY_LOGIN_METHODS, buildWaitlistPrivyLoginOptions } from './
 
 describe('waitlist Privy login options', () => {
   it('prefers email and social methods before wallet for waitlist auth', () => {
-    expect(WAITLIST_PRIVY_LOGIN_METHODS).toEqual(['email', 'google', 'twitter', 'farcaster', 'wallet'])
+    expect(WAITLIST_PRIVY_LOGIN_METHODS).toEqual(['email', 'google', 'twitter', 'telegram', 'wallet'])
   })
 
   it('builds login options with the waitlist-specific method order', () => {
     expect(buildWaitlistPrivyLoginOptions()).toEqual({
-      loginMethods: ['email', 'google', 'twitter', 'farcaster', 'wallet'],
+      loginMethods: ['email', 'google', 'twitter', 'telegram', 'wallet'],
     })
   })
 })

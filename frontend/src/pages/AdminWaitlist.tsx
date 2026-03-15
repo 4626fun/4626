@@ -37,7 +37,6 @@ type WaitlistListItem = {
   createdAt: string
   updatedAt: string
   preprovisioned: boolean
-  preprovFarcasterUsername: string | null
   preprovZoraHandle: string | null
   preprovCoinSymbol: string | null
 }
@@ -59,7 +58,6 @@ type WaitlistDetail = {
   embeddedWalletClientType: string | null
   baseSubAccount: string | null
   hasCreatorCoin: boolean | null
-  farcasterFid: number | null
   contactPreference: string | null
   verifications: unknown | null
   appAccessStatus: string | null
@@ -80,7 +78,6 @@ type WaitlistDetail = {
   preprovServerWalletAddress: string | null
   preprovCoinAddress: string | null
   preprovCoinSymbol: string | null
-  preprovFarcasterUsername: string | null
   preprovZoraHandle: string | null
   walletGraph: Array<{
     address: string
@@ -194,11 +191,7 @@ function ListItem({
   isActive: boolean
   onSelect: () => void
 }) {
-  const displayName = item.preprovFarcasterUsername
-    ? `@${item.preprovFarcasterUsername}`
-    : item.preprovZoraHandle
-      ? `@${item.preprovZoraHandle}`
-      : null
+  const displayName = item.preprovZoraHandle ? `@${item.preprovZoraHandle}` : null
   const displayWallet = item.cswAddress || item.primaryWallet || item.embeddedWallet || item.solanaWallet
 
   return (
@@ -206,7 +199,7 @@ function ListItem({
       type="button"
       onClick={onSelect}
       className={`w-full text-left px-3 sm:px-4 py-3 transition-colors ${
-        isActive ? 'bg-brand-primary/10 border-l-2 border-l-indigo-500' : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'
+        isActive ? 'bg-brand-primary/10 border-l-2 border-l-indigo-500' : 'hover:bg-white/3 border-l-2 border-l-transparent'
       }`}
     >
       <div className="flex items-center justify-between gap-2 min-w-0">
@@ -360,15 +353,6 @@ function DetailPanel({
               <div className="flex items-start gap-2">
                 <User className="w-3.5 h-3.5 text-zinc-600 mt-0.5 shrink-0" />
                 <div className="min-w-0">
-                  <div className="text-[10px] text-zinc-600">Farcaster</div>
-                  <div className="text-[12px] text-zinc-300 truncate">
-                    {detail.preprovFarcasterUsername ? `@${detail.preprovFarcasterUsername}` : 'Not found'}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <User className="w-3.5 h-3.5 text-zinc-600 mt-0.5 shrink-0" />
-                <div className="min-w-0">
                   <div className="text-[10px] text-zinc-600">Zora</div>
                   <div className="text-[12px] text-zinc-300 truncate">
                     {detail.preprovZoraHandle ? `@${detail.preprovZoraHandle}` : 'Not found'}
@@ -382,7 +366,7 @@ function DetailPanel({
           </div>
         ) : (
           <div className="text-[11px] sm:text-[12px] text-zinc-600">
-            Pre-provisioning runs automatically at signup. Server wallet, creator coin, and social identities will appear here once resolved.
+            Pre-provisioning runs automatically at signup. Server wallet, creator coin, and creator profile signals will appear here once resolved.
           </div>
         )}
       </div>
@@ -415,7 +399,6 @@ function DetailPanel({
           )}
           <DetailField label="Solana wallet" value={detail.solanaWallet} mono />
           <DetailField label="Base sub-account" value={detail.baseSubAccount} mono />
-          <DetailField label="Farcaster FID" value={detail.farcasterFid ? String(detail.farcasterFid) : null} />
           <DetailField label="Contact preference" value={detail.contactPreference} />
           <DetailField label="Privy user ID" value={detail.privyUserId} mono />
           <DetailField label="Has creator coin" value={detail.hasCreatorCoin === null ? null : detail.hasCreatorCoin ? 'Yes' : 'No'} />
@@ -486,16 +469,6 @@ function DetailPanel({
           >
             Zora <ExternalLink className="w-2.5 h-2.5" />
           </a>
-          {Boolean(detail.preprovFarcasterUsername) && (
-            <a
-              href={`https://warpcast.com/${detail.preprovFarcasterUsername}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors py-1"
-            >
-              Warpcast <ExternalLink className="w-2.5 h-2.5" />
-            </a>
-          )}
         </div>
       )}
     </div>

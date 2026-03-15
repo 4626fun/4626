@@ -5,7 +5,7 @@ export type Variant = 'page' | 'embedded' | 'modal'
 export type LegacyActionKey = 'shareX' | 'copyLink' | 'share' | 'follow' | 'saveApp'
 
 // New social actions (verified)
-export type SocialActionKey = 'farcaster' | 'baseApp' | 'zora' | 'x' | 'discord' | 'telegram'
+export type SocialActionKey = 'baseApp' | 'zora' | 'x' | 'discord' | 'telegram'
 
 // Bonus actions (honor system)
 export type BonusActionKey = 'github' | 'tiktok' | 'instagram' | 'reddit'

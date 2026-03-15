@@ -46,7 +46,6 @@ type WaitlistDetail = {
   embeddedWalletClientType: string | null
   baseSubAccount: string | null
   hasCreatorCoin: boolean | null
-  farcasterFid: number | null
   contactPreference: string | null
   verifications: unknown | null
   appAccessStatus: string | null
@@ -67,7 +66,6 @@ type WaitlistDetail = {
   preprovServerWalletAddress: string | null
   preprovCoinAddress: string | null
   preprovCoinSymbol: string | null
-  preprovFarcasterUsername: string | null
   preprovZoraHandle: string | null
   walletGraph: WalletGraphItem[]
   resolvedPrimaryWallet: string | null
@@ -582,7 +580,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
     baseSubAccount: typeof row.base_sub_account === 'string' ? row.base_sub_account : null,
     hasCreatorCoin: typeof row.has_creator_coin === 'boolean' ? row.has_creator_coin : row.has_creator_coin === null ? null : Boolean(row.has_creator_coin),
-    farcasterFid: typeof row.farcaster_fid === 'number' ? row.farcaster_fid : row.farcaster_fid ? Number(row.farcaster_fid) : null,
     contactPreference: typeof row.contact_preference === 'string' ? row.contact_preference : null,
     verifications: row.verifications ?? null,
     appAccessStatus: typeof row.app_access_status === 'string' ? row.app_access_status : null,
@@ -608,7 +605,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     preprovServerWalletAddress: typeof row.preprov_server_wallet_address === 'string' ? row.preprov_server_wallet_address : null,
     preprovCoinAddress: typeof row.preprov_coin_address === 'string' ? row.preprov_coin_address : null,
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
-    preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
     preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
     walletGraph,
     resolvedPrimaryWallet: resolvedIdentity.resolvedPrimaryWallet,

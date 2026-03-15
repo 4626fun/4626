@@ -23,7 +23,6 @@ const ALLOWED_PROVIDERS = new Set<AccountLinkProvider>([
   'apple',
   'twitter',
   'tiktok',
-  'farcaster',
   'external_eoa',
   'email',
   'zora_cross_app',

@@ -68,8 +68,6 @@ type WaitlistMeData = {
   primarySmartWallet?: string | null
   baseSubAccount?: string | null
   preprovZoraHandle?: string | null
-  farcasterFid?: number | null
-  preprovFarcasterUsername?: string | null
   lensHandle?: string | null
   lensAccountAddress?: string | null
   erc8128AgentId?: string | null
@@ -744,12 +742,6 @@ export function AgentRegister() {
   }, [agentQuery.data, canonicalSmartWalletAddress])
   const hasXmtpAgent = Boolean(xmtpAgentAddress)
   const hasLensProfile = Boolean(waitlistMeQuery.data?.lensHandle || waitlistMeQuery.data?.lensAccountAddress)
-  const farcasterFid =
-    typeof waitlistMeQuery.data?.farcasterFid === 'number' && waitlistMeQuery.data.farcasterFid > 0
-      ? waitlistMeQuery.data.farcasterFid
-      : null
-  const farcasterUsername = String(waitlistMeQuery.data?.preprovFarcasterUsername ?? '').trim() || null
-  const hasFarcasterIdentity = Boolean(farcasterFid || farcasterUsername)
   const hasGroveRegistration = Boolean(publishData?.grove?.lensUri)
   const hasErc8128AgentId = Boolean(waitlistMeQuery.data?.erc8128AgentId?.trim())
   const hasSiwaReceipt = Boolean(siwaStatus)
@@ -906,14 +898,6 @@ export function AgentRegister() {
             <span className="text-zinc-200">Lens profile</span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] ${hasLensProfile ? 'bg-emerald-500/15 text-emerald-300' : 'bg-zinc-700/60 text-zinc-300'}`}>
               {hasLensProfile ? `Connected${waitlistMeQuery.data?.lensHandle ? ` (@${waitlistMeQuery.data.lensHandle})` : ''}` : 'Pending'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-zinc-200">Farcaster identity</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] ${hasFarcasterIdentity ? 'bg-emerald-500/15 text-emerald-300' : 'bg-zinc-700/60 text-zinc-300'}`}>
-              {hasFarcasterIdentity
-                ? `${farcasterUsername ? `@${farcasterUsername}` : ''}${farcasterFid ? `${farcasterUsername ? ' · ' : ''}FID ${farcasterFid}` : ''}`
-                : 'Not linked'}
             </span>
           </div>
           <div className="flex items-center justify-between gap-3">

@@ -13,7 +13,7 @@ import { PageMeta } from '@/components/seo/PageMeta'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
-type AccountLinkProvider = 'google' | 'apple' | 'twitter' | 'tiktok' | 'farcaster' | 'external_eoa' | 'email' | 'zora_cross_app'
+type AccountLinkProvider = 'google' | 'apple' | 'twitter' | 'tiktok' | 'external_eoa' | 'email' | 'zora_cross_app'
 
 type AccountsMeResponse = {
   privyUserId: string
@@ -73,7 +73,6 @@ const PROVIDER_ROWS: ProviderRow[] = [
   { provider: 'google', label: 'Google', hint: 'OAuth identity' },
   { provider: 'apple', label: 'Apple', hint: 'OAuth identity' },
   { provider: 'twitter', label: 'Twitter/X', hint: 'Social identity' },
-  { provider: 'farcaster', label: 'Farcaster', hint: 'Social graph signal' },
   { provider: 'tiktok', label: 'TikTok', hint: 'Creator social signal' },
   { provider: 'external_eoa', label: 'Wallet connect (EOA)', hint: 'External signer wallet' },
 ]
@@ -265,7 +264,6 @@ export function AccountsPage(props: {
         google: ['linkGoogle', 'linkGoogleAccount'],
         apple: ['linkApple', 'linkAppleAccount'],
         twitter: ['linkTwitter', 'linkTwitterAccount'],
-        farcaster: ['linkFarcaster', 'linkFarcasterAccount'],
         tiktok: ['linkTiktok', 'linkTikTok', 'linkTiktokAccount', 'linkTikTokAccount'],
         external_eoa: ['linkWallet'],
         zora_cross_app: [],
@@ -284,7 +282,6 @@ export function AccountsPage(props: {
       google: ['unlinkGoogle', 'unlinkGoogleAccount'],
       apple: ['unlinkApple', 'unlinkAppleAccount'],
       twitter: ['unlinkTwitter', 'unlinkTwitterAccount'],
-      farcaster: ['unlinkFarcaster', 'unlinkFarcasterAccount'],
       tiktok: ['unlinkTiktok', 'unlinkTikTok', 'unlinkTiktokAccount', 'unlinkTikTokAccount'],
       external_eoa: ['unlinkWallet'],
       zora_cross_app: [],
