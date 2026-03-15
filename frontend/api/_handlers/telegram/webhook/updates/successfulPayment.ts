@@ -1,5 +1,20 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+import runtimeHandler from '../../_webhook.runtime.js'
+import type { TelegramWebhookConfig } from '../config.js'
+import type { TelegramUpdate } from '../types.js'
 import type { TelegramMessage, TelegramSuccessfulPayment, TelegramWebhookOk } from '../types.js'
 import { asTrimmed, isAddressLike, parseOptionalPositiveInteger } from '../utils.js'
+
+export async function handle(
+  req: VercelRequest,
+  res: VercelResponse,
+  update: TelegramUpdate,
+  _config: TelegramWebhookConfig,
+) {
+  ;(req as any).body = update
+  return runtimeHandler(req, res)
+}
 
 export async function handleSuccessfulPaymentUpdate(params: {
   updateId?: number

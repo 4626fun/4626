@@ -310,7 +310,7 @@ font-mono       /* JetBrains Mono, Space Mono */
 ```tsx
 <div className="bg-basalt/80 backdrop-blur-md border border-basalt-light overflow-hidden">
   {/* Top accent */}
-  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-tension-cyan to-transparent opacity-30" />
+  <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-transparent via-tension-cyan to-transparent opacity-30" />
   
   <div className="p-8">
     {/* Content */}
@@ -702,7 +702,7 @@ font-mono       /* JetBrains Mono, Space Mono */
 ```tsx
 <div className="bg-basalt/80 backdrop-blur-md border border-basalt-light overflow-hidden">
   {/* Top accent */}
-  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-tension-cyan to-transparent opacity-30" />
+  <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-transparent via-tension-cyan to-transparent opacity-30" />
   
   <div className="p-8">
     {/* Content */}

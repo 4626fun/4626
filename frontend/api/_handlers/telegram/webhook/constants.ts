@@ -86,6 +86,44 @@ export const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string
   },
 ]
 
+export type TelegramBotMenuCommand = {
+  command: string
+  description: string
+}
+
+export const TELEGRAM_PRIVATE_BOT_COMMANDS: TelegramBotMenuCommand[] = [
+  { command: 'help', description: 'Open minimal command menu' },
+  { command: 'link', description: 'Link Telegram to your 4626 wallet' },
+  { command: 'linked', description: 'Check link and wallet status' },
+  { command: 'zora', description: 'Open Zora signup/linking flow' },
+  { command: 'deploy', description: 'Guided trend/content/creator deploy' },
+  { command: 'portfolio', description: 'View positions and recent actions' },
+  { command: 'buy', description: 'Preview buy in 4626 vault scope' },
+  { command: 'sell', description: 'Preview sell in 4626 vault scope' },
+  { command: 'bid', description: 'Preview USD bid for CCA auction' },
+]
+
+export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
+  { command: 'help', description: 'Open command menu' },
+  { command: 'zora', description: 'Open Zora signup/linking flow' },
+  { command: 'deploy', description: 'Guided trend/content/creator deploy' },
+  { command: 'vaults', description: 'List scoped vaults in this chat' },
+  { command: 'auctions', description: 'List active CCA auctions' },
+  { command: 'signals', description: 'Recent trade signals in this chat' },
+  { command: 'buy', description: 'Preview buy for scoped vault' },
+  { command: 'sell', description: 'Preview sell for scoped vault' },
+  { command: 'bid', description: 'Preview bid for scoped auction' },
+]
+
+export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = [
+  { command: 'help', description: 'Open command menu' },
+  { command: 'zora', description: 'Open Zora signup/linking flow' },
+  { command: 'deploy', description: 'Guided trend/content/creator deploy' },
+  { command: 'inline', description: 'Open one-tap command templates' },
+  { command: 'x', description: 'Draft X post (confirm required)' },
+  { command: 'portfolio', description: 'View linked account activity' },
+]
+
 export const DEPLOY_CURRENCY_VALUES: DeployCurrencyInput[] = ['ETH', 'ZORA', 'CREATOR_COIN', 'CONTENT_COIN']
 
 export const SUPPORTED_METADATA_URI_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 'data:'] as const

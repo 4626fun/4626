@@ -1,3 +1,4 @@
+import type { VercelRequest } from '@vercel/node'
 import { formatUnits } from 'viem'
 
 import { SUPPORTED_METADATA_URI_PREFIXES, TELEGRAM_COMMAND_HEADS, TELEGRAM_COMMAND_HEADS_PATTERN, TELEGRAM_COMMAND_MICRO_HINTS } from './constants.js'
@@ -35,6 +36,44 @@ export function parseOptionalPositiveInteger(value: unknown): number | null {
   const parsed = Number(raw)
   if (!Number.isInteger(parsed) || parsed <= 0) return null
   return parsed
+}
+
+export function readTelegramUserId(value: unknown): string | null {
+  const raw = typeof value === 'number' ? String(Math.trunc(value)) : asTrimmed(value)
+  if (!/^\d+$/.test(raw)) return null
+  return raw
+}
+
+export function readTelegramChatId(value: unknown): string | null {
+  const raw = typeof value === 'number' ? String(Math.trunc(value)) : asTrimmed(value)
+  if (!/^-?\d+$/.test(raw)) return null
+  return raw
+}
+
+export function resolveTelegramLinkErrorStatusCode(error: unknown): number {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  if (lower.includes('privy') || lower.includes('unauthorized') || lower.includes('forbidden') || lower.includes('jwt')) {
+    return 401
+  }
+  if (lower.includes('canonical') || lower.includes('no privy')) {
+    return 409
+  }
+  if (lower.includes('not configured')) return 503
+  return 500
+}
+
+export function readQueryString(req: Pick<VercelRequest, 'query'>, key: string): string | null {
+  const value = req.query?.[key]
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) return value[0].trim()
+  return null
+}
+
+export function parseWindowHours(raw: string | null, fallback = 24): number {
+  const parsed = Number(raw ?? '')
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return Math.floor(parsed)
 }
 
 export function parseDelimitedSet(value: string): Set<string> {

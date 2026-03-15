@@ -40,6 +40,10 @@ const RawTelegramWebhookEnvSchema = z
     TELEGRAM_INLINE_MAX_RESULTS: z.string().optional(),
     TELEGRAM_INLINE_GROWTH_MODE: z.string().optional(),
     TELEGRAM_MINI_APP_URL: z.string().optional(),
+    TELEGRAM_MENU_BUTTON_MODE: z.string().optional(),
+    TELEGRAM_MENU_BUTTON_TEXT: z.string().optional(),
+    TELEGRAM_BOT_CONFIG_SECRET: z.string().optional(),
+    TELEGRAM_LINK_API_SECRET: z.string().optional(),
     TELEGRAM_HOLDER_ROOMS_ENABLED: z.string().optional(),
     TELEGRAM_REQUIRE_TRADE_MEMBERSHIP: z.string().optional(),
     TELEGRAM_COPY_TEXT_BUTTONS: z.string().optional(),
@@ -76,6 +80,10 @@ export type TelegramWebhookConfig = {
   inlineMaxResults: number
   inlineGrowthMode: boolean
   miniAppUrl: string
+  menuButtonMode: 'web_app' | 'commands'
+  menuButtonText: string
+  botConfigSecret: string
+  linkApiSecret: string
   holderRoomsEnabled: boolean
   requireTradeMembership: boolean
   copyTextButtons: boolean
@@ -91,6 +99,8 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   const inlineCapRaw = Number(asTrimmed(raw.TELEGRAM_INLINE_MAX_RESULTS ?? ''))
   const inlineMaxResults =
     Number.isFinite(inlineCapRaw) && inlineCapRaw >= 3 && inlineCapRaw <= 20 ? Math.floor(inlineCapRaw) : 8
+  const menuButtonModeRaw = asTrimmed(raw.TELEGRAM_MENU_BUTTON_MODE ?? '').toLowerCase()
+  const menuButtonMode: 'web_app' | 'commands' = menuButtonModeRaw === 'commands' ? 'commands' : 'web_app'
 
   const paymasterUrlCandidates = [
     asTrimmed(raw.CDP_PAYMASTER_URL ?? ''),
@@ -130,6 +140,10 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     inlineMaxResults,
     inlineGrowthMode: parseBoolean(raw.TELEGRAM_INLINE_GROWTH_MODE, false),
     miniAppUrl: asTrimmed(raw.TELEGRAM_MINI_APP_URL ?? ''),
+    menuButtonMode,
+    menuButtonText: asTrimmed(raw.TELEGRAM_MENU_BUTTON_TEXT ?? ''),
+    botConfigSecret: asTrimmed(raw.TELEGRAM_BOT_CONFIG_SECRET ?? raw.TELEGRAM_LINK_API_SECRET ?? ''),
+    linkApiSecret: asTrimmed(raw.TELEGRAM_LINK_API_SECRET ?? raw.TELEGRAM_BOT_CONFIG_SECRET ?? ''),
     holderRoomsEnabled: parseBoolean(raw.TELEGRAM_HOLDER_ROOMS_ENABLED, false),
     requireTradeMembership: parseBoolean(raw.TELEGRAM_REQUIRE_TRADE_MEMBERSHIP, false),
     copyTextButtons: parseBoolean(raw.TELEGRAM_COPY_TEXT_BUTTONS, true),

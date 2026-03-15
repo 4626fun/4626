@@ -1,5 +1,15 @@
-import { isPrivateChatId } from './env.js'
+import { getTelegramWebhookConfig } from './config.js'
 import { asTrimmed } from './utils.js'
+
+function isPrivateChatId(chatId: string): boolean {
+  return !chatId.startsWith('-')
+}
+
+export function resolveTelegramMiniAppUrl(): string {
+  const configured = asTrimmed(getTelegramWebhookConfig().miniAppUrl)
+  if (configured && /^https?:\/\//i.test(configured)) return configured
+  return 'https://app.4626.fun'
+}
 
 export function buildTelegramMiniAppUrl(params: {
   baseUrl: string

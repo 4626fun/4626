@@ -4,27 +4,12 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureTelegramTradingSchema, getTelegramLinkByUserId, revokeTelegramLink } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
+import { asTrimmed, readTelegramUserId } from './webhook/utils.js'
 
 type UnlinkBody = {
   telegramUserId?: string | number
   reason?: string
-}
-
-function asTrimmed(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function readTelegramUserId(body: UnlinkBody): string | null {
-  const raw = typeof body.telegramUserId === 'number' ? String(Math.trunc(body.telegramUserId)) : asTrimmed(body.telegramUserId)
-  if (!/^\d+$/.test(raw)) return null
-  return raw
-}
-
-function verifyTelegramLinkApiSecret(req: VercelRequest): boolean {
-  const configured = asTrimmed(process.env.TELEGRAM_LINK_API_SECRET)
-  if (!configured) return true
-  const provided = asTrimmed(req.headers['x-telegram-link-secret'])
-  return provided === configured
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -40,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (await readJsonBody<UnlinkBody>(req).catch(() => null)) ?? (req.body as UnlinkBody | null) ?? {}
-  const telegramUserId = readTelegramUserId(body)
+  const telegramUserId = readTelegramUserId(body.telegramUserId)
   if (!telegramUserId) {
     return res.status(400).json({ success: false, error: 'telegramUserId is required' } satisfies ApiEnvelope<never>)
   }

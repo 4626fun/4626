@@ -5,23 +5,8 @@ import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureTelegramTradingSchema, getTelegramLinkStatus } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
-function asTrimmed(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function readQueryString(req: VercelRequest, key: string): string | null {
-  const value = req.query?.[key]
-  if (typeof value === 'string' && value.trim()) return value.trim()
-  if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) return value[0].trim()
-  return null
-}
-
-function verifyTelegramLinkApiSecret(req: VercelRequest): boolean {
-  const configured = asTrimmed(process.env.TELEGRAM_LINK_API_SECRET)
-  if (!configured) return true
-  const provided = asTrimmed(req.headers['x-telegram-link-secret'])
-  return provided === configured
-}
+import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
+import { readQueryString } from './webhook/utils.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -48,10 +33,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   await ensureWaitlistSchema(db as any)
   await ensureTelegramTradingSchema(db as any)
 
-  const link = await getTelegramLinkStatus({
-    db: db as any,
-    telegramUserId,
-  })
+  const link = await getTelegramLinkStatus({ db: db as any, telegramUserId })
+
   return res.status(200).json({
     success: true,
     data: {
@@ -71,4 +54,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     linkedAt: string | null
   }>)
 }
-

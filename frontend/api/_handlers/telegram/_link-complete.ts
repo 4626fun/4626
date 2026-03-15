@@ -12,36 +12,12 @@ import {
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
+import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
+import { asTrimmed, resolveTelegramLinkErrorStatusCode } from './webhook/utils.js'
+
 type LinkCompleteBody = {
   token?: string
   telegramUsername?: string | null
-}
-
-function asTrimmed(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function resolveStatusCode(error: unknown): number {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
-  if (
-    lower.includes('missing privy auth token') ||
-    lower.includes('invalid privy auth token') ||
-    lower.includes('privy verification failed') ||
-    lower.includes('jwt') ||
-    lower.includes('unauthorized') ||
-    lower.includes('forbidden')
-  ) {
-    return 401
-  }
-  if (
-    lower.includes('unable to resolve canonical zora smart wallet') ||
-    lower.includes('no privy embedded eoa found')
-  ) {
-    return 409
-  }
-  if (lower.includes('not configured')) return 503
-  return 500
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -52,19 +28,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
+  if (!verifyTelegramLinkApiSecret(req)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
+  }
 
   const body = (await readJsonBody<LinkCompleteBody>(req).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
   const token = asTrimmed(body.token ?? '')
   const tokenStatus = readTelegramLinkStartTokenStatus(token)
   if (!tokenStatus.ok) {
     const statusCode = tokenStatus.reason === 'expired' ? 410 : 400
-    const errorMessage =
-      tokenStatus.reason === 'expired'
-        ? 'Telegram link expired. Run /link in Telegram and open the new Mini App button.'
-        : 'Invalid link token'
     return res.status(statusCode).json({
       success: false,
-      error: errorMessage,
+      error:
+        tokenStatus.reason === 'expired'
+          ? 'Telegram link expired. Run /link in Telegram and open the new Mini App button.'
+          : 'Invalid link token',
     } satisfies ApiEnvelope<never>)
   }
   const parsed = tokenStatus.payload
@@ -100,11 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chatId: parsed.chatId,
         eventName: 'link_complete_success',
         actionType: 'link',
-        context: {
-          profileId: link.profileId,
-          ownerVerified: link.ownerVerified,
-          linkStatus: link.linkStatus,
-        },
+        context: { profileId: link.profileId, ownerVerified: link.ownerVerified, linkStatus: link.linkStatus },
       }).catch(() => {})
     }
 
@@ -141,15 +115,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chatId: parsed.chatId,
         eventName: 'link_complete_failed',
         actionType: 'link',
-        context: {
-          message,
-        },
+        context: { message },
       }).catch(() => {})
     }
-    return res.status(resolveStatusCode(error)).json({
-      success: false,
-      error: message,
-    } satisfies ApiEnvelope<never>)
+    return res.status(resolveTelegramLinkErrorStatusCode(error)).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 }
-

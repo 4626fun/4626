@@ -9,30 +9,8 @@ import {
   isTelegramFunnelMetricsEnabled,
   isTelegramFunnelMetricsEnabledForChat,
 } from '../../../server/_lib/telegramTrading.js'
-
-function asTrimmed(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function readQueryString(req: VercelRequest, key: string): string | null {
-  const value = req.query?.[key]
-  if (typeof value === 'string' && value.trim()) return value.trim()
-  if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) return value[0].trim()
-  return null
-}
-
-function verifyTelegramLinkApiSecret(req: VercelRequest): boolean {
-  const configured = asTrimmed(process.env.TELEGRAM_LINK_API_SECRET)
-  if (!configured) return true
-  const provided = asTrimmed(req.headers['x-telegram-link-secret'])
-  return provided === configured
-}
-
-function parseWindowHours(raw: string | null): number {
-  const parsed = Number(raw ?? '')
-  if (!Number.isFinite(parsed) || parsed <= 0) return 24
-  return Math.floor(parsed)
-}
+import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
+import { parseWindowHours, readQueryString } from './webhook/utils.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
