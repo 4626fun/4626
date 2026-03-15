@@ -50,10 +50,10 @@ export function SwapDetails({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm"
+        className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm transition-all duration-200 hover:-translate-y-px"
         style={{
           borderColor: 'rgb(var(--vault-border-strong) / 0.6)',
-          background: 'rgb(var(--vault-card-raised) / 0.58)',
+          background: 'linear-gradient(160deg, rgb(var(--vault-card-raised) / 0.74), rgb(var(--vault-card) / 0.52))',
         }}
       >
         <span className="font-medium text-vault-text">Details</span>
@@ -77,10 +77,10 @@ export function SwapDetails({
             />
 
             <div
-              className="rounded-xl border p-3"
+              className="rounded-xl border p-3 backdrop-blur-sm"
               style={{
                 borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
-                background: 'rgb(var(--vault-card) / 0.35)',
+                background: 'linear-gradient(160deg, rgb(var(--vault-card) / 0.5), rgb(var(--vault-card-raised) / 0.35))',
               }}
             >
               <div className="mb-2 text-xs text-vault-subtext uppercase tracking-[0.12em]">Slippage</div>
@@ -119,10 +119,10 @@ export function SwapDetails({
             </div>
 
             <div
-              className="grid gap-2 rounded-xl border p-3 text-sm"
+              className="grid gap-2 rounded-xl border p-3 text-sm backdrop-blur-sm"
               style={{
                 borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
-                background: 'rgb(var(--vault-card) / 0.35)',
+                background: 'linear-gradient(160deg, rgb(var(--vault-card) / 0.5), rgb(var(--vault-card-raised) / 0.35))',
               }}
             >
               <div className="flex items-center justify-between text-vault-subtext">

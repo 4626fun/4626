@@ -75,6 +75,11 @@ export function AccountModeIndicator() {
   const atomicBadge = formatAtomicBadge(account.capabilities.atomicStatus)
   const hasSignerChip = Boolean(account.signerAddress)
   const hasActiveChip = Boolean(account.activeAccount)
+  const hideSignerChipOnMobile = !showModeToggle && hasSignerChip && hasActiveChip
+  const paymasterLabelMobile = account.uiFlags.paymasterAvailable ? 'PM on' : 'PM off'
+  const bundlingLabelMobile = atomicBadge.active ? 'Bundle on' : atomicBadge.pending ? 'Bundle ...' : 'Bundle off'
+  const hasWalletContext = hasSignerChip || hasActiveChip || showModeToggle
+  const hasPromptContext = account.uiFlags.shouldPromptToLinkOwner || account.uiFlags.shouldShowNetworkMismatch
 
   const handleModeClick = useCallback(
     async (mode: 'EOA' | 'SMART_WALLET') => {
@@ -96,17 +101,21 @@ export function AccountModeIndicator() {
     return () => window.clearTimeout(timer)
   }, [copiedMode])
 
+  if (!hasWalletContext && !hasPromptContext) return null
+
   return (
-    <div className="border-b border-vault-border/60 bg-black/45">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-12 py-2.5 min-h-[42px]">
-        <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-[11px] scrollbar-hide">
+    <div className="border-b border-white/7 bg-linear-to-b from-black/38 to-black/20 backdrop-blur-sm">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-12 py-1.5 min-h-[34px]">
+        <div className="mx-auto flex w-fit max-w-full items-center gap-1.5 sm:gap-2 overflow-x-auto whitespace-nowrap rounded-full border border-white/10 bg-black/24 px-2 py-1 text-[10px] sm:text-[11px] scrollbar-hide">
           {!showModeToggle ? (
             <>
               {hasSignerChip ? (
                 <button
                   type="button"
                   onClick={() => void copyAddress(account.signerAddress)}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 cursor-copy hover:text-white"
+                  className={`shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 cursor-copy transition-colors hover:text-white ${
+                    hideSignerChipOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'
+                  }`}
                   title={
                     account.signerType === 'SMART_WALLET'
                       ? `Smart Wallet ${shortAddress(account.signerAddress)} (click to copy)`
@@ -129,7 +138,7 @@ export function AccountModeIndicator() {
                 <button
                   type="button"
                   onClick={() => void copyAddress(account.activeAccount)}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 cursor-copy hover:text-white"
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300 cursor-copy transition-colors hover:text-white"
                   title={
                     account.activeAccountType === 'SMART_WALLET'
                       ? `Smart Wallet ${shortAddress(account.activeAccount)} (click to copy)`
@@ -148,11 +157,6 @@ export function AccountModeIndicator() {
                   {shortAddress(account.activeAccount)}
                 </button>
               ) : null}
-              {!hasSignerChip && !hasActiveChip ? (
-                <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-500">
-                  Wallet unavailable
-                </span>
-              ) : null}
             </>
           ) : null}
           <span
@@ -163,7 +167,8 @@ export function AccountModeIndicator() {
             }`}
             title="Paymaster"
           >
-            {formatPaymasterBadge(account.uiFlags.paymasterAvailable)}
+            <span className="sm:hidden">{paymasterLabelMobile}</span>
+            <span className="hidden sm:inline">{formatPaymasterBadge(account.uiFlags.paymasterAvailable)}</span>
           </span>
           <span
             className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
@@ -175,7 +180,8 @@ export function AccountModeIndicator() {
             }`}
             title="Bundling"
           >
-            {atomicBadge.label}
+            <span className="sm:hidden">{bundlingLabelMobile}</span>
+            <span className="hidden sm:inline">{atomicBadge.label}</span>
           </span>
 
           {showModeToggle ? (
@@ -194,7 +200,7 @@ export function AccountModeIndicator() {
                 onMouseLeave={() => setHoveredMode(null)}
                 onFocus={() => setHoveredMode('EOA')}
                 onBlur={() => setHoveredMode(null)}
-                className={`rounded-full px-2 py-0.5 transition ${
+                className={`rounded-full px-2 py-0.5 transition-all duration-200 ${
                   desiredMode === 'EOA' ? 'bg-white/12 text-white' : 'text-zinc-400 hover:text-zinc-200'
                 } ${desiredMode === 'EOA' && userWalletAddress ? 'cursor-copy' : ''}`}
               >
@@ -213,7 +219,7 @@ export function AccountModeIndicator() {
                 onMouseLeave={() => setHoveredMode(null)}
                 onFocus={() => setHoveredMode('SMART_WALLET')}
                 onBlur={() => setHoveredMode(null)}
-                className={`rounded-full px-2 py-0.5 transition ${
+                className={`rounded-full px-2 py-0.5 transition-all duration-200 ${
                   desiredMode === 'SMART_WALLET'
                     ? 'bg-brand-primary/25 text-brand-300'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -243,13 +249,15 @@ export function AccountModeIndicator() {
               to="/accounts"
               className="shrink-0 rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-brand-300 hover:bg-brand-primary/20"
             >
-              Unlock Smart Wallet features
+              <span className="sm:hidden">Unlock SW</span>
+              <span className="hidden sm:inline">Unlock Smart Wallet features</span>
             </Link>
           ) : null}
 
           {account.uiFlags.shouldShowNetworkMismatch ? (
             <span className="shrink-0 rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-0.5 text-amber-300">
-              Switch to Base to verify smart-wallet ownership
+              <span className="sm:hidden">Switch to Base</span>
+              <span className="hidden sm:inline">Switch to Base to verify smart-wallet ownership</span>
             </span>
           ) : null}
         </div>

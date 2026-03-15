@@ -1505,7 +1505,7 @@ export function Swap() {
       ) : null}
 
       {telegramDiscoveryEnabled ? (
-        <div className="mx-auto mt-4 max-w-4xl rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
+        <div className="mx-auto mt-4 max-w-4xl vault-surface p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold tracking-wide text-zinc-100">Telegram Discovery</h2>
             {telegramDiscoveryQuery.isFetching ? <span className="text-xs text-zinc-400">Refreshing…</span> : null}
@@ -1609,7 +1609,7 @@ export function Swap() {
       ) : null}
 
       {activePanel === 'swap' && diagnosticsEnabled ? (
-        <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-white/10 bg-zinc-950/60 p-3">
+        <div className="mx-auto mt-4 max-w-4xl vault-surface-muted rounded-xl p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Internal 7702 Diagnostics</div>
@@ -1635,7 +1635,7 @@ export function Swap() {
       ) : null}
 
       {activePanel === 'swap' && txDebug.enabled ? (
-        <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-cyan-400/20 bg-cyan-950/20 p-3">
+        <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-cyan-400/28 bg-linear-to-b from-cyan-900/35 to-cyan-950/22 p-3 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-cyan-200">Swap Tx Router Debug</div>
@@ -1700,7 +1700,7 @@ export function Swap() {
       ) : null}
 
       {chainMismatch ? (
-        <div className="mx-auto mb-4 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+        <div className="mx-auto mb-4 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 px-3 py-2.5 backdrop-blur-sm">
           <div className="text-xs text-amber-200">
             Your wallet is on {walletChainId ? getChainMeta(walletChainId)?.name ?? `chain ${walletChainId}` : 'a different network'}. Switch to {chainMeta?.name ?? 'the selected network'} to trade.
           </div>

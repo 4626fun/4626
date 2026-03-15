@@ -194,7 +194,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
   return (
     <article
       className={cn(
-        'rounded-2xl border border-white/10 bg-vault-card/70 p-3 transition',
+        'vault-surface-muted vault-hover-lift p-3 transition',
         compact ? 'space-y-2' : 'space-y-3',
       )}
     >
@@ -218,7 +218,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             <div className="mt-1 text-[11px] leading-4 text-zinc-500 break-all">
               Share token: {shareOFT ?? 'Unavailable'}
             </div>
-            <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400">
+            <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-[11px] text-zinc-400">
               <img alt="Base" className="h-3.5 w-3.5 rounded-full object-contain shrink-0" loading="lazy" src={BASE_BRANDMARK_BLUE} />
               <span>Base</span>
             </div>
@@ -268,7 +268,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
       </div>
 
       {auctionLive && recentActivity.length > 0 ? (
-        <div className="rounded-xl border border-white/10 bg-white/3 px-3 py-2">
+        <div className="rounded-xl border border-white/12 bg-linear-to-b from-white/8 to-white/3 px-3 py-2 backdrop-blur-sm">
           <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Live activity</div>
           <div className="space-y-1.5">
             {recentActivity.map((item) => (
@@ -294,7 +294,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
         <Link
           to={vaultPath}
           className={cn(
-            'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/8',
+            'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition-all duration-200 hover:-translate-y-px hover:bg-white/8',
           )}
           title={`Open vault ${vault.vaultAddress}`}
         >
@@ -310,9 +310,9 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
           }}
           disabled={!userHasShare}
           className={cn(
-            'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 px-3 py-1.5 text-xs',
+            'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 px-3 py-1.5 text-xs transition-all duration-200',
             userHasShare
-              ? 'bg-white/5 text-zinc-300 hover:bg-white/8'
+              ? 'bg-white/5 text-zinc-300 hover:-translate-y-px hover:bg-white/8'
               : 'bg-white/2.5 text-zinc-600 cursor-not-allowed',
           )}
         >

@@ -57,7 +57,7 @@ type SwapCardProps = {
 
 export function SwapCard(props: SwapCardProps) {
   return (
-    <div className="bv-panel p-4">
+    <div className="bv-panel vault-hover-lift p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="text-sm text-vault-subtext space-y-1">
           <div className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] text-vault-subtext" style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.65)', background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
@@ -144,7 +144,7 @@ export function SwapCard(props: SwapCardProps) {
       <Button
         variant="primary"
         size="lg"
-        className="mt-3 h-12 w-full rounded-xl shadow-[0_10px_34px_-12px_rgba(0,82,255,0.52)]"
+        className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgba(0,82,255,0.9)]"
         onClick={props.needsUnverifiedConfirmation ? props.onConfirmUnverified : props.onReviewTrade}
         loading={props.busy === 'pending'}
         disabled={
@@ -164,7 +164,7 @@ export function SwapCard(props: SwapCardProps) {
         <button
           type="button"
           onClick={props.onRefreshQuote}
-          className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-vault-text transition hover:bg-white/6"
+          className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-vault-text transition-all duration-200 hover:-translate-y-px hover:bg-white/6"
           style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.62)' }}
         >
           <RefreshCw className="h-3 w-3" />

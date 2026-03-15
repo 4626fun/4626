@@ -55,7 +55,7 @@ export function TokenInput({
 
   return (
     <div
-      className="rounded-2xl border p-4 backdrop-blur-sm"
+      className="vault-surface-muted p-4"
       style={{
         borderColor: 'rgb(var(--vault-border-strong) / 0.6)',
         background: 'rgb(var(--vault-card-raised) / 0.62)',
@@ -95,7 +95,7 @@ export function TokenInput({
         <button
           type="button"
           onClick={onSelectToken}
-          className="inline-flex min-w-34 items-center gap-2 rounded-xl border px-3 py-2 transition hover:bg-white/8"
+          className="inline-flex min-w-34 items-center gap-2 rounded-xl border px-3 py-2 transition-all duration-200 hover:-translate-y-px hover:bg-white/8"
           style={{
             borderColor: 'rgb(var(--vault-border-strong) / 0.64)',
             background: 'rgb(var(--vault-card) / 0.42)',
@@ -120,7 +120,7 @@ export function TokenInput({
 
       {!readOnly && tokenIdentityLoading === false && tokenBalanceValue !== null ? (
         <div
-          className="mt-3 rounded-xl border px-3 py-2.5"
+          className="mt-3 rounded-xl border px-3 py-2.5 backdrop-blur-sm"
           style={{
             borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
             background: 'rgb(var(--vault-card) / 0.35)',

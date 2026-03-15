@@ -130,7 +130,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
 
   if (vaultsQuery.isError) {
     return (
-      <div className="bv-panel p-4">
+      <div className="bv-panel vault-hover-lift p-4">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-vault-subtext">
           <AlertTriangle className="h-3.5 w-3.5" />
           Vaults unavailable
@@ -143,7 +143,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
   const list = effectiveTab === 'mine' ? userVaults : featuredVisibleVaults
 
   return (
-    <section className="bv-panel p-3">
+    <section className="bv-panel vault-hover-lift p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-vault-text">Creator Vaults</h2>
@@ -180,7 +180,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
           <Activity className="mx-auto h-4 w-4 animate-pulse text-vault-muted" />
         </div>
       ) : list.length === 0 ? (
-        <div className="rounded-xl border border-[rgb(var(--vault-border-strong)/0.5)] bg-[rgb(var(--vault-card-raised)/0.55)] p-4 text-sm text-vault-subtext">
+        <div className="vault-surface-muted rounded-xl p-4 text-sm text-vault-subtext">
           {effectiveTab === 'mine'
             ? currentAddress
               ? 'No vault positions found for this wallet yet.'

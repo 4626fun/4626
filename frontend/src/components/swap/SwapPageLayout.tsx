@@ -31,7 +31,7 @@ export function SwapPageLayout({
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
             <div className="mx-auto w-full max-w-2xl">{swapPanel}</div>
-            <div className="lg:sticky lg:top-6 lg:self-start">{vaultPanel ?? children ?? null}</div>
+            <div className="lg:sticky lg:top-6 lg:self-start lg:transition-transform lg:duration-300">{vaultPanel ?? children ?? null}</div>
           </div>
         </div>
       </section>

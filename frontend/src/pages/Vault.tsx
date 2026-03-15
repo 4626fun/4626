@@ -105,13 +105,13 @@ function TokenAvatar({
 
 function VaultChatCard() {
   return (
-    <div className="card p-5 space-y-3 opacity-60">
+    <div className="vault-surface-muted vault-hover-lift p-5 space-y-3 opacity-80">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-brand-primary" />
           <span className="label">Vault Chat</span>
         </div>
-        <span className="text-[10px] rounded-full border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-zinc-500">
+        <span className="text-[10px] rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-zinc-500">
           Coming soon
         </span>
       </div>
@@ -122,7 +122,7 @@ function VaultChatCard() {
         type="button"
         disabled
         aria-disabled="true"
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-white/4 text-zinc-600 text-xs font-medium py-2.5 cursor-not-allowed"
+        className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/4 text-zinc-600 text-xs font-medium py-2.5 cursor-not-allowed"
       >
         <MessageSquare className="w-3.5 h-3.5" />
         Chat not yet available
@@ -502,10 +502,10 @@ export function Vault() {
 
   if (!addressParam) {
     return (
-      <div className="relative pb-24 md:pb-0">
+      <div className="vault-shell relative pb-24 md:pb-0">
         <section className="cinematic-section">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <div className="rounded-3xl border border-white/5 bg-vault-bg/60 backdrop-blur-2xl px-6 py-10 sm:p-10">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+            <div className="vault-surface rounded-3xl px-6 py-10 sm:p-10">
               <span className="label">Vault</span>
               <h1 className="headline text-3xl sm:text-5xl mt-4">Invalid vault address</h1>
               <p className="text-zinc-600 text-sm font-light mt-4">Check the URL and try again.</p>
@@ -523,10 +523,10 @@ export function Vault() {
 
   if (showResolveError || showNotFound) {
     return (
-      <div className="relative pb-24 md:pb-0">
+      <div className="vault-shell relative pb-24 md:pb-0">
         <section className="cinematic-section">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <div className="rounded-3xl border border-white/5 bg-vault-bg/60 backdrop-blur-2xl px-6 py-10 sm:p-10">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+            <div className="vault-surface rounded-3xl px-6 py-10 sm:p-10">
               <span className="label">Vault</span>
               <h1 className="headline text-3xl sm:text-5xl mt-4">
                 {showResolveError ? 'Could not load vault' : 'Vault not registered'}
@@ -559,10 +559,10 @@ export function Vault() {
 
   if (resolveLoading && !resolved && !akitaFallback) {
     return (
-      <div className="relative pb-24 md:pb-0">
+      <div className="vault-shell relative pb-24 md:pb-0">
         <section className="cinematic-section">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <div className="rounded-3xl border border-white/5 bg-[#080808]/50 backdrop-blur-2xl px-6 py-10 sm:p-10">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+            <div className="vault-surface rounded-3xl px-6 py-10 sm:p-10">
               <div className="grid lg:grid-cols-[260px_minmax(0,1fr)] gap-8 items-center">
                 <div className="mx-auto lg:mx-0">
                   <Skeleton className="w-56 h-56 sm:w-64 sm:h-64 rounded-full" />
@@ -587,7 +587,7 @@ export function Vault() {
   const vaultMeta = META.vault(underlyingSymbol)
 
   return (
-    <div className="relative pb-24 md:pb-0">
+    <div className="vault-shell relative pb-24 md:pb-0">
       <PageMeta
         title={vaultMeta.title}
         description={vaultMeta.description}
@@ -600,12 +600,12 @@ export function Vault() {
 
       {/* Header */}
       <section className="cinematic-section">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="relative overflow-hidden rounded-3xl border border-white/5 bg-vault-bg/60 backdrop-blur-2xl px-6 py-10 sm:p-10"
+            className="vault-surface-elevated vault-hover-lift relative overflow-hidden rounded-3xl px-6 py-10 sm:p-10"
           >
             {/* Atmosphere */}
             <motion.div
@@ -673,9 +673,9 @@ export function Vault() {
                   </div>
 
                   <div className="shrink-0 hidden sm:flex flex-col items-end gap-3">
-                    <div className="bg-black/20 px-3 py-1.5 rounded-full border border-white/5 flex items-center gap-2">
+                  <div className="vault-pill normal-case tracking-[0.02em] px-3 py-1.5 gap-2">
                       <ShieldCheck className="w-3.5 h-3.5 text-brand-primary" />
-                      <span className="text-[10px] font-mono text-zinc-400">ERC-4626 • Base</span>
+                    <span className="text-[10px] font-mono text-zinc-300">ERC-4626 • Base</span>
                     </div>
                   </div>
                 </div>
@@ -746,11 +746,11 @@ export function Vault() {
 
       {/* Stats */}
       <section className="cinematic-section bg-zinc-950/20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
           {canManageVault || isAuctionActive ? (
-            <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/5">
-                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+            <div className="vault-surface vault-hover-lift overflow-hidden">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/8">
+                <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">
                     {isAuctionActive ? 'Committed' : tvlUsdDisplay ? 'TVL' : 'Assets in vault'}
                   </span>
@@ -767,7 +767,7 @@ export function Vault() {
                     </div>
                   ) : null}
                 </div>
-                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Total Supply</span>
                   <div className="value mono text-2xl sm:text-3xl">
                     {totalShareSupply !== undefined
@@ -775,13 +775,13 @@ export function Vault() {
                       : <Skeleton className="h-8 w-24 mt-1" />}
                   </div>
                 </div>
-                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Global Jackpot</span>
                   <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
                     —
                   </div>
                 </div>
-                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Trade Fee</span>
                   <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
                     —
@@ -810,7 +810,7 @@ export function Vault() {
       {/* Solana Lottery Prize Claim — deep-linked from Solana frontend */}
       {solanaClaimMode && solanaPubkeyParam && shareOFTAddress && (
         <section id="solana-claim" className="cinematic-section">
-          <div className="max-w-2xl mx-auto px-4 sm:px-6">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -836,7 +836,7 @@ export function Vault() {
       {/* Deposit/Withdraw */}
       {canManageVault ? (
       <section id="manage" className="cinematic-section">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -851,7 +851,7 @@ export function Vault() {
             {/* Main Form */}
             <div className="lg:col-span-3 space-y-10 sm:space-y-12">
               {/* Mode Selector */}
-              <div className="w-full inline-flex items-center gap-0.5 rounded-full border border-white/5 bg-black/30 p-0.5 backdrop-blur-sm">
+              <div className="w-full inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-linear-to-b from-white/8 to-white/3 p-0.5 backdrop-blur-sm">
                 {tabs.map((tab) => {
                   const active = activeTab === tab
                   const Icon = tab === 'Deposit' ? ArrowDownToLine : ArrowUpFromLine
@@ -861,8 +861,10 @@ export function Vault() {
                       type="button"
                       onClick={() => setActiveTab(tab)}
                       aria-pressed={active}
-                      className={`flex-1 h-10 rounded-full flex items-center justify-center gap-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
-                        active ? 'bg-white/8 text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'
+                      className={`flex-1 h-10 rounded-full border flex items-center justify-center gap-2 text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
+                        active
+                          ? 'border-brand-primary/35 bg-brand-primary/18 text-zinc-100 shadow-[0_8px_20px_-14px_rgba(0,82,255,0.9)]'
+                          : 'border-transparent text-zinc-500 hover:border-white/10 hover:text-zinc-200'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -904,7 +906,7 @@ export function Vault() {
                   </button>
                 </div>
                 
-                <div className={`card p-5 sm:p-8 ${amountError ? 'border-rose-500/30' : ''}`}>
+                <div className={`vault-surface-muted vault-hover-lift p-5 sm:p-8 ${amountError ? 'border-rose-500/40' : ''}`}>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -933,7 +935,7 @@ export function Vault() {
                 )}
 
                 {amount && !amountError && (
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-3 border-y border-zinc-900/50">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-3 border-y border-white/8">
                     <span className="label">You will receive</span>
                     <div className="value mono text-lg sm:text-xl glow-cyan sm:text-right whitespace-nowrap">
                       {amount} {activeTab === 'Deposit' ? shareSymbol : underlyingSymbol}
@@ -1001,7 +1003,7 @@ export function Vault() {
               <div>
                 <span className="label mb-4 block">Your Holdings</span>
                 
-                <div className="card p-5 sm:p-8">
+                <div className="vault-surface-muted vault-hover-lift p-5 sm:p-8">
                   <div className="space-y-5">
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center">
                       <TokenAvatar image={heroImage} symbol={underlyingSymbol} badge={SHARE_SYMBOL_PREFIX} />

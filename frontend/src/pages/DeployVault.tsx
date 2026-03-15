@@ -791,10 +791,10 @@ class DeployVaultErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-black text-white">
-          <section className="max-w-3xl mx-auto px-6 py-16">
+        <div className="vault-shell min-h-screen bg-vault-bg text-white">
+          <section className="max-w-[1400px] mx-auto px-6 py-16">
             <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
-            <div className="card rounded-xl p-8 space-y-4">
+            <div className="vault-surface vault-hover-lift p-8 space-y-4">
               <div className="text-lg font-medium text-red-400">Something went wrong</div>
               <div className="text-sm text-zinc-400 leading-relaxed">
                 The deploy page encountered an error. This may be due to wallet extension conflicts or a temporary issue.
@@ -837,10 +837,10 @@ export function DeployVault() {
   // Privy is used for auth/session - if not configured, show setup hint
   if (privyClientStatus !== 'ready') {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <section className="max-w-3xl mx-auto px-6 py-16">
+      <div className="vault-shell min-h-screen bg-vault-bg text-white">
+        <section className="max-w-[1400px] mx-auto px-6 py-16">
           <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
-          <div className="card rounded-xl p-8 space-y-3">
+          <div className="vault-surface vault-hover-lift p-8 space-y-3">
             <div className="text-lg font-medium">Authentication not configured</div>
             <div className="text-sm text-zinc-400 leading-relaxed">
               Deploy requires Privy for authentication. Your Coinbase Smart Wallet will be used for signing.
@@ -5442,7 +5442,7 @@ function DeployVaultBatcher({
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-white/5 bg-black/20 p-4 space-y-2">
+      <div className="vault-surface-muted rounded-lg p-4 space-y-2">
         <div className="text-[10px] font-medium text-zinc-500">Progress</div>
         <div className="grid grid-cols-1 gap-2 text-[11px]">
           <div className="flex items-center justify-between gap-4">
@@ -5524,7 +5524,7 @@ function DeployVaultBatcher({
         </div>
       ) : null}
 
-      <details className="group rounded-lg border border-white/5 bg-black/20">
+      <details className="vault-surface-muted group rounded-lg">
         <summary className="cursor-pointer select-none list-none px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] font-medium text-zinc-500">Deployment plan</div>
@@ -5536,7 +5536,7 @@ function DeployVaultBatcher({
           <div className="text-[11px] text-zinc-600 mb-3">
             Addresses are deterministic on Base. Click to view on BaseScan.
           </div>
-          <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
+          <div className="rounded-md border border-white/10 bg-white/4 px-3 py-2 mb-3 space-y-1 backdrop-blur-sm">
             <AddressRow label="Active batcher" address={batcherAddress} />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Deploy mode</div>
@@ -5544,7 +5544,7 @@ function DeployVaultBatcher({
             </div>
           </div>
 
-          <div className="rounded-md border border-white/5 bg-black/30 divide-y divide-white/5">
+          <div className="rounded-md border border-white/10 bg-white/4 divide-y divide-white/8 backdrop-blur-sm">
             <div className="py-3">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
               <div className="space-y-2">
@@ -5613,7 +5613,7 @@ function DeployVaultBatcher({
           </div>
           {dryRunError ? <div className="mt-2 text-[11px] text-amber-300/80">{dryRunError}</div> : null}
           {dryRunResult ? (
-            <div className="mt-3 rounded-lg border border-white/5 bg-black/20 p-3 space-y-2">
+            <div className="mt-3 rounded-lg border border-white/10 bg-white/4 p-3 space-y-2 backdrop-blur-sm">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[10px] font-medium text-zinc-500">Dry run</div>
                 <div className={dryRunResult.ok ? 'text-[11px] text-green-400/80' : 'text-[11px] text-amber-300/80'}>
@@ -5645,7 +5645,7 @@ function DeployVaultBatcher({
         </div>
       </details>
 
-      <div className="rounded-lg border border-white/5 bg-black/20 p-4 space-y-2">
+      <div className="vault-surface-muted rounded-lg p-4 space-y-2">
         <div className="text-[11px] text-zinc-400">
           Deploy runs as <span className="text-white">ERC‑4337 UserOperations</span> from{' '}
           <span className="font-mono text-zinc-200">{shortAddress(owner)}</span>.
@@ -5678,12 +5678,12 @@ function DeployVaultBatcher({
                         : 'via app smart wallet owner'
                 }`}
           </div>
-          <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-accent w-full rounded-lg">
+          <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-primary w-full rounded-lg">
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
           </button>
         </div>
       ) : (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+        <div className="rounded-lg border border-amber-500/35 bg-linear-to-b from-amber-500/16 to-amber-500/9 p-4 space-y-3 backdrop-blur-sm">
           <div className="text-sm font-medium text-amber-200">
             {strictNoEoaEnforced ? 'No-EOA deploy requirements' : 'ERC-4337 Setup Required'}
           </div>
@@ -7471,10 +7471,10 @@ function DeployVaultMain() {
   )
 
   return (
-    <div className="relative">
+    <div className="vault-shell relative">
       <PageMeta title={META.deploy.title} description={META.deploy.description} canonicalPath="/deploy" />
       <section className="cinematic-section">
-        <div className="max-w-3xl mx-auto px-6">
+        <div className="max-w-[1400px] mx-auto px-6">
           <div className="space-y-8">
             {/* Header */}
             <div className="flex items-start justify-between gap-6">
@@ -7489,7 +7489,7 @@ function DeployVaultMain() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.18, ease: baseEase }}
-                    className="mt-3 rounded-xl border border-zinc-900/70 bg-black/30 px-4 py-3 text-[12px] text-zinc-400"
+                    className="mt-3 rounded-xl border border-white/10 bg-linear-to-b from-white/8 to-white/3 px-4 py-3 text-[12px] text-zinc-400 backdrop-blur-sm"
                   >
                     <div className="text-zinc-200">From the waitlist</div>
                     <div className="mt-1">
@@ -7520,7 +7520,7 @@ function DeployVaultMain() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.18, ease: baseEase }}
-                    className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90"
+                    className="mt-3 rounded-xl border border-amber-500/25 bg-linear-to-b from-amber-500/18 to-amber-500/8 px-4 py-3 text-[12px] text-amber-200/90 backdrop-blur-sm"
                   >
                     <div className="font-medium text-amber-200">Account mismatch?</div>
                     <div className="mt-1 text-amber-200/80">
@@ -7548,14 +7548,14 @@ function DeployVaultMain() {
                   </motion.div>
                 ) : null}
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-zinc-900/70 bg-black/40 px-3 py-1 text-[10px] text-zinc-400">
+              <div className="vault-pill normal-case tracking-[0.02em] px-3 py-1 gap-2">
                 <img src="/protocols/base.png" alt="" aria-hidden="true" loading="lazy" className="w-3.5 h-3.5 opacity-90" />
                 Base
               </div>
             </div>
 
           {oneTimePrivyOwnerApprovalNeeded ? (
-              <div id="owner-approval-setup" className="rounded-lg border border-purple-500/20 bg-purple-500/10 p-4 space-y-3">
+              <div id="owner-approval-setup" className="rounded-lg border border-purple-500/28 bg-linear-to-b from-purple-500/16 to-purple-500/8 p-4 space-y-3 backdrop-blur-sm">
                 <div className="text-sm font-medium text-purple-200">One-time wallet approval (recommended first step)</div>
                 <div className="text-[11px] text-purple-200/75 leading-relaxed">
                   Before deploy, approve your app Privy wallet once as an owner of your canonical Zora smart wallet (EIP-1271).
@@ -7624,13 +7624,13 @@ function DeployVaultMain() {
             />
           ) : null}
           {pendingJustCompletedDeployment ? (
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-[12px] text-amber-200/90">
+            <div className="rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-4 text-[12px] text-amber-200/90 backdrop-blur-sm">
               Deployment is still finalizing on-chain. We now wait for the deferred auction (Phase 4) to be confirmed before
               marking this version complete.
             </div>
           ) : null}
           {staleIncompleteDeploymentRecord ? (
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+            <div className="rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-4 space-y-3 backdrop-blur-sm">
               <div className="text-[12px] text-amber-200">
                 Found an older local deployment record for this version, but final on-chain completion is missing. You can resume
                 deployment now.
@@ -7652,7 +7652,7 @@ function DeployVaultMain() {
             const shareOft = justCompletedDeployment?.contracts.shareOFT ?? trackerDeployment?.contracts.shareOFT
             const creatorCoin = justCompletedDeployment?.creatorToken ?? trackerDeployment?.creatorToken
             return shareOft && isAddress(shareOft) && creatorCoin && isAddress(creatorCoin) ? (
-              <div className="card rounded-xl p-6 space-y-4">
+              <div className="vault-surface-muted vault-hover-lift p-6 space-y-4">
                 <div className="space-y-1">
                   <div className="label">Vault token icon</div>
                   <div className="text-xs text-zinc-600">
@@ -7669,7 +7669,7 @@ function DeployVaultMain() {
           })()}
 
           {!alreadyDeployed && isAdmin ? (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+              <div className="rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-4 space-y-2 backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] uppercase tracking-wide text-amber-200">Launch checklist (admin)</div>
                   <div className="flex items-center gap-2 text-[11px] text-zinc-500">
@@ -7721,7 +7721,7 @@ function DeployVaultMain() {
                     <span className="text-zinc-200">Creator Coins</span>.
                   </div>
                 ) : baseSymbol ? (
-                  <div className="card rounded-xl p-8 space-y-6">
+                  <div className="vault-surface vault-hover-lift p-8 space-y-6">
                     {/* Token card */}
                     <div className="flex items-start justify-between gap-6">
                       <div className="flex items-center gap-4 min-w-0">
@@ -7810,7 +7810,7 @@ function DeployVaultMain() {
           {!alreadyDeployed && (
             <>
           {/* Essentials */}
-            <div className="card rounded-xl p-6 space-y-6">
+            <div className="vault-surface vault-hover-lift p-6 space-y-6">
               <div className="flex items-start justify-between gap-6">
                 <div className="space-y-1">
                   <div className="label">Launch</div>
@@ -7915,7 +7915,7 @@ function DeployVaultMain() {
           </div>
 
             {/* Deploy */}
-            <div className="card rounded-xl p-8 space-y-4">
+            <div className="vault-surface vault-hover-lift p-8 space-y-4">
               <div className="label">Deploy</div>
               {/* Auth flow */}
               {!privyReady ? (
@@ -7965,7 +7965,7 @@ function DeployVaultMain() {
                   Loading…
                 </button>
               ) : tokenIsValid && zoraCoin && identityBlockingReason ? (
-                <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
+                <div className="p-4 bg-linear-to-b from-amber-500/16 to-amber-500/8 border border-amber-500/25 rounded-lg space-y-2 backdrop-blur-sm">
                   <div className="text-amber-300/90 text-sm font-medium">Identity mismatch</div>
                   <div className="text-amber-300/70 text-xs leading-relaxed">{identityBlockingReason}</div>
                 </div>
@@ -8077,7 +8077,7 @@ function DeployVaultMain() {
                     </button>
                   ) : null}
                   {!creatorCoinReady ? (
-                    <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                    <div className="space-y-3 rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-3 backdrop-blur-sm">
                       <div className="text-[11px] text-amber-200 font-medium">Creator Coin required before vault deploy</div>
                       <div className="text-[11px] text-amber-100/80">
                         Create your Zora Creator Coin first, then this page will resume vault deployment with the detected coin.

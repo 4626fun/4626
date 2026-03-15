@@ -222,6 +222,14 @@ function buildRoutingQuotePayload(routing: unknown, quotePayload: Record<string,
   return { priorityQuote: quotePayload }
 }
 
+function hasApprovalTransaction(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const approval = (value as { approval?: unknown }).approval
+  if (!approval || typeof approval !== 'object') return false
+  const tx = approval as Record<string, unknown>
+  return typeof tx.to === 'string' && tx.to.length > 0 && typeof tx.data === 'string' && tx.data.length > 0
+}
+
 export function useSwapExecution(params: {
   address: string | undefined
   walletClient: unknown
@@ -890,12 +898,14 @@ export function useSwapExecution(params: {
       const selectedQuote = pickSwapQuote(quote)
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
       const permitPayload = await signPermitIfRequired(quote)
+      const requiresApprovalTx = hasApprovalTransaction(approvalData)
       const data = await buildSwap({
         quote: selectedQuote,
         ...permitPayload,
         includeGasInfo: false,
         refreshGasPrice: true,
-        simulateTransaction: true,
+        // Simulating before approval exists can fail with FAILED_TO_ESTIMATE_GAS.
+        simulateTransaction: !requiresApprovalTx,
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
       })
       assertValidSwapTransaction(data.swap)
@@ -906,7 +916,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [quote, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired])
+  }, [quote, approvalData, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired])
 
   const handleReviewTrade = useCallback(async () => {
     if (!params.executionAddress || !params.executionReady || !isReady) return
@@ -999,12 +1009,14 @@ export function useSwapExecution(params: {
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
       const permitPayload = await signPermitIfRequired(nextQuote)
       if (runId !== quoteRunRef.current) return
+      const requiresApprovalTx = hasApprovalTransaction(nextApproval)
       const built = await buildSwap({
         quote: selectedQuote,
         ...permitPayload,
         includeGasInfo: false,
         refreshGasPrice: true,
-        simulateTransaction: true,
+        // Simulating before approval exists can fail with FAILED_TO_ESTIMATE_GAS.
+        simulateTransaction: !requiresApprovalTx,
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
       })
       if (runId !== quoteRunRef.current) return

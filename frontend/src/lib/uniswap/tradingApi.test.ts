@@ -200,6 +200,39 @@ describe('fetchTradeQuote', () => {
       }
     }
   })
+
+  it('surfaces final local 404 payload after alias fallback', async () => {
+    const originalWindow = (globalThis as any).window
+    ;(globalThis as any).window = { location: { origin: 'http://localhost:5174' } }
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'Alias route not found' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'No route for pair' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      await expect(fetchTradeQuote(quoteRequest('791358'))).rejects.toThrow('No route for pair')
+      const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+      expect(calledUrls).toEqual(['/__api/uniswap/quote', '/api/uniswap/quote'])
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as any).window
+      } else {
+        ;(globalThis as any).window = originalWindow
+      }
+    }
+  })
 })
 
 describe('permit helpers', () => {

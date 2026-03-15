@@ -30,7 +30,7 @@ export function SwapSettingsSheet(props: {
         role="dialog"
         aria-modal="true"
         aria-label="Trade settings"
-        className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-2xl border border-white/8 glass-card px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.8)] sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pb-4"
+        className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-2xl border border-white/12 bg-linear-to-b from-vault-card/92 to-vault-cardRaised/78 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur-xl sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pb-4"
       >
         <div className="mb-4 flex items-center justify-between">
           <div className="text-sm font-medium text-vault-text">Trade settings</div>
@@ -47,14 +47,14 @@ export function SwapSettingsSheet(props: {
         <div className="space-y-4">
           {/* Slippage */}
           <div>
-            <label className="text-[11px] font-medium text-vault-subtext mb-1.5 block">Slippage tolerance</label>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-vault-subtext">Slippage tolerance</label>
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div className="relative">
                 <input
                   inputMode="decimal"
                   id="slippage-input"
                   aria-label="Slippage percentage"
-                  className="h-10 w-full rounded-xl border border-white/8 bg-white/4 px-3 pr-7 text-sm text-vault-text placeholder:text-vault-subtext focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-colors"
+                  className="h-10 w-full rounded-xl border border-white/12 bg-white/6 px-3 pr-7 text-sm text-vault-text placeholder:text-vault-subtext focus:outline-none focus:ring-2 focus:ring-brand-primary/35 focus:border-brand-primary/50 transition-all duration-200"
                   value={props.slippagePct}
                   onChange={(e) => props.onSetSlippagePct(e.target.value)}
                   placeholder="0.5"
@@ -63,16 +63,16 @@ export function SwapSettingsSheet(props: {
                   %
                 </span>
               </div>
-              <div className="flex items-center gap-0.5 rounded-xl border border-white/8 bg-white/4 p-0.5">
+              <div className="flex items-center gap-0.5 rounded-xl border border-white/12 bg-white/6 p-0.5">
                 {slippagePresets.map((value) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => props.onSetSlippagePct(value)}
-                    className={`min-h-8 rounded-lg px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
+                    className={`min-h-8 rounded-lg border px-2 py-1 text-[11px] transition-all duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
                       props.slippagePct === value
-                        ? 'bg-white/15 text-white font-medium'
-                        : 'text-zinc-400 hover:text-zinc-200'
+                        ? 'border-brand-primary/35 bg-brand-primary/20 text-white font-medium'
+                        : 'border-transparent text-zinc-400 hover:border-white/10 hover:text-zinc-200'
                     }`}
                   >
                     {value}%
@@ -94,7 +94,7 @@ export function SwapSettingsSheet(props: {
 
           {/* Deadline */}
           <div>
-            <label htmlFor="deadline-input" className="text-[11px] font-medium text-vault-subtext mb-1.5 block">
+            <label htmlFor="deadline-input" className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-vault-subtext">
               Transaction deadline
             </label>
             <div className="relative">
@@ -102,7 +102,7 @@ export function SwapSettingsSheet(props: {
                   inputMode="numeric"
                   id="deadline-input"
                   aria-label="Deadline in minutes"
-                  className="h-10 w-full rounded-xl border border-white/8 bg-white/4 px-3 pr-16 text-sm text-vault-text placeholder:text-vault-subtext focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-colors"
+                  className="h-10 w-full rounded-xl border border-white/12 bg-white/6 px-3 pr-16 text-sm text-vault-text placeholder:text-vault-subtext focus:outline-none focus:ring-2 focus:ring-brand-primary/35 focus:border-brand-primary/50 transition-all duration-200"
                   value={props.deadlineMinutes}
                   onChange={(e) => props.onSetDeadlineMinutes(e.target.value)}
                   placeholder="15"

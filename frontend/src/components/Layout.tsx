@@ -117,7 +117,7 @@ export function Layout() {
           isMobileChatOverlayActive ? 'hidden' : ''
         }`}
       >
-        <div className="flex items-center justify-around py-4 px-6" role="list">
+        <div className="mx-auto flex max-w-[560px] items-center justify-start gap-2 overflow-x-auto scrollbar-hide py-3.5 px-3 sm:py-4 sm:px-6" role="list">
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
@@ -127,10 +127,10 @@ export function Layout() {
                 to={path}
                 aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2 rounded-xl border transition-all duration-200 ${
+                className={`flex flex-col items-center justify-center gap-1.5 group min-h-11 min-w-[52px] sm:min-w-[56px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
                   isActive
                     ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
-                    : 'border-transparent hover:border-white/10 hover:bg-white/6'
+                    : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
                 }`}
                 role="listitem"
               >
@@ -140,7 +140,7 @@ export function Layout() {
                     isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
                   }`}
                 />
-                <span className={`label ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
+                <span className={`text-[9px] font-medium uppercase tracking-[0.12em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
                   {label}
                 </span>
               </Link>

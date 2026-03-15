@@ -13,7 +13,7 @@ export function RouteDisplay({ routeSummary, aggregator, executionPrice, marketP
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+    <div className="rounded-xl border border-white/12 bg-linear-to-b from-white/8 to-white/3 p-3 backdrop-blur-sm">
       <div className="mb-2 text-xs font-medium text-zinc-300">Route preview</div>
       {routeSummary ? (
         <RouteViz routeSummary={routeSummary} compact />

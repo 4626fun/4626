@@ -76,15 +76,19 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}, bases?: st
   const alias = path.startsWith('/api/') ? apiAliasPath(path) : null
 
   let lastErr: unknown = null
-  for (const base of baseList) {
-    for (const p of tryPaths) {
+  for (let baseIndex = 0; baseIndex < baseList.length; baseIndex += 1) {
+    const base = baseList[baseIndex]
+    for (let pathIndex = 0; pathIndex < tryPaths.length; pathIndex += 1) {
+      const p = tryPaths[pathIndex]
+      const hasNextAttempt = pathIndex < tryPaths.length - 1 || baseIndex < baseList.length - 1
       const url = joinBase(base, p)
       try {
         const res = await fetch(url, baseInit)
         // In dev, Vite may serve index.html for unknown paths; treat that as a miss.
         if (isProbablyHtml(res)) continue
-        // If the alias route isn't present yet, Vercel returns 404; fall back to next path/base.
-        if (res.status === 404) continue
+        // Try any remaining path/base fallbacks first (alias -> canonical, app origin -> marketing origin).
+        // If this is the final attempt, return the 404 so callers can surface its JSON error message.
+        if (res.status === 404 && hasNextAttempt) continue
         // Some deployments serve `/__api/*` as static content, which returns 405 on POST.
         // Treat that as a miss so we fall back to the real `/api/*` handlers.
         if (alias && p === alias && res.status === 405) {
