@@ -70,32 +70,64 @@ async function sendHolderRoomWarning(params: {
   botToken: string
   roomChatId: string
   text: string
-}): Promise<void> {
-  await fetch(`https://api.telegram.org/bot${params.botToken}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: params.roomChatId,
-      text: params.text,
-      disable_web_page_preview: true,
-    }),
-  })
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${params.botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: params.roomChatId,
+        text: params.text,
+        disable_web_page_preview: true,
+      }),
+    })
+    if (!response.ok) {
+      const details = await response.text().catch(() => '')
+      return { ok: false, error: `send_failed_${response.status}:${details.slice(0, 180)}` }
+    }
+    const body = (await response.json().catch(() => null)) as any
+    if (body?.ok !== true) {
+      return { ok: false, error: `send_failed_api:${asTrimmed(body?.description ?? 'unknown')}` }
+    }
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
 }
 
 async function removeHolderRoomMember(params: {
   botToken: string
   roomChatId: string
   telegramUserId: string
-}): Promise<void> {
-  await fetch(`https://api.telegram.org/bot${params.botToken}/banChatMember`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: params.roomChatId,
-      user_id: params.telegramUserId,
-      revoke_messages: false,
-    }),
-  })
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${params.botToken}/banChatMember`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: params.roomChatId,
+        user_id: params.telegramUserId,
+        revoke_messages: false,
+      }),
+    })
+    if (!response.ok) {
+      const details = await response.text().catch(() => '')
+      return { ok: false, error: `ban_failed_${response.status}:${details.slice(0, 180)}` }
+    }
+    const body = (await response.json().catch(() => null)) as any
+    if (body?.ok !== true) {
+      return { ok: false, error: `ban_failed_api:${asTrimmed(body?.description ?? 'unknown')}` }
+    }
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
 }
 
 function buildGraceWarningText(row: TelegramHolderRoomRecheckRow, graceUntilIso: string): string {
@@ -178,6 +210,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     if (eligibility.reason === 'onchain_read_failed') {
+      await upsertHolderRoomMember({
+        db: db as any,
+        roomChatId: row.roomChatId,
+        telegramUserId: row.telegramUserId,
+        canonicalCswAddress: row.canonicalCswAddress,
+        status: row.status,
+        lastEligibleAt: row.lastEligibleAt,
+        graceUntil: row.graceUntil,
+        lastCheckedAt: nowIso,
+        removedAt: row.status === 'removed' ? nowIso : null,
+      })
       skipped += 1
       continue
     }
@@ -201,6 +244,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const graceUntilMs = parseIsoMsOrNaN(row.graceUntil)
     const graceExpired = row.status === 'grace' && Number.isFinite(graceUntilMs) && graceUntilMs <= nowMs
     if (graceExpired) {
+      const removalResult = await removeHolderRoomMember({
+        botToken: config.botToken,
+        roomChatId: row.roomChatId,
+        telegramUserId: row.telegramUserId,
+      })
+      if (!removalResult.ok) {
+        await upsertHolderRoomMember({
+          db: db as any,
+          roomChatId: row.roomChatId,
+          telegramUserId: row.telegramUserId,
+          canonicalCswAddress: row.canonicalCswAddress,
+          status: 'grace',
+          lastEligibleAt: row.lastEligibleAt,
+          graceUntil: row.graceUntil,
+          lastCheckedAt: nowIso,
+          removedAt: null,
+        })
+        errors += 1
+        continue
+      }
+
       await upsertHolderRoomMember({
         db: db as any,
         roomChatId: row.roomChatId,
@@ -213,23 +277,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         removedAt: nowIso,
       })
 
-      try {
-        await removeHolderRoomMember({
-          botToken: config.botToken,
-          roomChatId: row.roomChatId,
-          telegramUserId: row.telegramUserId,
-        })
-      } catch {
-        errors += 1
-      }
-
-      try {
-        await sendHolderRoomWarning({
-          botToken: config.botToken,
-          roomChatId: row.roomChatId,
-          text: buildRemovalText(row),
-        })
-      } catch {
+      const removalNoticeResult = await sendHolderRoomWarning({
+        botToken: config.botToken,
+        roomChatId: row.roomChatId,
+        text: buildRemovalText(row),
+      })
+      if (!removalNoticeResult.ok) {
         errors += 1
       }
 

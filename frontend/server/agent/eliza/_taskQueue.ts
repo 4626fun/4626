@@ -120,20 +120,28 @@ async function leaseNextTask(workerId: string): Promise<AgentTask | null> {
   }
 }
 
-async function markTaskDone(id: number): Promise<void> {
+async function markTaskDone(params: {
+  id: number
+  workerId: string
+}): Promise<void> {
   const db = await getDb()
   if (!db) return
   await db.sql`
     UPDATE agent_background_tasks
        SET status = 'done',
+           leased_at = NULL,
+           leased_by = NULL,
            updated_at = NOW(),
            last_error = NULL
-     WHERE id = ${id};
+     WHERE id = ${params.id}
+       AND status = 'processing'
+       AND leased_by = ${params.workerId};
   `
 }
 
 async function markTaskFailed(params: {
   id: number
+  workerId: string
   error: string
   retryDelayMs?: number
 }): Promise<void> {
@@ -150,9 +158,13 @@ async function markTaskFailed(params: {
              WHEN attempts >= max_attempts THEN run_after
              ELSE NOW() + (${Math.floor(retryDelayMs)} * INTERVAL '1 millisecond')
            END,
+           leased_at = NULL,
+           leased_by = NULL,
            updated_at = NOW(),
            last_error = ${params.error}
-     WHERE id = ${params.id};
+     WHERE id = ${params.id}
+       AND status = 'processing'
+       AND leased_by = ${params.workerId};
   `
 }
 
@@ -282,11 +294,15 @@ export function startAgentBackgroundTaskWorker(params: {
         if (!task) break
         try {
           await params.handleTask(task)
-          await markTaskDone(task.id)
+          await markTaskDone({
+            id: task.id,
+            workerId,
+          })
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           await markTaskFailed({
             id: task.id,
+            workerId,
             error: message,
             retryDelayMs: backoffForAttempt(task.attempts),
           })

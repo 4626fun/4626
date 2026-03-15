@@ -16,6 +16,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { Agent, createUser, createSigner } from '@xmtp/agent-sdk'
 import type { Address } from 'viem'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -45,6 +46,7 @@ const EXECUTION_TIMEOUT_MS = 55_000 // Leave 5s buffer for Vercel's 60s limit
 
 const ETHEREUM_IDENTIFIER_KIND = 0
 let conversationCheckpointSchemaEnsured = false
+let agentMessageMemorySchemaEnsured = false
 
 const CONVERSATION_CHECKPOINTS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS creator_xmtp_agent_conversation_checkpoints (
@@ -59,6 +61,27 @@ const CONVERSATION_CHECKPOINTS_TABLE_SQL = `
 const CONVERSATION_CHECKPOINTS_INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS creator_xmtp_agent_conversation_checkpoints_creator_updated_idx
     ON creator_xmtp_agent_conversation_checkpoints (creator_address, updated_at DESC);
+`
+
+const AGENT_MESSAGE_MEMORY_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS agent_message_memory (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    entity_id TEXT,
+    role TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    conversation_type TEXT,
+    sender_address TEXT,
+    content TEXT NOT NULL,
+    metadata_json JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`
+
+const AGENT_MESSAGE_MEMORY_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS agent_message_memory_conversation_created_idx
+    ON agent_message_memory (conversation_id, created_at DESC);
 `
 
 export function readStrictUnsupportedRetryEnabled(raw = process.env.AGENT_PROCESS_STRICT_UNSUPPORTED_RETRY): boolean {
@@ -89,8 +112,9 @@ export function getMessageQueryOptions(lastProcessedMs: number): {
   direction: number
 } {
   const ms = Math.max(0, Math.floor(lastProcessedMs))
+  const cursorMs = Math.max(0, ms - 1)
   return {
-    sentAfterNs: BigInt(ms) * 1_000_000n,
+    sentAfterNs: BigInt(cursorMs) * 1_000_000n,
     limit: MAX_MESSAGES_PER_CONVERSATION,
     direction: 0, // SortDirection.Ascending in @xmtp/node-bindings.
   }
@@ -110,6 +134,48 @@ export function getEthereumAddressFromInboxState(state: any): string | null {
 
 export function mergeCheckpointMs(previousMs: number, candidateMs: number): number {
   return Math.max(previousMs, candidateMs)
+}
+
+function shortHash(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 32)
+}
+
+function formatAsUuid(hex32: string): string {
+  const h = hex32.padEnd(32, '0')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`
+}
+
+function toRoomId(conversationId: string): string {
+  return formatAsUuid(shortHash(conversationId))
+}
+
+function toEntityId(senderAddress: string): string {
+  return formatAsUuid(shortHash(senderAddress.toLowerCase()))
+}
+
+function normalizeMessageId(value: unknown): string | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  return raw.toLowerCase()
+}
+
+function toInboundMessageMemoryId(params: {
+  conversationId: string
+  senderAddress: string
+  content: string
+  messageId?: string | null
+  sentAtMs?: number | null
+}): string {
+  const explicitMessageId = normalizeMessageId(params.messageId)
+  if (explicitMessageId) {
+    return formatAsUuid(shortHash(`xmtp:msg:${params.conversationId}:${explicitMessageId}`))
+  }
+  const sentAtMs =
+    Number.isFinite(params.sentAtMs) && Number(params.sentAtMs) > 0
+      ? Math.floor(Number(params.sentAtMs))
+      : 0
+  const fallback = `${params.conversationId}:${params.senderAddress.toLowerCase()}:${sentAtMs}:${params.content}`
+  return formatAsUuid(shortHash(`xmtp:fallback:${fallback}`))
 }
 
 export function resolveFallbackCommandReply(params: {
@@ -175,6 +241,79 @@ async function ensureConversationCheckpointSchema(db: any): Promise<void> {
     `
   }
   conversationCheckpointSchemaEnsured = true
+}
+
+function toSqlStatement(sql: string): TemplateStringsArray {
+  const stmt = [sql] as unknown as TemplateStringsArray
+  ;(stmt as any).raw = [sql]
+  return stmt
+}
+
+async function ensureAgentMessageMemorySchema(db: any): Promise<void> {
+  if (agentMessageMemorySchemaEnsured) return
+  if (typeof db?.query === 'function') {
+    await db.query(AGENT_MESSAGE_MEMORY_TABLE_SQL)
+    await db.query(AGENT_MESSAGE_MEMORY_INDEX_SQL)
+  } else {
+    await db.sql(toSqlStatement(AGENT_MESSAGE_MEMORY_TABLE_SQL))
+    await db.sql(toSqlStatement(AGENT_MESSAGE_MEMORY_INDEX_SQL))
+  }
+  agentMessageMemorySchemaEnsured = true
+}
+
+async function claimInboundMessageMemory(params: {
+  db: any
+  memoryId: string
+  creatorAddress: string
+  conversationId: string
+  senderAddress: string
+  content: string
+  messageId?: string | null
+  sentAtMs: number
+}): Promise<'claimed' | 'duplicate'> {
+  const metadata = {
+    conversationId: params.conversationId,
+    conversationType: 'unknown',
+    senderAddress: params.senderAddress,
+    ...(normalizeMessageId(params.messageId) ? { messageId: normalizeMessageId(params.messageId) } : {}),
+  }
+  const createdAtIso =
+    Number.isFinite(params.sentAtMs) && params.sentAtMs > 0
+      ? new Date(params.sentAtMs).toISOString()
+      : new Date().toISOString()
+  const insertResult = await params.db.sql`
+    INSERT INTO agent_message_memory (
+      id, agent_id, room_id, entity_id, role, conversation_id, conversation_type, sender_address, content, metadata_json, created_at
+    ) VALUES (
+      ${params.memoryId},
+      ${params.creatorAddress},
+      ${toRoomId(params.conversationId)},
+      ${toEntityId(params.senderAddress)},
+      ${'user'},
+      ${params.conversationId},
+      ${'unknown'},
+      ${params.senderAddress},
+      ${params.content},
+      ${JSON.stringify(metadata)}::jsonb,
+      ${createdAtIso}::timestamptz
+    )
+    ON CONFLICT (id) DO NOTHING
+    RETURNING id;
+  `
+  const insertedRows = Array.isArray(insertResult?.rows)
+    ? insertResult.rows.length
+    : Number((insertResult as any)?.rowCount ?? 0)
+  return Number.isFinite(insertedRows) && insertedRows > 0 ? 'claimed' : 'duplicate'
+}
+
+async function releaseInboundMessageMemoryClaim(params: {
+  db: any
+  memoryId: string
+}): Promise<void> {
+  await params.db.sql`
+    DELETE FROM agent_message_memory
+    WHERE id = ${params.memoryId};
+  `
 }
 
 async function loadConversationCheckpointMap(params: {
@@ -290,6 +429,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     await ensureCreatorXmtpAgentsSchema(db as any)
     await ensureConversationCheckpointSchema(db as any)
+    await ensureAgentMessageMemorySchema(db as any)
 
     // Load agents
     const agentRows = await db.sql`
@@ -395,14 +535,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 shouldStopAgentLoop = true
                 break
               }
-              // Only process messages newer than our last checkpoint
+              // Process messages at-or-after checkpoint so same-ms neighbors are not skipped.
               const msgTs = msg.sentAt?.getTime() ?? 0
-              if (msgTs <= conversationCheckpointMs) continue
+              if (msgTs < conversationCheckpointMs) continue
               // Skip self messages
               if (msg.senderInboxId === client.inboxId) continue
 
               const content = typeof msg.content === 'string' ? msg.content : (msg.fallback ?? '')
-              if (!content || !isCommandLike(content)) continue
+              if (!content || !isCommandLike(content)) {
+                newestConversationTimestamp = mergeCheckpointMs(newestConversationTimestamp, msgTs)
+                continue
+              }
 
               // Resolve sender address
               let senderAddr: string | null = null
@@ -411,53 +554,88 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 senderAddr = getEthereumAddressFromInboxState(states?.[0])
               } catch {}
 
-              if (!senderAddr) continue
+              if (!senderAddr) {
+                newestConversationTimestamp = mergeCheckpointMs(newestConversationTimestamp, msgTs)
+                continue
+              }
+
+              const messageId = normalizeMessageId((msg as any)?.id ?? (msg as any)?.messageId)
+              const inboundMemoryId = toInboundMessageMemoryId({
+                conversationId: convo.id,
+                senderAddress: senderAddr,
+                content,
+                messageId,
+                sentAtMs: msgTs,
+              })
+              const claimStatus = await claimInboundMessageMemory({
+                db: db as any,
+                memoryId: inboundMemoryId,
+                creatorAddress,
+                conversationId: convo.id,
+                senderAddress: senderAddr,
+                content,
+                messageId,
+                sentAtMs: msgTs,
+              })
+              if (claimStatus === 'duplicate') {
+                newestConversationTimestamp = mergeCheckpointMs(newestConversationTimestamp, msgTs)
+                continue
+              }
 
               logger.info('[agent/process] Processing', {
                 creator: creatorAddress.slice(0, 10),
                 sender: senderAddr.slice(0, 10),
                 text: content.slice(0, 60),
               })
-
-              const result = await handleKeeprCommand({
-                groupId: convo.id,
-                senderWallet: senderAddr.toLowerCase() as Address,
-                text: content.trim(),
-              })
-              const reply = resolveFallbackCommandReply({
-                text: content.trim(),
-                result,
-              })
-              const deferUnsupported = shouldDeferFallbackCommand({
-                fallbackGenerated: reply.fallbackGenerated,
-                strictUnsupportedRetry: AGENT_PROCESS_STRICT_UNSUPPORTED_RETRY,
-              })
-              if (deferUnsupported) {
-                totalDeferredUnsupported++
-                deferredUnsupportedInConversation = true
-                logger.warn('[agent/process] deferring unsupported command until realtime runtime is online', {
-                  creator: creatorAddress.slice(0, 10),
-                  convo: convo.id.slice(0, 16),
-                  command: content.trim().slice(0, 64),
+              let shouldRetainClaim = false
+              try {
+                const result = await handleKeeprCommand({
+                  groupId: convo.id,
+                  senderWallet: senderAddr.toLowerCase() as Address,
+                  text: content.trim(),
                 })
-                break
-              }
-
-              await convo.sendText(reply.replyText)
-              totalReplied++
-              if (reply.fallbackGenerated) {
-                totalFallbackReplies++
-                logger.warn('[agent/process] fallback-only command reply', {
-                  creator: creatorAddress.slice(0, 10),
-                  convo: convo.id.slice(0, 16),
-                  command: content.trim().slice(0, 64),
+                const reply = resolveFallbackCommandReply({
+                  text: content.trim(),
+                  result,
                 })
+                const deferUnsupported = shouldDeferFallbackCommand({
+                  fallbackGenerated: reply.fallbackGenerated,
+                  strictUnsupportedRetry: AGENT_PROCESS_STRICT_UNSUPPORTED_RETRY,
+                })
+                if (deferUnsupported) {
+                  totalDeferredUnsupported++
+                  deferredUnsupportedInConversation = true
+                  logger.warn('[agent/process] deferring unsupported command until realtime runtime is online', {
+                    creator: creatorAddress.slice(0, 10),
+                    convo: convo.id.slice(0, 16),
+                    command: content.trim().slice(0, 64),
+                  })
+                  break
+                }
+
+                await convo.sendText(reply.replyText)
+                totalReplied++
+                if (reply.fallbackGenerated) {
+                  totalFallbackReplies++
+                  logger.warn('[agent/process] fallback-only command reply', {
+                    creator: creatorAddress.slice(0, 10),
+                    convo: convo.id.slice(0, 16),
+                    command: content.trim().slice(0, 64),
+                  })
+                }
+
+                shouldRetainClaim = true
+                totalProcessed++
+                messagesThisAgent++
+                newestConversationTimestamp = mergeCheckpointMs(newestConversationTimestamp, msgTs)
+              } finally {
+                if (!shouldRetainClaim) {
+                  await releaseInboundMessageMemoryClaim({
+                    db: db as any,
+                    memoryId: inboundMemoryId,
+                  }).catch(() => {})
+                }
               }
-
-              totalProcessed++
-              messagesThisAgent++
-
-              newestConversationTimestamp = mergeCheckpointMs(newestConversationTimestamp, msgTs)
             }
 
             if (newestConversationTimestamp > conversationCheckpointMs) {
