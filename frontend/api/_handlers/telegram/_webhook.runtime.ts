@@ -1139,20 +1139,20 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: '▤ Core', callback_data: 'help:core' },
-        { text: '◈ Coin', callback_data: 'help:coin' },
-        { text: '◷ Market', callback_data: 'help:market' },
+        { text: 'Core', callback_data: 'help:core' },
+        { text: 'Coin', callback_data: 'help:coin' },
+        { text: 'Market', callback_data: 'help:market' },
       ],
       [
-        { text: '✎ Social', callback_data: 'help:social' },
-        { text: '⚙ Ops', callback_data: 'help:ops' },
-        { text: '⬢ Bankr', callback_data: 'help:bankr' },
+        { text: 'Social', callback_data: 'help:social' },
+        { text: 'Ops', callback_data: 'help:ops' },
+        { text: 'Bankr', callback_data: 'help:bankr' },
       ],
       [
         { text: '■ Wallet', callback_data: 'help:wallet' },
         { text: 'Help', callback_data: 'help:all' },
       ],
-      [{ text: '◂ Back', callback_data: 'menu:start' }],
+      [{ text: '< Back', callback_data: 'menu:start' }],
     ],
   }
 }
@@ -1338,6 +1338,24 @@ function buildFocusedHelpText(): string {
 
 function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
   const miniAppUrl = resolveTelegramMiniAppUrl()
+  const connectAppUrl = buildTelegramMiniAppUrl({
+    baseUrl: miniAppUrl,
+    pathname: '/continue',
+    query: {
+      from: 'waitlist',
+      autologin: '1',
+      auth: 'wallet',
+      next: '/swap?tgMiniApp=1&tgEntry=connect',
+    },
+  })
+  const walletAppUrl = buildTelegramMiniAppUrl({
+    baseUrl: miniAppUrl,
+    pathname: '/swap',
+    query: {
+      tgMiniApp: '1',
+      tgEntry: 'wallet',
+    },
+  })
   const tradeAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
     pathname: '/swap',
@@ -1348,20 +1366,20 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
   })
   const keyboard: Array<Array<Record<string, unknown>>> = params.isLinked
     ? [
-        [{ text: '■ Wallet', callback_data: 'menu:wallet' }],
+        [buildMiniAppLaunchButton({ chatId: params.chatId, text: '■ Wallet', url: walletAppUrl })],
         [
           { text: '⇄ Trade', callback_data: 'menu:trade' },
-          { text: '⌕ Explore', callback_data: 'menu:explore' },
-          { text: 'ℹ Help', callback_data: 'menu:topics' },
+          { text: '◇ Explore', callback_data: 'menu:explore' },
+          { text: '? Help', callback_data: 'menu:topics' },
         ],
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
         [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
       ]
     : [
-        [{ text: '■ Connect', callback_data: 'menu:connect' }],
+        [buildMiniAppLaunchButton({ chatId: params.chatId, text: '■ Connect', url: connectAppUrl })],
         [
-          { text: '⌕ Explore', callback_data: 'menu:explore' },
-          { text: 'ℹ Help', callback_data: 'menu:topics' },
+          { text: '◇ Explore', callback_data: 'menu:explore' },
+          { text: '? Help', callback_data: 'menu:topics' },
         ],
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
         [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
@@ -1377,10 +1395,10 @@ function buildExploreReplyMarkup(): Record<string, unknown> {
     inline_keyboard: [
       [
         { text: '▣ Vaults', callback_data: 'menu:vaults' },
-        { text: '◷ Auctions', callback_data: 'menu:auctions' },
+        { text: '△ Auctions', callback_data: 'menu:auctions' },
         { text: '↗ Signals', callback_data: 'menu:signals' },
       ],
-      [{ text: '◂ Back', callback_data: 'menu:start' }],
+      [{ text: '< Back', callback_data: 'menu:start' }],
     ],
   }
 }
@@ -1389,15 +1407,15 @@ function buildTradeMenuReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: '＋ Buy', callback_data: 'menu:buy' },
-        { text: '− Sell', callback_data: 'menu:sell' },
-        { text: '◉ Bid', callback_data: 'menu:bid' },
+        { text: '+ Buy', callback_data: 'menu:buy' },
+        { text: '- Sell', callback_data: 'menu:sell' },
+        { text: '• Bid', callback_data: 'menu:bid' },
       ],
       [
         { text: '■ Wallet', callback_data: 'menu:wallet' },
-        { text: '⌕ Explore', callback_data: 'menu:explore' },
+        { text: '◇ Explore', callback_data: 'menu:explore' },
       ],
-      [{ text: '◂ Back', callback_data: 'menu:start' }],
+      [{ text: '< Back', callback_data: 'menu:start' }],
     ],
   }
 }
@@ -1472,7 +1490,7 @@ function resolveStaticMenuCallbackResponse(params: {
   }
   if (token === 'menu:explore') {
     return {
-      text: ['⌕ Explore', '', 'Pick where you want to scan next.'].join('\n'),
+      text: ['◇ Explore', '', 'Pick where you want to scan next.'].join('\n'),
       replyMarkup: buildExploreReplyMarkup(),
     }
   }
@@ -1496,7 +1514,7 @@ function resolveStaticMenuCallbackResponse(params: {
   }
   if (token === 'menu:topics') {
     return {
-      text: ['ℹ Help Topics', '', 'Pick a focused command guide.'].join('\n'),
+      text: ['? Help Topics', '', 'Pick a focused command guide.'].join('\n'),
       replyMarkup: buildHelpCategoryReplyMarkup(),
     }
   }
@@ -2745,15 +2763,28 @@ async function executeTelegramNativeCommand(params: {
         formatLinkStatusText(link),
         '',
         'Ready actions:',
-        '- tap ■ Wallet, ⇄ Trade, or ⌕ Explore below',
+        '- tap ■ Wallet, ⇄ Trade, or ◇ Explore below',
       ].join('\n'),
       replyMarkup: {
         inline_keyboard: [
-          [{ text: '■ Wallet', callback_data: 'menu:wallet' }],
+          [
+            buildMiniAppLaunchButton({
+              chatId: params.chatId,
+              text: '■ Wallet',
+              url: buildTelegramMiniAppUrl({
+                baseUrl: resolveTelegramMiniAppUrl(),
+                pathname: '/swap',
+                query: {
+                  tgMiniApp: '1',
+                  tgEntry: 'wallet',
+                },
+              }),
+            }),
+          ],
           [
             { text: '⇄ Trade', callback_data: 'menu:trade' },
-            { text: '⌕ Explore', callback_data: 'menu:explore' },
-            { text: 'ℹ Help', callback_data: 'menu:topics' },
+            { text: '◇ Explore', callback_data: 'menu:explore' },
+            { text: '? Help', callback_data: 'menu:topics' },
           ],
         ],
       },
@@ -3786,9 +3817,9 @@ function buildTradeRecoveryReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: '＋ Buy', callback_data: 'menu:buy' },
-        { text: '− Sell', callback_data: 'menu:sell' },
-        { text: '◉ Bid', callback_data: 'menu:bid' },
+        { text: '+ Buy', callback_data: 'menu:buy' },
+        { text: '- Sell', callback_data: 'menu:sell' },
+        { text: '• Bid', callback_data: 'menu:bid' },
       ],
       [
         { text: '■ Wallet', callback_data: 'menu:wallet' },

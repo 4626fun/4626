@@ -357,7 +357,13 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
-    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:connect')).toBe(true)
+    const connectButton = callbackButtons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
+    expect(Boolean(connectButton)).toBe(true)
+    expect(
+      typeof connectButton?.url === 'string' ||
+        typeof connectButton?.web_app?.url === 'string' ||
+        String(connectButton?.callback_data ?? '') === 'menu:connect',
+    ).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:explore')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(false)
@@ -413,8 +419,13 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('4626 on Telegram')
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const buttons = payload.reply_markup.inline_keyboard.flat()
-    expect(buttons.some((button: any) => String(button?.text ?? '').trim() === '■ Connect')).toBe(true)
-    expect(buttons.some((button: any) => String(button?.callback_data ?? '') === 'menu:connect')).toBe(true)
+    const connectButton = buttons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
+    expect(Boolean(connectButton)).toBe(true)
+    expect(
+      typeof connectButton?.web_app?.url === 'string' ||
+        typeof connectButton?.url === 'string' ||
+        String(connectButton?.callback_data ?? '') === 'menu:connect',
+    ).toBe(true)
     expect(
       buttons.some(
         (button: any) =>
@@ -1297,7 +1308,13 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Ready actions')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
-    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:wallet')).toBe(true)
+    const walletButton = allButtons.find((button: any) => String(button?.text ?? '').trim() === '■ Wallet')
+    expect(Boolean(walletButton)).toBe(true)
+    expect(
+      typeof walletButton?.web_app?.url === 'string' ||
+        typeof walletButton?.url === 'string' ||
+        String(walletButton?.callback_data ?? '') === 'menu:wallet',
+    ).toBe(true)
     expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:trade')).toBe(true)
     expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:explore')).toBe(true)
   })

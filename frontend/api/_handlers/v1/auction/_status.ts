@@ -127,6 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let status: unknown = null
     let currency: unknown = null
     let auctionToken: unknown = null
+    let resolvedRpcUrl: string | null = null
     let lastError: unknown = null
 
     for (let index = 0; index < rpcUrls.length; index += 1) {
@@ -144,6 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status = response[0]
         currency = response[1]
         auctionToken = response[2]
+        resolvedRpcUrl = rpcUrl
         lastError = null
         break
       } catch (error) {
@@ -169,15 +171,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenImagePath = tokenAddressLower ? `/api/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
     const tokenImageCanonicalPath = tokenAddressLower ? `/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
     const tokenImageUrl = tokenImageCanonicalPath ? `${getCanonicalApiOrigin(req)}${tokenImageCanonicalPath}` : null
+    const metadataClient = createPublicClient({
+      chain: base,
+      transport: http(resolvedRpcUrl ?? rpcUrls[0], { timeout: 20_000 }),
+    })
     const [tokenDecimals, tokenSymbol, currencyDecimals] = await Promise.all([
       tokenAddr
-        ? client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
+        ? metadataClient.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
         : null,
       tokenAddr
-        ? client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'symbol' }).catch(() => null)
+        ? metadataClient.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'symbol' }).catch(() => null)
         : null,
       currencyAddr
-        ? client.readContract({ address: currencyAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
+        ? metadataClient.readContract({ address: currencyAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
         : null,
     ])
 
