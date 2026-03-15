@@ -88,6 +88,16 @@ function buildCanonicalTokenImageUrl(tokenAddress: `0x${string}`): string {
   return `/api/v1/token/${tokenAddress.toLowerCase()}/image?chain=8453&format=png`
 }
 
+export function selectMetadataSourceUri(params: { tokenURI?: unknown; contractURI?: unknown }): string | null {
+  const tokenUri = typeof params.tokenURI === 'string' ? params.tokenURI.trim() : ''
+  if (tokenUri) return tokenUri
+
+  const contractUri = typeof params.contractURI === 'string' ? params.contractURI.trim() : ''
+  if (contractUri) return contractUri
+
+  return null
+}
+
 export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
   const [metadata, setMetadata] = useState<TokenMetadata | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -128,11 +138,7 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
         return
       }
 
-      const metadataSourceRaw =
-        (typeof tokenURI === 'string' && tokenURI.trim()) ||
-        (typeof contractURI === 'string' && contractURI.trim()) ||
-        ''
-      const metadataSource = metadataSourceRaw ? metadataSourceRaw : null
+      const metadataSource = selectMetadataSourceUri({ tokenURI, contractURI })
       if (!metadataSource) {
         // Fall back to canonical token image endpoint while metadata is unavailable.
         setMetadata(null)

@@ -53,6 +53,14 @@ function getPublicOrigin(req: VercelRequest): string {
   return `${protocol}://${host}`
 }
 
+function getCanonicalApiOrigin(req: VercelRequest): string {
+  const configuredApiHost = headerValue(process.env.API_HOST as string | undefined)
+  if (configuredApiHost) {
+    return `${inferProtocol(configuredApiHost)}://${configuredApiHost}`
+  }
+  return getPublicOrigin(req)
+}
+
 function getStrategyParam(req: VercelRequest): string {
   const v =
     (typeof req.query?.ccaStrategy === 'string' ? req.query.ccaStrategy : typeof req.query?.address === 'string' ? req.query.address : '').trim()
@@ -123,7 +131,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const currencyAddr = typeof currency === 'string' && isAddressLike(currency) ? (currency as `0x${string}`) : null
     const tokenAddressLower = tokenAddr ? tokenAddr.toLowerCase() : null
     const tokenImagePath = tokenAddressLower ? `/api/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
-    const tokenImageUrl = tokenImagePath ? `${getPublicOrigin(req)}${tokenImagePath}` : null
+    const tokenImageCanonicalPath = tokenAddressLower ? `/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
+    const tokenImageUrl = tokenImageCanonicalPath ? `${getCanonicalApiOrigin(req)}${tokenImageCanonicalPath}` : null
     const [tokenDecimals, tokenSymbol, currencyDecimals] = await Promise.all([
       tokenAddr
         ? client.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)

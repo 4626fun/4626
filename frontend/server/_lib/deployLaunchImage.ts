@@ -17,6 +17,12 @@ export const LAUNCH_IMAGE_PROJECT_ID_KEY = 'launchImageProjectId'
 export const LAUNCH_IMAGE_READY_AT_KEY = 'launchImageReadyAt'
 export const LAUNCH_IMAGE_VAULT_KEY = 'launchImageVaultAddress'
 export const LAUNCH_IMAGE_SHARE_OFT_KEY = 'launchImageShareOft'
+export const LAUNCH_IMAGE_VERIFIED_AT_KEY = 'launchImageVerifiedAt'
+export const LAUNCH_IMAGE_VERIFIED_BYTES_KEY = 'launchImageVerifiedBytes'
+
+const IMAGE_GATE_RETRY_ATTEMPTS = 5
+const IMAGE_GATE_VERIFY_RETRY_ATTEMPTS = 4
+const IMAGE_GATE_RETRY_BASE_MS = 250
 
 const FINALIZE_PHASE2_ABI = [
   {
@@ -117,6 +123,12 @@ function headerValue(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
 function normalizeAddress(value: unknown): Address | null {
   if (typeof value !== 'string' || !isAddress(value)) return null
   const addr = getAddress(value as Address)
@@ -202,6 +214,87 @@ async function postImageApi<T>(params: {
   return json.data as T
 }
 
+function isComposeInProgressError(message: string): boolean {
+  const text = message.toLowerCase()
+  return text.includes('/api/image/projects/direct-compose') && (text.includes('(409)') || text.includes('in progress'))
+}
+
+async function composeProjectOutputWithRetry(params: {
+  req: VercelRequest
+  projectId: string
+  deployToken?: string
+  deployTokenSignature?: string
+}): Promise<void> {
+  let lastError: Error | null = null
+  for (let attempt = 1; attempt <= IMAGE_GATE_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await postImageApi({
+        req: params.req,
+        path: '/api/image/projects/direct-compose',
+        body: { projectId: params.projectId },
+        deployToken: params.deployToken,
+        deployTokenSignature: params.deployTokenSignature,
+      })
+      return
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? '')
+      if (!isComposeInProgressError(message)) throw error
+      lastError = error instanceof Error ? error : new Error(message)
+
+      const existingProject = await getImageGenerationProject(params.projectId).catch(() => null)
+      const hasOutputAsset = Array.isArray(existingProject?.assets)
+        ? existingProject.assets.some((asset) => String((asset as { role?: unknown })?.role ?? '') === 'output')
+        : false
+      if (existingProject?.status === 'completed' && hasOutputAsset) {
+        return
+      }
+      if (existingProject?.status === 'failed') {
+        const latestError =
+          typeof existingProject.latestError === 'string' && existingProject.latestError.trim()
+            ? existingProject.latestError.trim()
+            : 'unknown_error'
+        throw new Error(`phase4 image gate failed: image composition failed (${latestError})`)
+      }
+
+      if (attempt < IMAGE_GATE_RETRY_ATTEMPTS) {
+        await sleep(IMAGE_GATE_RETRY_BASE_MS * attempt)
+      }
+    }
+  }
+  throw lastError ?? new Error('phase4 image gate failed: image composition retry exhausted')
+}
+
+async function verifyTokenImageEndpointReady(params: {
+  req: VercelRequest
+  shareOFT: Address
+}): Promise<{ verifiedUrl: string; byteSize: number }> {
+  const origin = getCanonicalOrigin(params.req)
+  const verifiedUrl = `${origin}/api/v1/token/${params.shareOFT.toLowerCase()}/image?chain=8453&format=png`
+  let lastFailure = 'unknown'
+
+  for (let attempt = 1; attempt <= IMAGE_GATE_VERIFY_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(verifiedUrl, { method: 'GET' })
+      if (!response.ok) {
+        lastFailure = `http_${response.status}`
+      } else {
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        if (bytes.byteLength > 0) {
+          return { verifiedUrl, byteSize: bytes.byteLength }
+        }
+        lastFailure = 'empty_image_body'
+      }
+    } catch {
+      lastFailure = 'request_failed'
+    }
+    if (attempt < IMAGE_GATE_VERIFY_RETRY_ATTEMPTS) {
+      await sleep(IMAGE_GATE_RETRY_BASE_MS * attempt)
+    }
+  }
+
+  throw new Error(`phase4 image gate failed: token image endpoint not ready (${lastFailure})`)
+}
+
 export async function ensureLaunchImageReady(params: {
   req: VercelRequest
   sessionId: string
@@ -224,11 +317,17 @@ export async function ensureLaunchImageReady(params: {
 
   const existingReady = await getCompletedImageProjectForVault(finalize.vault)
   if (existingReady) {
+    const verification = await verifyTokenImageEndpointReady({
+      req: params.req,
+      shareOFT: launch.shareOFT,
+    })
     await params.persistPayloadPatch({
       [LAUNCH_IMAGE_PROJECT_ID_KEY]: existingReady.projectId,
       [LAUNCH_IMAGE_SHARE_OFT_KEY]: launch.shareOFT,
       [LAUNCH_IMAGE_VAULT_KEY]: finalize.vault,
       [LAUNCH_IMAGE_READY_AT_KEY]: new Date().toISOString(),
+      [LAUNCH_IMAGE_VERIFIED_AT_KEY]: new Date().toISOString(),
+      [LAUNCH_IMAGE_VERIFIED_BYTES_KEY]: verification.byteSize,
     })
     return {
       projectId: existingReady.projectId,
@@ -275,10 +374,9 @@ export async function ensureLaunchImageReady(params: {
     deployToken: params.deployToken,
     deployTokenSignature: params.deployTokenSignature,
   })
-  await postImageApi({
+  await composeProjectOutputWithRetry({
     req: params.req,
-    path: '/api/image/projects/direct-compose',
-    body: { projectId },
+    projectId,
     deployToken: params.deployToken,
     deployTokenSignature: params.deployTokenSignature,
   })
@@ -290,11 +388,18 @@ export async function ensureLaunchImageReady(params: {
     throw new Error('phase4 image gate failed: generated image did not bind to vault')
   }
 
+  const verification = await verifyTokenImageEndpointReady({
+    req: params.req,
+    shareOFT: launch.shareOFT,
+  })
+
   await params.persistPayloadPatch({
     [LAUNCH_IMAGE_PROJECT_ID_KEY]: completed.projectId,
     [LAUNCH_IMAGE_SHARE_OFT_KEY]: launch.shareOFT,
     [LAUNCH_IMAGE_VAULT_KEY]: finalize.vault,
     [LAUNCH_IMAGE_READY_AT_KEY]: new Date().toISOString(),
+    [LAUNCH_IMAGE_VERIFIED_AT_KEY]: new Date().toISOString(),
+    [LAUNCH_IMAGE_VERIFIED_BYTES_KEY]: verification.byteSize,
   })
 
   return {

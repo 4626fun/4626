@@ -893,6 +893,45 @@ async function fetchDeployRuntimeConfig(): Promise<DeployRuntimeConfigResponse |
   return (json.data ?? null) as DeployRuntimeConfigResponse
 }
 
+const STALE_DEPLOY_CONFIG_RELOAD_KEY = 'cv:deploy:staleConfigAutoReloadAt'
+const STALE_DEPLOY_CONFIG_RELOAD_WINDOW_MS = 10_000
+
+function isLocalhostRuntime(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = String(window.location.hostname || '').toLowerCase()
+  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0'
+}
+
+function tryAutoRecoverStaleDeployConfig(params: {
+  reason: 'batcher' | 'deploymentVersion'
+  clientValue: string
+  runtimeValue: string
+}): boolean {
+  if (!isLocalhostRuntime()) return false
+  if (typeof window === 'undefined') return false
+
+  try {
+    const now = Date.now()
+    const lastRaw = window.sessionStorage.getItem(STALE_DEPLOY_CONFIG_RELOAD_KEY) ?? '0'
+    const last = Number(lastRaw)
+    if (Number.isFinite(last) && last > 0 && now - last < STALE_DEPLOY_CONFIG_RELOAD_WINDOW_MS) {
+      return false
+    }
+    window.sessionStorage.setItem(STALE_DEPLOY_CONFIG_RELOAD_KEY, String(now))
+    logger.warn('[DeployVault] stale_runtime_config_detected_auto_reload', {
+      reason: params.reason,
+      clientValue: params.clientValue,
+      runtimeValue: params.runtimeValue,
+      href: window.location.href,
+    })
+    // Force a hard navigation to refresh import.meta.env-backed config after local fork restart.
+    window.location.reload()
+    return true
+  } catch {
+    return false
+  }
+}
+
 // Use the canonical EntryPoint v0.6 from the ERC-4337 module
 // This ensures the UI and the UserOp sender use the same address
 const COINBASE_ENTRYPOINT_V06 = ERC4337_ENTRYPOINT_V06
@@ -3176,16 +3215,36 @@ function DeployVaultBatcher({
       if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
       const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? getAddress(runtimeConfig.creatorVaultBatcher) : null
       if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
+        if (
+          tryAutoRecoverStaleDeployConfig({
+            reason: 'batcher',
+            clientValue: batcherAddress,
+            runtimeValue: runtimeBatcher,
+          })
+        ) {
+          setError('Local dry-run config changed after restart. Reloading deploy page...')
+          return null
+        }
         throw new Error(
-          `Deploy page is stale after a local restart. Client batcher ${batcherAddress} does not match server batcher ${runtimeBatcher}. Hard refresh the page and try again.`,
+          `Deploy page is stale after a local restart. Client batcher ${batcherAddress} does not match server batcher ${runtimeBatcher}. Hard refresh the page and confirm you are on the dry-run origin (http://localhost:5174).`,
         )
       }
       const hasDeploymentVersionOverride =
         typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
       const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
       if (!hasDeploymentVersionOverride && runtimeDeploymentVersion && runtimeDeploymentVersion !== deploymentVersion) {
+        if (
+          tryAutoRecoverStaleDeployConfig({
+            reason: 'deploymentVersion',
+            clientValue: deploymentVersion,
+            runtimeValue: runtimeDeploymentVersion,
+          })
+        ) {
+          setError('Local dry-run deployment version changed after restart. Reloading deploy page...')
+          return null
+        }
         throw new Error(
-          `Deploy page is stale after a local restart. Client deployment version ${deploymentVersion} does not match server deployment version ${runtimeDeploymentVersion}. Hard refresh the page and try again.`,
+          `Deploy page is stale after a local restart. Client deployment version ${deploymentVersion} does not match server deployment version ${runtimeDeploymentVersion}. Hard refresh the page and confirm you are on the dry-run origin (http://localhost:5174).`,
         )
       }
       if (!publicClient) throw new Error('Network client not ready')

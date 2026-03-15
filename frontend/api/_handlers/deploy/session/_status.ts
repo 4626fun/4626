@@ -13,7 +13,15 @@ import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
-import { ensureLaunchImageReady } from '../../../../server/_lib/deployLaunchImage.js'
+import {
+  ensureLaunchImageReady,
+  LAUNCH_IMAGE_PROJECT_ID_KEY,
+  LAUNCH_IMAGE_READY_AT_KEY,
+  LAUNCH_IMAGE_SHARE_OFT_KEY,
+  LAUNCH_IMAGE_VAULT_KEY,
+  LAUNCH_IMAGE_VERIFIED_AT_KEY,
+  LAUNCH_IMAGE_VERIFIED_BYTES_KEY,
+} from '../../../../server/_lib/deployLaunchImage.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -44,6 +52,15 @@ type Phase3AjnaAdminAlignment = {
   ajnaAuthAdminMatchesOwner: boolean | null
 }
 
+type LaunchImageStatus = {
+  projectId: string | null
+  shareOft: Address | null
+  vaultAddress: Address | null
+  readyAt: string | null
+  verifiedAt: string | null
+  verifiedBytes: number | null
+}
+
 function isSessionExpired(expiresAt: unknown): boolean {
   if (typeof expiresAt !== 'string') return false
   const expiresMs = Date.parse(expiresAt)
@@ -71,6 +88,37 @@ function readPhase3AjnaAdminAlignment(value: unknown): Phase3AjnaAdminAlignment 
     expectedAjnaAuthAdmin,
     ajnaAuthAdmin,
     ajnaAuthAdminMatchesOwner,
+  }
+}
+
+function readLaunchImageStatus(value: unknown): LaunchImageStatus {
+  const payload = readPayloadObjectSafe(value)
+  const projectId =
+    typeof payload?.[LAUNCH_IMAGE_PROJECT_ID_KEY] === 'string' && payload[LAUNCH_IMAGE_PROJECT_ID_KEY].trim()
+      ? String(payload[LAUNCH_IMAGE_PROJECT_ID_KEY]).trim()
+      : null
+  const shareOft = normalizeAddress(payload?.[LAUNCH_IMAGE_SHARE_OFT_KEY])
+  const vaultAddress = normalizeAddress(payload?.[LAUNCH_IMAGE_VAULT_KEY])
+  const readyAt =
+    typeof payload?.[LAUNCH_IMAGE_READY_AT_KEY] === 'string' && payload[LAUNCH_IMAGE_READY_AT_KEY].trim()
+      ? String(payload[LAUNCH_IMAGE_READY_AT_KEY]).trim()
+      : null
+  const verifiedAt =
+    typeof payload?.[LAUNCH_IMAGE_VERIFIED_AT_KEY] === 'string' && payload[LAUNCH_IMAGE_VERIFIED_AT_KEY].trim()
+      ? String(payload[LAUNCH_IMAGE_VERIFIED_AT_KEY]).trim()
+      : null
+  const verifiedBytesRaw = payload?.[LAUNCH_IMAGE_VERIFIED_BYTES_KEY]
+  const verifiedBytes =
+    typeof verifiedBytesRaw === 'number' && Number.isFinite(verifiedBytesRaw) && verifiedBytesRaw >= 0
+      ? Math.trunc(verifiedBytesRaw)
+      : null
+  return {
+    projectId,
+    shareOft,
+    vaultAddress,
+    readyAt,
+    verifiedAt,
+    verifiedBytes,
   }
 }
 
@@ -978,9 +1026,11 @@ function extractPhase3RuntimeExpectations(params: {
   vault: Address
 }): {
   expectedMinimumTotalIdle: bigint | null
+  sawMinimumTotalIdleCall: boolean
   sawDeployToStrategiesCall: boolean
 } {
   let expectedMinimumTotalIdle: bigint | null = null
+  let sawMinimumTotalIdleCall = false
   let sawDeployToStrategiesCall = false
 
   for (const call of params.calls) {
@@ -991,6 +1041,7 @@ function extractPhase3RuntimeExpectations(params: {
         data: call.data,
       })
       if (decoded.functionName === 'setMinimumTotalIdle') {
+        sawMinimumTotalIdleCall = true
         const parsed = parseBigIntLike(decoded.args?.[0])
         if (parsed != null) {
           expectedMinimumTotalIdle = parsed
@@ -1005,7 +1056,7 @@ function extractPhase3RuntimeExpectations(params: {
     }
   }
 
-  return { expectedMinimumTotalIdle, sawDeployToStrategiesCall }
+  return { expectedMinimumTotalIdle, sawMinimumTotalIdleCall, sawDeployToStrategiesCall }
 }
 
 function extractPhase4LaunchInfo(calls: Array<{ to: Address; value: bigint; data: Hex }>): {
@@ -1336,7 +1387,15 @@ async function verifyPhase3PostState(params: {
   if (expectedTotalWeight > 0n && !runtimeExpectations.sawDeployToStrategiesCall) {
     throw new Error('phase3 verification failed: deployToStrategies call missing from phase3 payload')
   }
+  if (expectedTotalWeight < BPS_DENOMINATOR && !runtimeExpectations.sawMinimumTotalIdleCall) {
+    throw new Error(
+      'phase3 verification failed: setMinimumTotalIdle call missing from phase3 payload while idle reserve is required',
+    )
+  }
   if (runtimeExpectations.expectedMinimumTotalIdle != null) {
+    if (runtimeExpectations.expectedMinimumTotalIdle <= 0n) {
+      throw new Error('phase3 verification failed: minimumTotalIdle must be greater than zero')
+    }
     const minimumTotalIdleRaw = await params.publicClient
       .readContract({
         address: info.vault,
@@ -2598,6 +2657,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     isPlainObject(rec?.payload?.solanaOvault) && rec.payload.solanaOvault.enabled === true
   const ovaultRaw = isPlainObject(rec?.payload?.ovault) ? rec.payload.ovault : {}
   const phase3AjnaAdminAlignment = readPhase3AjnaAdminAlignment(rec?.payload)
+  const launchImage = readLaunchImageStatus(rec?.payload)
   return res.status(200).json({
     success: true,
     data: {
@@ -2613,6 +2673,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (typeof rec?.payload?.deploySignerWalletId === 'string' && rec.payload.deploySignerWalletId.trim()) || null,
       diagnostics: buildSessionDiagnostics(rec),
       phase3AjnaAdminAlignment,
+      launchImage,
       ovault: ovaultEnabled
         ? {
             existingMintCompatible: ovaultRaw.existingMintCompatible === false ? false : true,

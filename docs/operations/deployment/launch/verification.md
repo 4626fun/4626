@@ -35,7 +35,9 @@ Before accepting a launch as production-ready, verify image generation is part o
    - `lastError` does **not** contain `phase4 image gate failed`
 2. Read auction status:
    - `GET /api/v1/auction/status?ccaStrategy=<address>`
-   - response includes `auctionTokenImagePath` and `auctionTokenImageUrl`
+   - response includes:
+     - `auctionTokenImagePath` (`/api/v1/token/<auctionToken>/image?chain=8453&format=png`) for same-origin fallback
+     - `auctionTokenImageUrl` (`https://<api-host>/v1/token/<auctionToken>/image?chain=8453&format=png`) as canonical URL
 3. Verify canonical image endpoint for ShareOFT:
    - `GET /api/v1/token/<shareOFT>/image?chain=8453&format=png`
    - returns `200` and non-empty image bytes

@@ -78,31 +78,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transport: http(rpcUrl),
     })
 
-    // Check for a creator-customized AI-generated image first.
-    // If one exists, proxy it directly — skip the compositor entirely.
-    const aiOverride = await getCompletedImageProjectForVault(address).catch(() => null)
-    if (aiOverride) {
-      const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
-      const rawBytes = fetched?.bytes
-      if (rawBytes && rawBytes.length > 0) {
-        res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
-        if (format === 'svg') {
-          const b64 = Buffer.from(rawBytes).toString('base64')
-          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}"/></svg>`
-          res.setHeader('Content-Type', 'image/svg+xml')
-          return res.status(200).send(svg)
-        }
-        const resized = await sharp(Buffer.from(rawBytes)).resize(size, size, { fit: 'cover' }).png().toBuffer()
-        res.setHeader('Content-Type', 'image/png')
-        return res.status(200).send(resized)
-      }
-    }
-
     // Get symbol and vault
     const [symbol, vault] = await Promise.all([
       client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'symbol' }).catch(() => '■TOKEN'),
       client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'vault' }).catch(() => null),
     ])
+
+    // Check for a creator-customized AI-generated image first.
+    // Generated projects are keyed by vault address, not the ShareOFT address.
+    const vaultAddress = typeof vault === 'string' && isAddress(vault) ? (vault.toLowerCase() as Address) : null
+    if (vaultAddress) {
+      const aiOverride = await getCompletedImageProjectForVault(vaultAddress).catch(() => null)
+      if (aiOverride) {
+        const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
+        const rawBytes = fetched?.bytes
+        if (rawBytes && rawBytes.length > 0) {
+          res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
+          if (format === 'svg') {
+            const b64 = Buffer.from(rawBytes).toString('base64')
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}"/></svg>`
+            res.setHeader('Content-Type', 'image/svg+xml')
+            return res.status(200).send(svg)
+          }
+          const resized = await sharp(Buffer.from(rawBytes)).resize(size, size, { fit: 'cover' }).png().toBuffer()
+          res.setHeader('Content-Type', 'image/png')
+          return res.status(200).send(resized)
+        }
+      }
+    }
 
     // Get underlying creator coin
     let creatorCoin: Address | null = null

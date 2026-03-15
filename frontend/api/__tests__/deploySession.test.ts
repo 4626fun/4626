@@ -67,6 +67,12 @@ vi.mock('../../server/_lib/privyWalletApi.js', () => ({
 
 vi.mock('../../server/_lib/deployLaunchImage.js', () => ({
   ensureLaunchImageReady: ensureLaunchImageReadyMock,
+  LAUNCH_IMAGE_PROJECT_ID_KEY: 'launchImageProjectId',
+  LAUNCH_IMAGE_READY_AT_KEY: 'launchImageReadyAt',
+  LAUNCH_IMAGE_VAULT_KEY: 'launchImageVaultAddress',
+  LAUNCH_IMAGE_SHARE_OFT_KEY: 'launchImageShareOft',
+  LAUNCH_IMAGE_VERIFIED_AT_KEY: 'launchImageVerifiedAt',
+  LAUNCH_IMAGE_VERIFIED_BYTES_KEY: 'launchImageVerifiedBytes',
 }))
 
 vi.mock('viem', () => ({
@@ -2267,6 +2273,158 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
+  it('status blocks phase3_sent when canonical payload omits setMinimumTotalIdle', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [
+          makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv2'),
+          makeCall('0x3000000000000000000000000000000000000003', '0xphase3deploytostrategies'),
+        ],
+        phase4Calls: [],
+      }),
+      lastUserOpHash: `0x${'8'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const charmStrategy = '0x8100000000000000000000000000000000000008'
+    const ajnaAdapter = '0x9100000000000000000000000000000000000009'
+    const ajnaInnerVault = '0x9200000000000000000000000000000000000009'
+    const ajnaAuth = '0x9300000000000000000000000000000000000009'
+    const solanaStrategy = '0xa10000000000000000000000000000000000000a'
+    const charmVault = '0xb10000000000000000000000000000000000000b'
+    const ajnaPool = '0xc10000000000000000000000000000000000000c'
+    const bridgeAdapter = '0xd10000000000000000000000000000000000000d'
+    const v3Factory = '0xe10000000000000000000000000000000000000e'
+    const usdc = '0xf10000000000000000000000000000000000000f'
+    const v3Pool = '0x1110000000000000000000000000000000000011'
+    const vault = '0x3000000000000000000000000000000000000003'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ abi, data }: { abi: unknown; data: string }) => {
+      if (String(data) === '0xphase3deployv2') {
+        expect(JSON.stringify(abi)).not.toContain('ajnaStrategy')
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              version: 'v1.4.8',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+              solanaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase3deploytostrategies') {
+        return {
+          functionName: 'deployToStrategies',
+          args: [],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args, address }: any) => {
+        switch (functionName) {
+          case 'strategyList':
+            if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaAdapter
+            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            return '0xownerbytes'
+          case 'strategyWeights':
+            if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            return 0n
+          case 'charmVault':
+            if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
+            throw new Error('not_charm_strategy')
+          case 'ERC4626_VAULT':
+            if (String(address ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return ajnaInnerVault
+            throw new Error('not_ajna_adapter')
+          case 'AJNA_POOL':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_inner_vault')
+          case 'AUTH':
+            if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
+            throw new Error('not_ajna_inner_vault')
+          case 'bridgeAdapter':
+            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAdapter
+            throw new Error('not_solana_strategy')
+          case 'uniswapV3Factory':
+            return v3Factory
+          case 'usdc':
+            return usdc
+          case 'getPool':
+            return v3Pool
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          vault.toLowerCase(),
+          charmStrategy.toLowerCase(),
+          ajnaAdapter.toLowerCase(),
+          ajnaInnerVault.toLowerCase(),
+          ajnaAuth.toLowerCase(),
+          solanaStrategy.toLowerCase(),
+          charmVault.toLowerCase(),
+          ajnaPool.toLowerCase(),
+          bridgeAdapter.toLowerCase(),
+          v3Pool.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({
+        ...rec,
+        step: 'phase3_sent',
+        lastError:
+          'phase3 verification failed: setMinimumTotalIdle call missing from phase3 payload while idle reserve is required',
+      })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase3_sent')
+    expect(String(res.body?.data?.lastError ?? '')).toContain('setMinimumTotalIdle call missing')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+    expect(updateDeploySessionMock).toHaveBeenCalled()
+  })
+
   it('status returns persisted phase3 Ajna admin alignment diagnostics', async () => {
     const rec = {
       ...makeDeploySession('completed'),
@@ -2281,6 +2439,12 @@ describe('deploy session optimistic concurrency', () => {
           ajnaAuthAdmin: '0x7000000000000000000000000000000000000007',
           ajnaAuthAdminMatchesOwner: false,
         },
+        launchImageProjectId: 'imgproj_demo',
+        launchImageShareOft: '0x7000000000000000000000000000000000000007',
+        launchImageVaultAddress: '0x3000000000000000000000000000000000000003',
+        launchImageReadyAt: '2026-03-14T12:00:00.000Z',
+        launchImageVerifiedAt: '2026-03-14T12:00:01.000Z',
+        launchImageVerifiedBytes: 12345,
       }),
     }
     getDeploySessionByIdMock.mockResolvedValueOnce(rec)
@@ -2295,6 +2459,14 @@ describe('deploy session optimistic concurrency', () => {
       expectedAjnaAuthAdmin: '0x2000000000000000000000000000000000000002',
       ajnaAuthAdmin: '0x7000000000000000000000000000000000000007',
       ajnaAuthAdminMatchesOwner: false,
+    })
+    expect(res.body?.data?.launchImage).toEqual({
+      projectId: 'imgproj_demo',
+      shareOft: '0x7000000000000000000000000000000000000007',
+      vaultAddress: '0x3000000000000000000000000000000000000003',
+      readyAt: '2026-03-14T12:00:00.000Z',
+      verifiedAt: '2026-03-14T12:00:01.000Z',
+      verifiedBytes: 12345,
     })
   })
 

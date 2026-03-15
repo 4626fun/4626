@@ -209,8 +209,8 @@ Acceptance checks:
 - `/deploy` shows no bytecode infra blocker and no `deployment batcher not configured`
 - `/status?vault=0x...` shows Ajna as an adapter-backed inner vault and surfaces auth/min-bucket/buffer metadata
 - `GET /api/v1/auction/status?ccaStrategy=0x...` returns:
-  - `auctionTokenImagePath` using `/api/v1/token/<auctionToken>/image?chain=8453&format=png`
-  - `auctionTokenImageUrl` as an absolute URL
+  - `auctionTokenImagePath` using `/api/v1/token/<auctionToken>/image?chain=8453&format=png` (same-origin fallback)
+  - `auctionTokenImageUrl` using canonical `/v1/token/<auctionToken>/image?chain=8453&format=png` on API origin
 - `GET /api/v1/token/<shareOFT>/image?chain=8453&format=png` returns `200` with a non-empty image body
 - Vault CCA panel renders the generated ShareOFT image (fallback logo is not shown under normal launch conditions)
 
