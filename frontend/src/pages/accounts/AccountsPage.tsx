@@ -302,11 +302,7 @@ export function AccountsPage(props: {
       if (provider === 'telegram') {
         const launchParams = readPrivyTelegramLaunchParams()
         if (launchParams?.initDataRaw) {
-          const calledWithLaunchParams = await maybeCallMethod(
-            privy,
-            ['linkTelegram', 'linkTelegramAccount'],
-            [{ launchParams }],
-          )
+          const calledWithLaunchParams = await maybeCallMethod(privy, ['linkTelegram'], [{ launchParams }])
           if (calledWithLaunchParams) return
         }
       }
@@ -316,7 +312,7 @@ export function AccountsPage(props: {
         google: ['linkGoogle', 'linkGoogleAccount'],
         apple: ['linkApple', 'linkAppleAccount'],
         twitter: ['linkTwitter', 'linkTwitterAccount'],
-        telegram: ['linkTelegram', 'linkTelegramAccount'],
+        telegram: ['linkTelegram'],
         tiktok: ['linkTiktok', 'linkTikTok', 'linkTiktokAccount', 'linkTikTokAccount'],
         external_eoa: ['linkWallet'],
         zora_cross_app: [],
@@ -335,7 +331,7 @@ export function AccountsPage(props: {
       google: ['unlinkGoogle', 'unlinkGoogleAccount'],
       apple: ['unlinkApple', 'unlinkAppleAccount'],
       twitter: ['unlinkTwitter', 'unlinkTwitterAccount'],
-      telegram: ['unlinkTelegram', 'unlinkTelegramAccount'],
+      telegram: ['unlinkTelegram'],
       tiktok: ['unlinkTiktok', 'unlinkTikTok', 'unlinkTiktokAccount', 'unlinkTikTokAccount'],
       external_eoa: ['unlinkWallet'],
       zora_cross_app: [],

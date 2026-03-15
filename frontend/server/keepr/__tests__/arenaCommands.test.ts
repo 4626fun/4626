@@ -41,6 +41,7 @@ describe('/arena commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — arena</b>')
+    expect(result.response).toContain('/arena play')
     expect(result.response).toContain('/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW')
     expect(result.response).toContain('/arena watch on | off | status')
     expect((fetch as any).mock.calls.length).toBe(0)
@@ -114,6 +115,28 @@ describe('/arena commands', () => {
     expect(parsedBody).toEqual({
       rules: ['ECO:6', 'TECH:7', 'DEF:4', 'AIR:3', 'ASSIST:6'],
     })
+  })
+
+  it('routes /arena play to match search', async () => {
+    mockFetchJsonOnce({
+      success: true,
+      searching: true,
+      poll_interval_seconds: 20,
+      search_seconds: 4,
+      next_step: { action: 'POST /api/v1/matches/find', description: 'poll again in 20s' },
+    })
+
+    const result = await handleKeeprCommand({
+      groupId: 'group-arena-play',
+      senderWallet: TEST_WALLET,
+      text: '/arena play',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('Arena search queued.')
+    const [url, init] = (fetch as any).mock.calls[0]
+    expect(String(url)).toBe('https://clashofclaw.com/api/v1/matches/find')
+    expect(init?.method).toBe('POST')
   })
 
   it('supports mixed control payloads (rules + zones + commander)', async () => {

@@ -294,6 +294,15 @@ type PreparedArtworkLayers = {
   breakoutLayerBytes: Uint8Array | null
 }
 
+type CandidateRender = {
+  recipe: TokenIconRecipe
+  layout: TokenIconLayout
+  fit: ArtworkFitMode
+  baseLayerBytes: Uint8Array
+  breakoutLayerBytes: Uint8Array | null
+  score: number
+}
+
 type TokenIconLayout = {
   outerRadius: number
   panelX: number
@@ -318,7 +327,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 30
+const FRAME_STYLE_V = 49
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -329,7 +338,7 @@ const TOKEN_ICON_STYLE = {
   backgroundOuter: '#000000',
   panelFillTop: '#030608',
   panelFillBottom: '#020405',
-  panelScrim: 'rgba(0, 0, 0, 0.18)',
+  panelScrim: 'rgba(0, 0, 0, 0.08)',
   glowColor: '#3b82f6',
   outerRadiusRatio: 0.22,
   panelInsetRatio: FRAME_INSET_RATIO,
@@ -353,6 +362,13 @@ const BREAKOUT_CONFIG = {
   minForegroundCoverage: 0.03,
   rembgTimeoutMs: 30_000,
   rembgBin: process.env.REMBG_BIN || '/tmp/rembg-env/bin/rembg',
+} as const
+
+const CANDIDATE_QUALITY_CONFIG = {
+  minAcceptableScore: 2.05,
+  cornerSampleInsetRatio: 0.04,
+  edgeInsetRatio: 0.08,
+  foregroundColorDistanceThreshold: 42,
 } as const
 
 function getDefaultRecipe(): TokenIconRecipe {
@@ -421,9 +437,254 @@ function deriveTokenIconRecipe(
   }
 }
 
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  if (value <= 0) return 0
+  if (value >= 1) return 1
+  return value
+}
+
+function buildCandidateRecipes(params: {
+  classification: TokenImageClassification
+  breakoutEvaluation: BreakoutEvaluation
+  metrics: TokenImageMetrics
+}): TokenIconRecipe[] {
+  const { classification, breakoutEvaluation, metrics } = params
+  const recipes: TokenIconRecipe[] = []
+  const seen = new Set<string>()
+  const push = (recipe: TokenIconRecipe) => {
+    const key = `${recipe.mode}:${recipe.scale.toFixed(3)}:${recipe.innerPadding.toFixed(3)}:${recipe.breakout ? 1 : 0}`
+    if (seen.has(key)) return
+    seen.add(key)
+    recipes.push(recipe)
+  }
+
+  const derived = deriveTokenIconRecipe(classification, breakoutEvaluation)
+  const breakoutAllowed = derived.breakout
+  const fillScales =
+    classification.layoutMode === 'cover'
+      ? [1.12, 1.08, 1.04, 1.0]
+      : classification.layoutMode === 'contain'
+        ? [1.1, 1.06, 1.02]
+        : metrics.circularBadgeLikelihood >= 0.85
+          ? [1.02, 1.0]
+          : [1.06, 1.02, 1.0]
+
+  if (breakoutAllowed) {
+    push({
+      ...TOKEN_ICON_RECIPES.cover,
+      scale: fillScales[0] ?? 1.08,
+      innerPadding: 0,
+      breakout: true,
+    })
+  }
+
+  for (const scale of fillScales) {
+    push({
+      ...TOKEN_ICON_RECIPES.cover,
+      scale,
+      innerPadding: 0,
+      breakout: false,
+    })
+  }
+
+  return recipes
+}
+
+async function measureBreakoutTopCoverage(params: {
+  breakoutLayerBytes: Uint8Array
+  layout: TokenIconLayout
+}): Promise<number> {
+  const { breakoutLayerBytes, layout } = params
+  const { data, info } = await sharp(Buffer.from(breakoutLayerBytes))
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const riseAboveFrame = Math.round(layout.panelSize * BREAKOUT_CONFIG.riseAboveFrameRatio)
+  const regionTop = Math.max(0, layout.panelY - riseAboveFrame)
+  const regionBottom = Math.min(info.height, layout.panelY + Math.max(1, Math.round(layout.panelSize * 0.04)))
+  const regionLeft = Math.max(0, layout.panelX)
+  const regionRight = Math.min(info.width, layout.panelX + layout.panelSize)
+
+  let visible = 0
+  let total = 0
+  for (let y = regionTop; y < regionBottom; y += 1) {
+    for (let x = regionLeft; x < regionRight; x += 1) {
+      total += 1
+      const alpha = data[(y * info.width + x) * info.channels + 3]
+      if (alpha > 20) visible += 1
+    }
+  }
+
+  if (total <= 0) return 0
+  return visible / total
+}
+
+async function scoreRenderedCandidate(params: {
+  recipe: TokenIconRecipe
+  layout: TokenIconLayout
+  baseLayerBytes: Uint8Array
+  breakoutLayerBytes: Uint8Array | null
+  sourceMetrics: TokenImageMetrics
+  breakoutEvaluation: BreakoutEvaluation
+}): Promise<number> {
+  const { recipe, layout, baseLayerBytes, breakoutLayerBytes, sourceMetrics, breakoutEvaluation } = params
+  const { data, info } = await sharp(Buffer.from(baseLayerBytes))
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  const panelX = Math.max(0, layout.panelX)
+  const panelY = Math.max(0, layout.panelY)
+  const panelRight = Math.min(info.width, layout.panelX + layout.panelSize)
+  const panelBottom = Math.min(info.height, layout.panelY + layout.panelSize)
+  const panelWidth = Math.max(1, panelRight - panelX)
+  const panelHeight = Math.max(1, panelBottom - panelY)
+  const panelArea = panelWidth * panelHeight
+  const cornerInset = Math.max(1, Math.round(layout.panelSize * CANDIDATE_QUALITY_CONFIG.cornerSampleInsetRatio))
+  const edgeInset = Math.max(2, Math.round(layout.panelSize * CANDIDATE_QUALITY_CONFIG.edgeInsetRatio))
+
+  const cornerPoints = [
+    [panelX + cornerInset, panelY + cornerInset],
+    [panelRight - cornerInset - 1, panelY + cornerInset],
+    [panelX + cornerInset, panelBottom - cornerInset - 1],
+    [panelRight - cornerInset - 1, panelBottom - cornerInset - 1],
+  ]
+  let bgR = 0
+  let bgG = 0
+  let bgB = 0
+  let bgCount = 0
+  for (const [x, y] of cornerPoints) {
+    if (x < panelX || x >= panelRight || y < panelY || y >= panelBottom) continue
+    const idx = (y * info.width + x) * info.channels
+    const alpha = data[idx + 3]
+    if (alpha <= 8) continue
+    bgR += data[idx]
+    bgG += data[idx + 1]
+    bgB += data[idx + 2]
+    bgCount += 1
+  }
+  if (bgCount <= 0) {
+    const bg = hexToRgb(TOKEN_ICON_STYLE.backgroundInner)
+    bgR = bg.r
+    bgG = bg.g
+    bgB = bg.b
+    bgCount = 1
+  }
+  const bgAvgR = bgR / bgCount
+  const bgAvgG = bgG / bgCount
+  const bgAvgB = bgB / bgCount
+
+  let visibleCount = 0
+  let fgCount = 0
+  let edgeVisibleCount = 0
+  let edgeFgCount = 0
+  let visibleMinX = panelRight
+  let visibleMinY = panelBottom
+  let visibleMaxX = panelX - 1
+  let visibleMaxY = panelY - 1
+  let fgMinX = panelRight
+  let fgMinY = panelBottom
+  let fgMaxX = panelX - 1
+  let fgMaxY = panelY - 1
+
+  for (let y = panelY; y < panelBottom; y += 1) {
+    for (let x = panelX; x < panelRight; x += 1) {
+      const idx = (y * info.width + x) * info.channels
+      const alpha = data[idx + 3]
+      if (alpha <= 10) continue
+      visibleCount += 1
+      if (x < visibleMinX) visibleMinX = x
+      if (y < visibleMinY) visibleMinY = y
+      if (x > visibleMaxX) visibleMaxX = x
+      if (y > visibleMaxY) visibleMaxY = y
+
+      const edgePixel =
+        x < panelX + edgeInset ||
+        y < panelY + edgeInset ||
+        x >= panelRight - edgeInset ||
+        y >= panelBottom - edgeInset
+      if (edgePixel) edgeVisibleCount += 1
+
+      const distFromBg =
+        Math.abs(data[idx] - bgAvgR) + Math.abs(data[idx + 1] - bgAvgG) + Math.abs(data[idx + 2] - bgAvgB)
+      let isForeground = distFromBg > CANDIDATE_QUALITY_CONFIG.foregroundColorDistanceThreshold
+      if (!isForeground && alpha < 190) isForeground = true
+      if (!isForeground) continue
+
+      fgCount += 1
+      if (x < fgMinX) fgMinX = x
+      if (y < fgMinY) fgMinY = y
+      if (x > fgMaxX) fgMaxX = x
+      if (y > fgMaxY) fgMaxY = y
+      if (edgePixel) edgeFgCount += 1
+    }
+  }
+
+  const fallbackToVisibleMask = fgCount < Math.max(20, Math.round(panelArea * 0.01))
+  if (fallbackToVisibleMask) {
+    fgCount = visibleCount
+    edgeFgCount = edgeVisibleCount
+    fgMinX = visibleMinX
+    fgMinY = visibleMinY
+    fgMaxX = visibleMaxX
+    fgMaxY = visibleMaxY
+  }
+
+  const coverage = panelArea > 0 ? visibleCount / panelArea : 0
+  const fgCoverage = panelArea > 0 ? fgCount / panelArea : 0
+  const edgeTouch = fgCount > 0 ? edgeFgCount / fgCount : 1
+  const bboxWidth = fgMaxX >= fgMinX ? fgMaxX - fgMinX + 1 : 0
+  const bboxHeight = fgMaxY >= fgMinY ? fgMaxY - fgMinY + 1 : 0
+  const bboxAreaRatio = panelArea > 0 ? (bboxWidth * bboxHeight) / panelArea : 0
+  const bboxCenterX = fgMaxX >= fgMinX ? (fgMinX + fgMaxX) / 2 : panelX + panelWidth / 2
+  const bboxCenterY = fgMaxY >= fgMinY ? (fgMinY + fgMaxY) / 2 : panelY + panelHeight / 2
+  const centerDx = (bboxCenterX - (panelX + panelWidth / 2)) / Math.max(1, panelWidth / 2)
+  const centerDy = (bboxCenterY - (panelY + panelHeight / 2)) / Math.max(1, panelHeight / 2)
+  const centerDistance = Math.sqrt(centerDx * centerDx + centerDy * centerDy)
+
+  const coverLike = recipe.mode === 'cover'
+  const coinLike = recipe.mode === 'coin' || sourceMetrics.circularBadgeLikelihood >= 0.72
+
+  const targetCoverage = coinLike ? 0.62 : coverLike ? 0.88 : 0.74
+  const targetFgCoverage = coinLike ? 0.34 : coverLike ? 0.52 : 0.44
+  const edgeAllowance = coverLike ? 0.48 : coinLike ? 0.22 : 0.33
+  const minBboxArea = coinLike ? 0.18 : coverLike ? 0.28 : 0.2
+
+  let score = 0
+  score += 1 - clamp01(Math.abs(coverage - targetCoverage) / 0.5)
+  score += 1 - clamp01(Math.abs(fgCoverage - targetFgCoverage) / 0.5)
+  score += 1 - clamp01(Math.max(0, edgeTouch - edgeAllowance) / Math.max(0.01, 1 - edgeAllowance))
+  score += 1 - clamp01(centerDistance / 0.9)
+  score += 1 - clamp01(Math.max(0, minBboxArea - bboxAreaRatio) / Math.max(0.01, minBboxArea))
+
+  if (coverage < 0.34) score -= 0.3
+  if (sourceMetrics.opaquePhotoLikelihood >= 0.65) score += coverLike ? 0.12 : -0.08
+  if (sourceMetrics.circularBadgeLikelihood >= 0.62) score += coinLike ? 0.14 : -0.08
+  if (sourceMetrics.hasTransparency && !coverLike) score += 0.05
+
+  if (recipe.breakout) {
+    if (breakoutLayerBytes && breakoutLayerBytes.length > 0) {
+      const breakoutTopCoverage = await measureBreakoutTopCoverage({
+        breakoutLayerBytes,
+        layout,
+      })
+      if (breakoutTopCoverage >= 0.004 && breakoutTopCoverage <= 0.2) score += 0.18
+      else if (breakoutTopCoverage > 0.26) score -= 0.15
+      else score -= 0.12
+    } else {
+      score -= 0.3
+    }
+  } else if (breakoutEvaluation.hasUsableBreakoutMask && coverLike) {
+    score -= 0.04
+  }
+
+  return score
+}
+
 async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Promise<string> {
   const { r, g, b } = hexToRgb(TOKEN_ICON_STYLE.glowColor)
-  const outerStrokeW = Math.round(layout.frameStrokeWidth * 5)
+  const outerStrokeW = Math.round(layout.frameStrokeWidth * 4)
   const svgSize = size
   const ocx = layout.panelX + outerStrokeW / 2
   const ocy = layout.panelY + outerStrokeW / 2
@@ -434,7 +695,7 @@ async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Pr
     <rect x="${ocx}" y="${ocy}" width="${orw}" height="${orh}" rx="${orr}" fill="none" stroke="rgb(${r},${g},${b})" stroke-width="${outerStrokeW}"/>
   </svg>`
   const strokePng = await sharp(Buffer.from(strokeSvg)).png().toBuffer()
-  const sigma = Math.max(1, Math.round(size * 0.045))
+  const sigma = Math.max(1, Math.round(size * 0.042))
   const blurred = await sharp(strokePng)
     .blur(sigma)
     .png()
@@ -576,7 +837,9 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
     }
   }
 
-  const metrics = await analyzeTokenImageBytes(params.bytes)
+  const normalizedSource = await normalizeImageToPng(params.bytes)
+  const preparedSource = await cropTransparentPadding(normalizedSource)
+  const metrics = await analyzeTokenImageBytes(preparedSource)
   const classification = classifyTokenImageMetrics(metrics)
   const breakoutEvaluation: BreakoutEvaluation = {
     size: params.size,
@@ -586,29 +849,49 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
       (metrics.hasTransparency || metrics.opaquePhotoLikelihood >= 0.55),
     breakoutCoverage: metrics.topOccupancy,
   }
-  const recipe = deriveTokenIconRecipe(classification, breakoutEvaluation)
-  const layout = getTokenIconLayout(params.size, recipe)
-  const fit: ArtworkFitMode = recipe.mode === 'cover' ? 'cover' : 'contain'
-  const baseLayerBytesRaw = await renderPlacedArtworkLayer({
-    sourceBytes: params.bytes,
-    size: params.size,
-    layout,
-    fit,
-  })
-  const baseLayerBytes = await clipLayerToInnerPanel({
-    layerBytes: baseLayerBytesRaw,
-    size: params.size,
-    layout,
+  const candidateRecipes = buildCandidateRecipes({
+    classification,
+    breakoutEvaluation,
+    metrics,
   })
 
-  let breakoutLayerBytes: Uint8Array | null = null
-  if (recipe.breakout && BREAKOUT_CONFIG.enabled) {
-    const normalizedSource = await normalizeImageToPng(params.bytes)
-    const fg = await extractForeground(normalizedSource)
+  const renderBaseForRecipe = async (recipe: TokenIconRecipe): Promise<{
+    layout: TokenIconLayout
+    fit: ArtworkFitMode
+    baseLayerBytes: Uint8Array
+  }> => {
+    const layout = getTokenIconLayout(params.size, recipe)
+    const fit: ArtworkFitMode = recipe.mode === 'cover' ? 'cover' : 'contain'
+    const baseLayerRaw = await renderPlacedArtworkLayer({
+      sourceBytes: preparedSource,
+      size: params.size,
+      layout,
+      fit,
+    })
+    const baseLayerBytes = await clipLayerToInnerPanel({
+      layerBytes: baseLayerRaw,
+      size: params.size,
+      layout,
+    })
+    return { layout, fit, baseLayerBytes }
+  }
+
+  let refinedForegroundSource: Uint8Array | null = null
+  if (breakoutEvaluation.hasUsableBreakoutMask && BREAKOUT_CONFIG.enabled) {
+    const fg = await extractForeground(preparedSource)
     if (fg && (await isForegroundUsable(fg))) {
-      const refinedFg = await refineForegroundCutout(fg)
+      refinedForegroundSource = await refineForegroundCutout(fg)
+    }
+  }
+
+  const candidates: CandidateRender[] = []
+  for (const recipe of candidateRecipes) {
+    const { layout, fit, baseLayerBytes } = await renderBaseForRecipe(recipe)
+    let breakoutLayerBytes: Uint8Array | null = null
+
+    if (recipe.breakout && refinedForegroundSource) {
       const fgCanvas = await renderPlacedArtworkLayer({
-        sourceBytes: refinedFg,
+        sourceBytes: refinedForegroundSource,
         size: params.size,
         layout,
         fit,
@@ -618,9 +901,57 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
         layout,
       })
     }
+
+    const score = await scoreRenderedCandidate({
+      recipe,
+      layout,
+      baseLayerBytes,
+      breakoutLayerBytes,
+      sourceMetrics: metrics,
+      breakoutEvaluation,
+    })
+
+    candidates.push({
+      recipe,
+      layout,
+      fit,
+      baseLayerBytes,
+      breakoutLayerBytes,
+      score,
+    })
   }
 
-  return { recipe, baseLayerBytes, breakoutLayerBytes }
+  const ranked = candidates.sort((a, b) => b.score - a.score)
+  const best = ranked[0]
+  if (best && best.score >= CANDIDATE_QUALITY_CONFIG.minAcceptableScore) {
+    return {
+      recipe: best.recipe,
+      baseLayerBytes: best.baseLayerBytes,
+      breakoutLayerBytes: best.breakoutLayerBytes,
+    }
+  }
+
+  // Safety fallback: keep a fill-first crop so the inner frame is always occupied.
+  const fallbackRecipe: TokenIconRecipe = {
+    ...TOKEN_ICON_RECIPES.cover,
+    scale: 1.02,
+    innerPadding: 0,
+    breakout: false,
+  }
+  const fallback = await renderBaseForRecipe(fallbackRecipe)
+  if (best) {
+    console.info('[token/image] low-confidence candidate fallback', {
+      bestScore: best.score,
+      threshold: CANDIDATE_QUALITY_CONFIG.minAcceptableScore,
+      mode: best.recipe.mode,
+      breakout: best.recipe.breakout,
+    })
+  }
+  return {
+    recipe: fallbackRecipe,
+    baseLayerBytes: fallback.baseLayerBytes,
+    breakoutLayerBytes: null,
+  }
 }
 
 async function fetchSourceArtworkBytes(params: {
@@ -638,6 +969,47 @@ async function normalizeImageToPng(bytes: Uint8Array): Promise<Uint8Array> {
     .png()
     .toBuffer()
   return new Uint8Array(normalized)
+}
+
+async function cropTransparentPadding(bytes: Uint8Array): Promise<Uint8Array> {
+  const meta = await sharp(Buffer.from(bytes)).metadata()
+  const width = meta.width ?? 0
+  const height = meta.height ?? 0
+  if (width <= 0 || height <= 0) return bytes
+
+  const bounds = await getAlphaBounds(bytes, 18)
+  if (!bounds) return bytes
+
+  const bboxWidth = bounds.right - bounds.left + 1
+  const bboxHeight = bounds.bottom - bounds.top + 1
+  if (bboxWidth <= 0 || bboxHeight <= 0) return bytes
+
+  const areaRatio = (bboxWidth * bboxHeight) / Math.max(1, width * height)
+  if (areaRatio >= 0.96) return bytes
+
+  const padX = Math.max(1, Math.round(bboxWidth * 0.015))
+  const padY = Math.max(1, Math.round(bboxHeight * 0.015))
+  const left = Math.max(0, bounds.left - padX)
+  const top = Math.max(0, bounds.top - padY)
+  const right = Math.min(width - 1, bounds.right + padX)
+  const bottom = Math.min(height - 1, bounds.bottom + padY)
+  const extractWidth = Math.max(1, right - left + 1)
+  const extractHeight = Math.max(1, bottom - top + 1)
+
+  if (left === 0 && top === 0 && extractWidth === width && extractHeight === height) {
+    return bytes
+  }
+
+  const cropped = await sharp(Buffer.from(bytes))
+    .extract({
+      left,
+      top,
+      width: extractWidth,
+      height: extractHeight,
+    })
+    .png()
+    .toBuffer()
+  return new Uint8Array(cropped)
 }
 
 async function postProcessAiOverrideIcon(rawBytes: Uint8Array, size: number): Promise<Buffer> {
@@ -781,7 +1153,7 @@ async function clipLayerToInnerPanel(params: {
   const clipSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <rect x="${layout.panelX}" y="${layout.panelY}" width="${layout.panelSize}" height="${layout.panelSize}" rx="${layout.panelRadius}" fill="white" />
   </svg>`
-  const clipMask = await sharp(Buffer.from(clipSvg)).png().toBuffer()
+  const clipMask = await sharp(Buffer.from(clipSvg)).blur(0.65).png().toBuffer()
   const clipped = await sharp(Buffer.from(layerBytes))
     .ensureAlpha()
     .composite([{ input: clipMask, blend: 'dest-in' }])
@@ -1047,24 +1419,17 @@ async function applyBreakoutAlphaMask(params: {
     .composite([{ input: maskBuf, blend: 'dest-in' }])
     .png()
     .toBuffer()
-  const breakout = await sharp(masked).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-  const dominantMask = await buildDominantBreakoutComponentMask({
-    rgba: Buffer.from(breakout.data),
-    width: breakout.info.width,
-    height: breakout.info.height,
-    channels: breakout.info.channels,
-    region: {
-      left: zoneLeft,
-      right: zoneRight,
-      top: zoneTop,
-      bottom: zoneBottom,
-    },
-  })
-  if (!dominantMask) return new Uint8Array(masked)
-
+  const continuityMask = await sharp(masked)
+    .ensureAlpha()
+    .extractChannel('alpha')
+    .threshold(14)
+    .dilate(1)
+    .blur(0.75)
+    .png()
+    .toBuffer()
   const cleaned = await sharp(masked)
     .ensureAlpha()
-    .composite([{ input: dominantMask, blend: 'dest-in' }])
+    .composite([{ input: continuityMask, blend: 'dest-in' }])
     .png()
     .toBuffer()
   return new Uint8Array(cleaned)
@@ -1140,6 +1505,7 @@ function generateFramedSvg({
 }: FramedSvgParams): string {
   const resolvedBaseLayerImage = baseLayerImage ?? creatorCoinImage ?? null
   const layout = getTokenIconLayout(size, recipe)
+  const thinFrameStroke = Math.max(1, Math.round(size * 0.0023))
 
   const safeSymbol = symbol
     .replace(/&/g, '&amp;')
@@ -1184,32 +1550,6 @@ function generateFramedSvg({
         />`
       : ''
 
-  const frameElement = `<rect
-      data-frame='inner'
-      x="${layout.panelX}"
-      y="${layout.panelY}"
-      width="${layout.panelSize}"
-      height="${layout.panelSize}"
-      rx="${layout.panelRadius}"
-      fill="none"
-      stroke="#6ea2ff"
-      stroke-opacity="0.86"
-      stroke-width="${layout.frameStrokeWidth}"
-      stroke-linejoin="round"
-    />
-    <rect
-      x="${layout.panelX}"
-      y="${layout.panelY}"
-      width="${layout.panelSize}"
-      height="${layout.panelSize}"
-      rx="${layout.panelRadius}"
-      fill="none"
-      stroke="#dbeafe"
-      stroke-opacity="0.26"
-      stroke-width="${Math.max(1, Math.round(layout.frameStrokeWidth * 0.42))}"
-      stroke-linejoin="round"
-    />`
-
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
@@ -1240,7 +1580,7 @@ function generateFramedSvg({
   <rect width="${size}" height="${size}" fill="${TOKEN_ICON_STYLE.backgroundOuter}" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bg)" />
   <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#vignette)" />
-  ${glowLayerImage ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="0.94"/>` : ''}
+  ${glowLayerImage ? `<image href="${glowLayerImage}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="none" opacity="${TOKEN_ICON_STYLE.glowOpacity}"/>` : ''}
   <rect
     x="${layout.panelX}"
     y="${layout.panelY}"
@@ -1251,7 +1591,19 @@ function generateFramedSvg({
   />
   ${imageElement}
   <rect x="${layout.panelX}" y="${layout.panelY}" width="${layout.panelSize}" height="${layout.panelSize}" rx="${layout.panelRadius}" fill="${TOKEN_ICON_STYLE.panelScrim}" />
-  ${frameElement}
+  <rect
+    data-frame='inner'
+    x="${layout.panelX}"
+    y="${layout.panelY}"
+    width="${layout.panelSize}"
+    height="${layout.panelSize}"
+    rx="${layout.panelRadius}"
+    fill="none"
+    stroke="#8fb3ff"
+    stroke-opacity="0.58"
+    stroke-width="${thinFrameStroke}"
+    vector-effect="non-scaling-stroke"
+  />
   ${breakoutElement}
   <title>${safeSymbol}</title>
 </svg>`
@@ -1263,4 +1615,5 @@ export const __testables = {
   chooseArtworkFitMode,
   classifyTokenImageMetrics,
   deriveTokenIconRecipe,
+  buildCandidateRecipes,
 }

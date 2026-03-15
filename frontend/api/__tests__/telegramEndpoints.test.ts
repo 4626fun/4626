@@ -306,29 +306,6 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.success).toBe(false)
   })
 
-  it('POST /api/telegram/link/start returns 401 when link secret is not configured', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_link-start.ts')
-    const restoreSecrets = applyEnv({
-      TELEGRAM_LINK_API_SECRET: undefined,
-      TELEGRAM_BOT_CONFIG_SECRET: undefined,
-    })
-    try {
-      const req = createBaseMockReq({
-        method: 'POST',
-        headers: { 'x-telegram-link-secret': TELEGRAM_LINK_SECRET },
-        body: { telegramUserId: '42', chatId: '-100123' },
-      })
-      const res = createMockRes()
-
-      await handler(req, res)
-
-      expect(res.statusCode).toBe(401)
-      expect(res.body?.success).toBe(false)
-    } finally {
-      restoreSecrets()
-    }
-  })
-
   it('POST /api/telegram/unlink revokes an existing link', async () => {
     const { default: handler } = await import('../_handlers/telegram/_unlink.ts')
     getTelegramLinkByUserIdMock.mockResolvedValueOnce({
@@ -397,42 +374,6 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.success).toBe(true)
     expect(getTelegramPortfolioSummaryMock).toHaveBeenCalledTimes(1)
     expect(res.body?.data?.successfulActions).toBe(3)
-  })
-
-  it('POST /api/telegram/link/start validates required telegram ids', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_link-start.ts')
-    const req = createMockReq({
-      method: 'POST',
-      body: { chatId: '-100123' },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(400)
-    expect(res.body?.success).toBe(false)
-  })
-
-  it('POST /api/telegram/link/start returns one-time link url', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_link-start.ts')
-    const req = createMockReq({
-      method: 'POST',
-      body: { telegramUserId: '42', chatId: '-100123' },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(createTelegramLinkStartTokenMock).toHaveBeenCalledTimes(1)
-    const url = String(res.body?.data?.url ?? '')
-    const parsed = new URL(url)
-    expect(parsed.pathname).toBe('/continue')
-    expect(parsed.searchParams.get('autologin')).toBe('1')
-    const next = parsed.searchParams.get('next') ?? ''
-    expect(next).toContain('/swap?')
-    expect(next).toContain('tgLinkToken=token-abc')
-    expect(res.body?.data?.expiresAt).toBe('2026-03-13T00:10:00.000Z')
   })
 
   it('POST /api/telegram/miniapp/session verifies initData and issues session token', async () => {
@@ -648,22 +589,6 @@ describe('telegram endpoint handlers', () => {
     expect(listTelegramScopedVaultsMock).toHaveBeenCalledTimes(1)
   })
 
-  it('GET /api/telegram/link/status returns linked false when missing', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_link-status.ts')
-    getTelegramLinkByUserIdMock.mockResolvedValueOnce(null)
-    const req = createMockReq({
-      method: 'GET',
-      query: { telegramUserId: '42' },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.linked).toBe(false)
-  })
-
   it('POST /api/telegram/merge-preflight returns ok when no collision exists', async () => {
     const { default: handler } = await import('../_handlers/telegram/_merge-preflight.ts')
     runTelegramMergePreflightMock.mockResolvedValueOnce({ ok: true })
@@ -797,9 +722,9 @@ describe('telegram endpoint handlers', () => {
 
   it('route map registers telegram link endpoints', async () => {
     const { getApiHandler } = await import('../_handlers/_routes.ts')
-    expect(await getApiHandler('telegram/link/start')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/link/complete')).toBeTypeOf('function')
-    expect(await getApiHandler('telegram/link/status')).toBeTypeOf('function')
+    expect(await getApiHandler('telegram/link/start')).toBeNull()
+    expect(await getApiHandler('telegram/link/status')).toBeNull()
     expect(await getApiHandler('telegram/merge-preflight')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/miniapp/session')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/discovery')).toBeTypeOf('function')

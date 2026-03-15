@@ -442,6 +442,7 @@ export function formatClashArenaHelpTopic(): string {
     '',
     '<blockquote>Control Clash of Claw (Beyond All Reason) from Telegram.</blockquote>',
     formatCommandLine('/arena identify <name>', 'register commander name (3-24 chars)'),
+    formatCommandLine('/arena play', 'one-tap: enable watch + search for a match'),
     formatCommandLine('/arena find', 'search for a match'),
     formatCommandLine('/arena state', 'current game state snapshot'),
     formatCommandLine('/arena result', 'latest match result'),
@@ -515,7 +516,7 @@ export async function handleClashArenaCommandWithContext(
           '',
           `- enabled: ${String(current.enabled)}`,
           `- poll_seconds: ${readArenaWatchPollSeconds()}`,
-          `- watch_match_id: ${current.watchMatchId || 'unbound (run /arena find)'}`,
+          `- watch_match_id: ${current.watchMatchId || 'unbound (run /arena play or /arena find)'}`,
           `- last_phase: ${current.lastPhase || 'n/a'}`,
           `- last_game_time: ${current.lastGameTime || 'n/a'}`,
           `- last_pushed_at: ${current.lastPushedAt || 'n/a'}`,
@@ -541,7 +542,7 @@ export async function handleClashArenaCommandWithContext(
         '',
         `- poll_seconds: ${readArenaWatchPollSeconds()}`,
         '- scope: your bound match only',
-        '- next: run /arena find or /arena state to bind match_id',
+        '- next: run /arena play, /arena find, or /arena state to bind match_id',
         '- updates: pushed automatically when state changes',
         '- disable: /arena watch off',
       ]
@@ -593,6 +594,24 @@ export async function handleClashArenaCommandWithContext(
   }
 
   if (subcommand === 'find' || subcommand === 'play' || subcommand === 'match') {
+    const chatId = asTrimmed(context.chatId)
+    const requestedByUserId = asTrimmed(context.userId) || null
+    let db: any = null
+    let playWatchEnabled = false
+    if (subcommand === 'play' && chatId) {
+      db = await getDb()
+      if (db) {
+        await ensureTelegramTradingSchema(db as any)
+        const watch = await setTelegramArenaWatch({
+          db: db as any,
+          chatId,
+          enabled: true,
+          requestedByUserId,
+        })
+        playWatchEnabled = Boolean(watch?.enabled)
+      }
+    }
+
     const find = await callArenaApi({
       config,
       method: 'POST',
@@ -602,27 +621,32 @@ export async function handleClashArenaCommandWithContext(
     const formatted = formatArenaFindResponse(find.payload)
     if (!formatted.ok) return formatted
 
-    const chatId = asTrimmed(context.chatId)
     const matchId = asTrimmed(find.payload?.match?.match_id)
+    let responseText = formatted.response
+    if (playWatchEnabled) {
+      responseText = `${responseText}\n- watch: enabled`
+    }
     if (chatId && matchId) {
-      const db = await getDb()
+      if (!db) {
+        db = await getDb()
+      }
       if (db) {
         await ensureTelegramTradingSchema(db as any)
         const bound = await bindTelegramArenaWatchMatch({
           db: db as any,
           chatId,
           matchId,
-          requestedByUserId: asTrimmed(context.userId) || null,
+          requestedByUserId,
         })
         if (bound?.enabled) {
           return {
             ok: true,
-            response: `${formatted.response}\n- watch_bound_match_id: ${matchId}`,
+            response: `${responseText}\n- watch_bound_match_id: ${matchId}`,
           }
         }
       }
     }
-    return formatted
+    return { ok: true, response: responseText }
   }
 
   if (subcommand === 'state' || subcommand === 'status') {

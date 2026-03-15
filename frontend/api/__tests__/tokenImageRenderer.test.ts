@@ -159,4 +159,57 @@ describe('token image renderer', () => {
 
     expect(recipe.breakout).toBe(true)
   })
+
+  it('builds multi-recipe candidates for cover images with contain fallback', () => {
+    const recipes = __testables.buildCandidateRecipes({
+      classification: {
+        layoutMode: 'cover',
+        allowBreakout: true,
+      },
+      breakoutEvaluation: {
+        size: 1024,
+        hasUsableBreakoutMask: true,
+        breakoutCoverage: 0.12,
+      },
+      metrics: {
+        aspectRatio: 1,
+        hasTransparency: false,
+        alphaCoverage: 1,
+        edgeOccupancy: 0.88,
+        circularBadgeLikelihood: 0.18,
+        opaquePhotoLikelihood: 0.92,
+        topOccupancy: 0.2,
+      },
+    })
+
+    expect(recipes.length).toBeGreaterThanOrEqual(3)
+    expect(recipes.some((candidate) => candidate.mode === 'contain')).toBe(true)
+    expect(recipes.some((candidate) => candidate.mode === 'cover' && candidate.breakout)).toBe(true)
+  })
+
+  it('keeps coin-first candidate ordering for coin classifications', () => {
+    const recipes = __testables.buildCandidateRecipes({
+      classification: {
+        layoutMode: 'coin',
+        allowBreakout: false,
+      },
+      breakoutEvaluation: {
+        size: 1024,
+        hasUsableBreakoutMask: false,
+        breakoutCoverage: 0.02,
+      },
+      metrics: {
+        aspectRatio: 1,
+        hasTransparency: true,
+        alphaCoverage: 0.6,
+        edgeOccupancy: 0.12,
+        circularBadgeLikelihood: 0.93,
+        opaquePhotoLikelihood: 0.2,
+        topOccupancy: 0.04,
+      },
+    })
+
+    expect(recipes[0]?.mode).toBe('coin')
+    expect(recipes.every((candidate) => candidate.breakout === false)).toBe(true)
+  })
 })
