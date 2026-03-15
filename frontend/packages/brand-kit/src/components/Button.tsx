@@ -28,13 +28,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
   primary:
-    'bg-brand-primary hover:bg-brand-hover text-white shadow-[0_0_20px_rgba(0,82,255,0.2)] hover:shadow-[0_0_28px_rgba(0,82,255,0.35)]',
+    'border border-brand-primary/55 bg-linear-to-r from-brand-primary to-brand-hover text-white shadow-[0_14px_38px_-16px_rgba(0,82,255,0.92)] hover:-translate-y-[1px] hover:from-brand-hover hover:to-brand-primary hover:shadow-[0_22px_42px_-16px_rgba(0,82,255,0.95)] active:translate-y-0 active:scale-[0.99]',
   secondary:
-    'bg-white/5 hover:bg-white/8 text-vault-text border border-white/8 hover:border-white/12',
+    'border border-white/12 bg-linear-to-b from-white/7 to-white/3 text-vault-text shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:-translate-y-[1px] hover:border-white/18 hover:from-white/11 hover:to-white/6 hover:text-white',
   ghost:
-    'bg-transparent hover:bg-white/5 text-vault-subtext hover:text-vault-text border border-transparent hover:border-white/8',
+    'border border-transparent bg-transparent text-vault-subtext hover:border-white/12 hover:bg-white/6 hover:text-vault-text',
   destructive:
-    'bg-rose-500/8 hover:bg-rose-500/15 text-rose-400 border border-rose-500/15 hover:border-rose-500/25',
+    'border border-rose-400/30 bg-linear-to-b from-rose-500/18 to-rose-500/8 text-rose-200 shadow-[0_10px_24px_-18px_rgba(244,63,94,0.9)] hover:-translate-y-[1px] hover:border-rose-300/45 hover:from-rose-500/24 hover:to-rose-500/14',
 }
 
 const sizeClasses: Record<NonNullable<ButtonProps['size']>, string> = {
@@ -53,9 +53,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={isDisabled}
         aria-busy={loading || undefined}
         className={cn(
-          'inline-flex items-center justify-center font-medium transition-all duration-150',
+          'inline-flex items-center justify-center font-medium transition-all duration-200 ease-out',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1 focus-visible:ring-offset-vault-bg',
-          'disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none',
+          'disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none disabled:translate-y-0 disabled:scale-100',
           variantClasses[variant],
           sizeClasses[size],
           className,

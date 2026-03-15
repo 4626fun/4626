@@ -12,6 +12,7 @@ const RawTelegramWebhookEnvSchema = z
     TELEGRAM_ALLOWED_CHAT_IDS: z.string().optional(),
     TELEGRAM_ADMIN_USER_IDS: z.string().optional(),
     TELEGRAM_ALLOW_PRIVATE_DMS: z.string().optional(),
+    TELEGRAM_ALLOW_PRIVATE_DM: z.string().optional(),
     TELEGRAM_ALLOW_ALL_PRIVATE_DMS: z.string().optional(),
     TELEGRAM_ALLOW_ADMIN_DM: z.string().optional(),
     TELEGRAM_AI_FOLLOWUP_ENABLED: z.string().optional(),
@@ -111,8 +112,13 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   const botToken = asTrimmed(raw.TELEGRAM_BOT_TOKEN ?? '')
   const targetChatId = asTrimmed(raw.TELEGRAM_TARGET_CHAT_ID ?? '')
   const allowedChatIdsRaw = asTrimmed(raw.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
-  const allowPrivateDms =
-    parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DMS, false) || parseBoolean(raw.TELEGRAM_ALLOW_ALL_PRIVATE_DMS, false)
+  const allowPrivateDmsExplicit =
+    raw.TELEGRAM_ALLOW_PRIVATE_DMS !== undefined
+      ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DMS, true)
+      : raw.TELEGRAM_ALLOW_PRIVATE_DM !== undefined
+        ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DM, true)
+        : true
+  const allowPrivateDms = allowPrivateDmsExplicit || parseBoolean(raw.TELEGRAM_ALLOW_ALL_PRIVATE_DMS, false)
 
   const inlineCapRaw = Number(asTrimmed(raw.TELEGRAM_INLINE_MAX_RESULTS ?? ''))
   const inlineMaxResults =

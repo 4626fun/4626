@@ -157,7 +157,7 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
 
 function ActivityTableHeader() {
   return (
-    <div className="hidden sm:grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-800 bg-zinc-900/50">
+    <div className="hidden sm:grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-white/8 bg-vault-card/50">
       <span>Type</span>
       <span>Token</span>
       <span className="text-center">Volume (24h)</span>
@@ -291,7 +291,7 @@ export function ExploreTransactions() {
 
   return (
     <div className="relative pb-24 md:pb-0 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -331,15 +331,15 @@ export function ExploreTransactions() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/50"
+          className="vault-surface overflow-hidden"
         >
           {/* Sticky header */}
-          <div className="hidden sm:block sticky top-24 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+          <div className="hidden sm:block sticky top-24 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
             <ActivityTableHeader />
           </div>
 
           {/* Table Body */}
-          <div className="divide-y divide-zinc-800/50">
+          <div className="divide-y divide-white/6">
             {isLoading ? (
               // Loading skeletons
               Array.from({ length: 10 }).map((_, i) => <ActivityRowSkeleton key={i} />)
@@ -378,7 +378,7 @@ export function ExploreTransactions() {
 
           {/* Load more button (fallback for scroll) */}
           {hasNextPage && !isFetchingNextPage && (
-            <div className="px-6 py-4 border-t border-zinc-800 flex justify-center">
+            <div className="px-6 py-4 border-t border-white/8 flex justify-center">
               <button
                 type="button"
                 onClick={() => fetchNextPage()}

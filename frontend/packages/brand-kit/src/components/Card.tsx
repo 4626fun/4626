@@ -21,6 +21,7 @@ export function Card({ variant = 'default', padding = 'md', className, children,
     <div
       className={cn(
         variant === 'glass' ? 'glass-card' : 'card',
+        'transition-all duration-200 ease-out',
         paddingClasses[padding],
         className,
       )}

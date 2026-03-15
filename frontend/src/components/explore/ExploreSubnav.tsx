@@ -76,11 +76,11 @@ export function ExploreSubnav({
   }
 
   return (
-    <div className="space-y-2 sm:space-y-3">
+    <div className="space-y-2.5 sm:space-y-3">
       {/* Main navigation row */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
         {/* Tabs */}
-        <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide rounded-full border border-white/8 bg-black/20 p-0.5">
           {TABS.map((tab) => {
             const active = isActive(location.pathname, tab.to)
             return (
@@ -88,10 +88,10 @@ export function ExploreSubnav({
                 key={tab.to}
                 to={tab.to}
                 aria-current={active ? 'page' : undefined}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border text-[13px] sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                   active
-                    ? 'bg-white/10 text-white'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/6'
+                    ? 'border-brand-primary/35 bg-brand-primary/14 text-white shadow-[0_10px_22px_-16px_rgba(0,82,255,0.88)]'
+                    : 'border-transparent text-zinc-400 hover:text-white hover:border-white/10 hover:bg-white/7'
                 }`}
               >
                 {tab.label}
@@ -108,14 +108,14 @@ export function ExploreSubnav({
             <input
               type="text"
               placeholder={searchPlaceholder}
-              className="w-full sm:w-[260px] h-9 sm:h-10 pl-9 sm:pl-10 pr-4 bg-vault-card/60 border border-white/8 rounded-full text-[13px] sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-white/20 transition-colors"
+              className="w-full sm:w-[260px] h-9 sm:h-10 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 pl-9 sm:pl-10 pr-4 text-[13px] sm:text-sm text-white placeholder:text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all duration-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
               aria-label="Search"
               onChange={(e) => onSearch?.(e.target.value)}
             />
           </div>
 
           {/* Time filter pills */}
-          <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 bg-vault-card/60 border border-white/8 rounded-full p-0.5">
+          <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
             {TIME_FILTERS.map((filter) => {
               const active = currentTimeFilter === filter.value
               const isAvailable = filter.value === '1d' || uniswapAvailable
@@ -127,12 +127,12 @@ export function ExploreSubnav({
                   onClick={() => !disabled && handleTimeFilterClick(filter.value)}
                   disabled={disabled}
                   title={disabled ? 'Requires THEGRAPH_API_KEY - Uniswap V4 historical data' : `View ${filter.label} data`}
-                  className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-full text-[10px] sm:text-[11px] font-medium leading-none transition-colors ${
+                  className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-full border text-[10px] sm:text-[11px] font-medium leading-none transition-all duration-200 ${
                     active
-                      ? 'bg-white/12 text-white'
+                      ? 'border-blue-300/35 bg-blue-500/20 text-blue-100 shadow-[0_8px_20px_-14px_rgba(59,130,246,0.9)]'
                       : disabled
-                        ? 'text-zinc-600 cursor-not-allowed'
-                        : 'text-zinc-400 hover:text-white'
+                        ? 'border-transparent text-zinc-600 cursor-not-allowed'
+                        : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
                   }`}
                 >
                   {filter.label}
@@ -153,10 +153,10 @@ export function ExploreSubnav({
               key={option.value}
               type="button"
               onClick={() => handleSortClick(option.value)}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap active:scale-[0.97] ${
                 active
-                  ? 'bg-white/10 text-white'
-                  : 'text-zinc-400 hover:text-white hover:bg-white/6'
+                  ? 'border-brand-primary/35 bg-brand-primary/14 text-white shadow-[0_10px_22px_-16px_rgba(0,82,255,0.88)]'
+                  : 'border-transparent text-zinc-400 hover:text-white hover:border-white/10 hover:bg-white/7'
               }`}
             >
               {option.label}

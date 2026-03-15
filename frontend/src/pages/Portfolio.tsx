@@ -557,7 +557,7 @@ export function Portfolio() {
   }, [accountContext.activeAccount, accountContext.signerAddress, siwe.authAddress, wagmiAddress])
 
   const holdingsPanel = (
-    <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-white/10 bg-vault-card/70 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="vault-surface vault-hover-lift min-h-[360px] overflow-hidden">
       <div className="flex items-center justify-between border-b border-white/8 p-4">
         <div>
           <div className="text-[12px] text-white">Holdings</div>
@@ -606,7 +606,7 @@ export function Portfolio() {
   )
 
   const walletsPanel = (
-    <div className="min-h-[148px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="vault-surface vault-hover-lift min-h-[148px] p-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-[12px] text-white">Connected wallets</div>
@@ -650,7 +650,7 @@ export function Portfolio() {
   )
 
   const activityPanel = (
-    <div className="min-h-[148px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="vault-surface vault-hover-lift min-h-[148px] p-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-[12px] text-white">Recent activity</div>
@@ -671,9 +671,9 @@ export function Portfolio() {
       />
 
       <section className="py-8 sm:py-10">
-        <div className="mx-auto max-w-7xl px-3 sm:px-6">
+        <div className="mx-auto max-w-[1400px] px-3 sm:px-6">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-            <div className="rounded-2xl border border-white/8 bg-vault-card/65 p-4 backdrop-blur-xl">
+            <div className="vault-surface vault-hover-lift p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                   <div className="rounded-full border border-white/10 bg-black/35 px-3 py-1.5 font-mono text-[12px] text-zinc-200">
@@ -769,7 +769,7 @@ export function Portfolio() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, delay: 0.05 }}
-                  className="overflow-hidden rounded-[22px] border border-white/10 bg-vault-card/70 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+                  className="vault-surface vault-hover-lift overflow-hidden"
                 >
                   <div className="border-b border-white/8 p-5">
                     <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">Portfolio value</div>
@@ -814,7 +814,7 @@ export function Portfolio() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, delay: 0.08 }}
-                    className="min-h-[260px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+                    className="vault-surface vault-hover-lift min-h-[260px] p-4"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <div>
@@ -863,7 +863,7 @@ export function Portfolio() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, delay: 0.11 }}
-                    className="min-h-[230px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+                    className="vault-surface vault-hover-lift min-h-[230px] p-4"
                   >
                     <div className="mb-3 text-[12px] text-white">Quick actions</div>
                     <div className="grid grid-cols-2 gap-2">
@@ -905,7 +905,7 @@ export function Portfolio() {
               </div>
 
               {!isPublicMode ? (
-                <details className="group overflow-hidden rounded-[22px] border border-white/10 bg-vault-card/70 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+                <details className="vault-surface group overflow-hidden">
                   <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm text-white">
                     <span>Profile and identity settings</span>
                     <ChevronDown className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180" />
@@ -1080,7 +1080,7 @@ export function Portfolio() {
 
           {tab === 'activity' ? (
             <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]">
-              <div className="rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+              <div className="vault-surface p-4">
                 <div className="mb-3 text-[12px] text-white">Activity dashboard</div>
                 <div className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-[12px] text-zinc-600">
                   Detailed transaction feed and AMOE history will land here. Use Explore -&gt; Transactions until this module is enabled.
@@ -1094,7 +1094,7 @@ export function Portfolio() {
           ) : null}
 
           {tab === 'nfts' ? (
-            <div className="mt-5 rounded-[22px] border border-white/10 bg-vault-card/70 p-8 text-center shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+            <div className="vault-surface mt-5 p-8 text-center">
               <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800/50">
                 <Plus className="h-5 w-5 text-zinc-500" />
               </div>

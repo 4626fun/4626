@@ -598,7 +598,7 @@ export function ExploreCreators() {
   }
 
   const arrowButtonClass =
-    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-vault-card/70 backdrop-blur-md text-zinc-100 shadow-[0_10px_24px_-16px_rgba(0,0,0,0.95)] transition-all duration-200 hover:-translate-y-[1px] hover:border-white/15 hover:bg-white/10 hover:text-white hover:shadow-[0_14px_26px_-14px_rgba(0,0,0,0.95)] active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30'
+    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-300/30 bg-blue-500/15 backdrop-blur-md text-blue-100 shadow-[0_10px_24px_-16px_rgba(37,99,235,0.9)] transition-all duration-200 hover:-translate-y-[1px] hover:border-blue-200/60 hover:bg-blue-500/25 hover:text-white hover:shadow-[0_14px_26px_-14px_rgba(59,130,246,0.95)] active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/40'
 
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
@@ -620,7 +620,7 @@ export function ExploreCreators() {
 
           {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
           <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">{creatorsLabel}</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {creatorsTotalDisplay?.toLocaleString() ?? '—'}
@@ -632,7 +632,7 @@ export function ExploreCreators() {
               </div>
             </div>
 
-            <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-blue-300/20 bg-blue-950/10 px-3 sm:px-4 py-2.5 sm:py-3">
+            <div className="vault-surface-elevated vault-hover-lift relative overflow-hidden rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
               <ExploreMetricSparkline history={metricsQuery.data?.history30d} fallbackValue={marketCapDisplay} />
               <div className="relative z-10">
                 <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">{marketLabel}</div>
@@ -645,7 +645,7 @@ export function ExploreCreators() {
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(volume24hDisplay)}
@@ -655,7 +655,7 @@ export function ExploreCreators() {
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(fees24hDisplay)}
@@ -693,7 +693,7 @@ export function ExploreCreators() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="relative rounded-2xl border border-white/8 bg-vault-card/40 overflow-hidden"
+          className="vault-surface relative overflow-hidden"
         >
           {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
           <div className="sticky top-0 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">

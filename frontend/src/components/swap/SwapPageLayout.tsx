@@ -20,7 +20,7 @@ export function SwapPageLayout({
     <div className="relative pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56 bg-[radial-gradient(65%_70%_at_50%_0%,rgba(0,82,255,0.2)_0%,rgba(0,82,255,0.06)_40%,transparent_78%)]" />
       <section className="py-8 sm:py-10">
-        <div className="mx-auto max-w-7xl px-3 sm:px-6">
+        <div className="mx-auto max-w-[1400px] px-3 sm:px-6">
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="text-center sm:text-left">
               <h1 className="mt-1 font-display text-[2rem] font-medium tracking-[-0.02em] text-vault-text sm:text-[2.2rem]">

@@ -70,7 +70,16 @@ export function Layout() {
   }, [])
 
   return (
-    <div className="min-h-screen flex flex-col bg-vault-bg">
+    <div className="vault-shell min-h-screen flex flex-col bg-vault-bg">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-36 -top-40 h-104 w-104 rounded-full bg-brand-primary/16 blur-[120px] motion-safe:animate-float" />
+        <div
+          className="absolute -right-44 top-8 h-96 w-96 rounded-full bg-blue-400/10 blur-[120px] motion-safe:animate-float"
+          style={{ animationDelay: '700ms' }}
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_-10%,rgba(255,255,255,0.06),transparent_62%)]" />
+      </div>
+      <div aria-hidden="true" className="noise-overlay" />
       {showTopNavBar ? <VaultNavBar /> : null}
       {showAccountMode ? <AccountModeIndicator /> : null}
 
@@ -104,7 +113,7 @@ export function Layout() {
       {/* Mobile Nav - Minimal */}
       <nav
         aria-label="Mobile navigation"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl ${
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-white/8 bg-linear-to-t from-black/85 to-vault-bg/78 backdrop-blur-xl shadow-[0_-10px_30px_-18px_rgba(0,0,0,0.95)] ${
           isMobileChatOverlayActive ? 'hidden' : ''
         }`}
       >
@@ -118,7 +127,11 @@ export function Layout() {
                 to={path}
                 aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
-                className="flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2"
+                className={`flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2 rounded-xl border transition-all duration-200 ${
+                  isActive
+                    ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
+                    : 'border-transparent hover:border-white/10 hover:bg-white/6'
+                }`}
                 role="listitem"
               >
                 <Icon

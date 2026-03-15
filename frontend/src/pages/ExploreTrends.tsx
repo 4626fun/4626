@@ -190,7 +190,7 @@ export function ExploreTrends() {
 
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -230,10 +230,10 @@ export function ExploreTrends() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="relative rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+          className="vault-surface relative overflow-hidden"
         >
           {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
-          <div className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+          <div className="sticky top-0 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
             <div
               className="overflow-x-auto scrollbar-hide"
               id="explore-trends-header"
@@ -297,7 +297,7 @@ export function ExploreTrends() {
               e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
             }}
           >
-            <div className="min-w-max divide-y divide-zinc-800/50">
+            <div className="min-w-max divide-y divide-white/6">
               {isLoading ? (
                 // Loading skeletons
                 Array.from({ length: 10 }).map((_, i) => <PoolRowSkeleton key={i} />)
@@ -344,7 +344,7 @@ export function ExploreTrends() {
 
               {/* Load more button (fallback for scroll) */}
               {hasNextPage && !isFetchingNextPage && (
-                <div className="px-6 py-4 border-t border-zinc-800 flex justify-center">
+                <div className="px-6 py-4 border-t border-white/8 flex justify-center">
                   <button
                     type="button"
                     onClick={() => fetchNextPage()}

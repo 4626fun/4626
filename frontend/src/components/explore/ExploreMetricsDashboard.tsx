@@ -80,7 +80,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
   return (
     <div className={joinClasses('space-y-2', className)}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">Creators</div>
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
@@ -90,7 +90,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-blue-300/20 bg-blue-950/10 px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-surface-elevated vault-hover-lift relative overflow-hidden rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
           <ExploreMetricSparkline history={metricsQuery.data?.history30d} fallbackValue={marketCap} />
           <div className="relative z-10">
             <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">Market Cap</div>
@@ -103,7 +103,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           </div>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {formatCompactUsd(volume24h)}
@@ -113,7 +113,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           </div>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {formatCompactUsd(fees24h)}
@@ -124,7 +124,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         </div>
       </div>
 
-      <div className="text-right text-[11px] text-zinc-500">{statusLine}</div>
+      <div className="text-right text-[11px] text-zinc-500/90">{statusLine}</div>
     </div>
   )
 }

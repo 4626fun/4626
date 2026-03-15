@@ -910,6 +910,77 @@ describe('telegram webhook handler', () => {
     }
   })
 
+  it('allows non-admin private DM when TELEGRAM_ALLOW_PRIVATE_DM alias is enabled', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    const restorePrivateDmEnv = applyEnv({
+      TELEGRAM_ALLOW_PRIVATE_DMS: undefined,
+      TELEGRAM_ALLOW_PRIVATE_DM: 'true',
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 7_0_1,
+          message: {
+            message_id: 12_0_1,
+            text: '/help',
+            chat: { id: 7726886643 },
+            from: { id: 999 },
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+      expect((fetch as any).mock.calls.length).toBe(1)
+      expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+    } finally {
+      restorePrivateDmEnv()
+    }
+  })
+
+  it('allows non-admin private DM by default when private-dm flags are unset', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    const restorePrivateDmEnv = applyEnv({
+      TELEGRAM_ALLOW_PRIVATE_DMS: undefined,
+      TELEGRAM_ALLOW_PRIVATE_DM: undefined,
+      TELEGRAM_ALLOW_ALL_PRIVATE_DMS: undefined,
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 7_0_2,
+          message: {
+            message_id: 12_0_2,
+            text: '/help',
+            chat: { id: 7726886643 },
+            from: { id: 999 },
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+      expect((fetch as any).mock.calls.length).toBe(1)
+      expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+    } finally {
+      restorePrivateDmEnv()
+    }
+  })
+
   it('auto-routes plain private-chat followups into /ai', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })

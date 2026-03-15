@@ -10,28 +10,28 @@ const variantConfig: Record<
 > = {
   info: {
     icon: Info,
-    containerClass: 'bg-white/[0.03] border-white/8 text-zinc-300',
+    containerClass: 'bg-linear-to-b from-white/8 to-white/3 border-white/12 text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]',
     iconClass: 'text-zinc-400',
     textClass: 'text-zinc-400',
     titleClass: 'text-zinc-300',
   },
   warning: {
     icon: AlertTriangle,
-    containerClass: 'bg-amber-400/[0.04] border-amber-400/15 text-amber-200',
+    containerClass: 'bg-linear-to-b from-amber-400/12 to-amber-500/6 border-amber-300/30 text-amber-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
     iconClass: 'text-amber-400',
     textClass: 'text-amber-300/80',
     titleClass: 'text-amber-300',
   },
   error: {
     icon: XCircle,
-    containerClass: 'bg-rose-400/[0.04] border-rose-400/15 text-rose-200',
+    containerClass: 'bg-linear-to-b from-rose-400/12 to-rose-500/6 border-rose-300/28 text-rose-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
     iconClass: 'text-rose-400',
     textClass: 'text-rose-300/80',
     titleClass: 'text-rose-300',
   },
   success: {
     icon: CheckCircle2,
-    containerClass: 'bg-emerald-400/[0.04] border-emerald-400/15 text-emerald-200',
+    containerClass: 'bg-linear-to-b from-emerald-400/12 to-emerald-500/6 border-emerald-300/28 text-emerald-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
     iconClass: 'text-emerald-400',
     textClass: 'text-emerald-300/80',
     titleClass: 'text-emerald-300',
@@ -62,7 +62,7 @@ export function Alert({
     <div
       role={variant === 'error' ? 'alert' : 'status'}
       className={cn(
-        'flex gap-2.5 p-3 rounded-xl border text-sm',
+        'flex gap-2.5 rounded-xl border p-3 text-sm backdrop-blur-md',
         config.containerClass,
         className,
       )}
@@ -84,7 +84,8 @@ export function Alert({
             type="button"
             onClick={action.onClick}
             className={cn(
-              'mt-2 text-[11px] font-medium underline underline-offset-2 hover:no-underline transition-colors',
+              'mt-2 inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-medium transition-all duration-200 hover:-translate-y-px',
+              'border-current/30 bg-black/20 hover:bg-black/28',
               config.titleClass,
             )}
           >
