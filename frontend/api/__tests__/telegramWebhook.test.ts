@@ -259,8 +259,11 @@ describe('telegram webhook handler', () => {
     restoreEnv = applyEnv({
       TELEGRAM_BOT_TOKEN: 'test-token',
       TELEGRAM_TARGET_CHAT_ID: '-100123',
+      TELEGRAM_ALLOWED_CHAT_IDS: '-100123',
       TELEGRAM_WEBHOOK_SECRET: 'top-secret',
       TELEGRAM_ADMIN_USER_IDS: '42',
+      TELEGRAM_ALLOW_PRIVATE_DMS: 'false',
+      TELEGRAM_ALLOW_ALL_PRIVATE_DMS: 'false',
       TELEGRAM_DEFAULT_SENDER_WALLET: '0x00000000000000000000000000000000000000aa',
       TELEGRAM_GROUP_ID_MAP_JSON: JSON.stringify({ '-100123': 'xmtp-group-1' }),
       TELEGRAM_HOLDER_ROOMS_ENABLED: 'true',
@@ -761,6 +764,40 @@ describe('telegram webhook handler', () => {
     expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+  })
+
+  it('allows non-admin private DM when TELEGRAM_ALLOW_PRIVATE_DMS is enabled', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    const restorePrivateDmEnv = applyEnv({
+      TELEGRAM_ALLOW_PRIVATE_DMS: 'true',
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 7_0,
+          message: {
+            message_id: 12_0,
+            text: '/help',
+            chat: { id: 7726886643 },
+            from: { id: 999 },
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+      expect((fetch as any).mock.calls.length).toBe(1)
+      expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+    } finally {
+      restorePrivateDmEnv()
+    }
   })
 
   it('auto-routes plain private-chat followups into /ai', async () => {

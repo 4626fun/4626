@@ -183,6 +183,17 @@ function parseAllowedChatIds(): Set<string> {
   return fallback ? new Set([fallback]) : new Set()
 }
 
+function isTelegramPrivateDmEnabled(): boolean {
+  // Preferred flag:
+  // - TELEGRAM_ALLOW_PRIVATE_DMS=true
+  // Backward-compatible alias:
+  // - TELEGRAM_ALLOW_ALL_PRIVATE_DMS=true
+  return (
+    parseBoolean(process.env.TELEGRAM_ALLOW_PRIVATE_DMS, false) ||
+    parseBoolean(process.env.TELEGRAM_ALLOW_ALL_PRIVATE_DMS, false)
+  )
+}
+
 function parseOptionalPositiveInteger(value: unknown): number | null {
   const raw = asTrimmed(value)
   if (!raw) return null
@@ -5101,11 +5112,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const adminUserIds = parseAdminUserIds()
     const isAdmin = userId ? adminUserIds.has(userId) : false
     const allowAdminDm = parseBoolean(process.env.TELEGRAM_ALLOW_ADMIN_DM, true)
+    const allowPrivateDm = isTelegramPrivateDmEnabled()
     const allowedChatIds = parseAllowedChatIds()
     const signalsChatId = asTrimmed(process.env.TELEGRAM_SIGNALS_CHAT_ID ?? '')
     const allowedByChat = allowedChatIds.size === 0 || allowedChatIds.has(chatId) || (signalsChatId !== '' && chatId === signalsChatId)
+    const allowedByPrivateDm = allowPrivateDm && isPrivateChatId(chatId)
     const allowedByAdminDm = allowAdminDm && isAdmin && isPrivateChatId(chatId)
-    if (!allowedByChat && !allowedByAdminDm) {
+    if (!allowedByChat && !allowedByPrivateDm && !allowedByAdminDm) {
       return res.status(200).json({
         success: true,
         data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
@@ -5427,10 +5440,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const adminUserIds = parseAdminUserIds()
   const isAdmin = userId ? adminUserIds.has(userId) : false
   const allowAdminDm = parseBoolean(process.env.TELEGRAM_ALLOW_ADMIN_DM, true)
+  const allowPrivateDm = isTelegramPrivateDmEnabled()
   const allowedChatIds = parseAllowedChatIds()
   const allowedByChat = allowedChatIds.size === 0 || allowedChatIds.has(chatId)
+  const allowedByPrivateDm = allowPrivateDm && isPrivateChatId(chatId)
   const allowedByAdminDm = allowAdminDm && isAdmin && isPrivateChatId(chatId)
-  if (!allowedByChat && !allowedByAdminDm) {
+  if (!allowedByChat && !allowedByPrivateDm && !allowedByAdminDm) {
     return res.status(200).json({
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
