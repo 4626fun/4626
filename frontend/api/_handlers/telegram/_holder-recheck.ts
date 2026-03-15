@@ -87,7 +87,7 @@ async function removeHolderRoomMember(params: {
   roomChatId: string
   telegramUserId: string
 }): Promise<void> {
-  await fetch(`https://api.telegram.org/bot${params.botToken}/banChatMember`, {
+  const response = await fetch(`https://api.telegram.org/bot${params.botToken}/banChatMember`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -96,6 +96,10 @@ async function removeHolderRoomMember(params: {
       revoke_messages: false,
     }),
   })
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`telegram_ban_failed_${response.status}:${details.slice(0, 180)}`)
+  }
 }
 
 function buildGraceWarningText(row: TelegramHolderRoomRecheckRow, graceUntilIso: string): string {
@@ -201,6 +205,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const graceUntilMs = parseIsoMsOrNaN(row.graceUntil)
     const graceExpired = row.status === 'grace' && Number.isFinite(graceUntilMs) && graceUntilMs <= nowMs
     if (graceExpired) {
+      let removedFromRoom = true
+      try {
+        await removeHolderRoomMember({
+          botToken: config.botToken,
+          roomChatId: row.roomChatId,
+          telegramUserId: row.telegramUserId,
+        })
+      } catch {
+        removedFromRoom = false
+        errors += 1
+      }
+
+      if (!removedFromRoom) {
+        // Keep member in grace state so subsequent recheck ticks can retry enforcement.
+        await upsertHolderRoomMember({
+          db: db as any,
+          roomChatId: row.roomChatId,
+          telegramUserId: row.telegramUserId,
+          canonicalCswAddress: row.canonicalCswAddress,
+          status: 'grace',
+          lastEligibleAt: row.lastEligibleAt,
+          graceUntil: row.graceUntil,
+          lastCheckedAt: nowIso,
+          removedAt: null,
+        })
+        continue
+      }
+
       await upsertHolderRoomMember({
         db: db as any,
         roomChatId: row.roomChatId,
@@ -212,16 +244,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lastCheckedAt: nowIso,
         removedAt: nowIso,
       })
-
-      try {
-        await removeHolderRoomMember({
-          botToken: config.botToken,
-          roomChatId: row.roomChatId,
-          telegramUserId: row.telegramUserId,
-        })
-      } catch {
-        errors += 1
-      }
 
       try {
         await sendHolderRoomWarning({

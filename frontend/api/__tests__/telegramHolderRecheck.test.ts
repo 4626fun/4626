@@ -162,6 +162,62 @@ describe('telegram holder recheck endpoint', () => {
     expect(res.body?.data?.removed).toBe(1)
   })
 
+  it('keeps grace status when Telegram removal fails so enforcement can retry', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_holder-recheck.ts')
+    listHolderRoomMembersNeedingRecheckMock.mockResolvedValueOnce([
+      {
+        chatId: '-100123',
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+        roomChatId: '-100555',
+        shareTokenAddress: '0x2222222222222222222222222222222222222222',
+        minSharesRaw: '1000',
+        graceHours: 24,
+        enabled: true,
+        telegramUserId: '99',
+        canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        status: 'grace',
+        lastEligibleAt: '2026-03-12T00:00:00.000Z',
+        graceUntil: '2026-03-12T01:00:00.000Z',
+        lastCheckedAt: '2026-03-12T01:00:00.000Z',
+      },
+    ])
+    checkSharesEligibilityMock.mockResolvedValueOnce({
+      eligible: false,
+      reason: 'share_balance<threshold',
+      evidence: {
+        shareBalance: '1',
+        threshold: '1000',
+        blockNumber: 111,
+        rpcUrl: 'https://rpc.example.test',
+      },
+    })
+    ;(fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: async () => 'forbidden',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-holder-secret': 'holder-secret' },
+      body: {},
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(upsertHolderRoomMemberMock).toHaveBeenCalledTimes(1)
+    const call = upsertHolderRoomMemberMock.mock.calls[0]?.[0] as any
+    expect(call?.status).toBe('grace')
+    expect(call?.removedAt).toBe(null)
+    expect(typeof call?.lastCheckedAt).toBe('string')
+    expect((fetch as any).mock.calls.length).toBe(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/banChatMember')
+    expect(res.body?.data?.removed).toBe(0)
+    expect(res.body?.data?.errors).toBe(1)
+  })
+
   it('re-eligible member clears grace and remains active', async () => {
     const { default: handler } = await import('../_handlers/telegram/_holder-recheck.ts')
     listHolderRoomMembersNeedingRecheckMock.mockResolvedValueOnce([
