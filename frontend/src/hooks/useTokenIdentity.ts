@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { erc20Abi, isAddress } from 'viem'
+import { erc20Abi, getAddress, isAddress } from 'viem'
 import { usePublicClient } from 'wagmi'
 
 import { useTokenImage } from '@/hooks/useTokenMetadata'
@@ -22,6 +22,11 @@ export function useTokenIdentity(params: {
   const tokenImage = useTokenImage(
     shouldFetchImage ? (params.address as `0x${string}`) : undefined,
   )
+  const creatorCoinImageUrl = useMemo(() => {
+    if (params.option?.group !== 'creator') return null
+    if (!isAddress(params.address)) return null
+    return `/api/v1/token/${getAddress(params.address).toLowerCase()}/image?chain=8453&format=png&style=raw`
+  }, [params.address, params.option?.group])
 
   const tokenMetadataQuery = useQuery({
     queryKey: ['token-identity', params.address.toLowerCase()],
@@ -53,9 +58,9 @@ export function useTokenIdentity(params: {
         option: params.option,
         address: params.address,
         onchain: tokenMetadataQuery.data ?? null,
-        imageUrl: tokenImage.imageUrl,
+        imageUrl: creatorCoinImageUrl ?? tokenImage.imageUrl,
       }),
-    [params.option, params.address, tokenMetadataQuery.data, tokenImage.imageUrl],
+    [params.option, params.address, tokenMetadataQuery.data, tokenImage.imageUrl, creatorCoinImageUrl],
   )
 
   return {

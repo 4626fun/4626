@@ -92,7 +92,7 @@ export function classifyInlineQuery(rawQuery: string): InlineQueryClass {
   if (/\b(ai|assistant|prompt|question|analyze)\b/.test(query)) return 'ai'
   if (/\b(link|wallet|connect)\b/.test(query)) return 'link'
   if (/\b(deploy|launch|create)\b/.test(query)) return 'deploy'
-  if (/\b(vault|auction|signal|portfolio)\b/.test(query)) return 'discovery'
+  if (/\b(vault|auction|signal|wallet)\b/.test(query)) return 'discovery'
   return 'general'
 }
 
@@ -197,8 +197,8 @@ function scoreInlineResult(params: {
 function buildCommonCopy(growthMode: boolean): {
   linkTitle: string
   linkDescription: string
-  portfolioTitle: string
-  portfolioDescription: string
+  walletTitle: string
+  walletDescription: string
   helpTitle: string
   helpDescription: string
   statusTitle: string
@@ -214,8 +214,8 @@ function buildCommonCopy(growthMode: boolean): {
     return {
       linkTitle: 'Unlock trading -> link wallet',
       linkDescription: 'One-time setup -> buy, sell, bid',
-      portfolioTitle: 'Portfolio pulse',
-      portfolioDescription: 'Positions + recent activity',
+      walletTitle: 'Wallet pulse',
+      walletDescription: 'Positions + recent activity',
       helpTitle: 'Quick start (30 sec)',
       helpDescription: 'Beginner-first commands',
       statusTitle: 'Vault health',
@@ -232,8 +232,8 @@ function buildCommonCopy(growthMode: boolean): {
   return {
     linkTitle: 'Link wallet to unlock trading',
     linkDescription: 'One-time setup, then buy/sell/bid instantly',
-    portfolioTitle: 'My portfolio snapshot',
-    portfolioDescription: 'Positions, recent actions, and status',
+    walletTitle: 'My wallet snapshot',
+    walletDescription: 'Positions, recent actions, and status',
     helpTitle: 'Quick start guide',
     helpDescription: 'Beginner-friendly commands and shortcuts',
     statusTitle: 'Vault health check',
@@ -309,10 +309,10 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       mediaKey: 'card:buy',
     })
     pushTemplate({
-      key: 'portfolio',
-      title: copy.portfolioTitle,
-      description: copy.portfolioDescription,
-      command: '/portfolio',
+      key: 'wallet',
+      title: copy.walletTitle,
+      description: copy.walletDescription,
+      command: '/wallet',
       baseScore: 86,
       intentTags: ['discovery', 'general'],
       mediaKey: 'card:portfolio',
@@ -393,7 +393,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
     intentTags: ['general'],
     mediaKey: 'card:help',
   })
-  // Keep inline discovery laser-focused on link + trade + portfolio.
+  // Keep inline discovery laser-focused on connect + trade + wallet.
   // Show advanced tools only when the user explicitly asks for them.
   if (wantsStatus) {
     pushTemplate({

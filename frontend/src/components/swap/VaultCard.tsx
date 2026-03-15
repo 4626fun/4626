@@ -20,6 +20,7 @@ const SHARE_TO_CCA: Record<string, `0x${string}`> = {
 }
 
 const UNISWAP_AUCTION_BASE = 'https://app.uniswap.org/explore/auctions/base'
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 type VaultCardConfig = {
   vaultAddress: `0x${string}`
@@ -28,6 +29,8 @@ type VaultCardConfig = {
   groupId: string
   ccaStrategyAddress?: `0x${string}`
   shareOFTAddress?: `0x${string}`
+  graduatedAt?: string | null
+  settledAt?: string | null
 }
 
 type VaultCardProps = {
@@ -38,6 +41,7 @@ type VaultCardProps = {
 }
 
 type AuctionStatus = {
+  auction?: string | null
   isActive: boolean
   isGraduated: boolean
   currencyRaised?: string
@@ -61,6 +65,7 @@ async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<AuctionSt
   const json = (await res.json()) as {
     success?: boolean
     data?: {
+      auction?: string | null
       isActive?: boolean
       isGraduated?: boolean
       currencyRaised?: string
@@ -69,6 +74,7 @@ async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<AuctionSt
     }
   }
   return {
+    auction: typeof json.data?.auction === 'string' ? json.data.auction : null,
     isActive: Boolean(json.data?.isActive),
     isGraduated: Boolean(json.data?.isGraduated),
     currencyRaised: json.data?.currencyRaised,
@@ -130,7 +136,14 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
     enabled: Boolean(ccaStrategy),
     staleTime: 20_000,
   })
-  const auctionLive = auctionQuery.data?.isActive === true
+  const hasOnchainAuction = useMemo(() => {
+    const value = auctionQuery.data?.auction
+    return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value) && value.toLowerCase() !== ZERO_ADDRESS
+  }, [auctionQuery.data?.auction])
+  const auctionFinished = Boolean(vault.graduatedAt || vault.settledAt || auctionQuery.data?.isGraduated === true)
+  const auctionLive = !auctionFinished && auctionQuery.data?.isActive === true
+  const auctionFailed = hasOnchainAuction && !auctionFinished && auctionQuery.data?.isActive === false
+  const auctionStatusUnavailable = Boolean(ccaStrategy) && auctionQuery.isError === true
   const activityQuery = useQuery({
     queryKey: ['auction-activity', ccaStrategy],
     queryFn: () => fetchAuctionActivity(ccaStrategy!),
@@ -229,6 +242,21 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             Auction Live Now
           </a>
         ) : null}
+        {auctionFinished ? (
+          <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-2 py-0.5 text-sky-200">
+            Auction Finished
+          </span>
+        ) : null}
+        {auctionFailed ? (
+          <span className="rounded-full border border-rose-400/35 bg-rose-500/10 px-2 py-0.5 text-rose-200">
+            Auction Failed
+          </span>
+        ) : null}
+        {auctionStatusUnavailable ? (
+          <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
+            Auction Status Unavailable
+          </span>
+        ) : null}
         {committedDisplay ? (
           <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
             Committed {committedDisplay}
@@ -251,6 +279,15 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             ))}
           </div>
         </div>
+      ) : null}
+
+      {auctionFailed && ccaStrategy ? (
+        <Link
+          to={`/complete-auction/${ccaStrategy}`}
+          className="inline-flex w-full items-center justify-center rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-500/20"
+        >
+          Recover Auction + Strategy Funds
+        </Link>
       ) : null}
 
       <div className="grid grid-cols-2 gap-2">

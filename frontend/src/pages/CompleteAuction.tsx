@@ -46,6 +46,13 @@ const CCA_STRATEGY_ABI = [
     stateMutability: 'nonpayable',
   },
   {
+    name: 'sweepUnsoldTokens',
+    type: 'function',
+    inputs: [],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
     name: 'getTaxHookCalldata',
     type: 'function',
     inputs: [],
@@ -94,6 +101,7 @@ type Step = 'check' | 'sweep' | 'configure' | 'complete'
 
 const VAULT_ABI = [
   { name: 'deployToStrategies', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  { name: 'emergencyWithdrawFromStrategies', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { name: 'owner', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
 ] as const
 
@@ -181,6 +189,26 @@ export function CompleteAuction() {
     hash: configTxHash,
   })
 
+  // Failed-auction recovery: return unsold creator tokens to the configured recipient.
+  const {
+    writeContract: sweepUnsoldTokens,
+    data: unsoldTxHash,
+    isPending: isUnsoldSweeping,
+    error: unsoldSweepError,
+  } = useWriteContract()
+  const { isLoading: isUnsoldConfirming, isSuccess: isUnsoldSuccess } = useWaitForTransactionReceipt({
+    hash: unsoldTxHash,
+  })
+  const {
+    writeContract: sweepStrategyFunds,
+    data: strategySweepTxHash,
+    isPending: isStrategySweeping,
+    error: strategySweepError,
+  } = useWriteContract()
+  const { isLoading: isStrategySweepConfirming, isSuccess: isStrategySweepSuccess } = useWaitForTransactionReceipt({
+    hash: strategySweepTxHash,
+  })
+
   // Optional Step: Activate yield (deploy idle funds to strategies)
   const {
     writeContract: activateYield,
@@ -192,14 +220,27 @@ export function CompleteAuction() {
     hash: activateTxHash,
   })
 
+  const hasAuction = Boolean(auctionStatus?.[0] && auctionStatus?.[0] !== ZERO_ADDRESS)
+  const isActive = Boolean(auctionStatus?.[1])
+  const isGraduated = Boolean(auctionStatus?.[2])
+  const isFailed = hasAuction && !isActive && !isGraduated
+  const currencyRaised = auctionStatus?.[4]
+  const failedRecoveryComplete = isUnsoldSuccess && isStrategySweepSuccess
+
   // Update step based on transaction status
   useEffect(() => {
+    if (isFailed) {
+      if (failedRecoveryComplete) {
+        setCurrentStep('complete')
+      }
+      return
+    }
     if (isSweepSuccess && !isConfigSuccess) {
       setCurrentStep('configure')
     } else if (isConfigSuccess) {
       setCurrentStep('complete')
     }
-  }, [isSweepSuccess, isConfigSuccess])
+  }, [isFailed, failedRecoveryComplete, isSweepSuccess, isConfigSuccess])
 
   const handleSweepCurrency = () => {
     setError(null)
@@ -233,6 +274,28 @@ export function CompleteAuction() {
     })
   }
 
+  const handleSweepUnsoldTokens = () => {
+    setError(null)
+    sweepUnsoldTokens({
+      address: strategyAddress,
+      abi: CCA_STRATEGY_ABI,
+      functionName: 'sweepUnsoldTokens',
+    })
+  }
+
+  const handleSweepStrategyFunds = () => {
+    if (!vaultAddress) {
+      setError('Missing vault address')
+      return
+    }
+    setError(null)
+    sweepStrategyFunds({
+      address: vaultAddress,
+      abi: VAULT_ABI,
+      functionName: 'emergencyWithdrawFromStrategies',
+    })
+  }
+
   const handleActivateYield = () => {
     if (!vaultAddress) {
       setError('Missing vault address')
@@ -251,11 +314,6 @@ export function CompleteAuction() {
     return Number(formatUnits(value, 18)).toFixed(4)
   }
 
-  // Parse auction data
-  const isActive = auctionStatus?.[1]
-  const isGraduated = auctionStatus?.[2]
-  const currencyRaised = auctionStatus?.[4]
-
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-8">
       {/* Header */}
@@ -266,11 +324,13 @@ export function CompleteAuction() {
       >
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-500/10 text-yellow-500 text-sm font-medium">
           <PartyPopper className="w-4 h-4" />
-          Click 2: Complete Auction
+          {isFailed ? 'Auction Recovery' : 'Click 2: Complete Auction'}
         </div>
         <h1 className="font-display text-3xl font-bold">Finalize Your Vault</h1>
         <p className="text-surface-400">
-          Your CCA has graduated! Complete the setup to enable trading.
+          {isFailed
+            ? 'This auction did not graduate. Recover unsold auction tokens and pull strategy-deployed creator tokens back to the vault.'
+            : 'Your CCA has graduated! Complete the setup to enable trading.'}
         </p>
       </motion.div>
 
@@ -292,6 +352,10 @@ export function CompleteAuction() {
             {isGraduated ? (
               <p className="font-semibold text-green-400 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" /> Graduated
+              </p>
+            ) : isFailed ? (
+              <p className="font-semibold text-rose-400 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" /> Failed
               </p>
             ) : isActive ? (
               <p className="font-semibold text-yellow-400 flex items-center gap-2">
@@ -315,161 +379,296 @@ export function CompleteAuction() {
             </p>
           </div>
         )}
+        {isFailed && (
+          <div className="mt-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-200 text-sm">
+            <p className="font-medium">Auction did not graduate</p>
+            <p className="mt-1 text-rose-200/80">
+              Raised currency sweep is skipped for failed auctions. Use recovery to pull both unsold auction tokens and strategy-deployed funds.
+            </p>
+          </div>
+        )}
       </motion.div>
 
       {/* Steps */}
-      {isGraduated && (
+      {(isGraduated || isFailed) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="glass-card p-6 space-y-6"
         >
-          {/* Step 1: Sweep Currency */}
-          <div className={`p-4 rounded-xl border ${
-            currentStep === 'check' || currentStep === 'sweep'
-              ? 'bg-brand-500/5 border-brand-500/30'
-              : isSweepSuccess
-              ? 'bg-green-500/5 border-green-500/30'
-              : 'bg-surface-900/30 border-surface-800'
-          }`}>
-            <div className="flex items-start gap-4">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                isSweepSuccess
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-brand-500/20 text-brand-400'
-              }`}>
-                {isSweeping || isSweepConfirming ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : isSweepSuccess ? (
-                  <CheckCircle2 className="w-5 h-5" />
-                ) : (
-                  <span className="font-bold">1</span>
-                )}
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold">Complete Auction</h4>
-                <p className="text-surface-400 text-sm mt-1">
-                  Sweep raised ETH to vault and configure the price oracle.
-                </p>
-                {!isSweepSuccess && currentStep !== 'configure' && currentStep !== 'complete' && (
-                  <button
-                    onClick={handleSweepCurrency}
-                    disabled={isSweeping || isSweepConfirming}
-                    className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+          {isFailed ? (
+            <>
+              <div
+                className={`p-4 rounded-xl border ${
+                  isUnsoldSuccess
+                    ? 'bg-green-500/5 border-green-500/30'
+                    : 'bg-rose-500/5 border-rose-500/30'
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                      isUnsoldSuccess ? 'bg-green-500/20 text-green-400' : 'bg-rose-500/20 text-rose-400'
+                    }`}
                   >
-                    {isSweeping || isSweepConfirming ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {isSweeping ? 'Confirming...' : 'Processing...'}
-                      </>
+                    {isUnsoldSweeping || isUnsoldConfirming ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : isUnsoldSuccess ? (
+                      <CheckCircle2 className="w-5 h-5" />
                     ) : (
-                      <>
-                        Sweep Currency
-                        <ArrowRight className="w-4 h-4" />
-                      </>
+                      <span className="font-bold">1</span>
                     )}
-                  </button>
-                )}
-                {sweepTxHash && (
-                  <a
-                    href={`https://basescan.org/tx/${sweepTxHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
-                  >
-                    View transaction <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Step 2: Configure Tax Hook */}
-          <div className={`p-4 rounded-xl border ${
-            currentStep === 'configure'
-              ? 'bg-brand-500/5 border-brand-500/30'
-              : isConfigSuccess
-              ? 'bg-green-500/5 border-green-500/30'
-              : 'bg-surface-900/30 border-surface-800'
-          }`}>
-            <div className="flex items-start gap-4">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                isConfigSuccess
-                  ? 'bg-green-500/20 text-green-400'
-                  : currentStep === 'configure'
-                  ? 'bg-brand-500/20 text-brand-400'
-                  : 'bg-surface-800 text-surface-500'
-              }`}>
-                {isConfiguring || isConfigConfirming ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : isConfigSuccess ? (
-                  <CheckCircle2 className="w-5 h-5" />
-                ) : (
-                  <span className="font-bold">2</span>
-                )}
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold">Enable 6.9% Trade Fee</h4>
-                <p className="text-surface-400 text-sm mt-1">
-                  Configure the V4 hook to collect fees for jackpot & burns.
-                </p>
-                
-                {/* Fee breakdown */}
-                <div className="flex gap-4 mt-3 text-xs">
-                  <span className="flex items-center gap-1 text-yellow-400">
-                    <Trophy className="w-3 h-3" /> 69% Jackpot
-                  </span>
-                  <span className="flex items-center gap-1 text-red-400">
-                    <Flame className="w-3 h-3" /> 21% Burn
-                  </span>
-                  <span className="flex items-center gap-1 text-brand-400">
-                    <Zap className="w-3 h-3" /> 10% Treasury
-                  </span>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold">Recover Unsold Auction Tokens</h4>
+                    <p className="text-surface-400 text-sm mt-1">
+                      Sweep unsold creator tokens from the auction contract back to the configured vault recipient.
+                    </p>
+                    {!isUnsoldSuccess && (
+                      <button
+                        onClick={handleSweepUnsoldTokens}
+                        disabled={isUnsoldSweeping || isUnsoldConfirming}
+                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                      >
+                        {isUnsoldSweeping || isUnsoldConfirming ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {isUnsoldSweeping ? 'Confirming...' : 'Processing...'}
+                          </>
+                        ) : (
+                          <>
+                            Recover Unsold Tokens
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {unsoldTxHash && (
+                      <a
+                        href={`https://basescan.org/tx/${unsoldTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
+                      >
+                        View transaction <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
-
-                {currentStep === 'configure' && !isConfigSuccess && (
-                  <button
-                    onClick={handleConfigureTaxHook}
-                    disabled={isConfiguring || isConfigConfirming}
-                    className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
-                  >
-                    {isConfiguring || isConfigConfirming ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {isConfiguring ? 'Confirming...' : 'Configuring...'}
-                      </>
-                    ) : (
-                      <>
-                        Configure Tax Hook
-                        <Zap className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                )}
-                {configTxHash && (
-                  <a
-                    href={`https://basescan.org/tx/${configTxHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
-                  >
-                    View transaction <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
               </div>
-            </div>
-          </div>
+
+              <div
+                className={`p-4 rounded-xl border ${
+                  isStrategySweepSuccess
+                    ? 'bg-green-500/5 border-green-500/30'
+                    : 'bg-rose-500/5 border-rose-500/30'
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                      isStrategySweepSuccess ? 'bg-green-500/20 text-green-400' : 'bg-rose-500/20 text-rose-400'
+                    }`}
+                  >
+                    {isStrategySweeping || isStrategySweepConfirming ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : isStrategySweepSuccess ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <span className="font-bold">2</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold">Pull Strategy-Deployed Funds</h4>
+                    <p className="text-surface-400 text-sm mt-1">
+                      Emergency-withdraw creator tokens from all active vault strategies back into the vault balance.
+                    </p>
+                    {!isStrategySweepSuccess && (
+                      <button
+                        onClick={handleSweepStrategyFunds}
+                        disabled={!vaultAddress || isStrategySweeping || isStrategySweepConfirming}
+                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                      >
+                        {isStrategySweeping || isStrategySweepConfirming ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {isStrategySweeping ? 'Confirming...' : 'Processing...'}
+                          </>
+                        ) : (
+                          <>
+                            Pull Strategy Funds
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {!vaultAddress ? (
+                      <p className="mt-2 text-xs text-amber-300/80">Waiting for vault address...</p>
+                    ) : null}
+                    {strategySweepTxHash && (
+                      <a
+                        href={`https://basescan.org/tx/${strategySweepTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
+                      >
+                        View transaction <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Step 1: Sweep Currency */}
+              <div className={`p-4 rounded-xl border ${
+                currentStep === 'check' || currentStep === 'sweep'
+                  ? 'bg-brand-500/5 border-brand-500/30'
+                  : isSweepSuccess
+                  ? 'bg-green-500/5 border-green-500/30'
+                  : 'bg-surface-900/30 border-surface-800'
+              }`}>
+                <div className="flex items-start gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    isSweepSuccess
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-brand-500/20 text-brand-400'
+                  }`}>
+                    {isSweeping || isSweepConfirming ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : isSweepSuccess ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <span className="font-bold">1</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold">Complete Auction</h4>
+                    <p className="text-surface-400 text-sm mt-1">
+                      Sweep raised ETH to vault and configure the price oracle.
+                    </p>
+                    {!isSweepSuccess && currentStep !== 'configure' && currentStep !== 'complete' && (
+                      <button
+                        onClick={handleSweepCurrency}
+                        disabled={isSweeping || isSweepConfirming}
+                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                      >
+                        {isSweeping || isSweepConfirming ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {isSweeping ? 'Confirming...' : 'Processing...'}
+                          </>
+                        ) : (
+                          <>
+                            Sweep Currency
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {sweepTxHash && (
+                      <a
+                        href={`https://basescan.org/tx/${sweepTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
+                      >
+                        View transaction <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Configure Tax Hook */}
+              <div className={`p-4 rounded-xl border ${
+                currentStep === 'configure'
+                  ? 'bg-brand-500/5 border-brand-500/30'
+                  : isConfigSuccess
+                  ? 'bg-green-500/5 border-green-500/30'
+                  : 'bg-surface-900/30 border-surface-800'
+              }`}>
+                <div className="flex items-start gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    isConfigSuccess
+                      ? 'bg-green-500/20 text-green-400'
+                      : currentStep === 'configure'
+                      ? 'bg-brand-500/20 text-brand-400'
+                      : 'bg-surface-800 text-surface-500'
+                  }`}>
+                    {isConfiguring || isConfigConfirming ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : isConfigSuccess ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <span className="font-bold">2</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold">Enable 6.9% Trade Fee</h4>
+                    <p className="text-surface-400 text-sm mt-1">
+                      Configure the V4 hook to collect fees for jackpot & burns.
+                    </p>
+
+                    {/* Fee breakdown */}
+                    <div className="flex gap-4 mt-3 text-xs">
+                      <span className="flex items-center gap-1 text-yellow-400">
+                        <Trophy className="w-3 h-3" /> 69% Jackpot
+                      </span>
+                      <span className="flex items-center gap-1 text-red-400">
+                        <Flame className="w-3 h-3" /> 21% Burn
+                      </span>
+                      <span className="flex items-center gap-1 text-brand-400">
+                        <Zap className="w-3 h-3" /> 10% Treasury
+                      </span>
+                    </div>
+
+                    {currentStep === 'configure' && !isConfigSuccess && (
+                      <button
+                        onClick={handleConfigureTaxHook}
+                        disabled={isConfiguring || isConfigConfirming}
+                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                      >
+                        {isConfiguring || isConfigConfirming ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {isConfiguring ? 'Confirming...' : 'Configuring...'}
+                          </>
+                        ) : (
+                          <>
+                            Configure Tax Hook
+                            <Zap className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {configTxHash && (
+                      <a
+                        href={`https://basescan.org/tx/${configTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
+                      >
+                        View transaction <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Errors */}
-          {(sweepError || configError || activateError || error) && (
+          {(sweepError || configError || activateError || unsoldSweepError || strategySweepError || error) && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
                 <span className="font-medium">Error</span>
               </div>
               <p className="text-sm mt-1">
-                {error || sweepError?.message || configError?.message || activateError?.message}
+                {error || sweepError?.message || configError?.message || unsoldSweepError?.message || strategySweepError?.message || activateError?.message}
               </p>
             </div>
           )}
@@ -493,11 +692,12 @@ export function CompleteAuction() {
               <PartyPopper className="w-10 h-10 text-green-400" />
             </motion.div>
             <h2 className="font-display text-2xl font-bold">
-              🎉 Vault Activated!
+              {isFailed ? 'Recovery Complete' : '🎉 Vault Activated!'}
             </h2>
             <p className="text-surface-400">
-              Your vault is now live on Uniswap V4 with 6.9% trade fees enabled.
-              Qualifying buys can trigger lottery entries, and a no-purchase AMOE entry path is also available.
+              {isFailed
+                ? 'Unsold auction tokens were swept and strategy-deployed creator tokens were returned to the vault.'
+                : 'Your vault is now live on Uniswap V4 with 6.9% trade fees enabled. Qualifying buys can trigger lottery entries, and a no-purchase AMOE entry path is also available.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
@@ -507,37 +707,41 @@ export function CompleteAuction() {
                 View Vault
                 <ArrowRight className="w-4 h-4" />
               </button>
-              <button
-                onClick={handleActivateYield}
-                disabled={!canActivateYield || isActivating || isActivateConfirming || isActivateSuccess}
-                className="btn-secondary flex items-center justify-center gap-2"
-              >
-                {isActivating || isActivateConfirming ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Activating…
-                  </>
-                ) : isActivateSuccess ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Yield activated
-                  </>
-                ) : (
-                  <>
-                    Activate yield
-                    <Zap className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => navigate(`/swap?token=${tokenAddress}`)}
-                className="btn-secondary flex items-center justify-center gap-2"
-              >
-                Trade on 4626 Swap
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {!isFailed ? (
+                <>
+                  <button
+                    onClick={handleActivateYield}
+                    disabled={!canActivateYield || isActivating || isActivateConfirming || isActivateSuccess}
+                    className="btn-secondary flex items-center justify-center gap-2"
+                  >
+                    {isActivating || isActivateConfirming ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Activating…
+                      </>
+                    ) : isActivateSuccess ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Yield activated
+                      </>
+                    ) : (
+                      <>
+                        Activate yield
+                        <Zap className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => navigate(`/swap?token=${tokenAddress}`)}
+                    className="btn-secondary flex items-center justify-center gap-2"
+                  >
+                    Trade on 4626 Swap
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </>
+              ) : null}
             </div>
-            {activateTxHash && (
+            {activateTxHash && !isFailed && (
               <a
                 href={`https://basescan.org/tx/${activateTxHash}`}
                 target="_blank"
@@ -547,7 +751,7 @@ export function CompleteAuction() {
                 View activation transaction <ExternalLink className="w-3 h-3" />
               </a>
             )}
-            {!canActivateYield && vaultAddress && (
+            {!isFailed && !canActivateYield && vaultAddress && (
               <p className="text-xs text-surface-500">
                 Only the vault owner can activate yield strategies.
               </p>

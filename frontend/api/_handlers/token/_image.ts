@@ -71,6 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const size = Math.min(Math.max(getNumberQuery(req, 'size') ?? 512, 64), 1024)
   const formatRaw = (getStringQuery(req, 'format') ?? '').trim().toLowerCase()
   const format: 'png' | 'svg' = formatRaw === 'svg' ? 'svg' : 'png'
+  const styleRaw = (getStringQuery(req, 'style') ?? '').trim().toLowerCase()
+  const preferRawSourceImage = styleRaw === 'raw'
 
   try {
     const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
@@ -107,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Get underlying creator coin
+    // Get underlying creator coin (ShareOFT path)
     let creatorCoin: Address | null = null
     if (vault && isAddress(vault as string)) {
       try {
@@ -121,26 +123,73 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Fetch creator coin image from Zora
+    // Fetch creator coin image from Zora.
+    // Supports both:
+    // 1) ShareOFT address -> resolve vault.asset() and fetch that coin image.
+    // 2) Direct creator coin address -> fetch coin image directly.
     let creatorCoinImage: string | null = null
+    let zoraResolvedSymbol: string | null = null
     const zoraKey = requireServerKey()
-    if (zoraKey && creatorCoin && isAddress(creatorCoin)) {
+    if (zoraKey) {
       try {
         const sdk: any = await import('@zoralabs/coins-sdk')
         sdk.setApiKey(zoraKey)
-        const coinResponse = await sdk.getCoin({
-          address: creatorCoin,
-          chain: chainId,
-        })
-        const coinData = coinResponse.data?.zora20Token
-        if (coinData) {
-          creatorCoinImage = coinData.mediaContent?.previewImage?.medium 
-            || coinData.mediaContent?.previewImage?.small
-            || coinData.mediaContent?.originalUri
-            || null
+
+        const pickCoinImage = (coinData: any): string | null =>
+          coinData?.mediaContent?.previewImage?.medium ||
+          coinData?.mediaContent?.previewImage?.small ||
+          coinData?.mediaContent?.originalUri ||
+          null
+
+        const readCoin = async (coinAddress: Address): Promise<any | null> => {
+          const coinResponse = await sdk.getCoin({
+            address: coinAddress,
+            chain: chainId,
+          })
+          return coinResponse?.data?.zora20Token ?? null
+        }
+
+        // Try requested address first (handles direct creator coin lookups).
+        const requestedCoin = await readCoin(address as Address).catch(() => null)
+        if (requestedCoin) {
+          const image = pickCoinImage(requestedCoin)
+          if (image) creatorCoinImage = image
+          const symbolCandidate = typeof requestedCoin.symbol === 'string' ? requestedCoin.symbol.trim() : ''
+          if (symbolCandidate) zoraResolvedSymbol = symbolCandidate
+          if (!creatorCoin) creatorCoin = address as Address
+        }
+
+        // If this is a ShareOFT with an underlying asset, prefer underlying coin artwork.
+        if (creatorCoin && creatorCoin.toLowerCase() !== address.toLowerCase()) {
+          const underlyingCoin = await readCoin(creatorCoin).catch(() => null)
+          const underlyingImage = pickCoinImage(underlyingCoin)
+          if (underlyingImage) creatorCoinImage = underlyingImage
         }
       } catch (e) {
         console.warn('[token/image] Failed to fetch Zora coin image:', e)
+      }
+    }
+
+    const renderedSymbol = zoraResolvedSymbol || String(symbol)
+
+    if (preferRawSourceImage && creatorCoinImage) {
+      const fetched = await fetchBytes(creatorCoinImage).catch(() => null)
+      const rawBytes = fetched?.bytes
+      if (rawBytes && rawBytes.length > 0) {
+        res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
+        if (format === 'svg') {
+          const contentType =
+            typeof fetched?.contentType === 'string' && fetched.contentType.startsWith('image/')
+              ? fetched.contentType
+              : 'image/png'
+          const b64 = Buffer.from(rawBytes).toString('base64')
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:${contentType};base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
+          res.setHeader('Content-Type', 'image/svg+xml')
+          return res.status(200).send(svg)
+        }
+        const resized = await sharp(Buffer.from(rawBytes)).resize(size, size, { fit: 'cover' }).png().toBuffer()
+        res.setHeader('Content-Type', 'image/png')
+        return res.status(200).send(resized)
       }
     }
 
@@ -156,7 +205,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const glowLayerImage = await renderGlowLayerDataUri(size, glowLayout)
       const svg = generateFramedSvg({
         size,
-        symbol: String(symbol),
+        symbol: renderedSymbol,
         baseLayerImage:
           prepared.baseLayerBytes && prepared.baseLayerBytes.length > 0
             ? `data:image/png;base64,${Buffer.from(prepared.baseLayerBytes).toString('base64')}`
@@ -182,7 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       creatorCoin,
       upstreamUrl: creatorCoinImage,
       size,
-      symbol: String(symbol),
+      symbol: renderedSymbol,
     })
 
     // Cache for 24 hours at the edge; the underlying blob is content-addressed via cache keys.

@@ -4,16 +4,18 @@ export function resolveHelpCallbackCommand(rawData: string): string | null {
   const token = asTrimmed(rawData).toLowerCase()
   if (token.startsWith('menu:')) {
     const action = token.slice(5)
+    if (action === 'start') return '/start'
+    if (action === 'connect') return '/link'
     if (action === 'link') return '/link'
     if (action === 'linked') return '/linked'
     if (action === 'unlink') return '/unlink'
+    if (action === 'wallet' || action === 'portfolio') return '/wallet'
     if (action === 'buy') return '/buy'
     if (action === 'sell') return '/sell'
     if (action === 'bid') return '/bid'
     if (action === 'join') return '/join'
     if (action === 'eligibility') return '/eligibility'
     if (action === 'rooms') return '/rooms'
-    if (action === 'portfolio') return '/portfolio'
     if (action === 'vaults') return '/vaults'
     if (action === 'auctions') return '/auctions'
     if (action === 'mybids') return '/mybids'
@@ -44,9 +46,12 @@ export function resolveHelpCallbackCommand(rawData: string): string | null {
 
 export function resolveNavigationCallbackToast(rawData: string, mappedCommand: string | null): string {
   const token = asTrimmed(rawData).toLowerCase()
+  if (token === 'menu:start') return 'Start menu'
   if (token === 'menu:more') return 'More tools'
+  if (token === 'menu:trade') return 'Trade menu'
+  if (token === 'menu:explore') return 'Explore menu'
   if (token === 'menu:topics') return 'Help topics'
-  if (token === 'menu:portfolio') return 'Portfolio ready'
+  if (token === 'menu:wallet' || token === 'menu:portfolio') return 'Wallet ready'
   if (token === 'menu:vaults') return 'Vaults ready'
   if (token === 'menu:auctions') return 'Auctions ready'
   if (token === 'menu:mybids') return 'Bids ready'
@@ -56,7 +61,7 @@ export function resolveNavigationCallbackToast(rawData: string, mappedCommand: s
   if (token === 'menu:bid') return 'Bid flow'
   if (token === 'menu:deploy') return 'Deploy wizard'
   if (token === 'menu:zora') return 'Zora setup'
-  if (token === 'menu:link') return 'Link flow'
+  if (token === 'menu:connect' || token === 'menu:link') return 'Connect flow'
   if (token === 'menu:linked') return 'Link status'
   if (token === 'menu:unlink') return 'Unlink flow'
   if (token === 'menu:join') return 'Join flow'

@@ -284,11 +284,7 @@ export function isLikelyCommandText(rawText: string): boolean {
 }
 
 export function normalizeTelegramCommand(rawText: string): string {
-  const text = asTrimmed(rawText).replace(/^\/([a-z0-9_]+)@[\w_]+(?=\s|$)/i, '/$1')
-  if (/^\/start(?:\s+.*)?$/i.test(text)) {
-    return '/help'
-  }
-  return text
+  return asTrimmed(rawText).replace(/^\/([a-z0-9_]+)@[\w_]+(?=\s|$)/i, '/$1')
 }
 
 export function formatAmount(value: number, digits = 4): string {

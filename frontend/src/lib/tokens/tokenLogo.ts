@@ -27,14 +27,6 @@ type LogoCacheShape = Record<string, string>
 const STORAGE_KEY = 'swap-token-logo-cache-v1'
 const logoCache: LogoCacheShape = {}
 
-const coingeckoChainById: Record<number, string> = {
-  1: 'ethereum',
-  10: 'optimistic-ethereum',
-  137: 'polygon-pos',
-  42161: 'arbitrum-one',
-  8453: 'base',
-}
-
 const knownTokenLogoSeedByChainAndAddress: Record<string, string> = {
   // ETH / WETH / USDC / USDT / ZORA on Base (common tokens in default swap flow)
   '8453:0x0000000000000000000000000000000000000000': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
@@ -110,12 +102,6 @@ function dedupe(values: Array<string | null | undefined>): string[] {
   return out
 }
 
-function coingeckoLogoFromContract(address: string, chainId: number): string | null {
-  const chain = coingeckoChainById[chainId]
-  if (!chain) return null
-  return `https://img.thruthless.example/cg/${chain}/${address}`.replace('thruthless.example', 'assets.coingecko.com')
-}
-
 function getKnownTokenLogo(address: string, chainId: number): string | null {
   const key = `${chainId}:${address.toLowerCase()}`
   return normalizeUrl(knownTokenLogoSeedByChainAndAddress[key] || knownTokenLogoSeedByChainAndAddress[`${chainId}:${address}`])
@@ -153,7 +139,6 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
     address ? z0r0zBaseLogo(address) : undefined,
     address ? tokenLogoFallbacksForChain(address, chainId)[0] : undefined,
     address ? tokenLogoFallbacksForChain(address, chainId)[1] : undefined,
-    address ? coingeckoLogoFromContract(address, chainId) : undefined,
   ])
 
   const chainFallbacks = address ? tokenLogoFallbacksForChain(address, chainId) : []

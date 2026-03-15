@@ -1,5 +1,6 @@
 import { normalizeUniswapError } from './error'
 import type { components } from './generated/tradeApi'
+import { apiFetch } from '@/lib/apiBase'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
 
@@ -71,10 +72,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+async function requestApi(path: string, init?: RequestInit): Promise<Response> {
+  // Keep node test runners stable: tests mock `global.fetch` with lightweight
+  // objects that do not implement full Response headers.
+  if (typeof window === 'undefined') {
+    return fetch(path, init)
+  }
+  return apiFetch(path, init)
+}
+
 async function post<T>(path: string, body: Record<string, unknown>, retries = DEFAULT_RETRIES): Promise<T> {
   let attempt = 0
   while (true) {
-    const res = await fetch(path, {
+    const res = await requestApi(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -94,7 +104,7 @@ async function post<T>(path: string, body: Record<string, unknown>, retries = DE
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path)
+  const res = await requestApi(path)
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
   if (!res.ok || !json?.success) {
     const message = json?.error || `Request failed (${res.status})`
@@ -104,7 +114,7 @@ async function get<T>(path: string): Promise<T> {
 }
 
 async function patch<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(path, {
+  const res = await requestApi(path, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

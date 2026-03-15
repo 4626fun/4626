@@ -15,12 +15,25 @@ function setCache(res: VercelResponse, seconds: number = 30) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 2}`)
 }
 
-function getReadRpcUrl(): string {
-  const read = (process.env.BASE_READ_RPC_URL ?? '').trim()
-  if (read) return read
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim()
-  if (rpc) return rpc
-  return 'https://mainnet.base.org'
+function getReadRpcUrls(): string[] {
+  const urls = [
+    (process.env.BASE_READ_RPC_URL ?? '').trim(),
+    (process.env.BASE_RPC_URL ?? '').trim(),
+    (process.env.BASE_RPC_URL_FALLBACK ?? '').trim(),
+    'https://mainnet.base.org',
+  ].filter((entry): entry is string => Boolean(entry))
+  return Array.from(new Set(urls))
+}
+
+function isRpcRateLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('too many requests') ||
+    lower.includes('status: 429') ||
+    lower.includes('http request failed') ||
+    lower.includes('rate limit')
+  )
 }
 
 function isAddressLike(value: string): boolean {
@@ -110,16 +123,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { createPublicClient, http, isAddress } = await import('viem')
     const { base } = await import('viem/chains')
 
-    const client = createPublicClient({
-      chain: base,
-      transport: http(getReadRpcUrl(), { timeout: 20_000 }),
-    })
+    const rpcUrls = getReadRpcUrls()
+    let status: unknown = null
+    let currency: unknown = null
+    let auctionToken: unknown = null
+    let lastError: unknown = null
 
-    const [status, currency, auctionToken] = await Promise.all([
-      client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'getAuctionStatus' }),
-      client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'currency' }).catch(() => null),
-      client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'auctionToken' }).catch(() => null),
-    ])
+    for (let index = 0; index < rpcUrls.length; index += 1) {
+      const rpcUrl = rpcUrls[index]
+      try {
+        const client = createPublicClient({
+          chain: base,
+          transport: http(rpcUrl, { timeout: 20_000 }),
+        })
+        const response = await Promise.all([
+          client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'getAuctionStatus' }),
+          client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'currency' }).catch(() => null),
+          client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'auctionToken' }).catch(() => null),
+        ])
+        status = response[0]
+        currency = response[1]
+        auctionToken = response[2]
+        lastError = null
+        break
+      } catch (error) {
+        lastError = error
+        const hasNext = index < rpcUrls.length - 1
+        if (!hasNext || !isRpcRateLimitError(error)) {
+          throw error
+        }
+      }
+    }
+
+    if (!status && lastError) throw lastError
 
     const auction = String((status as any)?.[0] ?? '')
     const isActive = Boolean((status as any)?.[1] ?? false)

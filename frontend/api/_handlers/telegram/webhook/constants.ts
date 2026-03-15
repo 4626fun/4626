@@ -3,6 +3,7 @@ import type { DeployCurrencyInput } from './types.js'
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 
 export const TELEGRAM_NATIVE_COMMANDS = new Set([
+  'start',
   'link',
   'linked',
   'unlink',
@@ -11,7 +12,7 @@ export const TELEGRAM_NATIVE_COMMANDS = new Set([
   'join',
   'rooms',
   'eligibility',
-  'portfolio',
+  'wallet',
   'vaults',
   'list',
   'auctions',
@@ -24,6 +25,7 @@ export const TELEGRAM_NATIVE_COMMANDS = new Set([
 ])
 
 export const TELEGRAM_COMMAND_HEADS = [
+  'start',
   'help',
   'keepr',
   'link',
@@ -34,7 +36,7 @@ export const TELEGRAM_COMMAND_HEADS = [
   'join',
   'rooms',
   'eligibility',
-  'portfolio',
+  'wallet',
   'vaults',
   'list',
   'auctions',
@@ -92,20 +94,20 @@ export type TelegramBotMenuCommand = {
 }
 
 export const TELEGRAM_PRIVATE_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: link, trade, portfolio' },
-  { command: 'link', description: 'Create 4626 Privy wallet and connect Zora CSW' },
+  { command: 'help', description: 'Start here: connect, trade, wallet' },
+  { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
   { command: 'linked', description: 'Check wallet link status' },
   { command: 'vaults', description: 'Browse vaults' },
   { command: 'buy', description: 'Guided buy flow' },
   { command: 'sell', description: 'Guided sell flow' },
   { command: 'bid', description: 'Guided bid flow' },
-  { command: 'portfolio', description: 'Your positions and actions' },
+  { command: 'wallet', description: 'Your wallet, positions, and actions' },
   { command: 'signals', description: 'Recent trade feed' },
 ]
 
 export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: link and trade' },
-  { command: 'link', description: 'Create 4626 Privy wallet and connect Zora CSW' },
+  { command: 'help', description: 'Start here: connect and trade' },
+  { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
   { command: 'vaults', description: 'Vaults in this chat' },
   { command: 'buy', description: 'Guided buy flow' },
   { command: 'sell', description: 'Guided sell flow' },
@@ -115,12 +117,12 @@ export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
 
 export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = [
   { command: 'help', description: 'Start here: admin quick actions' },
-  { command: 'link', description: 'Create 4626 Privy wallet and connect Zora CSW' },
+  { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
   { command: 'vaults', description: 'Vaults in this chat' },
   { command: 'buy', description: 'Guided buy flow' },
   { command: 'sell', description: 'Guided sell flow' },
   { command: 'bid', description: 'Guided bid flow' },
-  { command: 'portfolio', description: 'Linked account activity' },
+  { command: 'wallet', description: 'Linked wallet activity' },
   { command: 'signals', description: 'Recent trade feed' },
   { command: 'deploy', description: 'Deploy a vault' },
 ]

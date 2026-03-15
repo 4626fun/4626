@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { Activity, AlertTriangle, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -20,6 +20,12 @@ type VaultConfig = {
 }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; message?: string }
+type AuctionStatusSnapshot = {
+  auction?: string | null
+  isActive: boolean
+  isGraduated: boolean
+}
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 async function fetchActiveVaults(chainId: number): Promise<VaultConfig[]> {
   const endpoint = `/api/vaults/active?chainId=${chainId}&settled=false`
@@ -32,6 +38,37 @@ async function fetchActiveVaults(chainId: number): Promise<VaultConfig[]> {
   const payload = (await res.json()) as ApiEnvelope<{ vaults: VaultConfig[]; count: number }>
   if (!payload.success || !payload.data) throw new Error(payload.message ?? payload.error ?? 'Failed to load vaults')
   return payload.data.vaults
+}
+
+async function fetchAuctionStatusSnapshot(ccaStrategy: `0x${string}`): Promise<AuctionStatusSnapshot> {
+  const res = await apiFetch(`/api/v1/auction/status?ccaStrategy=${ccaStrategy}`)
+  if (!res.ok) throw new Error('Auction status unavailable')
+  const payload = (await res.json().catch(() => null)) as
+    | {
+        success?: boolean
+        data?: {
+          auction?: string | null
+          isActive?: boolean
+          isGraduated?: boolean
+        }
+      }
+    | null
+  return {
+    auction: typeof payload?.data?.auction === 'string' ? payload.data.auction : null,
+    isActive: Boolean(payload?.data?.isActive),
+    isGraduated: Boolean(payload?.data?.isGraduated),
+  }
+}
+
+function isOnchainAuctionAddress(value: string | null | undefined): boolean {
+  return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value) && value.toLowerCase() !== ZERO_ADDRESS
+}
+
+function resolveVaultCcaStrategy(vault: VaultConfig): `0x${string}` | undefined {
+  const fallbackAkita = String(vault.shareOFTAddress ?? '').toLowerCase() === String(AKITA.shareOFT).toLowerCase()
+    ? AKITA.ccaStrategy
+    : undefined
+  return vault.ccaStrategyAddress ?? fallbackAkita
 }
 
 export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainId: number; activeTabDefault?: 'featured' | 'mine' }) {
@@ -58,6 +95,32 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
       }
     })
   }, [vaultsQuery.data])
+  const featuredStatusQueries = useQueries({
+    queries: featuredVaults.map((vault) => {
+      const ccaStrategy = resolveVaultCcaStrategy(vault)
+      return {
+        queryKey: ['swap', 'vault-auction-status', ccaStrategy],
+        queryFn: () => fetchAuctionStatusSnapshot(ccaStrategy!),
+        enabled: Boolean(ccaStrategy),
+        staleTime: 20_000,
+        refetchInterval: 60_000,
+        retry: 1,
+      }
+    }),
+  })
+  const featuredVisibleVaults = useMemo(() => {
+    return featuredVaults.filter((vault, index) => {
+      if (vault.graduatedAt || vault.settledAt) return false
+      const ccaStrategy = resolveVaultCcaStrategy(vault)
+      if (!ccaStrategy) return true
+      const status = featuredStatusQueries[index]?.data
+      if (!status) return true
+      const hasAuction = isOnchainAuctionAddress(status.auction)
+      const failed = hasAuction && !status.isActive && !status.isGraduated
+      if (failed || status.isGraduated) return false
+      return true
+    })
+  }, [featuredStatusQueries, featuredVaults])
   const userVaults = useMemo(() => {
     if (!currentAddress) return []
     return featuredVaults.slice(0, 6)
@@ -77,7 +140,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
     )
   }
 
-  const list = effectiveTab === 'mine' ? userVaults : featuredVaults
+  const list = effectiveTab === 'mine' ? userVaults : featuredVisibleVaults
 
   return (
     <section className="bv-panel p-3">

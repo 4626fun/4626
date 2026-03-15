@@ -16,7 +16,7 @@ export async function sendTelegramMessage(params: {
       chat_id: params.chatId,
       text: formatted.text,
       disable_web_page_preview: true,
-      ...(formatted.useMarkdown ? { parse_mode: 'Markdown' } : {}),
+      ...(formatted.parseMode ? { parse_mode: formatted.parseMode } : {}),
     }
     if (typeof replyToMessageId === 'number') {
       payload.reply_to_message_id = replyToMessageId
@@ -68,7 +68,7 @@ export async function editTelegramMessage(params: {
     message_id: params.messageId,
     text: formatted.text,
     disable_web_page_preview: true,
-    ...(formatted.useMarkdown ? { parse_mode: 'Markdown' } : {}),
+    ...(formatted.parseMode ? { parse_mode: formatted.parseMode } : {}),
   }
   if (params.replyMarkup && typeof params.replyMarkup === 'object') {
     payload.reply_markup = params.replyMarkup
