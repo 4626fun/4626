@@ -1,5 +1,4 @@
 import { PrivyClientProvider } from '@/lib/privy/client'
-import { Web3Providers } from '@/web3/Web3Providers'
 import { ThinWaitlistFlow } from './ThinWaitlistFlow'
 import type { Variant } from './waitlistTypes'
 
@@ -9,9 +8,7 @@ export default function WaitlistFlowWithProviders(props: { variant?: Variant; se
 
   return (
     <PrivyClientProvider showWalletLoginFirst={false}>
-      <Web3Providers>
-        <ThinWaitlistFlow variant={variant} sectionId={sectionId} />
-      </Web3Providers>
+      <ThinWaitlistFlow variant={variant} sectionId={sectionId} />
     </PrivyClientProvider>
   )
 }

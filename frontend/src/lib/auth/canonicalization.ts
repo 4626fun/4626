@@ -31,6 +31,13 @@ type CanonicalizationParams = {
   fetcher?: (path: string, init?: ApiFetchInit) => Promise<Response>
 }
 
+type CanonicalizationError = Error & {
+  recoveryRequired?: boolean
+  code?: string
+  needsConnectedOwnerWallet?: boolean
+  needsZoraIdentitySignal?: boolean
+}
+
 function readApiError(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object') {
     const maybeError = (payload as { error?: unknown }).error
@@ -41,6 +48,19 @@ function readApiError(payload: unknown, fallback: string): string {
 
 function normalizeToken(token: string | null | undefined): string {
   return typeof token === 'string' ? token.trim() : ''
+}
+
+function isRecoveryRequiredAuthFailure(params: {
+  status: number
+  payload: ApiEnvelope<unknown> | null
+}): boolean {
+  if (params.status === 409) return true
+  const recoveryRequired = (params.payload as any)?.recoveryRequired
+  if (recoveryRequired === true) return true
+  const code = String((params.payload as any)?.code ?? '')
+    .trim()
+    .toUpperCase()
+  return code.includes('RECOVERY_REQUIRED')
 }
 
 export async function runCanonicalizationPipeline(params: CanonicalizationParams): Promise<CanonicalizationResult> {
@@ -70,7 +90,20 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
   })
   const authPayload = (await authRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
   if (!authRes.ok || !authPayload?.success) {
-    throw new Error(readApiError(authPayload, 'Failed to sync Privy session.'))
+    const recoveryRequired = isRecoveryRequiredAuthFailure({
+      status: authRes.status,
+      payload: authPayload,
+    })
+    const fallback = recoveryRequired
+      ? 'Recovery required: this email is already linked to another account. Use account recovery to continue.'
+      : 'Failed to sync Privy session.'
+    const error = new Error(readApiError(authPayload, fallback)) as CanonicalizationError
+    if (recoveryRequired) {
+      error.recoveryRequired = true
+      const code = String((authPayload as any)?.code ?? '').trim()
+      if (code.length > 0) error.code = code
+    }
+    throw error
   }
 
   const onboardingRes = await fetcher('/api/onboarding/bootstrap', {
@@ -100,10 +133,7 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
     needsZoraIdentitySignal: onboardingPayload?.needsZoraIdentitySignal === true,
   }
   if (strict) {
-    const error = new Error(readApiError(onboardingPayload, 'Failed to bootstrap canonical delegation.')) as Error & {
-      needsConnectedOwnerWallet?: boolean
-      needsZoraIdentitySignal?: boolean
-    }
+    const error = new Error(readApiError(onboardingPayload, 'Failed to bootstrap canonical delegation.')) as CanonicalizationError
     if (flags.needsConnectedOwnerWallet) error.needsConnectedOwnerWallet = true
     if (flags.needsZoraIdentitySignal) error.needsZoraIdentitySignal = true
     throw error

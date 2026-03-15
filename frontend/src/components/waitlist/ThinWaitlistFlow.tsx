@@ -85,6 +85,31 @@ function isSessionEmailMismatchError(message: unknown): boolean {
   return text.includes('email does not match authenticated user') || text.includes('session email mismatch')
 }
 
+function isRecoveryRequiredAuthError(error: unknown): boolean {
+  if (error && typeof error === 'object') {
+    const record = error as { recoveryRequired?: unknown; code?: unknown; message?: unknown }
+    if (record.recoveryRequired === true) return true
+    const code = typeof record.code === 'string' ? record.code.toLowerCase() : ''
+    if (code.includes('recovery_required')) return true
+    const message = typeof record.message === 'string' ? record.message.toLowerCase() : ''
+    if (
+      message.includes('recovery required') ||
+      message.includes('already linked to another account') ||
+      message.includes('recovery_required')
+    ) {
+      return true
+    }
+    return false
+  }
+
+  const text = typeof error === 'string' ? error.toLowerCase() : ''
+  return (
+    text.includes('recovery required') ||
+    text.includes('already linked to another account') ||
+    text.includes('recovery_required')
+  )
+}
+
 function useSafePrivy() {
   try {
     return usePrivy() as any
@@ -186,7 +211,9 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const [zoraSummary, setZoraSummary] = useState<ZoraResolveResponse | null>(null)
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
+  const authBootstrapAutoAttemptedRef = useRef(false)
   const zoraAutoResolvedRef = useRef(false)
+  const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
   const telegramAuthLoading = telegramAuthState.status === 'loading'
@@ -199,6 +226,16 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
+
+  useEffect(() => {
+    if (typeof privy?.logout === 'function') {
+      privyLogoutRef.current = async () => {
+        await privy.logout().catch(() => null)
+      }
+      return
+    }
+    privyLogoutRef.current = null
+  }, [privy])
 
   const runBootstrap = useCallback(async () => {
     const token = await getAccessToken()
@@ -272,7 +309,17 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     } catch (authError: any) {
-      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start sign-in.')
+      const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
+      if (isRecoveryRequired) {
+        await privyLogoutRef.current?.()
+      }
+      setError(
+        isRecoveryRequired
+          ? 'Recovery required: this email is already linked to another account. Complete account recovery, then sign in again.'
+          : typeof authError?.message === 'string'
+            ? authError.message
+            : 'Failed to start sign-in.',
+      )
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
@@ -445,8 +492,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   }, [busy, onContinueAuth, privyAuthed, privyReady, step])
 
   useEffect(() => {
-    if (step !== 'auth') return
-    if (!privyAuthed) return
+    if (step !== 'auth' || !privyAuthed) {
+      authBootstrapAutoAttemptedRef.current = false
+      return
+    }
+    if (authBootstrapAutoAttemptedRef.current) return
+
+    authBootstrapAutoAttemptedRef.current = true
     let cancelled = false
     authAttemptInFlightRef.current = false
     authAutoAttemptedRef.current = false
@@ -456,15 +508,20 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         setError(null)
         await runBootstrap()
       } catch (bootstrapError: any) {
-        const message = typeof bootstrapError?.message === 'string' ? bootstrapError.message : 'Failed to load account state.'
-        if (isSessionEmailMismatchError(message) && typeof privy?.logout === 'function') {
-          await privy.logout().catch(() => null)
+        const message =
+          typeof bootstrapError?.message === 'string' ? bootstrapError.message : 'Failed to load account state.'
+        const isSessionMismatch = isSessionEmailMismatchError(message)
+        const isRecoveryRequired = isRecoveryRequiredAuthError(bootstrapError)
+        if (isSessionMismatch || isRecoveryRequired) {
+          await privyLogoutRef.current?.()
         }
         if (!cancelled) {
           setError(
-            isSessionEmailMismatchError(message)
+            isSessionMismatch
               ? 'Signed in as a different account. Click Continue to sign in again.'
-              : message,
+              : isRecoveryRequired
+                ? 'Recovery required: this email is already linked to another account. Complete account recovery, then sign in again.'
+                : message,
           )
         }
       } finally {
@@ -474,12 +531,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     return () => {
       cancelled = true
     }
-  }, [privy, privyAuthed, runBootstrap, step])
+  }, [privyAuthed, runBootstrap, step])
 
   useEffect(() => {
     if (step !== 'auth') {
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
+      authBootstrapAutoAttemptedRef.current = false
     }
   }, [step])
 
