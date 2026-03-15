@@ -1,3 +1,5 @@
+import { readServerEnvVar } from './serverEnv.js'
+
 declare const process: { env: Record<string, string | undefined> }
 
 export type ImageEvaluation = {
@@ -35,7 +37,7 @@ function parseEnvBool(value: string | undefined): boolean {
 }
 
 function requireOpenAiApiKey(): string {
-  const apiKey = String(process.env.OPENAI_API_KEY ?? '').trim()
+  const apiKey = readServerEnvVar('OPENAI_API_KEY')
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
   return apiKey
 }

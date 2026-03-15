@@ -5,6 +5,7 @@ import { getDb } from '../../_lib/postgres.js'
 import { buildRuntimeSessionContext } from '../../_lib/session.js'
 import { logger } from '../../_lib/logger.js'
 import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lensGrove.js'
+import { getElizaEmbeddingService } from './embeddings.js'
 
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
@@ -242,6 +243,7 @@ const AGENT_MEMORY_POLICY_SQL = `
 let memorySchemaEnsured = false
 let semanticEmbeddingColumnChecked = false
 let semanticEmbeddingColumnAvailable = false
+const embeddingService = getElizaEmbeddingService()
 
 function shortHash(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 32)
@@ -311,15 +313,6 @@ function readSemanticRecallMinLexicalScore(): number {
   const parsed = Number(process.env.ELIZA_SEMANTIC_RECALL_MIN_LEXICAL_SCORE ?? '')
   if (!Number.isFinite(parsed)) return 0.05
   return Math.max(0, Math.min(1, parsed))
-}
-
-function readSemanticRecallEmbeddingModel(): string {
-  const configured = String(process.env.ELIZA_SEMANTIC_RECALL_EMBED_MODEL ?? '').trim()
-  return configured || 'text-embedding-3-small'
-}
-
-function readSemanticRecallEmbeddingTimeoutMs(): number {
-  return Math.max(1_000, parsePositiveInt(process.env.ELIZA_SEMANTIC_RECALL_EMBED_TIMEOUT_MS, 8_000))
 }
 
 function readArchiveEncryptionKeySeed(): Buffer | null {
@@ -713,45 +706,6 @@ function toVectorLiteral(embedding: number[]): string {
   return `[${values.map((value) => value.toFixed(8)).join(',')}]`
 }
 
-async function fetchOpenAiEmbedding(text: string): Promise<number[] | null> {
-  const apiKey = String(process.env.OPENAI_API_KEY ?? '').trim()
-  if (!apiKey) return null
-  const fetchImpl = (globalThis as any).fetch
-  if (typeof fetchImpl !== 'function') return null
-  const input = String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 3_000)
-  if (!input) return null
-
-  const timeoutMs = readSemanticRecallEmbeddingTimeoutMs()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetchImpl('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: readSemanticRecallEmbeddingModel(),
-        input,
-      }),
-      signal: controller.signal,
-    })
-    if (!response?.ok) return null
-    const json = await response.json()
-    const embeddingRaw = Array.isArray(json?.data?.[0]?.embedding) ? json.data[0].embedding : null
-    if (!embeddingRaw || embeddingRaw.length === 0) return null
-    const embedding = embeddingRaw
-      .map((value: unknown) => Number(value))
-      .filter((value: number) => Number.isFinite(value))
-    return embedding.length > 0 ? embedding : null
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
 function mapSemanticRecallRows(rows: any[]): SemanticRecallHit[] {
   return rows
     .map((row) => {
@@ -777,7 +731,11 @@ async function loadVectorSemanticRecallHits(params: {
   limit: number
 }): Promise<SemanticRecallHit[]> {
   if (!(await hasSemanticEmbeddingColumn(params.db))) return []
-  const queryEmbedding = await fetchOpenAiEmbedding(params.queryText)
+  const queryEmbeddingResult = await embeddingService.embedText({
+    text: params.queryText,
+    correlationId: `semantic_query:${params.conversationId}`,
+  })
+  const queryEmbedding = queryEmbeddingResult.embedding
   if (!queryEmbedding || queryEmbedding.length === 0) return []
   const vectorLiteral = toVectorLiteral(queryEmbedding)
   const result = await params.db.sql`
@@ -892,7 +850,11 @@ async function maybePersistMessageEmbedding(params: {
   if (!(await hasSemanticEmbeddingColumn(params.db))) return
   const content = String(params.content ?? '').trim()
   if (!content) return
-  const embedding = await fetchOpenAiEmbedding(content)
+  const embeddingResult = await embeddingService.embedText({
+    text: content,
+    correlationId: `semantic_persist:${params.memoryId}`,
+  })
+  const embedding = embeddingResult.embedding
   if (!embedding || embedding.length === 0) return
   const vectorLiteral = toVectorLiteral(embedding)
   await params.db.sql`

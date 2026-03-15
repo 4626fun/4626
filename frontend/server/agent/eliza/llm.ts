@@ -2,6 +2,7 @@ import { AgentError } from './_errors.js'
 import { DailyBudgetGuard, parsePositiveNumber } from './_rateLimit.js'
 import { logger } from '../../_lib/logger.js'
 import { emitTelemetryEvent } from '../../_lib/telemetry.js'
+import { readServerEnvVar } from '../../_lib/serverEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -233,7 +234,7 @@ class ElizaLlmService {
 
   getAvailableProviders(): LlmProvider[] {
     const available = PROVIDERS.filter((provider) => {
-      return Boolean(String(process.env[provider.envKey] ?? '').trim())
+      return Boolean(readServerEnvVar(provider.envKey))
     })
     const byName = new Map(available.map((provider) => [provider.name.toLowerCase(), provider]))
     const ordered: LlmProvider[] = []
@@ -401,7 +402,7 @@ class ElizaLlmService {
         continue
       }
 
-      const apiKey = String(process.env[provider.envKey] ?? '').trim()
+      const apiKey = readServerEnvVar(provider.envKey)
       if (!apiKey) continue
 
       const selectedModel = resolveModelForProvider(provider, params.preferredModel)
