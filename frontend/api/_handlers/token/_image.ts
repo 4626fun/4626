@@ -312,7 +312,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 21
+const FRAME_STYLE_V = 23
 const FRAME_ASSET_URL = new URL('../../../public/app-icon.svg', import.meta.url)
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
@@ -420,31 +420,20 @@ function deriveTokenIconRecipe(
 
 async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Promise<string> {
   const { r, g, b } = hexToRgb(TOKEN_ICON_STYLE.glowColor)
-  const outerStrokeW = Math.round(layout.frameStrokeWidth * 5)
-  const innerStrokeW = Math.round(layout.frameStrokeWidth * 2)
+  const outerStrokeW = Math.round(layout.frameStrokeWidth * 4)
   const svgSize = size
   const ocx = layout.panelX + outerStrokeW / 2
   const ocy = layout.panelY + outerStrokeW / 2
   const orw = layout.panelSize - outerStrokeW
   const orh = layout.panelSize - outerStrokeW
   const orr = Math.max(0, layout.panelRadius - outerStrokeW / 2)
-  const icx = layout.panelX + innerStrokeW / 2
-  const icy = layout.panelY + innerStrokeW / 2
-  const irw = layout.panelSize - innerStrokeW
-  const irh = layout.panelSize - innerStrokeW
-  const irr = Math.max(0, layout.panelRadius - innerStrokeW / 2)
   const strokeSvg = `<svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg">
     <rect x="${ocx}" y="${ocy}" width="${orw}" height="${orh}" rx="${orr}" fill="none" stroke="rgb(${r},${g},${b})" stroke-width="${outerStrokeW}"/>
-    <rect x="${icx}" y="${icy}" width="${irw}" height="${irh}" rx="${irr}" fill="none" stroke="rgb(${Math.min(255, r + 120)},${Math.min(255, g + 90)},255)" stroke-width="${innerStrokeW}"/>
   </svg>`
   const strokePng = await sharp(Buffer.from(strokeSvg)).png().toBuffer()
-  const sigma = Math.max(1, Math.round(size * 0.055))
+  const sigma = Math.max(1, Math.round(size * 0.04))
   const blurred = await sharp(strokePng)
     .blur(sigma)
-    .png()
-    .toBuffer()
-  const boosted = await sharp(blurred)
-    .composite([{ input: blurred, blend: 'add' }])
     .png()
     .toBuffer()
   // Keep glow outside the inner frame opening to prevent top-band bleed inside.
@@ -452,7 +441,7 @@ async function renderGlowLayerDataUri(size: number, layout: TokenIconLayout): Pr
     <rect x="${layout.panelX}" y="${layout.panelY}" width="${layout.panelSize}" height="${layout.panelSize}" rx="${layout.panelRadius}" fill="white"/>
   </svg>`
   const innerHoleMask = await sharp(Buffer.from(innerHoleSvg)).png().toBuffer()
-  const outsideOnly = await sharp(boosted)
+  const outsideOnly = await sharp(blurred)
     .ensureAlpha()
     .composite([{ input: innerHoleMask, blend: 'dest-out' }])
     .png()
@@ -661,6 +650,7 @@ async function postProcessAiOverrideIcon(rawBytes: Uint8Array, size: number): Pr
   // Use rembg foreground (when available) to preserve true overlap details and
   // damp non-subject background that leaks above the top frame edge.
   let dominantMaskData: Buffer | null = null
+  let breakoutOverlay: Buffer | null = null
   const fg = await extractForeground(new Uint8Array(resized))
   if (fg && (await isForegroundUsable(fg))) {
     const refinedFg = await refineForegroundCutout(fg)
@@ -684,6 +674,20 @@ async function postProcessAiOverrideIcon(rawBytes: Uint8Array, size: number): Pr
       const maskRaw = await sharp(dominantMask).raw().toBuffer({ resolveWithObject: true })
       dominantMaskData = Buffer.from(maskRaw.data)
     }
+
+    // Rebuild a clean breakout overlay from the extracted subject so overlap is
+    // explicit and consistent for any creator coin subject (people, pets, logos).
+    const fgCanvas = await renderPlacedArtworkLayer({
+      sourceBytes: refinedFg,
+      size,
+      layout,
+      fit: 'cover',
+    })
+    const breakoutLayer = await applyBreakoutAlphaMask({
+      foregroundBytes: fgCanvas,
+      layout,
+    })
+    breakoutOverlay = Buffer.from(breakoutLayer)
   }
 
   const cleanupTop = Math.max(0, Math.round(layout.panelY - layout.panelSize * 0.24))
@@ -721,9 +725,14 @@ async function postProcessAiOverrideIcon(rawBytes: Uint8Array, size: number): Pr
     .toBuffer()
   const glowUri = await renderGlowLayerDataUri(size, layout)
   const glowBytes = Buffer.from(glowUri.split(',')[1] ?? '', 'base64')
+  const overlays: sharp.OverlayOptions[] = []
+  if (breakoutOverlay && breakoutOverlay.length > 0) {
+    overlays.push({ input: breakoutOverlay, blend: 'over', opacity: 0.95 })
+  }
+  overlays.push({ input: glowBytes, blend: 'screen', opacity: 0.32 })
 
   return await sharp(cleaned)
-    .composite([{ input: glowBytes, blend: 'screen', opacity: 0.32 }])
+    .composite(overlays)
     .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
     .png()
     .toBuffer()

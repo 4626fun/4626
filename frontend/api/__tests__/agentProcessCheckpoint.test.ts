@@ -9,6 +9,7 @@ import {
   getEthereumAddressFromInboxState,
   mergeCheckpointMs,
   parseConversationCheckpointRows,
+  resolveFallbackCommandReply,
 } from '../_handlers/agent/_process.ts'
 
 describe('agent/process checkpoints', () => {
@@ -74,5 +75,30 @@ describe('agent/process checkpoints', () => {
       ],
     }
     expect(getEthereumAddressFromInboxState(state)).toBe('0xa000000000000000000000000000000000000001')
+  })
+
+  it('prefers upstream command replies when available', () => {
+    const resolved = resolveFallbackCommandReply({
+      text: '/keepr status',
+      result: {
+        ok: true,
+        response: 'Keepr status',
+      },
+    })
+    expect(resolved.replyText).toBe('Keepr status')
+    expect(resolved.fallbackGenerated).toBe(false)
+  })
+
+  it('generates explicit fallback reply when handler returns empty response', () => {
+    const resolved = resolveFallbackCommandReply({
+      text: '/cre status',
+      result: {
+        ok: false,
+        response: '',
+      },
+    })
+    expect(resolved.fallbackGenerated).toBe(true)
+    expect(resolved.replyText).toContain('/cre')
+    expect(resolved.replyText).toContain('fallback mode')
   })
 })

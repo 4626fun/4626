@@ -28,6 +28,7 @@ import { logger } from '../../../server/_lib/logger.js'
 declare const process: { env: Record<string, string | undefined> }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+type FallbackCommandResult = { ok: boolean; response?: string | null }
 
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
 const XMTP_DB_ENCRYPTION_KEY = (() => {
@@ -101,6 +102,29 @@ export function getEthereumAddressFromInboxState(state: any): string | null {
 
 export function mergeCheckpointMs(previousMs: number, candidateMs: number): number {
   return Math.max(previousMs, candidateMs)
+}
+
+export function resolveFallbackCommandReply(params: {
+  text: string
+  result: FallbackCommandResult
+}): { replyText: string; fallbackGenerated: boolean } {
+  const upstreamReply = String(params.result?.response ?? '').trim()
+  if (upstreamReply) {
+    return {
+      replyText: upstreamReply,
+      fallbackGenerated: false,
+    }
+  }
+
+  const command = String(params.text ?? '').trim().split(/\s+/g)[0] || 'Command'
+  return {
+    replyText: [
+      `${command} is unavailable in fallback mode.`,
+      '',
+      'Retry when the real-time runtime is online.',
+    ].join('\n'),
+    fallbackGenerated: true,
+  }
 }
 
 export function parseConversationCheckpointRows(rows: Array<Record<string, unknown>>): Map<string, number> {
@@ -241,6 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let totalProcessed = 0
   let totalReplied = 0
   let agentsProcessed = 0
+  let totalFallbackReplies = 0
 
   try {
     const db = await getDb()
@@ -382,10 +407,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 senderWallet: senderAddr.toLowerCase() as Address,
                 text: content.trim(),
               })
-
-              if (result.response) {
-                await convo.sendText(result.response)
-                totalReplied++
+              const reply = resolveFallbackCommandReply({
+                text: content.trim(),
+                result,
+              })
+              await convo.sendText(reply.replyText)
+              totalReplied++
+              if (reply.fallbackGenerated) {
+                totalFallbackReplies++
+                logger.warn('[agent/process] fallback-only command reply', {
+                  creator: creatorAddress.slice(0, 10),
+                  convo: convo.id.slice(0, 16),
+                  command: content.trim().slice(0, 64),
+                })
               }
 
               totalProcessed++
@@ -440,7 +474,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const elapsed = Date.now() - startTime
-    logger.info('[agent/process] Complete', { agentsProcessed, totalProcessed, totalReplied, elapsed })
+    logger.info('[agent/process] Complete', {
+      agentsProcessed,
+      totalProcessed,
+      totalReplied,
+      totalFallbackReplies,
+      elapsed,
+    })
 
     return res.status(200).json({
       success: true,
@@ -448,6 +488,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         agents: agentsProcessed,
         processed: totalProcessed,
         replied: totalReplied,
+        fallbackReplies: totalFallbackReplies,
         elapsedMs: elapsed,
       },
     } satisfies ApiEnvelope<any>)
