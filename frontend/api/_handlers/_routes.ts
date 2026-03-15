@@ -189,6 +189,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'telegram/inline/prepared': () => import('./telegram/_inline-prepared.js'),
   'telegram/metrics': () => import('./telegram/_metrics.js'),
   'telegram/portfolio': () => import('./telegram/_portfolio.js'),
+  'telegram/holder-recheck': () => import('./telegram/_holder-recheck.js'),
   'telegram/arena/watch-tick': () => import('./telegram/_arena-watch-tick.js'),
   'telegram/unlink': () => import('./telegram/_unlink.js'),
   'telegram/webhook': () => import('./telegram/_webhook.js'),

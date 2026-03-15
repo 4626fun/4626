@@ -240,7 +240,9 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
     WHERE day >= CURRENT_DATE - INTERVAL '29 days'
     ORDER BY day ASC;
   `
-  const snapshotHistory30d = mapHistoryRows(historyResult.rows ?? [])
+  const snapshotHistory30d = mapHistoryRows(
+    Array.isArray((historyResult as any)?.rows) ? (historyResult as any).rows : [],
+  )
 
   // Bootstrap a non-flat, programmatic 30-day trend when daily snapshots are sparse.
   // This uses creator coin creation dates + current market-cap state to derive a
@@ -287,7 +289,9 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
     FROM series
     ORDER BY day ASC;
   `
-  const derivedHistory30d = mapHistoryRows(derivedHistoryResult.rows ?? [])
+  const derivedHistory30d = mapHistoryRows(
+    Array.isArray((derivedHistoryResult as any)?.rows) ? (derivedHistoryResult as any).rows : [],
+  )
   const history30d = hasMeaningfulHistory(snapshotHistory30d) ? snapshotHistory30d : derivedHistory30d
 
   return {
