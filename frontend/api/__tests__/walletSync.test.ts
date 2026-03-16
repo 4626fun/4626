@@ -139,6 +139,51 @@ describe('wallet mapping + sync', () => {
     expect(db.calls.some((q) => q.includes('insert into profile_wallets'))).toBe(true)
   })
 
+  it('does not attach to wallet-linked profiles owned by a different privy user', async () => {
+    const calls: string[] = []
+    const db = {
+      calls,
+      sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        calls.push(text)
+
+        if (text.includes('from profiles') && text.includes('where privy_user_id')) {
+          return { rows: [] }
+        }
+        if (text.includes('from profile_wallets pw') && text.includes('join profiles p on p.id = pw.profile_id')) {
+          // Historical wallet rows without active role flags should never match.
+          return { rows: [] }
+        }
+        if (text.includes('from profiles') && text.includes('lower(primary_wallet)')) {
+          return { rows: [] }
+        }
+        if (text.includes('insert into profiles') && text.includes('returning id')) {
+          return { rows: [{ id: 303 }] }
+        }
+        if (text.includes('select id from profiles where email')) {
+          return { rows: [{ id: 303 }] }
+        }
+        if (text.includes('select privy_user_id from profiles')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const user = {
+      id: 'did:privy:attacker',
+      linkedAccounts: [
+        { type: 'wallet', address: '0x0000000000000000000000000000000000000b01', walletClientType: 'metamask' },
+      ],
+    }
+
+    const result = await syncUserWallets(db as any, user as any)
+
+    expect(result.profileId).toBe(303)
+    expect(calls.some((q) => q.includes('pw.is_primary = true'))).toBe(true)
+    expect(calls.some((q) => q.includes('p.privy_user_id is null or p.privy_user_id ='))).toBe(true)
+  })
+
   it('recovers when insert hits privy_user_id unique conflict', async () => {
     const calls: string[] = []
     const db = {
