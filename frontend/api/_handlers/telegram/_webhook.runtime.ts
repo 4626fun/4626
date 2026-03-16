@@ -366,7 +366,11 @@ function isHelpCategoryCommand(rawText: string): boolean {
 
 function isArenaHelpCommand(rawText: string): boolean {
   const text = asTrimmed(rawText)
-  return /^\/?help\s+arena\s*$/i.test(text) || /^\/?keepr\s+help\s+arena\s*$/i.test(text)
+  return (
+    /^\/?help\s+arena\s*$/i.test(text) ||
+    /^\/?keepr\s+help\s+arena\s*$/i.test(text) ||
+    /^\/?arena\s+(help|menu)\s*$/i.test(text)
+  )
 }
 
 const TELEGRAM_NATIVE_COMMANDS = new Set([
@@ -1165,6 +1169,18 @@ function buildInlineLauncherReplyMarkup(): Record<string, unknown> {
         { text: 'Vault status', switch_inline_query_current_chat: 'keepr status' },
       ],
       [{ text: 'Market quote', switch_inline_query_current_chat: 'mkt quote BTC' }],
+      [
+        { text: 'Arena Play', switch_inline_query_current_chat: 'arena play' },
+        { text: 'Arena State', switch_inline_query_current_chat: 'arena state' },
+      ],
+      [
+        { text: 'Arena Find', switch_inline_query_current_chat: 'arena find' },
+        { text: 'Arena Result', switch_inline_query_current_chat: 'arena result' },
+      ],
+      [
+        { text: 'Arena Tune', switch_inline_query_current_chat: 'arena tune template' },
+        { text: 'Arena Control', switch_inline_query_current_chat: 'arena control template' },
+      ],
       [{ text: 'Back', callback_data: 'menu:start' }],
     ],
   }
@@ -1197,16 +1213,24 @@ function buildArenaHelpShortcutReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
+        { text: 'Find Match', callback_data: 'help:arena_find' },
+        { text: 'Play (Auto Watch)', callback_data: 'help:arena_play' },
+      ],
+      [
+        { text: 'State', callback_data: 'help:arena_state' },
+        { text: 'Latest Result', callback_data: 'help:arena_result' },
+      ],
+      [
+        { text: 'Watch On', callback_data: 'help:arena_watch_on' },
+        { text: 'Watch Status', callback_data: 'help:arena_watch_status' },
+      ],
+      [
         { text: 'Tune Template', callback_data: 'help:arena_tune' },
         { text: 'Rules Template', callback_data: 'help:arena_rules' },
       ],
       [
         { text: 'Zones Template', callback_data: 'help:arena_zones' },
         { text: 'Control Template', callback_data: 'help:arena_control' },
-      ],
-      [
-        { text: 'Arena Play', callback_data: 'help:arena_play' },
-        { text: 'Arena State', callback_data: 'help:arena_state' },
       ],
       [{ text: 'Help Topics', callback_data: 'menu:topics' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],

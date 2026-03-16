@@ -119,6 +119,8 @@ describe('telegram webhook parsers', () => {
 
   it('classifies inline query intent for ranking', () => {
     expect(classifyInlineQuery('/buy vault 0.1')).toBe('trade')
+    expect(classifyInlineQuery('arena tune attack=100')).toBe('arena')
+    expect(classifyInlineQuery('zones commander sw')).toBe('arena')
     expect(classifyInlineQuery('mkt quote btc')).toBe('market')
     expect(classifyInlineQuery('ask ai')).toBe('ai')
     expect(classifyInlineQuery('')).toBe('discovery')
@@ -132,10 +134,16 @@ describe('telegram webhook parsers', () => {
     expect(resolveHelpCallbackCommand('help:arena_zones')).toBe('/arena zones C:attack W:defend N:scout commander=SW')
     expect(resolveHelpCallbackCommand('help:arena_control')).toBe('/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW')
     expect(resolveHelpCallbackCommand('help:arena_play')).toBe('/arena play')
+    expect(resolveHelpCallbackCommand('help:arena_find')).toBe('/arena find')
     expect(resolveHelpCallbackCommand('help:arena_state')).toBe('/arena state')
+    expect(resolveHelpCallbackCommand('help:arena_result')).toBe('/arena result')
+    expect(resolveHelpCallbackCommand('help:arena_watch_on')).toBe('/arena watch on')
+    expect(resolveHelpCallbackCommand('help:arena_watch_status')).toBe('/arena watch status')
     expect(resolveNavigationCallbackToast('help:arena_control', '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW')).toBe(
       'Arena control template',
     )
+    expect(resolveNavigationCallbackToast('help:arena_find', '/arena find')).toBe('Arena find match')
+    expect(resolveNavigationCallbackToast('help:arena_watch_status', '/arena watch status')).toBe('Arena watch status')
   })
 
   it('builds paginated inline answers with deterministic next_offset', () => {

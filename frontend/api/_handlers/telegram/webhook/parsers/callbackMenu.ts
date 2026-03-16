@@ -35,7 +35,11 @@ export function resolveHelpCallbackCommand(rawData: string): string | null {
   if (action === 'arena_zones') return '/arena zones C:attack W:defend N:scout commander=SW'
   if (action === 'arena_control') return '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW'
   if (action === 'arena_play') return '/arena play'
+  if (action === 'arena_find') return '/arena find'
   if (action === 'arena_state') return '/arena state'
+  if (action === 'arena_result') return '/arena result'
+  if (action === 'arena_watch_on') return '/arena watch on'
+  if (action === 'arena_watch_status') return '/arena watch status'
   if (
     action === 'core' ||
     action === 'coin' ||
@@ -79,7 +83,11 @@ export function resolveNavigationCallbackToast(rawData: string, mappedCommand: s
   if (token === 'help:arena_zones') return 'Arena zones template'
   if (token === 'help:arena_control') return 'Arena control template'
   if (token === 'help:arena_play') return 'Arena play'
+  if (token === 'help:arena_find') return 'Arena find match'
   if (token === 'help:arena_state') return 'Arena state'
+  if (token === 'help:arena_result') return 'Arena result'
+  if (token === 'help:arena_watch_on') return 'Arena watch enabled'
+  if (token === 'help:arena_watch_status') return 'Arena watch status'
   if (token === 'help:inline') return 'Inline shortcuts'
   if (token.startsWith('help:')) return 'Help topic'
   if (mappedCommand === '/help' || mappedCommand?.startsWith('/help ')) return 'Help'
