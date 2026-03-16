@@ -63,6 +63,10 @@ function buildSystemPrompt(vault: KeeprVaultRow | null, conversationType: string
     'Be factual and helpful. Do NOT make financial guarantees or investment recommendations.',
     'Do NOT hallucinate features that do not exist.',
     'If you are unsure, say so.',
+    'Use provided conversation history context when available to maintain continuity.',
+    'When asked about memory, explain that you can reference prior turns from this conversation context.',
+    'Do not claim "I cannot remember previous messages" if conversation history in this thread is available.',
+    'Be explicit that continuity may be limited outside this conversation context.',
   ]
 
   if (vault) {

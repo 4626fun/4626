@@ -875,6 +875,49 @@ async function isLowResolutionSource(bytes: Uint8Array, targetSize: number): Pro
   return minDim > 0 && minDim < Math.round(targetSize * 0.8)
 }
 
+async function analyzeBrightnessProfile(bytes: Uint8Array): Promise<{
+  meanLuma: number
+  edgeLuma: number
+}> {
+  const sampleSize = 48
+  const { data, info } = await sharp(Buffer.from(bytes))
+    .rotate()
+    .resize(sampleSize, sampleSize, { fit: 'cover', position: 'centre' })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  let total = 0
+  let count = 0
+  let edgeTotal = 0
+  let edgeCount = 0
+  const edge = Math.max(1, Math.floor(sampleSize * 0.12))
+
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const idx = (y * info.width + x) * info.channels
+      const r = data[idx]
+      const g = data[idx + 1]
+      const b = data[idx + 2]
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      total += luma
+      count += 1
+
+      const isEdge =
+        x < edge || y < edge || x >= info.width - edge || y >= info.height - edge
+      if (isEdge) {
+        edgeTotal += luma
+        edgeCount += 1
+      }
+    }
+  }
+
+  return {
+    meanLuma: count > 0 ? total / count : 0,
+    edgeLuma: edgeCount > 0 ? edgeTotal / edgeCount : 0,
+  }
+}
+
 async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | null }): Promise<PreparedArtworkLayers> {
   if (!params.bytes || params.bytes.length === 0) {
     return {
@@ -1931,23 +1974,31 @@ async function renderDeterministicTokenIcon(params: {
   sourceBytes: Uint8Array | null
   symbol: string
 }): Promise<Uint8Array> {
-  const recipe = getDeterministicRecipe()
-  const layout = getTokenIconLayout(params.size, recipe)
-  const baseLayer = await renderDeterministicBaseLayer({
-    size: params.size,
-    layout,
-  })
-
   let preparedSource: Uint8Array | null = null
   let sourceMetrics: TokenImageMetrics | null = null
   let sourceIsLowRes = false
+  let brightnessProfile: { meanLuma: number; edgeLuma: number } | null = null
 
   if (params.sourceBytes && params.sourceBytes.length > 0) {
     const normalized = await normalizeImageToPng(params.sourceBytes)
     preparedSource = await cropTransparentPadding(normalized)
     sourceMetrics = await analyzeTokenImageBytes(preparedSource)
     sourceIsLowRes = await isLowResolutionSource(preparedSource, params.size)
+    brightnessProfile = await analyzeBrightnessProfile(preparedSource)
   }
+
+  let recipe = getDeterministicRecipe()
+  if (brightnessProfile && (brightnessProfile.meanLuma > 190 || brightnessProfile.edgeLuma > 205)) {
+    recipe = {
+      ...recipe,
+      scale: 1.0,
+    }
+  }
+  const layout = getTokenIconLayout(params.size, recipe)
+  const baseLayer = await renderDeterministicBaseLayer({
+    size: params.size,
+    layout,
+  })
 
   let artLayer: Uint8Array | null = null
   if (preparedSource) {

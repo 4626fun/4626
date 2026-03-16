@@ -336,6 +336,48 @@ function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function isPlainConversationText(raw: string): boolean {
+  const text = raw.trim()
+  if (!text) return false
+  return !text.startsWith('/')
+}
+
+function looksLikeGroupConnectIntent(raw: string): boolean {
+  const text = raw.trim().toLowerCase()
+  if (!text) return false
+  const asksConnect = /\b(connect|link|setup|set up|configure|onboard)\b/.test(text)
+  if (!asksConnect) return false
+  const mentionsGroup = /\b(group|chat|telegram|room|thread)\b/.test(text)
+  const mentionsApp = /\b(4626|keepr)\b/.test(text)
+  return mentionsGroup || mentionsApp
+}
+
+function formatGroupConnectGuidance(groupId: string): string {
+  return [
+    'Group Setup (4626)',
+    '',
+    'I can help once this Telegram chat is linked to a 4626 vault.',
+    '',
+    'Setup steps:',
+    '1) In this chat, run /link and complete wallet linking',
+    '2) Run /linked and confirm ownerVerified is true',
+    '3) Scope at least one vault to this chat in 4626',
+    '4) Run /vaults, then /keepr status to confirm config',
+    '',
+    `If the app asks for the chat/group identifier, use: ${groupId}`,
+  ].join('\n')
+}
+
+function formatAssistantOnlyBlocked(command: string): string {
+  return [
+    'Assistant-only mode',
+    '',
+    `- ${command} is disabled until this group is connected to a 4626 vault`,
+    '- You can still use /ai, /help, /mkt, /whois, and /bankr status',
+    '- To enable full actions: run /link, verify /linked, scope a vault, then confirm with /keepr status',
+  ].join('\n')
+}
+
 function roleForWallet(params: { wallet: Address; owner: Address; admins: Address[] }): KeeprRole {
   const w = params.wallet.toLowerCase()
   if (w === params.owner.toLowerCase()) return 'OWNER'
@@ -349,6 +391,7 @@ function formatVaultStatus(v: Awaited<ReturnType<typeof getKeeprVaultByGroupId>>
       'Keepr status',
       '',
       '- configured: no',
+      '- mode: assistant_only (setup pending)',
       '- next: ask the creator to connect this group in 4626',
     ].join('\n')
   }
@@ -874,6 +917,9 @@ export async function handleKeeprCommand(params: {
       return { ok: true, response: 'Ask me anything about this vault or DeFi on Base.' }
     }
     const v = await getKeeprVaultByGroupId(params.groupId)
+    if (!v && looksLikeGroupConnectIntent(aiText)) {
+      return { ok: true, response: formatGroupConnectGuidance(params.groupId) }
+    }
     return generateLlmResponse({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
@@ -939,7 +985,7 @@ export async function handleKeeprCommand(params: {
   const looksLikeSend = raw.toLowerCase().startsWith('/send') || raw.toLowerCase().startsWith('send ')
   if (looksLikeSend) {
     const sv = await getKeeprVaultByGroupId(params.groupId)
-    if (!sv) return { ok: false, response: 'Vault not configured. /send requires a connected vault.' }
+    if (!sv) return { ok: false, response: formatAssistantOnlyBlocked('/send') }
     const sOwner = sv.canonicalOwnerAddress
     const sAdmins = Array.isArray(sv.config?.roles?.admins) ? sv.config.roles.admins : []
     const sAdminsLc = sAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
@@ -957,7 +1003,7 @@ export async function handleKeeprCommand(params: {
   const looksLikeCoin = raw.toLowerCase().startsWith('/coin') || raw.toLowerCase().startsWith('coin ')
   if (looksLikeCoin) {
     const cv = await getKeeprVaultByGroupId(params.groupId)
-    if (!cv) return { ok: false, response: 'Vault not configured. /coin requires a connected vault.' }
+    if (!cv) return { ok: false, response: formatAssistantOnlyBlocked('/coin') }
     const cOwner = cv.canonicalOwnerAddress
     const cAdmins = Array.isArray(cv.config?.roles?.admins) ? cv.config.roles.admins : []
     const cAdminsLc = cAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
@@ -996,6 +1042,21 @@ export async function handleKeeprCommand(params: {
         ].join('\n'),
       }
     }
+    if (looksLikeGroupConnectIntent(raw)) {
+      return {
+        ok: true,
+        response: formatGroupConnectGuidance(params.groupId),
+      }
+    }
+    if (isPlainConversationText(raw)) {
+      const llmResult = await generateLlmResponse({
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        text: raw,
+        vault: null,
+      })
+      if (llmResult.ok || llmResult.response) return llmResult
+    }
     return {
       ok: false,
       response: formatNumberedCommandFallback({
@@ -1012,22 +1073,14 @@ export async function handleKeeprCommand(params: {
 
   const prefix = raw.toLowerCase().startsWith('/keepr') ? '/keepr' : raw.toLowerCase().startsWith('keepr') ? 'keepr' : null
   if (!prefix) {
-    // Check for /ai, @keepr, or @bot → LLM response
-    const looksLikeAi =
-      raw.toLowerCase().startsWith('/ai') ||
-      raw.toLowerCase().startsWith('@keepr') ||
-      raw.toLowerCase().startsWith('@bot')
-    if (looksLikeAi) {
-      const aiText = raw.replace(/^\/?ai\s*/i, '').replace(/^@(keepr|bot)\s*/i, '').trim()
-      if (aiText) {
-        const llmResult = await generateLlmResponse({
-          groupId: params.groupId,
-          senderWallet: params.senderWallet,
-          text: aiText,
-          vault: v,
-        })
-        if (llmResult.ok) return llmResult
-      }
+    if (isPlainConversationText(raw)) {
+      const llmResult = await generateLlmResponse({
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        text: raw,
+        vault: v,
+      })
+      if (llmResult.ok || llmResult.response) return llmResult
     }
     return { ok: false, response: '' }
   }
