@@ -256,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<CreatorAllowlistResponse>)
   }
 
-  // Fallback (no DB): env allowlist (legacy/simple).
+  // Fallback (no DB): env allowlist (compatibility/simple).
   const allowlist = parseAllowlist(process.env.CREATOR_ALLOWLIST)
   const mode: AllowlistMode = allowlist.size > 0 ? 'enforced' : 'disabled'
   const allowed = mode === 'disabled' ? true : addressesToCheck.some((a) => allowlist.has(a.toLowerCase()))

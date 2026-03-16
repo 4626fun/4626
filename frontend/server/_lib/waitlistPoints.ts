@@ -52,7 +52,7 @@ export type WaitlistPointSource =
   | 'agent_reputation'
   | 'lens_identity'
   | 'grove_proof'
-  | 'task'  // Legacy
+  | 'task' // Compatibility
 
 export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
   if (waitlistPointsSchemaEnsured) return
@@ -64,7 +64,7 @@ export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
       // ignore (older Postgres or restricted perms)
     }
 
-    // Referral conversion qualification state (backwards-compatible: NULL status treated as legacy-qualified by queries).
+    // Referral conversion qualification state (backwards-compatible: NULL status treated as compatibility-qualified by queries).
     try {
       await db.sql`ALTER TABLE referral_conversions ADD COLUMN IF NOT EXISTS status TEXT NULL;`
       await db.sql`ALTER TABLE referral_conversions ADD COLUMN IF NOT EXISTS qualified_at TIMESTAMPTZ NULL;`

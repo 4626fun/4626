@@ -72,6 +72,22 @@ describe('swapUtils token identity', () => {
     expect(out.symbol).toBe('AKITA')
   })
 
+  it('keeps explicit non-generic token labels stable when onchain metadata arrives', () => {
+    const out = resolveTokenDisplay({
+      option: {
+        symbol: 'AKITA',
+        name: 'Akita Share',
+        address: '0x4444444444444444444444444444444444444444',
+        group: 'share',
+      },
+      address: '0x4444444444444444444444444444444444444444',
+      onchain: { name: 'Wrapped Akita Share', symbol: '■AKITA' },
+      imageUrl: null,
+    })
+    expect(out.name).toBe('Akita Share')
+    expect(out.symbol).toBe('AKITA')
+  })
+
   it('falls back to short address when metadata unavailable', () => {
     const token = '0x5555555555555555555555555555555555555555'
     const out = resolveTokenDisplay({

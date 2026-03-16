@@ -34,8 +34,8 @@ export async function resolveCanonicalSolanaWalletByProfileId(db: Db, profileId:
   `
   const canonicalColumn = profileFallback?.rows?.[0]?.canonical_solana_wallet
   if (isValidSolanaAddress(canonicalColumn)) return canonicalColumn.trim()
-  const legacyColumn = profileFallback?.rows?.[0]?.solana_wallet
-  if (isValidSolanaAddress(legacyColumn)) return legacyColumn.trim()
+  const compatibilityColumn = profileFallback?.rows?.[0]?.solana_wallet
+  if (isValidSolanaAddress(compatibilityColumn)) return compatibilityColumn.trim()
   return null
 }
 

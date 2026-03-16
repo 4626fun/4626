@@ -92,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Automation signer enablement is opt-in by default.
     if (autoEnableAgents) {
-      // Optional legacy path: auto-enable agent on approval when explicitly configured.
+      // Optional compatibility path: auto-enable agent on approval when explicitly configured.
       if (serverWalletId && serverWalletAddress) {
         try {
           await enableCswAgent({

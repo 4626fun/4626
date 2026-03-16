@@ -81,9 +81,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((row: any) => (typeof row?.address === 'string' ? row.address.trim() : ''))
       .filter(Boolean),
   )
-  const legacySolana = typeof ownedProfile?.rows?.[0]?.solana_wallet === 'string' ? ownedProfile.rows[0].solana_wallet.trim() : ''
+  const profileSolanaFallback =
+    typeof ownedProfile?.rows?.[0]?.solana_wallet === 'string' ? ownedProfile.rows[0].solana_wallet.trim() : ''
 
-  if (!linkedSolanaSet.has(requestedWallet) && requestedWallet !== legacySolana) {
+  if (!linkedSolanaSet.has(requestedWallet) && requestedWallet !== profileSolanaFallback) {
     return res.status(403).json({
       success: false,
       error: 'Requested Solana wallet is not linked to this profile.',

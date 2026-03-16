@@ -6,14 +6,12 @@ import { applyEnv, createMockReq, createMockRes, readSetCookies } from './helper
 const {
   getDbMock,
   ensureWaitlistSchemaMock,
-  upsertProfileByWalletMock,
   syncUserWalletsMock,
   verifyAuthTokenMock,
   getUserByIdMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
-  upsertProfileByWalletMock: vi.fn(async () => {}),
   syncUserWalletsMock: vi.fn(async () => ({
     profileId: 1,
     canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
@@ -37,10 +35,6 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/profileSync.js', () => ({
-  upsertProfileByWallet: upsertProfileByWalletMock,
-}))
-
 vi.mock('../../server/_lib/walletSync.js', () => ({
   syncUserWallets: syncUserWalletsMock,
 }))
@@ -62,7 +56,6 @@ describe('auth privy wallet sync', () => {
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
       AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
-      WALLET_SYNC_LEGACY_FALLBACK: 'true',
     })
   })
 
@@ -71,7 +64,7 @@ describe('auth privy wallet sync', () => {
     restoreEnv = null
   })
 
-  it('uses syncUserWallets and keeps legacy upsert when fallback is enabled', async () => {
+  it('uses syncUserWallets for canonical wallet session sync', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-token' },
@@ -81,38 +74,8 @@ describe('auth privy wallet sync', () => {
 
     expect(res.statusCode).toBe(200)
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
-    expect(upsertProfileByWalletMock).toHaveBeenCalledTimes(1)
     expect(readSetCookies(res).length).toBeGreaterThan(0)
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
-  })
-
-  it('writes the active owner wallet separately from the canonical smart wallet in legacy fallback mode', async () => {
-    syncUserWalletsMock.mockResolvedValueOnce({
-      profileId: 1,
-      canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
-      activeOwnerWallet: { address: '0x00000000000000000000000000000000000000bb', provider: 'privy', walletType: 'embedded_eoa' },
-      embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
-      connectedWallets: [],
-      primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
-    })
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { authorization: 'Bearer test-token' },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(upsertProfileByWalletMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        primaryWallet: '0x00000000000000000000000000000000000000bb',
-        embeddedWallet: '0x00000000000000000000000000000000000000bb',
-        cswAddress: '0x00000000000000000000000000000000000000aa',
-        baseSubAccount: '0x00000000000000000000000000000000000000aa',
-      }),
-    )
   })
 
   it('prefers synced canonical wallet over raw Privy smart wallet for session address', async () => {
@@ -167,7 +130,6 @@ describe('auth privy wallet sync', () => {
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
       AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
-      WALLET_SYNC_LEGACY_FALLBACK: 'false',
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
@@ -215,7 +177,6 @@ describe('auth privy wallet sync', () => {
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
       AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
-      WALLET_SYNC_LEGACY_FALLBACK: 'false',
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
@@ -265,24 +226,4 @@ describe('auth privy wallet sync', () => {
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000cc')
   })
 
-  it('disables legacy fallback when WALLET_SYNC_LEGACY_FALLBACK=false', async () => {
-    restoreEnv?.()
-    restoreEnv = applyEnv({
-      PRIVY_APP_ID: 'test-privy-id',
-      PRIVY_APP_SECRET: 'test-privy-secret',
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
-      WALLET_SYNC_LEGACY_FALLBACK: 'false',
-    })
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { authorization: 'Bearer test-token' },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
-    expect(upsertProfileByWalletMock).not.toHaveBeenCalled()
-  })
 })

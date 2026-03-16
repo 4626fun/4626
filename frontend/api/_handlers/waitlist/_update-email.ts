@@ -29,7 +29,7 @@ function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun') || v.endsWith('@wallet.4626.fun')
 }
 
-function isLegacySyntheticEmail(v: string): boolean {
+function isCompatibilitySyntheticEmail(v: string): boolean {
   const s = String(v || '').trim().toLowerCase()
   if (!s.endsWith('@example.com')) return false
   const local = s.split('@')[0] ?? ''
@@ -42,7 +42,7 @@ function isLegacySyntheticEmail(v: string): boolean {
 }
 
 function isAnySyntheticEmail(v: string): boolean {
-  return isSyntheticEmail(v) || isLegacySyntheticEmail(v)
+  return isSyntheticEmail(v) || isCompatibilitySyntheticEmail(v)
 }
 async function findOwnedProfileByEmail(params: {
   db: any
@@ -366,7 +366,7 @@ export default async function handler(req: any, res: any) {
   }
 
   // Atomic update with NOT EXISTS to prevent TOCTOU race.
-  // Keep the legacy "update by currentEmail" branch for compatibility with existing clients/tests.
+  // Keep the "update by currentEmail" branch for compatibility with existing clients/tests.
   const updated = hasCurrentEmail
     ? await db.sql`
         UPDATE profiles

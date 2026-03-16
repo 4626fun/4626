@@ -873,7 +873,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     pushBool('gauge-vault', 'Gauge points to vault', same(gaugeVault, vaultAddress), `gauge.vault = ${String(gaugeVault ?? '—')}`)
     pushBool('gauge-coin', 'Gauge points to creator coin', same(gaugeCreatorCoin, creatorToken), `gauge.creatorCoin = ${String(gaugeCreatorCoin ?? '—')}`)
     // Share token wiring is important for fee routing + accurate conversions, but not required for basic deposit/withdraw.
-    // For legacy deployments, these values may be unset; treat as warnings with recommended action instead of hard failures.
+    // For compatibility deployments, these values may be unset; treat as warnings with recommended action instead of hard failures.
     const isZero = (a?: string | null) => !!a && a.toLowerCase() === ZERO
     const shareVaultOk = same(shareVault, vaultAddress)
     if (shareVault == null) {
@@ -881,7 +881,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: 'share-vault',
         label: 'Share token wired to vault',
         status: 'warn',
-        details: 'Could not read shareOFT.vault (may be a legacy token version).',
+        details: 'Could not read shareOFT.vault (may be a compatibility token version).',
       })
     } else if (isZero(shareVault)) {
       wiringChecks.push({
@@ -905,7 +905,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: 'share-gauge',
         label: 'Share token wired to gauge',
         status: 'warn',
-        details: 'Could not read shareOFT.gaugeController (may be a legacy token version).',
+        details: 'Could not read shareOFT.gaugeController (may be a compatibility token version).',
       })
     } else if (isZero(shareGauge)) {
       wiringChecks.push({

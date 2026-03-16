@@ -35,13 +35,7 @@ function getAllowedOriginsFromEnv(): Set<string> {
 
 function getExplicitAppOrigin(): string | null {
   // Preferred explicit runtime origin for app/API security flows.
-  const app = normalizeOrigin((process.env.APP_ORIGIN ?? '').trim())
-  if (app) return app
-
-  // Back-compat fallback for legacy naming.
-  const legacy = normalizeOrigin((process.env.CANONICAL_ORIGIN ?? '').trim())
-  if (legacy) return legacy
-  return null
+  return normalizeOrigin((process.env.APP_ORIGIN ?? '').trim())
 }
 
 export function getCanonicalOrigin(req?: VercelRequest): string {

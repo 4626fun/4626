@@ -860,9 +860,9 @@ async function checkCanonicalWalletOwnership(params: {
   `
   let profileId = canonicalRow.rows?.[0]?.profile_id ?? null
   if (!profileId) {
-    // Fallback for legacy rows that have canonical wallet fields populated
+    // Fallback for compatibility rows that have canonical wallet fields populated
     // but have not yet been fully synced into `profile_wallets`.
-    const legacyCanonicalRow = await db.sql`
+    const compatibilityCanonicalRow = await db.sql`
       SELECT id
       FROM profiles
       WHERE LOWER(primary_smart_wallet) = ${smartWalletLc}
@@ -871,7 +871,7 @@ async function checkCanonicalWalletOwnership(params: {
       ORDER BY updated_at DESC NULLS LAST, created_at DESC
       LIMIT 1;
     `
-    profileId = legacyCanonicalRow.rows?.[0]?.id ?? null
+    profileId = compatibilityCanonicalRow.rows?.[0]?.id ?? null
   }
   if (!profileId) {
     const onchain = await onchainOwnerCheck()
@@ -890,7 +890,7 @@ async function checkCanonicalWalletOwnership(params: {
     if (addr) linked.add(addr)
   }
 
-  const legacyProfileRow = await db.sql`
+  const compatibilityProfileRow = await db.sql`
     SELECT
       LOWER(primary_wallet) AS primary_wallet,
       LOWER(embedded_wallet) AS embedded_wallet,
@@ -902,9 +902,9 @@ async function checkCanonicalWalletOwnership(params: {
     WHERE id = ${profileId}
     LIMIT 1;
   `
-  const legacyProfile = (legacyProfileRow.rows?.[0] ?? null) as Record<string, unknown> | null
-  if (legacyProfile) {
-    for (const value of Object.values(legacyProfile)) {
+  const compatibilityProfile = (compatibilityProfileRow.rows?.[0] ?? null) as Record<string, unknown> | null
+  if (compatibilityProfile) {
+    for (const value of Object.values(compatibilityProfile)) {
       const addr = typeof value === 'string' ? value.trim().toLowerCase() : ''
       if (addr) linked.add(addr)
     }

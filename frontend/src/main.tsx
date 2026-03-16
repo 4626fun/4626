@@ -13,6 +13,7 @@ const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Cannot set property ethereum of #<Window> which has only a getter/i,
   /MetaMask encountered an error setting the global Ethereum provider/i,
   /Cannot access '\$a' before initialization/i,
+  /Failed to fetch dynamically imported module:\s*(chrome|moz)-extension:\/\//i,
 ]
 
 function readErrorMessage(value: unknown): string {

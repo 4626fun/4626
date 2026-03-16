@@ -87,7 +87,7 @@ function extractPrivyEmail(user: PrivyUserLike): string | null {
   return null
 }
 
-async function findProfileByLegacyWallet(db: Db, address: string): Promise<ExistingProfile | null> {
+async function findProfileByProfileColumns(db: Db, address: string): Promise<ExistingProfile | null> {
   const result = await db.sql`
     SELECT id, email
     FROM profiles
@@ -132,8 +132,8 @@ async function findExistingProfile(db: Db, privyUserId: string | null, wallets: 
   }
 
   for (const wallet of wallets) {
-    const legacy = await findProfileByLegacyWallet(db, wallet.address)
-    if (legacy) return legacy
+    const profileColumnMatch = await findProfileByProfileColumns(db, wallet.address)
+    if (profileColumnMatch) return profileColumnMatch
   }
 
   return null

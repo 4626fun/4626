@@ -10,6 +10,7 @@ import { useVault } from '@/hooks/useVault'
 import { useZoraCoin } from '@/lib/zora/hooks'
 import { apiFetch } from '@/lib/apiBase'
 import { toShareSymbol } from '@/lib/tokenSymbols'
+import { shareTokenLogo } from '@/lib/uniswap/swapUtils'
 import { cn } from '@/lib/utils'
 
 const BASE_BRANDMARK_BLUE = '/base/base-square-blue.svg'
@@ -159,7 +160,8 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
   const userHasShare = !!data.userShares && data.userShares > 0n
   const vaultPath = useMemo(() => `/vault/${vault.vaultAddress}`, [vault.vaultAddress])
   const displaySymbol = typeof assetSymbol === 'string' && assetSymbol.trim().length > 0 ? assetSymbol.trim() : null
-  const shareSymbol = displaySymbol ? toShareSymbol(displaySymbol) : null
+  const zoraSymbol = typeof zoraCoin?.symbol === 'string' && zoraCoin.symbol.trim().length > 0 ? zoraCoin.symbol.trim() : null
+  const shareSymbol = toShareSymbol(displaySymbol || zoraSymbol || 'TOKEN')
   const assetPriceUsd = useMemo(() => {
     const direct = Number(zoraCoin?.tokenPrice?.priceInUsdc ?? '')
     if (Number.isFinite(direct) && direct > 0) return direct
@@ -174,11 +176,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
   const tvlUsd = assetPriceUsd != null ? tvlRaw * assetPriceUsd : null
 
   const shareOFT = vault.shareOFTAddress
-  const tokenImageUrl = shareOFT
-    ? shareOFT.toLowerCase() === '0x00f80e71e77b562fdf28522a7b80a7d53438d38b'
-      ? '/tokens/akita-share.png'
-      : `/api/token/image?address=${shareOFT}&chain=${vault.chainId}&size=64`
-    : null
+  const tokenImageUrl = shareOFT ? shareTokenLogo(shareOFT, vault.chainId, 64) : null
 
   const auctionUrl = ccaStrategy ? `${UNISWAP_AUCTION_BASE}/${ccaStrategy}` : null
   const recentActivity = activityQuery.data?.activity ?? []
@@ -189,7 +187,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
       ? `$${amount}`
       : `${amount} ${auctionQuery.data.auctionTokenSymbol}`
   }, [auctionLive, auctionQuery.data?.auctionTokenSymbol, auctionQuery.data?.currencyDecimals, auctionQuery.data?.currencyRaised])
-  const title = shareSymbol ?? data.name ?? 'Vault'
+  const title = shareSymbol || data.name || 'Vault'
 
   return (
     <article

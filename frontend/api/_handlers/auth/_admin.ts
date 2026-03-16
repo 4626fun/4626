@@ -117,7 +117,7 @@ async function lookupAdminContextByWallet(address: string): Promise<AdminLookup>
       }
     }
 
-    // Check creator_wallets (legacy fallback path).
+    // Check creator_wallets for compatibility with wallet-email admin mappings.
     const r2 = await db.sql`
       SELECT email FROM creator_wallets
       WHERE LOWER(wallet_address) = LOWER(${address})

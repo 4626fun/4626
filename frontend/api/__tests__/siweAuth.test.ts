@@ -108,7 +108,7 @@ describe('siwe auth hardening', () => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
       AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
-      CANONICAL_ORIGIN: 'https://4626.fun',
+      APP_ORIGIN: 'https://4626.fun',
     })
   })
 

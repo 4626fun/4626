@@ -11,7 +11,6 @@ import {
 } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 import { classifyLinkedAccounts } from '../../../server/_lib/walletMapping.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
@@ -116,11 +115,6 @@ function getPrivyAuthDbSyncMinIntervalMs(): number {
   return 15_000
 }
 
-function isLegacyFallbackEnabled(): boolean {
-  const raw = String(process.env.WALLET_SYNC_LEGACY_FALLBACK ?? 'false').trim().toLowerCase()
-  return raw !== '0' && raw !== 'false' && raw !== 'off'
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -173,25 +167,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (shouldSyncNow) {
           const syncResult = await syncUserWallets(db as any, user as any)
           sessionAddress = syncResult.canonicalSmartWallet?.address ?? syncResult.primaryWalletAddress ?? sessionAddress
-          const rawEmail = typeof (user as any)?.email?.address === 'string' ? String((user as any).email.address).trim() : ''
-          const privyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail.toLowerCase() : null
-
-          if (isLegacyFallbackEnabled()) {
-            try {
-              await upsertProfileByWallet(db as any, {
-                email: privyEmail,
-                primaryWallet: syncResult.activeOwnerWallet?.address ?? syncResult.primaryWalletAddress ?? sessionAddress,
-                embeddedWallet: syncResult.embeddedEoa?.address ?? null,
-                embeddedWalletChain: syncResult.embeddedEoa?.chainType ?? null,
-                embeddedWalletClientType: syncResult.embeddedEoa?.clientType ?? null,
-                privyUserId: claims.userId,
-                cswAddress: syncResult.canonicalSmartWallet?.address ?? null,
-                baseSubAccount: syncResult.canonicalSmartWallet?.address ?? null,
-              })
-            } catch {
-              // Compatibility write should not block auth.
-            }
-          }
           lastPrivyAuthDbSyncAtMs = now
         }
       }

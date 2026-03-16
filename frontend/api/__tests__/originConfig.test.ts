@@ -11,10 +11,9 @@ describe('origin resolution', () => {
     restoreEnv = null
   })
 
-  it('prefers APP_ORIGIN over legacy CANONICAL_ORIGIN', () => {
+  it('uses APP_ORIGIN when configured', () => {
     restoreEnv = applyEnv({
       APP_ORIGIN: 'https://app.4626.fun',
-      CANONICAL_ORIGIN: 'https://4626.fun',
       VERCEL_URL: undefined,
       NODE_ENV: 'production',
       CORS_ALLOWED_ORIGINS: undefined,
@@ -23,22 +22,20 @@ describe('origin resolution', () => {
     expect(getCanonicalOrigin()).toBe('https://app.4626.fun')
   })
 
-  it('falls back to CANONICAL_ORIGIN when APP_ORIGIN is unset', () => {
+  it('falls back to VERCEL_URL when APP_ORIGIN is unset', () => {
     restoreEnv = applyEnv({
       APP_ORIGIN: undefined,
-      CANONICAL_ORIGIN: 'https://4626.fun',
-      VERCEL_URL: undefined,
+      VERCEL_URL: 'app-4626.vercel.app',
       NODE_ENV: 'production',
       CORS_ALLOWED_ORIGINS: undefined,
     })
 
-    expect(getCanonicalOrigin()).toBe('https://4626.fun')
+    expect(getCanonicalOrigin()).toBe('https://app-4626.vercel.app')
   })
 
   it('allows local forwarded host in non-production when explicit origins are unset', () => {
     restoreEnv = applyEnv({
       APP_ORIGIN: undefined,
-      CANONICAL_ORIGIN: undefined,
       VERCEL_URL: undefined,
       NODE_ENV: 'development',
       CORS_ALLOWED_ORIGINS: undefined,
@@ -57,7 +54,6 @@ describe('origin resolution', () => {
   it('throws when no origin can be derived in production', () => {
     restoreEnv = applyEnv({
       APP_ORIGIN: undefined,
-      CANONICAL_ORIGIN: undefined,
       VERCEL_URL: undefined,
       NODE_ENV: 'production',
       CORS_ALLOWED_ORIGINS: undefined,

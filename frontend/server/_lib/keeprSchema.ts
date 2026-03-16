@@ -268,7 +268,7 @@ export async function ensureKeeprSchema(): Promise<void> {
       // ignore
     }
 
-    // One-time migration from legacy takopi_* tables (if they exist).
+    // One-time migration from compatibility takopi_* tables (if they exist).
     await db.sql`
       DO $$
       BEGIN

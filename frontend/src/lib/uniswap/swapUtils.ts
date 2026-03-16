@@ -107,8 +107,19 @@ export function getCoreTokensForChain(config: ChainTokenConfig): TokenOption[] {
   return tokens
 }
 
-export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID): string {
-  return `/api/token/image?address=${getAddress(address)}&chain=${chainId}&size=128`
+export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, size = 128): string {
+  const normalizedSize = Number.isFinite(size) ? Math.max(32, Math.min(1024, Math.trunc(size))) : 128
+  return `/api/token/image?address=${getAddress(address)}&chain=${chainId}&size=${normalizedSize}`
+}
+
+function isGenericLabel(value: string | undefined, group: TokenOption['group'] | undefined, address: string): boolean {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return true
+  if (normalized === shortAddress(address).toLowerCase()) return true
+  if (normalized === 'token' || normalized === 'unknown') return true
+  if (group === 'creator' && normalized === 'creator coin') return true
+  if (group === 'share' && (normalized === 'share token' || normalized === 'content coin')) return true
+  return false
 }
 
 export function shortAddress(value: string): string {
@@ -247,12 +258,18 @@ export function resolveTokenDisplay(params: {
   imageUrl: string | null | undefined
 }): TokenDisplay {
   const isCore = params.option?.group === 'core'
+  const optionSymbol = params.option?.symbol?.trim() ?? ''
+  const optionName = params.option?.name?.trim() ?? ''
+  const preferOptionSymbol = !isGenericLabel(optionSymbol, params.option?.group, params.address)
+  const preferOptionName = !isGenericLabel(optionName, params.option?.group, params.address)
+  const onchainSymbol = params.onchain?.symbol?.trim() ?? ''
+  const onchainName = params.onchain?.name?.trim() ?? ''
   const symbol = isCore
-    ? (params.option?.symbol ?? shortAddress(params.address))
-    : (params.onchain?.symbol?.trim() || params.option?.symbol || shortAddress(params.address))
+    ? (optionSymbol || shortAddress(params.address))
+    : (preferOptionSymbol ? optionSymbol : onchainSymbol || optionSymbol || shortAddress(params.address))
   const name = isCore
-    ? (params.option?.name ?? params.option?.symbol ?? shortAddress(params.address))
-    : (params.onchain?.name?.trim() || params.option?.name || params.option?.symbol || shortAddress(params.address))
+    ? (optionName || optionSymbol || shortAddress(params.address))
+    : (preferOptionName ? optionName : onchainName || optionName || optionSymbol || shortAddress(params.address))
 
   const fallbackUrls = isAddress(params.address) ? tokenLogoFallbacks(params.address) : []
   const logoCandidates = [

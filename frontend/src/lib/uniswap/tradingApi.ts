@@ -179,7 +179,7 @@ export function pickQuote(quote: TradeQuoteResponse | null | undefined): Record<
   if (!quote) return null
 
   // OpenAPI: `quote` is the canonical oneOf payload. Keep fallbacks for any
-  // legacy/experimental response shapes we may have cached.
+  // compatibility/experimental response shapes we may have cached.
   const candidate =
     (quote as any).quote ??
     (quote as any).classicQuote ??
@@ -211,8 +211,8 @@ export function pickPermitData(quote: TradeQuoteResponse | null | undefined): Re
 
   const candidates: unknown[] = [
     (quote as any).permitData, // OpenAPI: NullablePermit | null
-    (quote as any).permitSingleData, // legacy
-    (quote as any).permitTransferFromData, // legacy
+    (quote as any).permitSingleData, // compatibility
+    (quote as any).permitTransferFromData, // compatibility
     (quote as any).quote?.permitData, // extremely defensive: nested shapes
   ]
 

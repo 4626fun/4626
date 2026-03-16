@@ -577,7 +577,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Server signs userops using the deploy-session owner.
-    // New sessions use a Privy-managed deploy signer wallet; legacy sessions use an encrypted raw private key.
+    // New sessions use a Privy-managed deploy signer wallet; compatibility sessions use an encrypted raw private key.
     const payload = asPayloadObject(rec.payload)
     const erc7712Grant = parseGrant(payload?.erc7712Grant)
     const deploySignerWalletId =

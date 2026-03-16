@@ -772,7 +772,7 @@ function readSolanaOvaultKillSwitchEnabled(): boolean {
   return isTruthyEnv(raw, false)
 }
 
-function readLegacySolanaWriteDisabled(): boolean {
+function readCompatibilitySolanaWriteDisabled(): boolean {
   const raw =
     process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED ??
     process.env.SOLANA_LEGACY_WRITE_DISABLED
@@ -1662,7 +1662,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   const candidateOrigins = dedupeOrigins([...configuredOrigins, ...defaultOrigins])
   if (candidateOrigins.length === 0) {
     throw new Error(
-      'Solana preflight failed: no registration origin available. Configure CANONICAL_ORIGIN or DEPLOY_SOLANA_REGISTRATION_ORIGINS.',
+      'Solana preflight failed: no registration origin available. Configure APP_ORIGIN or DEPLOY_SOLANA_REGISTRATION_ORIGINS.',
     )
   }
   if (registered !== true && (!expectedSolanaAmount || expectedSolanaAmount <= 0n)) {
@@ -1678,8 +1678,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       '',
   ).trim()
   const routeMode = readSolanaPreflightRouteMode()
-  const legacyWriteDisabled = readLegacySolanaWriteDisabled()
-  if (routeMode === 'legacy_only' && legacyWriteDisabled) {
+  const compatibilityWriteDisabled = readCompatibilitySolanaWriteDisabled()
+  if (routeMode === 'legacy_only' && compatibilityWriteDisabled) {
     throw new Error(
       'Solana preflight misconfigured: legacy_only route mode requires DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=0.',
     )
@@ -2326,7 +2326,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     let stageHash = asHexHash(payload?.[stageKey])
     if (!stageHash) {
       const fallback = asHexHash(rec.lastUserOpHash)
-      // Adopt legacy fallback only when tx hash is empty (means it wasn't reused from a prior stage).
+      // Adopt compatibility fallback only when tx hash is empty (means it wasn't reused from a prior stage).
       if (fallback && !asHexHash(rec.lastTxHash)) {
         stageHash = fallback
         await updateDeploySession({ id: rec.id, payloadPatch: { [stageKey]: stageHash } })

@@ -324,7 +324,7 @@ type SolanaRegistrationRouteKind = 'legacy' | 'ovault'
 
 export const SOLANA_REGISTRATION_ROUTE_KIND_KEY = '__cvSolanaRegistrationRouteKind'
 
-function readLegacySolanaWriteDisabled(): boolean {
+function readCompatibilitySolanaWriteDisabled(): boolean {
   const v = String(
     process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED ??
       process.env.SOLANA_LEGACY_WRITE_DISABLED ??
@@ -1241,11 +1241,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const routeKind = readSolanaRegistrationRouteKind(req)
-  if (routeKind === 'legacy' && readLegacySolanaWriteDisabled()) {
+  if (routeKind === 'legacy' && readCompatibilitySolanaWriteDisabled()) {
     return res.status(410).json({
       success: false,
       error:
-        'Legacy Solana registration route is disabled. Use /api/deploy/setupSolanaOvaultMesh.',
+        'Compatibility Solana registration route is disabled. Use /api/deploy/setupSolanaOvaultMesh.',
     } satisfies ApiEnvelope<never>)
   }
 

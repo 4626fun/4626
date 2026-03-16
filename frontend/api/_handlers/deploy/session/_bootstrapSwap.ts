@@ -284,7 +284,7 @@ async function executeViaZeroX(ctx: ProviderContext): Promise<ProviderExecution>
 
   let upstream = await fetchJson(v2Url.toString(), { method: 'GET', headers })
   if (upstream.status >= 400) {
-    const legacy = {
+    const compatibilityV1QuoteParams = {
       sellToken: quoteRequest.sellToken,
       buyToken: quoteRequest.buyToken,
       sellAmount: quoteRequest.sellAmount,
@@ -292,7 +292,7 @@ async function executeViaZeroX(ctx: ProviderContext): Promise<ProviderExecution>
       slippagePercentage: (ctx.slippageBps / 10_000).toFixed(4),
     }
     const v1Url = new URL(`${base}/swap/v1/quote`)
-    for (const [key, value] of Object.entries(legacy)) {
+    for (const [key, value] of Object.entries(compatibilityV1QuoteParams)) {
       v1Url.searchParams.set(key, value)
     }
     upstream = await fetchJson(v1Url.toString(), { method: 'GET', headers: { Accept: 'application/json' } })

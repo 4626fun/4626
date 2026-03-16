@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import sharp from 'sharp'
+import { renderPremiumTokenIcon } from './_premiumTokenIconRenderer.js'
 
 const execFileP = promisify(execFile)
 
@@ -298,9 +299,9 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 61
+const FRAME_STYLE_V = 73
 const FRAME_VIEWBOX_SIZE = 256
-const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
+const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
 const FRAME_STROKE_RATIO = 12 / FRAME_VIEWBOX_SIZE
 
@@ -1709,8 +1710,8 @@ async function renderDeterministicBaseLayer(params: {
       </linearGradient>
 
       <linearGradient id="innerPanel" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#6f8da0"/>
-        <stop offset="100%" stop-color="#6f8da0"/>
+        <stop offset="0%" stop-color="#091326"/>
+        <stop offset="100%" stop-color="#03070f"/>
       </linearGradient>
     </defs>
 
@@ -1747,13 +1748,13 @@ async function renderDeterministicBaseLayer(params: {
       rx="${layout.panelRadius}"
       fill="none"
       stroke="black"
-      stroke-opacity="0.24"
-      stroke-width="${Math.max(8, Math.round(size * 0.018))}"
+      stroke-opacity="0.34"
+      stroke-width="${Math.max(9, Math.round(size * 0.02))}"
     />
   </svg>`
 
   const recess = await sharp(Buffer.from(recessSvg))
-    .blur(5)
+    .blur(6)
     .png()
     .toBuffer()
 
@@ -1836,7 +1837,6 @@ async function renderDeterministicFrameLayer(params: {
   const { size, layout } = params
   const stroke = Math.max(14, Math.round(size * 0.032))
   const inset = stroke / 2
-  const innerHighlightStroke = Math.max(2, Math.round(stroke * 0.16))
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="frameStroke" x1="0" y1="0" x2="1" y2="1">
@@ -1858,20 +1858,18 @@ async function renderDeterministicFrameLayer(params: {
       stroke-width="${stroke}"
       stroke-linejoin="round"
     />
-
-    <rect
-      x="${layout.panelX + inset}"
-      y="${layout.panelY + inset}"
-      width="${layout.panelSize - stroke}"
-      height="${layout.panelSize - stroke}"
-      rx="${Math.max(0, layout.panelRadius - inset)}"
-      fill="none"
-      stroke="rgba(255,255,255,0.22)"
-      stroke-width="${innerHighlightStroke}"
-      stroke-linejoin="round"
-    />
   </svg>`
-  return sharp(Buffer.from(svg)).png().toBuffer()
+  const crispFrame = await sharp(Buffer.from(svg)).png().toBuffer()
+  const bloomBlur = Math.max(1.4, size * 0.0028)
+  const bloomLayer = await sharp(crispFrame)
+    .blur(bloomBlur)
+    .png()
+    .toBuffer()
+  const bloom = await applyLayerOpacity(bloomLayer, 0.42)
+  return sharp(bloom)
+    .composite([{ input: crispFrame, blend: 'over' }])
+    .png()
+    .toBuffer()
 }
 
 async function renderPremiumOuterGlow(size: number, layout: TokenIconLayout): Promise<Buffer> {
@@ -2040,6 +2038,17 @@ async function renderDeterministicTokenIcon(params: {
   sourceBytes: Uint8Array | null
   symbol: string
 }): Promise<Uint8Array> {
+  try {
+    const premium = await renderPremiumTokenIcon({
+      size: params.size,
+      sourceImage: params.sourceBytes ?? undefined,
+      symbol: params.symbol,
+    })
+    return new Uint8Array(premium)
+  } catch (error) {
+    console.warn('[token/image] premium token icon renderer failed; falling back to deterministic compatibility path:', error)
+  }
+
   let preparedSource: Uint8Array | null = null
   let sourceMetrics: TokenImageMetrics | null = null
   let sourceIsLowRes = false
@@ -2128,13 +2137,16 @@ async function renderDeterministicTokenIcon(params: {
     !!brightnessProfile &&
     (brightnessProfile.meanLuma > 190 || brightnessProfile.edgeLuma > 205)
   const hasTopCenterTexture = !!topCenterTexture && topCenterTexture.topCenterStdDev > 19
+  const topOccupancy = sourceMetrics?.topOccupancy ?? 0
+  const topOccupancyOk =
+    topOccupancy > 0.045 &&
+    (sourceMetrics?.hasTransparency ? topOccupancy < 0.26 : topOccupancy < 0.15)
   const shouldUseBreakout =
     !!preparedSource &&
     !!sourceMetrics &&
     !sourceIsLowRes &&
     !isBrightBackground &&
-    sourceMetrics.topOccupancy > 0.05 &&
-    sourceMetrics.topOccupancy < 0.17 &&
+    topOccupancyOk &&
     hasTopCenterTexture
 
   if (shouldUseBreakout && preparedSource) {

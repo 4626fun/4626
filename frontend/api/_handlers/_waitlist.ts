@@ -595,7 +595,7 @@ export default async function handler(req: any, res: any) {
             .filter((id: number) => Number.isFinite(id) && id > 0)
           candidates.push(...(await fetchProfilesByIds(profileIds)))
 
-          const legacyOr = [
+          const compatibilityOr = [
             `primary_wallet.ilike.${address}`,
             `embedded_wallet.ilike.${address}`,
             `primary_embedded_eoa.ilike.${address}`,
@@ -603,13 +603,13 @@ export default async function handler(req: any, res: any) {
             `primary_smart_wallet.ilike.${address}`,
             `base_sub_account.ilike.${address}`,
           ].join(',')
-          const { data: legacyRows, error: legacyError } = await supabase
+          const { data: compatibilityRows, error: compatibilityError } = await supabase
             .from('profiles')
             .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
-            .or(legacyOr)
+            .or(compatibilityOr)
             .limit(50)
-          if (legacyError) throw new Error(legacyError.message)
-          for (const row of legacyRows ?? []) {
+          if (compatibilityError) throw new Error(compatibilityError.message)
+          for (const row of compatibilityRows ?? []) {
             const mapped = toProfileRow(row)
             if (mapped) candidates.push(mapped)
           }

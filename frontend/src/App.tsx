@@ -7,7 +7,6 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
-import { CANONICAL_EXPLORE_ROUTE, CANONICAL_SWAP_ROUTE, resolveLegacyRedirect } from '@/lib/routes/canonicalRoutes'
 import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
@@ -47,7 +46,7 @@ function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
 }
 
-function withReason(to: string, reason: AccessReason | 'legacy-route' | 'host-redirect' | 'external-redirect' | 'invalid-params'): string {
+function withReason(to: string, reason: AccessReason | 'host-redirect' | 'external-redirect' | 'invalid-params'): string {
   try {
     const hashIdx = to.indexOf('#')
     const hash = hashIdx >= 0 ? to.slice(hashIdx) : ''
@@ -557,17 +556,14 @@ function App() {
                 </MarketingOnlyRoute>
               }
             />
-            <Route path="/home" element={<Navigate to={withReason(resolveLegacyRedirect('/home') ?? CANONICAL_SWAP_ROUTE, 'legacy-route')} replace />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/continue" element={<AppContinue />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account" element={<AccountsPage />} />
-            <Route path="/settings" element={<Navigate to={withReason('/accounts', 'legacy-route')} replace />} />
 
             {/* Session-gated routes */}
             <Route element={<RequireSession />}>
               <Route element={<RequireAccepted />}>
-                <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
                 <Route path="/explore/creators" element={<ExploreCreators />} />
                 <Route path="/explore/content" element={<ExploreContent />} />
                 <Route path="/explore/trends" element={<ExploreTrends />} />
@@ -577,14 +573,10 @@ function App() {
                 <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
                 <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
                 <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-                <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
-                <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
-                <Route path="/trade" element={<Navigate to={withReason(resolveLegacyRedirect('/trade') ?? CANONICAL_SWAP_ROUTE, 'legacy-route')} replace />} />
                 <Route path="/swap" element={<Swap />} />
                 <Route path="/positions" element={<Positions />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/portfolio/:address" element={<Portfolio />} />
-                <Route path="/launch" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
                 <Route
                   path="/deploy"
                   element={
@@ -597,11 +589,9 @@ function App() {
                 <Route path="/creator/earnings" element={<CreatorEarnings />} />
                 <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
                 <Route path="/vote" element={<GaugeVoting />} />
-                <Route path="/activate-akita" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
                 <Route path="/auction/bid/:address" element={<AuctionBid />} />
                 <Route path="/complete-auction" element={<CompleteAuction />} />
                 <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-                <Route path="/dashboard" element={<Navigate to={withReason(resolveLegacyRedirect('/dashboard') ?? CANONICAL_EXPLORE_ROUTE, 'legacy-route')} replace />} />
                 <Route path="/vault/:address" element={<Vault />} />
                 <Route path="/agents" element={<AgentDirectory />} />
                 <Route path="/agents/register" element={<AgentRegister />} />
@@ -611,7 +601,7 @@ function App() {
 
               <Route element={<RequireAdmin />}>
                 <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
+                  <Route index element={<Navigate to="/admin/waitlist" replace />} />
                   <Route path="creator-access" element={<AdminCreatorAccess />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="agent-setup" element={<AdminAgentSetup />} />

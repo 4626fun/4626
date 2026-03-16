@@ -604,7 +604,7 @@ const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
 // finalizePhase2 selectors:
 // - current (includes meteoraAlphaVault + solanaIxs): 0xbd4583fb
 // - permit2-backed current tuple: 0xab56c176
-// - legacy (pre-Solana tuple extension): 0xcafc9348
+// - compatibility (pre-Solana tuple extension): 0xcafc9348
 const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0xab56c176'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
@@ -768,7 +768,7 @@ const SELECTOR_VAULT_EMERGENCY_PULL = '0x53e0cf11'    // emergencyWithdrawFromSt
 const SELECTOR_VAULT_EMERGENCY_WITHDRAW = '0x2f940c70' // emergencyWithdraw(uint256,address)
 const LEGACY_VAULT_SELECTORS = new Set<string>([SELECTOR_VAULT_REDEEM, SELECTOR_VAULT_QUEUE, SELECTOR_VAULT_CLAIM])
 const LEGACY_VAULT_EMERGENCY_SELECTORS = new Set<string>([SELECTOR_VAULT_SHUTDOWN, SELECTOR_VAULT_EMERGENCY_PULL, SELECTOR_VAULT_EMERGENCY_WITHDRAW])
-/** All selectors allowed on a legacy vault target (normal withdraw + emergency ops). */
+/** All selectors allowed on a compatibility vault target (normal withdraw + emergency ops). */
 const ALL_LEGACY_VAULT_SELECTORS = new Set<string>(
   Array.from(LEGACY_VAULT_SELECTORS).concat(Array.from(LEGACY_VAULT_EMERGENCY_SELECTORS)),
 )
@@ -791,7 +791,7 @@ const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
 const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
-// Uniswap Universal Router on Base (legacy + current deployments).
+// Uniswap Universal Router on Base (compatibility + current deployments).
 const BASE_SWAP_ROUTER_LEGACY = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
 const BASE_SWAP_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
 const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
@@ -1018,7 +1018,7 @@ async function isCreatorAllowlisted(params: {
     return { mode: 'enforced', allowed: false }
   }
 
-  // Fallback (no DB): env allowlist (legacy/simple).
+  // Fallback (no DB): env allowlist (compatibility/simple).
   const allowlist = parseAllowlist(process.env.CREATOR_ALLOWLIST)
   const mode: AllowlistMode = allowlist.size > 0 ? 'enforced' : 'disabled'
   const allowed = mode === 'disabled' ? true : allowlist.has(addr)

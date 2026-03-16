@@ -101,9 +101,9 @@ export function getCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): n
 }
 
 export function getInitialConversationCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): number {
-  const legacyCheckpointMs = getCheckpointMs(lastProcessedAt, nowMs)
+  const storedCheckpointMs = getCheckpointMs(lastProcessedAt, nowMs)
   const rollingWindowCheckpointMs = nowMs - DEFAULT_CHECKPOINT_WINDOW_MS
-  return Math.max(0, Math.min(legacyCheckpointMs, rollingWindowCheckpointMs))
+  return Math.max(0, Math.min(storedCheckpointMs, rollingWindowCheckpointMs))
 }
 
 export function getMessageQueryOptions(lastProcessedMs: number): {
