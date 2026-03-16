@@ -13,6 +13,7 @@ import { StepIndicator } from '@/components/ui/StepIndicator'
 
 import type { Variant } from './waitlistTypes'
 import {
+  isRecoveryRequiredAuthError,
   runWaitlistPrivyLogout,
   shouldAutoStartWaitlistPrivyAuth,
   shouldStopWaitlistAutoAuthRetry,
@@ -91,31 +92,6 @@ function readApiErrorMessage(payload: unknown, fallback: string): string {
 function isSessionEmailMismatchError(message: unknown): boolean {
   const text = typeof message === 'string' ? message.toLowerCase() : ''
   return text.includes('email does not match authenticated user') || text.includes('session email mismatch')
-}
-
-function isRecoveryRequiredAuthError(error: unknown): boolean {
-  if (error && typeof error === 'object') {
-    const record = error as { recoveryRequired?: unknown; code?: unknown; message?: unknown }
-    if (record.recoveryRequired === true) return true
-    const code = typeof record.code === 'string' ? record.code.toLowerCase() : ''
-    if (code.includes('recovery_required')) return true
-    const message = typeof record.message === 'string' ? record.message.toLowerCase() : ''
-    if (
-      message.includes('recovery required') ||
-      message.includes('already linked to another account') ||
-      message.includes('recovery_required')
-    ) {
-      return true
-    }
-    return false
-  }
-
-  const text = typeof error === 'string' ? error.toLowerCase() : ''
-  return (
-    text.includes('recovery required') ||
-    text.includes('already linked to another account') ||
-    text.includes('recovery_required')
-  )
 }
 
 function useSafePrivy() {
@@ -268,7 +244,20 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     })
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
     if (!response.ok || !payload?.success || !payload.data) {
-      throw new Error(readApiErrorMessage(payload, 'Failed to bootstrap waitlist state.'))
+      const err = new Error(readApiErrorMessage(payload, 'Failed to bootstrap waitlist state.')) as Error & {
+        status?: number
+        code?: string
+        recoveryRequired?: boolean
+      }
+      err.status = response.status
+      const code = typeof (payload as any)?.code === 'string' ? String((payload as any).code).trim() : ''
+      if (code) err.code = code
+      const recoveryRequired =
+        response.status === 409 ||
+        Boolean((payload as any)?.recoveryRequired) ||
+        code.toUpperCase().includes('RECOVERY_REQUIRED')
+      if (recoveryRequired) err.recoveryRequired = true
+      throw err
     }
 
     if (payload.data.requiresPrivyAuth) {

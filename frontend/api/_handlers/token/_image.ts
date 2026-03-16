@@ -2127,7 +2127,7 @@ async function renderDeterministicTokenIcon(params: {
   const isBrightBackground =
     !!brightnessProfile &&
     (brightnessProfile.meanLuma > 190 || brightnessProfile.edgeLuma > 205)
-  const hasTopCenterTexture = !!topCenterTexture && topCenterTexture.topCenterStdDev > 22
+  const hasTopCenterTexture = !!topCenterTexture && topCenterTexture.topCenterStdDev > 19
   const shouldUseBreakout =
     !!preparedSource &&
     !!sourceMetrics &&

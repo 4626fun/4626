@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  isRecoveryRequiredAuthError,
   runWaitlistPrivyLogout,
   shouldAutoStartWaitlistPrivyAuth,
   shouldStopWaitlistAutoAuthRetry,
@@ -89,6 +90,20 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         authAutoAttempted: false,
       }),
     ).toBe(false)
+  })
+})
+
+describe('isRecoveryRequiredAuthError', () => {
+  it('detects recovery-required from status, flags, code, and message', () => {
+    expect(isRecoveryRequiredAuthError({ status: 409 })).toBe(true)
+    expect(isRecoveryRequiredAuthError({ recoveryRequired: true })).toBe(true)
+    expect(isRecoveryRequiredAuthError({ code: 'RECOVERY_REQUIRED_EMAIL_BOUND' })).toBe(true)
+    expect(isRecoveryRequiredAuthError(new Error('this email is already linked to another account'))).toBe(true)
+  })
+
+  it('returns false for unrelated errors', () => {
+    expect(isRecoveryRequiredAuthError({ status: 500, code: 'INTERNAL' })).toBe(false)
+    expect(isRecoveryRequiredAuthError(new Error('network timeout'))).toBe(false)
   })
 })
 
