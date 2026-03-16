@@ -1,215 +1,99 @@
+import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
 
 import { __testables } from '../_handlers/token/_image.ts'
 
+async function createSourcePng(params: {
+  width: number
+  height: number
+}): Promise<Uint8Array> {
+  const { width, height } = params
+  const bytes = await sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: { r: 229, g: 84, b: 66, alpha: 1 },
+    },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: {
+            width: Math.round(width * 0.58),
+            height: Math.round(height * 0.32),
+            channels: 4,
+            background: { r: 38, g: 152, b: 255, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
+        top: Math.round(height * 0.06),
+        left: Math.round(width * 0.2),
+      },
+    ])
+    .png()
+    .toBuffer()
+  return new Uint8Array(bytes)
+}
+
 describe('token image renderer', () => {
-  it('renders a single inner frame without an outer frame', () => {
-    const svg = __testables.generateFramedSvg({
-      size: 1024,
-      symbol: 'AKITA',
-      creatorCoinImage: 'data:image/png;base64,ZmFrZQ==',
-    })
-
-    expect(svg).toContain("data-frame='inner'")
-    expect(svg).not.toContain("data-frame='outer'")
+  it('keeps deterministic panel geometry', () => {
+    const layout = __testables.getTokenIconLayout(512)
+    expect(layout.panelSize).toBeGreaterThan(320)
+    expect(layout.panelRadius).toBeGreaterThan(40)
+    expect(layout.artSize).toBeGreaterThan(layout.panelSize)
   })
 
-  it('uses the real token artwork inside the branded icon composition', () => {
-    const href = 'data:image/png;base64,ZmFrZQ=='
-    const svg = __testables.generateFramedSvg({
-      size: 1024,
-      symbol: 'AKITA',
-      creatorCoinImage: href,
-    })
+  it('creates a top breakout mask in the centered top band', async () => {
+    const size = 512
+    const layout = __testables.getTokenIconLayout(size)
+    const mask = await __testables.createTopBreakoutMask({ size, layout })
+    const { data, info } = await sharp(mask).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+    const centerStartX = Math.round(layout.panelX + layout.panelSize * 0.35)
+    const centerEndX = Math.round(layout.panelX + layout.panelSize * 0.65)
+    const upperStartY = Math.max(0, layout.panelY - Math.round(layout.panelSize * 0.12))
+    const upperEndY = Math.min(size, layout.panelY + Math.round(layout.panelSize * 0.03))
+    const lowerStartY = Math.min(size - 1, layout.panelY + Math.round(layout.panelSize * 0.12))
+    const lowerEndY = Math.min(size, layout.panelY + Math.round(layout.panelSize * 0.24))
 
-    expect(svg).toContain(href)
-    expect(svg).toContain('preserveAspectRatio="xMidYMid meet"')
+    let upperAlphaSum = 0
+    let lowerAlphaSum = 0
+    for (let y = upperStartY; y < upperEndY; y += 1) {
+      for (let x = centerStartX; x < centerEndX; x += 1) {
+        upperAlphaSum += data[(y * info.width + x) * info.channels + 3]
+      }
+    }
+    for (let y = lowerStartY; y < lowerEndY; y += 1) {
+      for (let x = centerStartX; x < centerEndX; x += 1) {
+        lowerAlphaSum += data[(y * info.width + x) * info.channels + 3]
+      }
+    }
+
+    expect(upperAlphaSum).toBeGreaterThan(0)
+    expect(lowerAlphaSum).toBeLessThan(upperAlphaSum)
   })
 
-  it('renders an opaque canvas matte behind the rounded icon', () => {
-    const svg = __testables.generateFramedSvg({
+  it('renders deterministic icon output for provided source artwork', async () => {
+    const source = await createSourcePng({ width: 900, height: 1200 })
+    const rendered = await __testables.renderDeterministicTokenIcon({
       size: 512,
+      sourceBytes: source,
       symbol: 'AKITA',
-      creatorCoinImage: 'data:image/png;base64,ZmFrZQ==',
     })
-
-    expect(svg).toContain('<rect width="512" height="512" fill="#000000" />')
+    const meta = await sharp(Buffer.from(rendered)).metadata()
+    expect(meta.width).toBe(512)
+    expect(meta.height).toBe(512)
   })
 
-  it('allocates a larger artwork footprint for the crop-first layout', () => {
-    const layout = __testables.getTokenIconLayout(1024)
-
-    expect(layout.artSize).toBeGreaterThan(780)
-  })
-
-  it('biases moderately portrait artwork toward cover cropping', () => {
-    expect(__testables.chooseArtworkFitMode(768, 1024)).toBe('cover')
-  })
-
-  it('classifies transparent token art as contain', () => {
-    expect(
-      __testables.classifyTokenImageMetrics({
-        aspectRatio: 1,
-        hasTransparency: true,
-        alphaCoverage: 0.42,
-        edgeOccupancy: 0.18,
-        circularBadgeLikelihood: 0.12,
-        opaquePhotoLikelihood: 0.18,
-      }),
-    ).toMatchObject({
-      layoutMode: 'contain',
-      allowBreakout: false,
+  it('renders deterministic fallback icon when source artwork is missing', async () => {
+    const rendered = await __testables.renderDeterministicTokenIcon({
+      size: 512,
+      sourceBytes: null,
+      symbol: 'AKITA',
     })
-  })
-
-  it('classifies circular badge icons as coin mode', () => {
-    expect(
-      __testables.classifyTokenImageMetrics({
-        aspectRatio: 1,
-        hasTransparency: true,
-        alphaCoverage: 0.58,
-        edgeOccupancy: 0.08,
-        circularBadgeLikelihood: 0.92,
-        opaquePhotoLikelihood: 0.08,
-      }),
-    ).toMatchObject({
-      layoutMode: 'coin',
-      allowBreakout: false,
-    })
-  })
-
-  it('classifies opaque rectangular artwork as cover mode', () => {
-    expect(
-      __testables.classifyTokenImageMetrics({
-        aspectRatio: 1.18,
-        hasTransparency: false,
-        alphaCoverage: 1,
-        edgeOccupancy: 0.88,
-        circularBadgeLikelihood: 0.06,
-        opaquePhotoLikelihood: 0.94,
-      }),
-    ).toMatchObject({
-      layoutMode: 'cover',
-      allowBreakout: true,
-    })
-  })
-
-  it('disables breakout for coin recipes', () => {
-    const recipe = __testables.deriveTokenIconRecipe(
-      {
-        layoutMode: 'coin',
-        allowBreakout: false,
-      },
-      {
-        size: 1024,
-        hasUsableBreakoutMask: true,
-        breakoutCoverage: 0.42,
-      },
-    )
-
-    expect(recipe.mode).toBe('coin')
-    expect(recipe.breakout).toBe(false)
-  })
-
-  it('disables breakout when mask quality is poor', () => {
-    const recipe = __testables.deriveTokenIconRecipe(
-      {
-        layoutMode: 'cover',
-        allowBreakout: true,
-      },
-      {
-        size: 1024,
-        hasUsableBreakoutMask: false,
-        breakoutCoverage: 0.04,
-      },
-    )
-
-    expect(recipe.mode).toBe('cover')
-    expect(recipe.breakout).toBe(false)
-  })
-
-  it('uses a larger immersive scale for cover recipes', () => {
-    const recipe = __testables.deriveTokenIconRecipe(
-      {
-        layoutMode: 'cover',
-        allowBreakout: true,
-      },
-      {
-        size: 1024,
-        hasUsableBreakoutMask: false,
-        breakoutCoverage: 0.04,
-      },
-    )
-
-    expect(recipe.scale).toBeGreaterThanOrEqual(1.0)
-  })
-
-  it('enables breakout for strong cover candidates', () => {
-    const recipe = __testables.deriveTokenIconRecipe(
-      {
-        layoutMode: 'cover',
-        allowBreakout: true,
-      },
-      {
-        size: 1024,
-        hasUsableBreakoutMask: true,
-        breakoutCoverage: 0.12,
-      },
-    )
-
-    expect(recipe.breakout).toBe(true)
-  })
-
-  it('builds multi-recipe candidates for cover images with contain fallback', () => {
-    const recipes = __testables.buildCandidateRecipes({
-      classification: {
-        layoutMode: 'cover',
-        allowBreakout: true,
-      },
-      breakoutEvaluation: {
-        size: 1024,
-        hasUsableBreakoutMask: true,
-        breakoutCoverage: 0.12,
-      },
-      metrics: {
-        aspectRatio: 1,
-        hasTransparency: false,
-        alphaCoverage: 1,
-        edgeOccupancy: 0.88,
-        circularBadgeLikelihood: 0.18,
-        opaquePhotoLikelihood: 0.92,
-        topOccupancy: 0.2,
-      },
-    })
-
-    expect(recipes.length).toBeGreaterThanOrEqual(3)
-    expect(recipes.some((candidate) => candidate.mode === 'contain')).toBe(true)
-    expect(recipes.some((candidate) => candidate.mode === 'cover' && candidate.breakout)).toBe(true)
-  })
-
-  it('keeps coin-first candidate ordering for coin classifications', () => {
-    const recipes = __testables.buildCandidateRecipes({
-      classification: {
-        layoutMode: 'coin',
-        allowBreakout: false,
-      },
-      breakoutEvaluation: {
-        size: 1024,
-        hasUsableBreakoutMask: false,
-        breakoutCoverage: 0.02,
-      },
-      metrics: {
-        aspectRatio: 1,
-        hasTransparency: true,
-        alphaCoverage: 0.6,
-        edgeOccupancy: 0.12,
-        circularBadgeLikelihood: 0.93,
-        opaquePhotoLikelihood: 0.2,
-        topOccupancy: 0.04,
-      },
-    })
-
-    expect(recipes[0]?.mode).toBe('coin')
-    expect(recipes.every((candidate) => candidate.breakout === false)).toBe(true)
+    const meta = await sharp(Buffer.from(rendered)).metadata()
+    expect(meta.width).toBe(512)
+    expect(meta.height).toBe(512)
   })
 })

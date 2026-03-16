@@ -563,7 +563,7 @@ export function Swap() {
         throw new Error('Could not read your Privy access token. Please retry linking.')
       }
 
-      const res = await apiFetch('/api/telegram/link/complete', {
+      const res = await apiFetch('/api/telegram/miniapp/link', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

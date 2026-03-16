@@ -18,7 +18,7 @@ import { readTelegramMiniAppSessionToken } from './webhook/miniAppAuth.js'
 import { isTelegramMiniAppSessionEnabled, verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 import { asTrimmed, resolveTelegramLinkErrorStatusCode } from './webhook/utils.js'
 
-type LinkCompleteBody = {
+type MiniAppLinkBody = {
   token?: string
   telegramUsername?: string | null
   miniAppSessionToken?: string
@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<LinkCompleteBody>(req).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
+  const body = (await readJsonBody<MiniAppLinkBody>(req).catch(() => null)) ?? (req.body as MiniAppLinkBody | null) ?? {}
   const token = asTrimmed(body.token ?? '')
   const tokenStatus = readTelegramLinkStartTokenStatus(token)
   if (!tokenStatus.ok) {
