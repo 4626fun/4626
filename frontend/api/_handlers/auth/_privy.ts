@@ -196,7 +196,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
     } catch (dbSyncError) {
-      if (isIdentityRecoveryRequiredError(dbSyncError)) throw dbSyncError
+      if (isIdentityRecoveryRequiredError(dbSyncError)) {
+        // Do not block wallet-auth session establishment when identity writes need recovery.
+        // Recovery enforcement still happens in account/bootstrap endpoints that mutate identity state.
+        if (!sessionAddress) throw dbSyncError
+      }
       // best-effort: auth should succeed even if DB is unavailable
     }
 

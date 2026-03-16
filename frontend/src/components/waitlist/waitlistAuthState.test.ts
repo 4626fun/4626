@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { shouldAutoStartWaitlistPrivyAuth } from './waitlistAuthState'
+import {
+  runWaitlistPrivyLogout,
+  shouldAutoStartWaitlistPrivyAuth,
+  shouldShowWaitlistTelegramCta,
+} from './waitlistAuthState'
 
 describe('shouldAutoStartWaitlistPrivyAuth', () => {
   it('starts waitlist auth only on the auth step when Privy is ready and not authenticated', () => {
@@ -84,5 +88,86 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         authAutoAttempted: false,
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldShowWaitlistTelegramCta', () => {
+  it('shows Telegram fallback only on auth step when not busy and not in recovery mode', () => {
+    expect(
+      shouldShowWaitlistTelegramCta({
+        step: 'auth',
+        busy: false,
+        recoveryRequired: false,
+        isTelegramMiniApp: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('hides Telegram fallback while busy, during recovery, outside auth step, or outside Telegram Mini App', () => {
+    expect(
+      shouldShowWaitlistTelegramCta({
+        step: 'auth',
+        busy: true,
+        recoveryRequired: false,
+        isTelegramMiniApp: true,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldShowWaitlistTelegramCta({
+        step: 'auth',
+        busy: false,
+        recoveryRequired: true,
+        isTelegramMiniApp: true,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldShowWaitlistTelegramCta({
+        step: 'email',
+        busy: false,
+        recoveryRequired: false,
+        isTelegramMiniApp: true,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldShowWaitlistTelegramCta({
+        step: 'auth',
+        busy: false,
+        recoveryRequired: false,
+        isTelegramMiniApp: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('runWaitlistPrivyLogout', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('returns quickly when logout is unavailable or rejects', async () => {
+    await expect(runWaitlistPrivyLogout({ logout: null })).resolves.toBeUndefined()
+
+    const rejectingLogout = vi.fn(async () => {
+      throw new Error('blocked')
+    })
+    await expect(runWaitlistPrivyLogout({ logout: rejectingLogout, timeoutMs: 20 })).resolves.toBeUndefined()
+    expect(rejectingLogout).toHaveBeenCalledTimes(1)
+  })
+
+  it('times out if logout never resolves', async () => {
+    vi.useFakeTimers()
+    const neverResolvingLogout = vi.fn(() => new Promise<void>(() => {}))
+
+    const promise = runWaitlistPrivyLogout({
+      logout: neverResolvingLogout,
+      timeoutMs: 75,
+    })
+
+    await vi.advanceTimersByTimeAsync(75)
+    await expect(promise).resolves.toBeUndefined()
+    expect(neverResolvingLogout).toHaveBeenCalledTimes(1)
   })
 })

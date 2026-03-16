@@ -141,6 +141,26 @@ describe('auth privy wallet sync', () => {
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
+  it('keeps wallet sign-in successful when DB sync reports recovery required', async () => {
+    syncUserWalletsMock.mockRejectedValueOnce(
+      Object.assign(new Error('collision'), {
+        code: 'IDENTITY_RECOVERY_REQUIRED',
+        reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+      }),
+    )
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
+  })
+
   it('uses persisted canonical wallet when DB sync is throttled', async () => {
     restoreEnv?.()
     restoreEnv = applyEnv({

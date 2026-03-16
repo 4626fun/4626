@@ -12,7 +12,11 @@ import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 
 import type { Variant } from './waitlistTypes'
-import { shouldAutoStartWaitlistPrivyAuth } from './waitlistAuthState'
+import {
+  runWaitlistPrivyLogout,
+  shouldAutoStartWaitlistPrivyAuth,
+  shouldShowWaitlistTelegramCta,
+} from './waitlistAuthState'
 import { buildWaitlistPrivyLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import { canEnterAppFromAccountState, deriveWaitlistDoneUi, deriveWaitlistEmailUi, deriveWaitlistZoraUi } from './waitlistFlowUi'
 
@@ -223,6 +227,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
   const telegramAuthLoading = telegramAuthState.status === 'loading'
   const telegramAlreadyLinked = useMemo(() => hasLinkedTelegramAccount((privy as any)?.user), [privy])
+  const isTelegramMiniApp = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
 
   const isPage = variant === 'page'
 
@@ -320,7 +325,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
         authAutoAttemptedRef.current = true
-        await privyLogoutRef.current?.()
+        void runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         setRecoveryRequired(true)
       }
       setError(
@@ -342,7 +347,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setError(null)
     setRecoveryRequired(false)
     try {
-      await privyLogoutRef.current?.()
+      await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
       await login(buildWaitlistRecoveryLoginOptions() as any)
     } catch (recoverError: any) {
       setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
@@ -579,7 +584,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         const isSessionMismatch = isSessionEmailMismatchError(message)
         const isRecoveryRequired = isRecoveryRequiredAuthError(bootstrapError)
         if (isSessionMismatch || isRecoveryRequired) {
-          await privyLogoutRef.current?.()
+          void runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         }
         if (!cancelled) {
           if (isRecoveryRequired) setRecoveryRequired(true)
@@ -718,7 +723,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
               )}
             </button>
 
-            {step === 'auth' ? (
+            {shouldShowWaitlistTelegramCta({
+              step,
+              busy,
+              recoveryRequired,
+              isTelegramMiniApp,
+            }) ? (
               <button
                 type="button"
                 disabled={busy || telegramAuthLoading}

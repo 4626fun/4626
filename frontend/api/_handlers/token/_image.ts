@@ -918,6 +918,59 @@ async function analyzeBrightnessProfile(bytes: Uint8Array): Promise<{
   }
 }
 
+async function analyzeTopCenterTexture(bytes: Uint8Array): Promise<{
+  topCenterStdDev: number
+}> {
+  const sampleSize = 64
+  const { data, info } = await sharp(Buffer.from(bytes))
+    .rotate()
+    .resize(sampleSize, sampleSize, { fit: 'cover', position: 'centre' })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  const xStart = Math.max(0, Math.floor(sampleSize * 0.33))
+  const xEnd = Math.min(info.width, Math.ceil(sampleSize * 0.67))
+  const yStart = 0
+  const yEnd = Math.min(info.height, Math.ceil(sampleSize * 0.24))
+
+  let mean = 0
+  let count = 0
+  for (let y = yStart; y < yEnd; y += 1) {
+    for (let x = xStart; x < xEnd; x += 1) {
+      const idx = (y * info.width + x) * info.channels
+      const r = data[idx]
+      const g = data[idx + 1]
+      const b = data[idx + 2]
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      mean += luma
+      count += 1
+    }
+  }
+
+  if (count <= 0) {
+    return { topCenterStdDev: 0 }
+  }
+
+  mean /= count
+
+  let variance = 0
+  for (let y = yStart; y < yEnd; y += 1) {
+    for (let x = xStart; x < xEnd; x += 1) {
+      const idx = (y * info.width + x) * info.channels
+      const r = data[idx]
+      const g = data[idx + 1]
+      const b = data[idx + 2]
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      const delta = luma - mean
+      variance += delta * delta
+    }
+  }
+
+  variance /= count
+  return { topCenterStdDev: Math.sqrt(variance) }
+}
+
 async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | null }): Promise<PreparedArtworkLayers> {
   if (!params.bytes || params.bytes.length === 0) {
     return {
@@ -1264,7 +1317,7 @@ async function renderPlacedArtworkLayer(params: {
     .toBuffer()
 
   const coverTopBias = anchorTop ? Math.round(params.layout.panelSize * 0.052) : 0
-  const subtleTopBias = !anchorTop && params.fit === 'cover' ? Math.round(params.layout.panelSize * 0.018) : 0
+  const subtleTopBias = !anchorTop && params.fit === 'cover' ? Math.round(params.layout.panelSize * 0.008) : 0
   const compositeTop = Math.max(0, params.layout.artY - coverTopBias - subtleTopBias)
 
   const canvas = await sharp({
@@ -1627,7 +1680,7 @@ async function applyBreakoutAlphaMask(params: {
 function getDeterministicRecipe(): TokenIconRecipe {
   return {
     ...TOKEN_ICON_RECIPES.cover,
-    scale: 1.10,
+    scale: 1.04,
     innerPadding: 0,
     breakout: false,
   }
@@ -1645,14 +1698,14 @@ async function renderDeterministicBaseLayer(params: {
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <radialGradient id="bgFade" cx="50%" cy="45%" r="72%">
-        <stop offset="0%" stop-color="#020815"/>
-        <stop offset="52%" stop-color="#01050d"/>
+        <stop offset="0%" stop-color="#010611"/>
+        <stop offset="50%" stop-color="#00040b"/>
         <stop offset="100%" stop-color="#000000"/>
       </radialGradient>
 
       <linearGradient id="outerCard" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#020814"/>
-        <stop offset="100%" stop-color="#010306"/>
+        <stop offset="0%" stop-color="#01050f"/>
+        <stop offset="100%" stop-color="#000204"/>
       </linearGradient>
 
       <linearGradient id="innerPanel" x1="0" y1="0" x2="0" y2="1">
@@ -1783,6 +1836,7 @@ async function renderDeterministicFrameLayer(params: {
   const { size, layout } = params
   const stroke = Math.max(14, Math.round(size * 0.032))
   const inset = stroke / 2
+  const innerHighlightStroke = Math.max(2, Math.round(stroke * 0.16))
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="frameStroke" x1="0" y1="0" x2="1" y2="1">
@@ -1804,12 +1858,24 @@ async function renderDeterministicFrameLayer(params: {
       stroke-width="${stroke}"
       stroke-linejoin="round"
     />
+
+    <rect
+      x="${layout.panelX + inset}"
+      y="${layout.panelY + inset}"
+      width="${layout.panelSize - stroke}"
+      height="${layout.panelSize - stroke}"
+      rx="${Math.max(0, layout.panelRadius - inset)}"
+      fill="none"
+      stroke="rgba(255,255,255,0.22)"
+      stroke-width="${innerHighlightStroke}"
+      stroke-linejoin="round"
+    />
   </svg>`
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
 async function renderPremiumOuterGlow(size: number, layout: TokenIconLayout): Promise<Buffer> {
-  const glowStroke = Math.max(18, Math.round(size * 0.05))
+  const glowStroke = Math.max(20, Math.round(size * 0.058))
   const inset = glowStroke / 2
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <rect
@@ -1827,11 +1893,11 @@ async function renderPremiumOuterGlow(size: number, layout: TokenIconLayout): Pr
 
   const base = await sharp(Buffer.from(svg)).png().toBuffer()
   const blurA = await sharp(base)
-    .blur(Math.max(10, Math.round(size * 0.035)))
+    .blur(Math.max(12, Math.round(size * 0.04)))
     .png()
     .toBuffer()
   const blurB = await sharp(base)
-    .blur(Math.max(18, Math.round(size * 0.06)))
+    .blur(Math.max(22, Math.round(size * 0.075)))
     .png()
     .toBuffer()
 
@@ -1966,7 +2032,7 @@ async function createTopBreakoutLayer(params: {
     .composite([{ input: breakoutMask, blend: 'dest-in' }])
     .png()
     .toBuffer()
-  return applyLayerOpacity(masked, 0.58)
+  return applyLayerOpacity(masked, 0.52)
 }
 
 async function renderDeterministicTokenIcon(params: {
@@ -1978,13 +2044,25 @@ async function renderDeterministicTokenIcon(params: {
   let sourceMetrics: TokenImageMetrics | null = null
   let sourceIsLowRes = false
   let brightnessProfile: { meanLuma: number; edgeLuma: number } | null = null
+  let topCenterTexture: { topCenterStdDev: number } | null = null
 
   if (params.sourceBytes && params.sourceBytes.length > 0) {
-    const normalized = await normalizeImageToPng(params.sourceBytes)
-    preparedSource = await cropTransparentPadding(normalized)
-    sourceMetrics = await analyzeTokenImageBytes(preparedSource)
-    sourceIsLowRes = await isLowResolutionSource(preparedSource, params.size)
-    brightnessProfile = await analyzeBrightnessProfile(preparedSource)
+    try {
+      const normalized = await normalizeImageToPng(params.sourceBytes)
+      preparedSource = await cropTransparentPadding(normalized)
+      sourceMetrics = await analyzeTokenImageBytes(preparedSource)
+      sourceIsLowRes = await isLowResolutionSource(preparedSource, params.size)
+      brightnessProfile = await analyzeBrightnessProfile(preparedSource)
+      topCenterTexture = await analyzeTopCenterTexture(preparedSource)
+    } catch (error) {
+      // Some creator overrides can contain malformed bytes. Fallback to deterministic glyph icon.
+      console.warn('[token/image] deterministic source preprocessing failed; using fallback icon:', error)
+      preparedSource = null
+      sourceMetrics = null
+      sourceIsLowRes = false
+      brightnessProfile = null
+      topCenterTexture = null
+    }
   }
 
   let recipe = getDeterministicRecipe()
@@ -2046,8 +2124,18 @@ async function renderDeterministicTokenIcon(params: {
     blend: 'over',
   })
 
-  // Keep breakout disabled until panel/frame/glow composition is approved.
-  const shouldUseBreakout = false && !!preparedSource && !!sourceMetrics && !sourceIsLowRes
+  const isBrightBackground =
+    !!brightnessProfile &&
+    (brightnessProfile.meanLuma > 190 || brightnessProfile.edgeLuma > 205)
+  const hasTopCenterTexture = !!topCenterTexture && topCenterTexture.topCenterStdDev > 22
+  const shouldUseBreakout =
+    !!preparedSource &&
+    !!sourceMetrics &&
+    !sourceIsLowRes &&
+    !isBrightBackground &&
+    sourceMetrics.topOccupancy > 0.05 &&
+    sourceMetrics.topOccupancy < 0.17 &&
+    hasTopCenterTexture
 
   if (shouldUseBreakout && preparedSource) {
     const topBreakoutLayer = await createTopBreakoutLayer({
