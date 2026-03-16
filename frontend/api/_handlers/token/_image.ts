@@ -298,7 +298,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 59
+const FRAME_STYLE_V = 60
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 28 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 32 / 200
@@ -1221,7 +1221,8 @@ async function renderPlacedArtworkLayer(params: {
     .toBuffer()
 
   const coverTopBias = anchorTop ? Math.round(params.layout.panelSize * 0.052) : 0
-  const compositeTop = Math.max(0, params.layout.artY - coverTopBias)
+  const subtleTopBias = !anchorTop && params.fit === 'cover' ? Math.round(params.layout.panelSize * 0.018) : 0
+  const compositeTop = Math.max(0, params.layout.artY - coverTopBias - subtleTopBias)
 
   const canvas = await sharp({
     create: { width: params.size, height: params.size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
@@ -1583,7 +1584,7 @@ async function applyBreakoutAlphaMask(params: {
 function getDeterministicRecipe(): TokenIconRecipe {
   return {
     ...TOKEN_ICON_RECIPES.cover,
-    scale: 1.08,
+    scale: 1.10,
     innerPadding: 0,
     breakout: false,
   }
@@ -1595,17 +1596,50 @@ async function renderDeterministicBaseLayer(params: {
 }): Promise<Buffer> {
   const { size, layout } = params
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-    <rect width="${size}" height="${size}" fill="${TOKEN_ICON_STYLE.backgroundOuter}" />
+    <defs>
+      <radialGradient id="bg" cx="50%" cy="42%" r="72%">
+        <stop offset="0%" stop-color="#02060f"/>
+        <stop offset="55%" stop-color="#01040a"/>
+        <stop offset="100%" stop-color="#000000"/>
+      </radialGradient>
+      <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#0a1222"/>
+        <stop offset="100%" stop-color="#05070b"/>
+      </linearGradient>
+    </defs>
+
+    <rect width="${size}" height="${size}" fill="#000000"/>
+    <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bg)"/>
     <rect
       x="${layout.panelX}"
       y="${layout.panelY}"
       width="${layout.panelSize}"
       height="${layout.panelSize}"
       rx="${layout.panelRadius}"
-      fill="#05070b"
+      fill="url(#panel)"
     />
   </svg>`
-  return sharp(Buffer.from(svg)).png().toBuffer()
+
+  const base = await sharp(Buffer.from(svg)).png().toBuffer()
+  const shadowSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="${layout.panelX}"
+      y="${layout.panelY}"
+      width="${layout.panelSize}"
+      height="${layout.panelSize}"
+      rx="${layout.panelRadius}"
+      fill="none"
+      stroke="black"
+      stroke-opacity="0.48"
+      stroke-width="${Math.max(8, Math.round(size * 0.02))}"
+    />
+  </svg>`
+  const shadow = await sharp(Buffer.from(shadowSvg)).blur(6).png().toBuffer()
+
+  return sharp(base)
+    .composite([{ input: shadow, blend: 'multiply' }])
+    .png()
+    .toBuffer()
 }
 
 async function loadFrameOverlay(size: number, layout?: TokenIconLayout): Promise<Buffer | null> {
@@ -1661,6 +1695,11 @@ async function loadFrameOverlay(size: number, layout?: TokenIconLayout): Promise
         .composite([{ input: mask, blend: 'dest-in' }])
         .png()
         .toBuffer()
+      const stats = await sharp(frameOnly).stats()
+      const alphaMean = stats.channels[3]?.mean ?? 0
+      if (alphaMean < 2) {
+        continue
+      }
       return frameOnly
     } catch {
       // Continue to next candidate.
@@ -1674,35 +1713,76 @@ async function renderDeterministicFrameLayer(params: {
   layout: TokenIconLayout
 }): Promise<Buffer> {
   const { size, layout } = params
-  const thinFrameStroke = Math.max(1, Math.round(size * 0.0023))
-  const accentStroke = Math.max(1, Math.round(thinFrameStroke * 1.6))
+  const stroke = Math.max(10, Math.round(size * 0.028))
+  const inset = stroke / 2
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="frameStroke" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#f3f7ff"/>
+        <stop offset="45%" stop-color="#dbeafe"/>
+        <stop offset="78%" stop-color="#8fb3ff"/>
+        <stop offset="100%" stop-color="#2563eb"/>
+      </linearGradient>
+    </defs>
+
     <rect
-      x="${layout.panelX}"
-      y="${layout.panelY}"
-      width="${layout.panelSize}"
-      height="${layout.panelSize}"
-      rx="${layout.panelRadius}"
+      x="${layout.panelX + inset}"
+      y="${layout.panelY + inset}"
+      width="${layout.panelSize - stroke}"
+      height="${layout.panelSize - stroke}"
+      rx="${Math.max(0, layout.panelRadius - inset)}"
       fill="none"
-      stroke="#dbeafe"
-      stroke-opacity="0.78"
-      stroke-width="${thinFrameStroke}"
-      vector-effect="non-scaling-stroke"
-    />
-    <rect
-      x="${layout.panelX}"
-      y="${layout.panelY}"
-      width="${layout.panelSize}"
-      height="${layout.panelSize}"
-      rx="${layout.panelRadius}"
-      fill="none"
-      stroke="#8fb3ff"
-      stroke-opacity="0.54"
-      stroke-width="${accentStroke}"
-      vector-effect="non-scaling-stroke"
+      stroke="url(#frameStroke)"
+      stroke-width="${stroke}"
+      stroke-linejoin="round"
     />
   </svg>`
   return sharp(Buffer.from(svg)).png().toBuffer()
+}
+
+async function renderPremiumOuterGlow(size: number, layout: TokenIconLayout): Promise<Buffer> {
+  const outerStroke = Math.max(8, Math.round(size * 0.03))
+  const frameX = layout.panelX + outerStroke / 2
+  const frameY = layout.panelY + outerStroke / 2
+  const frameSize = layout.panelSize - outerStroke
+  const frameRadius = Math.max(0, layout.panelRadius - outerStroke / 2)
+  const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="${frameX}"
+      y="${frameY}"
+      width="${frameSize}"
+      height="${frameSize}"
+      rx="${frameRadius}"
+      fill="none"
+      stroke="#2563eb"
+      stroke-width="${outerStroke}"
+      opacity="0.95"
+    />
+  </svg>`
+
+  const base = await sharp(Buffer.from(svg)).png().toBuffer()
+  const blurred = await sharp(base)
+    .blur(Math.max(8, Math.round(size * 0.035)))
+    .png()
+    .toBuffer()
+
+  const holeSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="${layout.panelX}"
+      y="${layout.panelY}"
+      width="${layout.panelSize}"
+      height="${layout.panelSize}"
+      rx="${layout.panelRadius}"
+      fill="white"
+    />
+  </svg>`
+  const hole = await sharp(Buffer.from(holeSvg)).png().toBuffer()
+
+  return sharp(blurred)
+    .ensureAlpha()
+    .composite([{ input: hole, blend: 'dest-out' }])
+    .png()
+    .toBuffer()
 }
 
 async function renderDeterministicFallbackLayer(params: {
@@ -1737,19 +1817,19 @@ async function createTopBreakoutMask(params: {
   layout: TokenIconLayout
 }): Promise<Buffer> {
   const { size, layout } = params
-  const bandTop = Math.max(0, Math.round(layout.panelY - layout.panelSize * 0.11))
-  const bandBottom = Math.min(size, Math.round(layout.panelY + layout.panelSize * 0.035))
-  const centerWidth = Math.max(1, Math.round(layout.panelSize * 0.42))
+  const bandTop = Math.max(0, Math.round(layout.panelY - layout.panelSize * 0.09))
+  const bandBottom = Math.min(size, Math.round(layout.panelY + layout.panelSize * 0.02))
+  const centerWidth = Math.max(1, Math.round(layout.panelSize * 0.34))
   const left = Math.round(layout.panelX + (layout.panelSize - centerWidth) / 2)
   const maskHeight = Math.max(1, bandBottom - bandTop)
-  const radius = Math.max(1, Math.round(centerWidth * 0.18))
+  const radius = Math.max(1, Math.round(centerWidth * 0.22))
 
   const verticalSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="fadeY" x1="0" y1="${bandTop}" x2="0" y2="${bandBottom}" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="white" stop-opacity="1"/>
-        <stop offset="0.55" stop-color="white" stop-opacity="1"/>
-        <stop offset="1" stop-color="white" stop-opacity="0"/>
+        <stop offset="0%" stop-color="white" stop-opacity="1"/>
+        <stop offset="55%" stop-color="white" stop-opacity="1"/>
+        <stop offset="100%" stop-color="white" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <rect
@@ -1764,12 +1844,13 @@ async function createTopBreakoutMask(params: {
   const horizontalSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="fadeX" x1="${left}" y1="0" x2="${left + centerWidth}" y2="0" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="white" stop-opacity="0"/>
-        <stop offset="0.22" stop-color="white" stop-opacity="1"/>
-        <stop offset="0.78" stop-color="white" stop-opacity="1"/>
-        <stop offset="1" stop-color="white" stop-opacity="0"/>
+        <stop offset="0%" stop-color="white" stop-opacity="0"/>
+        <stop offset="25%" stop-color="white" stop-opacity="1"/>
+        <stop offset="75%" stop-color="white" stop-opacity="1"/>
+        <stop offset="100%" stop-color="white" stop-opacity="0"/>
       </linearGradient>
     </defs>
+
     <rect
       x="${left}"
       y="${bandTop}"
@@ -1784,7 +1865,7 @@ async function createTopBreakoutMask(params: {
   return sharp(vertical)
     .ensureAlpha()
     .composite([{ input: horizontal, blend: 'dest-in' }])
-    .blur(0.45)
+    .blur(0.35)
     .png()
     .toBuffer()
 }
@@ -1803,12 +1884,12 @@ async function createTopBreakoutLayer(params: {
     anchorTop: false,
   })
   const breakoutMask = await createTopBreakoutMask({ size, layout })
-  return sharp(Buffer.from(placed))
+  const masked = await sharp(Buffer.from(placed))
     .ensureAlpha()
     .composite([{ input: breakoutMask, blend: 'dest-in' }])
-    .blur(0.3)
     .png()
     .toBuffer()
+  return applyLayerOpacity(masked, 0.58)
 }
 
 async function renderDeterministicTokenIcon(params: {
@@ -1856,13 +1937,22 @@ async function renderDeterministicTokenIcon(params: {
     })
   }
 
+  const premiumFrameLayer = await renderDeterministicFrameLayer({
+    size: params.size,
+    layout,
+  })
   const frameOverlay = await loadFrameOverlay(params.size, layout)
-  const frameLayer =
-    frameOverlay ??
-    (await renderDeterministicFrameLayer({
-      size: params.size,
-      layout,
-    }))
+  const frameLayer = frameOverlay
+    ? await sharp(premiumFrameLayer)
+        .composite([
+          {
+            input: await applyLayerOpacity(frameOverlay, 0.42),
+            blend: 'screen',
+          },
+        ])
+        .png()
+        .toBuffer()
+    : premiumFrameLayer
 
   const overlays: sharp.OverlayOptions[] = []
   if (artLayer && artLayer.length > 0) {
@@ -1872,14 +1962,11 @@ async function renderDeterministicTokenIcon(params: {
     })
   }
 
-  if (!frameOverlay) {
-    const fallbackGlowLayer = await renderGlowLayerDataUri(params.size, layout)
-    const fallbackGlowLayerBytes = Buffer.from(fallbackGlowLayer.split(',')[1] ?? '', 'base64')
-    overlays.push({
-      input: await applyLayerOpacity(fallbackGlowLayerBytes, TOKEN_ICON_STYLE.glowOpacity),
-      blend: 'screen',
-    })
-  }
+  const premiumGlow = await renderPremiumOuterGlow(params.size, layout)
+  overlays.push({
+    input: premiumGlow,
+    blend: 'screen',
+  })
 
   overlays.push({
     input: frameLayer,
@@ -1890,8 +1977,8 @@ async function renderDeterministicTokenIcon(params: {
     !!preparedSource &&
     !!sourceMetrics &&
     !sourceIsLowRes &&
-    sourceMetrics.hasTransparency &&
-    sourceMetrics.topOccupancy > 0.02
+    sourceMetrics.topOccupancy > 0.045 &&
+    (sourceMetrics.hasTransparency || sourceMetrics.topOccupancy < 0.18)
 
   if (shouldUseBreakout && preparedSource) {
     const topBreakoutLayer = await createTopBreakoutLayer({
