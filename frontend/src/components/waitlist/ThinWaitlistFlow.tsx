@@ -15,6 +15,7 @@ import type { Variant } from './waitlistTypes'
 import {
   runWaitlistPrivyLogout,
   shouldAutoStartWaitlistPrivyAuth,
+  shouldStopWaitlistAutoAuthRetry,
   shouldShowWaitlistTelegramCta,
 } from './waitlistAuthState'
 import { buildWaitlistPrivyLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
@@ -583,6 +584,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
           typeof bootstrapError?.message === 'string' ? bootstrapError.message : 'Failed to load account state.'
         const isSessionMismatch = isSessionEmailMismatchError(message)
         const isRecoveryRequired = isRecoveryRequiredAuthError(bootstrapError)
+        if (
+          shouldStopWaitlistAutoAuthRetry({
+            isSessionMismatch,
+            isRecoveryRequired,
+          })
+        ) {
+          authAutoAttemptedRef.current = true
+        }
         if (isSessionMismatch || isRecoveryRequired) {
           void runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         }

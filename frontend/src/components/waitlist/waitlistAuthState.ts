@@ -15,6 +15,13 @@ export function shouldAutoStartWaitlistPrivyAuth(params: {
   return true
 }
 
+export function shouldStopWaitlistAutoAuthRetry(params: {
+  isSessionMismatch: boolean
+  isRecoveryRequired: boolean
+}): boolean {
+  return params.isSessionMismatch || params.isRecoveryRequired
+}
+
 export function shouldShowWaitlistTelegramCta(params: {
   step: 'email' | 'auth' | 'zora' | 'done'
   busy: boolean

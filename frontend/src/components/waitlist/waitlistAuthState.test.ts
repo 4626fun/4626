@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   runWaitlistPrivyLogout,
   shouldAutoStartWaitlistPrivyAuth,
+  shouldStopWaitlistAutoAuthRetry,
   shouldShowWaitlistTelegramCta,
 } from './waitlistAuthState'
 
@@ -86,6 +87,33 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldStopWaitlistAutoAuthRetry', () => {
+  it('stops auto retry on session mismatch or recovery required', () => {
+    expect(
+      shouldStopWaitlistAutoAuthRetry({
+        isSessionMismatch: true,
+        isRecoveryRequired: false,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldStopWaitlistAutoAuthRetry({
+        isSessionMismatch: false,
+        isRecoveryRequired: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('allows auto retry for non-auth bootstrap failures', () => {
+    expect(
+      shouldStopWaitlistAutoAuthRetry({
+        isSessionMismatch: false,
+        isRecoveryRequired: false,
       }),
     ).toBe(false)
   })
