@@ -30,6 +30,12 @@ export function resolveHelpCallbackCommand(rawData: string): string | null {
   if (!action || action === 'quick' || action === 'start') return '/help'
   if (action === 'inline') return '/inline'
   if (action === 'all') return '/help all'
+  if (action === 'arena_tune') return '/arena tune attack=100 eco=2.1 expansion=2.4 retreat=0.55 defense=1.3 air=0.4 raid=14 safety=8'
+  if (action === 'arena_rules') return '/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6'
+  if (action === 'arena_zones') return '/arena zones C:attack W:defend N:scout commander=SW'
+  if (action === 'arena_control') return '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW'
+  if (action === 'arena_play') return '/arena play'
+  if (action === 'arena_state') return '/arena state'
   if (
     action === 'core' ||
     action === 'coin' ||
@@ -68,6 +74,12 @@ export function resolveNavigationCallbackToast(rawData: string, mappedCommand: s
   if (token === 'menu:join') return 'Join flow'
   if (token === 'menu:eligibility') return 'Eligibility check'
   if (token === 'menu:rooms') return 'Rooms list'
+  if (token === 'help:arena_tune') return 'Arena tune template'
+  if (token === 'help:arena_rules') return 'Arena rules template'
+  if (token === 'help:arena_zones') return 'Arena zones template'
+  if (token === 'help:arena_control') return 'Arena control template'
+  if (token === 'help:arena_play') return 'Arena play'
+  if (token === 'help:arena_state') return 'Arena state'
   if (token === 'help:inline') return 'Inline shortcuts'
   if (token.startsWith('help:')) return 'Help topic'
   if (mappedCommand === '/help' || mappedCommand?.startsWith('/help ')) return 'Help'

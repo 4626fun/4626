@@ -364,6 +364,11 @@ function isHelpCategoryCommand(rawText: string): boolean {
   return /^\/?help\s+\S+\s*$/i.test(text) || /^\/?keepr\s+help\s+\S+\s*$/i.test(text)
 }
 
+function isArenaHelpCommand(rawText: string): boolean {
+  const text = asTrimmed(rawText)
+  return /^\/?help\s+arena\s*$/i.test(text) || /^\/?keepr\s+help\s+arena\s*$/i.test(text)
+}
+
 const TELEGRAM_NATIVE_COMMANDS = new Set([
   'start',
   'link',
@@ -1183,6 +1188,27 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
         { text: 'Arena', callback_data: 'help:arena' },
         { text: 'Help', callback_data: 'help:all' },
       ],
+      [{ text: menuLabel('back'), callback_data: 'menu:start' }],
+    ],
+  }
+}
+
+function buildArenaHelpShortcutReplyMarkup(): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Tune Template', callback_data: 'help:arena_tune' },
+        { text: 'Rules Template', callback_data: 'help:arena_rules' },
+      ],
+      [
+        { text: 'Zones Template', callback_data: 'help:arena_zones' },
+        { text: 'Control Template', callback_data: 'help:arena_control' },
+      ],
+      [
+        { text: 'Arena Play', callback_data: 'help:arena_play' },
+        { text: 'Arena State', callback_data: 'help:arena_state' },
+      ],
+      [{ text: 'Help Topics', callback_data: 'menu:topics' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -4970,11 +4996,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const helpMarkup = response.replyMarkup
-      ?? (isHelpCategoryCommand(mappedCommand)
-        ? buildHelpCategoryReplyMarkup()
-        : isHelpCommand(mappedCommand)
-          ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
-          : undefined)
+      ?? (isArenaHelpCommand(mappedCommand)
+        ? buildArenaHelpShortcutReplyMarkup()
+        : isHelpCategoryCommand(mappedCommand)
+          ? buildHelpCategoryReplyMarkup()
+          : isHelpCommand(mappedCommand)
+            ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
+            : undefined)
     if (canReplaceMenuMessage) {
       await replaceTelegramMenuMessage({
         botToken,
@@ -5102,11 +5130,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const chunks = splitTelegramMessage(response.text)
   const helpMarkup = response.replyMarkup
-    ?? (isHelpCategoryCommand(normalizedText)
-      ? buildHelpCategoryReplyMarkup()
-      : isHelpCommand(normalizedText)
-        ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
-        : undefined)
+    ?? (isArenaHelpCommand(normalizedText)
+      ? buildArenaHelpShortcutReplyMarkup()
+      : isHelpCategoryCommand(normalizedText)
+        ? buildHelpCategoryReplyMarkup()
+        : isHelpCommand(normalizedText)
+          ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
+          : undefined)
   for (let idx = 0; idx < chunks.length; idx += 1) {
     const chunk = chunks[idx]
     if (!chunk) continue

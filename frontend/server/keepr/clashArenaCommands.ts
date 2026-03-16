@@ -437,19 +437,33 @@ export function isClashArenaCommand(rawLower: string): boolean {
 }
 
 export function formatClashArenaHelpTopic(): string {
+  const tuneTemplate = '/arena tune attack=100 eco=2.1 expansion=2.4 retreat=0.55 defense=1.3 air=0.4 raid=14 safety=8'
+  const rulesTemplate = '/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6'
+  const zonesTemplate = '/arena zones C:attack W:defend N:scout commander=SW'
+  const controlTemplate = '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW'
   return [
     '<b>Keepr — arena</b>',
     '',
     '<blockquote>Control Clash of Claw (Beyond All Reason) from Telegram.</blockquote>',
+    '<u>Match flow</u>',
     formatCommandLine('/arena identify <name>', 'register commander name (3-24 chars)'),
     formatCommandLine('/arena play', 'one-tap: enable watch + search for a match'),
     formatCommandLine('/arena find', 'search for a match'),
     formatCommandLine('/arena state', 'current game state snapshot'),
     formatCommandLine('/arena result', 'latest match result'),
-    formatCommandLine('/arena tune attack=100 eco=2.1 expansion=2.4 retreat=0.55 defense=1.3 air=0.4 raid=14 safety=8', 'set pregame tuning'),
-    formatCommandLine('/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6', 'update production dials (0-10)'),
-    formatCommandLine('/arena zones C:attack W:defend N:scout commander=SW', 'zone orders + commander move'),
-    formatCommandLine('/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW', 'combined dials + zones'),
+    '',
+    '<u>Customization (copy + edit templates)</u>',
+    formatCommandLine(tuneTemplate, 'set pregame tuning'),
+    formatCommandLine(rulesTemplate, 'update production dials (0-10)'),
+    formatCommandLine(zonesTemplate, 'zone orders + commander move'),
+    formatCommandLine(controlTemplate, 'combined dials + zones'),
+    '',
+    '<u>Parameter guide</u>',
+    '<code>tune keys</code>: attack(10-300) eco(0.3-3.0) expansion(0.5-3.0) retreat(0.2-0.9) defense(0-4) air(0-2) raid(5-100) safety(1-30)',
+    '<code>dials</code>: ECO TECH DEF AIR ASSIST (each 0-10)',
+    '<code>zones</code>: NW N NE W C E SW S SE with attack|defend|scout|expand|hold|raid|retreat',
+    '',
+    formatCommandLine('/arena menu', 'alias for /arena help'),
     formatCommandLine('/arena watch on | off | status', 'Telegram live state updates every minute'),
     '',
     '<blockquote>Env: set <code>CLASH_OF_CLAW_API_KEY</code> (or <code>ARENA_API_KEY</code>).</blockquote>',
@@ -479,7 +493,7 @@ export async function handleClashArenaCommandWithContext(
   const subcommand = asTrimmed(parts[1] ?? 'help').toLowerCase()
   const rawArgs = splitArenaArgs(parts.slice(2))
 
-  if (subcommand === 'help') {
+  if (subcommand === 'help' || subcommand === 'menu') {
     return { ok: true, response: formatClashArenaHelpTopic() }
   }
 

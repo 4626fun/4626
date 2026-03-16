@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { shouldAutoRouteToAi } from '../_handlers/telegram/webhook/parsers/command.js'
+import { resolveHelpCallbackCommand, resolveNavigationCallbackToast } from '../_handlers/telegram/webhook/parsers/callbackMenu.js'
 import { parseDeployCallbackData, parseTelegramDeployIntent } from '../_handlers/telegram/webhook/parsers/deploy.js'
 import { parseHolderRoomIdentifier } from '../_handlers/telegram/webhook/parsers/holderRooms.js'
 import { buildInlineQueryAnswer, classifyInlineQuery } from '../_handlers/telegram/webhook/parsers/inline.js'
@@ -121,6 +122,20 @@ describe('telegram webhook parsers', () => {
     expect(classifyInlineQuery('mkt quote btc')).toBe('market')
     expect(classifyInlineQuery('ask ai')).toBe('ai')
     expect(classifyInlineQuery('')).toBe('discovery')
+  })
+
+  it('maps arena help shortcut callbacks to concrete commands', () => {
+    expect(resolveHelpCallbackCommand('help:arena_tune')).toBe(
+      '/arena tune attack=100 eco=2.1 expansion=2.4 retreat=0.55 defense=1.3 air=0.4 raid=14 safety=8',
+    )
+    expect(resolveHelpCallbackCommand('help:arena_rules')).toBe('/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6')
+    expect(resolveHelpCallbackCommand('help:arena_zones')).toBe('/arena zones C:attack W:defend N:scout commander=SW')
+    expect(resolveHelpCallbackCommand('help:arena_control')).toBe('/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW')
+    expect(resolveHelpCallbackCommand('help:arena_play')).toBe('/arena play')
+    expect(resolveHelpCallbackCommand('help:arena_state')).toBe('/arena state')
+    expect(resolveNavigationCallbackToast('help:arena_control', '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW')).toBe(
+      'Arena control template',
+    )
   })
 
   it('builds paginated inline answers with deterministic next_offset', () => {
