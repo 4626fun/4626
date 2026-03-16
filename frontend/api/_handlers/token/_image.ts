@@ -298,10 +298,10 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 60
+const FRAME_STYLE_V = 61
 const FRAME_VIEWBOX_SIZE = 256
-const FRAME_INSET_RATIO = 28 / FRAME_VIEWBOX_SIZE
-const FRAME_RADIUS_RATIO = 32 / 200
+const FRAME_INSET_RATIO = 36 / FRAME_VIEWBOX_SIZE
+const FRAME_RADIUS_RATIO = 30 / 184
 const FRAME_STROKE_RATIO = 12 / FRAME_VIEWBOX_SIZE
 
 const TOKEN_ICON_STYLE = {
@@ -1595,33 +1595,54 @@ async function renderDeterministicBaseLayer(params: {
   layout: TokenIconLayout
 }): Promise<Buffer> {
   const { size, layout } = params
+  const outerCardInset = Math.round(size * 0.012)
+  const outerCardSize = size - outerCardInset * 2
+  const outerCardRadius = Math.round(size * 0.22)
+
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <radialGradient id="bg" cx="50%" cy="42%" r="72%">
-        <stop offset="0%" stop-color="#02060f"/>
-        <stop offset="55%" stop-color="#01040a"/>
+      <radialGradient id="bgFade" cx="50%" cy="45%" r="72%">
+        <stop offset="0%" stop-color="#020815"/>
+        <stop offset="52%" stop-color="#01050d"/>
         <stop offset="100%" stop-color="#000000"/>
       </radialGradient>
-      <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#0a1222"/>
-        <stop offset="100%" stop-color="#05070b"/>
+
+      <linearGradient id="outerCard" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#020814"/>
+        <stop offset="100%" stop-color="#010306"/>
+      </linearGradient>
+
+      <linearGradient id="innerPanel" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#6f8da0"/>
+        <stop offset="100%" stop-color="#6f8da0"/>
       </linearGradient>
     </defs>
 
     <rect width="${size}" height="${size}" fill="#000000"/>
-    <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bg)"/>
+    <rect width="${size}" height="${size}" rx="${layout.outerRadius}" fill="url(#bgFade)"/>
+
+    <rect
+      x="${outerCardInset}"
+      y="${outerCardInset}"
+      width="${outerCardSize}"
+      height="${outerCardSize}"
+      rx="${outerCardRadius}"
+      fill="url(#outerCard)"
+    />
+
     <rect
       x="${layout.panelX}"
       y="${layout.panelY}"
       width="${layout.panelSize}"
       height="${layout.panelSize}"
       rx="${layout.panelRadius}"
-      fill="url(#panel)"
+      fill="url(#innerPanel)"
     />
   </svg>`
 
   const base = await sharp(Buffer.from(svg)).png().toBuffer()
-  const shadowSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+
+  const recessSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <rect
       x="${layout.panelX}"
       y="${layout.panelY}"
@@ -1630,14 +1651,18 @@ async function renderDeterministicBaseLayer(params: {
       rx="${layout.panelRadius}"
       fill="none"
       stroke="black"
-      stroke-opacity="0.48"
-      stroke-width="${Math.max(8, Math.round(size * 0.02))}"
+      stroke-opacity="0.24"
+      stroke-width="${Math.max(8, Math.round(size * 0.018))}"
     />
   </svg>`
-  const shadow = await sharp(Buffer.from(shadowSvg)).blur(6).png().toBuffer()
+
+  const recess = await sharp(Buffer.from(recessSvg))
+    .blur(5)
+    .png()
+    .toBuffer()
 
   return sharp(base)
-    .composite([{ input: shadow, blend: 'multiply' }])
+    .composite([{ input: recess, blend: 'multiply' }])
     .png()
     .toBuffer()
 }
@@ -1713,15 +1738,15 @@ async function renderDeterministicFrameLayer(params: {
   layout: TokenIconLayout
 }): Promise<Buffer> {
   const { size, layout } = params
-  const stroke = Math.max(10, Math.round(size * 0.028))
+  const stroke = Math.max(14, Math.round(size * 0.032))
   const inset = stroke / 2
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="frameStroke" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#f3f7ff"/>
-        <stop offset="45%" stop-color="#dbeafe"/>
-        <stop offset="78%" stop-color="#8fb3ff"/>
-        <stop offset="100%" stop-color="#2563eb"/>
+        <stop offset="0%" stop-color="#f2f7ff"/>
+        <stop offset="35%" stop-color="#d9e7ff"/>
+        <stop offset="72%" stop-color="#9bbcff"/>
+        <stop offset="100%" stop-color="#2f6fff"/>
       </linearGradient>
     </defs>
 
@@ -1741,28 +1766,37 @@ async function renderDeterministicFrameLayer(params: {
 }
 
 async function renderPremiumOuterGlow(size: number, layout: TokenIconLayout): Promise<Buffer> {
-  const outerStroke = Math.max(8, Math.round(size * 0.03))
-  const frameX = layout.panelX + outerStroke / 2
-  const frameY = layout.panelY + outerStroke / 2
-  const frameSize = layout.panelSize - outerStroke
-  const frameRadius = Math.max(0, layout.panelRadius - outerStroke / 2)
+  const glowStroke = Math.max(18, Math.round(size * 0.05))
+  const inset = glowStroke / 2
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <rect
-      x="${frameX}"
-      y="${frameY}"
-      width="${frameSize}"
-      height="${frameSize}"
-      rx="${frameRadius}"
+      x="${layout.panelX + inset}"
+      y="${layout.panelY + inset}"
+      width="${layout.panelSize - glowStroke}"
+      height="${layout.panelSize - glowStroke}"
+      rx="${Math.max(0, layout.panelRadius - inset)}"
       fill="none"
       stroke="#2563eb"
-      stroke-width="${outerStroke}"
-      opacity="0.95"
+      stroke-width="${glowStroke}"
+      opacity="1"
     />
   </svg>`
 
   const base = await sharp(Buffer.from(svg)).png().toBuffer()
-  const blurred = await sharp(base)
-    .blur(Math.max(8, Math.round(size * 0.035)))
+  const blurA = await sharp(base)
+    .blur(Math.max(10, Math.round(size * 0.035)))
+    .png()
+    .toBuffer()
+  const blurB = await sharp(base)
+    .blur(Math.max(18, Math.round(size * 0.06)))
+    .png()
+    .toBuffer()
+
+  const merged = await sharp(blurB)
+    .composite([
+      { input: blurA, blend: 'screen' },
+      { input: blurB, blend: 'screen' },
+    ])
     .png()
     .toBuffer()
 
@@ -1778,7 +1812,7 @@ async function renderPremiumOuterGlow(size: number, layout: TokenIconLayout): Pr
   </svg>`
   const hole = await sharp(Buffer.from(holeSvg)).png().toBuffer()
 
-  return sharp(blurred)
+  return sharp(merged)
     .ensureAlpha()
     .composite([{ input: hole, blend: 'dest-out' }])
     .png()
@@ -1937,22 +1971,10 @@ async function renderDeterministicTokenIcon(params: {
     })
   }
 
-  const premiumFrameLayer = await renderDeterministicFrameLayer({
+  const frameLayer = await renderDeterministicFrameLayer({
     size: params.size,
     layout,
   })
-  const frameOverlay = await loadFrameOverlay(params.size, layout)
-  const frameLayer = frameOverlay
-    ? await sharp(premiumFrameLayer)
-        .composite([
-          {
-            input: await applyLayerOpacity(frameOverlay, 0.42),
-            blend: 'screen',
-          },
-        ])
-        .png()
-        .toBuffer()
-    : premiumFrameLayer
 
   const overlays: sharp.OverlayOptions[] = []
   if (artLayer && artLayer.length > 0) {
@@ -1973,12 +1995,8 @@ async function renderDeterministicTokenIcon(params: {
     blend: 'over',
   })
 
-  const shouldUseBreakout =
-    !!preparedSource &&
-    !!sourceMetrics &&
-    !sourceIsLowRes &&
-    sourceMetrics.topOccupancy > 0.045 &&
-    (sourceMetrics.hasTransparency || sourceMetrics.topOccupancy < 0.18)
+  // Keep breakout disabled until panel/frame/glow composition is approved.
+  const shouldUseBreakout = false && !!preparedSource && !!sourceMetrics && !sourceIsLowRes
 
   if (shouldUseBreakout && preparedSource) {
     const topBreakoutLayer = await createTopBreakoutLayer({
