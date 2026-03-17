@@ -206,6 +206,7 @@ describe('generateLlmResponse memory integration', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('unverified in current runtime')
     expect(result.response).toContain('Telegram + XMTP')
     expect(result.response).toContain('Coinbase Smart Wallet')
     expect(generateResponseMock).not.toHaveBeenCalled()
@@ -222,11 +223,12 @@ describe('generateLlmResponse memory integration', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('unverified in current runtime')
     expect(result.response).toContain('Telegram + XMTP')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
-  it('answers ElizaOS connection questions explicitly', async () => {
+  it('answers ElizaOS connection questions with bounded fallback when runtime is unverified', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     const result = await generateLlmResponse({
       groupId: 'telegram:-100123',
@@ -236,13 +238,30 @@ describe('generateLlmResponse memory integration', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response.toLowerCase()).toContain('yes')
-    expect(result.response).toContain('ElizaOS')
+    expect(result.response.toLowerCase()).toContain("can't verify a live elizaos connection")
     expect(result.response).toContain('Telegram')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
-  it('answers ElizaOS identity questions with typo variants', async () => {
+  it('answers ElizaOS connection questions affirmatively only when runtime verification is true', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x5555555555555555555555555555555555555555',
+      text: 'are you connected to elizaOS?',
+      vault: null,
+      runtimeTruth: {
+        isElizaConnected: true,
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('Yes')
+    expect(result.response).toContain('ElizaOS')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers ElizaOS identity questions with typo variants without forced yes', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     const result = await generateLlmResponse({
       groupId: 'telegram:-100123',
@@ -252,13 +271,13 @@ describe('generateLlmResponse memory integration', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response.toLowerCase()).toContain('yes')
+    expect(result.response.toLowerCase()).toContain('cannot verify')
     expect(result.response).toContain('ElizaOS')
     expect(result.response).toContain('Telegram')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
-  it('answers persistent memory questions deterministically', async () => {
+  it('answers persistent memory questions with bounded fallback when memory is unverified', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     const result = await generateLlmResponse({
       groupId: 'telegram:-100123',
@@ -268,13 +287,29 @@ describe('generateLlmResponse memory integration', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response.toLowerCase()).toContain('yes')
-    expect(result.response.toLowerCase()).toContain('memory')
-    expect(result.response.toLowerCase()).toContain('conversation')
+    expect(result.response).toContain('I only have access to the current chat context')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
-  it('answers Eliza remember prompts without denying memory', async () => {
+  it('answers persistent memory questions affirmatively when memory is verified', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x5555555555555555555555555555555555555555',
+      text: 'hi do you have persistent memory now?',
+      vault: null,
+      runtimeTruth: {
+        hasPersistentMemory: true,
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('Yes')
+    expect(result.response.toLowerCase()).toContain('memory')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers Eliza remember prompts with memory limits when unverified', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     const result = await generateLlmResponse({
       groupId: 'telegram:-100123',
@@ -284,9 +319,7 @@ describe('generateLlmResponse memory integration', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response.toLowerCase()).toContain('memory')
-    expect(result.response.toLowerCase()).toContain('conversation')
-    expect(result.response.toLowerCase()).not.toContain("don't retain information between sessions")
+    expect(result.response).toContain('current chat context')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
@@ -301,7 +334,7 @@ describe('generateLlmResponse memory integration', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('Akitai (Keepr)')
-    expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('Runtime status:')
     expect(result.response).toContain('Telegram')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
@@ -317,7 +350,41 @@ describe('generateLlmResponse memory integration', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('Akitai (Keepr)')
-    expect(result.response).toContain('ElizaOS')
+    expect(result.response).toContain('Runtime status:')
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('answers vault deployment flow questions with bounded fallback when unverified', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x7777777777777777777777777777777777777777',
+      text: 'How does vault deployment flow work in the app?',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain("can't verify the exact in-app deployment steps")
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('uses verified deployment flow context when provided', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:-100123',
+      senderWallet: '0x7777777777777777777777777777777777777777',
+      text: 'How does vault deployment flow work in the app?',
+      vault: null,
+      runtimeTruth: {
+        hasVerifiedDeploymentFlow: true,
+        deploymentFlowSource: 'docs',
+        deploymentFlowSummary: 'Phase 1 deploys vault + wrapper, then later phases activate strategies and launch.',
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('verified docs context')
+    expect(result.response).toContain('Phase 1 deploys vault + wrapper')
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
@@ -335,5 +402,6 @@ describe('generateLlmResponse memory integration', () => {
     expect(call?.systemPrompt).toContain('You are Akitai (Keepr), the 4626 assistant.')
     expect(call?.systemPrompt).toContain('currently responding inside Telegram')
     expect(call?.systemPrompt).toContain('Never claim you are Meta AI')
+    expect(call?.systemPrompt).toContain('Only claim live ElizaOS connection when runtime verification is true')
   })
 })

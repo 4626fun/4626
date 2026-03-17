@@ -3,6 +3,12 @@ import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import { toAgentError } from '../agent/eliza/_errors.js'
 import { getElizaLlmService } from '../agent/eliza/llm.js'
 import { createRuntimeBridge } from '../agent/eliza/runtimeBridge.js'
+import {
+  hasVerifiedMemoryContinuity,
+  resolveAssistantRuntimeTruth,
+  type AssistantRuntimeTruth,
+  type AssistantRuntimeTruthInput,
+} from './runtimeTruth.js'
 
 const llmService = getElizaLlmService()
 const CHAT_MEMORY_AGENT_KEY = 'keepr-ai-chat'
@@ -43,22 +49,29 @@ function platformLabelForPrompt(conversationType: string): string {
   return 'group chat'
 }
 
-function buildSystemPrompt(vault: KeeprVaultRow | null, conversationType: string): string {
+function buildSystemPrompt(
+  vault: KeeprVaultRow | null,
+  conversationType: string,
+  runtimeTruth: AssistantRuntimeTruth,
+): string {
   const platform = platformLabelForPrompt(conversationType)
   const base = [
     'You are Akitai (Keepr), the 4626 assistant.',
     `You are currently responding inside ${platform}.`,
     'Core runtime facts you must keep accurate:',
-    '- Runtime/orchestration: ElizaOS + 4626 action plugins.',
+    '- Runtime/orchestration (configured stack): ElizaOS + 4626 action plugins.',
+    `- ElizaOS connection (current runtime): ${runtimeTruth.isElizaConnected ? 'verified' : 'unverified'}.`,
     '- Messaging transports: Telegram and XMTP.',
     '- Wallet/auth context: Privy + Coinbase Smart Wallet (ERC-4337).',
     '- LLM serving: 4626 Eliza LLM service with provider routing.',
-    'When users ask if you are connected to ElizaOS, answer yes.',
-    'When users ask about memory, explain that memory is persistent per conversation (when storage is available).',
-    'If conversation memory blocks are present, never claim you have no memory for this conversation.',
+    `- Conversation memory (current runtime): ${hasVerifiedMemoryContinuity(runtimeTruth) ? 'verified available' : 'not verified available'}.`,
+    `- Vault deployment context (trusted source): ${runtimeTruth.hasVerifiedDeploymentFlow ? String(runtimeTruth.deploymentFlowSource ?? 'app_state') : 'unverified'}.`,
+    'Only claim live ElizaOS connection when runtime verification is true.',
+    'Only claim memory continuity when current-conversation memory/session storage is verified available.',
+    'Only describe exact vault deployment steps when they are present in trusted app state, docs, config, or backend responses.',
     'Prefer continuity by using provided <conversation_history>, <memory_snapshot>, <fact_cards>, <open_tasks>, and <semantic_recall> blocks.',
-    'If users ask "are you Eliza/ElizaOS" (including minor misspellings like "elizao"), clarify that you are Akitai running on ElizaOS.',
-    'Never claim you are Meta AI, a generic model, or that your stack is unknown.',
+    'If users ask "are you Eliza/ElizaOS" (including minor misspellings like "elizao"), clarify that you are Akitai and report ElizaOS connection status truthfully.',
+    'Never claim you are Meta AI or a different assistant identity.',
     'Keep responses concise (2-3 sentences max).',
     'Be factual and helpful. Do NOT make financial guarantees or investment recommendations.',
     'Do NOT hallucinate features that do not exist.',
@@ -99,7 +112,7 @@ function normalizeIntentText(text: string): string {
     .trim()
 }
 
-type IdentityIntent = 'stack' | 'eliza' | 'memory' | 'identity' | null
+type IdentityIntent = 'stack' | 'eliza' | 'memory' | 'vault_deployment' | 'identity' | null
 
 function classifyIdentityIntent(text: string): IdentityIntent {
   const normalized = normalizeIntentText(text)
@@ -109,6 +122,10 @@ function classifyIdentityIntent(text: string): IdentityIntent {
   const mentionsEliza = /\beliza(?:\s*os)?\b|\beliza[a-z0-9]{1,3}\b/.test(normalized)
   const mentionsMemory = /\b(memory|remember|recall|context)\b/.test(normalized)
   const mentionsPersistence = /\b(persistent|persist|across|between|session|sessions|retain|store|saved|save)\b/.test(normalized)
+  const asksVaultDeploymentFlow =
+    /\bvault\b/.test(normalized) &&
+    /\b(deploy|deployment|launch|setup|phase|phases)\b/.test(normalized) &&
+    /\b(how|flow|steps?|process|walkthrough|walk through|explain|what)\b/.test(normalized)
   const asksWho =
     /\bwho(?:mst)?\s+are\s+you\b/.test(normalized) ||
     /\bwhat\s+are\s+you\b/.test(normalized) ||
@@ -122,6 +139,9 @@ function classifyIdentityIntent(text: string): IdentityIntent {
 
   if (mentionsMemory && (mentionsPersistence || mentionsEliza || /\bi thought\b|\ballowed\b/.test(normalized))) {
     return 'memory'
+  }
+  if (asksVaultDeploymentFlow) {
+    return 'vault_deployment'
   }
   if (mentionsStack && /\b(your|you|current|tech|what|tell)\b/.test(normalized)) {
     return 'stack'
@@ -152,42 +172,65 @@ function isLikelyIdentityDrift(text: string): boolean {
   )
 }
 
-function buildStackSnapshotReply(conversationType: string): string {
+function buildStackSnapshotReply(conversationType: string, runtimeTruth: AssistantRuntimeTruth): string {
   const platform = platformLabelForPrompt(conversationType)
   return [
     `Current stack (${platform} route):`,
-    '- Runtime/orchestration: ElizaOS + 4626 plugins/actions',
+    '- Runtime/orchestration (configured): ElizaOS + 4626 plugins/actions',
+    `- ElizaOS connection status: ${runtimeTruth.isElizaConnected ? 'verified in current runtime' : 'unverified in current runtime'}`,
     '- Messaging: Telegram + XMTP',
     '- Wallet/auth context: Privy + Coinbase Smart Wallet (ERC-4337)',
     '- LLM serving: 4626 Eliza LLM service (provider can vary by runtime policy)',
   ].join('\n')
 }
 
-function buildElizaConnectionReply(conversationType: string): string {
+function buildElizaConnectionReply(conversationType: string, runtimeTruth: AssistantRuntimeTruth): string {
   const platform = platformLabelForPrompt(conversationType)
+  if (!runtimeTruth.isElizaConnected) {
+    return [
+      "I may be running in a simulated or app-managed environment, and I can't verify a live ElizaOS connection from the current runtime.",
+      `I can still help in this ${platform} chat with the context currently available.`,
+    ].join('\n')
+  }
   return [
-    'Yes — I am connected to ElizaOS.',
-    `This ${platform} assistant runs through 4626's Eliza-based runtime.`,
+    'Yes — runtime state verifies an active ElizaOS connection.',
+    `This ${platform} assistant is currently running through 4626's Eliza-based runtime.`,
     'You can ask `/ai what is your current stack` for a stack breakdown.',
   ].join('\n')
 }
 
-function buildIdentityReply(conversationType: string): string {
+function buildIdentityReply(conversationType: string, runtimeTruth: AssistantRuntimeTruth): string {
   const platform = platformLabelForPrompt(conversationType)
+  const runtimeLine = runtimeTruth.isElizaConnected
+    ? "Runtime status: ElizaOS connection is verified for this assistant context."
+    : "Runtime status: ElizaOS connection is not verified from the current runtime."
   return [
     `I am Akitai (Keepr), the 4626 assistant for ${platform}.`,
-    "I'm connected to ElizaOS and run through 4626's Eliza-based runtime.",
+    runtimeLine,
     'I can help with vault actions, trading flows, and ecosystem questions.',
   ].join('\n')
 }
 
-function buildMemoryReply(conversationType: string): string {
+function buildMemoryReply(conversationType: string, runtimeTruth: AssistantRuntimeTruth): string {
   const platform = platformLabelForPrompt(conversationType)
+  if (!hasVerifiedMemoryContinuity(runtimeTruth)) {
+    return [
+      'I only have access to the current chat context unless persistent memory is enabled and available.',
+      `For this ${platform} chat, I can continue with what is visible in the current thread.`,
+    ].join('\n')
+  }
   return [
     `Yes — I keep memory for this ${platform} conversation.`,
     'I retain recent turns plus summarized facts/tasks, and can restore older context when storage is available.',
     "Memory is scoped per conversation, so I don't mix context from unrelated chats.",
   ].join('\n')
+}
+
+function buildVaultDeploymentReply(runtimeTruth: AssistantRuntimeTruth): string {
+  if (!runtimeTruth.hasVerifiedDeploymentFlow || !runtimeTruth.deploymentFlowSummary) {
+    return "I can describe the intended high-level flow, but I can't verify the exact in-app deployment steps from the current context."
+  }
+  return `From verified ${runtimeTruth.deploymentFlowSource ?? 'app_state'} context: ${runtimeTruth.deploymentFlowSummary}`
 }
 
 type ConversationTurn = { role: 'user' | 'assistant'; text: string }
@@ -285,20 +328,25 @@ export async function generateLlmResponse(params: {
   senderWallet: string
   text: string
   vault: KeeprVaultRow | null
+  runtimeTruth?: AssistantRuntimeTruthInput
 }): Promise<{ ok: true; response: string } | { ok: false; response: string }> {
   const conversationType = resolveConversationType(params.groupId)
+  let runtimeTruth = resolveAssistantRuntimeTruth(params.runtimeTruth)
   const identityIntent = classifyIdentityIntent(params.text)
   if (identityIntent === 'stack') {
-    return { ok: true, response: buildStackSnapshotReply(conversationType) }
+    return { ok: true, response: buildStackSnapshotReply(conversationType, runtimeTruth) }
   }
   if (identityIntent === 'eliza') {
-    return { ok: true, response: buildElizaConnectionReply(conversationType) }
+    return { ok: true, response: buildElizaConnectionReply(conversationType, runtimeTruth) }
   }
   if (identityIntent === 'memory') {
-    return { ok: true, response: buildMemoryReply(conversationType) }
+    return { ok: true, response: buildMemoryReply(conversationType, runtimeTruth) }
+  }
+  if (identityIntent === 'vault_deployment') {
+    return { ok: true, response: buildVaultDeploymentReply(runtimeTruth) }
   }
   if (identityIntent === 'identity') {
-    return { ok: true, response: buildIdentityReply(conversationType) }
+    return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth) }
   }
 
   if (!canCallLlm(params.groupId)) {
@@ -331,6 +379,10 @@ export async function generateLlmResponse(params: {
       if (structuredMemoryContext) {
         historyContext = [historyContext, structuredMemoryContext].filter(Boolean).join('\n\n')
       }
+      runtimeTruth = {
+        ...runtimeTruth,
+        hasConversationMemory: true,
+      }
       logger.info('[ai/chat] conversation memory loaded', {
         groupId: params.groupId,
         turns: historyTurns,
@@ -346,7 +398,7 @@ export async function generateLlmResponse(params: {
     const result = await llmService.generateResponse({
       agentKey: params.groupId,
       userMessage: `${identityHint}: ${params.text}`,
-      systemPrompt: buildSystemPrompt(params.vault, conversationType),
+      systemPrompt: buildSystemPrompt(params.vault, conversationType, runtimeTruth),
       vaultContext: historyContext,
       correlationId: `keepr-${params.groupId}-${Date.now()}`,
     })
@@ -361,13 +413,15 @@ export async function generateLlmResponse(params: {
     if (isLikelyIdentityDrift(finalText)) {
       const fallbackIntent = classifyIdentityIntent(params.text)
       if (fallbackIntent === 'stack') {
-        finalText = buildStackSnapshotReply(conversationType)
+        finalText = buildStackSnapshotReply(conversationType, runtimeTruth)
       } else if (fallbackIntent === 'eliza') {
-        finalText = buildElizaConnectionReply(conversationType)
+        finalText = buildElizaConnectionReply(conversationType, runtimeTruth)
       } else if (fallbackIntent === 'memory') {
-        finalText = buildMemoryReply(conversationType)
+        finalText = buildMemoryReply(conversationType, runtimeTruth)
+      } else if (fallbackIntent === 'vault_deployment') {
+        finalText = buildVaultDeploymentReply(runtimeTruth)
       } else if (fallbackIntent === 'identity') {
-        finalText = buildIdentityReply(conversationType)
+        finalText = buildIdentityReply(conversationType, runtimeTruth)
       }
     }
 
