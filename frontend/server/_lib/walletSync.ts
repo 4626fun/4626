@@ -87,21 +87,43 @@ function extractPrivyEmail(user: PrivyUserLike): string | null {
   return null
 }
 
-async function findProfileByProfileColumns(db: Db, address: string): Promise<ExistingProfile | null> {
-  const result = await db.sql`
-    SELECT id, email
-    FROM profiles
-    WHERE LOWER(primary_wallet) = ${address}
-       OR LOWER(embedded_wallet) = ${address}
-       OR LOWER(csw_address) = ${address}
-       OR LOWER(base_sub_account) = ${address}
-       OR LOWER(primary_smart_wallet) = ${address}
-       OR LOWER(primary_embedded_eoa) = ${address}
-       OR solana_wallet = ${address}
-       OR canonical_solana_wallet = ${address}
-       OR operational_solana_wallet = ${address}
-    LIMIT 1;
-  `
+async function findProfileByProfileColumns(db: Db, params: {
+  address: string
+  privyUserId: string | null
+}): Promise<ExistingProfile | null> {
+  const { address, privyUserId } = params
+  const result = privyUserId
+    ? await db.sql`
+        SELECT id, email
+        FROM profiles
+        WHERE (
+          LOWER(primary_wallet) = ${address}
+             OR LOWER(embedded_wallet) = ${address}
+             OR LOWER(csw_address) = ${address}
+             OR LOWER(base_sub_account) = ${address}
+             OR LOWER(primary_smart_wallet) = ${address}
+             OR LOWER(primary_embedded_eoa) = ${address}
+             OR solana_wallet = ${address}
+             OR canonical_solana_wallet = ${address}
+             OR operational_solana_wallet = ${address}
+        )
+          AND (privy_user_id IS NULL OR privy_user_id = ${privyUserId})
+        LIMIT 1;
+      `
+    : await db.sql`
+        SELECT id, email
+        FROM profiles
+        WHERE LOWER(primary_wallet) = ${address}
+           OR LOWER(embedded_wallet) = ${address}
+           OR LOWER(csw_address) = ${address}
+           OR LOWER(base_sub_account) = ${address}
+           OR LOWER(primary_smart_wallet) = ${address}
+           OR LOWER(primary_embedded_eoa) = ${address}
+           OR solana_wallet = ${address}
+           OR canonical_solana_wallet = ${address}
+           OR operational_solana_wallet = ${address}
+        LIMIT 1;
+      `
   const row = result.rows?.[0] as { id?: number; email?: string | null } | undefined
   if (!row?.id) return null
   return { id: Number(row.id), email: row.email ?? null }
@@ -120,19 +142,45 @@ async function findExistingProfile(db: Db, privyUserId: string | null, wallets: 
   }
 
   for (const wallet of wallets) {
-    const byWalletJoin = await db.sql`
-      SELECT p.id, p.email
-      FROM profile_wallets pw
-      JOIN profiles p ON p.id = pw.profile_id
-      WHERE LOWER(pw.address) = ${wallet.address}
-      LIMIT 1;
-    `
+    const byWalletJoin = privyUserId
+      ? await db.sql`
+          SELECT p.id, p.email
+          FROM profile_wallets pw
+          JOIN profiles p ON p.id = pw.profile_id
+          WHERE LOWER(pw.address) = ${wallet.address}
+            AND (
+              pw.is_primary = true
+              OR pw.is_canonical_smart_wallet = true
+              OR pw.is_embedded_eoa = true
+              OR pw.is_canonical_solana_wallet = true
+              OR pw.is_operational_solana_wallet = true
+            )
+            AND (p.privy_user_id IS NULL OR p.privy_user_id = ${privyUserId})
+          LIMIT 1;
+        `
+      : await db.sql`
+          SELECT p.id, p.email
+          FROM profile_wallets pw
+          JOIN profiles p ON p.id = pw.profile_id
+          WHERE LOWER(pw.address) = ${wallet.address}
+            AND (
+              pw.is_primary = true
+              OR pw.is_canonical_smart_wallet = true
+              OR pw.is_embedded_eoa = true
+              OR pw.is_canonical_solana_wallet = true
+              OR pw.is_operational_solana_wallet = true
+            )
+          LIMIT 1;
+        `
     const row = byWalletJoin.rows?.[0] as { id?: number; email?: string | null } | undefined
     if (row?.id) return { id: Number(row.id), email: row.email ?? null }
   }
 
   for (const wallet of wallets) {
-    const profileColumnMatch = await findProfileByProfileColumns(db, wallet.address)
+    const profileColumnMatch = await findProfileByProfileColumns(db, {
+      address: wallet.address,
+      privyUserId,
+    })
     if (profileColumnMatch) return profileColumnMatch
   }
 
