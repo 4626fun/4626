@@ -271,7 +271,7 @@ describe('generateLlmResponse memory integration', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response.toLowerCase()).toContain('cannot verify')
+    expect(result.response.toLowerCase()).toContain("can't verify")
     expect(result.response).toContain('ElizaOS')
     expect(result.response).toContain('Telegram')
     expect(generateResponseMock).not.toHaveBeenCalled()
