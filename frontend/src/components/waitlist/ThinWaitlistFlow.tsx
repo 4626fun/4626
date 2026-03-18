@@ -307,7 +307,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       if (privyAuthed) {
         await runBootstrap()
       } else {
-        await login(buildWaitlistPrivyLoginOptions() as any)
+        if (isTelegramMiniApp) {
+          await loginWithTelegram()
+        } else {
+          await login(buildWaitlistPrivyLoginOptions() as any)
+        }
       }
       authAttemptInFlightRef.current = false
       setBusy(false)
@@ -328,7 +332,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privyAuthed, runBootstrap])
+  }, [busy, isTelegramMiniApp, login, loginWithTelegram, privyAuthed, runBootstrap])
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -544,13 +548,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         busy,
         authAttemptInFlight: authAttemptInFlightRef.current,
         authAutoAttempted: authAutoAttemptedRef.current,
+        isTelegramMiniApp,
       })
     ) {
       return
     }
     authAutoAttemptedRef.current = true
     void onContinueAuth()
-  }, [busy, onContinueAuth, privyAuthed, privyReady, step])
+  }, [busy, isTelegramMiniApp, onContinueAuth, privyAuthed, privyReady, step])
 
   useEffect(() => {
     if (step !== 'auth' || !privyAuthed) {

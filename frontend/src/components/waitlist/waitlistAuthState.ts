@@ -5,10 +5,14 @@ export function shouldAutoStartWaitlistPrivyAuth(params: {
   busy: boolean
   authAttemptInFlight: boolean
   authAutoAttempted: boolean
+  isTelegramMiniApp: boolean
 }): boolean {
   if (params.step !== 'auth') return false
   if (!params.privyReady) return false
   if (params.privyAuthed) return false
+  // In Telegram mini-app context, prefer seamless Telegram auth/link flows
+  // over generic login modal auto-start.
+  if (params.isTelegramMiniApp) return false
   if (params.busy) return false
   if (params.authAttemptInFlight) return false
   if (params.authAutoAttempted) return false
