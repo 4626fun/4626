@@ -16,6 +16,8 @@ type InboundMessage = {
   conversationId: string
   conversationType: string
   senderAddress: string | null
+  source?: string | null
+  entityKey?: string | null
   content: string
   xmtpConversationKey?: string | null
   messageId?: string | null
@@ -38,7 +40,16 @@ type SwarmProfile = {
 type RuntimeBridge = {
   runtime: IAgentRuntime
   createInboundMemory: (msg: InboundMessage) => Memory
-  createOutboundMemory: (conversationId: string, conversationType: string, content: string) => Memory
+  createOutboundMemory: (
+    conversationId: string,
+    conversationType: string,
+    content: string,
+    options?: {
+      source?: string | null
+      senderAddress?: string | null
+      metadata?: Record<string, unknown>
+    },
+  ) => Memory
   composeState: (memory: Memory) => Promise<Record<string, unknown>>
   rankActions: (text: string, memory: Memory) => Promise<RankedAction[]>
   getDebugState: () => { trackedConversations: number; conversationIds: string[] }
@@ -290,6 +301,7 @@ let memorySchemaEnsured = false
 let semanticEmbeddingColumnChecked = false
 let semanticEmbeddingColumnAvailable = false
 const DUPLICATE_MEMORY_MARKER = '__xmtpDuplicate'
+const PERSISTED_MEMORY_MARKER = '__persistedToDb'
 const embeddingService = getElizaEmbeddingService()
 
 function shortHash(value: string): string {
@@ -301,9 +313,12 @@ function formatAsUuid(hex32: string): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`
 }
 
-function toEntityId(senderAddress: string | null): string {
-  if (!senderAddress) return randomUUID()
-  return formatAsUuid(shortHash(senderAddress.toLowerCase()))
+function toEntityId(senderAddress: string | null, stableEntityKey?: string | null): string {
+  const normalizedAddress = String(senderAddress ?? '').trim().toLowerCase()
+  if (normalizedAddress) return formatAsUuid(shortHash(normalizedAddress))
+  const normalizedEntityKey = String(stableEntityKey ?? '').trim().toLowerCase()
+  if (!normalizedEntityKey) return randomUUID()
+  return formatAsUuid(shortHash(`entity:${normalizedEntityKey}`))
 }
 
 function toRoomId(conversationId: string): string {
@@ -1710,6 +1725,7 @@ export function createRuntimeBridge(params: {
     },
     createMemory: async (memory: Memory) => {
       const memoryRecord = memory as Memory & Record<string, unknown>
+      memoryRecord[PERSISTED_MEMORY_MARKER] = false
       await ensureMemorySchema()
       const conversationId = String((memory.content as any)?.metadata?.conversationId ?? memory.roomId ?? 'unknown')
       const metadata = (memory.content as any)?.metadata ?? {}
@@ -1757,6 +1773,7 @@ export function createRuntimeBridge(params: {
           memoryRecord[DUPLICATE_MEMORY_MARKER] = true
           return memory
         }
+        memoryRecord[PERSISTED_MEMORY_MARKER] = true
         void maybePersistMessageEmbedding({
           db: db as any,
           memoryId: String(memory.id),
@@ -1786,6 +1803,42 @@ export function createRuntimeBridge(params: {
         })
       }
       return memory
+    },
+    composeState: async (memory: Memory) => composeState(memory),
+    processActions: async (
+      memory: Memory,
+      messages: Memory[],
+      state: Record<string, unknown>,
+      callback?: (content: any) => Promise<Memory[]>,
+    ) => {
+      const text = String((memory.content as any)?.text ?? '')
+      const rankedActions = await rankActions(text, memory)
+      for (const candidate of rankedActions) {
+        try {
+          await candidate.action.handler(
+            runtime as any,
+            memory as any,
+            state as any,
+            undefined,
+            async (content: any) => {
+              if (typeof callback === 'function') {
+                return callback(content)
+              }
+              return messages
+            },
+          )
+          if (typeof callback === 'function') {
+            // Preserve compatibility with Eliza plugin expectations.
+            return messages
+          }
+        } catch (error) {
+          logger.warn('[eliza/runtime] action handler failed during processActions', {
+            action: String(candidate.action?.name ?? 'unknown'),
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+      return messages
     },
   } as unknown as IAgentRuntime
 
@@ -1831,7 +1884,7 @@ export function createRuntimeBridge(params: {
             content: {
               text: String(row?.content ?? ''),
               role: String(row?.role ?? 'user'),
-              source: 'xmtp',
+              source: String((metadata as any)?.source ?? 'xmtp'),
               metadata: {
                 ...metadata,
                 conversationId: String(row?.conversation_id ?? conversationId),
@@ -2077,6 +2130,8 @@ export function createRuntimeBridge(params: {
   function createInboundMemory(msg: InboundMessage): Memory {
     const xmtpConversationKey = String(msg.xmtpConversationKey ?? '').trim() || null
     const messageId = String(msg.messageId ?? '').trim() || null
+    const source = String(msg.source ?? '').trim().toLowerCase() || 'xmtp'
+    const entityKey = String(msg.entityKey ?? '').trim() || `${msg.conversationType}:${msg.conversationId}`
     const sentAtMs =
       Number.isFinite(msg.sentAtMs) && Number(msg.sentAtMs) > 0
         ? Math.floor(Number(msg.sentAtMs))
@@ -2086,17 +2141,18 @@ export function createRuntimeBridge(params: {
     }
     return {
       id: toInboundMessageMemoryId({ ...msg, sentAtMs }) as any,
-      entityId: toEntityId(msg.senderAddress) as any,
+      entityId: toEntityId(msg.senderAddress, entityKey) as any,
       agentId: runtimeAgentId as any,
       roomId: toRoomId(msg.conversationId) as any,
       content: {
         text: msg.content,
         role: 'user',
-        source: 'xmtp',
+        source,
         metadata: {
           conversationId: msg.conversationId,
           conversationType: msg.conversationType,
           senderAddress: msg.senderAddress,
+          source,
           ...(messageId ? { messageId } : {}),
           ...(xmtpConversationKey ? { xmtpConversationKey } : {}),
         },
@@ -2105,8 +2161,19 @@ export function createRuntimeBridge(params: {
     } as Memory
   }
 
-  function createOutboundMemory(conversationId: string, conversationType: string, content: string): Memory {
+  function createOutboundMemory(
+    conversationId: string,
+    conversationType: string,
+    content: string,
+    options?: {
+      source?: string | null
+      senderAddress?: string | null
+      metadata?: Record<string, unknown>
+    },
+  ): Memory {
     const xmtpConversationKey = conversationArchiveKeyHints.get(conversationId) ?? null
+    const source = String(options?.source ?? '').trim().toLowerCase() || 'xmtp'
+    const senderAddress = String(options?.senderAddress ?? '').trim() || null
     return {
       id: randomUUID() as any,
       entityId: runtimeAgentId as any,
@@ -2115,11 +2182,13 @@ export function createRuntimeBridge(params: {
       content: {
         text: content,
         role: 'assistant',
-        source: 'xmtp',
+        source,
         metadata: {
           conversationId,
           conversationType,
-          senderAddress: null,
+          senderAddress,
+          source,
+          ...(options?.metadata ?? {}),
           ...(xmtpConversationKey ? { xmtpConversationKey } : {}),
         },
       } as any,

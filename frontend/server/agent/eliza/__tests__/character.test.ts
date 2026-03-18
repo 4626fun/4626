@@ -16,8 +16,8 @@ describe('character runtime prompt continuity guardrail', () => {
   it('prepends continuity guardrail to default system prompt', () => {
     delete process.env.ELIZA_CHARACTER_SYSTEM_PROMPT
     const runtime = resolveCharacterRuntimeConfig()
-    expect(runtime.systemPrompt).toContain('You are a stateful agent with perfect memory of this conversation.')
-    expect(runtime.systemPrompt).toContain('NEVER claim "I have no memory"')
+    expect(runtime.systemPrompt).toContain('Use conversation context blocks truthfully and conservatively.')
+    expect(runtime.systemPrompt).toContain('do not claim perfect or guaranteed memory')
     expect(runtime.systemPrompt).toContain('<history>')
   })
 
@@ -25,6 +25,6 @@ describe('character runtime prompt continuity guardrail', () => {
     process.env.ELIZA_CHARACTER_SYSTEM_PROMPT = 'Custom role prompt for testing.'
     const runtime = resolveCharacterRuntimeConfig()
     expect(runtime.systemPrompt).toContain('Custom role prompt for testing.')
-    expect(runtime.systemPrompt).toContain('Maintain perfect continuity across Telegram and XMTP sessions.')
+    expect(runtime.systemPrompt).toContain('continuity depends on runtime memory/session storage availability')
   })
 })
