@@ -23,6 +23,20 @@ const EXTERNAL_MAX_RETRIES = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_EXTERNAL_MAX_RETRIES, 2))
 const MAX_INBOUND_MESSAGE_CHARS = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_MAX_INBOUND_CHARS, 4_000))
+const LLM_COOLDOWN_MS = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_MS, 10_000))
+
+const groupCooldowns = new Map<string, number>()
+
+function canCallLlm(groupId: string): boolean {
+  const last = groupCooldowns.get(groupId)
+  if (!last) return true
+  return Date.now() - last >= LLM_COOLDOWN_MS
+}
+
+function recordLlmCall(groupId: string): void {
+  groupCooldowns.set(groupId, Date.now())
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -320,6 +334,19 @@ export async function generateLlmResponse(params: {
     }
   }
 
+  if (!canCallLlm(params.groupId)) {
+    return {
+      ok: false,
+      response: 'AI is rate-limited. Try again in a few seconds.',
+      handledByRuntime: true,
+    }
+  }
+
+  if (llmService.getAvailableProviders().length === 0) {
+    return { ok: false, response: '', handledByRuntime: true }
+  }
+  recordLlmCall(params.groupId)
+
   // -----------------------------------------------------------------------
   // 4. Gather context providers (keepr + knowledge) — same as handleMessage
   // -----------------------------------------------------------------------
@@ -357,10 +384,6 @@ export async function generateLlmResponse(params: {
   // -----------------------------------------------------------------------
   // 5. LLM generation with character systemPrompt + continuity context
   // -----------------------------------------------------------------------
-
-  if (llmService.getAvailableProviders().length === 0) {
-    return { ok: false, response: '', handledByRuntime: true }
-  }
 
   try {
     const continuityBlock = buildContinuityContextBlock(state)
