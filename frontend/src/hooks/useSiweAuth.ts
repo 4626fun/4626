@@ -33,7 +33,7 @@ type PrivySessionResponse = { address: string; sessionToken: string; privyUserId
  * Wallet-first in this path can accidentally create a new Privy identity and
  * then collide with an existing email-bound account.
  */
-export const PRIVY_INTERACTIVE_LOGIN_METHODS = ['email', 'google', 'twitter', 'telegram', 'wallet'] as const
+export const PRIVY_INTERACTIVE_LOGIN_METHODS = ['email', 'google', 'twitter', 'wallet'] as const
 
 // Prevent request storms:
 // `useSiweAuth()` can be mounted in multiple places; without a shared guard each instance can auto-bridge.

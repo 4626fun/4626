@@ -133,7 +133,7 @@ function hasLinkedTelegramAccount(user: unknown): boolean {
   const camel = Array.isArray(record.linkedAccounts) ? (record.linkedAccounts as any[]) : []
   const snake = Array.isArray(record.linked_accounts) ? (record.linked_accounts as any[]) : []
   const linked = [...camel, ...snake]
-  return linked.some((account) => String((account as any)?.type ?? '').trim().toLowerCase().includes('telegram'))
+  return linked.some((account) => String((account as any)?.type ?? '').trim().toLowerCase() === 'telegram')
 }
 
 function shortAddress(value: string | null | undefined): string {

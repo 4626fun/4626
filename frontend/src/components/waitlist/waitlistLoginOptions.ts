@@ -1,4 +1,4 @@
-export const WAITLIST_PRIVY_LOGIN_METHODS = ['email', 'google', 'twitter', 'telegram', 'wallet'] as const
+export const WAITLIST_PRIVY_LOGIN_METHODS = ['email', 'google', 'twitter', 'wallet'] as const
 
 export function buildWaitlistPrivyLoginOptions() {
   return {
@@ -6,7 +6,7 @@ export function buildWaitlistPrivyLoginOptions() {
   } as const
 }
 
-export const WAITLIST_RECOVERY_LOGIN_METHODS = ['email', 'google', 'twitter', 'telegram'] as const
+export const WAITLIST_RECOVERY_LOGIN_METHODS = ['email', 'google', 'twitter'] as const
 
 export function buildWaitlistRecoveryLoginOptions() {
   return {
