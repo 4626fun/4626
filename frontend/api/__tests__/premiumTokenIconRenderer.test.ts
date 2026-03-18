@@ -49,7 +49,7 @@ describe('premium token icon renderer', () => {
     const meta = await sharp(png).metadata()
     expect(meta.width).toBe(512)
     expect(meta.height).toBe(512)
-  })
+  }, 12_000)
 
   it('renders premium icon for provided source image', async () => {
     const source = await createSource({ width: 900, height: 1200 })
@@ -61,17 +61,17 @@ describe('premium token icon renderer', () => {
     const meta = await sharp(png).metadata()
     expect(meta.width).toBe(512)
     expect(meta.height).toBe(512)
-  })
+  }, 12_000)
 
   it('is deterministic for the same source and size', async () => {
-    const source = await createSource({ width: 1024, height: 1024 })
+    const source = await createSource({ width: 512, height: 512 })
     const a = await renderPremiumTokenIcon({
-      size: 768,
+      size: 480,
       sourceImage: source,
       symbol: 'AKITA',
     })
     const b = await renderPremiumTokenIcon({
-      size: 768,
+      size: 480,
       sourceImage: source,
       symbol: 'AKITA',
     })

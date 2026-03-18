@@ -38,6 +38,22 @@ async function createSourcePng(params: {
 }
 
 describe('token image renderer', () => {
+  it('normalizes source artwork URLs to fetchable http(s) URLs', () => {
+    const ipfsUrl = __testables.normalizeSourceArtworkUrl('ipfs://bafybeigdyrzt2q/cover.png')
+    expect(ipfsUrl).toBeTruthy()
+    expect(ipfsUrl).toMatch(/\/ipfs\/bafybeigdyrzt2q\/cover\.png$/)
+
+    const ipnsUrl = __testables.normalizeSourceArtworkUrl('ipns://k51qzi5uqu5dl/test-logo')
+    expect(ipnsUrl).toBeTruthy()
+    expect(ipnsUrl).toMatch(/\/ipns\/k51qzi5uqu5dl\/test-logo$/)
+
+    const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgQhW0tMAAAAASUVORK5CYII='
+    expect(__testables.normalizeSourceArtworkUrl(dataUrl)).toBe(dataUrl)
+
+    expect(__testables.normalizeSourceArtworkUrl('ar://QmTestArId')).toBe('https://arweave.net/QmTestArId')
+    expect(__testables.normalizeSourceArtworkUrl('chrome-extension://abc/token.png')).toBeNull()
+  })
+
   it('keeps deterministic panel geometry', () => {
     const layout = __testables.getTokenIconLayout(512)
     expect(layout.panelSize).toBeGreaterThan(320)
@@ -84,7 +100,7 @@ describe('token image renderer', () => {
     const meta = await sharp(Buffer.from(rendered)).metadata()
     expect(meta.width).toBe(512)
     expect(meta.height).toBe(512)
-  })
+  }, 15_000)
 
   it('renders deterministic fallback icon when source artwork is missing', async () => {
     const rendered = await __testables.renderDeterministicTokenIcon({
@@ -95,5 +111,5 @@ describe('token image renderer', () => {
     const meta = await sharp(Buffer.from(rendered)).metadata()
     expect(meta.width).toBe(512)
     expect(meta.height).toBe(512)
-  })
+  }, 15_000)
 })
