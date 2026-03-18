@@ -479,6 +479,29 @@ describe('generateLlmResponse — Eliza runtime driven', () => {
     expect(generateResponseMock).not.toHaveBeenCalled()
   })
 
+  it('enforces per-group cooldown for back-to-back LLM requests', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+
+    const first = await generateLlmResponse({
+      groupId: 'telegram:chat-rate-limit',
+      senderWallet: '0x1111111111111111111111111111111111111111',
+      text: '/ai first request',
+      vault: null,
+    })
+    const second = await generateLlmResponse({
+      groupId: 'telegram:chat-rate-limit',
+      senderWallet: '0x1111111111111111111111111111111111111111',
+      text: '/ai second request',
+      vault: null,
+    })
+
+    expect(first.ok).toBe(true)
+    expect(second.ok).toBe(false)
+    expect(second.response).toContain('AI is rate-limited')
+    expect(second.handledByRuntime).toBe(true)
+    expect(generateResponseMock).toHaveBeenCalledTimes(1)
+  })
+
   it('returns error message when LLM providers are unavailable', async () => {
     getAvailableProvidersMock.mockReturnValueOnce([])
 
