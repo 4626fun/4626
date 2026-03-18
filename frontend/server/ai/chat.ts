@@ -1,6 +1,7 @@
 import { logger } from '../_lib/logger.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import { toAgentError } from '../agent/eliza/_errors.js'
+import { resolveCharacterRuntimeConfig } from '../agent/eliza/character.js'
 import { getElizaLlmService } from '../agent/eliza/llm.js'
 import { createRuntimeBridge } from '../agent/eliza/runtimeBridge.js'
 import {
@@ -14,14 +15,64 @@ const llmService = getElizaLlmService()
 const CHAT_MEMORY_AGENT_KEY = 'keepr-ai-chat'
 const HISTORY_TURN_LIMIT = 10
 const HISTORY_CHAR_BUDGET = 1_800
-const conversationMemoryBridge = createRuntimeBridge({
-  agentKey: CHAT_MEMORY_AGENT_KEY,
-  plugins: [],
-  history: {
-    maxConversations: 500,
-    maxMessagesPerConversation: 40,
-  },
-})
+type ChatRuntimeBridge = ReturnType<typeof createRuntimeBridge>
+let chatRuntimeBridgePromise: Promise<ChatRuntimeBridge> | null = null
+
+async function getChatRuntimeBridge(): Promise<ChatRuntimeBridge> {
+  if (chatRuntimeBridgePromise) return chatRuntimeBridgePromise
+  chatRuntimeBridgePromise = (async () => {
+    // Lazy-load plugin wiring to avoid module init cycles with command handlers.
+    const [
+      { keeprPlugin },
+      { zoraPlugin },
+      { uniswapPlugin },
+      { bankrPlugin },
+      { lensPlugin },
+      { walletIntelPlugin },
+      { reputationPlugin },
+      { crePlugin },
+      { knowledgePlugin },
+    ] = await Promise.all([
+      import('../agent/eliza/plugins/keepr/index.js'),
+      import('../agent/eliza/plugins/zora/index.js'),
+      import('../agent/eliza/plugins/uniswap/index.js'),
+      import('../agent/eliza/plugins/bankr/index.js'),
+      import('../agent/eliza/plugins/lens/index.js'),
+      import('../agent/eliza/plugins/walletIntel/index.js'),
+      import('../agent/eliza/plugins/reputation/index.js'),
+      import('../agent/eliza/plugins/cre/index.js'),
+      import('../agent/eliza/plugins/knowledge/index.js'),
+    ])
+    const characterRuntimeConfig = resolveCharacterRuntimeConfig()
+    return createRuntimeBridge({
+      agentKey: CHAT_MEMORY_AGENT_KEY,
+      plugins: [
+        keeprPlugin,
+        zoraPlugin,
+        uniswapPlugin,
+        bankrPlugin,
+        lensPlugin,
+        walletIntelPlugin,
+        reputationPlugin,
+        crePlugin,
+        knowledgePlugin,
+      ],
+      settings: characterRuntimeConfig.settings,
+      character: {
+        systemPrompt: characterRuntimeConfig.systemPrompt,
+        preferredModel: characterRuntimeConfig.preferredModel,
+      },
+      history: {
+        maxConversations: 500,
+        maxMessagesPerConversation: 40,
+      },
+    })
+  })().catch((error) => {
+    chatRuntimeBridgePromise = null
+    throw error
+  })
+  return chatRuntimeBridgePromise
+}
 
 // ---------------------------------------------------------------------------
 // Rate limiting – one LLM call per group every 10 s
@@ -46,6 +97,7 @@ function platformLabelForPrompt(conversationType: string): string {
   if (conversationType === 'telegram') return 'Telegram'
   if (conversationType === 'xmtp') return 'XMTP'
   if (conversationType === 'discord') return 'Discord'
+  if (conversationType === 'web') return 'web app chat'
   return 'group chat'
 }
 
@@ -233,6 +285,14 @@ function buildVaultDeploymentReply(runtimeTruth: AssistantRuntimeTruth): string 
   return `From verified ${runtimeTruth.deploymentFlowSource ?? 'app_state'} context: ${runtimeTruth.deploymentFlowSummary}`
 }
 
+function buildRuntimeUnavailableFallback(conversationType: string): string {
+  const platform = platformLabelForPrompt(conversationType)
+  return [
+    "I may be running in a simulated or app-managed environment, and I can't verify a live ElizaOS connection from the current runtime.",
+    `I can still help with bounded answers in this ${platform} chat, but runtime-backed actions are temporarily unavailable.`,
+  ].join('\n')
+}
+
 type ConversationTurn = { role: 'user' | 'assistant'; text: string }
 
 function readStateBlock(state: Record<string, unknown>, key: string): string {
@@ -254,7 +314,29 @@ function resolveConversationType(groupId: string): string {
   if (normalized.startsWith('telegram:')) return 'telegram'
   if (normalized.startsWith('discord:')) return 'discord'
   if (normalized.startsWith('xmtp')) return 'xmtp'
+  if (normalized.startsWith('web:') || normalized.startsWith('app:') || normalized.startsWith('chat:')) return 'web'
   return 'group'
+}
+
+function resolveConversationSource(conversationType: string): string {
+  if (conversationType === 'web') return 'web'
+  if (conversationType === 'xmtp') return 'xmtp'
+  if (conversationType === 'telegram') return 'telegram'
+  if (conversationType === 'discord') return 'discord'
+  return 'app'
+}
+
+function normalizeAiPrompt(text: string): string {
+  return String(text ?? '')
+    .replace(/^\/?ai\s*/i, '')
+    .replace(/^@(keepr|bot)\s*/i, '')
+    .trim()
+}
+
+function toSenderAddress(senderWallet: string): string | null {
+  const normalized = String(senderWallet ?? '').trim().toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null
+  return normalized
 }
 
 function extractRecentTurns(state: Record<string, unknown>): ConversationTurn[] {
@@ -331,8 +413,112 @@ export async function generateLlmResponse(params: {
   runtimeTruth?: AssistantRuntimeTruthInput
 }): Promise<{ ok: true; response: string } | { ok: false; response: string }> {
   const conversationType = resolveConversationType(params.groupId)
+  const conversationSource = resolveConversationSource(conversationType)
+  const normalizedPrompt = normalizeAiPrompt(params.text)
+  const userText = normalizedPrompt || String(params.text ?? '').trim()
   let runtimeTruth = resolveAssistantRuntimeTruth(params.runtimeTruth)
-  const identityIntent = classifyIdentityIntent(params.text)
+  const identityIntent = classifyIdentityIntent(userText)
+  let runtimeBridge: ChatRuntimeBridge | null = null
+  let historyContext = ''
+  let historyTurns = 0
+  let actionReply = ''
+
+  try {
+    runtimeBridge = await getChatRuntimeBridge()
+    const senderAddress = toSenderAddress(params.senderWallet)
+    const inbound = runtimeBridge.createInboundMemory({
+      conversationId: params.groupId,
+      conversationType,
+      senderAddress,
+      source: conversationSource,
+      entityKey: senderAddress ?? `web-user:${params.groupId}`,
+      content: userText,
+    })
+    await runtimeBridge.runtime.createMemory(inbound as any, 'messages' as any)
+    const state = await (runtimeBridge.runtime as any).composeState(inbound as any)
+    const turns = trimTrailingCurrentUserTurn(extractRecentTurns(state), userText)
+    historyTurns = turns.length
+    historyContext = buildConversationHistoryContext(turns)
+    const structuredMemoryContext = buildStructuredMemoryContext(state)
+    if (structuredMemoryContext) {
+      historyContext = [historyContext, structuredMemoryContext].filter(Boolean).join('\n\n')
+    }
+    runtimeTruth = {
+      ...runtimeTruth,
+      isElizaConnected: true,
+      hasConversationMemory: true,
+      hasPersistentMemory:
+        runtimeTruth.hasPersistentMemory ||
+        (inbound as any)?.__persistedToDb === true ||
+        Boolean(structuredMemoryContext),
+    }
+    logger.info('[ai/chat] runtime state loaded', {
+      groupId: params.groupId,
+      turns: historyTurns,
+      persistedInbound: (inbound as any)?.__persistedToDb === true,
+    })
+
+    await (runtimeBridge.runtime as any).processActions(
+      inbound as any,
+      [inbound as any],
+      state as any,
+      async (responseContent: any) => {
+        const chunk = String(responseContent?.text ?? '').trim()
+        if (!chunk) return [inbound as any]
+        actionReply = actionReply ? `${actionReply}\n\n${chunk}` : chunk
+        return [inbound as any]
+      },
+    )
+
+    if (actionReply) {
+      try {
+        const outbound = runtimeBridge.createOutboundMemory(
+          params.groupId,
+          conversationType,
+          actionReply,
+          { source: conversationSource },
+        )
+        await runtimeBridge.runtime.createMemory(outbound as any, 'messages' as any)
+        runtimeTruth = {
+          ...runtimeTruth,
+          hasPersistentMemory: runtimeTruth.hasPersistentMemory || (outbound as any)?.__persistedToDb === true,
+        }
+      } catch (error) {
+        logger.warn('[ai/chat] action reply memory persistence failed (non-blocking)', {
+          groupId: params.groupId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  } catch (error) {
+    runtimeTruth = {
+      ...runtimeTruth,
+      isElizaConnected: false,
+      hasConversationMemory: false,
+      hasPersistentMemory: false,
+    }
+    logger.warn('[ai/chat] eliza runtime unavailable; returning bounded fallback', {
+      groupId: params.groupId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    if (identityIntent === 'stack') {
+      return { ok: true, response: buildStackSnapshotReply(conversationType, runtimeTruth) }
+    }
+    if (identityIntent === 'eliza') {
+      return { ok: true, response: buildElizaConnectionReply(conversationType, runtimeTruth) }
+    }
+    if (identityIntent === 'memory') {
+      return { ok: true, response: buildMemoryReply(conversationType, runtimeTruth) }
+    }
+    if (identityIntent === 'vault_deployment') {
+      return { ok: true, response: buildVaultDeploymentReply(runtimeTruth) }
+    }
+    if (identityIntent === 'identity') {
+      return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth) }
+    }
+    return { ok: true, response: buildRuntimeUnavailableFallback(conversationType) }
+  }
+
   if (identityIntent === 'stack') {
     return { ok: true, response: buildStackSnapshotReply(conversationType, runtimeTruth) }
   }
@@ -349,122 +535,95 @@ export async function generateLlmResponse(params: {
     return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth) }
   }
 
-  if (!canCallLlm(params.groupId)) {
-    return { ok: false, response: 'AI is rate-limited. Try again in a few seconds.' }
-  }
+  let finalText = actionReply.trim()
 
-  if (llmService.getAvailableProviders().length === 0) {
-    return { ok: false, response: '' }
-  }
+  if (!finalText) {
+    if (!canCallLlm(params.groupId)) {
+      return { ok: false, response: 'AI is rate-limited. Try again in a few seconds.' }
+    }
 
-  try {
+    if (llmService.getAvailableProviders().length === 0) {
+      return { ok: false, response: '' }
+    }
+
     recordLlmCall(params.groupId)
-    const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
-    let historyContext = ''
-    let historyTurns = 0
-    let memoryEnabled = true
     try {
-      const inbound = conversationMemoryBridge.createInboundMemory({
-        conversationId: params.groupId,
-        conversationType,
-        senderAddress: params.senderWallet,
-        content: params.text,
+      const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
+      const result = await llmService.generateResponse({
+        agentKey: params.groupId,
+        userMessage: `${identityHint}: ${userText}`,
+        systemPrompt: buildSystemPrompt(params.vault, conversationType, runtimeTruth),
+        vaultContext: historyContext,
+        correlationId: `keepr-${params.groupId}-${Date.now()}`,
       })
-      await conversationMemoryBridge.runtime.createMemory(inbound as any, 'messages' as any)
-      const state = await conversationMemoryBridge.composeState(inbound as any)
-      const turns = trimTrailingCurrentUserTurn(extractRecentTurns(state), params.text)
-      historyTurns = turns.length
-      historyContext = buildConversationHistoryContext(turns)
-      const structuredMemoryContext = buildStructuredMemoryContext(state)
-      if (structuredMemoryContext) {
-        historyContext = [historyContext, structuredMemoryContext].filter(Boolean).join('\n\n')
+      if (!result.text?.trim()) {
+        return { ok: false, response: '' }
       }
+      finalText = result.text.trim()
+    } catch (error) {
+      const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM generation failed')
+      if (agentError.code === 'BUDGET_EXCEEDED') {
+        return { ok: false, response: 'Daily AI budget limit reached for this agent. Please try again tomorrow.' }
+      }
+      if (agentError.code === 'RATE_LIMITED') {
+        return { ok: false, response: 'AI provider is rate-limited. Please try again shortly.' }
+      }
+      if (agentError.code === 'UPSTREAM_TIMEOUT') {
+        return { ok: false, response: 'AI request timed out. Please retry.' }
+      }
+      if (agentError.code === 'DEPENDENCY_UNAVAILABLE') {
+        return { ok: false, response: 'AI provider is temporarily unavailable. Please retry shortly.' }
+      }
+      logger.error('[ai/chat] Unified Eliza LLM call failed', {
+        code: agentError.code,
+        message: agentError.message,
+      })
+      return { ok: false, response: '' }
+    }
+  }
+
+  // Defense-in-depth: if identity/stack intent somehow reached LLM and drifted,
+  // force canonical replies instead of leaking generic model self-descriptions.
+  if (isLikelyIdentityDrift(finalText)) {
+    const fallbackIntent = classifyIdentityIntent(userText)
+    if (fallbackIntent === 'stack') {
+      finalText = buildStackSnapshotReply(conversationType, runtimeTruth)
+    } else if (fallbackIntent === 'eliza') {
+      finalText = buildElizaConnectionReply(conversationType, runtimeTruth)
+    } else if (fallbackIntent === 'memory') {
+      finalText = buildMemoryReply(conversationType, runtimeTruth)
+    } else if (fallbackIntent === 'vault_deployment') {
+      finalText = buildVaultDeploymentReply(runtimeTruth)
+    } else if (fallbackIntent === 'identity') {
+      finalText = buildIdentityReply(conversationType, runtimeTruth)
+    }
+  }
+
+  if (runtimeBridge) {
+    try {
+      const outbound = runtimeBridge.createOutboundMemory(
+        params.groupId,
+        conversationType,
+        finalText,
+        { source: conversationSource },
+      )
+      await runtimeBridge.runtime.createMemory(outbound as any, 'messages' as any)
       runtimeTruth = {
         ...runtimeTruth,
-        hasConversationMemory: true,
+        hasPersistentMemory: runtimeTruth.hasPersistentMemory || (outbound as any)?.__persistedToDb === true,
       }
-      logger.info('[ai/chat] conversation memory loaded', {
-        groupId: params.groupId,
-        turns: historyTurns,
-      })
     } catch (error) {
-      memoryEnabled = false
-      logger.warn('[ai/chat] conversation memory unavailable; falling back to stateless prompt', {
+      logger.warn('[ai/chat] assistant memory persistence failed (non-blocking)', {
         groupId: params.groupId,
         error: error instanceof Error ? error.message : String(error),
       })
     }
-
-    const result = await llmService.generateResponse({
-      agentKey: params.groupId,
-      userMessage: `${identityHint}: ${params.text}`,
-      systemPrompt: buildSystemPrompt(params.vault, conversationType, runtimeTruth),
-      vaultContext: historyContext,
-      correlationId: `keepr-${params.groupId}-${Date.now()}`,
-    })
-
-    if (!result.text?.trim()) {
-      return { ok: false, response: '' }
-    }
-
-    let finalText = result.text.trim()
-    // Defense-in-depth: if identity/stack intent somehow reached LLM and drifted,
-    // force canonical replies instead of leaking generic model self-descriptions.
-    if (isLikelyIdentityDrift(finalText)) {
-      const fallbackIntent = classifyIdentityIntent(params.text)
-      if (fallbackIntent === 'stack') {
-        finalText = buildStackSnapshotReply(conversationType, runtimeTruth)
-      } else if (fallbackIntent === 'eliza') {
-        finalText = buildElizaConnectionReply(conversationType, runtimeTruth)
-      } else if (fallbackIntent === 'memory') {
-        finalText = buildMemoryReply(conversationType, runtimeTruth)
-      } else if (fallbackIntent === 'vault_deployment') {
-        finalText = buildVaultDeploymentReply(runtimeTruth)
-      } else if (fallbackIntent === 'identity') {
-        finalText = buildIdentityReply(conversationType, runtimeTruth)
-      }
-    }
-
-    if (memoryEnabled) {
-      try {
-        const outbound = conversationMemoryBridge.createOutboundMemory(
-          params.groupId,
-          conversationType,
-          finalText,
-        )
-        await conversationMemoryBridge.runtime.createMemory(outbound as any, 'messages' as any)
-      } catch (error) {
-        logger.warn('[ai/chat] assistant memory persistence failed (non-blocking)', {
-          groupId: params.groupId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    }
-
-    logger.info('[ai/chat] Unified Eliza LLM response', {
-      groupId: params.groupId,
-      provider: result.provider,
-      historyTurns,
-    })
-    return { ok: true, response: finalText }
-  } catch (error) {
-    const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM generation failed')
-    if (agentError.code === 'BUDGET_EXCEEDED') {
-      return { ok: false, response: 'Daily AI budget limit reached for this agent. Please try again tomorrow.' }
-    }
-    if (agentError.code === 'RATE_LIMITED') {
-      return { ok: false, response: 'AI provider is rate-limited. Please try again shortly.' }
-    }
-    if (agentError.code === 'UPSTREAM_TIMEOUT') {
-      return { ok: false, response: 'AI request timed out. Please retry.' }
-    }
-    if (agentError.code === 'DEPENDENCY_UNAVAILABLE') {
-      return { ok: false, response: 'AI provider is temporarily unavailable. Please retry shortly.' }
-    }
-    logger.error('[ai/chat] Unified Eliza LLM call failed', {
-      code: agentError.code,
-      message: agentError.message,
-    })
-    return { ok: false, response: '' }
   }
+
+  logger.info('[ai/chat] Unified Eliza runtime response', {
+    groupId: params.groupId,
+    historyTurns,
+    usedAction: Boolean(actionReply),
+  })
+  return { ok: true, response: finalText }
 }
