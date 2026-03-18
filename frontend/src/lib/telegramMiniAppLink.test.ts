@@ -1,8 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { readTelegramMiniAppLinkContext, stripTelegramMiniAppLinkParams } from './telegramMiniAppLink'
+import {
+  clearStoredTelegramMiniAppLinkContext,
+  persistTelegramMiniAppLinkContext,
+  readStoredTelegramMiniAppLinkContext,
+  readTelegramMiniAppLinkContext,
+  resolveTelegramMiniAppLinkContext,
+  stripTelegramMiniAppLinkParams,
+} from './telegramMiniAppLink'
+
+function stubWindowSessionStorage(initial?: Record<string, string>) {
+  const store = new Map<string, string>(Object.entries(initial ?? {}))
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => (store.has(key) ? String(store.get(key)) : null),
+      setItem: (key: string, value: string) => {
+        store.set(key, value)
+      },
+      removeItem: (key: string) => {
+        store.delete(key)
+      },
+    },
+  } as any)
+  return store
+}
 
 describe('telegramMiniAppLink', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('reads link context from Telegram deep-link params', () => {
     const params = new URLSearchParams({
       tgMiniApp: '1',
@@ -52,6 +79,70 @@ describe('telegramMiniAppLink', () => {
     expect(cleaned.get('tgLinkToken')).toBeNull()
     expect(cleaned.get('token')).toBe('0x1234')
     expect(cleaned.get('share')).toBe('0xabcd')
+  })
+
+  it('persists and restores link context through session storage', () => {
+    stubWindowSessionStorage()
+    persistTelegramMiniAppLinkContext({
+      linkToken: 'token-abc',
+      chatId: '-100123',
+      telegramUsername: 'akita',
+    })
+
+    expect(readStoredTelegramMiniAppLinkContext()).toEqual({
+      linkToken: 'token-abc',
+      chatId: '-100123',
+      telegramUsername: 'akita',
+    })
+  })
+
+  it('clears stored link context', () => {
+    stubWindowSessionStorage()
+    persistTelegramMiniAppLinkContext({
+      linkToken: 'token-abc',
+      chatId: '-100123',
+      telegramUsername: 'akita',
+    })
+    clearStoredTelegramMiniAppLinkContext()
+    expect(readStoredTelegramMiniAppLinkContext()).toBeNull()
+  })
+
+  it('resolves context from URL and persists it for post-auth recovery', () => {
+    const store = stubWindowSessionStorage()
+    const params = new URLSearchParams({
+      tgMiniApp: '1',
+      tgEntry: 'link',
+      tgLinkToken: 'token-abc',
+      tgChatId: '-100123',
+    })
+    expect(resolveTelegramMiniAppLinkContext(params)).toEqual({
+      linkToken: 'token-abc',
+      chatId: '-100123',
+      telegramUsername: null,
+    })
+
+    const raw = store.get('cv_tg_link_context_v1')
+    expect(typeof raw).toBe('string')
+    const parsed = JSON.parse(String(raw))
+    expect(parsed.linkToken).toBe('token-abc')
+  })
+
+  it('resolves context from stored session when URL params are absent', () => {
+    const now = Date.now()
+    stubWindowSessionStorage({
+      cv_tg_link_context_v1: JSON.stringify({
+        linkToken: 'token-abc',
+        chatId: '-100123',
+        telegramUsername: 'akita',
+        savedAtMs: now,
+      }),
+    })
+    const params = new URLSearchParams({ tgMiniApp: '1', tgEntry: 'trade' })
+    expect(resolveTelegramMiniAppLinkContext(params)).toEqual({
+      linkToken: 'token-abc',
+      chatId: '-100123',
+      telegramUsername: 'akita',
+    })
   })
 })
 

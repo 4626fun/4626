@@ -20,7 +20,11 @@ import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { readTelegramMiniAppLinkContext, stripTelegramMiniAppLinkParams } from '@/lib/telegramMiniAppLink'
+import {
+  clearStoredTelegramMiniAppLinkContext,
+  resolveTelegramMiniAppLinkContext,
+  stripTelegramMiniAppLinkParams,
+} from '@/lib/telegramMiniAppLink'
 import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 import {
   claimLiquidityFees,
@@ -459,7 +463,7 @@ export function Swap() {
   const [lpPositionId, setLpPositionId] = useState<string>('')
   const [lpStatus, setLpStatus] = useState<string>('')
   const [lpError, setLpError] = useState<string>('')
-  const telegramLinkContext = useMemo(() => readTelegramMiniAppLinkContext(searchParams), [searchParams])
+  const telegramLinkContext = useMemo(() => resolveTelegramMiniAppLinkContext(searchParams), [searchParams])
   const [telegramLinkState, setTelegramLinkState] = useState<'idle' | 'linking' | 'linked' | 'error'>('idle')
   const [telegramLinkMessage, setTelegramLinkMessage] = useState<string | null>(null)
   const telegramLinkAttemptRef = useRef<string>('')
@@ -587,6 +591,7 @@ export function Swap() {
 
       setTelegramLinkState('linked')
       setTelegramLinkMessage('Telegram linked successfully. Return to Telegram, tap Check Link Status, then pick Buy, Sell, or Bid.')
+      clearStoredTelegramMiniAppLinkContext()
       const cleaned = stripTelegramMiniAppLinkParams(searchParams)
       const next = cleaned.toString()
       navigate(
@@ -601,6 +606,9 @@ export function Swap() {
         error instanceof Error && error.message.trim().length > 0
           ? error.message
           : 'Could not complete Telegram linking. Retry in a moment.'
+      if (/expired/i.test(message)) {
+        clearStoredTelegramMiniAppLinkContext()
+      }
       setTelegramLinkState('error')
       setTelegramLinkMessage(message)
     })
