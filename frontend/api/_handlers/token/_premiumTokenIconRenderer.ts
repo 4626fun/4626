@@ -135,7 +135,7 @@ function getTokenIconLayout(size: number): PremiumLayout {
   const chamberX = frameInset + chamberInset
   const chamberY = chamberX
   const breakoutWidth = Math.max(1, Math.round(chamberSize * 0.20))
-  const breakoutHeight = Math.max(1, Math.round(chamberSize * 0.13))
+  const breakoutHeight = Math.max(1, Math.round(chamberSize * 0.10))
   const breakoutX = chamberX + Math.round((chamberSize - breakoutWidth) / 2)
   const breakoutY = Math.max(0, chamberY - Math.round(chamberSize * 0.068))
 
@@ -1745,9 +1745,9 @@ async function createTopBreakoutSubjectMask(params: {
 
   const width = info.width
   const height = info.height
-  const padXMul = isIllustration ? 0.28 : 0.14
-  const padYMul = isIllustration ? 0.42 : 0.26
-  const yExtendMul = isIllustration ? 1.8 : 1.45
+  const padXMul = isIllustration ? 0.20 : 0.14
+  const padYMul = isIllustration ? 0.32 : 0.26
+  const yExtendMul = isIllustration ? 1.58 : 1.45
   const regionPadX = Math.max(1, Math.round(layout.breakoutWidth * padXMul))
   const regionPadY = Math.max(1, Math.round(layout.breakoutHeight * padYMul))
   const x0 = Math.max(0, layout.breakoutX - regionPadX)
@@ -1868,14 +1868,14 @@ async function createTopBreakoutSubjectMask(params: {
   const presentMeanLuma = presentLumaSum / presentCount
   const flatnessRatio = widthRatio / Math.max(0.001, heightRatio)
 
-  const maxPresentRatio = isIllustration ? 0.92 : 0.38
-  const minPresentRatio = isIllustration ? 0.005 : 0.018
+  const maxPresentRatio = isIllustration ? 0.86 : 0.38
+  const minPresentRatio = isIllustration ? 0.008 : 0.018
   const maxWidthRatio = isIllustration ? 1.01 : 0.62
   const maxHeightRatio = isIllustration ? 1.01 : 0.82
-  const maxFlatnessRatio = isIllustration ? 5.5 : 2.8
-  const maxCentroidYNorm = isIllustration ? 0.82 : 0.58
-  const minTopWeightedRatio = isIllustration ? 0.12 : 0.36
-  const maxPresentMeanLuma = isIllustration ? 235 : 220
+  const maxFlatnessRatio = isIllustration ? 4.0 : 2.8
+  const maxCentroidYNorm = isIllustration ? 0.72 : 0.58
+  const minTopWeightedRatio = isIllustration ? 0.20 : 0.36
+  const maxPresentMeanLuma = isIllustration ? 228 : 220
   if (
     presentRatio < minPresentRatio ||
     presentRatio > maxPresentRatio ||
@@ -1889,6 +1889,24 @@ async function createTopBreakoutSubjectMask(params: {
     flatnessRatio > maxFlatnessRatio ||
     presentMeanLuma > maxPresentMeanLuma
   ) {
+    return createTransparentCanvas(layout.size).png().toBuffer()
+  }
+
+  let edgePixelCount = 0
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      if (mask[y * width + x] === 0) continue
+      const hasEmptyNeighbor =
+        (x > 0 && mask[y * width + (x - 1)] === 0) ||
+        (x < width - 1 && mask[y * width + (x + 1)] === 0) ||
+        (y > 0 && mask[(y - 1) * width + x] === 0) ||
+        (y < height - 1 && mask[(y + 1) * width + x] === 0)
+      if (hasEmptyNeighbor) edgePixelCount += 1
+    }
+  }
+  const edgeRatio = presentCount > 0 ? edgePixelCount / presentCount : 0
+  const minEdgeRatio = isIllustration ? 0.04 : 0.07
+  if (edgeRatio < minEdgeRatio) {
     return createTransparentCanvas(layout.size).png().toBuffer()
   }
 
@@ -1926,7 +1944,7 @@ export async function renderBreakoutLayer(params: {
   const normalized = await normalizeSourceImage(params.sourceImage)
   const isIllustrationBreakout = params.sourceClass === 'illustration'
   const breakoutScale = isIllustrationBreakout
-    ? Math.max(params.scale ?? 1.04, 1.07)
+    ? Math.max(params.scale ?? 1.04, 1.06)
     : params.scale ?? 1.04
   const sourceCanvas = await renderPlacedSourceCanvas({
     sourceImage: normalized,
@@ -1935,8 +1953,7 @@ export async function renderBreakoutLayer(params: {
     fit: 'cover',
     topBiasPx: params.topBiasPx,
     sourceClass: params.sourceClass,
-    maxTopBiasRatio: isIllustrationBreakout ? 0.06 : undefined,
-    cropPosition: isIllustrationBreakout ? 'top' : undefined,
+    maxTopBiasRatio: isIllustrationBreakout ? 0.046 : undefined,
   })
   const breakoutMask = await createTopBreakoutMask({ size, layout })
   const subjectMask = await createTopBreakoutSubjectMask({
@@ -2067,9 +2084,9 @@ export async function renderPremiumTokenIcon(params: {
       })
 
       if (analysis.allowBreakout) {
-        const breakoutOpacity = analysis.sourceClass === 'illustration' ? 0.62 : 0.22
+        const breakoutOpacity = analysis.sourceClass === 'illustration' ? 0.50 : 0.22
         const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
-          ? Math.max(1, Math.round(layout.chamberSize * 0.05))
+          ? Math.max(1, Math.round(layout.chamberSize * 0.042))
           : topBiasPx
         breakoutLayer = await renderBreakoutLayer({
           size,
