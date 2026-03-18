@@ -4,7 +4,7 @@ import { PRIVY_INTERACTIVE_LOGIN_METHODS, deriveSiweSessionState, shouldResetPri
 
 describe('PRIVY_INTERACTIVE_LOGIN_METHODS', () => {
   it('prefers email/social before wallet for explicit Privy sign-in', () => {
-    expect(PRIVY_INTERACTIVE_LOGIN_METHODS).toEqual(['email', 'google', 'twitter', 'telegram', 'wallet'])
+    expect(PRIVY_INTERACTIVE_LOGIN_METHODS).toEqual(['email', 'google', 'twitter', 'wallet'])
   })
 })
 
