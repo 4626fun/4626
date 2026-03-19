@@ -8,10 +8,13 @@ const {
   enqueueImageGenerationJobMock,
   getImageGenerationJobMock,
   getImageGenerationProjectMock,
+  getCompletedImageProjectForVaultOwnerMock,
   setImageProjectVaultAddressMock,
   processImageGenerationJobMock,
   getSessionAddressMock,
   isAdminAddressMock,
+  resolveCoinPartiesAndOwnerMock,
+  resolveAuthorizedRequestPrincipalMock,
 } = vi.hoisted(() => ({
   createImageGenerationProjectMock: vi.fn(async () => ({
     id: 'proj_123',
@@ -41,10 +44,17 @@ const {
     attempts: [],
     latestJob: null,
   })),
+  getCompletedImageProjectForVaultOwnerMock: vi.fn(async () => null),
   setImageProjectVaultAddressMock: vi.fn(async () => {}),
   processImageGenerationJobMock: vi.fn(async () => ({ id: 'job_123', status: 'pending' })),
   getSessionAddressMock: vi.fn<() => string | null>(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
-  isAdminAddressMock: vi.fn(() => true),
+  isAdminAddressMock: vi.fn(() => false),
+  resolveCoinPartiesAndOwnerMock: vi.fn(async () => ({
+    creator: null,
+    payoutRecipient: null,
+    owner: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+  })),
+  resolveAuthorizedRequestPrincipalMock: vi.fn(async () => null),
 }))
 
 vi.mock('../../server/_lib/session.js', () => ({
@@ -56,6 +66,7 @@ vi.mock('../../server/_lib/imageProjects.js', () => ({
   createImageGenerationProject: createImageGenerationProjectMock,
   attachImageGenerationAsset: attachImageGenerationAssetMock,
   getImageGenerationProject: getImageGenerationProjectMock,
+  getCompletedImageProjectForVaultOwner: getCompletedImageProjectForVaultOwnerMock,
   setImageProjectVaultAddress: setImageProjectVaultAddressMock,
 }))
 
@@ -73,12 +84,26 @@ vi.mock('../../server/_lib/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 
+vi.mock('../../server/_lib/coinParties.js', () => ({
+  resolveCoinPartiesAndOwner: resolveCoinPartiesAndOwnerMock,
+}))
+
+vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+  resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
+}))
+
 describe('image generation route registration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
     getSessionAddressMock.mockReturnValue('0xb05cf01231cf2ff99499682e64d3780d57c80fdd')
-    isAdminAddressMock.mockReturnValue(true)
+    isAdminAddressMock.mockReturnValue(false)
+    resolveCoinPartiesAndOwnerMock.mockResolvedValue({
+      creator: null,
+      payoutRecipient: null,
+      owner: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+    })
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValue(null)
   })
 
   it('registers all image generation routes in the API loader map', async () => {
@@ -364,6 +389,7 @@ describe('POST /api/image/projects/associate-vault', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
+    expect(resolveCoinPartiesAndOwnerMock).toHaveBeenCalledWith('0x1111111111111111111111111111111111111111')
     expect(setImageProjectVaultAddressMock).toHaveBeenCalledWith(
       'proj_123',
       '0x1111111111111111111111111111111111111111',
@@ -395,5 +421,82 @@ describe('POST /api/image/projects/associate-vault', () => {
 
     expect(res.statusCode).toBe(404)
     expect(setImageProjectVaultAddressMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects associating a vault not controlled by non-admin actor', async () => {
+    getImageGenerationProjectMock.mockResolvedValueOnce({
+      id: 'proj_123',
+      ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      creatorAddress: null,
+      status: 'completed',
+      assets: [],
+      attempts: [],
+      latestJob: null,
+    })
+    resolveCoinPartiesAndOwnerMock.mockResolvedValueOnce({
+      creator: null,
+      payoutRecipient: null,
+      owner: '0x9999999999999999999999999999999999999999',
+    })
+    const mod = await import('../_handlers/image/_associate-vault.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        projectId: 'proj_123',
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toMatch(/do not control/i)
+    expect(setImageProjectVaultAddressMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /api/image/projects/vault-image', () => {
+  it('returns completed output URL for signed-in owner', async () => {
+    getCompletedImageProjectForVaultOwnerMock.mockResolvedValueOnce({
+      projectId: 'proj_abc',
+      outputBlobUrl: 'https://blob.local/output.png',
+    })
+    const mod = await import('../_handlers/image/_vault-image-get.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { vaultAddress: '0x1111111111111111111111111111111111111111' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(getCompletedImageProjectForVaultOwnerMock).toHaveBeenCalledWith(
+      '0x1111111111111111111111111111111111111111',
+      '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+    )
+    expect(res.body).toEqual({
+      success: true,
+      data: { outputBlobUrl: 'https://blob.local/output.png' },
+    })
+  })
+
+  it('requires authentication', async () => {
+    getSessionAddressMock.mockReturnValueOnce(null)
+    const mod = await import('../_handlers/image/_vault-image-get.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { vaultAddress: '0x1111111111111111111111111111111111111111' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(String(res.body?.error ?? '')).toMatch(/sign in required/i)
   })
 })

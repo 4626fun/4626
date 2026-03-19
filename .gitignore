@@ -215,3 +215,5 @@ docs/hackathon/*secrets*.local.md
 # Dependencies
 **/node_modules/
 bun.lock
+docs/codex-security-findings.md
+docs/codex-security-findings-2026-03-19T04-18-41.400Z.csv

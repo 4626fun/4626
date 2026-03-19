@@ -264,6 +264,33 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
   `
 
   const canonicalAddress = normalizeLower(row.primary_smart_wallet) || normalizeLower(row.csw_address) || null
+  const allWallets = mapWalletRows(Array.isArray(walletsResult.rows) ? walletsResult.rows : [])
+  const wallets = mode === 'public'
+    ? (() => {
+      const canonicalOnly = allWallets
+        .filter((wallet) => wallet.isCanonicalSmartWallet)
+        .map((wallet) => ({
+          ...wallet,
+          walletType: null,
+          provider: null,
+          chain: null,
+          isEmbeddedEoa: false,
+        }))
+      if (canonicalOnly.length > 0) return canonicalOnly
+      if (!canonicalAddress) return canonicalOnly
+      return [{
+        address: canonicalAddress,
+        walletType: null,
+        provider: null,
+        chain: null,
+        isPrimary: true,
+        isCanonicalSmartWallet: true,
+        isEmbeddedEoa: false,
+        verifiedAt: null,
+      }]
+    })()
+    : allWallets
+
   const onchainSummary = await fetchOnchainSummary(canonicalAddress)
   const identityAddress =
     canonicalAddress ||
@@ -308,7 +335,7 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
   const profile: PortfolioProfile = {
     profileId,
     primarySmartWallet: asNullableString(row.primary_smart_wallet) ?? asNullableString(row.csw_address),
-    primaryEmbeddedEoa: asNullableString(row.primary_embedded_eoa) ?? asNullableString(row.embedded_wallet),
+    primaryEmbeddedEoa: mode === 'public' ? null : (asNullableString(row.primary_embedded_eoa) ?? asNullableString(row.embedded_wallet)),
     displayName: getFieldValue(row, effectiveProfileFields, 'displayName'),
     bio: getFieldValue(row, effectiveProfileFields, 'bio'),
     website: getFieldValue(row, effectiveProfileFields, 'website'),
@@ -324,7 +351,7 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
   return {
     mode,
     profile,
-    wallets: mapWalletRows(Array.isArray(walletsResult.rows) ? walletsResult.rows : []),
+    wallets,
     onchainSummary,
     onchainIdentity,
   }

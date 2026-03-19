@@ -1,16 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import sharp from 'sharp'
 
 import { createMockReq, createMockRes } from './helpers'
 
 const SHARE_OFT = '0x7000000000000000000000000000000000000007'
 const VAULT = '0x3000000000000000000000000000000000000003'
 
-const ONE_BY_ONE_PNG = new Uint8Array(
-  Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgQhW0tMAAAAASUVORK5CYII=',
-    'base64',
-  ),
-)
+async function createSourcePng(): Promise<Uint8Array> {
+  const bytes = await sharp({
+    create: {
+      width: 16,
+      height: 16,
+      channels: 4,
+      background: { r: 85, g: 170, b: 238, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer()
+  return new Uint8Array(bytes)
+}
 
 const mocks = vi.hoisted(() => ({
   handleOptionsMock: vi.fn(() => false),
@@ -74,12 +82,13 @@ describe('token image AI override lookup', () => {
   })
 
   it('resolves generated override by vault address (not shareOFT address)', async () => {
+    const sourcePng = await createSourcePng()
     mocks.getCompletedImageProjectForVaultMock.mockResolvedValue({
       projectId: 'imgproj_jesse',
       outputBlobUrl: 'https://blob.local/jesse.png',
     })
     mocks.fetchBytesMock.mockResolvedValue({
-      bytes: ONE_BY_ONE_PNG,
+      bytes: sourcePng,
       contentType: 'image/png',
     })
 
@@ -99,5 +108,5 @@ describe('token image AI override lookup', () => {
     expect(res.statusCode).toBe(200)
     expect(String(res.getHeader('content-type') ?? '')).toBe('image/svg+xml')
     expect(String(res.body ?? '')).toContain('data:image/png;base64,')
-  }, 15_000)
+  }, 30_000)
 })

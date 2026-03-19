@@ -18,6 +18,19 @@ type Body = {
   dataBase64?: string
 }
 
+const ASSET_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
+const ASSET_UPLOAD_MAX_BODY_BYTES = 14 * 1024 * 1024
+const ALLOWED_IMAGE_CONTENT_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/avif',
+])
+
+function normalizeImageContentType(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApiAuthenticated(req, res)) return
   const actor = getImageApiActor(req)
@@ -29,7 +42,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const body = await readBody<Body>(req)
+  let body: Body
+  try {
+    body = await readBody<Body>(req, { maxBytes: ASSET_UPLOAD_MAX_BODY_BYTES })
+  } catch {
+    return res.status(413).json({ success: false, error: 'Asset payload too large' })
+  }
   const projectId = parseRequiredString(body.projectId)
   const contentType = parseRequiredString(body.contentType)
   const dataBase64 = parseRequiredString(body.dataBase64)
@@ -37,18 +55,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!projectId || !contentType || !dataBase64 || !isReferenceAssetRole(body.role)) {
     return res.status(400).json({ success: false, error: 'Invalid asset payload' })
   }
+  const normalizedContentType = normalizeImageContentType(contentType)
+  if (!ALLOWED_IMAGE_CONTENT_TYPES.has(normalizedContentType)) {
+    return res.status(400).json({ success: false, error: 'Unsupported asset content type' })
+  }
 
   const project = await getImageGenerationProject(projectId)
-  if (!project || project.ownerAddress !== actor) {
+  if (!project || project.ownerAddress?.toLowerCase() !== actor.toLowerCase()) {
     return res.status(404).json({ success: false, error: 'Project not found' })
+  }
+
+  let bytes: Uint8Array
+  try {
+    bytes = decodeBase64Payload(dataBase64, { maxBytes: ASSET_UPLOAD_MAX_BYTES })
+  } catch {
+    return res.status(413).json({ success: false, error: 'Asset payload too large' })
   }
 
   const asset = await attachImageGenerationAsset({
     projectId,
     role: body.role,
     filename: body.filename ?? null,
-    contentType,
-    bytes: decodeBase64Payload(dataBase64),
+    contentType: normalizedContentType,
+    bytes,
   })
 
   return res.status(200).json({

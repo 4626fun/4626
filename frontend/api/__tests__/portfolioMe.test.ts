@@ -140,6 +140,10 @@ describe('portfolio /api/portfolio/me', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.mode).toBe('public')
     expect(res.body?.data?.profile?.primarySmartWallet).toBe('0x00000000000000000000000000000000000000aa')
+    expect(res.body?.data?.profile?.primaryEmbeddedEoa).toBeNull()
+    expect(Array.isArray(res.body?.data?.wallets)).toBe(true)
+    expect(res.body?.data?.wallets).toHaveLength(1)
+    expect(res.body?.data?.wallets?.[0]?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
   it('hydrates blank profile fields from ENS profile data', async () => {

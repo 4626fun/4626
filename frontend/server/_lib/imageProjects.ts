@@ -543,3 +543,34 @@ export async function getCompletedImageProjectForVault(vaultAddress: string): Pr
     outputBlobUrl: String(row.output_blob_url),
   }
 }
+
+export async function getCompletedImageProjectForVaultOwner(
+  vaultAddress: string,
+  ownerAddress: string,
+): Promise<{
+  projectId: string
+  outputBlobUrl: string
+} | null> {
+  await ensureImageGenerationSchema()
+  const db = await getDb()
+  if (!db) return null
+
+  const result = await db.sql`
+    SELECT p.id AS project_id, a.blob_url AS output_blob_url
+      FROM image_generation_projects p
+      JOIN image_generation_assets a ON a.project_id = p.id AND a.role = 'output'
+     WHERE p.vault_address = ${vaultAddress.toLowerCase()}
+       AND p.owner_address = ${ownerAddress.toLowerCase()}
+       AND p.status = 'completed'
+     ORDER BY p.updated_at DESC, a.created_at DESC
+     LIMIT 1;
+  `
+
+  const row = (result.rows ?? [])[0]
+  if (!row) return null
+
+  return {
+    projectId: String(row.project_id),
+    outputBlobUrl: String(row.output_blob_url),
+  }
+}

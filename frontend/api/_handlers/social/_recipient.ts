@@ -2,12 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type RecipientResolution = {
   inputAddress: string
   recipientAddress: string
-  canonicalSmartWallet: string | null
 }
 
 function normalizeAddress(value: unknown): string | null {
@@ -83,6 +84,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
+  }
+  const clientIp = getClientIp(req)
+  const rate = checkRateLimit(rateLimitKey('social-recipient', principalAddress, clientIp), {
+    windowMs: 60_000,
+    maxRequests: 120,
+  })
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
+
   const inputAddress = readAddressParam(req)
   if (!inputAddress) {
     return res.status(400).json({
@@ -94,7 +109,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fallback: RecipientResolution = {
     inputAddress,
     recipientAddress: inputAddress,
-    canonicalSmartWallet: null,
   }
 
   const db = await getDb()
@@ -108,7 +122,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data: RecipientResolution = {
       inputAddress,
       recipientAddress: canonicalSmartWallet ?? inputAddress,
-      canonicalSmartWallet,
     }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<RecipientResolution>)
   } catch {

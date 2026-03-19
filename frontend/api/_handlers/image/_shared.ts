@@ -62,8 +62,23 @@ export function getImageApiActor(req: VercelRequest): string | null {
   return getSessionAddress(req) ?? null
 }
 
-export async function readBody<T>(req: VercelRequest): Promise<T> {
-  const body = (await readJsonBody<T>(req).catch(() => null)) ?? ((req as any).body as T | null)
+export async function readBody<T>(
+  req: VercelRequest,
+  options: { maxBytes?: number } = {},
+): Promise<T> {
+  const maxBytes = Number.isFinite(options.maxBytes) && (options.maxBytes ?? 0) > 0
+    ? Math.floor(options.maxBytes ?? 256_000)
+    : 256_000
+  const preParsedBody = (req as any).body
+  if (preParsedBody && typeof preParsedBody === 'object') {
+    try {
+      const estimatedBytes = Buffer.byteLength(JSON.stringify(preParsedBody), 'utf8')
+      if (estimatedBytes > maxBytes) throw new Error('body_too_large')
+    } catch {
+      throw new Error('body_too_large')
+    }
+  }
+  const body = (await readJsonBody<T>(req, { maxBytes }).catch(() => null)) ?? (preParsedBody as T | null)
   return (body ?? {}) as T
 }
 
@@ -75,6 +90,13 @@ export function isReferenceAssetRole(value: unknown): value is 'frame' | 'subjec
   return value === 'frame' || value === 'subject'
 }
 
-export function decodeBase64Payload(value: string): Uint8Array {
-  return new Uint8Array(Buffer.from(value, 'base64'))
+export function decodeBase64Payload(value: string, options: { maxBytes?: number } = {}): Uint8Array {
+  const maxBytes = Number.isFinite(options.maxBytes) && (options.maxBytes ?? 0) > 0
+    ? Math.floor(options.maxBytes ?? 10 * 1024 * 1024)
+    : 10 * 1024 * 1024
+  const decoded = Buffer.from(value, 'base64')
+  if (decoded.byteLength > maxBytes) {
+    throw new Error('payload_too_large')
+  }
+  return new Uint8Array(decoded)
 }

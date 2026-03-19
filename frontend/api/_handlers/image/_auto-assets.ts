@@ -9,6 +9,8 @@ import { attachImageGenerationAsset, getImageGenerationProject } from '../../../
 import { parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 
 const FRAME_SVG_URL = new URL('../../../public/brand/4626v2.svg', import.meta.url)
+const AUTO_ASSET_MAX_BODY_BYTES = 20_000
+const AUTO_ASSET_MAX_BYTES = 10 * 1024 * 1024
 
 type Body = {
   projectId?: string
@@ -20,7 +22,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApiAuthenticated(req, res)) return
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' })
 
-  const body = await readBody<Body>(req)
+  let body: Body
+  try {
+    body = await readBody<Body>(req, { maxBytes: AUTO_ASSET_MAX_BODY_BYTES })
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' })
+  }
   const projectId = parseRequiredString(body.projectId)
   const creatorCoinAddress = parseRequiredString(body.creatorCoinAddress)
   const chainId = typeof body.chainId === 'number' ? body.chainId : 8453
