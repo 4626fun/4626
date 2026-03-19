@@ -594,20 +594,32 @@ async function analyzeSourceImage(params: {
   }
   preferredScale = clamp(preferredScale, 0.79, 1.08)
 
-  const breakoutUpperBound = hasTransparency ? 0.22 : 0.82
+  const pixelArtTransparentBreakoutCandidate =
+    sourceClass === 'pixelArt' &&
+    hasTransparency &&
+    topCenterStdDev > 26 &&
+    topOccupancy > 0.026 &&
+    topOccupancy < 0.11 &&
+    strongEdgeRatio > 0.13 &&
+    alphaCoverage < 0.94
   const allowBreakout =
     fitMode === 'cover' &&
-    !lowResolution &&
+    hasTransparency &&
     !brightBadgeLike &&
-    sourceClass !== 'pixelArt' &&
-    (sourceClass === 'portraitPhoto' || sourceClass === 'illustration') &&
-    meanLuma < 196 &&
-    edgeLuma < 240 &&
-    centerLuma < 198 &&
-    centerEdgeDelta > 14 &&
-    topCenterStdDev > 20 &&
-    topOccupancy > 0.032 &&
-    topOccupancy < breakoutUpperBound
+    (
+      (
+        !lowResolution &&
+        (sourceClass === 'illustration' || sourceClass === 'portraitPhoto')
+      ) ||
+      pixelArtTransparentBreakoutCandidate
+    ) &&
+    meanLuma < 208 &&
+    edgeLuma < 244 &&
+    centerLuma < 210 &&
+    centerEdgeDelta > 10 &&
+    topCenterStdDev > 16 &&
+    topOccupancy > 0.02 &&
+    topOccupancy < 0.62
 
   const isPortraitLikeHeroAsset =
     sourceClass === 'portraitPhoto' &&
@@ -1857,35 +1869,27 @@ async function createTopBreakoutSubjectMask(params: {
 
   let alphaPartialCount = 0
   let alphaCount = 0
+  let alphaMostlyTransparentCount = 0
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
       const idx = (y * width + x) * info.channels
       const a = data[idx + 3] ?? 255
       alphaCount += 1
       if (a < 250) alphaPartialCount += 1
+      if (a <= 24) alphaMostlyTransparentCount += 1
     }
   }
-  const hasMeaningfulTransparency = alphaCount > 0 && alphaPartialCount / alphaCount > 0.004
-
-  let bgLumaSum = 0
-  let bgLumaCount = 0
-  const bgY0 = Math.max(0, layout.chamberY - Math.round(layout.breakoutHeight * 0.8))
-  const bgY1 = Math.min(height, layout.chamberY + Math.round(layout.chamberSize * 0.14))
-  const chamberRight = layout.chamberX + layout.chamberSize
-  for (let y = bgY0; y < bgY1; y += 1) {
-    for (let x = layout.chamberX; x < chamberRight; x += 1) {
-      if (x >= x0 && x < x1) continue
-      if (x < 0 || x >= width) continue
-      const idx = (y * width + x) * info.channels
-      const r = data[idx] ?? 0
-      const g = data[idx + 1] ?? 0
-      const b = data[idx + 2] ?? 0
-      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-      bgLumaSum += luma
-      bgLumaCount += 1
-    }
+  const alphaPartialRatio = alphaCount > 0 ? alphaPartialCount / alphaCount : 0
+  const alphaMostlyTransparentRatio = alphaCount > 0 ? alphaMostlyTransparentCount / alphaCount : 0
+  // Breakout is intentionally alpha-only: non-transparent art stays fully contained.
+  const hasMeaningfulTransparency =
+    alphaCount > 0 &&
+    alphaPartialRatio > 0.03 &&
+    alphaPartialRatio < 0.92 &&
+    alphaMostlyTransparentRatio > 0.015
+  if (!hasMeaningfulTransparency) {
+    return createTransparentCanvas(layout.size).png().toBuffer()
   }
-  const bgLuma = bgLumaCount > 0 ? bgLumaSum / bgLumaCount : 120
 
   const mask = Buffer.alloc(width * height, 0)
   let presentCount = 0
@@ -1896,52 +1900,17 @@ async function createTopBreakoutSubjectMask(params: {
   let presentMaxY = -1
   let sumPresentX = 0
   let sumPresentY = 0
-  let presentLumaSum = 0
   const regionArea = Math.max(1, (x1 - x0) * (y1 - y0))
   const subjectTopBandY = y0 + Math.floor((y1 - y0) * 0.58)
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
       const idx = (y * width + x) * info.channels
-      const r = data[idx] ?? 0
-      const g = data[idx + 1] ?? 0
-      const b = data[idx + 2] ?? 0
       const a = data[idx + 3] ?? 255
-      let present = false
-
-      if (hasMeaningfulTransparency) {
-        present = a > 28
-      } else {
-        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        const rx = Math.min(width - 1, x + 1)
-        const dy = Math.min(height - 1, y + 1)
-        const rightIdx = (y * width + rx) * info.channels
-        const downIdx = (dy * width + x) * info.channels
-        const rr = data[rightIdx] ?? 0
-        const rg = data[rightIdx + 1] ?? 0
-        const rb = data[rightIdx + 2] ?? 0
-        const dr = data[downIdx] ?? 0
-        const dg = data[downIdx + 1] ?? 0
-        const db = data[downIdx + 2] ?? 0
-        const rightLuma = 0.2126 * rr + 0.7152 * rg + 0.0722 * rb
-        const downLuma = 0.2126 * dr + 0.7152 * dg + 0.0722 * db
-        const detail = Math.abs(luma - rightLuma) + Math.abs(luma - downLuma)
-        const contrastToBg = Math.abs(luma - bgLuma)
-        const chroma = Math.max(r, g, b) - Math.min(r, g, b)
-        const notWashed = luma < 236
-        const detailThresh = isIllustration ? 10 : 16
-        const contrastThresh = isIllustration ? 4 : 6
-        present = (
-          (detail > detailThresh && contrastToBg > contrastThresh && notWashed) ||
-          (contrastToBg > 22 && chroma > 8 && notWashed)
-        )
-      }
-
-      if (present) {
+      if (a > 28) {
         mask[y * width + x] = 255
         presentCount += 1
         sumPresentX += x
         sumPresentY += y
-        presentLumaSum += 0.2126 * r + 0.7152 * g + 0.0722 * b
         if (y <= subjectTopBandY) presentTopCount += 1
         if (x < presentMinX) presentMinX = x
         if (x > presentMaxX) presentMaxX = x
@@ -1965,7 +1934,6 @@ async function createTopBreakoutSubjectMask(params: {
   const centroidY = sumPresentY / presentCount
   const centroidNorm = (centroidX - x0) / Math.max(1, x1 - x0)
   const centroidYNorm = (centroidY - y0) / Math.max(1, y1 - y0)
-  const presentMeanLuma = presentLumaSum / presentCount
   const flatnessRatio = widthRatio / Math.max(0.001, heightRatio)
 
   const maxPresentRatio = isIllustration ? 0.86 : 0.38
@@ -1975,7 +1943,6 @@ async function createTopBreakoutSubjectMask(params: {
   const maxFlatnessRatio = isIllustration ? 4.0 : 2.8
   const maxCentroidYNorm = isIllustration ? 0.72 : 0.58
   const minTopWeightedRatio = isIllustration ? 0.20 : 0.36
-  const maxPresentMeanLuma = isIllustration ? 228 : 220
   if (
     presentRatio < minPresentRatio ||
     presentRatio > maxPresentRatio ||
@@ -1986,8 +1953,7 @@ async function createTopBreakoutSubjectMask(params: {
     centroidNorm < 0.2 ||
     centroidNorm > 0.8 ||
     centroidYNorm > maxCentroidYNorm ||
-    flatnessRatio > maxFlatnessRatio ||
-    presentMeanLuma > maxPresentMeanLuma
+    flatnessRatio > maxFlatnessRatio
   ) {
     return createTransparentCanvas(layout.size).png().toBuffer()
   }
