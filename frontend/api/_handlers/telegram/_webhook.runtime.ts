@@ -4742,6 +4742,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       signalsChatId: webhookConfig.signalsChatId,
     })
     if (!isAllowedContext) {
+      await answerTelegramCallbackQuery({
+        botToken,
+        callbackQueryId,
+        text: 'This chat is not enabled for bot actions.',
+        showAlert: true,
+      }).catch(() => {})
       return res.status(200).json({
         success: true,
         data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,

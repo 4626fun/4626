@@ -1231,6 +1231,45 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(true)
   })
 
+  it('acknowledges callback query from disallowed chat context and ignores it', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 10_1,
+        callback_query: {
+          id: 'cbq-disallowed',
+          data: 'menu:start',
+          from: { id: 999 },
+          message: { message_id: 1401, chat: { id: 7726886643 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.ignored).toBe(true)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(handleTwitterCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.callback_query_id).toBe('cbq-disallowed')
+    expect(String(payload.text ?? '')).toContain('not enabled')
+    expect(payload.show_alert).toBe(true)
+  })
+
   it('handles callback query for inline launcher and returns prefill keyboard', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
