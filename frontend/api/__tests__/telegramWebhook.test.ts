@@ -1518,7 +1518,7 @@ describe('telegram webhook handler', () => {
     expect(decodeURIComponent(launchUrl)).not.toContain('autologin=1')
   })
 
-  it('renders /help connect deep-link directly to /swap for unlinked users', async () => {
+  it('renders /help connect CTA as menu callback for deterministic /link flow', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -1544,13 +1544,7 @@ describe('telegram webhook handler', () => {
         .includes('connect'),
     )
     expect(connectButton).toBeTruthy()
-    const launchUrl = String(connectButton?.web_app?.url ?? connectButton?.url ?? '')
-    expect(decodeURIComponent(launchUrl)).toContain('/swap?')
-    expect(decodeURIComponent(launchUrl)).toContain('tgMiniApp=1')
-    expect(decodeURIComponent(launchUrl)).toContain('tgEntry=connect')
-    expect(decodeURIComponent(launchUrl)).toContain('tgChatId=7726886643')
-    expect(decodeURIComponent(launchUrl)).not.toContain('/continue?')
-    expect(decodeURIComponent(launchUrl)).not.toContain('autologin=1')
+    expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
   })
 
   it('handles /wallet as a telegram-native command without delegating to keepr', async () => {
