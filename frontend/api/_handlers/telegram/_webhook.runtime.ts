@@ -1416,16 +1416,6 @@ function buildFocusedHelpText(): string {
 
 function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
   const miniAppUrl = resolveTelegramMiniAppUrl()
-  const connectAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: '/swap',
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'connect',
-      chatAction: 'connect',
-      tgChatId: params.chatId,
-    },
-  })
   const walletAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
     pathname: '/swap',
@@ -1454,7 +1444,7 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
         [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
       ]
     : [
-        [buildMiniAppLaunchButton({ chatId: params.chatId, text: menuLabel('connect'), url: connectAppUrl })],
+        [{ text: menuLabel('connect'), callback_data: 'menu:connect' }],
         [
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },

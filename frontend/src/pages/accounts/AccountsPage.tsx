@@ -80,7 +80,7 @@ const PROVIDER_ROWS: ProviderRow[] = [
   { provider: 'google', label: 'Google', hint: 'OAuth identity' },
   { provider: 'apple', label: 'Apple', hint: 'OAuth identity' },
   { provider: 'twitter', label: 'Twitter/X', hint: 'Social identity' },
-  { provider: 'telegram', label: 'Telegram', hint: 'Social identity' },
+  { provider: 'telegram', label: 'Telegram', hint: 'Link from Telegram bot (/link)' },
   { provider: 'tiktok', label: 'TikTok', hint: 'Creator social signal' },
   { provider: 'external_eoa', label: 'Wallet connect (EOA)', hint: 'External signer wallet' },
 ]
@@ -212,6 +212,7 @@ export function AccountsPage(props: {
 
   const canonicalCswAddress = me?.zora?.canonicalCswAddress ?? null
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.zora?.linked)
+  const telegramLaunchParamsAvailable = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
 
   const authHeaders = useCallback(
     async (): Promise<Record<string, string>> => {
@@ -301,10 +302,14 @@ export function AccountsPage(props: {
 
       if (provider === 'telegram') {
         const launchParams = readPrivyTelegramLaunchParams()
-        if (launchParams?.initDataRaw) {
-          const calledWithLaunchParams = await maybeCallMethod(privy, ['linkTelegram'], [{ launchParams }])
-          if (calledWithLaunchParams) return
+        if (!launchParams?.initDataRaw) {
+          throw new Error('Telegram linking must start from Telegram. Run /link in the bot, then open the Mini App.')
         }
+        const calledWithLaunchParams = await maybeCallMethod(privy, ['linkTelegram'], [{ launchParams }])
+        if (!calledWithLaunchParams) {
+          throw new Error('Telegram linking is unavailable in this client. Re-open from Telegram and retry.')
+        }
+        return
       }
 
       const linkMethods: Record<AccountLinkProvider, string[]> = {
@@ -677,14 +682,26 @@ export function AccountsPage(props: {
                     <div className="text-xs text-zinc-400">
                       {provider.values.length > 0 ? provider.values.map((value) => shortValue(value)).join(', ') : 'No linked values'}
                     </div>
+                    {provider.provider === 'telegram' && !provider.linked && !telegramLaunchParamsAvailable ? (
+                      <div className="text-[11px] text-amber-300/90">
+                        Run <span className="font-mono">/link</span> in Telegram, then open the Mini App to link.
+                      </div>
+                    ) : null}
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        disabled={busyProvider === provider.provider}
+                        disabled={
+                          busyProvider === provider.provider ||
+                          (provider.provider === 'telegram' && !provider.linked && !telegramLaunchParamsAvailable)
+                        }
                         onClick={() => void onLinkProvider(provider.provider)}
                         className="btn-secondary btn-no-icon inline-flex"
                       >
-                        {busyProvider === provider.provider ? 'Working…' : 'Link'}
+                        {busyProvider === provider.provider
+                          ? 'Working…'
+                          : provider.provider === 'telegram' && !provider.linked && !telegramLaunchParamsAvailable
+                            ? 'Link in Telegram'
+                            : 'Link'}
                       </button>
                       {provider.linked ? (
                         <button

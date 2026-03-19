@@ -385,11 +385,7 @@ describe('telegram webhook handler', () => {
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
     const connectButton = callbackButtons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
     expect(Boolean(connectButton)).toBe(true)
-    expect(
-      typeof connectButton?.url === 'string' ||
-        typeof connectButton?.web_app?.url === 'string' ||
-        String(connectButton?.callback_data ?? '') === 'menu:connect',
-    ).toBe(true)
+    expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:explore')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(false)
@@ -447,11 +443,7 @@ describe('telegram webhook handler', () => {
     const buttons = payload.reply_markup.inline_keyboard.flat()
     const connectButton = buttons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
     expect(Boolean(connectButton)).toBe(true)
-    expect(
-      typeof connectButton?.web_app?.url === 'string' ||
-        typeof connectButton?.url === 'string' ||
-        String(connectButton?.callback_data ?? '') === 'menu:connect',
-    ).toBe(true)
+    expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
     expect(
       buttons.some(
         (button: any) =>
