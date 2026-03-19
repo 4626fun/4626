@@ -16,6 +16,7 @@ import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalle
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { ensureLaunchImageReady } from '../../../../server/_lib/deployLaunchImage.js'
+import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -113,7 +114,7 @@ function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
 }
 
 function shouldPersistManagedSessionOwner(): boolean {
-  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, false)
 }
 
 function isVercelDeploymentOrigin(origin: string): boolean {
@@ -800,6 +801,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const shouldAttachCleanup = attachCleanup && !persistSessionOwner
       const allowCleanupFallback = shouldAttachCleanup && toStep === 'phase4_sent'
       if (shouldAttachCleanup) calls.push(removeOwnerCall)
+
+      await validateSponsoredSmartWalletCalls({
+        sender: smartWallet,
+        sessionAddress,
+        calls,
+        deploySessionOwner: sessionSigner,
+      })
 
       const permissionCheck = validateCallsAgainstGrant({
         grant: erc7712Grant,

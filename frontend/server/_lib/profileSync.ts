@@ -1,4 +1,5 @@
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
+import { normalizeEmail } from './trust.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -10,13 +11,6 @@ function normalizeWallet(value: string | null | undefined): string | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw || !isValidEvmAddress(raw)) return null
   return raw.toLowerCase()
-}
-
-function normalizeEmail(value: string | null | undefined): string | null {
-  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  if (!raw) return null
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return null
-  return raw
 }
 
 function isPrivyUserIdUniqueViolation(error: unknown): boolean {

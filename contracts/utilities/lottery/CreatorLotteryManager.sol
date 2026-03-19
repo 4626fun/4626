@@ -724,11 +724,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             } catch {}
         }
 
-        // STEP 2: Add vault gauge boost (flat additive vote-directed budget).
+        // STEP 2: Add vault gauge boost (vote-directed budget).
+        // Scale by swap size so tiny swaps cannot fully consume gauge probability budget.
         if (address(vaultGaugeVoting) != address(0) && vault != address(0)) {
             try vaultGaugeVoting.getVaultGaugeProbabilityBoostPPM(vault) returns (uint256 gaugeBoostPPM) {
                 if (gaugeBoostPPM > 0) {
-                    boostedWinChance += gaugeBoostPPM;
+                    boostedWinChance += _scaleGaugeBoostBySwapSize(gaugeBoostPPM, swapAmountUSD);
                 }
             } catch {}
         }
@@ -737,6 +738,17 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (boostedWinChance > lotteryConfig.maxWinChance) {
             boostedWinChance = lotteryConfig.maxWinChance;
         }
+    }
+
+    function _scaleGaugeBoostBySwapSize(uint256 gaugeBoostPPM, uint256 swapAmountUSD) internal view returns (uint256) {
+        uint256 minSwap = lotteryConfig.minSwapAmount;
+        if (swapAmountUSD <= minSwap) return 0;
+
+        uint256 scaledAmount = swapAmountUSD - minSwap;
+        uint256 maxScale = 9_999_000_000; // $9,999 above minSwap ($1), 6 decimals
+        if (scaledAmount >= maxScale) return gaugeBoostPPM;
+
+        return (gaugeBoostPPM * scaledAmount) / maxScale;
     }
 
     /**

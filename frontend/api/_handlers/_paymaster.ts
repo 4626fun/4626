@@ -19,7 +19,6 @@ import { logger } from '../../server/_lib/logger.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../server/_lib/postgres.js'
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
-import { resolveCoinParties } from '../../server/_lib/coinParties.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../server/auth/_shared.js'
@@ -796,6 +795,7 @@ const BASE_SWAP_ROUTER_LEGACY = getAddress(`0x${'2626664c2603336E57B271c5C0b26F4
 const BASE_SWAP_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
 const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
 const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
+const CREATOR_OVAULT_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex)
 
 const UNISWAP_UNIVERSAL_ROUTER_ABI = [
   {
@@ -864,11 +864,7 @@ function buildSupabaseOrFilters(fields: string[], addresses: string[]): string {
 
 async function resolveAllowlistAddresses(params: { sessionAddress: Address; creatorToken?: Address | null }): Promise<Address[]> {
   const base = normalizeAddresses([params.sessionAddress])
-  const token = params.creatorToken && isAddress(params.creatorToken) ? getAddress(params.creatorToken) : null
-  if (!token) return base
-  const parties = await resolveCoinParties(token as `0x${string}`)
-  const combined = normalizeAddresses([params.sessionAddress, parties.creator, parties.payoutRecipient])
-  return combined.length > 0 ? combined : base
+  return base
 }
 
 async function checkCswOwnership(sessionAddress: Address, cswAddress: Address): Promise<boolean> {
@@ -1030,6 +1026,133 @@ async function assertCreatorAllowlisted(params: { sessionAddress: Address; creat
   if (mode === 'enforced' && !allowed) throw new Error('not_allowlisted')
 }
 
+function normalizeSponsoredInnerCalls(
+  calls: Array<{ to: Address; value: bigint; data: Hex }>,
+): InnerCall[] {
+  return calls.map((call) => ({
+    target: getAddress(call.to),
+    value: BigInt(call.value),
+    data: call.data,
+  }))
+}
+
+function decodeSmartWalletInnerCalls(callData: Hex): Array<{ to: Address; value: bigint; data: Hex }> {
+  const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callData })
+  if (decoded.functionName === 'execute') {
+    return [
+      {
+        to: getAddress(decoded.args[0] as Address),
+        value: decoded.args[1] as bigint,
+        data: decoded.args[2] as Hex,
+      },
+    ]
+  }
+  if (decoded.functionName === 'executeBatch') {
+    return (decoded.args[0] as any[]).map((call: any) => ({
+      to: getAddress(call.target as Address),
+      value: BigInt(call.value),
+      data: call.data as Hex,
+    }))
+  }
+  throw new Error('smart_wallet_call_not_allowed')
+}
+
+function encodeSmartWalletCallDataFromInnerCalls(innerCalls: InnerCall[]): Hex {
+  if (innerCalls.length === 1) {
+    const only = innerCalls[0]
+    return encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [only.target, only.value, only.data],
+    })
+  }
+  return encodeFunctionData({
+    abi: COINBASE_SMART_WALLET_ABI,
+    functionName: 'executeBatch',
+    args: [innerCalls.map((call) => ({ target: call.target, value: call.value, data: call.data }))],
+  })
+}
+
+export async function validateSponsoredSmartWalletCalls(params: {
+  sender: Address
+  sessionAddress: Address
+  calls: Array<{ to: Address; value: bigint; data: Hex }>
+  deploySessionOwner?: Address | null
+  allowCleanupOnlyForInactiveDeploySession?: boolean
+  initCode?: Hex | null
+  factory?: Address | null
+  factoryData?: Hex | null
+  debug?: (info: {
+    deployer: Address
+    storeEnv: Address | null
+    storeFromDeployer: Address | null
+    storeUsed: Address
+    expectedVault?: Address | null
+    expectedBurnStream?: Address | null
+    expectedPayoutRouter?: Address | null
+    payoutRouterBurnStreamArg?: Address | null
+    vaultBurnStreamArg?: Address | null
+  }) => void
+}): Promise<{ expectedCreatorToken: Address | null; mode: string }> {
+  const innerCalls = normalizeSponsoredInnerCalls(params.calls)
+  if (innerCalls.length === 0) throw new Error('no_inner_calls')
+
+  const deploySessionOwner =
+    params.deploySessionOwner && isAddress(params.deploySessionOwner)
+      ? getAddress(params.deploySessionOwner)
+      : null
+
+  await assertSessionOwnsSender({
+    sender: params.sender,
+    sessionAddress: params.sessionAddress,
+    initCode: params.initCode ?? null,
+    factory: params.factory ?? null,
+    factoryData: params.factoryData ?? null,
+  })
+
+  if (deploySessionOwner) {
+    const client = await getBaseClient()
+    const ownerInstalled = await client.readContract({
+      address: params.sender,
+      abi: COINBASE_SMART_WALLET_OWNER_ABI,
+      functionName: 'isOwnerAddress',
+      args: [deploySessionOwner],
+    })
+    if (!ownerInstalled) throw new Error('deploy_session_owner_not_installed')
+  }
+
+  if (params.allowCleanupOnlyForInactiveDeploySession) {
+    if (!deploySessionOwner) throw new Error('deploy_session_missing')
+    for (const call of innerCalls) {
+      if (call.value !== 0n) throw new Error('value_transfer_not_allowed')
+      if (call.target !== params.sender) throw new Error('cleanup_only_violation')
+      if (getSelector(call.data) !== SELECTOR_CSW_REMOVE_OWNER_AT_INDEX) throw new Error('cleanup_only_violation')
+      const decodedSelf = decodeFunctionData({ abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI, data: call.data })
+      if (decodedSelf.functionName !== 'removeOwnerAtIndex') throw new Error('cleanup_only_violation')
+      const ownerBytes = decodedSelf.args[1] as Hex
+      const expected = asOwnerBytes(deploySessionOwner)
+      if (String(ownerBytes).toLowerCase() !== String(expected).toLowerCase()) {
+        throw new Error('deploy_session_owner_mismatch')
+      }
+    }
+    return { expectedCreatorToken: null, mode: 'cleanup_only' }
+  }
+
+  const callData = encodeSmartWalletCallDataFromInnerCalls(innerCalls)
+  const validated = await validateInnerCalls({
+    sender: params.sender,
+    sessionAddress: params.sessionAddress,
+    callData,
+    deploySessionOwner,
+    debug: params.debug,
+  })
+  await assertCreatorAllowlisted({
+    sessionAddress: params.sessionAddress,
+    creatorToken: validated.expectedCreatorToken,
+  })
+  return validated
+}
+
 function jsonRpcError(id: JsonRpcId, code: number, message: string) {
   return { jsonrpc: '2.0', id: id ?? null, error: { code, message } }
 }
@@ -1097,6 +1220,40 @@ function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
   if (canonicalData.toLowerCase() !== data.toLowerCase()) {
     throw new Error('swap_router_non_canonical_encoding')
   }
+}
+
+function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void {
+  let decoded: any
+  try {
+    decoded = decodeFunctionData({
+      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
+      data,
+    })
+  } catch {
+    throw new Error('swap_router_decode_failed')
+  }
+
+  if (decoded.functionName !== 'execute') {
+    throw new Error('swap_router_selector_not_allowed')
+  }
+
+  const commands = decoded.args[0] as Hex
+  const inputs = decoded.args[1] as Hex[]
+  const commandBytes =
+    typeof commands === 'string' && commands.startsWith('0x')
+      ? Math.max(0, Math.floor((commands.length - 2) / 2))
+      : 0
+  if (commandBytes === 0) throw new Error('swap_router_empty_commands')
+  if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length !== commandBytes) {
+    throw new Error('swap_router_inputs_mismatch')
+  }
+
+  const tokenNeedle = token.slice(2).toLowerCase()
+  const referencesToken = inputs.some((input) => {
+    if (typeof input !== 'string') return false
+    return input.toLowerCase().includes(tokenNeedle)
+  })
+  if (!referencesToken) throw new Error('swap_router_token_not_referenced')
 }
 
 function summarizeSmartWalletCallData(callData: Hex): {
@@ -1169,6 +1326,17 @@ function decodeAddressArgFromCalldata(data: Hex, argIndex: number): Address | nu
   const addr = `0x${word.slice(24)}` // last 20 bytes
   if (!isAddress(addr)) return null
   return getAddress(addr)
+}
+
+function decodeUint256ArgFromCalldata(data: Hex, argIndex: number): bigint | null {
+  const start = 10 + argIndex * 64
+  const word = data.slice(start, start + 64)
+  if (word.length !== 64) return null
+  try {
+    return BigInt(`0x${word}`)
+  } catch {
+    return null
+  }
 }
 
 function decodeAddressArgFromAbiEncodedBytes(data: Hex, argIndex: number): Address | null {
@@ -1295,10 +1463,6 @@ async function assertSessionOwnsSender(params: { sender: Address; sessionAddress
   // Deployed accounts: verify onchain ownership.
   const code = await client.getBytecode({ address: params.sender })
   if (code && code !== '0x') {
-    if (getAddress(params.sessionAddress) === getAddress(params.sender)) {
-      // Allow SIWE/Privy sessions that are tied to the smart wallet itself.
-      return
-    }
     const isOwner = await client.readContract({
       address: params.sender,
       abi: COINBASE_SMART_WALLET_OWNER_ABI,
@@ -1550,7 +1714,10 @@ async function validateInnerCalls(params: {
     } else {
       const swapMode = (() => {
         let sawSwapRouter = false
+        let swapRouterCalls = 0
+        let approvalCalls = 0
         let approvedToken: Address | null = null
+        let swapRouterCallData: Hex | null = null
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
 
@@ -1558,15 +1725,23 @@ async function validateInnerCalls(params: {
             if (selector !== SELECTOR_SWAP_ROUTER_EXECUTE) {
               return { matched: false, creatorToken: null as Address | null }
             }
+            if (c.value !== 0n) throw new Error('swap_router_value_not_allowed')
             assertCanonicalSwapRouterExecuteEncoding(c.data)
             sawSwapRouter = true
+            swapRouterCalls += 1
+            if (swapRouterCalls > 1) throw new Error('swap_router_call_count_not_allowed')
+            swapRouterCallData = c.data
             continue
           }
 
           if (selector !== SELECTOR_ERC20_APPROVE) return { matched: false, creatorToken: null as Address | null }
           if (c.value !== 0n) throw new Error('value_transfer_not_allowed')
+          approvalCalls += 1
+          if (approvalCalls > 1) throw new Error('swap_approval_call_count_not_allowed')
           const spender = decodeAddressArgFromCalldata(c.data, 0)
           if (!spender || spender !== permit2) return { matched: false, creatorToken: null as Address | null }
+          const amount = decodeUint256ArgFromCalldata(c.data, 1)
+          if (amount == null || amount <= 0n) throw new Error('swap_approval_amount_invalid')
           const approvalToken = getAddress(c.target)
           if (!approvedToken) {
             approvedToken = approvalToken
@@ -1575,8 +1750,12 @@ async function validateInnerCalls(params: {
           }
         }
 
+        if (sawSwapRouter && approvedToken && swapRouterCallData) {
+          assertSwapRouterPayloadReferencesToken(swapRouterCallData, approvedToken)
+        }
+
         return {
-          matched: sawSwapRouter,
+          matched: sawSwapRouter && approvalCalls === 1 && swapRouterCalls === 1 && !!approvedToken,
           creatorToken: approvedToken,
         }
       })()
@@ -1788,12 +1967,10 @@ async function validateInnerCalls(params: {
       const vaultCodeId = expectedCodeIds?.vault
       const version = expectedVersion as string
       if (!vaultCodeId) throw new Error('missing_code_ids')
-      const creationCode = (await client.readContract({
-        address: bytecodeStore,
-        abi: BYTECODE_STORE_ABI,
-        functionName: 'get',
-        args: [vaultCodeId],
-      })) as Hex
+      if (String(vaultCodeId).toLowerCase() !== String(CREATOR_OVAULT_CODE_ID).toLowerCase()) {
+        throw new Error('vault_codeid_not_allowed')
+      }
+      const creationCode = DEPLOY_BYTECODE.CreatorOVault as Hex
       const constructorArgs = encodeAbiParameters(
         [
           { type: 'address', name: 'creatorToken' },
@@ -1824,37 +2001,6 @@ async function validateInnerCalls(params: {
           creatorToken: expectedCreatorToken,
           sender: params.sender,
         })
-      }
-    }
-
-    if (!vaultValidated) {
-      if (expectedWrapper && expectedShareOFT) {
-        const [wrapperCreator, wrapperVault, wrapperShareOFT, wrapperOwner, shareOftVault, shareOftOwner] =
-          (await Promise.all([
-            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'creatorCoin' }),
-            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'vault' }),
-            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'shareOFT' }),
-            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'owner' }),
-            client.readContract({ address: expectedShareOFT, abi: SHARE_OFT_VIEW_ABI, functionName: 'vault' }),
-            client.readContract({ address: expectedShareOFT, abi: SHARE_OFT_VIEW_ABI, functionName: 'owner' }),
-          ]).catch(() => [])) as [Address, Address, Address, Address, Address, Address]
-        const wrapperOk =
-          wrapperCreator &&
-          wrapperVault &&
-          wrapperShareOFT &&
-          wrapperOwner &&
-          getAddress(wrapperCreator) === getAddress(expectedCreatorToken as Address) &&
-          getAddress(wrapperVault) === getAddress(expectedVault) &&
-          getAddress(wrapperShareOFT) === getAddress(expectedShareOFT) &&
-          getAddress(wrapperOwner) === getAddress(creatorVaultBatcher)
-        const shareOftOk =
-          shareOftVault &&
-          shareOftOwner &&
-          getAddress(shareOftVault) === getAddress(expectedVault) &&
-          getAddress(shareOftOwner) === getAddress(creatorVaultBatcher)
-        if (wrapperOk && shareOftOk) {
-          vaultValidated = true
-        }
       }
     }
 
@@ -2328,76 +2474,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Basic rate limit: per session address.
       enforceRateLimit(sessionAddress)
       const initCode = isHexString(initCodeRaw) ? (initCodeRaw as Hex) : null
-
-      // If this is a server-driven deploy session request, also ensure the session owner is installed.
-      if (deploySessionOwner) {
-        const client = await getBaseClient()
-        const ok = await client.readContract({
-          address: sender,
-          abi: COINBASE_SMART_WALLET_OWNER_ABI,
-          functionName: 'isOwnerAddress',
-          args: [deploySessionOwner],
-        })
-        if (!ok) throw new Error('deploy_session_owner_not_installed')
-      }
-
-      // Ensure this session is an onchain owner of the Coinbase Smart Wallet sender.
-      await assertSessionOwnsSender({ sender, sessionAddress, initCode })
-
-      // Validate inner calls match deployment flow patterns.
-      let expectedCreatorToken: Address | null = null
-      if (allowCleanupOnlyForInactiveDeploySession && deploySessionOwner) {
-        requestContext.mode = 'cleanup_only'
-        // Special-case: allow only `removeOwnerAtIndex` self-call for the recorded deploy session owner.
-        const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callDataRaw })
-        const innerCalls: InnerCall[] =
-          decoded.functionName === 'execute'
-            ? [
-                {
-                  target: getAddress(decoded.args[0] as Address),
-                  value: decoded.args[1] as bigint,
-                  data: decoded.args[2] as Hex,
-                },
-              ]
-            : decoded.functionName === 'executeBatch'
-              ? (decoded.args[0] as any[]).map((c: any) => ({
-                  target: getAddress(c.target as Address),
-                  value: BigInt(c.value),
-                  data: c.data as Hex,
-                }))
-              : []
-        if (innerCalls.length === 0) throw new Error('no_inner_calls')
-        for (const c of innerCalls) {
-          if (c.value !== 0n) throw new Error('value_transfer_not_allowed')
-          if (c.target !== sender) throw new Error('cleanup_only_violation')
-          if (getSelector(c.data) !== SELECTOR_CSW_REMOVE_OWNER_AT_INDEX) throw new Error('cleanup_only_violation')
-          const decodedSelf = decodeFunctionData({ abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI, data: c.data })
-          if (decodedSelf.functionName !== 'removeOwnerAtIndex') throw new Error('cleanup_only_violation')
-          const ownerBytes = decodedSelf.args[1] as Hex
-          const expected = asOwnerBytes(getAddress(deploySessionOwner))
-          if (String(ownerBytes).toLowerCase() !== String(expected).toLowerCase()) throw new Error('deploy_session_owner_mismatch')
-        }
-      } else {
-        const validated = await validateInnerCalls({
-          sender,
-          sessionAddress,
-          callData: callDataRaw,
-          deploySessionOwner,
-          debug: debugEnabled
-            ? (info) => {
-                debugStoreInfo = info
-              }
-            : undefined,
-        })
-        expectedCreatorToken = validated.expectedCreatorToken
-        requestContext.mode = String(validated.mode ?? 'unknown')
-        requestContext.expectedCreatorToken = validated.expectedCreatorToken ?? null
-        const isLegacyWithdraw = String(validated.mode) === 'legacy_withdraw'
-        if (!isLegacyWithdraw) {
-          // Only sponsor approved creators (Supabase/Postgres allowlist).
-          await assertCreatorAllowlisted({ sessionAddress, creatorToken: expectedCreatorToken })
-        }
-      }
+      const factoryRaw = extracted.userOp?.factory
+      const factoryDataRaw = extracted.userOp?.factoryData
+      const factory = typeof factoryRaw === 'string' && isAddress(factoryRaw) ? getAddress(factoryRaw) : null
+      const factoryData = isHexString(factoryDataRaw) ? (factoryDataRaw as Hex) : null
+      const calls = decodeSmartWalletInnerCalls(callDataRaw as Hex)
+      const validated = await validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls,
+        deploySessionOwner,
+        allowCleanupOnlyForInactiveDeploySession,
+        initCode,
+        factory,
+        factoryData,
+        debug: debugEnabled
+          ? (info) => {
+              debugStoreInfo = info
+            }
+          : undefined,
+      })
+      requestContext.mode = String(validated.mode ?? 'unknown')
+      requestContext.expectedCreatorToken = validated.expectedCreatorToken ?? null
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.message === 'rate_limited') {

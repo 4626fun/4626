@@ -921,6 +921,11 @@ describe('telegram webhook handler', () => {
 
       expect(res.statusCode).toBe(200)
       expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+      expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+        groupId: 'telegram:7726886643',
+        senderWallet: '0x0000000000000000000000000000000000000000',
+        text: '/help',
+      }))
       expect((fetch as any).mock.calls.length).toBe(1)
       expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
     } finally {
@@ -963,7 +968,7 @@ describe('telegram webhook handler', () => {
     }
   })
 
-  it('allows non-admin private DM by default when private-dm flags are unset', async () => {
+  it('blocks non-admin private DM by default when private-dm flags are unset', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
     const restorePrivateDmEnv = applyEnv({
@@ -991,15 +996,14 @@ describe('telegram webhook handler', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-      expect((fetch as any).mock.calls.length).toBe(1)
-      expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+      expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+      expect((fetch as any).mock.calls.length).toBe(0)
     } finally {
       restorePrivateDmEnv()
     }
   })
 
-  it('auto-routes plain private-chat followups into /ai', async () => {
+  it('keeps plain private-chat followups as normal command text', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
 
@@ -1025,7 +1029,37 @@ describe('telegram webhook handler', () => {
     expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'telegram:7726886643',
       senderWallet: '0x00000000000000000000000000000000000000aa',
-      text: '/ai Why?',
+      text: 'Why?',
+    }))
+  })
+
+  it('auto-routes private-chat mentions into /ai', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 7_1_1,
+        message: {
+          message_id: 12_1_1,
+          text: '@keepr Why?',
+          chat: { id: 7726886643 },
+          from: { id: 42 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+      groupId: 'telegram:7726886643',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/ai @keepr Why?',
     }))
   })
 
@@ -1711,6 +1745,11 @@ describe('telegram webhook handler', () => {
         status: 200,
         json: async () => ({ ok: true }),
       })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
 
     getTelegramLinkByUserIdMock.mockResolvedValue({
       telegramUserId: '99',
@@ -1778,14 +1817,19 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect((fetch as any).mock.calls.length).toBe(2)
+    expect((fetch as any).mock.calls.length).toBe(3)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/createChatInviteLink')
     const invitePayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(invitePayload.chat_id ?? '')).toBe('-100555')
     expect(Number(invitePayload.member_limit)).toBe(1)
     expect(String((fetch as any).mock.calls[1][0])).toContain('/sendMessage')
-    const messagePayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-    expect(String(messagePayload.text ?? '')).toContain('https://t.me/+roomInvite123')
+    const dmPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(dmPayload.chat_id ?? '')).toBe('99')
+    expect(String(dmPayload.text ?? '')).toContain('https://t.me/+roomInvite123')
+    expect(String((fetch as any).mock.calls[2][0])).toContain('/sendMessage')
+    const groupAckPayload = JSON.parse(String((fetch as any).mock.calls[2][1]?.body ?? '{}'))
+    expect(String(groupAckPayload.chat_id ?? '')).toBe('-100123')
+    expect(String(groupAckPayload.text ?? '')).toContain('invite sent via private DM')
   })
 
   it('keeps holder-room command templates copy-friendly with backticks', async () => {

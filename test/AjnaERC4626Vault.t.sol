@@ -169,7 +169,7 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setKeeper(keeper, true);
+        auth.setSwapper(keeper);
 
         vm.prank(keeper);
         vault.moveFromBuffer(4_156, 90e18);
@@ -183,7 +183,7 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setKeeper(keeper, true);
+        auth.setSwapper(keeper);
         auth.setBufferRatio(2_000);
 
         vm.prank(keeper);
@@ -252,7 +252,7 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setKeeper(keeper, true);
+        auth.setSwapper(keeper);
 
         vm.prank(keeper);
         vm.expectRevert();

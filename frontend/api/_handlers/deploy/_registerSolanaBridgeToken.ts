@@ -18,6 +18,8 @@ import {
 import { logger } from '../../../server/_lib/logger.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { readDeployAuthFromRequest } from '../../../server/_lib/deployAuth.js'
+import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { isAdminAddress } from '../../../server/_lib/session.js'
 import {
   SOLANA_NATIVE_MINT,
   resolveMeteoraAlphaVaultConfig,
@@ -1254,7 +1256,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!auth?.address && !internalAuthorized) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
-  const callerTag = auth?.address ?? 'internal:solana-registration-secret'
+  const callerAddress = auth?.address && isAddress(auth.address) ? getAddress(auth.address) : null
+  const adminAuthorized = callerAddress ? isAdminAddress(callerAddress) : false
+  if (!internalAuthorized && !adminAuthorized) {
+    return res.status(403).json({ success: false, error: 'Admin authorization required' } satisfies ApiEnvelope<never>)
+  }
+
+  const callerTag = internalAuthorized
+    ? 'internal:solana-registration-secret'
+    : (callerAddress ?? 'unknown-admin')
+  const clientIp = getClientIp(req)
+  const rate = checkRateLimit(
+    rateLimitKey('deploy-register-solana-bridge-token', callerTag, clientIp),
+    {
+      windowMs: 60_000,
+      maxRequests: internalAuthorized ? 120 : 20,
+    },
+  )
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
 
   const body = await readJsonBody<RegisterSolanaBridgeTokenRequest>(req)
   const requestedBridgeTokenRaw = typeof body?.bridgeToken === 'string' ? body.bridgeToken.trim() : ''

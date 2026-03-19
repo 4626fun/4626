@@ -12,6 +12,10 @@ const {
   createWalletClientMock,
   privateKeyToAccountMock,
   resolveMeteoraConfigMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
+  isAdminAddressMock,
 } = vi.hoisted(() => ({
   readDeployAuthMock: vi.fn(),
   getApiContractsMock: vi.fn(),
@@ -19,6 +23,10 @@ const {
   createWalletClientMock: vi.fn(),
   privateKeyToAccountMock: vi.fn(),
   resolveMeteoraConfigMock: vi.fn(),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
+  isAdminAddressMock: vi.fn(() => true),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -34,6 +42,16 @@ vi.mock('../../server/_lib/deployAuth.js', () => ({
 
 vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: getApiContractsMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+}))
+
+vi.mock('../../server/_lib/session.js', () => ({
+  isAdminAddress: isAdminAddressMock,
 }))
 
 vi.mock('../../server/_lib/meteoraAlphaVaultConfig.js', () => ({
@@ -63,6 +81,8 @@ describe('deploy registerSolanaBridgeToken handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readDeployAuthMock.mockReturnValue({ address: '0x1111111111111111111111111111111111111111' })
+    isAdminAddressMock.mockReturnValue(true)
+    checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
     getApiContractsMock.mockReturnValue({
       creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
     })
@@ -81,6 +101,34 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
     expect(res.statusCode).toBe(401)
     expect(res.body?.error).toContain('Not authenticated')
+  })
+
+  it('returns 403 for authenticated non-admin callers', async () => {
+    isAdminAddressMock.mockReturnValueOnce(false)
+    const req = createMockReq({
+      method: 'POST',
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('Admin authorization required')
+  })
+
+  it('returns 429 when Solana registration rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 1_000 })
+    const req = createMockReq({
+      method: 'POST',
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(String(res.body?.error ?? '')).toContain('Rate limit exceeded')
   })
 
   it('returns 410 when legacy route writes are disabled', async () => {

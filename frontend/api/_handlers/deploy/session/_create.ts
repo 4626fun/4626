@@ -26,7 +26,7 @@ import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAg
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
-import { resolveCoinParties } from '../../../../server/_lib/coinParties.js'
+import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/coinParties.js'
 import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/charmVaults.js'
 import {
   normalizeSolanaAssetMintOrigin,
@@ -233,8 +233,8 @@ function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
 }
 
 function shouldPersistManagedSessionOwner(): boolean {
-  // Keep Privy-managed session owners installed by default to reduce repeated add-owner prompts.
-  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+  // Safe default: cleanup temporary deploy signer unless explicitly opted in.
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, false)
 }
 
 const DEFAULT_DEPLOY_SESSION_TTL_MINUTES = 45
@@ -685,18 +685,7 @@ async function resolveAllowlistAddresses(params: {
   creatorToken: Address
 }): Promise<Address[]> {
   const base = normalizeAllowlistAddresses([params.sessionAddress, params.smartWallet])
-  try {
-    const parties = await resolveCoinParties(params.creatorToken as `0x${string}`)
-    const combined = normalizeAllowlistAddresses([
-      params.sessionAddress,
-      params.smartWallet,
-      parties.creator,
-      parties.payoutRecipient,
-    ])
-    return combined.length > 0 ? combined : base
-  } catch {
-    return base
-  }
+  return base
 }
 
 /**
@@ -706,7 +695,6 @@ async function resolveAllowlistAddresses(params: {
  * evaluate the same address set:
  * - authenticated session wallet
  * - canonical smart wallet sender
- * - creator/payoutRecipient resolved from creatorToken
  */
 async function checkCreatorAllowlist(params: {
   sessionAddress: Address
@@ -804,6 +792,33 @@ async function checkCreatorAllowlist(params: {
     return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
   } catch {
     return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
+  }
+}
+
+async function assertCreatorTokenAuthority(params: {
+  creatorToken: Address
+  ownerAddress: Address
+  sessionAddress: Address
+}): Promise<void> {
+  const parties = await resolveCoinPartiesAndOwner(params.creatorToken as `0x${string}`)
+  const authorized = new Set<string>()
+  if (typeof parties.creator === 'string' && isAddress(parties.creator)) {
+    authorized.add(getAddress(parties.creator).toLowerCase())
+  }
+  if (typeof parties.payoutRecipient === 'string' && isAddress(parties.payoutRecipient)) {
+    authorized.add(getAddress(parties.payoutRecipient).toLowerCase())
+  }
+  if (typeof parties.owner === 'string' && isAddress(parties.owner)) {
+    authorized.add(getAddress(parties.owner).toLowerCase())
+  }
+
+  const ownerLc = params.ownerAddress.toLowerCase()
+  const sessionLc = params.sessionAddress.toLowerCase()
+  if (authorized.size === 0 || (!authorized.has(ownerLc) && !authorized.has(sessionLc))) {
+    throw new DeploySessionRequestError(
+      403,
+      'Creator token authority mismatch: active session or canonical smart wallet must control the creator token.',
+    )
   }
 }
 
@@ -974,6 +989,12 @@ export async function validateDeploySessionRequest(params: {
       ownership.reason ? `Deploy ownership mismatch: ${ownership.reason}` : 'Deploy ownership mismatch',
     )
   }
+
+  await assertCreatorTokenAuthority({
+    creatorToken,
+    ownerAddress,
+    sessionAddress,
+  })
 
   const allowlistCheck = await checkCreatorAllowlist({
     sessionAddress,

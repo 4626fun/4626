@@ -88,6 +88,7 @@ vi.mock('../../server/_lib/logger.js', () => ({
 
 vi.mock('../../src/deploy/bytecode.generated.js', () => ({
   DEPLOY_BYTECODE: {
+    CreatorOVault: ('0x' + '00'.repeat(32)) as `0x${string}`,
     PayoutRouter: ('0x' + '00'.repeat(32)) as `0x${string}`,
     VaultShareBurnStream: ('0x' + '00'.repeat(32)) as `0x${string}`,
   },
@@ -416,7 +417,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(String(responseBody?.error?.message ?? '')).toMatch(/upstream_network_error/i)
   })
 
-  it('allows swap router execute call with native value', async () => {
+  it('rejects swap router execute call with native value', async () => {
     const COINBASE_SMART_WALLET_ABI = [
       {
         type: 'function',
@@ -488,8 +489,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(res.statusCode).toBe(200)
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = String(responseBody?.error?.message ?? '')
-    expect(errMsg).not.toMatch(/request denied/i)
-    expect(errMsg).not.toMatch(/value_transfer_not_allowed/i)
+    expect(errMsg).toMatch(/swap_router_value_not_allowed/i)
   })
 
   it('allows approve plus swap router execute batch', async () => {
@@ -548,10 +548,11 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       functionName: 'approve',
       args: [permit2, 1_000_000n],
     })
+    const tokenRefBytes = `0x${'00'.repeat(12)}${token.slice(2)}` as `0x${string}`
     const swapData = encodeFunctionData({
       abi: UNIVERSAL_ROUTER_ABI,
       functionName: 'execute',
-      args: ['0x00', ['0x'], 1_900_000_000n],
+      args: ['0x00', [tokenRefBytes], 1_900_000_000n],
     })
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
@@ -693,7 +694,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(res.statusCode).toBe(200)
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = String(responseBody?.error?.message ?? '')
-    expect(errMsg).toMatch(/swap_approval_token_mismatch/i)
+    expect(errMsg).toMatch(/swap_approval_call_count_not_allowed|swap_approval_token_mismatch/i)
   })
 
   it('rejects non-canonical universal router execute calldata', async () => {

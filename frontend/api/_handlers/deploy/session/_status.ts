@@ -23,6 +23,7 @@ import {
   LAUNCH_IMAGE_VERIFIED_BYTES_KEY,
 } from '../../../../server/_lib/deployLaunchImage.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
+import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -242,7 +243,7 @@ function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
 }
 
 function shouldPersistManagedSessionOwner(): boolean {
-  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, false)
 }
 
 function isVercelDeploymentOrigin(origin: string): boolean {
@@ -1887,6 +1888,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   let txHash: Hex | undefined
   const payload = asPayloadObject(rec.payload)
+  const sessionAddress = getAddress(rec.sessionAddress)
+  const smartWalletAddress = getAddress(rec.smartWallet)
 
   const deploySignerWalletId =
     typeof payload?.deploySignerWalletId === 'string'
@@ -1984,16 +1987,16 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     bundler: any
     paymasterClient: any
     account: any
+    sessionSigner: Address
     removeOwnerCall: { to: Address; value: bigint; data: Hex }
   }
   let ctx: AuthedCtx | null = null
   const getCtx = async (): Promise<AuthedCtx> => {
     if (ctx) return ctx
     const { ownerAccount, sessionSigner } = await getOwnerAccount(rec)
-    const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
       publicClient,
-      smartWallet,
+      smartWallet: smartWalletAddress,
       ownerAddress: sessionSigner,
       maxScan: 512,
     })
@@ -2015,7 +2018,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     const bundler = createBundlerClient({ client: publicClient as any, transport: authedTransport })
     const account = await toCoinbaseSmartAccount({
       client: publicClient as any,
-      address: smartWallet,
+      address: smartWalletAddress,
       owners: [ownerAccount as any],
       ownerIndex,
       version: '1',
@@ -2027,10 +2030,10 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         functionName: 'removeOwnerAtIndex',
         args: [BigInt(ownerIndex), ownerBytes],
       })
-      return { to: smartWallet, value: 0n, data } as const
+      return { to: smartWalletAddress, value: 0n, data } as const
     })()
 
-    ctx = { bundler, paymasterClient, account, removeOwnerCall }
+    ctx = { bundler, paymasterClient, account, sessionSigner, removeOwnerCall }
     return ctx
   }
 
@@ -2058,10 +2061,18 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       })
     }
 
+    const authedCtx = await getCtx()
     const fullCalls = [...calls]
     const shouldAttachCleanup = attachCleanup && !persistSessionOwner
     const allowCleanupFallback = shouldAttachCleanup && toStep === 'phase4_sent'
-    if (shouldAttachCleanup) fullCalls.push((await getCtx()).removeOwnerCall)
+    if (shouldAttachCleanup) fullCalls.push(authedCtx.removeOwnerCall)
+
+    await validateSponsoredSmartWalletCalls({
+      sender: smartWalletAddress,
+      sessionAddress,
+      calls: fullCalls,
+      deploySessionOwner: authedCtx.sessionSigner,
+    })
 
     const permissionCheck = validateCallsAgainstGrant({
       grant: erc7712Grant,
@@ -2082,7 +2093,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       payloadPatch: { [stageKey]: null },
     })
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
-    const { bundler, paymasterClient, account } = await getCtx()
+    const { bundler, paymasterClient, account } = authedCtx
     try {
       let nextHash: Hex
       let payloadPatch: Record<string, unknown> = { [stageKey]: null }
@@ -2276,10 +2287,19 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const dispatchSentStage = async (sentStep: string): Promise<void> => {
     const plan = getSentStagePlan(sentStep)
     if (!plan) return
+    const authedCtx = await getCtx()
     const fullCalls = [...plan.calls]
     if (plan.attachCleanup && !persistSessionOwner) {
-      fullCalls.push((await getCtx()).removeOwnerCall)
+      fullCalls.push(authedCtx.removeOwnerCall)
     }
+
+    await validateSponsoredSmartWalletCalls({
+      sender: smartWalletAddress,
+      sessionAddress,
+      calls: fullCalls,
+      deploySessionOwner: authedCtx.sessionSigner,
+    })
+
     const permissionCheck = validateCallsAgainstGrant({
       grant: erc7712Grant,
       calls: fullCalls,
@@ -2287,7 +2307,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       expectedSessionId: rec.id,
     })
     if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
-    const { bundler, paymasterClient, account } = await getCtx()
+    const { bundler, paymasterClient, account } = authedCtx
     try {
       const nextHash = await sendUserOperation(bundler, {
         account,

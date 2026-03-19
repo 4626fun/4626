@@ -3,10 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import handler from '../_handlers/keepr/vault/_upsert.ts'
 import { createMockReq, createMockRes } from './helpers'
 
-const { getSessionAddressMock, computeConfigHashMock, upsertKeeprVaultMock } = vi.hoisted(() => ({
+const {
+  getSessionAddressMock,
+  computeConfigHashMock,
+  upsertKeeprVaultMock,
+  validateCreatorRegistryBindingMock,
+} = vi.hoisted(() => ({
   getSessionAddressMock: vi.fn(),
   computeConfigHashMock: vi.fn(),
   upsertKeeprVaultMock: vi.fn(),
+  validateCreatorRegistryBindingMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/session.js', () => ({
@@ -16,6 +22,10 @@ vi.mock('../../server/_lib/session.js', () => ({
 vi.mock('../../server/_lib/keeprRegistry.js', () => ({
   computeConfigHash: computeConfigHashMock,
   upsertKeeprVault: upsertKeeprVaultMock,
+}))
+
+vi.mock('../../server/_lib/creatorRegistryVerification.js', () => ({
+  validateCreatorRegistryBinding: validateCreatorRegistryBindingMock,
 }))
 
 const OWNER = '0x00000000000000000000000000000000000000aa'
@@ -54,6 +64,7 @@ describe('keepr/vault/upsert', () => {
     vi.clearAllMocks()
     getSessionAddressMock.mockReturnValue(OWNER)
     computeConfigHashMock.mockReturnValue('cfg-hash-1')
+    validateCreatorRegistryBindingMock.mockResolvedValue({ ok: true })
     upsertKeeprVaultMock.mockResolvedValue({
       vaultAddress: VAULT,
       chainId: 8453,
@@ -136,6 +147,44 @@ describe('keepr/vault/upsert', () => {
     expect(passed?.actorWallet).toBe(OWNER)
     expect(passed?.config?.lens?.groupAddress).toBe(LENS_GROUP)
     expect(passed?.config?.lens?.metadataUri).toBe('lens://group-meta-1')
+  })
+
+  it('rejects config when onchain registry binding does not match', async () => {
+    validateCreatorRegistryBindingMock.mockResolvedValueOnce({ ok: false, reason: 'vault_mismatch' })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        config: buildConfig(),
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('onchain registry')
+    expect(upsertKeeprVaultMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when onchain registry verification is unavailable', async () => {
+    validateCreatorRegistryBindingMock.mockRejectedValueOnce(new Error('rpc unavailable'))
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        config: buildConfig(),
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(503)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('verification unavailable')
+    expect(upsertKeeprVaultMock).not.toHaveBeenCalled()
   })
 })
 

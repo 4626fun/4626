@@ -152,7 +152,7 @@ contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {
         vm.prank(address(outerVault));
         adapter.deposit(100e18);
 
-        auth.setKeeper(keeper, true);
+        auth.setSwapper(keeper);
 
         vm.prank(keeper);
         innerVault.moveFromBuffer(4_156, 90e18);
@@ -174,7 +174,7 @@ contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {
         vm.prank(address(outerVault));
         adapter.deposit(100e18);
 
-        auth.setKeeper(keeper, true);
+        auth.setSwapper(keeper);
 
         vm.prank(keeper);
         innerVault.moveFromBuffer(4_156, 90e18);

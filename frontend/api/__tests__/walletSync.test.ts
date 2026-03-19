@@ -139,6 +139,36 @@ describe('wallet mapping + sync', () => {
     expect(db.calls.some((q) => q.includes('insert into profile_wallets'))).toBe(true)
   })
 
+  it('ignores unverified Privy email during profile sync', async () => {
+    const calls: string[] = []
+    const db = {
+      calls,
+      sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        calls.push(text)
+        if (text.includes('insert into profiles') && text.includes('returning id')) {
+          return { rows: [{ id: 404 }] }
+        }
+        if (text.includes('select privy_user_id from profiles')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+    const user = {
+      id: 'did:privy:unverified-email',
+      email: { address: 'shadow@example.com' },
+      linkedAccounts: [
+        { type: 'wallet', address: '0x0000000000000000000000000000000000000b11', walletClientType: 'embedded_privy_wallet' },
+      ],
+    }
+
+    const result = await syncUserWallets(db as any, user as any)
+
+    expect(result.profileId).toBe(404)
+    expect(calls.some((q) => q.includes('select id from profiles where email'))).toBe(false)
+  })
+
   it('does not attach to wallet-linked profiles owned by a different privy user', async () => {
     const calls: string[] = []
     const db = {

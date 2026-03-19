@@ -114,10 +114,10 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   const allowedChatIdsRaw = asTrimmed(raw.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
   const allowPrivateDmsExplicit =
     raw.TELEGRAM_ALLOW_PRIVATE_DMS !== undefined
-      ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DMS, true)
+      ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DMS, false)
       : raw.TELEGRAM_ALLOW_PRIVATE_DM !== undefined
-        ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DM, true)
-        : true
+        ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DM, false)
+        : false
   const allowPrivateDms = allowPrivateDmsExplicit || parseBoolean(raw.TELEGRAM_ALLOW_ALL_PRIVATE_DMS, false)
 
   const inlineCapRaw = Number(asTrimmed(raw.TELEGRAM_INLINE_MAX_RESULTS ?? ''))

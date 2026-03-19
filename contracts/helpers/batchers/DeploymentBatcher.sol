@@ -108,6 +108,7 @@ interface ICreatorOVaultStrategyManager {
 interface IAjnaVaultAuthConfigurator {
     function setBufferRatio(uint256 bufferRatioBps) external;
     function setMinBucketIndex(uint256 minBucketIndex) external;
+    function setSwapper(address swapper) external;
     function setKeeper(address keeper, bool isKeeper) external;
     function setAdmin(address admin) external;
 }
@@ -319,6 +320,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     error Phase1Missing();
     error Phase1CoreMissing();
     error Phase1StateMismatch();
+    error SaltOverrideDisabled();
     error InvalidWeight();
     error V3PoolMissing();
     error MissingInitialSqrtPriceX96();
@@ -508,7 +510,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         nonReentrant
         returns (Phase1Result memory out)
     {
-        return _deployPhase1CoreInternal(params, codeIds, bytes32(0));
+        return _deployPhase1CoreInternal(params, codeIds);
     }
 
     function deployPhase1CoreWithSalt(
@@ -516,7 +518,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
     ) external nonReentrant returns (Phase1Result memory out) {
-        return _deployPhase1CoreInternal(params, codeIds, shareOftSaltOverride);
+        if (shareOftSaltOverride != bytes32(0)) revert SaltOverrideDisabled();
+        return _deployPhase1CoreInternal(params, codeIds);
     }
 
     function finalizePhase1(Phase1Params calldata params, CodeIds calldata codeIds)
@@ -524,7 +527,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         nonReentrant
         returns (Phase1Result memory out)
     {
-        return _finalizePhase1InternalSplit(params, codeIds, bytes32(0));
+        return _finalizePhase1InternalSplit(params, codeIds);
     }
 
     function finalizePhase1WithSalt(
@@ -532,23 +535,21 @@ contract DeploymentBatcher is ReentrancyGuard {
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
     ) external nonReentrant returns (Phase1Result memory out) {
-        return _finalizePhase1InternalSplit(params, codeIds, shareOftSaltOverride);
+        if (shareOftSaltOverride != bytes32(0)) revert SaltOverrideDisabled();
+        return _finalizePhase1InternalSplit(params, codeIds);
     }
 
-    function _deployPhase1CoreInternal(
-        Phase1Params calldata params,
-        CodeIds calldata codeIds,
-        bytes32 shareOftSaltOverride
-    ) internal returns (Phase1Result memory out) {
+    function _deployPhase1CoreInternal(Phase1Params calldata params, CodeIds calldata codeIds)
+        internal
+        returns (Phase1Result memory out)
+    {
         _requireOwner(params.owner);
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
 
         string memory shareSymbolLower = _toLower(params.shareSymbol);
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-        bytes32 shareOftSalt = shareOftSaltOverride == bytes32(0)
-            ? _deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
-            : shareOftSaltOverride;
+        bytes32 shareOftSalt = _deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
         bytes32 paramsHash = _phase1ParamsHash(params);
         bytes32 codeIdsHash = _phase1CodeIdsHash(codeIds);
 
@@ -602,11 +603,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         );
     }
 
-    function _finalizePhase1InternalSplit(
-        Phase1Params calldata params,
-        CodeIds calldata codeIds,
-        bytes32 shareOftSaltOverride
-    ) internal returns (Phase1Result memory out) {
+    function _finalizePhase1InternalSplit(Phase1Params calldata params, CodeIds calldata codeIds)
+        internal
+        returns (Phase1Result memory out)
+    {
         _requireOwner(params.owner);
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
@@ -614,9 +614,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         string memory shareSymbolLower = _toLower(params.shareSymbol);
         string memory shareSymbolUpper = _toUpper(params.shareSymbol);
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-        bytes32 expectedShareOftSalt = shareOftSaltOverride == bytes32(0)
-            ? _deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
-            : shareOftSaltOverride;
+        bytes32 expectedShareOftSalt = _deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
         bytes32 paramsHash = _phase1ParamsHash(params);
         bytes32 codeIdsHash = _phase1CodeIdsHash(codeIds);
 
@@ -1023,6 +1021,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes memory ajnaArgs = abi.encode(params.vault, out.ajnaVault, address(this));
         out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.erc4626StrategyAdapter, ajnaArgs);
         IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
+        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setSwapper(out.ajnaStrategy);
         IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
         // Set Ajna auth admin to the creator owner (canonical CSW sender) so
         // post-launch keeper actions can execute without a manual admin handoff.

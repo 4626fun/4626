@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_2022;
 
 use crate::constants::*;
 use crate::errors::CreatorShareHookError;
@@ -27,10 +28,16 @@ pub struct DrainEntries<'info> {
 
     /// The Token-2022 mint (used for PDA derivation).
     /// CHECK: Only used as a seed — validated via PDA constraints.
+    #[account(owner = token_2022::ID)]
     pub creator_mint: UncheckedAccount<'info>,
 
     /// PendingEntries PDA — zero-copy, mutable to drain entries.
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [PENDING_ENTRIES_SEED, creator_mint.key().as_ref()],
+        bump,
+        constraint = pending_entries.load()?.creator_mint == creator_mint.key() @ CreatorShareHookError::InvalidMint,
+    )]
     pub pending_entries: AccountLoader<'info, PendingEntries>,
 }
 

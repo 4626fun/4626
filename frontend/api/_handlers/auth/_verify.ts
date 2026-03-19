@@ -8,7 +8,6 @@ import {
   COOKIE_SESSION,
   ensureNonceSchema,
   handleOptions,
-  hostMatchesDomain,
   makeSessionToken,
   parseCookies,
   parseSiweMessage,
@@ -19,31 +18,14 @@ import {
   setNoStore,
   verifySiweSignature,
 } from '../../../server/auth/_shared.js'
-import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
+import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { getTrustedRequestOrigins, isAddressLike, normalizeOrigin } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 
 
 type VerifyBody = { message?: string; signature?: string; nonceToken?: string; cswAddress?: string }
-
-const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com'] as const
-
-const COINBASE_SMART_WALLET_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
-
-const COINBASE_SMART_WALLET_OWNERS_ABI = [
-  { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
-  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-] as const
 
 type VerifyResponse = {
   address: string
@@ -55,104 +37,8 @@ type VerifyResponse = {
   } | null
 }
 
-function normalizeOrigin(value: string): string {
-  try {
-    return new URL(value).origin
-  } catch {
-    return ''
-  }
-}
-
-function firstHeaderValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return String(value[0] ?? '').trim()
-  return String(value ?? '').split(',')[0]?.trim() ?? ''
-}
-
-function getRequestOrigin(req: VercelRequest): string {
-  const protoRaw = firstHeaderValue(req.headers?.['x-forwarded-proto'])
-  const hostRaw =
-    firstHeaderValue(req.headers?.['x-forwarded-host']) || firstHeaderValue(req.headers?.host)
-  if (!hostRaw) return ''
-  const proto = protoRaw.toLowerCase().startsWith('https') ? 'https' : 'http'
-  return `${proto}://${hostRaw}`
-}
-
-function isAddressLike(v: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/i.test(v)
-}
-
-function getBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  if (!raw) return [...DEFAULT_BASE_RPCS]
-  const parts = raw.split(/[\s,]+/g).map((s) => s.trim()).filter(Boolean)
-  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
-  return Array.from(new Set(urls))
-}
-
 async function verifyCswOwnerOnBase(params: { smartWallet: string; ownerAddress: string }): Promise<boolean> {
-  const { createPublicClient, encodeAbiParameters, getAddress, http } = await import('viem')
-  const { base } = await import('viem/chains')
-
-  const smartWallet = getAddress(params.smartWallet as `0x${string}`)
-  const ownerAddress = getAddress(params.ownerAddress as `0x${string}`)
-
-  for (const rpc of getBaseRpcUrls()) {
-    try {
-      const client = createPublicClient({
-        chain: base,
-        transport: http(rpc, { timeout: 10_000 }),
-      })
-
-      try {
-        const isOwner = await client.readContract({
-          address: smartWallet,
-          abi: COINBASE_SMART_WALLET_ABI,
-          functionName: 'isOwnerAddress',
-          args: [ownerAddress],
-        })
-        if (isOwner === true) return true
-      } catch {
-        // Fallback to owner scan for wallets/contracts that don't expose isOwnerAddress.
-      }
-
-      const countRaw = (await client.readContract({
-        address: smartWallet,
-        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-        functionName: 'ownerCount',
-      })) as bigint
-      let upperBound = Number(countRaw)
-      if (!Number.isFinite(upperBound) || upperBound < 0) upperBound = 0
-      try {
-        const nextRaw = (await client.readContract({
-          address: smartWallet,
-          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-          functionName: 'nextOwnerIndex',
-        })) as bigint
-        const next = Number(nextRaw)
-        if (Number.isFinite(next) && next > 0) upperBound = next
-      } catch {
-        // ignore; fallback to ownerCount
-      }
-      const maxScan = Math.min(upperBound, 128)
-      const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress])).toLowerCase()
-      for (let i = 0; i < maxScan; i += 1) {
-        const ownerBytes = (await client.readContract({
-          address: smartWallet,
-          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-          functionName: 'ownerAtIndex',
-          args: [BigInt(i)],
-        })) as string
-        if (String(ownerBytes).toLowerCase() === expected) return true
-      }
-      // Reached a healthy RPC and found no owner match.
-      return false
-    } catch {
-      // Try next RPC
-      continue
-    }
-  }
-
-  return false
+  return isCswOwner(params.ownerAddress, params.smartWallet)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -181,8 +67,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid message' } satisfies ApiEnvelope<never>)
   }
 
-  const host = typeof req.headers?.host === 'string' ? req.headers.host : ''
-  if (!hostMatchesDomain(host, parsed.domain)) {
+  const trustedOrigins = getTrustedRequestOrigins(req)
+  const trustedDomains = new Set<string>()
+  for (const origin of trustedOrigins) {
+    try {
+      trustedDomains.add(new URL(origin).host.toLowerCase())
+    } catch {
+      // ignore invalid origin entries
+    }
+  }
+
+  if (!trustedDomains.has(String(parsed.domain).trim().toLowerCase())) {
     return res.status(400).json({ success: false, error: 'Domain mismatch' } satisfies ApiEnvelope<never>)
   }
 
@@ -211,16 +106,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!parsedUriOrigin) {
     return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
   }
-  const requestOrigin = normalizeOrigin(getRequestOrigin(req))
-  const acceptedOrigins = new Set<string>()
-  if (requestOrigin) acceptedOrigins.add(requestOrigin)
-  try {
-    const canonicalOrigin = normalizeOrigin(getCanonicalOrigin(req))
-    if (canonicalOrigin) acceptedOrigins.add(canonicalOrigin)
-  } catch {
-    // Canonical origin may be intentionally unset in some environments; rely on request-origin binding.
+  if (!trustedOrigins.has(parsedUriOrigin)) {
+    return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
   }
-  if (!acceptedOrigins.has(parsedUriOrigin)) {
+  if (new URL(parsedUriOrigin).host.toLowerCase() !== String(parsed.domain).trim().toLowerCase()) {
     return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
   }
 

@@ -10,6 +10,7 @@ import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../.
 import { listKeeprVaultAutomationByVaultAddresses } from '../../../../server/_lib/keeprAutomation.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
+import { validateCreatorRegistryBinding } from '../../../../server/_lib/creatorRegistryVerification.js'
 
 export interface VaultAutomationConfig {
   automationEnabled: boolean
@@ -23,6 +24,7 @@ export interface VaultConfig {
   vaultAddress: `0x${string}`
   chainId: number
   creatorCoinAddress: `0x${string}`
+  shareTokenAddress?: `0x${string}`
   ccaStrategyAddress?: `0x${string}`
   oracleAddress?: `0x${string}`
   vrfHubAddress?: `0x${string}`
@@ -77,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let result
     if (hasChainFilter && hasSettledFalse) {
       result = await db.sql`
-        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+        SELECT vault_address, chain_id, creator_coin_address, share_token_address, group_id, config_json,
                graduated_at, settled_at
         FROM keepr_vaults
         WHERE chain_id = ${chainId} AND settled_at IS NULL
@@ -85,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
     } else if (hasChainFilter && hasSettledTrue) {
       result = await db.sql`
-        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+        SELECT vault_address, chain_id, creator_coin_address, share_token_address, group_id, config_json,
                graduated_at, settled_at
         FROM keepr_vaults
         WHERE chain_id = ${chainId} AND settled_at IS NOT NULL
@@ -93,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
     } else if (hasChainFilter) {
       result = await db.sql`
-        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+        SELECT vault_address, chain_id, creator_coin_address, share_token_address, group_id, config_json,
                graduated_at, settled_at
         FROM keepr_vaults
         WHERE chain_id = ${chainId}
@@ -101,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
     } else if (hasSettledFalse) {
       result = await db.sql`
-        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+        SELECT vault_address, chain_id, creator_coin_address, share_token_address, group_id, config_json,
                graduated_at, settled_at
         FROM keepr_vaults
         WHERE settled_at IS NULL
@@ -109,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
     } else if (hasSettledTrue) {
       result = await db.sql`
-        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+        SELECT vault_address, chain_id, creator_coin_address, share_token_address, group_id, config_json,
                graduated_at, settled_at
         FROM keepr_vaults
         WHERE settled_at IS NOT NULL
@@ -117,23 +119,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
     } else {
       result = await db.sql`
-        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+        SELECT vault_address, chain_id, creator_coin_address, share_token_address, group_id, config_json,
                graduated_at, settled_at
         FROM keepr_vaults
         ORDER BY created_at ASC;
       `
     }
 
-    const automationRows = await listKeeprVaultAutomationByVaultAddresses(
-      result.rows.map((row: any) => String(row.vault_address).toLowerCase() as `0x${string}`),
-    )
-    const automationByVault = new Map(automationRows.map((row) => [row.vaultAddress, row]))
+    type VerifiedVaultRow = {
+      row: any
+      configJson: Record<string, unknown>
+      shareTokenAddress: string | null
+    }
 
-    const vaults: VaultConfig[] = result.rows.map((row: any) => {
+    const verifiedRows: VerifiedVaultRow[] = []
+    for (const row of result.rows as any[]) {
       const configJson = typeof row.config_json === 'string'
         ? JSON.parse(row.config_json)
         : row.config_json ?? {}
-      const contracts = configJson.contracts ?? {}
+      const configVault = (configJson as any)?.vault ?? {}
+      const shareTokenAddress =
+        typeof configVault.shareTokenAddress === 'string'
+          ? String(configVault.shareTokenAddress).trim()
+          : typeof row.share_token_address === 'string'
+            ? String(row.share_token_address).trim()
+            : null
+
+      let registryValidation
+      try {
+        registryValidation = await validateCreatorRegistryBinding({
+          creatorCoinAddress: String(row.creator_coin_address ?? ''),
+          vaultAddress: String(row.vault_address ?? ''),
+          shareTokenAddress,
+        })
+      } catch (err) {
+        console.error('[cre/vaults/active] Registry verification unavailable:', err)
+        return res.status(503).json({
+          success: false,
+          error: 'Onchain registry verification unavailable',
+        } satisfies ApiEnvelope<never>)
+      }
+
+      if (!registryValidation.ok) {
+        console.warn(
+          '[cre/vaults/active] Skipping vault due to registry mismatch',
+          {
+            vaultAddress: String(row.vault_address ?? '').toLowerCase(),
+            reason: registryValidation.reason,
+          },
+        )
+        continue
+      }
+
+      verifiedRows.push({
+        row,
+        configJson: configJson as Record<string, unknown>,
+        shareTokenAddress,
+      })
+    }
+
+    const automationRows = await listKeeprVaultAutomationByVaultAddresses(
+      verifiedRows.map((entry) => String(entry.row.vault_address).toLowerCase() as `0x${string}`),
+    )
+    const automationByVault = new Map(automationRows.map((row) => [row.vaultAddress, row]))
+
+    const vaults: VaultConfig[] = verifiedRows.map(({ row, configJson, shareTokenAddress }) => {
+      const contracts = ((configJson as any).contracts ?? {}) as Record<string, unknown>
       const vaultAddress = String(row.vault_address).toLowerCase() as `0x${string}`
       const automation = automationByVault.get(vaultAddress)
 
@@ -141,6 +192,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         vaultAddress,
         chainId: Number(row.chain_id),
         creatorCoinAddress: row.creator_coin_address as `0x${string}`,
+        ...(shareTokenAddress ? { shareTokenAddress: shareTokenAddress.toLowerCase() as `0x${string}` } : {}),
         groupId: String(row.group_id),
         graduatedAt: row.graduated_at ? new Date(row.graduated_at).toISOString() : null,
         settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : null,

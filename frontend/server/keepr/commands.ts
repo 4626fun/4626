@@ -336,12 +336,6 @@ function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
-function isPlainConversationText(raw: string): boolean {
-  const text = raw.trim()
-  if (!text) return false
-  return !text.startsWith('/')
-}
-
 function looksLikeGroupConnectIntent(raw: string): boolean {
   const text = raw.trim().toLowerCase()
   if (!text) return false
@@ -1048,15 +1042,6 @@ export async function handleKeeprCommand(params: {
         response: formatGroupConnectGuidance(params.groupId),
       }
     }
-    if (isPlainConversationText(raw)) {
-      const llmResult = await generateLlmResponse({
-        groupId: params.groupId,
-        senderWallet: params.senderWallet,
-        text: raw,
-        vault: null,
-      })
-      if (llmResult.ok || llmResult.response) return llmResult
-    }
     return {
       ok: false,
       response: formatNumberedCommandFallback({
@@ -1073,15 +1058,6 @@ export async function handleKeeprCommand(params: {
 
   const prefix = raw.toLowerCase().startsWith('/keepr') ? '/keepr' : raw.toLowerCase().startsWith('keepr') ? 'keepr' : null
   if (!prefix) {
-    if (isPlainConversationText(raw)) {
-      const llmResult = await generateLlmResponse({
-        groupId: params.groupId,
-        senderWallet: params.senderWallet,
-        text: raw,
-        vault: v,
-      })
-      if (llmResult.ok || llmResult.response) return llmResult
-    }
     return { ok: false, response: '' }
   }
   const parts = raw.split(/\s+/g).filter(Boolean)

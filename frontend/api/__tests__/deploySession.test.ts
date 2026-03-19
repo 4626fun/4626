@@ -17,6 +17,7 @@ const {
   sendUserOperationMock,
   getUserOperationReceiptMock,
   ensureLaunchImageReadyMock,
+  validateSponsoredSmartWalletCallsMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
@@ -34,6 +35,7 @@ const {
     vaultAddress: '0x3000000000000000000000000000000000000003',
     shareOFT: '0x7000000000000000000000000000000000000007',
   })),
+  validateSponsoredSmartWalletCallsMock: vi.fn(async () => ({ expectedCreatorToken: null, mode: 'deploy' })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -75,9 +77,14 @@ vi.mock('../../server/_lib/deployLaunchImage.js', () => ({
   LAUNCH_IMAGE_VERIFIED_BYTES_KEY: 'launchImageVerifiedBytes',
 }))
 
+vi.mock('../_handlers/_paymaster.js', () => ({
+  validateSponsoredSmartWalletCalls: (...args: unknown[]) => validateSponsoredSmartWalletCallsMock(...args),
+}))
+
 vi.mock('viem', () => ({
   getAddress: (value: string) => String(value).toLowerCase(),
   isAddress: (value: string) => /^0x[a-fA-F0-9]{40}$/.test(String(value)),
+  keccak256: vi.fn(() => `0x${'1'.repeat(64)}`),
   decodeEventLog: vi.fn(() => ({
     eventName: 'AuctionLaunchedDeferred',
     args: {},

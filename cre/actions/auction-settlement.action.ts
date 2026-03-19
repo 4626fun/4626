@@ -27,7 +27,12 @@ import {
   alertWarning,
   alertCritical,
 } from '../utils/alerts.js';
-import { fetchActiveVaults, filterVaultsForWorkflow, type VaultConfig } from '../utils/registry.js';
+import {
+  fetchActiveVaults,
+  filterVaultsForWorkflow,
+  verifyVaultRegistryBinding,
+  type VaultConfig,
+} from '../utils/registry.js';
 
 const WORKFLOW_NAME = 'auction-settlement';
 
@@ -260,6 +265,23 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
     if (!vault.ccaStrategyAddress) continue;
 
     try {
+      const registryCheck = await verifyVaultRegistryBinding(vault);
+      if (!registryCheck.verified) {
+        const reason = registryCheck.reason ?? 'registry_verification_failed';
+        console.warn(
+          `[${vault.ccaStrategyAddress}] Skipping due to registry verification: ${reason}`
+        );
+        batchResult.results.push({
+          ccaStrategyAddress: vault.ccaStrategyAddress,
+          swept: false,
+          unsoldSwept: false,
+          skippedReason: `registry_unverified: ${reason}`,
+        });
+        batchResult.processed++;
+        batchResult.skipped++;
+        continue;
+      }
+
       const result = await executeSettlementForStrategy(vault.ccaStrategyAddress);
       batchResult.results.push(result);
       batchResult.processed++;

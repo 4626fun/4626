@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_2022;
 
 use crate::constants::*;
 use crate::errors::CreatorShareHookError;
@@ -30,6 +31,7 @@ pub struct InitializeCreator<'info> {
 
     /// The Token-2022 mint for this creator's share token.
     /// CHECK: We only store its key; no deserialization needed.
+    #[account(owner = token_2022::ID)]
     pub creator_mint: UncheckedAccount<'info>,
 
     /// CreatorConfig PDA — initialized here.

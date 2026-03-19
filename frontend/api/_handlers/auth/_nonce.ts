@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, COOKIE_NONCE, ensureNonceSchema, handleOptions, makeNonce, makeNonceToken, setCookie, setCors, setNoStore, storeNonce } from '../../../server/auth/_shared.js'
+import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 
 type NonceResponse = {
@@ -12,18 +13,12 @@ type NonceResponse = {
   chainId: number
 }
 
-function firstHeaderValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return String(value[0] ?? '').trim()
-  return String(value ?? '').split(',')[0]?.trim() ?? ''
-}
-
-function getRequestOrigin(req: VercelRequest): string {
-  const protoRaw = firstHeaderValue(req.headers?.['x-forwarded-proto'])
-  const hostRaw =
-    firstHeaderValue(req.headers?.['x-forwarded-host']) || firstHeaderValue(req.headers?.host)
-  const proto = protoRaw.toLowerCase().startsWith('https') ? 'https' : 'http'
-  const host = hostRaw || 'localhost'
-  return `${proto}://${host}`
+function getNonceOrigin(req: VercelRequest): string | null {
+  try {
+    return new URL(getCanonicalOrigin(req)).origin
+  } catch {
+    return null
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -38,7 +33,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const nonce = makeNonce()
   const nonceToken = makeNonceToken({ nonce })
   const issuedAt = new Date().toISOString()
-  const uri = getRequestOrigin(req)
+  const uri = getNonceOrigin(req)
+  if (!uri) {
+    return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
+  }
   const domain = new URL(uri).host
 
   try {

@@ -75,15 +75,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ success: false, error: 'No waitlist profile found for this wallet' } satisfies ApiEnvelope<never>)
     }
 
-    const walletForProvision = String(
-      row.csw_address ||
+    const walletForProvisionCandidate = String(
+      authorizedPrincipal.canonicalSmartWalletAddress ||
+        row.csw_address ||
         row.primary_smart_wallet ||
         row.base_sub_account ||
         row.primary_wallet ||
         row.embedded_wallet ||
-        authorizedPrincipal.canonicalSmartWalletAddress ||
         principalWallet
     ).toLowerCase()
+    const walletForProvision = isValidEvmAddress(walletForProvisionCandidate)
+      ? walletForProvisionCandidate
+      : principalWallet.toLowerCase()
     const result = await preprovisionWaitlistUser(
       typeof row.id === 'number' ? row.id : Number(row.id),
       walletForProvision,

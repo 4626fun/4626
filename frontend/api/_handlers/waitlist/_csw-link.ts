@@ -1,7 +1,5 @@
-import { createPublicClient, http } from 'viem'
-import { base } from 'viem/chains'
-
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -31,54 +29,6 @@ function isValidEmail(v: string): boolean {
 
 function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
-}
-
-const COINBASE_SMART_WALLET_OWNER_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
-
-const DEFAULT_BASE_RPCS = [
-  'https://mainnet.base.org',
-  'https://base.llamarpc.com',
-] as const
-
-function getBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  if (!raw) return [...DEFAULT_BASE_RPCS]
-  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
-  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
-  return Array.from(new Set(urls))
-}
-
-async function isCswOwner(sessionAddress: string, cswAddress: string): Promise<boolean> {
-  if (!isValidEvmAddress(sessionAddress) || !isValidEvmAddress(cswAddress)) return false
-  const rpcs = getBaseRpcUrls()
-  let lastError: unknown = null
-  for (const rpc of rpcs) {
-    try {
-      const client = createPublicClient({
-        chain: base,
-        transport: http(rpc, { timeout: 10_000 }),
-      })
-      const ok = await client.readContract({
-        address: cswAddress as `0x${string}`,
-        abi: COINBASE_SMART_WALLET_OWNER_ABI,
-        functionName: 'isOwnerAddress',
-        args: [sessionAddress as `0x${string}`],
-      })
-      return Boolean(ok)
-    } catch (err) {
-      lastError = err
-    }
-  }
-  if (lastError) throw lastError
-  return false
 }
 
 export default async function handler(req: any, res: any) {

@@ -393,6 +393,32 @@ function toSenderAddress(senderWallet: string): string | null {
   return normalized
 }
 
+function isExplicitAiInvocation(text: string): boolean {
+  const trimmed = String(text ?? '').trim().toLowerCase()
+  if (!trimmed) return false
+  return (
+    trimmed.startsWith('/ai') ||
+    trimmed.startsWith('ai ') ||
+    trimmed.startsWith('@keepr') ||
+    trimmed.startsWith('@bot')
+  )
+}
+
+function redactConversationId(groupId: string): string {
+  const normalized = String(groupId ?? '').trim()
+  if (!normalized) return 'unknown'
+  const sep = normalized.indexOf(':')
+  if (sep <= 0) {
+    if (normalized.length <= 14) return normalized
+    return `${normalized.slice(0, 8)}...${normalized.slice(-4)}`
+  }
+  const prefix = normalized.slice(0, sep)
+  const value = normalized.slice(sep + 1)
+  if (!value) return `${prefix}:unknown`
+  if (value.length <= 12) return `${prefix}:${value}`
+  return `${prefix}:${value.slice(0, 8)}...${value.slice(-4)}`
+}
+
 function extractRecentTurns(state: Record<string, unknown>): ConversationTurn[] {
   const recent = Array.isArray((state as any)?.recentMessages) ? (state as any).recentMessages : []
   const turns: ConversationTurn[] = []
@@ -435,8 +461,15 @@ export async function generateLlmResponse(params: {
 }): Promise<{ ok: true; response: string } | { ok: false; response: string }> {
   const conversationType = resolveConversationType(params.groupId)
   const conversationSource = resolveConversationSource(conversationType)
-  const normalizedPrompt = normalizeAiPrompt(params.text)
-  const userText = normalizedPrompt || String(params.text ?? '').trim()
+  const rawText = String(params.text ?? '')
+  const normalizedPrompt = normalizeAiPrompt(rawText)
+  const userText = normalizedPrompt || rawText.trim()
+  const senderAddress = toSenderAddress(params.senderWallet)
+  const isPlainPrompt = !isExplicitAiInvocation(rawText)
+  if (isPlainPrompt && !senderAddress) {
+    return { ok: false, response: 'Connect wallet first to use plain-chat AI prompts.' }
+  }
+  const safeConversationId = redactConversationId(params.groupId)
   let runtimeTruth = resolveAssistantRuntimeTruth(params.runtimeTruth)
   const identityIntent = classifyIdentityIntent(userText)
   let runtimeBridge: ChatRuntimeBridge | null = null
@@ -446,7 +479,6 @@ export async function generateLlmResponse(params: {
 
   try {
     runtimeBridge = await getChatRuntimeBridge()
-    const senderAddress = toSenderAddress(params.senderWallet)
     const inbound = runtimeBridge.createInboundMemory({
       conversationId: params.groupId,
       conversationType,
@@ -474,7 +506,7 @@ export async function generateLlmResponse(params: {
         Boolean(structuredMemoryContext),
     }
     logger.info('[ai/chat] runtime state loaded', {
-      groupId: params.groupId,
+      groupId: safeConversationId,
       turns: historyTurns,
       persistedInbound: (inbound as any)?.__persistedToDb === true,
     })
@@ -506,7 +538,7 @@ export async function generateLlmResponse(params: {
         }
       } catch (error) {
         logger.warn('[ai/chat] action reply memory persistence failed (non-blocking)', {
-          groupId: params.groupId,
+          groupId: safeConversationId,
           error: error instanceof Error ? error.message : String(error),
         })
       }
@@ -519,7 +551,7 @@ export async function generateLlmResponse(params: {
       hasPersistentMemory: false,
     }
     logger.warn('[ai/chat] eliza runtime unavailable; returning bounded fallback', {
-      groupId: params.groupId,
+      groupId: safeConversationId,
       error: error instanceof Error ? error.message : String(error),
     })
     if (identityIntent === 'stack') {
@@ -569,7 +601,9 @@ export async function generateLlmResponse(params: {
 
     recordLlmCall(params.groupId)
     try {
-      const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
+      const identityHint = senderAddress
+        ? `[${senderAddress.slice(0, 6)}...${senderAddress.slice(-4)}]`
+        : '[anonymous]'
       const result = await llmService.generateResponse({
         agentKey: params.groupId,
         userMessage: `${identityHint}: ${userText}`,
@@ -635,14 +669,14 @@ export async function generateLlmResponse(params: {
       }
     } catch (error) {
       logger.warn('[ai/chat] assistant memory persistence failed (non-blocking)', {
-        groupId: params.groupId,
+        groupId: safeConversationId,
         error: error instanceof Error ? error.message : String(error),
       })
     }
   }
 
   logger.info('[ai/chat] Unified Eliza runtime response', {
-    groupId: params.groupId,
+    groupId: safeConversationId,
     historyTurns,
     usedAction: Boolean(actionReply),
   })

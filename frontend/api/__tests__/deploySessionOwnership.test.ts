@@ -15,6 +15,7 @@ const {
   generatePrivateKeyMock,
   privateKeyToAccountMock,
   resolveCoinPartiesMock,
+  resolveCoinPartiesAndOwnerMock,
   extractCharmCreateVaultPoolMock,
   isCharmPoolIndexedMock,
   createPublicClientMock,
@@ -36,6 +37,11 @@ const {
     privateKey: ('0x' + '11'.repeat(32)) as `0x${string}`,
   })),
   resolveCoinPartiesMock: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
+  resolveCoinPartiesAndOwnerMock: vi.fn(async () => ({
+    creator: '0x0000000000000000000000000000000000000002',
+    payoutRecipient: null,
+    owner: '0x0000000000000000000000000000000000000002',
+  })),
   extractCharmCreateVaultPoolMock: vi.fn((() => null) as (call: unknown) => string | null),
   isCharmPoolIndexedMock: vi.fn(async () => true),
   getBytecodeMock: vi.fn(async () => '0x'),
@@ -86,6 +92,7 @@ vi.mock('../../server/_lib/origin.js', () => ({
 
 vi.mock('../../server/_lib/coinParties.js', () => ({
   resolveCoinParties: resolveCoinPartiesMock,
+  resolveCoinPartiesAndOwner: resolveCoinPartiesAndOwnerMock,
 }))
 
 vi.mock('../../server/_lib/charmVaults.js', () => ({
@@ -222,6 +229,11 @@ describe('deploy session ownership guardrails', () => {
     vi.clearAllMocks()
     delete process.env.DEPLOY_SESSION_TTL_MINUTES
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
+    resolveCoinPartiesAndOwnerMock.mockResolvedValue({
+      creator: '0x0000000000000000000000000000000000000002',
+      payoutRecipient: null,
+      owner: '0x0000000000000000000000000000000000000002',
+    })
     extractCharmCreateVaultPoolMock.mockReturnValue(null)
     isCharmPoolIndexedMock.mockResolvedValue(true)
     getBytecodeMock.mockResolvedValue('0x')
@@ -347,7 +359,7 @@ describe('deploy session ownership guardrails', () => {
     const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
     expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
     expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000010')
-    expect(insertArgs.payload?.persistSessionOwner).toBe(true)
+    expect(insertArgs.payload?.persistSessionOwner).toBe(false)
   })
 
   it('prepends creatorToken approval before phase2 finalize and whitelists selector', async () => {
@@ -521,10 +533,11 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints?.oftFeeBps).toBe(0)
   })
 
-  it('creates session when creator/payout recipient is allowlisted via creatorToken resolution', async () => {
-    resolveCoinPartiesMock.mockResolvedValueOnce({
+  it('rejects creator-token party allowlist spoofing when caller is not directly allowlisted', async () => {
+    resolveCoinPartiesAndOwnerMock.mockResolvedValueOnce({
       creator: null,
       payoutRecipient: '0x00000000000000000000000000000000000000aa',
+      owner: null,
     } as any)
     const db = makeCanonicalDb()
     ;(db.query as any).mockImplementation(async (sql: string, params: any[]) => {
@@ -541,8 +554,8 @@ describe('deploy session ownership guardrails', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(200)
-    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    expect(res.statusCode).toBe(403)
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
 
   it('returns actionable creator access error when allowlist checks fail', async () => {

@@ -2,17 +2,106 @@
  * Vault registry client — fetches active vaults from the API.
  */
 
+import { getAddress, isAddress, type Address } from 'viem';
 import { requireEnv } from '../config.js';
+import { readContract } from './onchain.js';
 
 export interface VaultConfig {
   vaultAddress: `0x${string}`;
   chainId: number;
   creatorCoinAddress: `0x${string}`;
+  shareTokenAddress?: `0x${string}`;
   ccaStrategyAddress?: `0x${string}`;
   oracleAddress?: `0x${string}`;
   vrfHubAddress?: `0x${string}`;
   groupId: string;
   extra?: Record<string, unknown>;
+}
+
+interface RegistryVerificationResult {
+  verified: boolean;
+  reason?: string;
+}
+
+const DEFAULT_CREATOR_REGISTRY = '0x888506B92181c57A2fD06516FFFb6F375b7A4626' as const;
+const CREATOR_REGISTRY_ABI = [
+  {
+    type: 'function',
+    name: 'isCreatorCoinActive',
+    stateMutability: 'view',
+    inputs: [{ name: '_token', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'getVaultForToken',
+    stateMutability: 'view',
+    inputs: [{ name: '_token', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'getShareOFTForToken',
+    stateMutability: 'view',
+    inputs: [{ name: '_token', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+] as const;
+
+function normalizeAddress(value: string | null | undefined): Address | null {
+  const raw = String(value ?? '').trim();
+  if (!isAddress(raw)) return null;
+  return getAddress(raw);
+}
+
+function getCreatorRegistryAddress(): Address {
+  const configured = String(process.env.CREATOR_REGISTRY ?? '').trim();
+  const candidate = configured || DEFAULT_CREATOR_REGISTRY;
+  if (!isAddress(candidate)) {
+    throw new Error('CREATOR_REGISTRY is not a valid address');
+  }
+  return getAddress(candidate);
+}
+
+export async function verifyVaultRegistryBinding(vault: VaultConfig): Promise<RegistryVerificationResult> {
+  const creatorCoin = normalizeAddress(vault.creatorCoinAddress);
+  const expectedVault = normalizeAddress(vault.vaultAddress);
+  const expectedShare = vault.shareTokenAddress ? normalizeAddress(vault.shareTokenAddress) : null;
+
+  if (!creatorCoin || !expectedVault || (vault.shareTokenAddress && !expectedShare)) {
+    return { verified: false, reason: 'invalid_addresses' };
+  }
+
+  const registryAddress = getCreatorRegistryAddress();
+
+  const [active, registryVault, registryShare] = await Promise.all([
+    readContract<boolean>({
+      address: registryAddress,
+      abi: CREATOR_REGISTRY_ABI,
+      functionName: 'isCreatorCoinActive',
+      args: [creatorCoin],
+    }),
+    readContract<Address>({
+      address: registryAddress,
+      abi: CREATOR_REGISTRY_ABI,
+      functionName: 'getVaultForToken',
+      args: [creatorCoin],
+    }),
+    readContract<Address>({
+      address: registryAddress,
+      abi: CREATOR_REGISTRY_ABI,
+      functionName: 'getShareOFTForToken',
+      args: [creatorCoin],
+    }),
+  ]);
+
+  if (!active) return { verified: false, reason: 'creator_coin_inactive' };
+  if (getAddress(registryVault) !== expectedVault) return { verified: false, reason: 'vault_mismatch' };
+  if (expectedShare && getAddress(registryShare) !== expectedShare) {
+    return { verified: false, reason: 'share_token_mismatch' };
+  }
+
+  return { verified: true };
 }
 
 interface VaultsResponse {

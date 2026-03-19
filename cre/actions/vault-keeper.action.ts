@@ -27,7 +27,12 @@ import {
   alertCritical,
   formatTokens,
 } from '../utils/alerts.js';
-import { fetchActiveVaults, filterVaultsForWorkflow, type VaultConfig } from '../utils/registry.js';
+import {
+  fetchActiveVaults,
+  filterVaultsForWorkflow,
+  verifyVaultRegistryBinding,
+  type VaultConfig,
+} from '../utils/registry.js';
 
 const WORKFLOW_NAME = 'vault-keeper';
 
@@ -289,6 +294,21 @@ export async function executeKeeper(): Promise<BatchKeeperResult> {
   // Process vaults sequentially to avoid rate limits
   for (const vault of vaults) {
     try {
+      const registryCheck = await verifyVaultRegistryBinding(vault);
+      if (!registryCheck.verified) {
+        const reason = registryCheck.reason ?? 'registry_verification_failed';
+        console.warn(`[${vault.vaultAddress}] Skipping due to registry verification: ${reason}`);
+        batchResult.results.push({
+          vaultAddress: vault.vaultAddress,
+          tended: false,
+          reported: false,
+          skippedReason: `registry_unverified: ${reason}`,
+        });
+        batchResult.processed++;
+        batchResult.skipped++;
+        continue;
+      }
+
       const result = await executeKeeperForVault(vault.vaultAddress);
       batchResult.results.push(result);
       batchResult.processed++;

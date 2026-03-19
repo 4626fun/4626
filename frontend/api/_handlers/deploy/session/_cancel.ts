@@ -13,6 +13,7 @@ import { decryptWithSecret, getDeploySessionById, signDeployToken, updateDeployS
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
+import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -29,7 +30,7 @@ function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
 }
 
 function shouldPersistManagedSessionOwner(): boolean {
-  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, false)
 }
 
 function isVercelDeploymentOrigin(origin: string): boolean {
@@ -259,11 +260,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       functionName: 'removeOwnerAtIndex',
       args: [BigInt(ownerIndex), ownerBytes],
     })
+    const cleanupCall = { to: smartWallet, value: 0n, data } as const
+
+    await validateSponsoredSmartWalletCalls({
+      sender: smartWallet,
+      sessionAddress,
+      calls: [cleanupCall],
+      deploySessionOwner: sessionSigner,
+      allowCleanupOnlyForInactiveDeploySession: true,
+    })
 
     await updateDeploySession({ id: rec.id, step: 'cleanup_sent' })
     const hash = await sendUserOperation(bundlerClient, {
       account,
-      calls: [{ to: smartWallet, value: 0n, data }],
+      calls: [cleanupCall],
       paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
     })
     await updateDeploySession({ id: rec.id, step: 'cleanup_sent', lastUserOpHash: hash, lastTxHash: null, lastError: null })

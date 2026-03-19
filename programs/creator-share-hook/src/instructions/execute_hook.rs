@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_2022;
 
 use crate::constants::*;
+use crate::errors::CreatorShareHookError;
 use crate::events::*;
 use crate::state::*;
 
@@ -21,14 +22,17 @@ use crate::state::*;
 pub struct TransferHook<'info> {
     /// Source token account (tokens flow FROM here).
     /// CHECK: Validated by the Transfer Hook runtime.
+    #[account(owner = token_2022::ID)]
     pub source_token_account: UncheckedAccount<'info>,
 
     /// The Token-2022 mint.
     /// CHECK: Validated by the Transfer Hook runtime.
+    #[account(owner = token_2022::ID)]
     pub mint: UncheckedAccount<'info>,
 
     /// Destination token account (tokens flow TO here).
     /// CHECK: Validated by the Transfer Hook runtime.
+    #[account(owner = token_2022::ID)]
     pub destination_token_account: UncheckedAccount<'info>,
 
     /// Source authority (owner or delegate that signed the transfer).
@@ -47,11 +51,17 @@ pub struct TransferHook<'info> {
     #[account(
         seeds = [CREATOR_CONFIG_SEED, mint.key().as_ref()],
         bump = creator_config.bump,
+        constraint = creator_config.creator_mint == mint.key() @ CreatorShareHookError::InvalidMint,
     )]
     pub creator_config: Box<Account<'info, CreatorConfig>>,
 
     /// PendingEntries PDA — zero-copy, writable to record buy entries.
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [PENDING_ENTRIES_SEED, mint.key().as_ref()],
+        bump,
+        constraint = pending_entries.load()?.creator_mint == mint.key() @ CreatorShareHookError::InvalidMint,
+    )]
     pub pending_entries: AccountLoader<'info, PendingEntries>,
 }
 

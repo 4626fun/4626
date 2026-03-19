@@ -94,6 +94,16 @@ describe('telegram webhook parsers', () => {
         aiFollowupEnabled: true,
         isPrivateChatId,
       }),
+    ).toBe(false)
+
+    expect(
+      shouldAutoRouteToAi({
+        chatId: '7726886643',
+        text: '@keepr how are we doing',
+        message: {},
+        aiFollowupEnabled: true,
+        isPrivateChatId,
+      }),
     ).toBe(true)
 
     expect(

@@ -78,6 +78,7 @@ vi.mock('../../server/_lib/logger.js', () => ({
 
 vi.mock('../../src/deploy/bytecode.generated.js', () => ({
   DEPLOY_BYTECODE: {
+    CreatorOVault: ('0x' + '00'.repeat(32)) as `0x${string}`,
     PayoutRouter: ('0x' + '00'.repeat(32)) as `0x${string}`,
     VaultShareBurnStream: ('0x' + '00'.repeat(32)) as `0x${string}`,
   },
@@ -160,6 +161,8 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
   })
 
   it('accepts finalizePhase2 with current tuple shape and selector', async () => {
+    mockGetLogs.mockResolvedValue([{ args: { vault } }])
+
     const BATCHER_ABI = [
       {
         type: 'function',

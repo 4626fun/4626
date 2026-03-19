@@ -1011,6 +1011,20 @@ function initializeRuntimeBridge(agentKey: string): ReturnType<typeof createRunt
   })
 }
 
+function summarizeInboundMessageForLog(params: {
+  senderAddress?: string | null
+  senderInboxId: string
+  content: string
+}): string {
+  const senderLabel = (params.senderAddress ?? params.senderInboxId).slice(0, 10)
+  const contentLength = params.content.length
+  const contentDigest = createHash('sha256')
+    .update(params.content, 'utf8')
+    .digest('hex')
+    .slice(0, 12)
+  return `${senderLabel}: [len=${contentLength} sha=${contentDigest}]`
+}
+
 // ---------------------------------------------------------------------------
 // Message router (ElizaOS plugin pipeline)
 // ---------------------------------------------------------------------------
@@ -1429,7 +1443,7 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
   // Wire message handler through the ElizaOS plugin pipeline
   xmtp.setMessageHandler(async (msg) => {
     logger.info(
-      `[eliza:${row.creatorAddress.slice(0, 10)}] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
+      `[eliza:${row.creatorAddress.slice(0, 10)}] ${summarizeInboundMessageForLog(msg)}`,
     )
 
     return handleMessage(
@@ -1621,7 +1635,7 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
 
   xmtp.setMessageHandler(async (msg) => {
     logger.info(
-      `[eliza:single] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
+      `[eliza:single] ${summarizeInboundMessageForLog(msg)}`,
     )
 
     return handleMessage(
@@ -1704,7 +1718,7 @@ async function startSingleAgentCsw(params: {
 
   xmtp.setMessageHandler(async (msg) => {
     logger.info(
-      `[eliza:csw] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
+      `[eliza:csw] ${summarizeInboundMessageForLog(msg)}`,
     )
 
     return handleMessage(
@@ -1752,7 +1766,7 @@ async function startSingleAgentCsw(params: {
       })
       activeXmtp.setMessageHandler(async (m) => {
         logger.info(
-          `[eliza:csw] ${m.senderAddress?.slice(0, 10) ?? m.senderInboxId.slice(0, 10)}: ${m.content.slice(0, 80)}`,
+          `[eliza:csw] ${summarizeInboundMessageForLog(m)}`,
         )
         return handleMessage(
           {

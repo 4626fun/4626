@@ -617,14 +617,11 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
     }
 
     function _increaseReportBaselineForPrincipalInflow(uint256 assetsIn) internal {
-        uint256 baseline = totalAssetsAtLastReport;
-        if (baseline == 0) return;
-        totalAssetsAtLastReport = baseline + assetsIn;
+        totalAssetsAtLastReport += assetsIn;
     }
 
     function _decreaseReportBaselineForPrincipalOutflow(uint256 assetsOut) internal {
         uint256 baseline = totalAssetsAtLastReport;
-        if (baseline == 0) return;
         totalAssetsAtLastReport = assetsOut >= baseline ? 0 : baseline - assetsOut;
     }
 

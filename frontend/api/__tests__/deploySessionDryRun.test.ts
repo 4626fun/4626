@@ -18,6 +18,7 @@ const {
   sendUserOperationMock,
   createWalletClientMock,
   baseChainMock,
+  resolveCoinPartiesAndOwnerMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readDeployAuthFromRequestMock: vi.fn(() => ({
@@ -37,6 +38,11 @@ const {
   sendUserOperationMock: vi.fn(async () => '0xuserop'),
   createWalletClientMock: vi.fn(),
   baseChainMock: { id: 8453, name: 'Base' },
+  resolveCoinPartiesAndOwnerMock: vi.fn(async () => ({
+    creator: '0x0000000000000000000000000000000000000002',
+    payoutRecipient: null,
+    owner: '0x0000000000000000000000000000000000000002',
+  })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -88,6 +94,7 @@ vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
 
 vi.mock('../../server/_lib/coinParties.js', () => ({
   resolveCoinParties: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
+  resolveCoinPartiesAndOwner: resolveCoinPartiesAndOwnerMock,
 }))
 
 vi.mock('../../server/_lib/charmVaults.js', () => ({

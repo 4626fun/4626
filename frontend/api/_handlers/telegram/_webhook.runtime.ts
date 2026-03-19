@@ -328,6 +328,27 @@ function resolveGroupId(chatId: string): string {
   return resolveGroupIdShared(chatId)
 }
 
+function resolveCommandExecutionContext(params: {
+  chatId: string
+  userId: string
+  isAdmin: boolean
+}): {
+  groupId: string
+  senderWallet: `0x${string}`
+} {
+  if (isPrivateChatId(params.chatId) && !params.isAdmin) {
+    // Prevent private-DM fallback defaults from inheriting privileged group/sender context.
+    return {
+      groupId: `telegram:${params.chatId}`,
+      senderWallet: ZERO_ADDRESS as `0x${string}`,
+    }
+  }
+  return {
+    groupId: resolveGroupId(params.chatId),
+    senderWallet: resolveSenderWallet(params.userId),
+  }
+}
+
 function extractUpdateMessage(update: TelegramUpdate): TelegramMessage | null {
   return extractUpdateMessageShared(update)
 }
@@ -2783,16 +2804,45 @@ async function executeTelegramNativeCommand(params: {
       lastCheckedAt: nowIso,
       removedAt: null,
     })
+
+    const inviteMessage = [
+      'Join Room',
+      '',
+      '- eligible: yes',
+      `- vault: ${truncateAddress(target.vaultAddress)}`,
+      `- roomChatId: ${policy.roomChatId}`,
+      `- invite: ${inviteLink}`,
+      '- invite validity is short-lived; use immediately',
+    ].join('\n')
+
+    if (!isPrivateChatId(params.chatId)) {
+      const sentToDm = await sendTelegramMessage({
+        botToken: getTelegramWebhookConfig().botToken,
+        chatId: params.userId,
+        text: inviteMessage,
+      }).then(() => true).catch(() => false)
+
+      return {
+        text: sentToDm
+          ? [
+            'Join Room',
+            '',
+            '- eligible: yes',
+            `- vault: ${truncateAddress(target.vaultAddress)}`,
+            '- invite sent via private DM for security',
+          ].join('\n')
+          : [
+            'Join Room',
+            '',
+            '- eligible: yes',
+            '- invite ready but private DM delivery failed',
+            '- open a private chat with this bot and send /start, then retry /join',
+          ].join('\n'),
+      }
+    }
+
     return {
-      text: [
-        'Join Room',
-        '',
-        '- eligible: yes',
-        `- vault: ${truncateAddress(target.vaultAddress)}`,
-        `- roomChatId: ${policy.roomChatId}`,
-        `- invite: ${inviteLink}`,
-        '- invite validity is short-lived; use immediately',
-      ].join('\n'),
+      text: inviteMessage,
     }
   }
 
@@ -4813,8 +4863,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
-    const groupId = resolveGroupId(chatId)
-    const senderWallet = resolveSenderWallet(userId)
+    const executionContext = resolveCommandExecutionContext({
+      chatId,
+      userId,
+      isAdmin,
+    })
+    const groupId = executionContext.groupId
+    const senderWallet = executionContext.senderWallet
     const callbackResponse =
       (await handleTelegramDeployCallback({
         callbackData,
@@ -5109,8 +5164,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 
-  const senderWallet = resolveSenderWallet(userId)
-  const groupId = resolveGroupId(chatId)
+  const executionContext = resolveCommandExecutionContext({
+    chatId,
+    userId,
+    isAdmin,
+  })
+  const senderWallet = executionContext.senderWallet
+  const groupId = executionContext.groupId
 
   let response: TelegramCommandResponse = { text: '' }
   try {

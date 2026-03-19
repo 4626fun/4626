@@ -11,9 +11,23 @@ const { getDbMock, ensureWaitlistSchemaMock, upsertProfileByWalletMock } = vi.ho
 }))
 
 const { createPublicClientMock, httpMock } = vi.hoisted(() => ({
-  createPublicClientMock: vi.fn(() => ({
-    readContract: vi.fn(async () => true),
-  })),
+  createPublicClientMock: vi.fn(() => {
+    const testOwner = '0x2681c2ca956015724567c969bdc23207ec0cc0e6'
+    const encodedOwner = `0x${'00'.repeat(12)}${testOwner.slice(2)}`
+    return {
+      getBytecode: vi.fn(async () => '0x60016000'),
+      readContract: vi.fn(async (opts: any) => {
+        const fn = String(opts?.functionName ?? '')
+        if (fn === 'ownerCount' || fn === 'nextOwnerIndex') return 1n
+        if (fn === 'ownerAtIndex') return encodedOwner
+        if (fn === 'isOwnerAddress') {
+          const owner = String(opts?.args?.[0] ?? '').toLowerCase()
+          return owner === testOwner
+        }
+        return true
+      }),
+    }
+  }),
   httpMock: vi.fn(() => ({ transport: 'http' })),
 }))
 
@@ -224,6 +238,57 @@ describe('siwe auth hardening', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toBe('URI mismatch')
+  })
+
+  it('issues nonces with canonical origin, not forwarded host headers', async () => {
+    const db = createNonceDb()
+    getDbMock.mockResolvedValue(db)
+
+    const req = createMockReq({
+      method: 'GET',
+      headers: {
+        host: 'evil.test',
+        'x-forwarded-host': 'evil.test',
+        'x-forwarded-proto': 'https',
+      },
+    })
+    const res = createMockRes()
+
+    await nonceHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.uri).toBe('https://4626.fun')
+    expect(res.body?.data?.domain).toBe('4626.fun')
+  })
+
+  it('rejects SIWE domain not present in trusted origin set', async () => {
+    const db = createNonceDb()
+    getDbMock.mockResolvedValue(db)
+
+    const nonce = 'nonce-wrong-domain'
+    db.rows.set(nonce, { expiresAtMs: Date.now() + 15 * 60 * 1000, consumedAtMs: null })
+
+    const message = makeSiweMessage({
+      domain: 'evil.test',
+      address: account.address,
+      uri: 'https://4626.fun',
+      chainId: 8453,
+      nonce,
+      issuedAt: new Date().toISOString(),
+    })
+    const signature = await account.signMessage({ message })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: `cv_auth_nonce=${nonce}` },
+      body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
+    })
+    const res = createMockRes()
+
+    await verifyHandler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Domain mismatch')
   })
 
   it('rejects expired nonces', async () => {

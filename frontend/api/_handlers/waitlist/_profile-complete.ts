@@ -3,6 +3,7 @@ import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWall
 import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import { isAddressLike, normalizeAddress, normalizeEmail } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import { checkRateLimit, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
@@ -13,10 +14,6 @@ type ProfileCompleteResponse = {
   email: string
   profileCompleted: boolean
   qualifiedReferral: boolean
-}
-
-function normalizeEmail(v: string): string {
-  return v.trim().toLowerCase()
 }
 
 function isValidEmail(v: string): boolean {
@@ -42,7 +39,7 @@ export default async function handler(req: any, res: any) {
 
   const body = await readJsonBody<Body>(req)
   const emailRaw = typeof body?.email === 'string' ? body.email : ''
-  const email = normalizeEmail(emailRaw)
+  const email = normalizeEmail(emailRaw) ?? ''
   if (!isValidEmail(email)) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
@@ -77,7 +74,7 @@ export default async function handler(req: any, res: any) {
   let profileCompleted = Boolean(row?.profile_completed_at)
   if (!signupId) {
     const exists = await db.sql`
-      SELECT id, csw_address
+      SELECT id, csw_address, primary_smart_wallet, base_sub_account
       FROM profiles
       WHERE email = ${email}
       LIMIT 1;
@@ -102,11 +99,16 @@ export default async function handler(req: any, res: any) {
       }
 
       // Final fallback: check if principal wallet is an owner of the profile's linked CSW.
-      const cswAddr = typeof existingRow.csw_address === 'string' ? existingRow.csw_address.trim() : ''
-      if (!signupId && cswAddr && /^0x[a-fA-F0-9]{40}$/.test(cswAddr)) {
-        try {
-          const owned = await isCswOwner(principalAddress, cswAddr)
-          if (owned) {
+      const cswCandidates = [
+        normalizeAddress(existingRow.csw_address),
+        normalizeAddress(existingRow.primary_smart_wallet),
+        normalizeAddress(existingRow.base_sub_account),
+      ].filter((candidate): candidate is `0x${string}` => Boolean(candidate))
+      if (!signupId && cswCandidates.length > 0 && isAddressLike(principalAddress)) {
+        for (const cswAddr of cswCandidates) {
+          try {
+            const owned = await isCswOwner(principalAddress, cswAddr)
+            if (!owned) continue
             const ownerUpdate = await db.sql`
               UPDATE profiles
               SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
@@ -115,9 +117,11 @@ export default async function handler(req: any, res: any) {
             `
             signupId = existingId
             profileCompleted = Boolean(ownerUpdate?.rows?.[0]?.profile_completed_at)
+            break
+          } catch {
+            // On-chain check failed; try next candidate and then fall through to 403.
+            continue
           }
-        } catch {
-          // On-chain check failed; fall through to 403
         }
       }
       if (!signupId) {

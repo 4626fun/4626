@@ -21,12 +21,8 @@ describe('keepr conversational fallback behavior', () => {
     vi.clearAllMocks()
   })
 
-  it('routes plain text to AI when vault is not configured', async () => {
+  it('returns deterministic command fallback for plain text when vault is not configured', async () => {
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
-    generateLlmResponseMock.mockResolvedValueOnce({
-      ok: true,
-      response: 'gm — I can still help while setup is pending.',
-    })
     const { handleKeeprCommand } = await import('../commands.ts')
 
     const result = await handleKeeprCommand({
@@ -35,14 +31,10 @@ describe('keepr conversational fallback behavior', () => {
       text: 'Gm',
     })
 
-    expect(result.ok).toBe(true)
-    expect(result.response).toContain('setup is pending')
-    expect(generateLlmResponseMock).toHaveBeenCalledWith({
-      groupId: 'telegram:7726886643',
-      senderWallet: TEST_WALLET,
-      text: 'Gm',
-      vault: null,
-    })
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('Keepr is not configured for this group')
+    expect(result.response).toContain('/help')
+    expect(generateLlmResponseMock).not.toHaveBeenCalled()
   })
 
   it('returns deterministic connect guidance for unconfigured groups', async () => {
@@ -96,7 +88,7 @@ describe('keepr conversational fallback behavior', () => {
     expect(result.response).toContain('/link')
   })
 
-  it('routes plain text to AI with vault context when configured', async () => {
+  it('does not route plain group chatter to AI when vault is configured', async () => {
     const vault = {
       vaultAddress: '0x1111111111111111111111111111111111111111',
       chainId: 8453,
@@ -112,10 +104,6 @@ describe('keepr conversational fallback behavior', () => {
       config: {},
     }
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(vault)
-    generateLlmResponseMock.mockResolvedValueOnce({
-      ok: true,
-      response: 'Got it — this vault is connected.',
-    })
     const { handleKeeprCommand } = await import('../commands.ts')
 
     const result = await handleKeeprCommand({
@@ -124,13 +112,8 @@ describe('keepr conversational fallback behavior', () => {
       text: 'Can you summarize this group setup?',
     })
 
-    expect(result.ok).toBe(true)
-    expect(result.response).toContain('vault is connected')
-    expect(generateLlmResponseMock).toHaveBeenCalledWith({
-      groupId: 'telegram:7726886643',
-      senderWallet: TEST_WALLET,
-      text: 'Can you summarize this group setup?',
-      vault,
-    })
+    expect(result.ok).toBe(false)
+    expect(result.response).toBe('')
+    expect(generateLlmResponseMock).not.toHaveBeenCalled()
   })
 })

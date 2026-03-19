@@ -20,6 +20,7 @@ export function shouldAutoRouteToAi(params: {
   if (!text) return false
   if (text.startsWith('/')) return false
   if (isLikelyCommandText(text)) return false
-  if (params.isPrivateChatId(params.chatId)) return true
+  const lower = text.toLowerCase()
+  if (lower.startsWith('@keepr') || lower.startsWith('@bot')) return true
   return Boolean(params.message.reply_to_message?.from?.is_bot)
 }

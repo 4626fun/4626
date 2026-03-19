@@ -67,4 +67,33 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);
         batcher.deployPhase3Strategies(params, codeIds);
     }
+
+    function test_phase1SaltOverrideEntrypoints_areDisabled() public {
+        DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
+            creatorToken: makeAddr("creatorToken"),
+            owner: address(this),
+            vaultName: "Creator OVault",
+            vaultSymbol: "ovCR8R",
+            shareName: "Creator Share",
+            shareSymbol: "sCR8R",
+            version: "v1"
+        });
+        DeploymentBatcher.CodeIds memory codeIds = DeploymentBatcher.CodeIds({
+            vault: bytes32(uint256(1)),
+            wrapper: bytes32(uint256(2)),
+            shareOFT: bytes32(uint256(3)),
+            gauge: bytes32(uint256(4)),
+            cca: bytes32(uint256(5)),
+            oracle: bytes32(uint256(6)),
+            oftBootstrap: bytes32(uint256(7))
+        });
+
+        bytes32 saltOverride = keccak256("custom-share-oft-salt");
+
+        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
+        batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride);
+
+        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
+        batcher.finalizePhase1WithSalt(params, codeIds, saltOverride);
+    }
 }

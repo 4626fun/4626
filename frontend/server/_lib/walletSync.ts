@@ -2,6 +2,7 @@ import { type ClassifiedLinkedAccounts, classifyLinkedAccounts, type MappedWalle
 import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 import { fetchZoraProfile } from './zoraProfile.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
+import { extractPrivyVerifiedEmail } from './trust.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -51,13 +52,6 @@ function getPrivyUserId(user: PrivyUserLike): string | null {
   return id.length > 0 ? id : null
 }
 
-function normalizeEmail(value: unknown): string | null {
-  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  if (!raw) return null
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return null
-  return raw
-}
-
 function isPrivyUserIdUniqueViolation(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
@@ -65,26 +59,6 @@ function isPrivyUserIdUniqueViolation(error: unknown): boolean {
     lower.includes('profiles_privy_user_id_unique') ||
     (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
   )
-}
-
-function extractPrivyEmail(user: PrivyUserLike): string | null {
-  const direct = normalizeEmail((user as any)?.email?.address)
-  if (direct) return direct
-  const linked = [
-    ...(Array.isArray((user as any)?.linkedAccounts) ? (user as any).linkedAccounts : []),
-    ...(Array.isArray((user as any)?.linked_accounts) ? (user as any).linked_accounts : []),
-  ]
-  for (const account of linked) {
-    const type = normalizeLower((account as any)?.type)
-    if (!type.includes('email')) continue
-    const value =
-      normalizeEmail((account as any)?.address) ??
-      normalizeEmail((account as any)?.emailAddress) ??
-      normalizeEmail((account as any)?.email_address) ??
-      normalizeEmail((account as any)?.email)
-    if (value) return value
-  }
-  return null
 }
 
 async function findProfileByProfileColumns(db: Db, params: {
@@ -735,7 +709,7 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
 
   const classification = classifyLinkedAccounts(privyUser)
   const privyUserId = getPrivyUserId(privyUser)
-  const email = extractPrivyEmail(privyUser)
+  const email = extractPrivyVerifiedEmail(privyUser)
   const existing = await findExistingProfile(db, privyUserId, classification.allWallets)
   const persisted = existing?.id ? await readPersistedIdentity(db, existing.id) : null
 
