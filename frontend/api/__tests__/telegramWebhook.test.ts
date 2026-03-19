@@ -1517,7 +1517,48 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(true)
     const openMiniAppButton = allButtons.find((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')
     const launchUrl = String(openMiniAppButton?.web_app?.url ?? openMiniAppButton?.url ?? '')
+    expect(decodeURIComponent(launchUrl)).toContain('/swap?')
+    expect(decodeURIComponent(launchUrl)).toContain('tgMiniApp=1')
+    expect(decodeURIComponent(launchUrl)).toContain('tgEntry=link')
+    expect(decodeURIComponent(launchUrl)).toContain('tgChatId=')
     expect(decodeURIComponent(launchUrl)).toContain('tgLinkToken=')
+    expect(decodeURIComponent(launchUrl)).not.toContain('/continue?')
+    expect(decodeURIComponent(launchUrl)).not.toContain('autologin=1')
+  })
+
+  it('renders /help connect deep-link directly to /swap for unlinked users', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_16,
+        message: { message_id: 160, text: '/help', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
+    const connectButton = allButtons.find((button: any) =>
+      String(button?.text ?? '')
+        .trim()
+        .toLowerCase()
+        .includes('connect'),
+    )
+    expect(connectButton).toBeTruthy()
+    const launchUrl = String(connectButton?.web_app?.url ?? connectButton?.url ?? '')
+    expect(decodeURIComponent(launchUrl)).toContain('/swap?')
+    expect(decodeURIComponent(launchUrl)).toContain('tgMiniApp=1')
+    expect(decodeURIComponent(launchUrl)).toContain('tgEntry=connect')
+    expect(decodeURIComponent(launchUrl)).toContain('tgChatId=7726886643')
+    expect(decodeURIComponent(launchUrl)).not.toContain('/continue?')
+    expect(decodeURIComponent(launchUrl)).not.toContain('autologin=1')
   })
 
   it('handles /wallet as a telegram-native command without delegating to keepr', async () => {

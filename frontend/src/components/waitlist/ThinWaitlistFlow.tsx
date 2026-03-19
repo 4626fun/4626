@@ -133,7 +133,7 @@ function hasLinkedTelegramAccount(user: unknown): boolean {
   const camel = Array.isArray(record.linkedAccounts) ? (record.linkedAccounts as any[]) : []
   const snake = Array.isArray(record.linked_accounts) ? (record.linked_accounts as any[]) : []
   const linked = [...camel, ...snake]
-  return linked.some((account) => String((account as any)?.type ?? '').trim().toLowerCase().includes('telegram'))
+  return linked.some((account) => String((account as any)?.type ?? '').trim().toLowerCase() === 'telegram')
 }
 
 function shortAddress(value: string | null | undefined): string {
@@ -307,7 +307,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       if (privyAuthed) {
         await runBootstrap()
       } else {
-        await login(buildWaitlistPrivyLoginOptions() as any)
+        if (isTelegramMiniApp) {
+          await loginWithTelegram()
+        } else {
+          await login(buildWaitlistPrivyLoginOptions() as any)
+        }
       }
       authAttemptInFlightRef.current = false
       setBusy(false)
@@ -328,7 +332,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privyAuthed, runBootstrap])
+  }, [busy, isTelegramMiniApp, login, loginWithTelegram, privyAuthed, runBootstrap])
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -544,13 +548,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         busy,
         authAttemptInFlight: authAttemptInFlightRef.current,
         authAutoAttempted: authAutoAttemptedRef.current,
+        isTelegramMiniApp,
       })
     ) {
       return
     }
     authAutoAttemptedRef.current = true
     void onContinueAuth()
-  }, [busy, onContinueAuth, privyAuthed, privyReady, step])
+  }, [busy, isTelegramMiniApp, onContinueAuth, privyAuthed, privyReady, step])
 
   useEffect(() => {
     if (step !== 'auth' || !privyAuthed) {

@@ -65,7 +65,10 @@ import {
   resolveSignalsDestination as resolveSignalsDestinationShared,
   resolveTelegramMiniAppUrl as resolveTelegramMiniAppUrlShared,
 } from './webhook/env.js'
-import { buildMiniAppLaunchButton as buildMiniAppLaunchButtonShared, buildTelegramLinkSwapNextPath as buildTelegramLinkSwapNextPathShared, buildTelegramMiniAppUrl as buildTelegramMiniAppUrlShared } from './webhook/miniApp.js'
+import {
+  buildMiniAppLaunchButton as buildMiniAppLaunchButtonShared,
+  buildTelegramMiniAppUrl as buildTelegramMiniAppUrlShared,
+} from './webhook/miniApp.js'
 import {
   resolveHelpCallbackCommand as resolveHelpCallbackCommandShared,
   resolveImmediateCallbackToast as resolveImmediateCallbackToastShared,
@@ -1250,14 +1253,6 @@ function buildTelegramMiniAppUrl(params: {
   return buildTelegramMiniAppUrlShared(params)
 }
 
-function buildTelegramLinkSwapNextPath(params: {
-  token: string
-  chatId: string
-  telegramUsername?: string | null
-}): string {
-  return buildTelegramLinkSwapNextPathShared(params)
-}
-
 function buildTelegramLinkFlowResponse(params: {
   chatId: string
   telegramUserId: string
@@ -1308,22 +1303,23 @@ function buildTelegramLinkFlowResponse(params: {
       },
     })
   })().catch(() => {})
+  const linkQuery: Record<string, string> = {
+    tgMiniApp: '1',
+    tgEntry: 'link',
+    chatAction: 'link-account',
+    tgChatId: params.chatId,
+  }
+  if (linkToken?.token) {
+    linkQuery.tgLinkToken = linkToken.token
+  }
+  const username = asTrimmed(params.telegramUsername ?? '')
+  if (username) {
+    linkQuery.tgUsername = username
+  }
   const linkUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: '/continue',
-    query: {
-      from: 'waitlist',
-      autologin: '1',
-      auth: 'wallet',
-      next:
-        linkToken?.token
-          ? buildTelegramLinkSwapNextPath({
-              token: linkToken.token,
-              chatId: params.chatId,
-              telegramUsername: params.telegramUsername,
-            })
-          : '/swap',
-    },
+    pathname: '/swap',
+    query: linkQuery,
   })
   const openMiniAppButton = buildMiniAppLaunchButton({
     chatId: params.chatId,
@@ -1422,12 +1418,12 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
   const miniAppUrl = resolveTelegramMiniAppUrl()
   const connectAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: '/continue',
+    pathname: '/swap',
     query: {
-      from: 'waitlist',
-      autologin: '1',
-      auth: 'wallet',
-      next: '/swap?tgMiniApp=1&tgEntry=connect',
+      tgMiniApp: '1',
+      tgEntry: 'connect',
+      chatAction: 'connect',
+      tgChatId: params.chatId,
     },
   })
   const walletAppUrl = buildTelegramMiniAppUrl({

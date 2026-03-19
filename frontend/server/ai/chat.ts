@@ -74,11 +74,20 @@ async function getChatRuntimeBridge(): Promise<ChatRuntimeBridge> {
   return chatRuntimeBridgePromise
 }
 
-// ---------------------------------------------------------------------------
-// Rate limiting – one LLM call per group every 10 s
-// ---------------------------------------------------------------------------
+const ACTION_TIMEOUT_MS = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_ACTION_TIMEOUT_MS, 30_000))
+const ACTION_MAX_CANDIDATES = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_ACTION_MAX_CANDIDATES, 2))
+const ACTION_MAX_RETRIES = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_ACTION_MAX_RETRIES, 2))
+const EXTERNAL_MAX_RETRIES = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_EXTERNAL_MAX_RETRIES, 2))
+const MAX_INBOUND_MESSAGE_CHARS = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_MAX_INBOUND_CHARS, 4_000))
+const LLM_COOLDOWN_MS = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_MS, 10_000))
+
 const groupCooldowns = new Map<string, number>()
-const LLM_COOLDOWN_MS = 10_000
 
 function canCallLlm(groupId: string): boolean {
   const last = groupCooldowns.get(groupId)
@@ -91,7 +100,7 @@ function recordLlmCall(groupId: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// System prompt builder
+// Types
 // ---------------------------------------------------------------------------
 function platformLabelForPrompt(conversationType: string): string {
   if (conversationType === 'telegram') return 'Telegram'
@@ -207,22 +216,7 @@ function classifyIdentityIntent(text: string): IdentityIntent {
   return null
 }
 
-function isLikelyIdentityDrift(text: string): boolean {
-  const normalized = normalizeIntentText(text)
-  if (!normalized) return false
-  return (
-    normalized.includes('xmtp assistant') ||
-    normalized.includes('cloud based language model') ||
-    normalized.includes('not publicly disclosed') ||
-    normalized.includes('do not have personal identity') ||
-    normalized.includes('dont have personal identity') ||
-    normalized.includes('not connected to eliza') ||
-    normalized.includes('not aware of any connection to eliza') ||
-    normalized.includes('not the same as eliza') ||
-    normalized.includes('do not have any information about being') ||
-    normalized.includes('dont have any information about being')
-  )
-}
+type ChatRuntimeBridge = ReturnType<typeof createRuntimeBridge>
 
 function buildStackSnapshotReply(conversationType: string, runtimeTruth: AssistantRuntimeTruth): string {
   const platform = platformLabelForPrompt(conversationType)
@@ -295,19 +289,79 @@ function buildRuntimeUnavailableFallback(conversationType: string): string {
 
 type ConversationTurn = { role: 'user' | 'assistant'; text: string }
 
-function readStateBlock(state: Record<string, unknown>, key: string): string {
-  const raw = state[key]
-  if (typeof raw !== 'string') return ''
-  const trimmed = raw.trim()
-  if (!trimmed) return ''
-  if (/^<\w+(?:_\w+)?\s*\/>$/.test(trimmed)) return ''
-  return trimmed
+let runtimeContextPromise: Promise<ChatRuntimeContext> | null = null
+
+async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
+  if (runtimeContextPromise) return runtimeContextPromise
+  runtimeContextPromise = (async () => {
+    const [
+      { keeprPlugin },
+      { zoraPlugin },
+      { uniswapPlugin },
+      { bankrPlugin },
+      { lensPlugin },
+      { walletIntelPlugin },
+      { reputationPlugin },
+      { crePlugin },
+      { knowledgePlugin },
+    ] = await Promise.all([
+      import('../agent/eliza/plugins/keepr/index.js'),
+      import('../agent/eliza/plugins/zora/index.js'),
+      import('../agent/eliza/plugins/uniswap/index.js'),
+      import('../agent/eliza/plugins/bankr/index.js'),
+      import('../agent/eliza/plugins/lens/index.js'),
+      import('../agent/eliza/plugins/walletIntel/index.js'),
+      import('../agent/eliza/plugins/reputation/index.js'),
+      import('../agent/eliza/plugins/cre/index.js'),
+      import('../agent/eliza/plugins/knowledge/index.js'),
+    ])
+    const characterRuntimeConfig = resolveCharacterRuntimeConfig()
+    const plugins = [
+      keeprPlugin,
+      zoraPlugin,
+      uniswapPlugin,
+      bankrPlugin,
+      lensPlugin,
+      walletIntelPlugin,
+      reputationPlugin,
+      crePlugin,
+      knowledgePlugin,
+    ]
+    const bridge = createRuntimeBridge({
+      agentKey: CHAT_MEMORY_AGENT_KEY,
+      plugins,
+      settings: characterRuntimeConfig.settings,
+      character: {
+        systemPrompt: characterRuntimeConfig.systemPrompt,
+        preferredModel: characterRuntimeConfig.preferredModel,
+      },
+      history: {
+        maxConversations: 500,
+        maxMessagesPerConversation: 40,
+      },
+    })
+    const contextProviders = [
+      ...(keeprPlugin.providers ?? []),
+      ...(knowledgePlugin.providers ?? []),
+    ]
+    return {
+      bridge,
+      contextProviders,
+      characterConfig: {
+        systemPrompt: characterRuntimeConfig.systemPrompt,
+        preferredModel: characterRuntimeConfig.preferredModel,
+      },
+    }
+  })().catch((error) => {
+    runtimeContextPromise = null
+    throw error
+  })
+  return runtimeContextPromise
 }
 
-function normalizeHistoryText(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  return value.replace(/\s+/g, ' ').trim()
-}
+// ---------------------------------------------------------------------------
+// Request normalization helpers (kept from original chat.ts)
+// ---------------------------------------------------------------------------
 
 function resolveConversationType(groupId: string): string {
   const normalized = groupId.trim().toLowerCase()
@@ -355,55 +409,22 @@ function extractRecentTurns(state: Record<string, unknown>): ConversationTurn[] 
   return turns
 }
 
-function trimTrailingCurrentUserTurn(turns: ConversationTurn[], currentText: string): ConversationTurn[] {
-  const normalizedCurrent = normalizeHistoryText(currentText)
-  if (!normalizedCurrent || turns.length === 0) return turns
-  const last = turns[turns.length - 1]
-  if (!last) return turns
-  if (last.role === 'user' && normalizeHistoryText(last.text) === normalizedCurrent) {
-    return turns.slice(0, -1)
-  }
-  return turns
+function normalizeAiPrompt(text: string): string {
+  return String(text ?? '')
+    .replace(/^\/?ai\s*/i, '')
+    .replace(/^@(keepr|bot)\s*/i, '')
+    .trim()
 }
 
-function buildConversationHistoryContext(turns: ConversationTurn[]): string {
-  if (!turns.length) return ''
-  const boundedTurns = turns.slice(-HISTORY_TURN_LIMIT)
-  const lines: string[] = []
-  let usedChars = 0
-  for (let i = boundedTurns.length - 1; i >= 0; i -= 1) {
-    const turn = boundedTurns[i]
-    if (!turn) continue
-    const line = `${turn.role}: ${turn.text}`
-    if (!line) continue
-    const additional = line.length + 1
-    if (usedChars + additional > HISTORY_CHAR_BUDGET && lines.length > 0) break
-    if (usedChars + additional > HISTORY_CHAR_BUDGET && lines.length === 0) {
-      lines.unshift(line.slice(0, Math.max(1, HISTORY_CHAR_BUDGET - 1)).trimEnd() + '…')
-      usedChars = HISTORY_CHAR_BUDGET
-      break
-    }
-    lines.unshift(line)
-    usedChars += additional
-  }
-  if (!lines.length) return ''
-  return [
-    '[conversation_history]',
-    'Prior turns from this same conversation. Use them to preserve context and references.',
-    ...lines,
-    '[/conversation_history]',
-  ].join('\n')
+function toSenderAddress(senderWallet: string): string | null {
+  const normalized = String(senderWallet ?? '').trim().toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null
+  return normalized
 }
 
-function buildStructuredMemoryContext(state: Record<string, unknown>): string {
-  const blocks = [
-    readStateBlock(state, 'memorySnapshotBlock'),
-    readStateBlock(state, 'factCardsBlock'),
-    readStateBlock(state, 'openTasksBlock'),
-    readStateBlock(state, 'semanticRecallBlock'),
-  ].filter(Boolean)
-  return blocks.join('\n\n')
-}
+// ---------------------------------------------------------------------------
+// generateLlmResponse — thin adapter into the Eliza runtime pipeline
+// ---------------------------------------------------------------------------
 
 export async function generateLlmResponse(params: {
   groupId: string

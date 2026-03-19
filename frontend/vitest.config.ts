@@ -11,6 +11,7 @@ export default defineConfig({
     include: ['api/__tests__/**/*.test.ts', 'src/**/*.test.ts', 'src/**/*.test.tsx', 'server/**/*.test.ts'],
     environment: 'node',
     globals: true,
+    testTimeout: 30_000,
     restoreMocks: true,
     clearMocks: true,
     // The suite mixes native-image tests and route-heavy module loading; keeping

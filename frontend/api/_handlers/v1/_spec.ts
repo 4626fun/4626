@@ -45,6 +45,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     servers: [{ url: resolveServerBaseUrl(req) }],
     paths: {
       '/v1/spec.json': { get: { summary: 'OpenAPI spec', responses: { '200': { description: 'OK' } } } },
+      '/v1/token/{address}/metadata': { get: { summary: 'Share token metadata (ERC-7572)', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/token/{address}/image': { get: { summary: 'Share token image renderer', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/token/{address}/logo.png': { get: { summary: 'Canonical PNG logo alias (64x64 default)', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/token/{address}/logo.svg': { get: { summary: 'Canonical SVG logo alias (64x64 default)', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/token/{address}/tokenlist': { get: { summary: 'Token Lists compatible single-token payload', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/vault/{address}/report': { get: { summary: 'Vault report', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/vault/{address}/strategies': { get: { summary: 'Vault strategies', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/auction/{address}/status': { get: { summary: 'CCA strategy auction status', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
@@ -62,8 +67,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/gauge/user/{address}': { get: { summary: 'Gauge user votes', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/ve4626/user/{address}': { get: { summary: 've4626 lock + power', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/charm/strategy/{address}': { get: { summary: 'Charm strategy config + status', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/capabilities': { get: { summary: 'Resolve wallet room capabilities + qualification state', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/creators': { get: { summary: 'List creator XMTP agents', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/creators/enable': { post: { summary: 'Enable/provision creator XMTP agent (auth required)', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/access-proof/request': { post: { summary: 'Issue signable room access proof payload', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/access-proof/verify': { post: { summary: 'Verify signed proof and issue short-lived room token', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/xmtp/join': { post: { summary: 'Validate room token and return XMTP join instructions', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/telegram/join': { post: { summary: 'Validate room token and return Telegram join instructions', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/identity/verification': { get: { summary: 'Public ERC-8004 agent verification snapshot', responses: { '200': { description: 'OK' } } } },
 
       // Build-only endpoints (return unsigned tx calldata)

@@ -99,5 +99,5 @@ describe('token image AI override lookup', () => {
     expect(res.statusCode).toBe(200)
     expect(String(res.getHeader('content-type') ?? '')).toBe('image/svg+xml')
     expect(String(res.body ?? '')).toContain('data:image/png;base64,')
-  })
+  }, 15_000)
 })

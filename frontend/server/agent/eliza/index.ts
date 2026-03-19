@@ -63,6 +63,8 @@ import { XmtpService } from './plugins/xmtp/service.js'
 import { createRuntimeBridge } from './runtimeBridge.js'
 import { getElizaLlmService } from './llm.js'
 import { AgentError, isRetryableAgentError, toAgentError, toErrorDetails } from './_errors.js'
+import { withRetry, withTimeout, sleep } from './_retry.js'
+import { buildContinuityContextBlock } from './_stateHelpers.js'
 import { SlidingWindowRateLimiter, parsePositiveNumber } from './_rateLimit.js'
 import { enqueueAgentBackgroundTask, getAgentBackgroundQueueStats, startAgentBackgroundTaskWorker } from './_taskQueue.js'
 import { WelcomeConversationTracker, fingerprintAgentConfig, getActionRetryBudget } from './_runtimePolicy.js'
@@ -542,65 +544,7 @@ function resolveProvider(): { name: string; model: string } | null {
   return { name: provider.name, model: provider.model }
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      setTimeout(() => reject(new AgentError('UPSTREAM_TIMEOUT', timeoutMessage, { retryable: true })), timeoutMs)
-    }),
-  ])
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function withRetry<T>(params: {
-  operation: string
-  maxRetries?: number
-  baseDelayMs?: number
-  run: () => Promise<T>
-  correlationId?: string
-}): Promise<T> {
-  const maxRetries = Math.max(0, params.maxRetries ?? EXTERNAL_MAX_RETRIES)
-  const baseDelayMs = Math.max(50, params.baseDelayMs ?? EXTERNAL_RETRY_BASE_MS)
-  let lastError: unknown
-
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    try {
-      return await params.run()
-    } catch (error) {
-      lastError = error
-      const asAgentError = toAgentError(error, 'UPSTREAM_ERROR', `${params.operation}_failed`)
-      const retryable =
-        isRetryableAgentError(asAgentError) ||
-        asAgentError.code === 'UPSTREAM_TIMEOUT' ||
-        asAgentError.code === 'UPSTREAM_ERROR' ||
-        asAgentError.code === 'DEPENDENCY_UNAVAILABLE'
-      if (!retryable || attempt >= maxRetries) {
-        console.error(
-          `[eliza] ${params.operation} failed (attempt ${attempt + 1}/${maxRetries + 1}, retryable=${retryable}): ${asAgentError.message}`,
-        )
-        break
-      }
-      const waitMs = baseDelayMs * Math.pow(2, attempt)
-      console.warn(
-        `[eliza] ${params.operation} attempt ${attempt + 1} failed, retrying in ${waitMs}ms: ${asAgentError.message}`,
-      )
-      logger.warn('[eliza] retrying operation after failure', {
-        operation: params.operation,
-        attempt: attempt + 1,
-        waitMs,
-        correlationId: params.correlationId ?? null,
-        error: asAgentError.message,
-        code: asAgentError.code,
-      })
-      await sleep(waitMs)
-    }
-  }
-
-  throw toAgentError(lastError, 'UPSTREAM_ERROR', `${params.operation}_failed_after_retries`)
-}
+// withTimeout, sleep, withRetry imported from ./_retry.js
 
 // ---------------------------------------------------------------------------
 // Welcome message for first-time conversations
@@ -663,49 +607,7 @@ function hasDetailedHealthAccess(req: http.IncomingMessage): boolean {
   return provided === ELIZA_HEALTH_DETAIL_TOKEN
 }
 
-function xmlEscape(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function buildFallbackHistoryBlock(state: Record<string, unknown>): string {
-  const recent = Array.isArray((state as any).recentMessages)
-    ? ((state as any).recentMessages as Array<any>)
-    : []
-  const entries = recent
-    .map((entry) => {
-      const role = String(entry?.role ?? 'user')
-      const text = String(entry?.text ?? '').replace(/\s+/g, ' ').trim()
-      const createdAt = Number(entry?.createdAt ?? Date.now())
-      const ts = Number.isFinite(createdAt) ? new Date(createdAt).toISOString() : new Date().toISOString()
-      return `<turn role="${xmlEscape(role)}" ts="${ts}">${xmlEscape(text)}</turn>`
-    })
-    .join('\n')
-  return `<history>\n${entries}\n</history>`
-}
-
-function buildContinuityContextBlock(state: Record<string, unknown>): string {
-  const historyBlock =
-    typeof (state as any).historyBlock === 'string' && (state as any).historyBlock.trim()
-      ? String((state as any).historyBlock)
-      : buildFallbackHistoryBlock(state)
-  const snapshotBlock =
-    typeof (state as any).memorySnapshotBlock === 'string' && (state as any).memorySnapshotBlock.trim()
-      ? String((state as any).memorySnapshotBlock)
-      : '<memory_snapshot />'
-  const factCardsBlock =
-    typeof (state as any).factCardsBlock === 'string' && (state as any).factCardsBlock.trim()
-      ? String((state as any).factCardsBlock)
-      : '<fact_cards />'
-  const openTasksBlock =
-    typeof (state as any).openTasksBlock === 'string' && (state as any).openTasksBlock.trim()
-      ? String((state as any).openTasksBlock)
-      : '<open_tasks />'
-
-  return [historyBlock, snapshotBlock, factCardsBlock, openTasksBlock].join('\n\n').trim()
-}
+// xmlEscape, buildFallbackHistoryBlock, buildContinuityContextBlock imported from ./_stateHelpers.js
 
 const AGENT_RUNTIME_ROLE: RuntimeRole = (() => {
   const raw = String(process.env.AGENT_RUNTIME_ROLE ?? 'primary').trim().toLowerCase()
