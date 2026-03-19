@@ -1416,16 +1416,6 @@ function buildFocusedHelpText(): string {
 
 function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
   const miniAppUrl = resolveTelegramMiniAppUrl()
-  const connectAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: '/swap',
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'connect',
-      chatAction: 'connect',
-      tgChatId: params.chatId,
-    },
-  })
   const walletAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
     pathname: '/swap',
@@ -1454,7 +1444,7 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
         [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
       ]
     : [
-        [buildMiniAppLaunchButton({ chatId: params.chatId, text: menuLabel('connect'), url: connectAppUrl })],
+        [{ text: menuLabel('connect'), callback_data: 'menu:connect' }],
         [
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
@@ -4752,6 +4742,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       signalsChatId: webhookConfig.signalsChatId,
     })
     if (!isAllowedContext) {
+      await answerTelegramCallbackQuery({
+        botToken,
+        callbackQueryId,
+        text: 'This chat is not enabled for bot actions.',
+        showAlert: true,
+      }).catch(() => {})
       return res.status(200).json({
         success: true,
         data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,

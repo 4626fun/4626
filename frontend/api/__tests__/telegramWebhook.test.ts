@@ -385,11 +385,7 @@ describe('telegram webhook handler', () => {
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
     const connectButton = callbackButtons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
     expect(Boolean(connectButton)).toBe(true)
-    expect(
-      typeof connectButton?.url === 'string' ||
-        typeof connectButton?.web_app?.url === 'string' ||
-        String(connectButton?.callback_data ?? '') === 'menu:connect',
-    ).toBe(true)
+    expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:explore')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(false)
@@ -447,11 +443,7 @@ describe('telegram webhook handler', () => {
     const buttons = payload.reply_markup.inline_keyboard.flat()
     const connectButton = buttons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
     expect(Boolean(connectButton)).toBe(true)
-    expect(
-      typeof connectButton?.web_app?.url === 'string' ||
-        typeof connectButton?.url === 'string' ||
-        String(connectButton?.callback_data ?? '') === 'menu:connect',
-    ).toBe(true)
+    expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
     expect(
       buttons.some(
         (button: any) =>
@@ -1239,6 +1231,45 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(true)
   })
 
+  it('acknowledges callback query from disallowed chat context and ignores it', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 10_1,
+        callback_query: {
+          id: 'cbq-disallowed',
+          data: 'menu:start',
+          from: { id: 999 },
+          message: { message_id: 1401, chat: { id: 7726886643 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.ignored).toBe(true)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(handleTwitterCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.callback_query_id).toBe('cbq-disallowed')
+    expect(String(payload.text ?? '')).toContain('not enabled')
+    expect(payload.show_alert).toBe(true)
+  })
+
   it('handles callback query for inline launcher and returns prefill keyboard', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
@@ -1526,7 +1557,7 @@ describe('telegram webhook handler', () => {
     expect(decodeURIComponent(launchUrl)).not.toContain('autologin=1')
   })
 
-  it('renders /help connect deep-link directly to /swap for unlinked users', async () => {
+  it('renders /help connect CTA as menu callback for deterministic /link flow', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -1552,13 +1583,7 @@ describe('telegram webhook handler', () => {
         .includes('connect'),
     )
     expect(connectButton).toBeTruthy()
-    const launchUrl = String(connectButton?.web_app?.url ?? connectButton?.url ?? '')
-    expect(decodeURIComponent(launchUrl)).toContain('/swap?')
-    expect(decodeURIComponent(launchUrl)).toContain('tgMiniApp=1')
-    expect(decodeURIComponent(launchUrl)).toContain('tgEntry=connect')
-    expect(decodeURIComponent(launchUrl)).toContain('tgChatId=7726886643')
-    expect(decodeURIComponent(launchUrl)).not.toContain('/continue?')
-    expect(decodeURIComponent(launchUrl)).not.toContain('autologin=1')
+    expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
   })
 
   it('handles /wallet as a telegram-native command without delegating to keepr', async () => {

@@ -15,7 +15,7 @@ import {
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 import { readTelegramMiniAppSessionToken } from './webhook/miniAppAuth.js'
-import { isTelegramMiniAppSessionEnabled, verifyTelegramLinkApiSecret } from './webhook/services/access.js'
+import { isTelegramMiniAppSessionEnabled } from './webhook/services/access.js'
 import { asTrimmed, resolveTelegramLinkErrorStatusCode } from './webhook/utils.js'
 
 type MiniAppLinkBody = {
@@ -32,9 +32,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
-  }
-  if (!verifyTelegramLinkApiSecret(req)) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
   const body = (await readJsonBody<MiniAppLinkBody>(req).catch(() => null)) ?? (req.body as MiniAppLinkBody | null) ?? {}
