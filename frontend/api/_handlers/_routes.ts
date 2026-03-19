@@ -42,6 +42,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/chat/command-preflight': () => import('./v1/chat/_commandPreflight.js'),
   'v1/chat/telemetry': () => import('./v1/chat/_telemetry.js'),
   'v1/creators/quickstart': () => import('./v1/creators/_quickstart.js'),
+  'v1/agents/capabilities': () => import('./v1/agents/_capabilities.js'),
   'v1/agents/creators': () => import('./v1/agents/creators/_list.js'),
   'v1/agents/creators/enable': () => import('./v1/agents/creators/_enable.js'),
   'v1/agents/creators/provision-wallet': () => import('./v1/agents/creators/_provisionWallet.js'),
@@ -49,8 +50,18 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/agents/feedback/submit': () => import('./v1/agents/feedback/_submit.js'),
   'v1/agents/identity/verification': () => import('./v1/agents/identity/_verification.js'),
   'v1/agents/identity/set-agent-wallet': () => import('./v1/agents/identity/_setAgentWallet.js'),
+  'v1/agents/access-proof/request': () => import('./v1/agents/access-proof/_request.js'),
+  'v1/agents/access-proof/verify': () => import('./v1/agents/access-proof/_verify.js'),
+  'v1/agents/xmtp/join': () => import('./v1/agents/xmtp/_join.js'),
+  'v1/agents/telegram/join': () => import('./v1/agents/telegram/_join.js'),
   'v1/agents/wallet-intelligence': () => import('./v1/agents/_wallet-intelligence.js'),
   'v1/agents/publish': () => import('./v1/agents/_publish.js'),
+  // Optional singular aliases for external compatibility.
+  'v1/agent/capabilities': () => import('./v1/agents/_capabilities.js'),
+  'v1/agent/access-proof/request': () => import('./v1/agents/access-proof/_request.js'),
+  'v1/agent/access-proof/verify': () => import('./v1/agents/access-proof/_verify.js'),
+  'v1/agent/xmtp/join': () => import('./v1/agents/xmtp/_join.js'),
+  'v1/agent/telegram/join': () => import('./v1/agents/telegram/_join.js'),
   // v1 build endpoints (return unsigned tx calldata)
   // Phase 1 + Ajna + Charm endpoints enabled.
   'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
@@ -233,6 +244,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   // Token metadata (ERC-7572) - supports both query param and path-based addresses
   'token/metadata': () => import('./token/_metadata.js'),
   'token/image': () => import('./token/_image.js'),
+  'token/tokenlist': () => import('./token/_tokenlist.js'),
   // Versioned API paths (v1/token/{address}/metadata and v1/token/{address}/image)
   // These are handled dynamically in getApiHandler below
 
@@ -278,8 +290,10 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/wallet/duplicate-principals': () => import('./admin/wallet/_duplicatePrincipals.js'),
 }
 
-// Match v1/token/{address}/metadata or v1/token/{address}/image patterns
-const V1_TOKEN_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/(metadata|image)$/
+// Match v1/token/{address}/metadata|image|tokenlist patterns
+const V1_TOKEN_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/(metadata|image|tokenlist)$/
+// Match canonical extension-based logo aliases.
+const V1_TOKEN_LOGO_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/logo\.(png|svg)$/
 
 // Match v1 REST patterns that embed an address in the path.
 const V1_VAULT_PATTERN = /^v1\/vault\/([a-fA-F0-9x]+)\/(report|strategies)$/
@@ -297,7 +311,7 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
     return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
   }
 
-  // Handle dynamic v1 token routes: v1/token/{address}/metadata or v1/token/{address}/image
+  // Handle dynamic v1 token routes: v1/token/{address}/metadata|image|tokenlist
   const v1Match = subpath.match(V1_TOKEN_PATTERN)
   if (v1Match) {
     const [, address, action] = v1Match
@@ -313,6 +327,27 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
           if (!req.query.address) {
             req.query.address = address
           }
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  // Handle dynamic token logo aliases: v1/token/{address}/logo.png|logo.svg
+  const v1LogoMatch = subpath.match(V1_TOKEN_LOGO_PATTERN)
+  if (v1LogoMatch) {
+    const [, address, ext] = v1LogoMatch
+    const dynamicLoader = apiRouteLoaders['token/image']
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        const wrappedHandler: ApiHandler = (req, res) => {
+          if (!req.query.address) req.query.address = address
+          if (!req.query.format) req.query.format = ext
+          // Uniswap token logo recommendations optimize around 64x64 token assets.
+          if (!req.query.size) req.query.size = '64'
           return baseHandler(req, res)
         }
         return wrappedHandler

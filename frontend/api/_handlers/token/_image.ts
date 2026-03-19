@@ -28,6 +28,85 @@ import { getCompletedImageProjectForVault } from '../../../server/_lib/imageProj
 
 declare const process: { env: Record<string, string | undefined> }
 
+const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
+const IPFS_GATEWAY = `${String(process.env.IPFS_GATEWAY ?? DEFAULT_IPFS_GATEWAY).trim().replace(/\/+$/, '')}/`
+const IPNS_GATEWAY = IPFS_GATEWAY.replace(/\/ipfs\/$/i, '/')
+
+function normalizeHttpUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
+function ipfsToHttpUrl(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+
+  if (raw.startsWith('ipfs://')) {
+    const path = raw.slice('ipfs://'.length).replace(/^ipfs\//i, '').replace(/^\/+/, '')
+    if (!path) return null
+    return `${IPFS_GATEWAY}${path}`
+  }
+
+  if (raw.startsWith('/ipfs/')) {
+    const path = raw.replace(/^\/+ipfs\//i, '')
+    if (!path) return null
+    return `${IPFS_GATEWAY}${path}`
+  }
+
+  if (raw.startsWith('bafy') || raw.startsWith('Qm')) {
+    return `${IPFS_GATEWAY}${raw}`
+  }
+
+  return null
+}
+
+function ipnsToHttpUrl(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+
+  if (raw.startsWith('ipns://')) {
+    const path = raw.slice('ipns://'.length).replace(/^ipns\//i, '').replace(/^\/+/, '')
+    if (!path) return null
+    return `${IPNS_GATEWAY}ipns/${path}`
+  }
+
+  if (raw.startsWith('/ipns/')) {
+    const path = raw.replace(/^\/+ipns\//i, '')
+    if (!path) return null
+    return `${IPNS_GATEWAY}ipns/${path}`
+  }
+
+  return null
+}
+
+function normalizeSourceArtworkUrl(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+
+  const ipfs = ipfsToHttpUrl(raw)
+  if (ipfs) return ipfs
+
+  const ipns = ipnsToHttpUrl(raw)
+  if (ipns) return ipns
+
+  if (raw.startsWith('data:image/')) {
+    return raw
+  }
+
+  if (raw.startsWith('ar://')) {
+    const id = raw.slice('ar://'.length).replace(/^\/+/, '')
+    if (!id) return null
+    return `https://arweave.net/${id}`
+  }
+
+  return normalizeHttpUrl(raw)
+}
+
 // ABI fragments
 const SHARE_OFT_ABI = [
   { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
@@ -299,7 +378,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 73
+const FRAME_STYLE_V = 100
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -1138,10 +1217,18 @@ async function prepareArtworkLayers(params: { size: number; bytes: Uint8Array | 
 async function fetchSourceArtworkBytes(params: {
   upstreamUrl: string | null
 }): Promise<Uint8Array | null> {
-  const url = typeof params.upstreamUrl === 'string' ? params.upstreamUrl.trim() : ''
+  const url = normalizeSourceArtworkUrl(params.upstreamUrl)
   if (!url) return null
-  const fetched = await fetchBytes(url)
-  return fetched.bytes
+  try {
+    const fetched = await fetchBytes(url)
+    return fetched.bytes
+  } catch (error) {
+    console.warn('[token/image] source artwork fetch failed; using deterministic fallback icon:', {
+      url,
+      message: error instanceof Error ? error.message : String(error ?? ''),
+    })
+    return null
+  }
 }
 
 async function normalizeImageToPng(bytes: Uint8Array): Promise<Uint8Array> {
@@ -2348,6 +2435,7 @@ function generateFramedSvg({
 }
 
 export const __testables = {
+  normalizeSourceArtworkUrl,
   getTokenIconLayout,
   createTopBreakoutMask,
   renderDeterministicFrameLayer,
