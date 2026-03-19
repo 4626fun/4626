@@ -102,4 +102,28 @@ describe('v1 auction status handler', () => {
       auctionTokenImageUrl: `https://api.4626.fun/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`,
     })
   })
+
+  it('does not trust forwarded host headers when API_HOST is unset', async () => {
+    delete process.env.API_HOST
+    const mod = await import('../_handlers/v1/auction/_status.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { ccaStrategy: CCA_STRATEGY },
+      headers: {
+        host: 'attacker.invalid',
+        'x-forwarded-host': 'attacker.invalid',
+        'x-forwarded-proto': 'http',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.auctionTokenImagePath).toBe(`/api/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`)
+    expect(res.body?.data?.auctionTokenImageUrl).toBe(`/api/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`)
+  })
 })

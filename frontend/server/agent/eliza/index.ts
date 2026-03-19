@@ -173,7 +173,6 @@ const ELIZA_GROVE_UPLOAD_MODE = (() => {
 })()
 
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
-let legacyPlaintextCompatibilityLogged = false
 
 function fileLooksLikePlainSqlite(filePath: string): boolean {
   try {
@@ -225,14 +224,6 @@ function hasLegacyMigrationBackupForFile(filePath: string): boolean {
   }
 }
 
-function logLegacyPlaintextCompatibility(): void {
-  if (legacyPlaintextCompatibilityLogged) return
-  legacyPlaintextCompatibilityLogged = true
-  logger.info(
-    '[xmtp] Legacy plaintext DB detected; compatibility mode is active and existing installation will be reused.',
-  )
-}
-
 function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
   if (XMTP_DB_PLAINTEXT_ONLY) return undefined
   if (!XMTP_DB_ENCRYPTION_KEY) return undefined
@@ -249,8 +240,12 @@ function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
     throw new Error(message)
   }
   if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
-    logLegacyPlaintextCompatibility()
-    return undefined
+    const message =
+      '[xmtp] Refusing startup: XMTP_DB_ENCRYPTION_KEY is configured but legacy plaintext DB file(s) were detected. ' +
+      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db ' +
+      'to rotate plaintext DBs before startup.'
+    logger.error(message)
+    throw new Error(message)
   }
   return XMTP_DB_ENCRYPTION_KEY
 }
@@ -369,10 +364,14 @@ function checkDbPersistence(): DbPersistenceCheckResult {
       logger.warn(
         '[xmtp] Forced encrypted migration requested but NOT confirmed.\n' +
         '    To run migration intentionally, set XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db.\n' +
-        '    Running in compatibility mode to avoid accidental installation churn.',
+        '    Startup will fail if legacy plaintext DB files are present.',
       )
     } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
-      logLegacyPlaintextCompatibility()
+      errors.push(
+        '[xmtp] Legacy plaintext XMTP DB detected while encryption is configured. ' +
+          'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and ' +
+          'XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to rotate plaintext DB files.',
+      )
     }
   } catch {
     // Directory doesn't exist yet — will be created by makeDbPath

@@ -278,6 +278,145 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     expect((globalThis.fetch as any).mock.calls.length).toBe(1)
   })
 
+  it('accepts finalizePhase2WithPermit2 with current tuple shape', async () => {
+    mockGetLogs.mockResolvedValue([{ args: { vault } }])
+
+    const BATCHER_ABI = [
+      {
+        type: 'function',
+        name: 'finalizePhase2WithPermit2',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'creatorToken', type: 'address' },
+              { name: 'owner', type: 'address' },
+              { name: 'vault', type: 'address' },
+              { name: 'wrapper', type: 'address' },
+              { name: 'shareOFT', type: 'address' },
+              { name: 'gaugeController', type: 'address' },
+              { name: 'ccaStrategy', type: 'address' },
+              { name: 'oracle', type: 'address' },
+              { name: 'version', type: 'string' },
+              { name: 'depositAmount', type: 'uint256' },
+              { name: 'requiredRaise', type: 'uint128' },
+              { name: 'floorPriceQ96', type: 'uint256' },
+              { name: 'auctionSteps', type: 'bytes' },
+              { name: 'meteoraAlphaVault', type: 'bytes32' },
+              {
+                name: 'solanaIxs',
+                type: 'tuple[]',
+                components: [
+                  { name: 'programId', type: 'bytes32' },
+                  { name: 'serializedAccounts', type: 'bytes[]' },
+                  { name: 'data', type: 'bytes' },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'permit',
+            type: 'tuple',
+            components: [
+              {
+                name: 'permitted',
+                type: 'tuple',
+                components: [
+                  { name: 'token', type: 'address' },
+                  { name: 'amount', type: 'uint256' },
+                ],
+              },
+              { name: 'nonce', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+            ],
+          },
+          { name: 'signature', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const finalizeData = encodeFunctionData({
+      abi: BATCHER_ABI,
+      functionName: 'finalizePhase2WithPermit2',
+      args: [
+        {
+          creatorToken,
+          owner: sender,
+          vault,
+          wrapper,
+          shareOFT,
+          gaugeController,
+          ccaStrategy,
+          oracle,
+          version: 'v1',
+          depositAmount: 5_000_000n * 10n ** 18n,
+          requiredRaise: 100_000_000_000_000_000n,
+          floorPriceQ96: 1_000_000n,
+          auctionSteps: '0x',
+          meteoraAlphaVault: ZERO_BYTES32,
+          solanaIxs: [],
+        },
+        {
+          permitted: { token: creatorToken, amount: 5_000_000n * 10n ** 18n },
+          nonce: 1n,
+          deadline: 1_900_000_000n,
+        },
+        '0x1234',
+      ],
+    })
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [creatorVaultBatcher, 0n, finalizeData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = responseBody?.error?.message ?? ''
+
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(1)
+  })
+
   it('accepts deployPhase3Strategies with current selector', async () => {
     const BATCHER_ABI = [
       {

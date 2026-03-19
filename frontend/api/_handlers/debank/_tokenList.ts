@@ -1,10 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getStringQuery, handleOptions, isAddressLike, requireDebankAccessKey, setCache, setCors } from '../../../server/debank/_shared.js'
+import {
+  getStringQuery,
+  getTrustedClientIp,
+  handleOptions,
+  isAddressLike,
+  requireDebankAccessKey,
+  setCache,
+  setCors,
+} from '../../../server/debank/_shared.js'
+import { checkDurableRateLimit } from '../../../server/_lib/durableRateLimit.js'
+import { rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-
-type RateBucket = { count: number; resetAt: number }
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS_PER_IP = 20
@@ -46,33 +54,15 @@ export type DebankTokenListResponse = {
   tokens: DebankToken[]
 }
 
-function getClientKey(req: VercelRequest): string {
-  const xff = req.headers['x-forwarded-for']
-  if (typeof xff === 'string' && xff.trim().length > 0) return xff.split(',')[0]!.trim()
-  const realIp = req.headers['x-real-ip']
-  if (typeof realIp === 'string' && realIp.trim().length > 0) return realIp.trim()
-  return 'unknown'
-}
-
-function rateLimitOk(req: VercelRequest): { ok: true } | { ok: false; retryAfterSeconds: number } {
-  const key = getClientKey(req)
-  const now = Date.now()
-  const g: any = globalThis as any
-  const buckets: Map<string, RateBucket> = (g.__4626_debank_token_list_rate_buckets ??= new Map())
-
-  const bucket = buckets.get(key)
-  if (!bucket || now >= bucket.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
-    return { ok: true }
-  }
-
-  if (bucket.count >= RATE_LIMIT_MAX_REQUESTS_PER_IP) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))
-    return { ok: false, retryAfterSeconds }
-  }
-
-  bucket.count += 1
-  return { ok: true }
+async function rateLimitOk(req: VercelRequest): Promise<{ ok: true } | { ok: false; retryAfterSeconds: number }> {
+  const clientIp = getTrustedClientIp(req)
+  const result = await checkDurableRateLimit(
+    rateLimitKey('debank', 'token_list', clientIp),
+    { windowMs: RATE_LIMIT_WINDOW_MS, maxRequests: RATE_LIMIT_MAX_REQUESTS_PER_IP },
+  )
+  if (result.allowed) return { ok: true }
+  const retryAfterSeconds = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000))
+  return { ok: false, retryAfterSeconds }
 }
 
 function normalizeChainId(raw: string | null): string {
@@ -103,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const rl = rateLimitOk(req)
+  const rl = await rateLimitOk(req)
   if (!rl.ok) {
     res.setHeader('Retry-After', String(rl.retryAfterSeconds))
     return res.status(429).json({ success: false, error: 'Rate limited. Please retry shortly.' } satisfies ApiEnvelope<never>)

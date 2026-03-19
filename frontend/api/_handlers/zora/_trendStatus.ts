@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getNumberQuery, getStringQuery, handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
+import { setNoStore } from '../../../server/auth/_shared.js'
+import { getNumberQuery, getStringQuery, handleOptions, setCors } from '../../../server/zora/_shared.js'
 import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { isAdminAddress } from '../../../server/_lib/session.js'
 import { getTrendOpByTickerHash, listRecentTrendOps } from '../../../server/_lib/zoraTrendOpsStore.js'
@@ -27,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!ticker) {
     const limit = Math.max(1, Math.min(getNumberQuery(req, 'limit') ?? 20, 100))
     const recent = await listRecentTrendOps(limit)
-    setCache(res, 10)
+    setNoStore(res)
     return res.status(200).json({
       success: true,
       data: {
@@ -39,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const preflight = await preflightTrendTicker({ ticker })
     const stored = await getTrendOpByTickerHash(preflight.tickerHash)
-    setCache(res, 10)
+    setNoStore(res)
     return res.status(200).json({
       success: true,
       data: {

@@ -4961,17 +4961,11 @@ function DeployVaultBatcher({
                           : 'unknown'
               const shouldFallback =
                 !isMissingPrimaryCall &&
+                !isPaymasterPolicyFailure &&
                 (lc.includes('invalid signature') ||
                   lc.includes('signature check failed') ||
                   isVerificationGasFailure ||
-                  lc.includes('banned opcode') ||
-                  lc.includes('stake/unstake delay') ||
-                  lc.includes('unstake delay too low') ||
-                  lc.includes('sponsored userop exceeds paymaster total gas cap') ||
-                  lc.includes('total gas used by the user operation') ||
-                  (lc.includes('total gas used') && lc.includes('allowed limit')) ||
-                  lc.includes('invalid fields') ||
-                  isPaymasterPolicyFailure)
+                  lc.includes('invalid fields'))
               if (shouldFallback) {
                 logger.warn('[DeployVault] Privy smart wallet signer failed; setup still required', {
                   phaseLabel: logPhaseLabel,
@@ -4988,15 +4982,6 @@ function DeployVaultBatcher({
                   throw new Error(
                     `ERC-4337 signing failed (${failureClass}). Owner-EOA fallback is disabled in no-EOA mode.`,
                   )
-                }
-                if (isPaymasterPolicyFailure) {
-                  const usedDirectFallback = await tryOwnerDirectExecuteBatchFallback(
-                    calls,
-                    phaseLabel,
-                    logPhaseLabel,
-                    e,
-                  )
-                  if (usedDirectFallback) return
                 }
                 // Fallback path: retry the same canonical CSW UserOp with an owner EOA signer.
                 if (!connectedAddress || !wagmiWalletClient || !canonicalSmartWallet || !publicClient) {
@@ -5048,14 +5033,26 @@ function DeployVaultBatcher({
                   })
                   return
                 } catch (fallbackError) {
-                  const usedDirectFallback = await tryOwnerDirectExecuteBatchFallback(
-                    calls,
-                    phaseLabel,
-                    logPhaseLabel,
-                    fallbackError,
-                  )
-                  if (usedDirectFallback) return
                   const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError ?? '')
+                  const fallbackLc = fallbackMsg.toLowerCase()
+                  const fallbackIsPaymasterPolicyFailure =
+                    fallbackLc.includes('request denied -') ||
+                    fallbackLc.includes('paymaster rejected this request') ||
+                    fallbackLc.includes('requested resource not available') ||
+                    fallbackLc.includes('resource not available') ||
+                    fallbackLc.includes('sponsored userop exceeds paymaster total gas cap') ||
+                    (fallbackLc.includes('total gas used by the user operation') &&
+                      fallbackLc.includes('allowed limit')) ||
+                    (fallbackLc.includes('total gas used') && fallbackLc.includes('allowed limit'))
+                  if (!fallbackIsPaymasterPolicyFailure) {
+                    const usedDirectFallback = await tryOwnerDirectExecuteBatchFallback(
+                      calls,
+                      phaseLabel,
+                      logPhaseLabel,
+                      fallbackError,
+                    )
+                    if (usedDirectFallback) return
+                  }
                   logger.error('[DeployVault] Owner EOA fallback failed', {
                     phaseLabel: logPhaseLabel,
                     ownerAddress: connectedAddress,

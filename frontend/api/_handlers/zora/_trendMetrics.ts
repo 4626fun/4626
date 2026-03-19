@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getNumberQuery, handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
+import { setNoStore } from '../../../server/auth/_shared.js'
+import { getNumberQuery, handleOptions, setCors } from '../../../server/zora/_shared.js'
 import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { isAdminAddress } from '../../../server/_lib/session.js'
 import { getTrendOpsMetrics, listRecentTrendOps } from '../../../server/_lib/zoraTrendOpsStore.js'
@@ -27,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const [metrics, recent] = await Promise.all([getTrendOpsMetrics(hours), listRecentTrendOps(limit)])
-    setCache(res, 10)
+    setNoStore(res)
     return res.status(200).json({
       success: true,
       data: {

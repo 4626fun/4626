@@ -13,8 +13,8 @@ import {OFTComposeMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTCompo
 interface ICreatorOVaultWrapperComposer {
     function creatorCoin() external view returns (address);
     function shareOFT() external view returns (address);
-    function deposit(uint256 amount, uint256 minOut) external returns (uint256 shareOFTOut);
-    function withdraw(uint256 amount, uint256 minOut) external returns (uint256 creatorCoinOut);
+    function depositFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 shareOFTOut);
+    function withdrawFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 creatorCoinOut);
 }
 
 /**
@@ -250,7 +250,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         uint256 shareBefore = share.balanceOf(address(this));
 
         creator.forceApprove(wrapper, amountIn);
-        sharesOut = ICreatorOVaultWrapperComposer(wrapper).deposit(amountIn, minSharesOut);
+        sharesOut = ICreatorOVaultWrapperComposer(wrapper).depositFor(amountIn, minSharesOut, receiver);
         creator.forceApprove(wrapper, 0);
 
         uint256 creatorAfter = creator.balanceOf(address(this));
@@ -288,7 +288,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         uint256 creatorBefore = creator.balanceOf(address(this));
 
         share.forceApprove(wrapper, amountIn);
-        assetsOut = ICreatorOVaultWrapperComposer(wrapper).withdraw(amountIn, minAssetsOut);
+        assetsOut = ICreatorOVaultWrapperComposer(wrapper).withdrawFor(amountIn, minAssetsOut, receiver);
         share.forceApprove(wrapper, 0);
 
         uint256 shareAfterBurn = share.balanceOf(address(this));

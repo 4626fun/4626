@@ -28,7 +28,6 @@ import {
   getReputationRegistryAddress,
   REPUTATION_REGISTRY_ABI,
 } from '../../../../../server/_lib/erc8004.js'
-import { indexFeedback, revokeFeedbackIndex } from '../../../../../server/_lib/walletIntelligenceCache.js'
 
 type SubmitRequest = {
   action?: string
@@ -90,20 +89,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         args: [agentId, value, valueDecimals, tag1, tag2, endpoint, feedbackURI, feedbackHash],
       })
 
-      // Index in Supabase (async, non-blocking).
-      void indexFeedback({
-        agentId: Number(agentId),
-        clientAddress: g.ip, // Will be overwritten when on-chain tx is confirmed
-        feedbackIndex: 0, // Placeholder — updated when tx is mined
-        value: Number(value),
-        valueDecimals,
-        tag1,
-        tag2,
-        endpoint,
-        feedbackUri: feedbackURI || undefined,
-        feedbackHash: feedbackHash !== ZERO_BYTES32 ? feedbackHash : undefined,
-      })
-
       return res.status(200).json({
         success: true,
         data: {
@@ -134,12 +119,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         functionName: 'revokeFeedback',
         args: [agentId, feedbackIndex],
       })
-
-      // Mark as revoked in Supabase index (async, non-blocking).
-      const revokeClient = String(body.clientAddress ?? '').trim()
-      if (/^0x[a-fA-F0-9]{40}$/.test(revokeClient)) {
-        void revokeFeedbackIndex(Number(agentId), revokeClient, Number(feedbackIndex))
-      }
 
       return res.status(200).json({
         success: true,

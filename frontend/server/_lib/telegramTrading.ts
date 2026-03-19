@@ -310,6 +310,11 @@ function normalizeAddress(value: unknown): string {
   return /^0x[a-f0-9]{40}$/.test(address) ? address : ''
 }
 
+function normalizeMiniAppInitDataHash(value: unknown): string {
+  const hash = asTrimmed(value).toLowerCase()
+  return /^[a-f0-9]{64}$/.test(hash) ? hash : ''
+}
+
 function normalizeRawAmount(value: unknown): string {
   if (typeof value === 'bigint') {
     return value > 0n ? value.toString() : ''
@@ -509,10 +514,10 @@ export async function claimTelegramMiniAppReplayNonce(params: {
   authDate: number
   ttlSeconds?: number
 }): Promise<boolean> {
-  const initDataHash = asTrimmed(params.initDataHash).toLowerCase()
+  const initDataHash = normalizeMiniAppInitDataHash(params.initDataHash)
   const userId = normalizeTelegramUserId(params.telegramUserId)
   const authDate = Math.trunc(Number(params.authDate))
-  if (!/^[a-f0-9]{64}$/.test(initDataHash) || !userId || !Number.isInteger(authDate) || authDate <= 0) {
+  if (!initDataHash || !userId || !Number.isInteger(authDate) || authDate <= 0) {
     return false
   }
   const ttlSeconds = Math.max(30, Math.min(60 * 60, Math.floor(Number(params.ttlSeconds ?? 60 * 15))))
@@ -556,9 +561,9 @@ export async function createTelegramMiniAppSession(params: {
   const chatId = asTrimmed(params.chatId ?? '') || null
   const chatType = asTrimmed(params.chatType ?? '') || null
   const chatInstance = asTrimmed(params.chatInstance ?? '') || null
-  const initDataHash = asTrimmed(params.initDataHash).toLowerCase()
+  const initDataHash = normalizeMiniAppInitDataHash(params.initDataHash)
   const authDate = Math.trunc(Number(params.authDate))
-  if (!userId || !/^[a-f0-9]{64}$/.test(initDataHash) || !Number.isInteger(authDate) || authDate <= 0) {
+  if (!userId || !initDataHash || !Number.isInteger(authDate) || authDate <= 0) {
     return null
   }
   const ttlSeconds = Math.max(60, Math.min(60 * 60, Math.floor(Number(params.ttlSeconds ?? 60 * 10))))

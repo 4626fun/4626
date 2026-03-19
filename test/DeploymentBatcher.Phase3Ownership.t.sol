@@ -33,6 +33,8 @@ contract MockAjnaVaultAuth {
 
     function setKeeper(address, bool) external {}
 
+    function setSwapper(address) external {}
+
     function setAdmin(address nextAdmin) external {
         admin = nextAdmin;
     }
@@ -43,6 +45,14 @@ contract MockAjnaAdapter is MockOwnableTransfer {
 
     function setIdleBufferBps(uint256 newBps) external {
         idleBufferBps = newBps;
+    }
+}
+
+contract MockCharmVault {
+    address public manager;
+
+    constructor(address manager_) {
+        manager = manager_;
     }
 }
 
@@ -151,6 +161,7 @@ contract MockVaultStrategyManager {
 contract DeploymentBatcherPhase3OwnershipTest is Test {
     bytes4 internal constant CREATE_VAULT_SELECTOR =
         bytes4(keccak256("createVault((address,address,uint24,address,uint256,int24,int24,uint24,uint32,int24,int24,uint32,string,string))"));
+    bytes4 internal constant GOVERNANCE_SELECTOR = bytes4(keccak256("governance()"));
 
     bytes32 internal constant CHARM_ALPHA_VAULT_DEPLOY_CODE_ID = keccak256("charm-alpha-vault-deploy");
     bytes32 internal constant CREATOR_CHARM_STRATEGY_CODE_ID = keccak256("creator-charm-strategy");
@@ -197,7 +208,14 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         );
 
         vm.mockCall(
-            batcher.CHARM_FACTORY(), abi.encodeWithSelector(CREATE_VAULT_SELECTOR), abi.encode(makeAddr("charmVault"))
+            batcher.CHARM_FACTORY(),
+            abi.encodeWithSelector(GOVERNANCE_SELECTOR),
+            abi.encode(batcher.CHARM_FACTORY_GOVERNANCE())
+        );
+        vm.mockCall(
+            batcher.CHARM_FACTORY(),
+            abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
+            abi.encode(address(new MockCharmVault(protocolTreasury)))
         );
     }
 
@@ -244,5 +262,54 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         assertEq(vault.addedWeights(out.charmStrategy), params.charmWeightBps, "charm strategy should be registered");
         assertEq(vault.addedWeights(out.ajnaStrategy), params.ajnaWeightBps, "ajna strategy should be registered");
         assertTrue(vault.autoAllocate(), "auto-allocate should be enabled");
+    }
+
+    function test_deployPhase3Strategies_revertsWhenCharmVaultManagerMismatches() external {
+        DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
+            creatorToken: makeAddr("creatorToken"),
+            owner: ownerAddr,
+            vault: address(vault),
+            version: "v1",
+            initialSqrtPriceX96: 0,
+            charmVaultName: "Charm Vault",
+            charmVaultSymbol: "CHV",
+            ajnaVaultName: "Ajna Inner Vault",
+            ajnaVaultSymbol: "AIV",
+            charmWeightBps: 7000,
+            ajnaWeightBps: 2000,
+            solanaWeightBps: 1000,
+            ajnaBufferRatioBps: 1_500,
+            ajnaMinBucketIndex: 4_156,
+            ajnaKeeper: makeAddr("ajnaKeeper"),
+            solanaKeeper: makeAddr("solanaKeeper"),
+            solanaMaxNavAge: 3600,
+            solanaMaxNavDeltaBpsPerUpdate: 500,
+            solanaMinBaseLiquidityBps: 1_000,
+            solanaBridgeAddress: makeAddr("solanaBridge"),
+            enableAutoAllocate: true
+        });
+        DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
+            charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
+            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            ajnaVaultAuth: AJNA_AUTH_CODE_ID,
+            ajnaVault: AJNA_VAULT_CODE_ID,
+            erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID
+        });
+
+        address wrongManager = makeAddr("wrongManager");
+        vm.mockCall(
+            batcher.CHARM_FACTORY(),
+            abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
+            abi.encode(address(new MockCharmVault(wrongManager)))
+        );
+
+        vm.prank(ownerAddr);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolTreasury, wrongManager
+            )
+        );
+        batcher.deployPhase3Strategies(params, codeIds);
     }
 }

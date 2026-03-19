@@ -186,6 +186,9 @@ export function verifyTelegramMiniAppInitData(params: {
   const chatId = parseTelegramMiniAppChatId(asTrimmed(searchParams.get('chat') ?? ''))
   const chatType = asTrimmed(searchParams.get('chat_type') ?? '') || null
   const chatInstance = asTrimmed(searchParams.get('chat_instance') ?? '') || null
+  // Replay protection must be keyed off canonicalized initData fields so
+  // query-parameter reordering cannot create a distinct nonce key.
+  const canonicalInitData = buildDataCheckString(searchParams)
 
   return {
     ok: true,
@@ -196,7 +199,7 @@ export function verifyTelegramMiniAppInitData(params: {
       chatType,
       chatInstance,
       authDate,
-      initDataHash: createHash('sha256').update(initData, 'utf8').digest('hex'),
+      initDataHash: createHash('sha256').update(canonicalInitData, 'utf8').digest('hex'),
     },
   }
 }

@@ -56,6 +56,8 @@ contract MockWrapperForComposer {
     uint16 public redeemBurnBps = 10_000;
     uint16 public redeemMintBps = 10_000;
     uint16 public redeemReturnBps = 10_000;
+    address public lastDepositBeneficiary;
+    address public lastWithdrawBeneficiary;
 
     constructor(address _creatorCoin, address _shareOft) {
         creatorCoin = MockToken(_creatorCoin);
@@ -74,7 +76,8 @@ contract MockWrapperForComposer {
         redeemReturnBps = returnBps;
     }
 
-    function deposit(uint256 amount, uint256 minOut) external returns (uint256 shareOftOut) {
+    function depositFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 shareOftOut) {
+        lastDepositBeneficiary = beneficiary;
         uint256 spend = (amount * depositSpendBps) / 10_000;
         if (spend > 0) {
             creatorCoin.transferFrom(msg.sender, address(this), spend);
@@ -87,7 +90,8 @@ contract MockWrapperForComposer {
         require(shareOftOut >= minOut, "slippage");
     }
 
-    function withdraw(uint256 amount, uint256 minOut) external returns (uint256 creatorCoinOut) {
+    function withdrawFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 creatorCoinOut) {
+        lastWithdrawBeneficiary = beneficiary;
         uint256 burnAmount = (amount * redeemBurnBps) / 10_000;
         if (burnAmount > 0) {
             shareOFT.transferFrom(msg.sender, address(this), burnAmount);
@@ -173,6 +177,7 @@ contract OVaultHubComposerTest is Test {
         assertEq(creatorToken.balanceOf(address(composer)), composerCreatorBefore - amountIn, "creator spend mismatch");
         assertEq(shareOft.balanceOf(address(composer)), composerShareBefore, "share residual mismatch");
         assertEq(shareOft.balanceOf(receiver), amountIn, "receiver share out mismatch");
+        assertEq(wrapper.lastDepositBeneficiary(), receiver, "deposit beneficiary mismatch");
     }
 
     function test_RedeemCompose_HappyPath_ExactInvariants() public {
@@ -201,6 +206,7 @@ contract OVaultHubComposerTest is Test {
         assertEq(shareOft.balanceOf(address(composer)), composerShareBefore - sharesIn, "share spend mismatch");
         assertEq(creatorToken.balanceOf(address(composer)), composerCreatorBefore, "creator residual mismatch");
         assertEq(creatorToken.balanceOf(receiver), sharesIn, "receiver creator out mismatch");
+        assertEq(wrapper.lastWithdrawBeneficiary(), receiver, "withdraw beneficiary mismatch");
     }
 
     function test_DepositCompose_RevertOnInputSpendInvariant() public {

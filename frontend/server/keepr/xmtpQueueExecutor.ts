@@ -243,13 +243,10 @@ function getEffectiveDbEncryptionKeyForPath(filePath: string): `0x${string}` | u
   const encKey = getDbEncryptionKey()
   if (!encKey) return undefined
   if (XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED && !XMTP_DB_FORCE_ENCRYPTED_MIGRATION && fileLooksLikePlainSqlite(filePath)) {
-    logger.warn(
-      '[keepr/xmtp-queue] Forced migration requested but NOT confirmed; ' +
-      'running in compatibility mode to avoid accidental installation churn. ' +
-      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to enable.',
-      { filePath },
+    throw new KeeprQueueError(
+      'legacy_plaintext_db_detected_requires_confirmed_migration',
+      false,
     )
-    return undefined
   }
   if (
     XMTP_DB_FORCE_ENCRYPTED_MIGRATION &&
@@ -262,13 +259,10 @@ function getEffectiveDbEncryptionKeyForPath(filePath: string): `0x${string}` | u
     )
   }
   if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && fileLooksLikePlainSqlite(filePath)) {
-    logger.warn(
-      '[keepr/xmtp-queue] Legacy plaintext DB detected; using compatibility mode for this run. ' +
-      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and ' +
-      'XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to force encrypted migration.',
-      { filePath },
+    throw new KeeprQueueError(
+      'legacy_plaintext_db_detected_requires_migration',
+      false,
     )
-    return undefined
   }
   return encKey
 }

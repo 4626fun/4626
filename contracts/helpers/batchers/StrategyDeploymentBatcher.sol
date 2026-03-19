@@ -35,6 +35,11 @@ interface ICharmFactory {
     }
 
     function createVault(VaultParams calldata params) external returns (address vault);
+    function governance() external view returns (address);
+}
+
+interface ICharmVaultManager {
+    function manager() external view returns (address);
 }
 
 /**
@@ -51,6 +56,9 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     /// @notice Charm Finance Alpha Vault Factory on Base
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
+    /// @notice Pinned Charm governance allowlist on Base. Strategy deploys fail closed outside this set.
+    address public constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
+    address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
     address public immutable creatorCharmStrategyFactory;
     address public immutable ajnaStrategyFactory;
     bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
@@ -61,6 +69,8 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     error ZeroUnderlying();
     error ZeroQuote();
     error ZeroVault();
+    error CharmFactoryGovernanceMismatch(address expected, address actual);
+    error CharmVaultManagerMismatch(address expected, address actual);
 
     constructor() {
         creatorCharmStrategyFactory = address(new CreatorCharmStrategyFactory());
@@ -133,6 +143,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         // ═══════════════════════════════════════════════════════════
         // STEP 2: Deploy Charm Alpha Vault via Charm Factory (shows on alpha.charm.fi UI)
         // ═══════════════════════════════════════════════════════════
+        _enforceCharmFactoryGovernance();
         // NOTE: Using Charm's official factory ensures vault appears on their UI
         // Parameters: manager=owner can rebalance, baseThreshold=3000 ticks,
         //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
@@ -154,6 +165,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
                 symbol: vaultSymbol
             })
         );
+        _enforceCharmVaultManager(result.charmVault, owner);
 
         // ═══════════════════════════════════════════════════════════
         // STEP 3: No separate initialization needed - factory handles it
@@ -215,5 +227,29 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         if (result.ajnaStrategy != address(0)) {
             calls[1] = abi.encodeWithSelector(ADD_STRATEGY_SELECTOR, result.ajnaStrategy, ajnaWeightBps);
         }
+    }
+
+    function _enforceCharmFactoryGovernance() internal view {
+        try ICharmFactory(CHARM_FACTORY).governance() returns (address governance) {
+            if (!_isAllowedCharmFactoryGovernance(governance)) {
+                revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, governance);
+            }
+        } catch {
+            revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, address(0));
+        }
+    }
+
+    function _enforceCharmVaultManager(address charmVault, address expectedManager) internal view {
+        try ICharmVaultManager(charmVault).manager() returns (address manager) {
+            if (manager != expectedManager) {
+                revert CharmVaultManagerMismatch(expectedManager, manager);
+            }
+        } catch {
+            revert CharmVaultManagerMismatch(expectedManager, address(0));
+        }
+    }
+
+    function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool) {
+        return governance == CHARM_FACTORY_GOVERNANCE || governance == CHARM_FACTORY_GOVERNANCE_LEGACY;
     }
 }

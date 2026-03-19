@@ -1673,6 +1673,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   }
   const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
   const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
+  const siwaReceipt = headerValue(params.req.headers['x-siwa-receipt'] as string | string[] | undefined)
+  const privyToken = headerValue(params.req.headers['x-privy-token'] as string | string[] | undefined)
   const internalRegistrationSecret = String(
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
@@ -1723,6 +1725,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
           'Content-Type': 'application/json',
           ...(cookie ? { Cookie: cookie } : {}),
           ...(authz ? { Authorization: authz } : {}),
+          ...(siwaReceipt ? { 'X-SIWA-Receipt': siwaReceipt } : {}),
+          ...(privyToken ? { 'X-Privy-Token': privyToken } : {}),
           ...(internalRegistrationSecret
             ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret }
             : {}),

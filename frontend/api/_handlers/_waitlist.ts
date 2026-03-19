@@ -117,6 +117,10 @@ function normalizeReferralCodeOrNull(v: string | null | undefined): string | nul
   return code.length > 0 ? code : null
 }
 
+function waitlistServiceUnavailableMessage(): string {
+  return 'Waitlist service is temporarily unavailable. Please retry shortly.'
+}
+
 async function resolveCreatorCoinSymbolFromWallet(wallet: string): Promise<string | null> {
   const key = (process.env.ZORA_SERVER_API_KEY || '').trim()
   if (!key) return null
@@ -775,27 +779,25 @@ export default async function handler(req: any, res: any) {
     }
 
     const dbInitError = getDbInitError()
-    const errorMessage = supabaseOnly
-      ? supabaseFallbackError
-        ? `Waitlist Supabase write failed: ${supabaseFallbackError}`
-        : 'Waitlist Supabase write failed.'
-      : dbConfigured
-      ? dbInitError
-        ? `Waitlist database unavailable: ${dbInitError}`
-        : 'Waitlist database is unavailable. Please retry shortly.'
-      : 'Waitlist requires DB configuration (DATABASE_URL, POSTGRES_URL, or POSTGRES_URL_NON_POOLING).'
+    if (supabaseFallbackError || dbInitError) {
+      console.warn('waitlist: backend unavailable', {
+        supabaseOnly,
+        dbConfigured,
+        supabaseFallbackError: supabaseFallbackError || null,
+        dbInitError: dbInitError || null,
+      })
+    }
     return res.status(500).json({
       success: false,
-      error: errorMessage,
+      error: waitlistServiceUnavailableMessage(),
     } satisfies ApiEnvelope<never>)
   }
 
   try {
     await ensureWaitlistSchema(db as any)
   } catch (e: any) {
-    // If the DB is reachable but schema creation is blocked, fail with a clear operator error.
-    const msg = e?.message ? String(e.message) : 'Failed to initialize waitlist schema'
-    return res.status(500).json({ success: false, error: msg } satisfies ApiEnvelope<never>)
+    console.warn('waitlist: schema ensure failed', e?.message ? String(e.message) : e)
+    return res.status(500).json({ success: false, error: waitlistServiceUnavailableMessage() } satisfies ApiEnvelope<never>)
   }
   // Keep points schema ensured even if this handler is hot-reloaded separately.
   await ensureWaitlistPointsSchema(db as any)
@@ -1311,8 +1313,8 @@ export default async function handler(req: any, res: any) {
             recoveryRequired: true,
           } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
         }
-        const msgRetry = eRetry instanceof Error ? eRetry.message : msg
-        return res.status(500).json({ success: false, error: String(msgRetry) } satisfies ApiEnvelope<never>)
+        console.warn('waitlist: retry insert failed', eRetry instanceof Error ? eRetry.message : eRetry)
+        return res.status(500).json({ success: false, error: waitlistServiceUnavailableMessage() } satisfies ApiEnvelope<never>)
       }
     }
 
@@ -1364,16 +1366,15 @@ export default async function handler(req: any, res: any) {
             recoveryRequired: true,
           } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
         }
-        const msg2 = e2 instanceof Error ? e2.message : msg
-        return res.status(500).json({ success: false, error: String(msg2) } satisfies ApiEnvelope<never>)
+        console.warn('waitlist: legacy insert fallback failed', e2 instanceof Error ? e2.message : e2)
+        return res.status(500).json({ success: false, error: waitlistServiceUnavailableMessage() } satisfies ApiEnvelope<never>)
       }
     }
 
-    // Helpful hint if the table hasn't been created yet.
-    const hint =
-      lower.includes('relation') && lower.includes('profiles')
-        ? 'Missing table. Create `profiles` (see docs) and retry.'
-        : null
-    return res.status(500).json({ success: false, error: hint ? `${msg}. ${hint}` : msg } satisfies ApiEnvelope<never>)
+    console.warn('waitlist: unhandled insert failure', msg)
+    return res.status(500).json({
+      success: false,
+      error: waitlistServiceUnavailableMessage(),
+    } satisfies ApiEnvelope<never>)
   }
 }

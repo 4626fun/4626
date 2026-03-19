@@ -4,6 +4,8 @@ import { encodeFunctionData, parseUnits, isAddress, getAddress } from 'viem'
 import { logger } from '../_lib/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
 import { assertTeeAttestationOrThrow } from '../_lib/teeAttestationGate.js'
+import { checkDurableRateLimit } from '../_lib/durableRateLimit.js'
+import { getDb, isDbConfigured } from '../_lib/postgres.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from './commands.js'
 
@@ -38,20 +40,22 @@ const ERC20_TRANSFER_ABI = [
   },
 ]
 
-// ---------------------------------------------------------------------------
-// Rate limiting – one send per group per 60 s
-// ---------------------------------------------------------------------------
-const sendCooldowns = new Map<string, number>()
-const SEND_COOLDOWN_MS = 60_000
-
-function canSend(groupId: string): boolean {
-  const last = sendCooldowns.get(groupId)
-  if (!last) return true
-  return Date.now() - last >= SEND_COOLDOWN_MS
+type Db = {
+  query?: (text: string, params?: any[]) => Promise<{ rows: any[] }>
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
 
-function recordSend(groupId: string) {
-  sendCooldowns.set(groupId, Date.now())
+// ---------------------------------------------------------------------------
+// Rate limiting – one send per group per 60 s (durable)
+// ---------------------------------------------------------------------------
+const SEND_COOLDOWN_MS = 60_000
+
+async function canSend(groupId: string): Promise<boolean> {
+  const rl = await checkDurableRateLimit(`keepr:send:cooldown:${groupId}`, {
+    windowMs: SEND_COOLDOWN_MS,
+    maxRequests: 1,
+  })
+  return rl.allowed
 }
 
 // ---------------------------------------------------------------------------
@@ -62,18 +66,56 @@ const DAILY_CAP: Record<string, number> = { usdc: 5000, eth: 5 }
 
 type DailyLedger = { date: string; totals: Record<string, number> }
 const dailyLedgers = new Map<string, DailyLedger>()
+let sendLimitsSchemaEnsured = false
+
+async function ensureSendLimitsSchema(db: Db): Promise<boolean> {
+  if (sendLimitsSchemaEnsured) return true
+  try {
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS keepr_send_daily_ledger (
+        vault_address TEXT NOT NULL,
+        token TEXT NOT NULL,
+        day DATE NOT NULL,
+        amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (vault_address, token, day)
+      );
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS keepr_send_daily_ledger_vault_day_idx
+      ON keepr_send_daily_ledger (vault_address, day DESC);
+    `
+    sendLimitsSchemaEnsured = true
+    return true
+  } catch (error) {
+    sendLimitsSchemaEnsured = false
+    logger.warn('[send] failed to ensure durable send-limit schema, using memory fallback', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}
+
+async function getSendLimitDb(): Promise<Db | null> {
+  if (!isDbConfigured()) return null
+  const db = await getDb()
+  if (!db) return null
+  const ready = await ensureSendLimitsSchema(db as Db)
+  if (!ready) return null
+  return db as Db
+}
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function getDailySpent(vaultAddress: string, token: string): number {
+function getDailySpentMemory(vaultAddress: string, token: string): number {
   const ledger = dailyLedgers.get(vaultAddress)
   if (!ledger || ledger.date !== todayKey()) return 0
   return ledger.totals[token] ?? 0
 }
 
-function recordDailySpend(vaultAddress: string, token: string, amount: number) {
+function recordDailySpendMemory(vaultAddress: string, token: string, amount: number) {
   const today = todayKey()
   let ledger = dailyLedgers.get(vaultAddress)
   if (!ledger || ledger.date !== today) {
@@ -83,7 +125,82 @@ function recordDailySpend(vaultAddress: string, token: string, amount: number) {
   ledger.totals[token] = (ledger.totals[token] ?? 0) + amount
 }
 
-function checkLimits(
+async function getDailySpent(vaultAddress: string, token: string): Promise<number> {
+  const db = await getSendLimitDb()
+  if (!db) return getDailySpentMemory(vaultAddress, token)
+  try {
+    const rows =
+      typeof db.query === 'function'
+        ? (
+            await db.query(
+              `SELECT amount
+                 FROM keepr_send_daily_ledger
+                WHERE vault_address = $1
+                  AND token = $2
+                  AND day = CURRENT_DATE
+                LIMIT 1;`,
+              [vaultAddress.toLowerCase(), token],
+            )
+          )?.rows
+        : (
+            await db.sql`
+              SELECT amount
+              FROM keepr_send_daily_ledger
+              WHERE vault_address = ${vaultAddress.toLowerCase()}
+                AND token = ${token}
+                AND day = CURRENT_DATE
+              LIMIT 1;
+            `
+          )?.rows
+    const amount = Number(rows?.[0]?.amount ?? 0)
+    if (Number.isFinite(amount) && amount >= 0) return amount
+  } catch (error) {
+    logger.warn('[send] failed reading durable daily spend, using memory fallback', {
+      vaultAddress,
+      token,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return getDailySpentMemory(vaultAddress, token)
+}
+
+async function recordDailySpend(vaultAddress: string, token: string, amount: number): Promise<void> {
+  const db = await getSendLimitDb()
+  if (!db) {
+    recordDailySpendMemory(vaultAddress, token, amount)
+    return
+  }
+  try {
+    if (typeof db.query === 'function') {
+      await db.query(
+        `INSERT INTO keepr_send_daily_ledger (vault_address, token, day, amount, updated_at)
+         VALUES ($1, $2, CURRENT_DATE, $3, NOW())
+         ON CONFLICT (vault_address, token, day)
+         DO UPDATE SET amount = keepr_send_daily_ledger.amount + EXCLUDED.amount,
+                       updated_at = NOW();`,
+        [vaultAddress.toLowerCase(), token, amount],
+      )
+    } else {
+      await db.sql`
+        INSERT INTO keepr_send_daily_ledger (vault_address, token, day, amount, updated_at)
+        VALUES (${vaultAddress.toLowerCase()}, ${token}, CURRENT_DATE, ${amount}, NOW())
+        ON CONFLICT (vault_address, token, day)
+        DO UPDATE SET amount = keepr_send_daily_ledger.amount + EXCLUDED.amount,
+                      updated_at = NOW();
+      `
+    }
+  } catch (error) {
+    logger.warn('[send] failed writing durable daily spend, using memory fallback', {
+      vaultAddress,
+      token,
+      amount,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    recordDailySpendMemory(vaultAddress, token, amount)
+  }
+}
+
+async function checkLimits(
   token: string,
   amount: number,
   vaultAddress: string,
@@ -94,7 +211,7 @@ function checkLimits(
   }
   const cap = DAILY_CAP[token]
   if (cap !== undefined) {
-    const spent = getDailySpent(vaultAddress, token)
+    const spent = await getDailySpent(vaultAddress, token)
     if (spent + amount > cap) {
       const remaining = Math.max(0, cap - spent)
       return {
@@ -141,7 +258,7 @@ export async function handleSendCommand(params: {
   }
 
   // Rate limit
-  if (!canSend(params.groupId)) {
+  if (!(await canSend(params.groupId))) {
     return { ok: false, response: 'Rate limited. Wait 1 minute between sends.' }
   }
 
@@ -184,7 +301,7 @@ export async function handleSendCommand(params: {
   const recipient = getAddress(parsed.recipient) as Address
 
   // Check transaction limits
-  const limitsCheck = checkLimits(parsed.token, amountNum, params.vault.vaultAddress)
+  const limitsCheck = await checkLimits(parsed.token, amountNum, params.vault.vaultAddress)
   if (!limitsCheck.allowed) {
     return { ok: false, response: `Limit exceeded: ${limitsCheck.reason}` }
   }
@@ -227,7 +344,6 @@ export async function handleSendCommand(params: {
   }
 
   try {
-    recordSend(params.groupId)
     let txHash: string
 
     if (parsed.token === 'eth') {
@@ -288,7 +404,7 @@ export async function handleSendCommand(params: {
       txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
     }
 
-    recordDailySpend(params.vault.vaultAddress, parsed.token, amountNum)
+    await recordDailySpend(params.vault.vaultAddress, parsed.token, amountNum)
 
     logger.info('[send] Transfer sent', {
       groupId: params.groupId,

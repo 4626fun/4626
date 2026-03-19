@@ -182,21 +182,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Deploy sessions require DB configuration' } satisfies ApiEnvelope<null>)
   }
 
-  let auth = readDeployAuthFromRequest(req)
-  // Dev-only bypass: when DEPLOY_DRY_RUN_DEV_BYPASS=1 and BASE_RPC_URL is localhost (fork),
-  // allow unauthenticated dry-run. Pass X-Deploy-Dry-Run-Dev: <ownerAddress> header.
+  const auth = readDeployAuthFromRequest(req)
   const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
   const isLocalFork = isLocalForkRpcUrl(rpc)
-  const devBypassHeaderRaw = req.headers['x-deploy-dry-run-dev']
-  const devBypassHeader = typeof devBypassHeaderRaw === 'string' ? devBypassHeaderRaw.trim() : ''
-  const devBypassEnabled =
-    process.env.DEPLOY_DRY_RUN_DEV_BYPASS === '1' &&
-    isLocalFork &&
-    devBypassHeader.length > 0 &&
-    /^0x[a-fA-F0-9]{40}$/.test(devBypassHeader)
-  if (!auth?.address && devBypassEnabled) {
-    auth = { type: 'session', address: getAddress(devBypassHeader as Address) }
-  }
   if (!auth?.address) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }

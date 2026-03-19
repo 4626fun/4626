@@ -15,6 +15,10 @@ import { getDb, isDbConfigured } from './postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
+function isAddressLike(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
 // ---------------------------------------------------------------------------
 // Schema bootstrap (idempotent)
 // ---------------------------------------------------------------------------
@@ -370,6 +374,10 @@ export async function indexFeedback(entry: {
   const db = await getDb()
   if (!db) return
 
+  const clientAddress = String(entry.clientAddress ?? '').trim().toLowerCase()
+  if (!isAddressLike(clientAddress)) return
+  if (!Number.isInteger(entry.feedbackIndex) || entry.feedbackIndex <= 0) return
+
   try {
     if (db.query) {
       await db.query(
@@ -383,7 +391,7 @@ export async function indexFeedback(entry: {
            grove_uri = $11, reasoning = $12, updated_at = NOW();`,
         [
           entry.agentId,
-          entry.clientAddress.toLowerCase(),
+          clientAddress,
           entry.feedbackIndex,
           entry.value,
           entry.valueDecimals ?? 0,
@@ -478,6 +486,7 @@ export async function queryFeedbackIndex(params: {
   if (!params.includeRevoked) {
     conditions.push('is_revoked = FALSE')
   }
+  conditions.push(`client_address ~* '^0x[a-f0-9]{40}$'`)
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
   const orderCol = params.orderBy === 'value' ? 'value' : 'created_at'

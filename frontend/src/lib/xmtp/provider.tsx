@@ -274,6 +274,7 @@ const XMTP_ENV: 'production' | 'dev' | 'local' =
     : 'production'
 const XMTP_APP_VERSION = '4626.fun-web'
 const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
+const inMemoryEncKeys = new Map<string, string>()
 
 function encKeyStorageKey(address: string): string {
   return `cv:xmtp:encKey:${XMTP_ENV}:${address.toLowerCase()}`
@@ -308,24 +309,14 @@ function writeStoredSignerType(address: string, signerType: 'SCW' | 'EOA'): void
 }
 
 export function readStoredEncKeyHex(address: string): string | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.localStorage.getItem(encKeyStorageKey(address))
-    if (!raw || !ENC_KEY_HEX_RE.test(raw)) return null
-    return raw
-  } catch {
-    return null
-  }
+  const raw = inMemoryEncKeys.get(encKeyStorageKey(address)) ?? null
+  if (!raw || !ENC_KEY_HEX_RE.test(raw)) return null
+  return raw
 }
 
 export function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
-  if (typeof window === 'undefined') return
   if (!ENC_KEY_HEX_RE.test(encKeyHex)) return
-  try {
-    window.localStorage.setItem(encKeyStorageKey(address), encKeyHex)
-  } catch {
-    // ignore storage errors
-  }
+  inMemoryEncKeys.set(encKeyStorageKey(address), encKeyHex)
 }
 
 function closeClientSafe(client: Client | null | undefined): void {
@@ -339,8 +330,7 @@ function closeClientSafe(client: Client | null | undefined): void {
 
 /**
  * Get or create a random XMTP DB encryption key for this address.
- * Stored in localStorage — no wallet popup required.
- * Falls back to any existing signature-derived key for backward compat.
+ * Kept in memory only for the current page session.
  */
 function getOrCreateEncKeyHex(address: string): string {
   // 1. Return existing key (works for both old sig-derived and new random keys)

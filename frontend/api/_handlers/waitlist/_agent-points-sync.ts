@@ -77,12 +77,21 @@ export default async function handler(req: any, res: any) {
     return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
   }
 
-  const agentIdFromBody = safeInt(body?.agentId)
   const agentIdFromDb = safeInt(row?.erc8004_agent_id)
-  const agentId = agentIdFromBody || agentIdFromDb
-  if (!agentId) {
-    return res.status(400).json({ success: false, error: 'Missing agentId (provide one or set erc8004_agent_id on profile)' } satisfies ApiEnvelope<never>)
+  const agentIdFromBody = safeInt(body?.agentId)
+  if (!agentIdFromDb) {
+    return res.status(400).json({
+      success: false,
+      error: 'No verified agent is linked to this profile yet.',
+    } satisfies ApiEnvelope<never>)
   }
+  if (agentIdFromBody && agentIdFromBody !== agentIdFromDb) {
+    return res.status(403).json({
+      success: false,
+      error: 'agentId must match the profile-linked agent.',
+    } satisfies ApiEnvelope<never>)
+  }
+  const agentId = agentIdFromDb
 
   const graph = await buildReputationGraph({ agentId })
   const feedbackCount = Math.max(0, safeInt(graph?.summary?.totalFeedback))
@@ -98,7 +107,7 @@ export default async function handler(req: any, res: any) {
     db,
     signupId,
     source: 'agent_feedback',
-    sourceId: `agent:${agentId}:feedback:${feedbackCount}`,
+    sourceId: `agent:${agentId}:feedback`,
     amount: awardedFeedbackPoints,
   })
 
@@ -106,7 +115,7 @@ export default async function handler(req: any, res: any) {
     db,
     signupId,
     source: 'agent_reputation',
-    sourceId: `agent:${agentId}:avg:${averageValue.toFixed(2)}`,
+    sourceId: `agent:${agentId}:reputation`,
     amount: awardedReputationPoints,
   })
 

@@ -120,7 +120,7 @@ export default async function handler(req: any, res: any) {
       db,
       signupId,
       source: 'grove_proof',
-      sourceId: `lens:${lensUser.accountAddress.toLowerCase()}:grove:${lensGroveUri}`,
+      sourceId: `lens:${lensUser.accountAddress.toLowerCase()}:grove`,
       amount: awardedGrovePoints,
     })
   }

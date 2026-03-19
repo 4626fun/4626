@@ -1151,14 +1151,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
   const preflightOnly = body.preflightOnly === true
 
-  // Rate limiting: 3 deploy sessions per minute per address
-  // Preflight checks are read-only and should not consume create quota.
-  if (!preflightOnly) {
-    const rateLimit = checkRateLimit(rateLimitKey('deploy', auth.address.toLowerCase()), RATE_LIMITS.deployCreate)
-    if (!rateLimit.allowed) {
-      res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
-      return res.status(429).json({ success: false, error: 'Too many deploy attempts. Please try again later.' } satisfies ApiEnvelope<null>)
-    }
+  // Split throttles: preflight should not consume create quota, but it still must be limited.
+  const rateLimit = preflightOnly
+    ? checkRateLimit(rateLimitKey('deploy-preflight', auth.address.toLowerCase()), { windowMs: 60_000, maxRequests: 20 })
+    : checkRateLimit(rateLimitKey('deploy', auth.address.toLowerCase()), RATE_LIMITS.deployCreate)
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({
+      success: false,
+      error: preflightOnly
+        ? 'Too many deploy preflight checks. Please retry shortly.'
+        : 'Too many deploy attempts. Please try again later.',
+    } satisfies ApiEnvelope<null>)
   }
 
   try {

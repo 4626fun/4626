@@ -208,21 +208,7 @@ function isV3ObserveOldError(e: any): boolean {
   return /\bOLD\b/.test(msg)
 }
 
-async function getV3SpotTick(params: { publicClient: ReadonlyPublicClient; pool: Address }): Promise<number> {
-  const { publicClient, pool } = params
-  const res = await publicClient.readContract({
-    address: pool,
-    abi: UNISWAP_V3_POOL_ORACLE_ABI,
-    functionName: 'slot0',
-    args: [],
-  })
-  // slot0 returns: [sqrtPriceX96, tick, observationIndex, observationCardinality, observationCardinalityNext, feeProtocol, unlocked]
-  const tick = Number((res as any)?.[1] ?? (res as any)?.tick)
-  if (!Number.isFinite(tick)) throw new Error('Invalid V3 spot tick')
-  return tick
-}
-
-async function getZoraReferenceV3Ticks(params: {
+export async function getZoraReferenceV3Ticks(params: {
   publicClient: ReadonlyPublicClient
   zoraWethV3Pool: Address
   zoraUsdcV3Pool: Address
@@ -253,21 +239,8 @@ async function getZoraReferenceV3Ticks(params: {
     }
   }
 
-  // FALLBACK: Use spot price from slot0 when TWAP observation history is unavailable.
-  // This is less manipulation-resistant but allows deployment when pools are new.
-  console.warn('[marketFloor] TWAP unavailable, falling back to spot price from slot0')
   void lastOldErr
-  try {
-    const [wethTick, usdcTick] = await Promise.all([
-      getV3SpotTick({ publicClient, pool: zoraWethV3Pool }),
-      getV3SpotTick({ publicClient, pool: zoraUsdcV3Pool }),
-    ])
-    // durationSec = 0 signals spot price (no TWAP smoothing)
-    return { durationSec: 0, wethTick, usdcTick }
-  } catch (spotErr: any) {
-    console.error('[marketFloor] Spot price fallback also failed:', spotErr?.message)
-    throw new Error('ZORA reference pools do not have enough oracle history and spot price fallback failed')
-  }
+  throw new Error('ZORA reference pools do not have enough oracle history for TWAP pricing')
 }
 
 function getBlockTimestampSec(block: any): bigint {

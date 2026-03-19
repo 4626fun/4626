@@ -10,7 +10,19 @@ interface IEndpointRegistryLike {
     function getLayerZeroEndpoint(uint256 chainId) external view returns (address);
 }
 
-contract MockBytecodeStore {}
+contract MockBytecodeStore {
+    mapping(bytes32 => bytes) internal bytecodes;
+
+    function setCode(bytes32 codeId, bytes memory creationCode) external {
+        bytecodes[codeId] = creationCode;
+    }
+
+    function get(bytes32 codeId) external view returns (bytes memory) {
+        bytes memory creationCode = bytecodes[codeId];
+        require(creationCode.length > 0, "missing code");
+        return creationCode;
+    }
+}
 
 contract MockCreatorRegistry {
     address public endpoint;
@@ -95,14 +107,16 @@ contract MockShareOFT {
 
 contract MockUniversalCreate2Deployer {
     bytes32 public bootstrapSalt;
-    bytes32 public bootstrapCodeId;
+    bytes32 public bootstrapInitCodeHash;
     address public bootstrapAddress;
 
     mapping(bytes32 => uint8) public codeKinds;
+    mapping(bytes32 => address) public computedAddressOverrides;
+    mapping(bytes32 => bool) public deployRevertOverrides;
 
-    function configureBootstrap(bytes32 _bootstrapSalt, bytes32 _bootstrapCodeId, address _bootstrapAddress) external {
+    function configureBootstrap(bytes32 _bootstrapSalt, bytes32 _bootstrapInitCodeHash, address _bootstrapAddress) external {
         bootstrapSalt = _bootstrapSalt;
-        bootstrapCodeId = _bootstrapCodeId;
+        bootstrapInitCodeHash = _bootstrapInitCodeHash;
         bootstrapAddress = _bootstrapAddress;
     }
 
@@ -110,14 +124,25 @@ contract MockUniversalCreate2Deployer {
         codeKinds[codeId] = kind;
     }
 
+    function setComputedAddress(bytes32 salt, bytes32 initCodeHash, address computed) external {
+        computedAddressOverrides[_computedKey(salt, initCodeHash)] = computed;
+    }
+
+    function setDeployRevert(bytes32 salt, bytes32 codeId, bool shouldRevert) external {
+        deployRevertOverrides[_deployKey(salt, codeId)] = shouldRevert;
+    }
+
     function computeAddress(bytes32 salt, bytes32 initCodeHash) external view returns (address) {
-        if (salt == bootstrapSalt && initCodeHash == bootstrapCodeId) {
+        if (salt == bootstrapSalt && initCodeHash == bootstrapInitCodeHash) {
             return bootstrapAddress;
         }
+        address overrideAddr = computedAddressOverrides[_computedKey(salt, initCodeHash)];
+        if (overrideAddr != address(0)) return overrideAddr;
         return address(uint160(uint256(keccak256(abi.encodePacked("mock-address", salt, initCodeHash)))));
     }
 
-    function deploy(bytes32, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr) {
+    function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr) {
+        if (deployRevertOverrides[_deployKey(salt, codeId)]) revert("already deployed");
         uint8 kind = codeKinds[codeId];
         if (kind == 1) {
             (address creatorToken, address owner, string memory vaultName, string memory vaultSymbol) =
@@ -135,6 +160,14 @@ contract MockUniversalCreate2Deployer {
             return address(new MockShareOFT(name, symbol, registry, owner));
         }
         revert("unknown codeId");
+    }
+
+    function _computedKey(bytes32 salt, bytes32 initCodeHash) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(salt, initCodeHash));
+    }
+
+    function _deployKey(bytes32 salt, bytes32 codeId) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(salt, codeId));
     }
 }
 
@@ -155,6 +188,14 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
 
     function _oftBootstrapSalt() internal pure returns (bytes32) {
         return keccak256("4626:OFTBootstrapRegistry:v1");
+    }
+
+    function _oftBootstrapCreationCode() internal pure returns (bytes memory) {
+        return bytes("mock-oft-bootstrap");
+    }
+
+    function _shareOftCreationCode() internal pure returns (bytes memory) {
+        return bytes("mock-share-oft");
     }
 
     function _codeIds() internal pure returns (DeploymentBatcher.CodeIds memory codeIds) {
@@ -188,6 +229,8 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         registry = new MockCreatorRegistry(CANONICAL_ENDPOINT);
         MockBytecodeStore store = new MockBytecodeStore();
         create2 = new MockUniversalCreate2Deployer();
+        store.setCode(OFT_BOOTSTRAP_CODE_ID, _oftBootstrapCreationCode());
+        store.setCode(SHARE_OFT_CODE_ID, _shareOftCreationCode());
         create2.configureBootstrap(_oftBootstrapSalt(), OFT_BOOTSTRAP_CODE_ID, bootstrapAddress);
         create2.setCodeKind(VAULT_CODE_ID, 1);
         create2.setCodeKind(WRAPPER_CODE_ID, 2);
@@ -259,6 +302,46 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
 
         DeploymentBatcher.Phase1Result memory out = deployer.finalizePhase1(_phase1Params(), _codeIds());
         assertEq(MockShareOFT(out.shareOFT).constructorEndpoint(), bootstrap.LZ_COMMON_ENDPOINT());
+    }
+
+    function test_finalizePhase1_reusesPredeployedShareOFTOnCreate2Collision() public {
+        OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
+        (DeploymentBatcher deployer,, MockUniversalCreate2Deployer create2) = _deployFixture(address(bootstrap));
+
+        DeploymentBatcher.Phase1Params memory params = _phase1Params();
+        DeploymentBatcher.CodeIds memory codeIds = _codeIds();
+        deployer.deployPhase1Core(params, codeIds);
+
+        bytes32 baseSalt =
+            keccak256(abi.encodePacked(params.creatorToken, params.owner, block.chainid, "4626:deploy:", params.version));
+        (
+            address oftBootstrapRegistry,
+            address vaultAddr,
+            address wrapperAddr,
+            address shareAddr,
+            bytes32 shareOftSalt,
+            bytes32 paramsHash,
+            bytes32 codeIdsHash,
+            bool coreDone,
+            bool finalized
+        ) = deployer.phase1SplitStates(baseSalt);
+        vaultAddr;
+        shareAddr;
+        paramsHash;
+        codeIdsHash;
+        coreDone;
+        finalized;
+
+        bytes memory shareOftArgs = abi.encode(params.shareName, "STOK", oftBootstrapRegistry, address(deployer));
+        bytes32 shareOftInitCodeHash = keccak256(bytes.concat(_shareOftCreationCode(), shareOftArgs));
+        MockShareOFT squattedShareOFT = new MockShareOFT(params.shareName, "STOK", oftBootstrapRegistry, address(deployer));
+        create2.setComputedAddress(shareOftSalt, shareOftInitCodeHash, address(squattedShareOFT));
+        create2.setDeployRevert(shareOftSalt, SHARE_OFT_CODE_ID, true);
+
+        DeploymentBatcher.Phase1Result memory out = deployer.finalizePhase1(params, codeIds);
+
+        assertEq(out.shareOFT, address(squattedShareOFT), "should reuse existing deterministic ShareOFT");
+        assertEq(MockWrapper(wrapperAddr).shareOFT(), address(squattedShareOFT), "wrapper should wire existing ShareOFT");
     }
 }
 

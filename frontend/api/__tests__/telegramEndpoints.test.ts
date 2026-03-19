@@ -550,6 +550,27 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.data?.linked).toBe(true)
   })
 
+  it('POST /api/telegram/miniapp/link requires x-telegram-link-secret when mini app sessions are disabled', async () => {
+    const restoreSessionGate = applyEnv({
+      TELEGRAM_MINIAPP_SESSION_ENABLED: 'false',
+    })
+    const { default: handler } = await import('../_handlers/telegram/_miniapp-link.ts')
+    const req = createBaseMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { token: 'token-abc', telegramUsername: 'akita' },
+    })
+    const res = createMockRes()
+
+    try {
+      await handler(req, res)
+      expect(res.statusCode).toBe(401)
+      expect(String(res.body?.error ?? '')).toContain('Unauthorized')
+    } finally {
+      restoreSessionGate()
+    }
+  })
+
   it('POST /api/telegram/miniapp/link returns recovery-required on merge conflict', async () => {
     const { default: handler } = await import('../_handlers/telegram/_miniapp-link.ts')
     runTelegramMergePreflightMock.mockResolvedValueOnce({

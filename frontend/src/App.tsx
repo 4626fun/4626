@@ -42,8 +42,28 @@ type AccessState = {
   hostMode: import('@/lib/host').HostMode
 }
 
-function isValidEvmAddress(v: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(v)
+type ResolvedAllowlistMode = CreatorAllowlistMode | 'unknown'
+
+function isValidEvmAddress(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+export function resolveAllowlistMode(params: {
+  modeFromGlobal?: CreatorAllowlistMode | null
+  modeFromAddress?: CreatorAllowlistMode | null
+}): ResolvedAllowlistMode {
+  if (params.modeFromGlobal === 'disabled' || params.modeFromGlobal === 'enforced') return params.modeFromGlobal
+  if (params.modeFromAddress === 'disabled' || params.modeFromAddress === 'enforced') return params.modeFromAddress
+  return 'unknown'
+}
+
+export function computeAcceptedFromAllowlist(params: {
+  mode: ResolvedAllowlistMode
+  allowlisted: boolean
+}): boolean {
+  if (params.mode === 'disabled') return true
+  if (params.mode === 'enforced') return params.allowlisted
+  return false
 }
 
 function withReason(to: string, reason: AccessReason | 'host-redirect' | 'external-redirect' | 'invalid-params'): string {
@@ -80,10 +100,6 @@ const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolea
 function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
-  // Owner/admin bypass wallets can access protected routes even without a SIWE session.
-  if (state.admin && (req.session || req.accepted || req.creator || req.admin)) {
-    return { allow: true, reason: 'ok' }
-  }
   if (req.session && !state.sessionValid) {
     return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref('needs-session', state.hostMode) }
   }
@@ -99,22 +115,6 @@ function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   }
   return { allow: true, reason: 'ok' }
 }
-
-function buildAdminBypassSet(): Set<string> {
-  const seed: string[] = [
-    '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
-    '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
-    '0xab6d5c10b03300326cd7fab7267ae192842967b5',
-  ]
-  const raw = (import.meta.env.VITE_ADMIN_BYPASS_ADDRESSES as string | undefined) ?? ''
-  const fromEnv = raw
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter((s) => isValidEvmAddress(s))
-  return new Set<string>([...seed, ...fromEnv].map((a) => a.toLowerCase()))
-}
-
-const ADMIN_BYPASS_ADDRESSES = buildAdminBypassSet()
 
 function useResolvedAccessState(): AccessState {
   const { address: connectedAddressRaw, isConnected } = useAccount()
@@ -133,11 +133,10 @@ function useResolvedAccessState(): AccessState {
     const raw = typeof siwe.authAddress === 'string' ? siwe.authAddress : ''
     return isValidEvmAddress(raw) ? raw.toLowerCase() : null
   }, [siwe.authAddress])
-  // Use the actively connected wallet for allowlist/admin bypass checks, while still allowing
+  // Use the actively connected wallet for allowlist checks, while still allowing
   // a bearer/cookie-backed session to satisfy session gates.
   const effectiveAddress = connectedAddress ?? siweAuthAddress
   const hasSession = Boolean(siweAuthAddress)
-  const isBypassAdmin = effectiveAddress ? ADMIN_BYPASS_ADDRESSES.has(effectiveAddress) : false
 
   const allowlistModeQuery = useQuery({
     queryKey: ['creatorAllowlist', 'mode'],
@@ -152,17 +151,25 @@ function useResolvedAccessState(): AccessState {
     retry: 0,
   })
 
-  const allowlistMode = allowlistModeQuery.data?.mode ?? 'disabled'
-  const allowlistEnforced = allowlistMode === 'enforced'
-  const allowQuery = useCreatorAllowlist(isBypassAdmin ? null : effectiveAddress)
+  const allowQuery = useCreatorAllowlist(effectiveAddress)
+  const allowlistMode = resolveAllowlistMode({
+    modeFromGlobal: allowlistModeQuery.data?.mode ?? null,
+    modeFromAddress: allowQuery.data?.mode ?? null,
+  })
+  const allowlistEnforced = allowlistMode !== 'disabled'
   const allowlisted = allowQuery.data?.allowed === true
-  const accepted = !allowlistEnforced || isBypassAdmin || allowlisted
+  const accepted = computeAcceptedFromAllowlist({ mode: allowlistMode, allowlisted })
+  const allowlistModeLoading = allowlistModeQuery.isLoading || allowlistModeQuery.isFetching
+  const allowlistAddressLoading =
+    allowlistEnforced &&
+    !!effectiveAddress &&
+    (allowQuery.isLoading || allowQuery.isFetching)
 
   const loading =
     !siwe.sessionHydrated ||
     siwe.busy ||
-    allowlistModeQuery.isLoading ||
-    (allowlistEnforced && !isBypassAdmin && !!effectiveAddress && allowQuery.isLoading) ||
+    allowlistModeLoading ||
+    allowlistAddressLoading ||
     (hasSession && adminStatus.isLoading)
 
   return {
@@ -171,7 +178,7 @@ function useResolvedAccessState(): AccessState {
     sessionValid: hasSession,
     accepted,
     creator: accepted,
-    admin: adminStatus.isAdmin || isBypassAdmin,
+    admin: adminStatus.isAdmin,
     allowlistEnforced,
     effectiveAddress,
     marketingUrl: getMarketingBaseUrl(),

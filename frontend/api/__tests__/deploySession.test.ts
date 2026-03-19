@@ -1647,13 +1647,22 @@ describe('deploy session optimistic concurrency', () => {
         .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
       transitionDeploySessionMock.mockResolvedValue(true)
 
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const req = createMockReq({
+        method: 'POST',
+        headers: {
+          'x-siwa-receipt': 'siwa-receipt-token',
+          'x-privy-token': 'privy-auth-token',
+        },
+        body: { sessionId: 'sess_1' },
+      })
       const res = createMockRes()
       await statusHandler(req, res)
 
       expect(res.statusCode).toBe(200)
       const init = (fetchMock.mock.calls as any[])[0]?.[1] as { headers?: Record<string, string> } | undefined
       expect(init?.headers?.['X-CV-Solana-Registration-Secret']).toBe('internal-secret')
+      expect(init?.headers?.['X-SIWA-Receipt']).toBe('siwa-receipt-token')
+      expect(init?.headers?.['X-Privy-Token']).toBe('privy-auth-token')
     } finally {
       if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
       else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
@@ -3170,6 +3179,64 @@ describe('deploy session optimistic concurrency', () => {
       expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
     )
     expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('continue forwards SIWA/Privy/internal registration headers during OVault mesh preflight', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [],
+        solanaOvault: { enabled: true },
+      },
+    }
+    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          success: true,
+          data: {
+            existingMintCompatible: true,
+            depositEligible: true,
+            redeemEligible: true,
+          },
+        }),
+    })) as any
+
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      getDeploySessionByIdMock.mockResolvedValue(rec)
+      transitionDeploySessionMock.mockResolvedValue(true)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: {
+          'x-siwa-receipt': 'siwa-receipt-token',
+          'x-privy-token': 'privy-auth-token',
+        },
+        body: { sessionId: 'sess_1' },
+      })
+      const res = createMockRes()
+      await continueHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
+      expect(fetchMock).toHaveBeenCalled()
+      const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { headers?: Record<string, string> }]
+      expect(String(url)).toContain('/api/deploy/setupSolanaOvaultMesh')
+      expect(init?.headers?.['X-CV-Solana-Registration-Secret']).toBe('internal-secret')
+      expect(init?.headers?.['X-SIWA-Receipt']).toBe('siwa-receipt-token')
+      expect(init?.headers?.['X-Privy-Token']).toBe('privy-auth-token')
+    } finally {
+      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
+      ;(globalThis as any).fetch = originalFetch
+    }
   })
 
   it('continue preserves deployToStrategies in stored phase3 calls', async () => {

@@ -456,6 +456,60 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   },
   {
     type: 'function',
+    name: 'finalizePhase2WithPermit2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'permit',
+        type: 'tuple',
+        components: [
+          {
+            name: 'permitted',
+            type: 'tuple',
+            components: [
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+            ],
+          },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'deployPhase2AndLaunchWithPermit',
     stateMutability: 'nonpayable',
     inputs: [
@@ -1592,7 +1646,6 @@ async function validateInnerCalls(params: {
     | 'deploy'
     | 'activate'
     | 'swap'
-    | 'approve_only'
     | 'legacy_withdraw'
     | 'deploy_session_setup'
     | 'agent_registry'
@@ -1781,8 +1834,7 @@ async function validateInnerCalls(params: {
       if (mode === 'swap') {
         // Swap-only sponsorship path validated above (strict target/selector/value checks).
       } else if (approveOnlyToken) {
-        mode = 'approve_only'
-        expectedCreatorToken = approveOnlyToken
+        throw new Error('approve_only_not_allowed')
       } else {
         const legacyResolved = await (async () => {
           const client = await getBaseClient()

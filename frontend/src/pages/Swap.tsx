@@ -937,14 +937,10 @@ export function Swap() {
   const tokenOptions = useMemo<TokenOption[]>(() => {
     const creatorCoin = (searchParams.get('token') ?? '').trim()
     const shareCoin = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
-    const shareSymbolParam = (searchParams.get('shareSymbol') ?? searchParams.get('shareTokenSymbol') ?? '').trim()
-    const shareNameParam = (searchParams.get('shareName') ?? searchParams.get('shareTokenName') ?? '').trim()
     return buildTokenOptions({
       coreTokens: dynamicCoreTokens,
       creatorCoin: swapChainId === BASE_CHAIN_ID ? creatorCoin : '',
       shareCoin: swapChainId === BASE_CHAIN_ID ? shareCoin : '',
-      shareSymbol: shareSymbolParam,
-      shareName: shareNameParam,
       chainId: swapChainId,
     })
   }, [searchParams, dynamicCoreTokens, swapChainId])

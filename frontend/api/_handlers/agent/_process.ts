@@ -605,6 +605,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 if (deferUnsupported) {
                   totalDeferredUnsupported++
                   deferredUnsupportedInConversation = true
+                  newestConversationTimestamp = mergeCheckpointMs(newestConversationTimestamp, msgTs)
                   logger.warn('[agent/process] deferring unsupported command until realtime runtime is online', {
                     creator: creatorAddress.slice(0, 10),
                     convo: convo.id.slice(0, 16),

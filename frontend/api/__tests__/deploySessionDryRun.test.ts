@@ -220,6 +220,28 @@ describe('deploy session dry run', () => {
     })
   })
 
+  it('requires authenticated deploy auth even when legacy dev-bypass header is present', async () => {
+    const previousBypass = process.env.DEPLOY_DRY_RUN_DEV_BYPASS
+    process.env.DEPLOY_DRY_RUN_DEV_BYPASS = '1'
+    readDeployAuthFromRequestMock.mockReturnValueOnce(null)
+    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-deploy-dry-run-dev': '0x00000000000000000000000000000000000000ff' },
+      body: makeRequestBody(),
+    })
+    const res = createMockRes()
+
+    try {
+      await handler(req, res)
+      expect(res.statusCode).toBe(401)
+      expect(String(res.body?.error ?? '')).toContain('Not authenticated')
+    } finally {
+      if (typeof previousBypass === 'undefined') delete process.env.DEPLOY_DRY_RUN_DEV_BYPASS
+      else process.env.DEPLOY_DRY_RUN_DEV_BYPASS = previousBypass
+    }
+  })
+
   it('returns a phase summary without persisting session state or sending user operations', async () => {
     const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })

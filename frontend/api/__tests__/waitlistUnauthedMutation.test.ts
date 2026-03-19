@@ -6,6 +6,7 @@ const {
   readRequestPrincipalAddressMock,
   checkRateLimitMock,
   getDbMock,
+  getDbInitErrorMock,
   ensureWaitlistSchemaMock,
   ensureWaitlistPointsSchemaMock,
   awardWaitlistPointsMock,
@@ -13,6 +14,7 @@ const {
   readRequestPrincipalAddressMock: vi.fn(() => ''),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   getDbMock: vi.fn(),
+  getDbInitErrorMock: vi.fn(() => null),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   ensureWaitlistPointsSchemaMock: vi.fn(async () => {}),
   awardWaitlistPointsMock: vi.fn(async () => {}),
@@ -37,7 +39,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
 
 vi.mock('../../server/_lib/postgres.js', () => ({
   isDbConfigured: vi.fn(() => true),
-  getDbInitError: vi.fn(() => null),
+  getDbInitError: getDbInitErrorMock,
   getDb: getDbMock,
 }))
 
@@ -78,6 +80,7 @@ describe('waitlist unauthenticated mutation hardening', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    getDbInitErrorMock.mockReturnValue(null)
     restoreEnv = applyEnv({
       PRIVY_APP_ID: undefined,
       PRIVY_APP_SECRET: undefined,
@@ -136,5 +139,26 @@ describe('waitlist unauthenticated mutation hardening', () => {
     expect(insertValues?.[12]).toBeNull()
     expect(referralUpdateValues[0]?.[0]).toBe('C16')
     expect(res.body?.data?.referralCode).toBe('C16')
+  })
+
+  it('does not leak raw database init errors when waitlist storage is unavailable', async () => {
+    getDbMock.mockResolvedValue(null)
+    getDbInitErrorMock.mockReturnValue('password authentication failed for user "postgres" at db.internal')
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        email: 'victim@example.com',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(500)
+    const error = String(res.body?.error ?? '')
+    expect(error).toContain('temporarily unavailable')
+    expect(error).not.toContain('password authentication failed')
+    expect(error).not.toContain('db.internal')
   })
 })

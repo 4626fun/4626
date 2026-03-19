@@ -29,7 +29,7 @@ type OnchainSnapshot = {
   ownerAddress: string | null
   agentWallet: string | null
   tokenUri: string | null
-  diagnostics: string[]
+  rpcErrorCount: number
 }
 
 function setPublicCors(res: VercelResponse) {
@@ -134,7 +134,7 @@ async function readOnchainSnapshot(params: {
   registryAddress: Address
   agentId: bigint
 }): Promise<OnchainSnapshot> {
-  const diagnostics: string[] = []
+  let rpcErrorCount = 0
   const chain = resolveChain(params.chainId)
 
   for (const rpcUrl of getRpcUrls()) {
@@ -193,10 +193,10 @@ async function readOnchainSnapshot(params: {
         // Best effort only.
       }
 
-      return { ownerAddress, agentWallet, tokenUri, diagnostics }
+      return { ownerAddress, agentWallet, tokenUri, rpcErrorCount }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'rpc_unavailable'
-      diagnostics.push(`rpc_failed:${msg}`)
+      void error
+      rpcErrorCount += 1
       continue
     }
   }
@@ -205,7 +205,7 @@ async function readOnchainSnapshot(params: {
     ownerAddress: null,
     agentWallet: null,
     tokenUri: null,
-    diagnostics,
+    rpcErrorCount,
   }
 }
 
@@ -299,7 +299,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ownerAddress: onchain.ownerAddress ? `${explorer}/address/${onchain.ownerAddress}` : null,
         agentWallet: onchain.agentWallet ? `${explorer}/address/${onchain.agentWallet}` : null,
       },
-      diagnostics: onchain.diagnostics,
+      rpcHealthy: onchain.rpcErrorCount === 0,
+      rpcErrorCount: onchain.rpcErrorCount,
     },
   })
 }

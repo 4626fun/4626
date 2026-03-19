@@ -316,13 +316,26 @@ export default defineConfig(({ command }) => {
     const raw = (process.env.VITE_BUILD_SOURCEMAP ?? '').trim().toLowerCase()
     return raw === '1' || raw === 'true' || raw === 'yes'
   })()
+  const devServerHost: true | string = (() => {
+    const raw = (process.env.VITE_DEV_SERVER_HOST ?? '').trim()
+    const normalized = raw.toLowerCase()
+    if (!normalized || normalized === 'false' || normalized === 'no' || normalized === '0') {
+      // Secure-by-default local binding.
+      return '127.0.0.1'
+    }
+    if (normalized === 'true' || normalized === 'yes' || normalized === '1') {
+      // Explicit opt-in for network exposure (binds 0.0.0.0 in Vite).
+      return true
+    }
+    // Allow explicit host values like 0.0.0.0 or localhost.
+    return raw
+  })()
 
   return {
     plugins: [react(), tailwindcss(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
-    // In remote/WSL/devcontainer setups, binding to 127.0.0.1 can make the dev server
-    // unreachable from the host browser. `host: true` binds to 0.0.0.0.
+    // Default localhost-only. Set VITE_DEV_SERVER_HOST=true (or 0.0.0.0) to expose on LAN/WSL.
     server: {
-      host: true,
+      host: devServerHost,
       port: 5173,
       strictPort: true,
     },

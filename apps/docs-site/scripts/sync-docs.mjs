@@ -90,6 +90,14 @@ const stats = {
 };
 
 /**
+ * Returns true when targetPath stays inside baseDir.
+ */
+function isPathInside(baseDir, targetPath) {
+  const rel = path.relative(path.resolve(baseDir), path.resolve(targetPath));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
  * Convert filename to title case
  */
 function filenameToTitle(filename) {
@@ -370,6 +378,8 @@ async function syncBrandAssets() {
   const files = await fg(['**/*'], {
     cwd: BRAND_SOURCE,
     dot: false,
+    onlyFiles: true,
+    followSymbolicLinks: false,
   });
   
   if (files.length === 0) {
@@ -380,14 +390,40 @@ async function syncBrandAssets() {
   
   // Copy each file
   let copied = 0;
+  const copiedFiles = [];
   for (const file of files) {
-    const sourcePath = path.join(BRAND_SOURCE, file);
-    const destPath = path.join(BRAND_DEST, file);
+    const sourcePath = path.resolve(BRAND_SOURCE, file);
+    const destPath = path.resolve(BRAND_DEST, file);
     
     try {
+      if (!isPathInside(BRAND_SOURCE, sourcePath)) {
+        stats.warnings.push(`Brand asset ${file}: skipped (source path escapes brand root)`);
+        continue;
+      }
+      if (!isPathInside(BRAND_DEST, destPath)) {
+        stats.warnings.push(`Brand asset ${file}: skipped (destination path escapes brand output root)`);
+        continue;
+      }
+
+      const sourceStat = await fs.lstat(sourcePath);
+      if (sourceStat.isSymbolicLink()) {
+        stats.warnings.push(`Brand asset ${file}: skipped symbolic link`);
+        continue;
+      }
+      if (!sourceStat.isFile()) {
+        continue;
+      }
+
+      const realSourcePath = await fs.realpath(sourcePath);
+      if (!isPathInside(BRAND_SOURCE, realSourcePath)) {
+        stats.warnings.push(`Brand asset ${file}: skipped symlink traversal target outside brand root`);
+        continue;
+      }
+
       await fs.mkdir(path.dirname(destPath), { recursive: true });
-      await fs.copyFile(sourcePath, destPath);
+      await fs.copyFile(realSourcePath, destPath);
       copied++;
+      copiedFiles.push(file);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       stats.warnings.push(`Brand asset ${file}: ${message}`);
@@ -395,7 +431,7 @@ async function syncBrandAssets() {
   }
   
   console.log(`   ✓ ${copied} brand assets copied`);
-  for (const file of files) {
+  for (const file of copiedFiles) {
     console.log(`     - ${file}`);
   }
 }

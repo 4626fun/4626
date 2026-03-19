@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, type HostMode } from '@/lib/host'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
 import { PageMeta } from '@/components/seo/PageMeta'
 
@@ -12,6 +12,18 @@ const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
 
 type HomeRedirectInput = {
   hostMode: HostMode
+  search: string
+  hash: string
+}
+
+type WaitlistModalInput = {
+  hash: string
+  search: string
+  stickyOpen: boolean
+}
+
+type WaitlistCloseTargetInput = {
+  pathname: string
   search: string
   hash: string
 }
@@ -26,23 +38,59 @@ export function shouldRedirectHomeToSwap(input: HomeRedirectInput): boolean {
   return true
 }
 
+export function shouldOpenWaitlistModal(input: WaitlistModalInput): boolean {
+  if (input.hash === '#waitlist') return true
+  const qs = new URLSearchParams(input.search)
+  const wl = (qs.get('wl') ?? '').trim().toLowerCase()
+  if (wl === '1' || wl === 'true' || wl === 'yes') return true
+  const ref = (qs.get('ref') ?? '').trim()
+  if (ref.length > 0) return true
+  return input.stickyOpen
+}
+
+export function buildWaitlistCloseTarget(input: WaitlistCloseTargetInput): { path: string; changed: boolean } {
+  const qs = new URLSearchParams(input.search)
+  let changed = false
+  if (qs.has('wl')) {
+    qs.delete('wl')
+    changed = true
+  }
+  // If user closes before the referral param is consumed, remove it
+  // so the modal doesn't immediately reopen.
+  if (qs.has('ref')) {
+    qs.delete('ref')
+    changed = true
+  }
+  const hash = input.hash === '#waitlist' ? '' : input.hash
+  if (input.hash === '#waitlist') changed = true
+  const query = qs.toString()
+  return {
+    path: `${input.pathname}${query ? `?${query}` : ''}${hash}`,
+    changed,
+  }
+}
+
 export function Home() {
   const location = useLocation()
   const navigate = useNavigate()
-  const waitlistOpen = useMemo(() => {
-    if (location.hash === '#waitlist') return true
-    const qs = new URLSearchParams(location.search)
-    const wl = (qs.get('wl') ?? '').trim().toLowerCase()
-    if (wl === '1' || wl === 'true' || wl === 'yes') return true
-    const ref = (qs.get('ref') ?? '').trim()
-    if (ref.length > 0) return true
+  const [waitlistDismissVersion, setWaitlistDismissVersion] = useState(0)
+  const stickyWaitlistOpen = useMemo(() => {
+    // Force recomputation after local dismiss when URL does not change.
+    void waitlistDismissVersion
     try {
       if (typeof window !== 'undefined' && window.sessionStorage.getItem(WAITLIST_STICKY_OPEN_KEY) === '1') return true
     } catch {
       // ignore
     }
     return false
-  }, [location.hash, location.search])
+  }, [waitlistDismissVersion])
+  const waitlistOpen = useMemo(() => {
+    return shouldOpenWaitlistModal({
+      hash: location.hash,
+      search: location.search,
+      stickyOpen: stickyWaitlistOpen,
+    })
+  }, [location.hash, location.search, stickyWaitlistOpen])
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
@@ -88,36 +136,22 @@ export function Home() {
   }
 
   const closeWaitlistModal = () => {
-    if (typeof window === 'undefined') return
     try {
-      window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
+      }
     } catch {
       // ignore
     }
-    try {
-      const url = new URL(window.location.href)
-      let changed = false
-      if (url.hash === '#waitlist') {
-        url.hash = ''
-        changed = true
-      }
-      if (url.searchParams.has('wl')) {
-        url.searchParams.delete('wl')
-        changed = true
-      }
-      // If user closes before the referral param is consumed, remove it
-      // so the modal doesn't immediately reopen.
-      if (url.searchParams.has('ref')) {
-        url.searchParams.delete('ref')
-        changed = true
-      }
-      if (!changed) return
-      navigate(`${url.pathname}${url.search}${url.hash}`, { replace: true })
-    } catch {
-      // Best-effort: at minimum, drop the waitlist hash.
-      if (location.hash === '#waitlist') {
-        navigate(`${location.pathname}${location.search}`, { replace: true })
-      }
+    // Force a re-evaluation so sticky-open modals close immediately even when URL is unchanged.
+    setWaitlistDismissVersion((v) => v + 1)
+    const closeTarget = buildWaitlistCloseTarget({
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+    })
+    if (closeTarget.changed) {
+      navigate(closeTarget.path, { replace: true })
     }
   }
 

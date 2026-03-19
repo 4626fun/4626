@@ -237,7 +237,7 @@ function readRegistryConfig(base: RegistrationFile): {
     return { error: 'ERC8004_AGENT_REGISTRY must be a valid address.', missing: [] }
   }
 
-  let agentId = Number(agentIdRaw)
+  let agentId = agentIdRaw ? Number(agentIdRaw) : Number.NaN
   if (!agentIdRaw && fallbackRegistration) {
     agentId = Number(fallbackRegistration.agentId)
   }

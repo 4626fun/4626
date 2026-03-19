@@ -54,7 +54,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorAddressRaw = typeof req.query?.creatorAddress === 'string' ? req.query.creatorAddress.trim() : ''
 
   const limit = clampInt(Number(limitRaw || '50'), 1, 200)
-  const listedOnly = !(listedRaw.toLowerCase() === 'false' || listedRaw === '0')
+  const includeUnlistedRequested = listedRaw.toLowerCase() === 'false' || listedRaw === '0'
+  if (includeUnlistedRequested && !g.auth) {
+    return res.status(403).json({ success: false, error: 'Authentication required for unlisted creator queries' })
+  }
+  const listedOnly = !includeUnlistedRequested
   const cursor = parseCursor(cursorRaw)
   const creatorAddress =
     creatorAddressRaw.length > 0 && /^0x[a-fA-F0-9]{40}$/.test(creatorAddressRaw)

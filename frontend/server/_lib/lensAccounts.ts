@@ -112,35 +112,45 @@ function pickBestLensAccount(accounts: LensAccount[]): LensAccount | null {
 // GraphQL-based account fetching
 // ---------------------------------------------------------------------------
 
+function mapAccounts(data: AccountsBulkResponse | null | undefined): LensAccount[] {
+  const accounts = data?.accountsBulk
+  if (!Array.isArray(accounts)) return []
+  return accounts
+    .map((item): LensAccount | null => {
+      if (!item || typeof item !== 'object') return null
+      const address = getString(item.address)
+      if (!address) return null
+      return {
+        address,
+        owner: getString(item.owner),
+        username: item.username
+          ? { value: getString(item.username.value), localName: getString(item.username.localName) }
+          : null,
+        metadata: item.metadata
+          ? { name: getString(item.metadata.name), picture: item.metadata.picture }
+          : null,
+      }
+    })
+    .filter((item): item is LensAccount => Boolean(item))
+}
+
 async function fetchLensAccounts(request: { ownedBy?: string[] }): Promise<LensAccount[]> {
   const hasOwnedBy = Array.isArray(request.ownedBy) && request.ownedBy.length > 0
   if (!hasOwnedBy) return []
 
   try {
-    const data = await lensGql<AccountsBulkResponse>(ACCOUNTS_BULK_QUERY, {
+    // Owner resolution should use ownedBy semantics first.
+    const ownedByData = await lensGql<AccountsBulkResponse>(ACCOUNTS_BULK_QUERY, {
+      request: { ownedBy: request.ownedBy },
+    })
+    const ownedByAccounts = mapAccounts(ownedByData)
+    if (ownedByAccounts.length > 0) return ownedByAccounts
+
+    // Backward-compatible fallback for indexers that only support direct address lookup.
+    const addressData = await lensGql<AccountsBulkResponse>(ACCOUNTS_BULK_QUERY, {
       request: { addresses: request.ownedBy },
     })
-
-    const accounts = data?.accountsBulk
-    if (!Array.isArray(accounts)) return []
-
-    return accounts
-      .map((item): LensAccount | null => {
-        if (!item || typeof item !== 'object') return null
-        const address = getString(item.address)
-        if (!address) return null
-        return {
-          address,
-          owner: getString(item.owner),
-          username: item.username
-            ? { value: getString(item.username.value), localName: getString(item.username.localName) }
-            : null,
-          metadata: item.metadata
-            ? { name: getString(item.metadata.name), picture: item.metadata.picture }
-            : null,
-        }
-      })
-      .filter((item): item is LensAccount => Boolean(item))
+    return mapAccounts(addressData)
   } catch (err) {
     console.error('[lensAccounts] GraphQL query failed:', err instanceof Error ? err.message : err)
     return []

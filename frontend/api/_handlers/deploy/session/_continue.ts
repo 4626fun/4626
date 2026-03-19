@@ -51,6 +51,11 @@ function isPlainObject(value: unknown): value is Record<string, any> {
   return proto === Object.prototype || proto === null
 }
 
+function headerValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value.find((entry) => typeof entry === 'string' && entry.trim())?.trim() ?? ''
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 function normalizeErrorMessage(error: unknown): string {
   if (typeof error === 'string' && error.trim()) return error.trim()
   if (error instanceof Error && error.message.trim()) return error.message.trim()
@@ -402,8 +407,10 @@ async function ensureOvaultPreflight(params: {
     : null
 
   const origin = getCanonicalOrigin(params.req)
-  const cookie = typeof params.req.headers.cookie === 'string' ? params.req.headers.cookie : ''
-  const authz = typeof params.req.headers.authorization === 'string' ? params.req.headers.authorization : ''
+  const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
+  const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
+  const siwaReceipt = headerValue(params.req.headers['x-siwa-receipt'] as string | string[] | undefined)
+  const privyToken = headerValue(params.req.headers['x-privy-token'] as string | string[] | undefined)
   const internalRegistrationSecret = String(
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
@@ -430,6 +437,8 @@ async function ensureOvaultPreflight(params: {
           'Content-Type': 'application/json',
           ...(cookie ? { Cookie: cookie } : {}),
           ...(authz ? { Authorization: authz } : {}),
+          ...(siwaReceipt ? { 'X-SIWA-Receipt': siwaReceipt } : {}),
+          ...(privyToken ? { 'X-Privy-Token': privyToken } : {}),
           ...(internalRegistrationSecret ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret } : {}),
         },
         body: JSON.stringify(body),

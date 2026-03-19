@@ -6,11 +6,22 @@
  */
 
 import { createPublicClient, http } from 'viem'
+import { decodeAbiParameters, isAddress, parseAbiParameters } from 'viem'
 import { base } from 'viem/chains'
 
 // LiquidityMigrated event signature
 // event LiquidityMigrated(PoolKey oldPoolKey, bytes32 indexed oldPoolKeyHash, PoolKey newPoolKey, bytes32 indexed newPoolKeyHash)
 const LIQUIDITY_MIGRATED_TOPIC = '0x907fbdc07b1c9a591dc1287635b072fa848f4da7c86645dfc9b8bfb3b94f82ab'
+const LIQUIDITY_MIGRATED_DATA_ABI = parseAbiParameters(
+  '(address,address,uint24,int24,address),bytes32,(address,address,uint24,int24,address),bytes32',
+)
+
+// Known Zora coin proxy implementation addresses observed on Base migrations.
+// You can override via VITE_ZORA_COIN_IMPLEMENTATION_ALLOWLIST (comma-separated).
+const DEFAULT_ZORA_COIN_IMPLEMENTATION_ALLOWLIST = [
+  '0x88cc4e08c7608723f3e44e17ac669fb43b6a8313',
+  '0xca72309aaf706d290e08608b1af47943902f69b2',
+] as const
 
 // V4 launch block (June 6, 2025)
 const V4_LAUNCH_BLOCK = 31250000n
@@ -23,6 +34,25 @@ const CACHE_TTL = 1000 * 60 * 60 // 1 hour
 // In-memory cache for faster lookups
 let migratedCoinsSet: Set<string> | null = null
 let lastFetchTime = 0
+
+function parseAddressAllowlist(raw: string | undefined, fallback: readonly string[]): Set<string> {
+  const parsed = new Set<string>()
+  const entries = (raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const source = entries.length > 0 ? entries : [...fallback]
+  for (const entry of source) {
+    if (isAddress(entry)) parsed.add(entry.toLowerCase())
+  }
+  if (parsed.size > 0) return parsed
+  return new Set(fallback.map((a) => a.toLowerCase()))
+}
+
+const ALLOWED_ZORA_COIN_IMPLEMENTATIONS = parseAddressAllowlist(
+  import.meta.env.VITE_ZORA_COIN_IMPLEMENTATION_ALLOWLIST as string | undefined,
+  DEFAULT_ZORA_COIN_IMPLEMENTATION_ALLOWLIST,
+)
 
 const BASE_RPC_RAW =
   (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
@@ -104,6 +134,69 @@ function getInitialLogRangeDelta(): bigint {
   return BigInt(Math.floor(n))
 }
 
+export function parseMinimalProxyImplementation(bytecode: string): string | null {
+  const code = String(bytecode || '').toLowerCase()
+  const match = code.match(
+    /^0x363d3d373d3d3d363d73([0-9a-f]{40})5af43d82803e903d91602b57fd5bf3$/,
+  )
+  if (!match) return null
+  return `0x${match[1]}`
+}
+
+export function extractMigratedCoinAddressFromLog(log: { address?: string; data?: string }): string | null {
+  const emitter = String(log.address ?? '').toLowerCase()
+  const data = String(log.data ?? '')
+  if (!isAddress(emitter) || !data) return null
+
+  try {
+    const [oldPoolKey, , newPoolKey] = decodeAbiParameters(
+      LIQUIDITY_MIGRATED_DATA_ABI,
+      data as `0x${string}`,
+    ) as [[string, string, number, number, string], string, [string, string, number, number, string], string]
+
+    const oldCurrency0 = String(oldPoolKey[0] ?? '').toLowerCase()
+    const oldCurrency1 = String(oldPoolKey[1] ?? '').toLowerCase()
+    const newCurrency0 = String(newPoolKey[0] ?? '').toLowerCase()
+    const newCurrency1 = String(newPoolKey[1] ?? '').toLowerCase()
+    if (
+      !isAddress(oldCurrency0) ||
+      !isAddress(oldCurrency1) ||
+      !isAddress(newCurrency0) ||
+      !isAddress(newCurrency1)
+    ) {
+      return null
+    }
+
+    // Enforce pool-pair consistency across old/new keys.
+    const oldPair = [oldCurrency0, oldCurrency1].sort().join(':')
+    const newPair = [newCurrency0, newCurrency1].sort().join(':')
+    if (oldPair !== newPair) return null
+
+    // Enforce source authenticity: the emitting contract must be the migrated coin.
+    if (emitter !== oldCurrency0 && emitter !== oldCurrency1) return null
+    if (emitter !== newCurrency0 && emitter !== newCurrency1) return null
+
+    return emitter
+  } catch {
+    return null
+  }
+}
+
+async function isTrustedMigratedCoin(client: ReturnType<typeof getPublicClient>, coinAddress: string): Promise<boolean> {
+  if (!isAddress(coinAddress)) return false
+  try {
+    const bytecode = await client.request({
+      method: 'eth_getCode',
+      params: [coinAddress as `0x${string}`, 'latest'],
+    }) as `0x${string}`
+    const implementation = parseMinimalProxyImplementation(bytecode)
+    if (!implementation) return false
+    return ALLOWED_ZORA_COIN_IMPLEMENTATIONS.has(implementation.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
 function extractSuggestedRangeDelta(error: unknown): bigint | null {
   const msg = String((error as any)?.message ?? error ?? '')
   const rangeMatch = msg.match(/\[(0x[0-9a-fA-F]+),\s*(0x[0-9a-fA-F]+)\]/)
@@ -153,6 +246,8 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
     let chunkDelta = getInitialLogRangeDelta()
     let warnedRangeLimit = false
     const migratedAddresses = new Set<string>()
+    const trustedAddressCache = new Map<string, boolean>()
+    let rejectedUntrustedCandidates = 0
     
     let fromBlock = V4_LAUNCH_BLOCK
     
@@ -168,11 +263,34 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
             toBlock: `0x${toBlock.toString(16)}`,
             topics: [LIQUIDITY_MIGRATED_TOPIC as `0x${string}`],
           }],
-        }) as Array<{ address: string }>
-        
+        }) as Array<{ address: string; data: `0x${string}` }>
+
+        const chunkCandidates = new Set<string>()
         for (const log of logs) {
-          // The emitting address is the coin contract
-          migratedAddresses.add(log.address.toLowerCase())
+          const candidate = extractMigratedCoinAddressFromLog(log)
+          if (!candidate) continue
+          chunkCandidates.add(candidate)
+        }
+
+        const uncachedCandidates = Array.from(chunkCandidates).filter((candidate) => !trustedAddressCache.has(candidate))
+        if (uncachedCandidates.length > 0) {
+          const trustResults = await Promise.all(
+            uncachedCandidates.map(async (candidate) => {
+              const trusted = await isTrustedMigratedCoin(client, candidate)
+              return [candidate, trusted] as const
+            }),
+          )
+          for (const [candidate, trusted] of trustResults) {
+            trustedAddressCache.set(candidate, trusted)
+          }
+        }
+
+        for (const candidate of chunkCandidates) {
+          if (trustedAddressCache.get(candidate)) {
+            migratedAddresses.add(candidate)
+          } else {
+            rejectedUntrustedCandidates += 1
+          }
         }
       } catch (e) {
         const suggestedDelta = extractSuggestedRangeDelta(e)
@@ -206,7 +324,9 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
     migratedCoinsSet = migratedAddresses
     lastFetchTime = Date.now()
     
-    console.log(`[migrations] Cached ${addressArray.length} migrated coins`)
+    console.log(
+      `[migrations] Cached ${addressArray.length} migrated coins (rejected ${rejectedUntrustedCandidates} untrusted candidates)`,
+    )
     return migratedAddresses
   } catch (e) {
     console.error('[migrations] Failed to fetch migrated coins:', e)

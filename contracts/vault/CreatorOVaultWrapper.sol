@@ -101,6 +101,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
     /// @notice Whitelist (no fees)
     mapping(address => bool) public isWhitelisted;
+    /// @notice Trusted callers allowed to attribute fee/dust accounting to a third-party beneficiary.
+    mapping(address => bool) public isBeneficiaryOperator;
 
     /// @notice Fee statistics
     uint256 public totalWrapFees;
@@ -123,6 +125,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     event WhitelistUpdated(address indexed user, bool status);
     event FeesUpdated(uint256 wrapFee, uint256 unwrapFee);
     event FeeRecipientUpdated(address indexed recipient);
+    event BeneficiaryOperatorUpdated(address indexed operator, bool status);
 
     // ================================
     // ERRORS
@@ -145,6 +148,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     error FeeExceedsLimit();
     error SlippageExceeded();
     error AmountTooSmallToNormalize(); // < 1 normalized share after fees + user dust
+    error UnauthorizedBeneficiaryOperator(address operator, address beneficiary);
 
     // ================================
     // CONSTRUCTOR
@@ -164,6 +168,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         vault = IERC4626(_vault);
         feeRecipient = _owner;
         isWhitelisted[_owner] = true;
+        isBeneficiaryOperator[_owner] = true;
 
         // Infinite approval for vault deposits
         IERC20(_creatorCoin).approve(_vault, type(uint256).max);
@@ -230,6 +235,12 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         }
     }
 
+    function setBeneficiaryOperator(address operator, bool status) external onlyOwner {
+        if (operator == address(0)) revert ZeroAddress();
+        isBeneficiaryOperator[operator] = status;
+        emit BeneficiaryOperatorUpdated(operator, status);
+    }
+
     // ================================
     // USER-FACING: DEPOSIT & WITHDRAW
     // ================================
@@ -260,7 +271,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 vaultShares = vault.deposit(amount, address(this));
 
         // 3. Wrap vault shares → ShareOFT (internal, no extra transfer)
-        shareOFTOut = _wrapInternal(vaultShares, msg.sender);
+        shareOFTOut = _wrapInternal(vaultShares, msg.sender, msg.sender);
 
         // 4. Check slippage
         if (shareOFTOut < minOut) revert SlippageExceeded();
@@ -277,9 +288,32 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
         creatorCoin.safeTransferFrom(msg.sender, address(this), amount);
         uint256 vaultShares = vault.deposit(amount, address(this));
-        shareOFTOut = _wrapInternal(vaultShares, msg.sender);
+        shareOFTOut = _wrapInternal(vaultShares, msg.sender, msg.sender);
 
         emit Deposited(msg.sender, amount, shareOFTOut);
+    }
+
+    /**
+     * @notice Deposit Creator Coin and attribute fee/dust accounting to `beneficiary`.
+     * @dev Beneficiary attribution to third parties is restricted to trusted operators (e.g. hub composer).
+     *      Minted ShareOFT is always credited to `msg.sender`.
+     */
+    function depositFor(uint256 amount, uint256 minOut, address beneficiary)
+        external
+        nonReentrant
+        returns (uint256 shareOFTOut)
+    {
+        if (beneficiary == address(0)) revert ZeroAddress();
+        _requireBeneficiaryOperator(beneficiary);
+        if (amount == 0) revert ZeroAmount();
+        if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
+
+        creatorCoin.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 vaultShares = vault.deposit(amount, address(this));
+        shareOFTOut = _wrapInternal(vaultShares, beneficiary, msg.sender);
+        if (shareOFTOut < minOut) revert SlippageExceeded();
+
+        emit Deposited(beneficiary, amount, shareOFTOut);
     }
 
     /**
@@ -302,7 +336,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
         // 1-2. Unwrap: burn ShareOFT, get vault shares (internal)
-        uint256 vaultShares = _unwrapInternal(amount, msg.sender);
+        uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
 
         // 3. Redeem vault shares → Creator Coin (sent directly to user)
         creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
@@ -320,10 +354,32 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
-        uint256 vaultShares = _unwrapInternal(amount, msg.sender);
+        uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
         creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
 
         emit Withdrawn(msg.sender, amount, creatorCoinOut);
+    }
+
+    /**
+     * @notice Withdraw Creator Coin and attribute fee/dust accounting to `beneficiary`.
+     * @dev Beneficiary attribution to third parties is restricted to trusted operators (e.g. hub composer).
+     *      Creator Coin output is always redeemed to `msg.sender`.
+     */
+    function withdrawFor(uint256 amount, uint256 minOut, address beneficiary)
+        external
+        nonReentrant
+        returns (uint256 creatorCoinOut)
+    {
+        if (beneficiary == address(0)) revert ZeroAddress();
+        _requireBeneficiaryOperator(beneficiary);
+        if (amount == 0) revert ZeroAmount();
+        if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
+
+        uint256 vaultShares = _unwrapInternal(amount, beneficiary, msg.sender);
+        creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
+        if (creatorCoinOut < minOut) revert SlippageExceeded();
+
+        emit Withdrawn(beneficiary, amount, creatorCoinOut);
     }
 
     // ================================
@@ -345,7 +401,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         IERC20(address(vault)).safeTransferFrom(msg.sender, address(this), amount);
 
         // Wrap internally
-        amountOut = _wrapInternal(amount, msg.sender);
+        amountOut = _wrapInternal(amount, msg.sender, msg.sender);
     }
 
     /**
@@ -359,7 +415,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
         // Unwrap internally (burns from user)
-        amountOut = _unwrapInternal(amount, msg.sender);
+        amountOut = _unwrapInternal(amount, msg.sender, msg.sender);
 
         // Transfer vault shares to user
         IERC20(address(vault)).safeTransfer(msg.sender, amountOut);
@@ -372,18 +428,22 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @dev Internal wrap: locks vault shares, mints NORMALIZED ShareOFT
      * @param vaultSharesIn Vault shares to lock (already in this contract)
-     * @param user User to mint ShareOFT to and check whitelist
+     * @param accountingUser User used for fee/dust accounting and whitelist checks
+     * @param mintTo Recipient that receives newly minted ShareOFT
      * @return shareOFTOut Normalized share token amount (■AKITA = vaultShares / 1000)
      *
      * @dev NORMALIZATION:
      *      1000 ▢AKITA → 1 ■AKITA
      *      This makes: 1 AKITA ≈ 1 ■AKITA (clean UX!)
      */
-    function _wrapInternal(uint256 vaultSharesIn, address user) internal returns (uint256 shareOFTOut) {
+    function _wrapInternal(uint256 vaultSharesIn, address accountingUser, address mintTo)
+        internal
+        returns (uint256 shareOFTOut)
+    {
         uint256 fee = 0;
         uint256 vaultSharesAfterFee = vaultSharesIn;
 
-        if (!isWhitelisted[user] && wrapFee > 0) {
+        if (!isWhitelisted[accountingUser] && wrapFee > 0) {
             fee = (vaultSharesIn * wrapFee) / BASIS_POINTS;
             vaultSharesAfterFee = vaultSharesIn - fee;
             totalWrapFees += fee;
@@ -395,7 +455,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         }
 
         // Include user dust so normalization never destroys value.
-        uint256 priorDust = userDustShares[user];
+        uint256 priorDust = userDustShares[accountingUser];
         uint256 normalizedInput = vaultSharesAfterFee + priorDust;
 
         // NORMALIZE: Divide by 1000 to get share token amount
@@ -404,44 +464,48 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (shareOFTOut == 0) revert AmountTooSmallToNormalize();
 
         uint256 newDust = normalizedInput - (shareOFTOut * NORMALIZATION_FACTOR);
-        userDustShares[user] = newDust;
+        userDustShares[accountingUser] = newDust;
         totalUserDustShares = totalUserDustShares - priorDust + newDust;
 
         // Track locked shares (minus fee)
         totalLocked += vaultSharesAfterFee;
 
         // Mint normalized share token to user
-        uint256 beforeBalance = shareOFT.balanceOf(user);
-        shareOFT.mint(user, shareOFTOut);
-        uint256 afterBalance = shareOFT.balanceOf(user);
+        uint256 beforeBalance = shareOFT.balanceOf(mintTo);
+        shareOFT.mint(mintTo, shareOFTOut);
+        uint256 afterBalance = shareOFT.balanceOf(mintTo);
         if (afterBalance < beforeBalance || afterBalance - beforeBalance != shareOFTOut) {
-            revert ShareOFTMintBalanceMismatch(user, beforeBalance, afterBalance, shareOFTOut);
+            revert ShareOFTMintBalanceMismatch(mintTo, beforeBalance, afterBalance, shareOFTOut);
         }
         totalMinted += shareOFTOut;
 
-        emit Wrapped(user, vaultSharesIn, shareOFTOut, fee);
+        emit Wrapped(accountingUser, vaultSharesIn, shareOFTOut, fee);
     }
 
     /**
      * @dev Internal unwrap: burns ShareOFT, releases DENORMALIZED vault shares
      * @param shareOFTIn Normalized share token amount (■AKITA) to burn
-     * @param user User to burn from and check whitelist
+     * @param accountingUser User used for fee/dust accounting and whitelist checks
+     * @param burnFrom Account that provides ShareOFT for burn
      * @return vaultSharesOut Denormalized vault shares (▢AKITA = ■AKITA * 1000)
      *
      * @dev DENORMALIZATION:
      *      1 ■AKITA → 1000 ▢AKITA
      *      This makes: 1 ■AKITA ≈ 1 AKITA (clean UX!)
      */
-    function _unwrapInternal(uint256 shareOFTIn, address user) internal returns (uint256 vaultSharesOut) {
+    function _unwrapInternal(uint256 shareOFTIn, address accountingUser, address burnFrom)
+        internal
+        returns (uint256 vaultSharesOut)
+    {
         // DENORMALIZE: Multiply by 1000 and include user's accumulated dust.
         // 1 ■AKITA → 1000 ▢AKITA (+ user dust remainder)
-        uint256 userDust = userDustShares[user];
+        uint256 userDust = userDustShares[accountingUser];
         uint256 vaultSharesBeforeFee = shareOFTIn * NORMALIZATION_FACTOR + userDust;
 
         uint256 fee = 0;
         vaultSharesOut = vaultSharesBeforeFee;
 
-        if (!isWhitelisted[user] && unwrapFee > 0) {
+        if (!isWhitelisted[accountingUser] && unwrapFee > 0) {
             fee = (vaultSharesBeforeFee * unwrapFee) / BASIS_POINTS;
             vaultSharesOut = vaultSharesBeforeFee - fee;
             totalUnwrapFees += fee;
@@ -451,16 +515,16 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (shareOFTIn > totalMinted) revert BurnExceedsTotalMinted(totalMinted, shareOFTIn);
 
         // Burn normalized share token from user
-        uint256 beforeBalance = shareOFT.balanceOf(user);
-        shareOFT.burn(user, shareOFTIn);
-        uint256 afterBalance = shareOFT.balanceOf(user);
+        uint256 beforeBalance = shareOFT.balanceOf(burnFrom);
+        shareOFT.burn(burnFrom, shareOFTIn);
+        uint256 afterBalance = shareOFT.balanceOf(burnFrom);
         if (beforeBalance < shareOFTIn || afterBalance > beforeBalance || beforeBalance - afterBalance != shareOFTIn) {
-            revert ShareOFTBurnBalanceMismatch(user, beforeBalance, afterBalance, shareOFTIn);
+            revert ShareOFTBurnBalanceMismatch(burnFrom, beforeBalance, afterBalance, shareOFTIn);
         }
         totalMinted -= shareOFTIn;
 
         if (userDust > 0) {
-            userDustShares[user] = 0;
+            userDustShares[accountingUser] = 0;
             totalUserDustShares -= userDust;
         }
 
@@ -472,7 +536,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
             IERC20(address(vault)).safeTransfer(feeRecipient, fee);
         }
 
-        emit Unwrapped(user, shareOFTIn, vaultSharesOut, fee);
+        emit Unwrapped(accountingUser, shareOFTIn, vaultSharesOut, fee);
     }
 
     // ================================
@@ -651,5 +715,12 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
     function _requiredLockedBacking() internal view returns (uint256) {
         return totalMinted * NORMALIZATION_FACTOR + totalUserDustShares;
+    }
+
+    function _requireBeneficiaryOperator(address beneficiary) internal view {
+        if (beneficiary == msg.sender) return;
+        if (!isBeneficiaryOperator[msg.sender]) {
+            revert UnauthorizedBeneficiaryOperator(msg.sender, beneficiary);
+        }
     }
 }

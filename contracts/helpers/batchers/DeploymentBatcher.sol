@@ -94,6 +94,11 @@ interface ICharmFactory {
     }
 
     function createVault(VaultParams calldata params) external returns (address vault);
+    function governance() external view returns (address);
+}
+
+interface ICharmVaultManager {
+    function manager() external view returns (address);
 }
 
 interface ICreatorCharmStrategy {
@@ -135,6 +140,9 @@ contract DeploymentBatcher is ReentrancyGuard {
     /// @notice Charm Finance Alpha Vault Factory on Base
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
+    /// @notice Pinned Charm governance allowlist on Base. Deployments fail closed outside this set.
+    address public constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
+    address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
 
     // ── Fixed Two-Way Split Constants ────────────────────────────────
     /// @notice Minimum deposit amount (5M tokens, 18 decimals)
@@ -333,6 +341,9 @@ contract DeploymentBatcher is ReentrancyGuard {
     error InvalidSolanaBridgeConfig();
     error PermitTokenMismatch();
     error PermitAmountTooLow();
+    error Phase1ShareOFTMissing();
+    error CharmFactoryGovernanceMismatch(address expected, address actual);
+    error CharmVaultManagerMismatch(address expected, address actual);
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -640,7 +651,17 @@ contract DeploymentBatcher is ReentrancyGuard {
 
         bytes memory shareOftArgs =
             abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, address(this));
-        out.shareOFT = create2Deployer.deploy(state.shareOftSalt, codeIds.shareOFT, shareOftArgs);
+        bytes32 shareOftInitCodeHash = _deriveInitCodeHash(codeIds.shareOFT, shareOftArgs);
+        try create2Deployer.deploy(state.shareOftSalt, codeIds.shareOFT, shareOftArgs) returns (address deployedShareOFT)
+        {
+            out.shareOFT = deployedShareOFT;
+        } catch {
+            // If ShareOFT is already deployed at the deterministic address, reuse it
+            // instead of permanently wedging phase-1 finalize.
+            address existingShareOFT = create2Deployer.computeAddress(state.shareOftSalt, shareOftInitCodeHash);
+            if (existingShareOFT.code.length == 0) revert Phase1ShareOFTMissing();
+            out.shareOFT = existingShareOFT;
+        }
 
         // Minimal wiring so Phase 2 can proceed without redeploying Phase 1 components.
         ICreatorOVaultWrapper(out.wrapper).setShareOFT(out.shareOFT);
@@ -950,6 +971,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         // ───────────────────────────────
         // 2) Deploy Charm alpha vault via Charm Factory (shows on alpha.charm.fi UI)
         // ───────────────────────────────
+        _enforceCharmFactoryGovernance();
         // NOTE: Using Charm's official factory ensures vault appears on their UI
         // Parameters: manager=protocolTreasury can rebalance, baseThreshold=3000 ticks,
         //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
@@ -971,6 +993,7 @@ contract DeploymentBatcher is ReentrancyGuard {
                 symbol: params.charmVaultSymbol
             })
         );
+        _enforceCharmVaultManager(out.charmVault, protocolTreasury);
 
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
 
@@ -1176,6 +1199,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         return keccak256(abi.encode(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap));
     }
 
+    function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32) {
+        bytes memory creationCode = bytecodeStore.get(codeId);
+        return keccak256(bytes.concat(creationCode, constructorArgs));
+    }
+
     function _deriveBaseSalt(address creatorToken, address owner, string memory version)
         internal
         view
@@ -1222,5 +1250,29 @@ contract DeploymentBatcher is ReentrancyGuard {
             }
         }
         return string(b);
+    }
+
+    function _enforceCharmFactoryGovernance() internal view {
+        try ICharmFactory(CHARM_FACTORY).governance() returns (address governance) {
+            if (!_isAllowedCharmFactoryGovernance(governance)) {
+                revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, governance);
+            }
+        } catch {
+            revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, address(0));
+        }
+    }
+
+    function _enforceCharmVaultManager(address charmVault, address expectedManager) internal view {
+        try ICharmVaultManager(charmVault).manager() returns (address manager) {
+            if (manager != expectedManager) {
+                revert CharmVaultManagerMismatch(expectedManager, manager);
+            }
+        } catch {
+            revert CharmVaultManagerMismatch(expectedManager, address(0));
+        }
+    }
+
+    function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool) {
+        return governance == CHARM_FACTORY_GOVERNANCE || governance == CHARM_FACTORY_GOVERNANCE_LEGACY;
     }
 }

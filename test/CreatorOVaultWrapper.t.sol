@@ -76,6 +76,7 @@ contract CreatorOVaultWrapperTest is Test {
 
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
+    address internal composer = makeAddr("composer");
     address internal sweepRecipient = makeAddr("sweepRecipient");
 
     function setUp() public {
@@ -156,6 +157,63 @@ contract CreatorOVaultWrapperTest is Test {
         vm.prank(alice);
         vm.expectRevert(CreatorOVaultWrapper.AmountTooSmallToNormalize.selector);
         wrapper.wrap(1000); // after fee = 900, with zero dust -> 0 normalized mint
+    }
+
+    function test_depositFor_revertsForUntrustedThirdPartyAttribution() public {
+        creatorCoin.mint(alice, 2_000);
+        vm.prank(alice);
+        creatorCoin.approve(address(wrapper), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVaultWrapper.UnauthorizedBeneficiaryOperator.selector, alice, bob)
+        );
+        wrapper.depositFor(1_000, 0, bob);
+    }
+
+    function test_depositFor_tracksDustPerBeneficiary() public {
+        wrapper.setBeneficiaryOperator(composer, true);
+
+        creatorCoin.mint(composer, 2_000);
+        vm.prank(composer);
+        creatorCoin.approve(address(wrapper), type(uint256).max);
+
+        vm.prank(composer);
+        uint256 firstOut = wrapper.depositFor(1_001, 0, alice);
+        assertEq(firstOut, 1);
+        assertEq(shareOFT.balanceOf(composer), 1);
+        assertEq(wrapper.userDustShares(alice), 1);
+        assertEq(wrapper.userDustShares(bob), 0);
+
+        vm.prank(composer);
+        vm.expectRevert(CreatorOVaultWrapper.AmountTooSmallToNormalize.selector);
+        wrapper.depositFor(999, 0, bob);
+
+        vm.prank(composer);
+        uint256 secondOut = wrapper.depositFor(999, 0, alice);
+        assertEq(secondOut, 1);
+        assertEq(shareOFT.balanceOf(composer), 2);
+        assertEq(wrapper.userDustShares(alice), 0);
+        assertEq(wrapper.userDustShares(bob), 0);
+    }
+
+    function test_withdrawFor_consumesBeneficiaryDust() public {
+        wrapper.setBeneficiaryOperator(composer, true);
+
+        creatorCoin.mint(composer, 1_001);
+        vm.prank(composer);
+        creatorCoin.approve(address(wrapper), type(uint256).max);
+
+        vm.prank(composer);
+        wrapper.depositFor(1_001, 0, alice);
+        assertEq(wrapper.userDustShares(alice), 1);
+        assertEq(shareOFT.balanceOf(composer), 1);
+
+        vm.prank(composer);
+        uint256 creatorOut = wrapper.withdrawFor(1, 0, alice);
+        assertEq(creatorOut, 1_001);
+        assertEq(wrapper.userDustShares(alice), 0);
+        assertEq(shareOFT.balanceOf(composer), 0);
     }
 
     function test_verify_and_isBalanced_includeDust() public {

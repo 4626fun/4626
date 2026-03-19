@@ -40,9 +40,11 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
-function headerValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return value.find((entry) => typeof entry === 'string' && entry.trim())?.trim() ?? ''
-  return typeof value === 'string' ? value.trim() : ''
+function normalizeHost(raw: string): string | null {
+  const host = raw.trim().toLowerCase()
+  if (!host) return null
+  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(host)) return null
+  return host
 }
 
 function inferProtocol(host: string): 'http' | 'https' {
@@ -57,21 +59,10 @@ function inferProtocol(host: string): 'http' | 'https' {
   return 'https'
 }
 
-function getPublicOrigin(req: VercelRequest): string {
-  const forwardedHost = headerValue(req.headers['x-forwarded-host'] as string | string[] | undefined)
-  const host = forwardedHost || headerValue(req.headers.host as string | string[] | undefined) || 'app.4626.fun'
-  const forwardedProto = headerValue(req.headers['x-forwarded-proto'] as string | string[] | undefined)
-  const protocol =
-    forwardedProto === 'http' || forwardedProto === 'https' ? (forwardedProto as 'http' | 'https') : inferProtocol(host)
-  return `${protocol}://${host}`
-}
-
-function getCanonicalApiOrigin(req: VercelRequest): string {
-  const configuredApiHost = headerValue(process.env.API_HOST as string | undefined)
-  if (configuredApiHost) {
-    return `${inferProtocol(configuredApiHost)}://${configuredApiHost}`
-  }
-  return getPublicOrigin(req)
+function getCanonicalApiOrigin(): string | null {
+  const configuredApiHost = normalizeHost(String(process.env.API_HOST ?? ''))
+  if (!configuredApiHost) return null
+  return `${inferProtocol(configuredApiHost)}://${configuredApiHost}`
 }
 
 function getStrategyParam(req: VercelRequest): string {
@@ -170,7 +161,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenAddressLower = tokenAddr ? tokenAddr.toLowerCase() : null
     const tokenImagePath = tokenAddressLower ? `/api/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
     const tokenImageCanonicalPath = tokenAddressLower ? `/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
-    const tokenImageUrl = tokenImageCanonicalPath ? `${getCanonicalApiOrigin(req)}${tokenImageCanonicalPath}` : null
+    const canonicalApiOrigin = getCanonicalApiOrigin()
+    const tokenImageUrl = tokenImageCanonicalPath && canonicalApiOrigin ? `${canonicalApiOrigin}${tokenImageCanonicalPath}` : tokenImagePath
     const metadataClient = createPublicClient({
       chain: base,
       transport: http(resolvedRpcUrl ?? rpcUrls[0], { timeout: 20_000 }),

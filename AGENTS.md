@@ -83,17 +83,13 @@ The deployment batcher is configured for Solana bridging:
 
 **Planned model:** treat Solana allocation as strategy-stage orchestration (alongside Charm/Ajna) rather than phase-2 finalize logic.
 
-### Provisioner VM (Vultr)
+### Provisioner operations
 
-The Solana route provisioner runs on a Vultr VPS at `provisioner.4626.fun` (IP: `45.63.52.50`).
+Operational access details for the Solana route provisioner (hostnames, IPs, SSH users, service names, and filesystem paths) are intentionally excluded from this repository.
 
-- **SSH:** `ssh root@45.63.52.50`
-- **Service:** `systemctl {status|restart} solana-provisioner`
-- **Env:** `/etc/4626/solana-provisioner.env`
-- **Repo:** `/opt/4626`
-- **Nginx:** reverse proxy 80/443 → 8788, Let's Encrypt cert (auto-renew)
-- **Bridge CLI:** installed at `/opt/base-bridge/scripts` on the VM. Provisioner healthz reports `ok:true, cliExists:true`.
-- **Auto-pool:** `SOLANA_AUTO_POOL=1` is set — provisioner auto-creates DLMM pool + Alpha Vault after `wrap-token`.
+- **Access management:** Use team-managed secrets and approved access channels only.
+- **Operational runbook:** Use the internal runbook for restart/status procedures and environment locations.
+- **Repo hygiene:** Do not commit live infrastructure endpoints, SSH commands, or root-level host details.
 
 ### Solana integration: per-creator setup
 

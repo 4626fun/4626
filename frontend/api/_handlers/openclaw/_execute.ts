@@ -15,6 +15,7 @@ import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { requireServerKey } from '../../../server/zora/_shared.js'
 import { executeUniswapSkill, type UniswapSkillName } from '../../../server/uniswap/agentSkills.js'
+import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -39,6 +40,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
+
+  const guard = await guardAgentApiRequest({
+    req,
+    res,
+    endpoint: 'openclaw/execute',
+    kind: 'build',
+  })
+  if (!guard.ok) return
 
   const body = (await readJsonBody<ExecuteRequest>(req)) ?? {}
   const tool = typeof body.tool === 'string' ? body.tool.trim() : ''

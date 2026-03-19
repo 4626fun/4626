@@ -51,6 +51,37 @@ describe('telegram mini app initData verification', () => {
     }
   })
 
+  it('derives the same replay nonce hash for reordered initData params', () => {
+    const botToken = 'test-bot-token'
+    const initData = buildInitData({
+      botToken,
+      authDate: Math.floor(Date.now() / 1000),
+      userId: '42',
+    })
+    const parsed = new URLSearchParams(initData)
+    const reordered = new URLSearchParams()
+    reordered.set('user', String(parsed.get('user') ?? ''))
+    reordered.set('auth_date', String(parsed.get('auth_date') ?? ''))
+    reordered.set('hash', String(parsed.get('hash') ?? ''))
+
+    const first = verifyTelegramMiniAppInitData({
+      initData,
+      botToken,
+      maxAgeSeconds: 900,
+    })
+    const second = verifyTelegramMiniAppInitData({
+      initData: reordered.toString(),
+      botToken,
+      maxAgeSeconds: 900,
+    })
+
+    expect(first.ok).toBe(true)
+    expect(second.ok).toBe(true)
+    if (first.ok && second.ok) {
+      expect(first.identity.initDataHash).toBe(second.identity.initDataHash)
+    }
+  })
+
   it('rejects invalid hash', () => {
     const result = verifyTelegramMiniAppInitData({
       initData: 'auth_date=1710000000&user=%7B%22id%22%3A42%7D&hash=deadbeef',

@@ -96,12 +96,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress as `0x${string}`])).toLowerCase()
       let isOwner = false
       for (let i = 0; i < maxScan; i++) {
-        const ownerBytes = (await client.readContract({
-          address: smartWallet as `0x${string}`,
-          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-          functionName: 'ownerAtIndex',
-          args: [BigInt(i)],
-        })) as string
+        let ownerBytes: string
+        try {
+          ownerBytes = (await client.readContract({
+            address: smartWallet as `0x${string}`,
+            abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+            functionName: 'ownerAtIndex',
+            args: [BigInt(i)],
+          })) as string
+        } catch {
+          continue
+        }
         if (String(ownerBytes).toLowerCase() === expected) {
           isOwner = true
           break

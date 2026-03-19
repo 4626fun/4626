@@ -56,6 +56,33 @@ describe('swapUtils token identity', () => {
     expect(shareOption?.name).toBe('Share Token')
   })
 
+  it('ignores unverified share labels by default', () => {
+    const share = '0x9999999999999999999999999999999999999999'
+    const options = buildTokenOptions({
+      coreTokens: CORE_TOKENS,
+      shareCoin: share,
+      shareSymbol: 'USDC',
+      shareName: 'USD Coin',
+    })
+    const shareOption = options.find((o) => o.address.toLowerCase() === share.toLowerCase())
+    expect(shareOption?.symbol).toBe('Share Token')
+    expect(shareOption?.name).toBe('Share Token')
+  })
+
+  it('keeps share labels when explicitly marked verified', () => {
+    const share = '0x8888888888888888888888888888888888888888'
+    const options = buildTokenOptions({
+      coreTokens: CORE_TOKENS,
+      shareCoin: share,
+      shareSymbol: '■AKITA',
+      shareName: 'Akita Share',
+      shareLabelVerified: true,
+    })
+    const shareOption = options.find((o) => o.address.toLowerCase() === share.toLowerCase())
+    expect(shareOption?.symbol).toBe('■AKITA')
+    expect(shareOption?.name).toBe('Akita Share')
+  })
+
   it('resolves non-core display with onchain metadata precedence', () => {
     const out = resolveTokenDisplay({
       option: {

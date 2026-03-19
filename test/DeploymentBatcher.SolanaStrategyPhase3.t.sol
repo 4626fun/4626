@@ -79,6 +79,7 @@ contract MockAjnaVaultAuthForPhase3 {
     uint256 public bufferRatio;
     uint256 public minBucketIndex;
     mapping(address => bool) public keepers;
+    address public swapper;
 
     function setBufferRatio(uint256 ratio) external {
         bufferRatio = ratio;
@@ -90,6 +91,10 @@ contract MockAjnaVaultAuthForPhase3 {
 
     function setKeeper(address keeper, bool status) external {
         keepers[keeper] = status;
+    }
+
+    function setSwapper(address nextSwapper) external {
+        swapper = nextSwapper;
     }
 
     function setAdmin(address nextAdmin) external {
@@ -124,6 +129,14 @@ contract MockVaultStrategyManagerForPhase3 {
     }
 }
 
+contract MockCharmVaultForPhase3 {
+    address public manager;
+
+    constructor(address manager_) {
+        manager = manager_;
+    }
+}
+
 contract MockCreate2DeployerForPhase3 is IUniversalCreate2DeployerFromStore {
     mapping(bytes32 => address) public deployments;
 
@@ -145,6 +158,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     address internal constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
     bytes4 internal constant CREATE_VAULT_SELECTOR =
         bytes4(keccak256("createVault((address,address,uint24,address,uint256,int24,int24,uint24,uint32,int24,int24,uint32,string,string))"));
+    bytes4 internal constant GOVERNANCE_SELECTOR = bytes4(keccak256("governance()"));
 
     bytes32 internal constant CHARM_ALPHA_CODE_ID = bytes32(uint256(1));
     bytes32 internal constant CREATOR_CHARM_STRATEGY_CODE_ID = bytes32(uint256(2));
@@ -217,7 +231,14 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         );
 
         vm.mockCall(
-            CHARM_FACTORY, abi.encodeWithSelector(CREATE_VAULT_SELECTOR), abi.encode(address(new MockUniswapV3PoolForPhase3()))
+            CHARM_FACTORY,
+            abi.encodeWithSelector(GOVERNANCE_SELECTOR),
+            abi.encode(batcher.CHARM_FACTORY_GOVERNANCE())
+        );
+        vm.mockCall(
+            CHARM_FACTORY,
+            abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
+            abi.encode(address(new MockCharmVaultForPhase3(protocolTreasury)))
         );
     }
 
@@ -317,5 +338,19 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
 
         vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);
         batcher.deployPhase3Strategies(params, _strategyCodeIds());
+    }
+
+    function test_deployPhase3Strategies_revertsWhenCharmVaultManagerMismatches() public {
+        address wrongManager = makeAddr("wrongManager");
+        vm.mockCall(
+            CHARM_FACTORY,
+            abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
+            abi.encode(address(new MockCharmVaultForPhase3(wrongManager)))
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolTreasury, wrongManager)
+        );
+        batcher.deployPhase3Strategies(_phase3Params(), _strategyCodeIds());
     }
 }

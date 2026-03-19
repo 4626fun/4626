@@ -15,7 +15,7 @@ import {
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 import { readTelegramMiniAppSessionToken } from './webhook/miniAppAuth.js'
-import { isTelegramMiniAppSessionEnabled } from './webhook/services/access.js'
+import { isTelegramMiniAppSessionEnabled, verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 import { asTrimmed, resolveTelegramLinkErrorStatusCode } from './webhook/utils.js'
 
 type MiniAppLinkBody = {
@@ -53,6 +53,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     chatId: parsed.chatId,
     userId: parsed.telegramUserId,
   })
+  const hasLinkApiSecret = verifyTelegramLinkApiSecret(req)
+  if (!miniAppSessionRequired && !hasLinkApiSecret) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+    } satisfies ApiEnvelope<never>)
+  }
 
   const db = await getDb()
   if (!db) {

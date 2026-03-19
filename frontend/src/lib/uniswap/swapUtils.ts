@@ -221,6 +221,7 @@ export function buildTokenOptions(params: {
   shareCoin?: string | null
   shareSymbol?: string | null
   shareName?: string | null
+  shareLabelVerified?: boolean
   chainId?: number
 }): TokenOption[] {
   const out: TokenOption[] = [...params.coreTokens]
@@ -237,8 +238,9 @@ export function buildTokenOptions(params: {
 
   const shareCoin = normalizeTokenAddress(params.shareCoin)
   if (shareCoin) {
-    const shareSymbol = String(params.shareSymbol ?? '').trim()
-    const shareName = String(params.shareName ?? '').trim()
+    const shareLabelVerified = params.shareLabelVerified === true
+    const shareSymbol = shareLabelVerified ? String(params.shareSymbol ?? '').trim() : ''
+    const shareName = shareLabelVerified ? String(params.shareName ?? '').trim() : ''
     out.push({
       symbol: shareSymbol || 'Share Token',
       name: shareName || shareSymbol || 'Share Token',
