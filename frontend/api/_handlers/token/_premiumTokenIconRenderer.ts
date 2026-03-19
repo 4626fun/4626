@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import sharp from 'sharp'
 
 type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
@@ -62,6 +64,75 @@ type StackConfig = {
 type StackedArtworkUnderlay = {
   rearLayerB: Buffer | null
   rearLayerA: Buffer | null
+}
+
+const BREAKOUT_DEBUG_LOG_ENABLED =
+  process.env.TOKEN_BREAKOUT_DEBUG === '1' ||
+  Boolean(process.env.TOKEN_BREAKOUT_DEBUG_DIR)
+const BREAKOUT_DEBUG_DIR = process.env.TOKEN_BREAKOUT_DEBUG_DIR
+
+async function writeBreakoutDebugAsset(filename: string, layer: Buffer): Promise<void> {
+  if (!BREAKOUT_DEBUG_DIR) return
+  try {
+    await fs.mkdir(BREAKOUT_DEBUG_DIR, { recursive: true })
+    await fs.writeFile(path.join(BREAKOUT_DEBUG_DIR, filename), layer)
+  } catch (error) {
+    console.warn('[token/image] breakout debug write failed:', error)
+  }
+}
+
+function getAlphaBounds(raw: Buffer, width: number, height: number, channels: number): {
+  nonZeroPixels: number
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+  width: number
+  height: number
+} | null {
+  let nonZeroPixels = 0
+  let minX = width
+  let minY = height
+  let maxX = -1
+  let maxY = -1
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = (y * width + x) * channels
+      const alpha = channels >= 4 ? raw[idx + 3] ?? 0 : raw[idx] ?? 0
+      if (alpha <= 2) continue
+      nonZeroPixels += 1
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+  }
+  if (nonZeroPixels === 0 || maxX < minX || maxY < minY) return null
+  return {
+    nonZeroPixels,
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  }
+}
+
+async function debugLogLayerBounds(label: string, layer: Buffer): Promise<void> {
+  if (!BREAKOUT_DEBUG_LOG_ENABLED) return
+  const { data, info } = await sharp(layer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const bounds = getAlphaBounds(data, info.width, info.height, info.channels)
+  console.info('[breakout-debug]', JSON.stringify({
+    label,
+    width: info.width,
+    height: info.height,
+    channels: info.channels,
+    bounds,
+  }))
 }
 
 const BACKGROUND_COLORS = {
@@ -1687,18 +1758,22 @@ export async function renderArtworkLayer(params: {
 async function createTopBreakoutMask(params: {
   size: number
   layout: PremiumLayout
+  sourceClass?: SourceClass
 }): Promise<Buffer> {
   const { size, layout } = params
+  const isIllustration = params.sourceClass === 'illustration'
   const top = layout.breakoutY
   const bottom = Math.min(size, top + layout.breakoutHeight)
   const height = Math.max(1, bottom - top)
   const radius = Math.max(1, Math.round(layout.breakoutWidth * 0.30))
+  const topHoldOffset = isIllustration ? '40%' : '32%'
+  const lowerFadeOpacity = isIllustration ? '0.18' : '0.28'
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="fadeY" x1="0" y1="${top}" x2="0" y2="${bottom}" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="white" stop-opacity="1"/>
-      <stop offset="32%" stop-color="white" stop-opacity="1"/>
-      <stop offset="65%" stop-color="white" stop-opacity="0.28"/>
+      <stop offset="${topHoldOffset}" stop-color="white" stop-opacity="1"/>
+      <stop offset="70%" stop-color="white" stop-opacity="${lowerFadeOpacity}"/>
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="fadeX" x1="${layout.breakoutX}" y1="0" x2="${layout.breakoutX + layout.breakoutWidth}" y2="0" gradientUnits="userSpaceOnUse">
@@ -1726,9 +1801,34 @@ async function createTopBreakoutMask(params: {
   />
 </svg>`
   return sharp(Buffer.from(svg))
-    .blur(0.6)
+    .blur(isIllustration ? 0.32 : 0.6)
     .png()
     .toBuffer()
+}
+
+async function createBreakoutAboveFrameMask(params: {
+  size: number
+  layout: PremiumLayout
+  sourceClass?: SourceClass
+}): Promise<Buffer> {
+  const { size, layout } = params
+  const isIllustration = params.sourceClass === 'illustration'
+  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.08 : 0.05)))
+  const edgeFeatherPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.16 : 0.12)))
+  const keepToY = Math.min(size, Math.max(0, layout.chamberY + overlapIntoChamberPx))
+  const fadeEndY = Math.min(size, keepToY + edgeFeatherPx)
+  const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="breakoutAboveFrame" x1="0" y1="0" x2="0" y2="${size}" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="white" stop-opacity="1"/>
+      <stop offset="${Math.round((keepToY / Math.max(1, size)) * 100)}%" stop-color="white" stop-opacity="1"/>
+      <stop offset="${Math.round((fadeEndY / Math.max(1, size)) * 100)}%" stop-color="white" stop-opacity="0"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="${size}" height="${size}" fill="url(#breakoutAboveFrame)" />
+</svg>`
+  return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
 async function createTopBreakoutSubjectMask(params: {
@@ -1910,9 +2010,10 @@ async function createTopBreakoutSubjectMask(params: {
     return createTransparentCanvas(layout.size).png().toBuffer()
   }
 
-  const { data: processed, info: maskInfo } = await sharp(mask, { raw: { width, height, channels: 1 } })
+  let processedSharp = sharp(mask, { raw: { width, height, channels: 1 } })
     .threshold(18)
-    .blur(0.7)
+  processedSharp = processedSharp.blur(isIllustration ? 0.32 : 0.7)
+  const { data: processed, info: maskInfo } = await processedSharp
     .toColourspace('b-w')
     .raw()
     .toBuffer({ resolveWithObject: true })
@@ -1946,6 +2047,29 @@ export async function renderBreakoutLayer(params: {
   const breakoutScale = isIllustrationBreakout
     ? Math.max(params.scale ?? 1.04, 1.06)
     : params.scale ?? 1.04
+  if (BREAKOUT_DEBUG_LOG_ENABLED) {
+    const sourceMeta = await sharp(normalized).metadata()
+    console.info('[breakout-debug]', JSON.stringify({
+      step: 'renderBreakoutLayer:start',
+      extractionSource: 'normalized-original-source',
+      sourceWidth: sourceMeta.width,
+      sourceHeight: sourceMeta.height,
+      sourceClass: params.sourceClass ?? 'unknown',
+      breakoutScale,
+      topBiasPx: params.topBiasPx ?? 0,
+      requestedOpacity: params.opacity ?? 0.22,
+      compositeOrder: [
+        'backgroundCard',
+        'outerGlow',
+        'frameBloom',
+        'rearLayers',
+        'heroClipped',
+        'premiumFrame',
+        'breakoutSprite',
+      ],
+    }))
+  }
+  await writeBreakoutDebugAsset('0-breakout-source-normalized.png', normalized)
   const sourceCanvas = await renderPlacedSourceCanvas({
     sourceImage: normalized,
     layout,
@@ -1955,24 +2079,51 @@ export async function renderBreakoutLayer(params: {
     sourceClass: params.sourceClass,
     maxTopBiasRatio: isIllustrationBreakout ? 0.046 : undefined,
   })
-  const breakoutMask = await createTopBreakoutMask({ size, layout })
+  await writeBreakoutDebugAsset('1-breakout-source-canvas.png', sourceCanvas)
+  const breakoutMask = await createTopBreakoutMask({ size, layout, sourceClass: params.sourceClass })
   const subjectMask = await createTopBreakoutSubjectMask({
     sourceCanvas,
     layout,
     sourceClass: params.sourceClass,
   })
+  const aboveFrameMask = await createBreakoutAboveFrameMask({
+    size,
+    layout,
+    sourceClass: params.sourceClass,
+  })
+  await writeBreakoutDebugAsset('2-breakout-mask-window.png', breakoutMask)
+  await writeBreakoutDebugAsset('3-breakout-mask-subject.png', subjectMask)
+  await writeBreakoutDebugAsset('4-breakout-mask-above-frame.png', aboveFrameMask)
+  await debugLogLayerBounds('breakoutMask', breakoutMask)
+  await debugLogLayerBounds('subjectMask', subjectMask)
+  await debugLogLayerBounds('aboveFrameMask', aboveFrameMask)
 
-  const masked = await sharp(sourceCanvas)
+  let maskedSharp = sharp(sourceCanvas)
     .ensureAlpha()
     .composite([
       { input: breakoutMask, blend: 'dest-in' },
       { input: subjectMask, blend: 'dest-in' },
+      { input: aboveFrameMask, blend: 'dest-in' },
     ])
-    .blur(0.5)
+  if (!isIllustrationBreakout) {
+    maskedSharp = maskedSharp.blur(0.5)
+  }
+  const masked = await maskedSharp
     .png()
     .toBuffer()
+  await writeBreakoutDebugAsset('5-breakout-isolated-sprite.png', masked)
+  await debugLogLayerBounds('breakoutSprite', masked)
 
-  return applyOpacity(masked, params.opacity ?? 0.22)
+  const breakoutOpacity = params.opacity ?? 0.22
+  if (BREAKOUT_DEBUG_LOG_ENABLED) {
+    console.info('[breakout-debug]', JSON.stringify({
+      step: 'renderBreakoutLayer:end',
+      breakoutOpacity,
+      breakoutDrawCount: 1,
+      softBlurApplied: !isIllustrationBreakout,
+    }))
+  }
+  return applyOpacity(masked, breakoutOpacity)
 }
 
 async function renderCreatorSignature(params: {
@@ -2050,6 +2201,7 @@ export async function renderPremiumTokenIcon(params: {
   if (params.sourceImage && params.sourceImage.length > 0) {
     try {
       const normalized = await normalizeSourceImage(params.sourceImage)
+      await writeBreakoutDebugAsset('0-original-source-art.png', normalized)
       const analysis = await analyzeSourceImage({
         sourceImage: normalized,
         size,
@@ -2082,9 +2234,10 @@ export async function renderPremiumTokenIcon(params: {
         topBiasPx,
         symbol: params.symbol,
       })
+      await writeBreakoutDebugAsset('1-clipped-in-frame-art.png', artworkLayer)
 
       if (analysis.allowBreakout) {
-        const breakoutOpacity = analysis.sourceClass === 'illustration' ? 0.50 : 0.22
+        const breakoutOpacity = analysis.sourceClass === 'illustration' ? 0.92 : 0.22
         const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
           ? Math.max(1, Math.round(layout.chamberSize * 0.042))
           : topBiasPx
@@ -2097,6 +2250,15 @@ export async function renderPremiumTokenIcon(params: {
           topBiasPx: breakoutTopBiasPx,
           sourceClass: analysis.sourceClass,
         })
+        if (BREAKOUT_DEBUG_LOG_ENABLED) {
+          console.info('[breakout-debug]', JSON.stringify({
+            step: 'renderPremiumTokenIcon:breakout-layer',
+            sourceClass: analysis.sourceClass,
+            breakoutOpacity,
+            breakoutTopBiasPx,
+            breakoutAllowed: analysis.allowBreakout,
+          }))
+        }
       }
     } catch (error) {
       console.warn('[token/image] premium renderer source decode failed; using symbol fallback:', error)
@@ -2158,10 +2320,30 @@ export async function renderPremiumTokenIcon(params: {
     overlays.push(buildCompositeStep(signature, 'over'))
   }
 
-  return sharp(backgroundCard)
+  if (BREAKOUT_DEBUG_LOG_ENABLED) {
+    console.info('[breakout-debug]', JSON.stringify({
+      step: 'renderPremiumTokenIcon:composite',
+      breakoutDrawCount: breakoutLayer ? 1 : 0,
+      layerOrder: [
+        'backgroundCard',
+        'outerGlow',
+        'frameBloom',
+        'rearLayerB',
+        'rearLayerA',
+        'heroCompositeLayer',
+        'premiumFrame',
+        'breakoutLayer',
+        'signature',
+      ],
+    }))
+  }
+
+  const finalOutput = await sharp(backgroundCard)
     .composite(overlays)
     .flatten({ background: '#000000' })
     .png()
     .toBuffer()
+  await writeBreakoutDebugAsset('6-final-composited-output.png', finalOutput)
+  return finalOutput
 }
 
