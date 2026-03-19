@@ -18,6 +18,7 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
+        isTelegramMiniApp: false,
       }),
     ).toBe(true)
   })
@@ -31,6 +32,7 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
+        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -42,6 +44,7 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: true,
         authAttemptInFlight: false,
         authAutoAttempted: false,
+        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -53,6 +56,7 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: true,
         authAutoAttempted: false,
+        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -64,6 +68,7 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: true,
+        isTelegramMiniApp: false,
       }),
     ).toBe(false)
   })
@@ -77,6 +82,7 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
+        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -88,6 +94,21 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
+        isTelegramMiniApp: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not auto-start generic auth in Telegram Mini App context', () => {
+    expect(
+      shouldAutoStartWaitlistPrivyAuth({
+        step: 'auth',
+        privyReady: true,
+        privyAuthed: false,
+        busy: false,
+        authAttemptInFlight: false,
+        authAutoAttempted: false,
+        isTelegramMiniApp: true,
       }),
     ).toBe(false)
   })
