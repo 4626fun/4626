@@ -4,6 +4,10 @@ import { creatorVaultCharacter } from '../../../server/agent/eliza/character.js'
 import { getElizaLlmService } from '../../../server/agent/eliza/llm.js'
 import { createCorrelationId, logger } from '../../../server/_lib/logger.js'
 import { handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { RATE_LIMITS, checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+
+const STREAM_MESSAGE_MAX_CHARS = 4_000
+const STREAM_CONTEXT_MAX_CHARS = 8_000
 
 function firstQueryValue(value: string | string[] | undefined): string {
   if (typeof value === 'string') return value
@@ -29,6 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isAddressLike(sessionAddress)) {
     return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
+  const rate = checkRateLimit(rateLimitKey('agent-stream', sessionAddress), RATE_LIMITS.general)
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  }
 
   const queryMessage = firstQueryValue(req.query.message as any).trim()
   const bodyMessage =
@@ -39,13 +48,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!message) {
     return res.status(400).json({ success: false, error: 'message is required' })
   }
+  if (message.length > STREAM_MESSAGE_MAX_CHARS) {
+    return res.status(400).json({ success: false, error: 'message is too long' })
+  }
 
   const queryContext = firstQueryValue(req.query.context as any).trim()
   const bodyContext =
     req.body && typeof req.body === 'object' && typeof (req.body as any).context === 'string'
       ? String((req.body as any).context).trim()
       : ''
-  const vaultContext = bodyContext || queryContext
+  const vaultContextRaw = bodyContext || queryContext
+  const vaultContext = vaultContextRaw.slice(0, STREAM_CONTEXT_MAX_CHARS)
 
   const correlationId = createCorrelationId('sse')
   const llm = getElizaLlmService()

@@ -7,6 +7,8 @@ import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
 import { getCachedWalletIntelligence, cacheWalletIntelligence } from '../../../../server/_lib/walletIntelligenceCache.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+const MAX_CHAIN_IDS = 5
+const SUPPORTED_CHAIN_IDS = new Set<number>([1, 10, 137, 8453, 42161])
 
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -19,6 +21,26 @@ function parseChainIds(raw: string | undefined): number[] | undefined {
     .map((s) => Number(s.trim()))
     .filter((n) => Number.isFinite(n) && n > 0)
   return ids.length > 0 ? ids : undefined
+}
+
+function normalizeRequestedChainIds(chainIds: number[] | undefined): { value: number[] | undefined; error: string | null } {
+  if (!chainIds || chainIds.length === 0) return { value: undefined, error: null }
+  if (chainIds.length > MAX_CHAIN_IDS) {
+    return { value: undefined, error: `chainIds exceeds max length (${MAX_CHAIN_IDS})` }
+  }
+  const normalized = Array.from(
+    new Set(
+      chainIds
+        .map((id) => Math.floor(id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  )
+  const invalid = normalized.filter((id) => !SUPPORTED_CHAIN_IDS.has(id))
+  if (invalid.length > 0) {
+    return { value: undefined, error: `Unsupported chainIds: ${invalid.join(',')}` }
+  }
+  if (normalized.length === 0) return { value: undefined, error: null }
+  return { value: normalized, error: null }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -84,6 +106,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!address || !isAddressLike(address)) {
     return res.status(400).json({ success: false, error: 'address is required (0x...)' } satisfies ApiEnvelope<never>)
   }
+
+  const normalizedChainIds = normalizeRequestedChainIds(chainIds)
+  if (normalizedChainIds.error) {
+    return res.status(400).json({ success: false, error: normalizedChainIds.error } satisfies ApiEnvelope<never>)
+  }
+  chainIds = normalizedChainIds.value
 
   const effectiveHops = hops ?? 3
   const effectiveChainIds = chainIds ?? [8453, 1]

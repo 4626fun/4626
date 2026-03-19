@@ -139,7 +139,14 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         return _netFromGross(grossAssets, AUTH.tax());
     }
 
-    function deposit(uint256 assets, address receiver) public override notPaused nonReentrant returns (uint256 shares) {
+    function deposit(uint256 assets, address receiver)
+        public
+        override
+        onlyAdapterAuthorized
+        notPaused
+        nonReentrant
+        returns (uint256 shares)
+    {
         uint256 maxAssets = maxDeposit(receiver);
         if (assets > maxAssets) revert ERC4626ExceededMaxDeposit(receiver, assets, maxAssets);
 
@@ -156,7 +163,14 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         emit Deposit(msg.sender, receiver, netAssets, shares);
     }
 
-    function mint(uint256 shares, address receiver) public override notPaused nonReentrant returns (uint256 assetsIn) {
+    function mint(uint256 shares, address receiver)
+        public
+        override
+        onlyAdapterAuthorized
+        notPaused
+        nonReentrant
+        returns (uint256 assetsIn)
+    {
         uint256 maxShares = maxMint(receiver);
         if (shares > maxShares) revert ERC4626ExceededMaxMint(receiver, shares, maxShares);
 
@@ -176,6 +190,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     function withdraw(uint256 assets, address receiver, address owner)
         public
         override
+        onlyAdapterAuthorized
         notPaused
         nonReentrant
         returns (uint256 shares)
@@ -202,6 +217,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     function redeem(uint256 shares, address receiver, address owner)
         public
         override
+        onlyAdapterAuthorized
         notPaused
         nonReentrant
         returns (uint256 assetsOut)

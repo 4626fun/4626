@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 
 type JsonRpcRequest = { jsonrpc?: string; id?: unknown; method?: unknown; params?: unknown }
 
@@ -57,7 +58,21 @@ const RETRY_BACKOFF_MS = [0, 150]
 const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
 const RPC_CHAIN_ID_TIMEOUT_MS = 1_500
 const RPC_FORWARD_TIMEOUT_MS = 5_000
+const RPC_RATE_LIMIT_WINDOW_MS = 60_000
+const RPC_RATE_LIMIT_MAX_REQUESTS = 120
 const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
+const rpcRateLimitState = new Map<string, { count: number; resetAt: number }>()
+
+const BLOCKED_RPC_METHOD_PREFIXES = ['eth_send', 'personal_', 'wallet_', 'admin_', 'debug_', 'trace_'] as const
+const BLOCKED_RPC_METHODS = new Set<string>([
+  'eth_sign',
+  'eth_signTypedData',
+  'eth_signTypedData_v4',
+  'eth_sendRawTransaction',
+  'eth_sendTransaction',
+  'eth_submitWork',
+  'eth_submitHashrate',
+])
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -181,6 +196,37 @@ function isValidRpcBody(body: unknown): body is JsonRpcRequest | JsonRpcRequest[
   return Boolean(b.method)
 }
 
+function extractRpcMethods(payload: JsonRpcRequest | JsonRpcRequest[]): string[] {
+  const requests = Array.isArray(payload) ? payload : [payload]
+  const methods: string[] = []
+  for (const request of requests) {
+    const method = typeof request?.method === 'string' ? request.method.trim() : ''
+    if (method) methods.push(method)
+  }
+  return methods
+}
+
+function isBlockedRpcMethod(method: string): boolean {
+  const normalized = method.trim()
+  if (!normalized) return true
+  if (BLOCKED_RPC_METHODS.has(normalized)) return true
+  const lower = normalized.toLowerCase()
+  return BLOCKED_RPC_METHOD_PREFIXES.some((prefix) => lower.startsWith(prefix))
+}
+
+function consumeRateLimitBucket(key: string): boolean {
+  const now = Date.now()
+  const existing = rpcRateLimitState.get(key)
+  if (!existing || existing.resetAt <= now) {
+    rpcRateLimitState.set(key, { count: 1, resetAt: now + RPC_RATE_LIMIT_WINDOW_MS })
+    return true
+  }
+  if (existing.count >= RPC_RATE_LIMIT_MAX_REQUESTS) return false
+  existing.count += 1
+  rpcRateLimitState.set(key, existing)
+  return true
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -190,12 +236,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
+    return res.status(401).json({ success: false, error: 'Authentication required' })
+  }
+  if (!consumeRateLimitBucket(principalAddress.toLowerCase())) {
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  }
+
   const body = await readJsonBody<unknown>(req, { maxBytes: 512_000 })
   if (!isValidRpcBody(body)) {
     return res.status(400).json({ success: false, error: 'Invalid JSON-RPC body' })
   }
 
   const payload = body
+  const requestedMethods = extractRpcMethods(payload)
+  if (requestedMethods.length === 0) {
+    return res.status(400).json({ success: false, error: 'Missing JSON-RPC method' })
+  }
+  if (requestedMethods.some(isBlockedRpcMethod)) {
+    return res.status(400).json({ success: false, error: 'Unsupported JSON-RPC method' })
+  }
   const chain = resolveRpcChain(req)
   const rpcUrls = getRpcUrls(chain)
   const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
@@ -208,7 +269,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const actualChainId = await readRpcChainIdCached(rpc)
       if (actualChainId && actualChainId !== expectedChainId) {
         lastStatus = 502
-        lastError = `RPC chain mismatch for ${rpc}: expected ${expectedChainId}, got ${actualChainId}`
+        lastError = 'RPC chain mismatch'
         continue
       }
     }
@@ -252,9 +313,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(status).send(text)
       } catch (e) {
         if (isAbortError(e)) {
-          lastError = `RPC request timeout (${rpc})`
+          lastError = 'RPC request timeout'
         } else {
-          lastError = e instanceof Error ? e.message : String(e ?? 'RPC proxy error')
+          lastError = 'RPC proxy error'
         }
         lastStatus = 502
         if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue

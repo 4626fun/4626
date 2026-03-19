@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program_option::COption;
+use anchor_lang::solana_program::program_pack::Pack;
 use anchor_spl::token_2022;
+use anchor_spl::token_2022::spl_token_2022::state::Mint as Token2022Mint;
 
 use crate::constants::*;
 use crate::errors::CreatorShareHookError;
@@ -73,6 +76,17 @@ pub fn handler(ctx: Context<InitializeCreator>, params: InitializeCreatorParams)
     }
     if params.known_amm_programs.len() > MAX_AMM_PROGRAMS {
         return err!(CreatorShareHookError::AmmListFull);
+    }
+
+    // Only the Token-2022 mint authority can initialize creator config for this mint.
+    let mint_data = ctx.accounts.creator_mint.try_borrow_data()?;
+    let mint_state = Token2022Mint::unpack(&mint_data).map_err(|_| error!(CreatorShareHookError::InvalidMint))?;
+    let mint_authority = match mint_state.mint_authority {
+        COption::Some(authority) => authority,
+        COption::None => return err!(CreatorShareHookError::UnauthorizedAuthority),
+    };
+    if mint_authority != ctx.accounts.authority.key() {
+        return err!(CreatorShareHookError::UnauthorizedAuthority);
     }
 
     // Initialize CreatorConfig.

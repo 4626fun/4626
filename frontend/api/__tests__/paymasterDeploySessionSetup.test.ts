@@ -6,6 +6,7 @@ import { createMockReq, createMockRes } from './helpers'
 import { applyEnv } from './helpers'
 
 const ENTRYPOINT_V06 = getAddress('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
+const CSW_IMPLEMENTATION = getAddress('0x9999999999999999999999999999999999999998')
 
 const sessionAddress = getAddress('0x1111111111111111111111111111111111111111')
 const sessionSigner = getAddress('0x2222222222222222222222222222222222222222')
@@ -141,9 +142,11 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       if (String(address).toLowerCase() === sessionSigner.toLowerCase()) return '0x'
       return '0x1234'
     })
-    mockReadContract.mockImplementation((opts: { functionName?: string }) => {
+    mockReadContract.mockImplementation((opts: { address?: string; functionName?: string }) => {
       if (opts.functionName === 'isOwnerAddress') return Promise.resolve(true)
       if (opts.functionName === 'store') return Promise.resolve('0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c')
+      if (opts.functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (opts.functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
       return Promise.resolve(null)
     })
     mockGetLogs.mockResolvedValue([])
@@ -287,6 +290,83 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = String(responseBody?.error?.message ?? '')
     expect(errMsg).toMatch(/contract_owner_not_allowed/i)
+  })
+
+  it('rejects sponsored calls when sender provenance is not a Coinbase smart wallet implementation', async () => {
+    const disallowedImplementation = getAddress('0x9999999999999999999999999999999999999997')
+    mockReadContract.mockImplementation((opts: { address?: string; functionName?: string }) => {
+      const target = opts.address ? getAddress(opts.address) : null
+      if (opts.functionName === 'isOwnerAddress') return Promise.resolve(true)
+      if (opts.functionName === 'store') return Promise.resolve('0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c')
+      if (opts.functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (opts.functionName === 'implementation') {
+        if (target && target.toLowerCase() === sender.toLowerCase()) return Promise.resolve(disallowedImplementation)
+        return Promise.resolve(CSW_IMPLEMENTATION)
+      }
+      return Promise.resolve(null)
+    })
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [sessionSigner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/request denied/i)
+    expect(errMsg).toMatch(/sender_implementation_not_allowed/i)
   })
 
   it('returns JSON-RPC denial when principal resolution throws unexpectedly', async () => {

@@ -9,6 +9,7 @@ type SourceClass = 'brightBadge' | 'portraitPhoto' | 'illustration' | 'pixelArt'
 export type PremiumTokenIconParams = {
   size: number
   sourceImage?: Uint8Array
+  heroCutoutSourceImage?: Uint8Array
   symbol?: string
 }
 
@@ -44,6 +45,8 @@ type SourceAnalysis = {
   isPortraitLikeHeroAsset: boolean
   usePortraitEnhancement: boolean
 }
+
+type BreakoutSourceKind = 'heroCutout' | 'sourceAlpha' | 'none'
 
 type StackLayerConfig = {
   offsetXRatio: number
@@ -672,6 +675,20 @@ function createFrameGradientSvg(size: number, layout: PremiumLayout): string {
   </defs>
   ${createFrameStrokeRect(layout, 'url(#frameStroke)')}
 </svg>`
+}
+
+function resolveBreakoutSourceKind(params: {
+  sourceAlphaBreakoutAllowed: boolean
+  preparedHeroCutoutAvailable: boolean
+  preparedHeroCutoutBreakoutAllowed: boolean
+}): BreakoutSourceKind {
+  if (params.preparedHeroCutoutAvailable && params.preparedHeroCutoutBreakoutAllowed) {
+    return 'heroCutout'
+  }
+  if (params.sourceAlphaBreakoutAllowed) {
+    return 'sourceAlpha'
+  }
+  return 'none'
 }
 
 export async function renderBackgroundCard(params: {
@@ -2146,11 +2163,7 @@ function buildCompositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptio
   return { input, blend }
 }
 
-export async function renderPremiumTokenIcon(params: {
-  size: number
-  sourceImage?: Uint8Array
-  symbol?: string
-}): Promise<Buffer> {
+export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
   const size = sanitizeSize(params.size)
   const layout = getTokenIconLayout(size)
 
@@ -2173,10 +2186,21 @@ export async function renderPremiumTokenIcon(params: {
         size,
       })
       sourceClassForHero = analysis.sourceClass
+      const hasHeroCutoutSource = !!params.heroCutoutSourceImage && params.heroCutoutSourceImage.length > 0
+      const breakoutAllowedByPreparedHeroCutout =
+        hasHeroCutoutSource &&
+        analysis.fitMode === 'cover' &&
+        !analysis.brightBadgeLike
+      const breakoutSourceKind = resolveBreakoutSourceKind({
+        sourceAlphaBreakoutAllowed: analysis.allowBreakout,
+        preparedHeroCutoutAvailable: hasHeroCutoutSource,
+        preparedHeroCutoutBreakoutAllowed: breakoutAllowedByPreparedHeroCutout,
+      })
+      const allowBreakoutForLayout = breakoutSourceKind !== 'none'
       const topBiasPx =
         analysis.fitMode === 'cover' && analysis.sourceClass === 'portraitPhoto'
-          ? Math.max(1, Math.round(layout.chamberSize * (analysis.allowBreakout ? 0.022 : 0.018)))
-          : analysis.fitMode === 'cover' && analysis.allowBreakout && analysis.sourceClass === 'illustration'
+          ? Math.max(1, Math.round(layout.chamberSize * (allowBreakoutForLayout ? 0.022 : 0.018)))
+          : analysis.fitMode === 'cover' && allowBreakoutForLayout && analysis.sourceClass === 'illustration'
             ? Math.max(1, Math.round(layout.chamberSize * 0.009))
             : 0
       stackedUnderlay = await renderStackedArtworkUnderlay({
@@ -2202,27 +2226,41 @@ export async function renderPremiumTokenIcon(params: {
       })
       await writeBreakoutDebugAsset('1-clipped-in-frame-art.png', artworkLayer)
 
-      if (analysis.allowBreakout) {
+      if (allowBreakoutForLayout) {
         const breakoutOpacity = analysis.sourceClass === 'illustration' ? 0.92 : 0.22
         const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
           ? Math.max(1, Math.round(layout.chamberSize * 0.042))
           : topBiasPx
-        breakoutLayer = await renderBreakoutLayer({
-          size,
-          layout,
-          sourceImage: new Uint8Array(normalized),
-          opacity: breakoutOpacity,
-          scale: analysis.preferredScale,
-          topBiasPx: breakoutTopBiasPx,
-          sourceClass: analysis.sourceClass,
-        })
+        const breakoutSource = breakoutSourceKind === 'heroCutout'
+          ? new Uint8Array(params.heroCutoutSourceImage!)
+          : new Uint8Array(normalized)
+        try {
+          breakoutLayer = await renderBreakoutLayer({
+            size,
+            layout,
+            sourceImage: breakoutSource,
+            opacity: breakoutOpacity,
+            scale: analysis.preferredScale,
+            topBiasPx: breakoutTopBiasPx,
+            sourceClass: analysis.sourceClass,
+          })
+        } catch (breakoutError) {
+          // Never fail the full premium render due to optional breakout source failure.
+          breakoutLayer = null
+          console.warn('[token/image] premium breakout render failed; rendering contained icon:', {
+            sourceKind: breakoutSourceKind,
+            message: breakoutError instanceof Error ? breakoutError.message : String(breakoutError ?? ''),
+          })
+        }
         if (BREAKOUT_DEBUG_LOG_ENABLED) {
           console.info('[breakout-debug]', JSON.stringify({
             step: 'renderPremiumTokenIcon:breakout-layer',
             sourceClass: analysis.sourceClass,
             breakoutOpacity,
             breakoutTopBiasPx,
-            breakoutAllowed: analysis.allowBreakout,
+            breakoutAllowed: allowBreakoutForLayout,
+            breakoutSource: breakoutSourceKind,
+            breakoutAllowedByPreparedHeroCutout,
           }))
         }
       }
@@ -2311,5 +2349,9 @@ export async function renderPremiumTokenIcon(params: {
     .toBuffer()
   await writeBreakoutDebugAsset('6-final-composited-output.png', finalOutput)
   return finalOutput
+}
+
+export const __testables = {
+  resolveBreakoutSourceKind,
 }
 

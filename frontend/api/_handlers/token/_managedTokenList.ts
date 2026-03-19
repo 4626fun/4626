@@ -74,6 +74,15 @@ async function writeKnownShareOfts(chainId: number, addresses: Address[]): Promi
   await blobPutBytes({ pathname, bytes, contentType: 'application/json', cacheControlMaxAgeSeconds: 300 })
 }
 
+export async function ingestShareOftIntoManagedTokenlist(chainId: number, shareOft: Address): Promise<boolean> {
+  if (!isAddress(shareOft)) return false
+  const existing = await readKnownShareOfts(chainId).catch(() => [])
+  const already = existing.some((a) => a.toLowerCase() === shareOft.toLowerCase())
+  if (already) return false
+  await writeKnownShareOfts(chainId, [...existing, shareOft])
+  return true
+}
+
 const ERC20_META_ABI = [
   { type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
   { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
@@ -165,14 +174,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid shareOft' })
     }
 
-    const existing = await readKnownShareOfts(chainId)
-    const normalized = existing.map((a) => a.toLowerCase())
-    const nextAddr = shareOftRaw as Address
-    const already = normalized.includes(nextAddr.toLowerCase())
-    const next = already ? existing : [...existing, nextAddr]
-    await writeKnownShareOfts(chainId, next)
-
-    return res.status(200).json({ ok: true, chainId, shareOftsCount: next.length })
+    const added = await ingestShareOftIntoManagedTokenlist(chainId, shareOftRaw as Address).catch(() => false)
+    const shareOfts = await readKnownShareOfts(chainId).catch(() => [])
+    return res.status(200).json({ ok: true, added, chainId, shareOftsCount: shareOfts.length })
   }
 
   return res.status(405).json({ error: 'Method not allowed' })

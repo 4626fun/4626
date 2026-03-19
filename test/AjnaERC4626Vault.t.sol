@@ -117,6 +117,7 @@ contract AjnaERC4626VaultTest is Test {
         pool = new MockAjnaPool(IERC20(address(asset)), address(collateral));
         auth = new AjnaVaultAuth(address(this));
         vault = new AjnaERC4626Vault(address(pool), IERC20(address(asset)), "Ajna Inner Vault", "AIV", auth);
+        auth.setSwapper(user);
 
         asset.mint(user, 1_000e18);
         vm.prank(user);

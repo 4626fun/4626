@@ -13,6 +13,7 @@ import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { DEFAULT_CHAIN_ID } from '../../../../server/zora/_shared.js'
 import {
   ensureLaunchImageReady,
   LAUNCH_IMAGE_PROJECT_ID_KEY,
@@ -22,6 +23,7 @@ import {
   LAUNCH_IMAGE_VERIFIED_AT_KEY,
   LAUNCH_IMAGE_VERIFIED_BYTES_KEY,
 } from '../../../../server/_lib/deployLaunchImage.js'
+import { ingestShareOftIntoManagedTokenlist } from '../../token/_managedTokenList.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 
@@ -2702,6 +2704,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ovaultRaw = isPlainObject(rec?.payload?.ovault) ? rec.payload.ovault : {}
   const phase3AjnaAdminAlignment = readPhase3AjnaAdminAlignment(rec?.payload)
   const launchImage = readLaunchImageStatus(rec?.payload)
+
+  // Best-effort: if enabled, persist newly deployed ShareOFT addresses so a stable
+  // managed tokenlist can include them once Uniswap/tokenlists ingestion approves.
+  if (
+    process.env.MANAGED_TOKENLIST_INGEST_ON_DEPLOY === 'true' &&
+    String(rec?.step ?? '') === 'completed' &&
+    launchImage?.shareOft
+  ) {
+    try {
+      await ingestShareOftIntoManagedTokenlist(DEFAULT_CHAIN_ID, launchImage.shareOft)
+    } catch {
+      // Never block deploy status reads on tokenlist ingestion.
+    }
+  }
+
   return res.status(200).json({
     success: true,
     data: {

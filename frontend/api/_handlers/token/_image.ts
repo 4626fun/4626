@@ -24,6 +24,7 @@ import {
 } from '../../../server/zora/_shared.js'
 
 import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/blob.js'
+import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from '../../../server/_lib/creatorTokenArtwork.js'
 import { getCompletedImageProjectForVault } from '../../../server/_lib/imageProjects.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -31,6 +32,10 @@ declare const process: { env: Record<string, string | undefined> }
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const IPFS_GATEWAY = `${String(process.env.IPFS_GATEWAY ?? DEFAULT_IPFS_GATEWAY).trim().replace(/\/+$/, '')}/`
 const IPNS_GATEWAY = IPFS_GATEWAY.replace(/\/ipfs\/$/i, '/')
+const MAX_SOURCE_ARTWORK_BYTES = 8 * 1024 * 1024
+const MAX_SOURCE_ARTWORK_PIXELS = 16_000_000
+const MAX_CACHED_ICON_BYTES = 2 * 1024 * 1024
+const ENABLE_RAW_SOURCE_STYLE = String(process.env.TOKEN_IMAGE_ENABLE_RAW_STYLE ?? '').trim().toLowerCase() === 'true'
 
 function normalizeHttpUrl(value: string): string | null {
   try {
@@ -107,6 +112,41 @@ function normalizeSourceArtworkUrl(value: string | null | undefined): string | n
   return normalizeHttpUrl(raw)
 }
 
+function safeSourceSharp(bytes: Uint8Array | Buffer) {
+  return sharp(Buffer.from(bytes), { limitInputPixels: MAX_SOURCE_ARTWORK_PIXELS })
+}
+
+function decodeDataImageUrl(url: string): Uint8Array | null {
+  const match = /^data:image\/[a-z0-9.+-]+(?:;charset=[^;,]+)?(?:;(base64))?,(.*)$/i.exec(url)
+  if (!match) return null
+  const isBase64 = match[1] === 'base64'
+  const payload = match[2] ?? ''
+  try {
+    const bytes = isBase64
+      ? Buffer.from(payload, 'base64')
+      : Buffer.from(decodeURIComponent(payload), 'binary')
+    if (bytes.length > MAX_SOURCE_ARTWORK_BYTES) return null
+    return new Uint8Array(bytes)
+  } catch {
+    return null
+  }
+}
+
+async function sanitizeSourceArtworkBytes(bytes: Uint8Array): Promise<Uint8Array | null> {
+  if (!bytes || bytes.length <= 0) return null
+  if (bytes.length > MAX_SOURCE_ARTWORK_BYTES) return null
+  try {
+    const meta = await safeSourceSharp(bytes).metadata()
+    const width = meta.width ?? 0
+    const height = meta.height ?? 0
+    if (width <= 0 || height <= 0) return null
+    if (width * height > MAX_SOURCE_ARTWORK_PIXELS) return null
+    return bytes
+  } catch {
+    return null
+  }
+}
+
 // ABI fragments
 const SHARE_OFT_ABI = [
   { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
@@ -152,7 +192,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const formatRaw = (getStringQuery(req, 'format') ?? '').trim().toLowerCase()
   const format: 'png' | 'svg' = formatRaw === 'svg' ? 'svg' : 'png'
   const styleRaw = (getStringQuery(req, 'style') ?? '').trim().toLowerCase()
-  const preferRawSourceImage = styleRaw === 'raw'
+  // Raw-source passthrough returns upstream bytes directly. Keep it disabled by default
+  // and only allow in explicitly opted-in local preview workflows.
+  const preferRawSourceImage = styleRaw === 'raw' && ENABLE_RAW_SOURCE_STYLE && isLocalPreview
 
   try {
     const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
@@ -174,8 +216,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (vaultAddress) {
       const aiOverride = await getCompletedImageProjectForVault(vaultAddress).catch(() => null)
       if (aiOverride) {
-        const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
-        const rawBytes = fetched?.bytes
+        const fetched = await fetchBytes(aiOverride.outputBlobUrl, {
+          maxBytes: MAX_SOURCE_ARTWORK_BYTES,
+          requireImageContentType: true,
+        }).catch(() => null)
+        const rawBytes = fetched?.bytes ? await sanitizeSourceArtworkBytes(fetched.bytes) : null
         if (rawBytes && rawBytes.length > 0) {
           preferredSourceBytes = rawBytes
           preferredSourceFingerprint = sha256Hex(Buffer.from(rawBytes).toString('base64'))
@@ -201,7 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Supports both:
     // 1) ShareOFT address -> resolve vault.asset() and fetch that coin image.
     // 2) Direct creator coin address -> fetch coin image directly.
-    let creatorCoinImage: string | null = null
+    let creatorTokenArtwork: CreatorTokenArtwork | null = null
     let zoraResolvedSymbol: string | null = null
     const zoraKey = requireServerKey()
     if (zoraKey) {
@@ -209,11 +254,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const sdk: any = await import('@zoralabs/coins-sdk')
         sdk.setApiKey(zoraKey)
 
-        const pickCoinImage = (coinData: any): string | null =>
-          coinData?.mediaContent?.originalUri ||
-          coinData?.mediaContent?.previewImage?.medium ||
-          coinData?.mediaContent?.previewImage?.small ||
-          null
+        const pickCoinArtwork = (coinData: any): CreatorTokenArtwork | null =>
+          resolveCreatorTokenArtwork(coinData)
 
         const readCoin = async (coinAddress: Address): Promise<any | null> => {
           const coinResponse = await sdk.getCoin({
@@ -226,8 +268,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Try requested address first (handles direct creator coin lookups).
         const requestedCoin = await readCoin(address as Address).catch(() => null)
         if (requestedCoin) {
-          const image = pickCoinImage(requestedCoin)
-          if (image) creatorCoinImage = image
+          const artwork = pickCoinArtwork(requestedCoin)
+          if (artwork) creatorTokenArtwork = artwork
           const symbolCandidate = typeof requestedCoin.symbol === 'string' ? requestedCoin.symbol.trim() : ''
           if (symbolCandidate) zoraResolvedSymbol = symbolCandidate
           if (!creatorCoin) creatorCoin = address as Address
@@ -236,8 +278,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // If this is a ShareOFT with an underlying asset, prefer underlying coin artwork.
         if (creatorCoin && creatorCoin.toLowerCase() !== address.toLowerCase()) {
           const underlyingCoin = await readCoin(creatorCoin).catch(() => null)
-          const underlyingImage = pickCoinImage(underlyingCoin)
-          if (underlyingImage) creatorCoinImage = underlyingImage
+          const underlyingArtwork = pickCoinArtwork(underlyingCoin)
+          if (underlyingArtwork) creatorTokenArtwork = underlyingArtwork
         }
       } catch (e) {
         console.warn('[token/image] Failed to fetch Zora coin image:', e)
@@ -245,9 +287,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const renderedSymbol = zoraResolvedSymbol || String(symbol)
+    const artworkUrl = creatorTokenArtwork?.artworkUrl ?? null
+    const heroCutoutArtworkUrl = creatorTokenArtwork?.heroCutoutArtworkUrl ?? null
 
     if (preferRawSourceImage) {
-      const rawBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: creatorCoinImage }))
+      const rawBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: artworkUrl }))
       if (rawBytes && rawBytes.length > 0) {
         res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
         if (format === 'svg') {
@@ -257,7 +301,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           res.setHeader('Content-Type', 'image/svg+xml')
           return res.status(200).send(svg)
         }
-        const resized = await sharp(Buffer.from(rawBytes))
+        const resized = await safeSourceSharp(rawBytes)
           .resize(size, size, { fit: 'cover' })
           // Keep icon corners opaque/dark across wallets and image viewers.
           .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
@@ -270,10 +314,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // SVG stays self-contained so wallets and crawlers see the same deterministic composition.
     if (format === 'svg') {
-      const sourceBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: creatorCoinImage }))
+      const sourceBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: artworkUrl }))
+      const heroCutoutSourceBytes = await fetchSourceArtworkBytes({ upstreamUrl: heroCutoutArtworkUrl })
       const iconPng = await renderDeterministicTokenIcon({
         size,
         sourceBytes,
+        heroCutoutSourceBytes,
         symbol: renderedSymbol,
       })
       const b64 = Buffer.from(iconPng).toString('base64')
@@ -289,7 +335,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chainId,
       shareOft: address as Address,
       creatorCoin,
-      upstreamUrl: creatorCoinImage,
+      upstreamUrl: artworkUrl,
+      heroCutoutUpstreamUrl: heroCutoutArtworkUrl,
       size,
       symbol: renderedSymbol,
       sourceBytesOverride: preferredSourceBytes,
@@ -378,7 +425,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 101
+const FRAME_STYLE_V = 102
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -829,7 +876,7 @@ async function applyLayerOpacity(bytes: Uint8Array | Buffer, opacity: number): P
   if (clamped >= 0.999) {
     return Buffer.from(bytes)
   }
-  const { data, info } = await sharp(Buffer.from(bytes))
+  const { data, info } = await safeSourceSharp(bytes)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })
@@ -850,13 +897,13 @@ async function applyLayerOpacity(bytes: Uint8Array | Buffer, opacity: number): P
 
 async function analyzeTokenImageBytes(bytes: Uint8Array): Promise<TokenImageMetrics> {
   const sampleSize = 64
-  const sampleBuffer = await sharp(Buffer.from(bytes))
+  const sampleBuffer = await safeSourceSharp(bytes)
     .rotate()
     .ensureAlpha()
     .resize(sampleSize, sampleSize, { fit: 'inside', withoutEnlargement: false, background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .raw()
     .toBuffer({ resolveWithObject: false })
-  const meta = await sharp(Buffer.from(bytes)).metadata()
+  const meta = await safeSourceSharp(bytes).metadata()
 
   let visibleCount = 0
   let borderCount = 0
@@ -948,7 +995,7 @@ async function analyzeTokenImageBytes(bytes: Uint8Array): Promise<TokenImageMetr
 }
 
 async function isLowResolutionSource(bytes: Uint8Array, targetSize: number): Promise<boolean> {
-  const meta = await sharp(Buffer.from(bytes)).metadata()
+  const meta = await safeSourceSharp(bytes).metadata()
   const width = meta.width ?? 0
   const height = meta.height ?? 0
   const minDim = Math.min(width, height)
@@ -960,7 +1007,7 @@ async function analyzeBrightnessProfile(bytes: Uint8Array): Promise<{
   edgeLuma: number
 }> {
   const sampleSize = 48
-  const { data, info } = await sharp(Buffer.from(bytes))
+  const { data, info } = await safeSourceSharp(bytes)
     .rotate()
     .resize(sampleSize, sampleSize, { fit: 'cover', position: 'centre' })
     .removeAlpha()
@@ -1002,7 +1049,7 @@ async function analyzeTopCenterTexture(bytes: Uint8Array): Promise<{
   topCenterStdDev: number
 }> {
   const sampleSize = 64
-  const { data, info } = await sharp(Buffer.from(bytes))
+  const { data, info } = await safeSourceSharp(bytes)
     .rotate()
     .resize(sampleSize, sampleSize, { fit: 'cover', position: 'centre' })
     .removeAlpha()
@@ -1219,9 +1266,17 @@ async function fetchSourceArtworkBytes(params: {
 }): Promise<Uint8Array | null> {
   const url = normalizeSourceArtworkUrl(params.upstreamUrl)
   if (!url) return null
+  if (url.startsWith('data:image/')) {
+    const decoded = decodeDataImageUrl(url)
+    if (!decoded) return null
+    return await sanitizeSourceArtworkBytes(decoded)
+  }
   try {
-    const fetched = await fetchBytes(url)
-    return fetched.bytes
+    const fetched = await fetchBytes(url, {
+      maxBytes: MAX_SOURCE_ARTWORK_BYTES,
+      requireImageContentType: true,
+    })
+    return await sanitizeSourceArtworkBytes(fetched.bytes)
   } catch (error) {
     console.warn('[token/image] source artwork fetch failed; using deterministic fallback icon:', {
       url,
@@ -1232,7 +1287,7 @@ async function fetchSourceArtworkBytes(params: {
 }
 
 async function normalizeImageToPng(bytes: Uint8Array): Promise<Uint8Array> {
-  const normalized = await sharp(Buffer.from(bytes))
+  const normalized = await safeSourceSharp(bytes)
     .rotate()
     .png()
     .toBuffer()
@@ -1240,7 +1295,7 @@ async function normalizeImageToPng(bytes: Uint8Array): Promise<Uint8Array> {
 }
 
 async function cropTransparentPadding(bytes: Uint8Array): Promise<Uint8Array> {
-  const meta = await sharp(Buffer.from(bytes)).metadata()
+  const meta = await safeSourceSharp(bytes).metadata()
   const width = meta.width ?? 0
   const height = meta.height ?? 0
   if (width <= 0 || height <= 0) return bytes
@@ -1268,7 +1323,7 @@ async function cropTransparentPadding(bytes: Uint8Array): Promise<Uint8Array> {
     return bytes
   }
 
-  const cropped = await sharp(Buffer.from(bytes))
+  const cropped = await safeSourceSharp(bytes)
     .extract({
       left,
       top,
@@ -1281,7 +1336,7 @@ async function cropTransparentPadding(bytes: Uint8Array): Promise<Uint8Array> {
 }
 
 async function postProcessAiOverrideIcon(rawBytes: Uint8Array, size: number): Promise<Buffer> {
-  const resized = await sharp(Buffer.from(rawBytes))
+  const resized = await safeSourceSharp(rawBytes)
     .resize(size, size, { fit: 'cover' })
     .ensureAlpha()
     .png()
@@ -1528,7 +1583,7 @@ async function extractForeground(pngBytes: Uint8Array): Promise<Uint8Array | nul
 }
 
 async function isForegroundUsable(fgBytes: Uint8Array): Promise<boolean> {
-  const stats = await sharp(Buffer.from(fgBytes)).stats()
+  const stats = await safeSourceSharp(fgBytes).stats()
   const alphaMean = stats.channels[3]?.mean ?? 0
   return alphaMean > BREAKOUT_CONFIG.minForegroundCoverage * 255
 }
@@ -1539,7 +1594,7 @@ async function getAlphaBounds(imageBytes: Uint8Array, threshold = 24): Promise<{
   right: number
   bottom: number
 } | null> {
-  const { data, info } = await sharp(Buffer.from(imageBytes))
+  const { data, info } = await safeSourceSharp(imageBytes)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })
@@ -2123,12 +2178,14 @@ async function createTopBreakoutLayer(params: {
 async function renderDeterministicTokenIcon(params: {
   size: number
   sourceBytes: Uint8Array | null
+  heroCutoutSourceBytes?: Uint8Array | null
   symbol: string
 }): Promise<Uint8Array> {
   try {
     const premium = await renderPremiumTokenIcon({
       size: params.size,
       sourceImage: params.sourceBytes ?? undefined,
+      heroCutoutSourceImage: params.heroCutoutSourceBytes ?? undefined,
       symbol: params.symbol,
     })
     return new Uint8Array(premium)
@@ -2272,6 +2329,7 @@ async function getOrCreatePng(params: {
   shareOft: Address
   creatorCoin: Address | null
   upstreamUrl: string | null
+  heroCutoutUpstreamUrl?: string | null
   size: number
   symbol: string
   sourceBytesOverride?: Uint8Array | null
@@ -2289,21 +2347,29 @@ async function getOrCreatePng(params: {
       : url
         ? sha256Hex(url)
         : 'no-upstream')
-  const recipeSeed = `${creatorCoinLc ?? 'no-coin'}:${sourceFingerprint}:${FRAME_STYLE_V}:${params.size}`
+  const heroCutoutFingerprint = params.heroCutoutUpstreamUrl
+    ? sha256Hex(params.heroCutoutUpstreamUrl)
+    : 'no-hero-cutout'
+  const recipeSeed = `${creatorCoinLc ?? 'no-coin'}:${sourceFingerprint}:${heroCutoutFingerprint}:${FRAME_STYLE_V}:${params.size}`
 
   const tokenKey = `token-images/v1/base/${params.chainId}/${shareOftLc}/size-${params.size}/frame-${FRAME_STYLE_V}/${sha256Hex(
     recipeSeed,
   )}.png`
   const cachedToken = await blobHeadOrNull(tokenKey)
   if (cachedToken?.url) {
-    const { bytes } = await fetchBytes(cachedToken.url)
+    const { bytes } = await fetchBytes(cachedToken.url, {
+      maxBytes: MAX_CACHED_ICON_BYTES,
+      requireImageContentType: true,
+    })
     return bytes
   }
 
   const sourceBytes = params.sourceBytesOverride ?? (await fetchSourceArtworkBytes({ upstreamUrl: params.upstreamUrl }))
+  const heroCutoutSourceBytes = await fetchSourceArtworkBytes({ upstreamUrl: params.heroCutoutUpstreamUrl ?? null })
   const pngBytes = await renderDeterministicTokenIcon({
     size: params.size,
     sourceBytes,
+    heroCutoutSourceBytes,
     symbol: params.symbol,
   })
 
@@ -2436,6 +2502,7 @@ function generateFramedSvg({
 
 export const __testables = {
   normalizeSourceArtworkUrl,
+  resolveCreatorTokenArtwork,
   getTokenIconLayout,
   createTopBreakoutMask,
   renderDeterministicFrameLayer,

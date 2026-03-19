@@ -63,13 +63,12 @@ async function canSend(groupId: string): Promise<boolean> {
 // ---------------------------------------------------------------------------
 const PER_TX_MAX: Record<string, number> = { usdc: 1000, eth: 1 }
 const DAILY_CAP: Record<string, number> = { usdc: 5000, eth: 5 }
+const SEND_LIMIT_UNAVAILABLE_REASON = 'Durable daily limits are temporarily unavailable'
 
-type DailyLedger = { date: string; totals: Record<string, number> }
-const dailyLedgers = new Map<string, DailyLedger>()
 let sendLimitsSchemaEnsured = false
 
-async function ensureSendLimitsSchema(db: Db): Promise<boolean> {
-  if (sendLimitsSchemaEnsured) return true
+async function ensureSendLimitsSchema(db: Db): Promise<void> {
+  if (sendLimitsSchemaEnsured) return
   try {
     await db.sql`
       CREATE TABLE IF NOT EXISTS keepr_send_daily_ledger (
@@ -86,48 +85,25 @@ async function ensureSendLimitsSchema(db: Db): Promise<boolean> {
       ON keepr_send_daily_ledger (vault_address, day DESC);
     `
     sendLimitsSchemaEnsured = true
-    return true
   } catch (error) {
     sendLimitsSchemaEnsured = false
-    logger.warn('[send] failed to ensure durable send-limit schema, using memory fallback', {
+    logger.error('[send] failed to ensure durable send-limit schema', {
       error: error instanceof Error ? error.message : String(error),
     })
-    return false
+    throw new Error('send_limit_schema_unavailable')
   }
 }
 
-async function getSendLimitDb(): Promise<Db | null> {
-  if (!isDbConfigured()) return null
+async function getSendLimitDb(): Promise<Db> {
+  if (!isDbConfigured()) throw new Error('send_limit_db_not_configured')
   const db = await getDb()
-  if (!db) return null
-  const ready = await ensureSendLimitsSchema(db as Db)
-  if (!ready) return null
+  if (!db) throw new Error('send_limit_db_unavailable')
+  await ensureSendLimitsSchema(db as Db)
   return db as Db
-}
-
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function getDailySpentMemory(vaultAddress: string, token: string): number {
-  const ledger = dailyLedgers.get(vaultAddress)
-  if (!ledger || ledger.date !== todayKey()) return 0
-  return ledger.totals[token] ?? 0
-}
-
-function recordDailySpendMemory(vaultAddress: string, token: string, amount: number) {
-  const today = todayKey()
-  let ledger = dailyLedgers.get(vaultAddress)
-  if (!ledger || ledger.date !== today) {
-    ledger = { date: today, totals: {} }
-    dailyLedgers.set(vaultAddress, ledger)
-  }
-  ledger.totals[token] = (ledger.totals[token] ?? 0) + amount
 }
 
 async function getDailySpent(vaultAddress: string, token: string): Promise<number> {
   const db = await getSendLimitDb()
-  if (!db) return getDailySpentMemory(vaultAddress, token)
   try {
     const rows =
       typeof db.query === 'function'
@@ -154,29 +130,27 @@ async function getDailySpent(vaultAddress: string, token: string): Promise<numbe
           )?.rows
     const amount = Number(rows?.[0]?.amount ?? 0)
     if (Number.isFinite(amount) && amount >= 0) return amount
+    throw new Error('send_limit_read_invalid_amount')
   } catch (error) {
-    logger.warn('[send] failed reading durable daily spend, using memory fallback', {
+    logger.error('[send] failed reading durable daily spend', {
       vaultAddress,
       token,
       error: error instanceof Error ? error.message : String(error),
     })
+    throw new Error('send_limit_read_failed')
   }
-  return getDailySpentMemory(vaultAddress, token)
 }
 
 async function recordDailySpend(vaultAddress: string, token: string, amount: number): Promise<void> {
+  if (!Number.isFinite(amount) || amount === 0) return
   const db = await getSendLimitDb()
-  if (!db) {
-    recordDailySpendMemory(vaultAddress, token, amount)
-    return
-  }
   try {
     if (typeof db.query === 'function') {
       await db.query(
         `INSERT INTO keepr_send_daily_ledger (vault_address, token, day, amount, updated_at)
          VALUES ($1, $2, CURRENT_DATE, $3, NOW())
          ON CONFLICT (vault_address, token, day)
-         DO UPDATE SET amount = keepr_send_daily_ledger.amount + EXCLUDED.amount,
+         DO UPDATE SET amount = GREATEST(0, keepr_send_daily_ledger.amount + EXCLUDED.amount),
                        updated_at = NOW();`,
         [vaultAddress.toLowerCase(), token, amount],
       )
@@ -185,18 +159,18 @@ async function recordDailySpend(vaultAddress: string, token: string, amount: num
         INSERT INTO keepr_send_daily_ledger (vault_address, token, day, amount, updated_at)
         VALUES (${vaultAddress.toLowerCase()}, ${token}, CURRENT_DATE, ${amount}, NOW())
         ON CONFLICT (vault_address, token, day)
-        DO UPDATE SET amount = keepr_send_daily_ledger.amount + EXCLUDED.amount,
+        DO UPDATE SET amount = GREATEST(0, keepr_send_daily_ledger.amount + EXCLUDED.amount),
                       updated_at = NOW();
       `
     }
   } catch (error) {
-    logger.warn('[send] failed writing durable daily spend, using memory fallback', {
+    logger.error('[send] failed writing durable daily spend', {
       vaultAddress,
       token,
       amount,
       error: error instanceof Error ? error.message : String(error),
     })
-    recordDailySpendMemory(vaultAddress, token, amount)
+    throw new Error('send_limit_write_failed')
   }
 }
 
@@ -211,7 +185,12 @@ async function checkLimits(
   }
   const cap = DAILY_CAP[token]
   if (cap !== undefined) {
-    const spent = await getDailySpent(vaultAddress, token)
+    let spent = 0
+    try {
+      spent = await getDailySpent(vaultAddress, token)
+    } catch {
+      return { allowed: false, reason: SEND_LIMIT_UNAVAILABLE_REASON }
+    }
     if (spent + amount > cap) {
       const remaining = Math.max(0, cap - spent)
       return {
@@ -343,6 +322,25 @@ export async function handleSendCommand(params: {
     return { ok: false, response: 'Agent wallet not available. Contact the vault creator.' }
   }
 
+  let reservedDailySpend = false
+  try {
+    // Reserve daily limit first so successful transfers are always durably counted.
+    await recordDailySpend(params.vault.vaultAddress, parsed.token, amountNum)
+    reservedDailySpend = true
+  } catch (err) {
+    logger.error('[send] failed reserving durable daily spend', {
+      groupId: params.groupId,
+      vaultAddress: params.vault.vaultAddress,
+      token: parsed.token,
+      amount: amountNum,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      response: 'Transfer unavailable: durable daily limits are temporarily unavailable. Please retry shortly.',
+    }
+  }
+
   try {
     let txHash: string
 
@@ -404,8 +402,6 @@ export async function handleSendCommand(params: {
       txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
     }
 
-    await recordDailySpend(params.vault.vaultAddress, parsed.token, amountNum)
-
     logger.info('[send] Transfer sent', {
       groupId: params.groupId,
       token: tokenInfo.name,
@@ -439,6 +435,19 @@ export async function handleSendCommand(params: {
       },
     }
   } catch (err: any) {
+    if (reservedDailySpend) {
+      try {
+        await recordDailySpend(params.vault.vaultAddress, parsed.token, -amountNum)
+      } catch (rollbackError) {
+        logger.error('[send] failed rolling back reserved daily spend', {
+          groupId: params.groupId,
+          vaultAddress: params.vault.vaultAddress,
+          token: parsed.token,
+          amount: amountNum,
+          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+        })
+      }
+    }
     const msg = err?.message ?? 'Transaction failed'
     logger.error('[send] Transfer failed', { error: msg, groupId: params.groupId })
     return { ok: false, response: `Transfer failed: ${msg.slice(0, 200)}` }

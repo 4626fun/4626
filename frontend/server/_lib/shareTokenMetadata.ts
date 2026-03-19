@@ -1,5 +1,6 @@
 import { createPublicClient, http, type Address } from 'viem'
 import { base } from 'viem/chains'
+import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from './creatorTokenArtwork.js'
 import { resolveLensUserByOwner } from './lensAccounts.js'
 
 type ShareTokenMetadataParams = {
@@ -94,6 +95,7 @@ export async function buildShareTokenMetadata({
   }
 
   let creatorCoinImage: string | null = null
+  let creatorTokenArtwork: CreatorTokenArtwork | null = null
   let creatorCoinName: string | null = null
   let creatorCoinSymbol: string | null = null
   let creatorAddress: string | null = null
@@ -110,11 +112,8 @@ export async function buildShareTokenMetadata({
       })
       const coinData = coinResponse.data?.zora20Token
       if (coinData) {
-        creatorCoinImage =
-          coinData.mediaContent?.previewImage?.medium ||
-          coinData.mediaContent?.previewImage?.small ||
-          coinData.mediaContent?.originalUri ||
-          null
+        creatorTokenArtwork = resolveCreatorTokenArtwork(coinData)
+        creatorCoinImage = creatorTokenArtwork?.artworkUrl ?? null
         creatorCoinName = coinData.name || null
         creatorCoinSymbol = typeof coinData.symbol === 'string' ? coinData.symbol : null
         creatorAddress = typeof coinData.creatorAddress === 'string' ? coinData.creatorAddress : null
@@ -160,6 +159,14 @@ export async function buildShareTokenMetadata({
     rawDescription.length > 0 &&
     LEGACY_SHARE_DESCRIPTION_MARKERS.every((marker) => rawDescription.includes(marker))
   const publicDescription = !rawDescription || isLegacyDescription ? SHARE_TOKEN_PUBLIC_DESCRIPTION : rawDescription
+  const artworkContract = creatorTokenArtwork
+    ? {
+        artworkUrl: creatorTokenArtwork.artworkUrl,
+        ...(creatorTokenArtwork.heroCutoutArtworkUrl
+          ? { heroCutoutArtworkUrl: creatorTokenArtwork.heroCutoutArtworkUrl }
+          : {}),
+      }
+    : null
 
   return {
     id: `${chainId}:${address.toLowerCase()}`,
@@ -204,6 +211,7 @@ export async function buildShareTokenMetadata({
         creatorCoinAddress: creatorCoin,
         creatorAddress: creatorAddress,
       },
+      artwork: artworkContract,
     },
     properties: {
       category: SHARE_TOKEN_PUBLIC_DESCRIPTION,
@@ -216,6 +224,8 @@ export async function buildShareTokenMetadata({
       underlyingAssetName: creatorCoinName,
       underlyingAssetSymbol: creatorCoinSymbol,
       underlyingAssetImage: creatorCoinImage,
+      artworkUrl: artworkContract?.artworkUrl ?? null,
+      heroCutoutArtworkUrl: artworkContract?.heroCutoutArtworkUrl ?? null,
       creatorAddress: creatorAddress || lensProfile?.ownerAddress || null,
       creatorHandle: creatorHandle || lensProfile?.handle || null,
       creatorAvatar: creatorAvatar || lensProfile?.avatar || null,

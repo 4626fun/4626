@@ -549,7 +549,9 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
         uint256 currentTotalAssets = totalAssets();
         uint256 previousTotalAssets = totalAssetsAtLastReport;
 
-        if (previousTotalAssets == 0) {
+        // Bootstrap only on the very first report; a zero baseline after withdrawals
+        // should still process subsequent profit/loss instead of silently resetting.
+        if (previousTotalAssets == 0 && trustedPpsCheckpoint == 0) {
             lastReport = uint96(block.timestamp);
             totalAssetsAtLastReport = currentTotalAssets;
             trustedPpsCheckpoint = pricePerShare();

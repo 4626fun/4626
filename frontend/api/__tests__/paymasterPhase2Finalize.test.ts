@@ -6,6 +6,7 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const ENTRYPOINT_V06 = getAddress('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
 const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
+const CSW_IMPLEMENTATION = getAddress('0x9999999999999999999999999999999999999998')
 
 const sessionAddress = getAddress('0x1111111111111111111111111111111111111111')
 const sender = getAddress('0x3333333333333333333333333333333333333333')
@@ -131,6 +132,8 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       const address = opts.address ? getAddress(opts.address) : null
 
       if (functionName === 'isOwnerAddress') return Promise.resolve(true)
+      if (functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
       if (functionName === 'store') return Promise.resolve(bytecodeStore)
       if (functionName === 'get') return Promise.resolve('0x60006000')
       if (functionName === 'asset') return Promise.resolve(creatorToken)
@@ -161,7 +164,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
   })
 
   it('accepts finalizePhase2 with current tuple shape and selector', async () => {
-    mockGetLogs.mockResolvedValue([{ args: { vault } }])
+    mockGetLogs.mockResolvedValue([{ args: { vault, wrapper, shareOFT } }])
 
     const BATCHER_ABI = [
       {
@@ -279,7 +282,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
   })
 
   it('accepts finalizePhase2WithPermit2 with current tuple shape', async () => {
-    mockGetLogs.mockResolvedValue([{ args: { vault } }])
+    mockGetLogs.mockResolvedValue([{ args: { vault, wrapper, shareOFT } }])
 
     const BATCHER_ABI = [
       {

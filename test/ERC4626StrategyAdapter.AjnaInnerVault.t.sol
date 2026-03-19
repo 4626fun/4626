@@ -129,6 +129,7 @@ contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {
         innerVault = new AjnaERC4626Vault(address(pool), IERC20(address(asset)), "Ajna Inner Vault", "AIV", auth);
         outerVault = new MockCreatorOVaultLike(IERC20(address(asset)));
         adapter = new ERC4626StrategyAdapter(address(outerVault), address(innerVault), address(this));
+        auth.setSwapper(address(adapter));
 
         asset.mint(address(outerVault), 1_000e18);
 

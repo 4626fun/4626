@@ -245,6 +245,11 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'token/metadata': () => import('./token/_metadata.js'),
   'token/image': () => import('./token/_image.js'),
   'token/tokenlist': () => import('./token/_tokenlist.js'),
+
+  // Stable TokenLists-compatible managed multi-token document for ShareOFT tokens.
+  // Intended to support Uniswap UI discovery via approved token-list ingestion.
+  'tokenlist': () => import('./token/_managedTokenList.js'),
+  'tokenlist.json': () => import('./token/_managedTokenList.js'),
   // Versioned API paths (v1/token/{address}/metadata and v1/token/{address}/image)
   // These are handled dynamically in getApiHandler below
 

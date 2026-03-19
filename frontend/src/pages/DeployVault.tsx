@@ -4314,17 +4314,34 @@ function DeployVaultBatcher({
         const isLikelyPaymasterOrSponsorshipFailure = (error: unknown): boolean => {
           const msg = error instanceof Error ? error.message : String(error ?? '')
           const lc = msg.toLowerCase()
+          const isPaymasterPolicyDenial =
+            lc.includes('request denied -') ||
+            lc.includes('paymaster rejected this request') ||
+            lc.includes('requested resource not available') ||
+            lc.includes('resource not available') ||
+            lc.includes('sponsored userop exceeds paymaster total gas cap') ||
+            (lc.includes('total gas used by the user operation') && lc.includes('allowed limit')) ||
+            (lc.includes('total gas used') && lc.includes('allowed limit'))
+          return (
+            isPaymasterPolicyDenial ||
+            lc.includes('paymaster unavailable') ||
+            lc.includes('sponsorship') ||
+            lc.includes('stake/unstake delay') ||
+            lc.includes('banned opcode')
+          )
+        }
+
+        const isPaymasterPolicyDenial = (error: unknown): boolean => {
+          const msg = error instanceof Error ? error.message : String(error ?? '')
+          const lc = msg.toLowerCase()
           return (
             lc.includes('request denied -') ||
             lc.includes('paymaster rejected this request') ||
             lc.includes('requested resource not available') ||
             lc.includes('resource not available') ||
-            lc.includes('paymaster unavailable') ||
-            lc.includes('sponsorship') ||
-            lc.includes('stake/unstake delay') ||
-            lc.includes('banned opcode') ||
             lc.includes('sponsored userop exceeds paymaster total gas cap') ||
-            (lc.includes('total gas used by the user operation') && lc.includes('allowed limit'))
+            (lc.includes('total gas used by the user operation') && lc.includes('allowed limit')) ||
+            (lc.includes('total gas used') && lc.includes('allowed limit'))
           )
         }
 
@@ -4336,6 +4353,7 @@ function DeployVaultBatcher({
         ): Promise<boolean> => {
           if (strictNoEoaEnforced) return false
           if (isUserRejectedError(reason)) return false
+          if (isPaymasterPolicyDenial(reason)) return false
           if (!isLikelyPaymasterOrSponsorshipFailure(reason)) return false
           if (!canonicalSmartWallet || !connectedAddress || !wagmiWalletClient || !publicClient) return false
           if (connectedAddress.toLowerCase() === canonicalSmartWallet.toLowerCase()) return false
@@ -5034,16 +5052,7 @@ function DeployVaultBatcher({
                   return
                 } catch (fallbackError) {
                   const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError ?? '')
-                  const fallbackLc = fallbackMsg.toLowerCase()
-                  const fallbackIsPaymasterPolicyFailure =
-                    fallbackLc.includes('request denied -') ||
-                    fallbackLc.includes('paymaster rejected this request') ||
-                    fallbackLc.includes('requested resource not available') ||
-                    fallbackLc.includes('resource not available') ||
-                    fallbackLc.includes('sponsored userop exceeds paymaster total gas cap') ||
-                    (fallbackLc.includes('total gas used by the user operation') &&
-                      fallbackLc.includes('allowed limit')) ||
-                    (fallbackLc.includes('total gas used') && fallbackLc.includes('allowed limit'))
+                  const fallbackIsPaymasterPolicyFailure = isPaymasterPolicyDenial(fallbackError)
                   if (!fallbackIsPaymasterPolicyFailure) {
                     const usedDirectFallback = await tryOwnerDirectExecuteBatchFallback(
                       calls,

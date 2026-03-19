@@ -163,20 +163,9 @@ async function autoAllowlist(db: any, address: string, cswAddress: string | null
         AND revoked_at IS NULL
       LIMIT 1;
     `
-    if (existing.rows?.length > 0) return true
-
-    // Auto-allowlist the creator
-    await db.sql`
-      INSERT INTO allowlist (address, csw_address, source, created_at)
-      VALUES (${addr}, ${csw}, ${'quickstart'}, NOW())
-      ON CONFLICT (address) DO UPDATE SET
-        csw_address = COALESCE(EXCLUDED.csw_address, allowlist.csw_address),
-        revoked_at = NULL,
-        updated_at = NOW();
-    `
-    return true
+    return (existing.rows?.length ?? 0) > 0
   } catch (err) {
-    logger.warn('[quickstart] Auto-allowlist failed', err)
+    logger.warn('[quickstart] Allowlist check failed', err)
     return false
   }
 }
@@ -277,9 +266,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ------------------------------------------------------------------
-    // 3. Auto-allowlist
+    // 3. Enforce creator allowlist approval
     // ------------------------------------------------------------------
     const allowlisted = await autoAllowlist(db, creatorAddress, creatorAddress)
+    if (!allowlisted) {
+      return res.status(403).json({
+        success: false,
+        error: 'Creator access is pending approval',
+      } satisfies ApiEnvelope<never>)
+    }
 
     // ------------------------------------------------------------------
     // 4. Provision server signer wallet (explicit opt-in only)

@@ -118,7 +118,17 @@ function createDb() {
           ],
         }
       }
-      if (text.includes('select address from allowlist')) return { rows: [] }
+      if (text.includes('select address from allowlist')) {
+        const addr = typeof values[0] === 'string' ? values[0].toLowerCase() : ''
+        const csw = typeof values[1] === 'string' ? values[1].toLowerCase() : ''
+        if (
+          addr === '0x00000000000000000000000000000000000000aa' ||
+          csw === '0x00000000000000000000000000000000000000aa'
+        ) {
+          return { rows: [{ address: '0x00000000000000000000000000000000000000aa' }] }
+        }
+        return { rows: [] }
+      }
       if (text.includes('insert into allowlist')) return { rows: [] }
       return { rows: [] }
     }),

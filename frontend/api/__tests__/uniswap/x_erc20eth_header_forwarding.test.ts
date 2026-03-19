@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv, createMockReq, createMockRes } from '../helpers'
 
+const readRequestPrincipalAddressMock = vi.hoisted(() => vi.fn(() => '0x00000000000000000000000000000000000000aa'))
+
+vi.mock('../../../server/_lib/requestPrincipal.js', () => ({
+  readRequestPrincipalAddress: (...args: unknown[]) => readRequestPrincipalAddressMock(...args),
+}))
+
 async function loadQuoteHandler() {
   const mod = await import('../../_handlers/uniswap/_quote.ts')
   return mod.default
@@ -18,6 +24,7 @@ describe('Uniswap proxy forwards x-erc20eth-enabled header', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
   })
 
   afterEach(() => {

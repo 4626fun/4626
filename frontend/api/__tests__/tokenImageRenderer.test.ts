@@ -37,6 +37,54 @@ async function createSourcePng(params: {
   return new Uint8Array(bytes)
 }
 
+async function createHeroCutoutPng(params: {
+  width: number
+  height: number
+}): Promise<Uint8Array> {
+  const { width, height } = params
+  const bytes = await sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: {
+            width: Math.round(width * 0.22),
+            height: Math.round(height * 0.18),
+            channels: 4,
+            background: { r: 236, g: 244, b: 255, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
+        top: Math.round(height * 0.08),
+        left: Math.round(width * 0.39),
+      },
+      {
+        input: await sharp({
+          create: {
+            width: Math.round(width * 0.32),
+            height: Math.round(height * 0.2),
+            channels: 4,
+            background: { r: 58, g: 168, b: 255, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
+        top: Math.round(height * 0.16),
+        left: Math.round(width * 0.34),
+      },
+    ])
+    .png()
+    .toBuffer()
+  return new Uint8Array(bytes)
+}
+
 describe('token image renderer', () => {
   it('normalizes source artwork URLs to fetchable http(s) URLs', () => {
     const ipfsUrl = __testables.normalizeSourceArtworkUrl('ipfs://bafybeigdyrzt2q/cover.png')
@@ -52,6 +100,21 @@ describe('token image renderer', () => {
 
     expect(__testables.normalizeSourceArtworkUrl('ar://QmTestArId')).toBe('https://arweave.net/QmTestArId')
     expect(__testables.normalizeSourceArtworkUrl('chrome-extension://abc/token.png')).toBeNull()
+  })
+
+  it('resolves creator token artwork contract with optional hero cutout URL', () => {
+    const artwork = __testables.resolveCreatorTokenArtwork({
+      mediaContent: { originalUri: 'https://cdn.example/artwork.png' },
+      metadata: {
+        properties: {
+          heroCutoutArtworkUrl: 'https://cdn.example/hero-cutout.png',
+        },
+      },
+    })
+    expect(artwork).toEqual({
+      artworkUrl: 'https://cdn.example/artwork.png',
+      heroCutoutArtworkUrl: 'https://cdn.example/hero-cutout.png',
+    })
   })
 
   it('keeps deterministic panel geometry', () => {
@@ -98,6 +161,20 @@ describe('token image renderer', () => {
       symbol: 'AKITA',
     })
     const meta = await sharp(Buffer.from(rendered)).metadata()
+    expect(meta.width).toBe(512)
+    expect(meta.height).toBe(512)
+  }, 15_000)
+
+  it('accepts optional prepared hero cutout bytes in deterministic premium rendering', async () => {
+    const source = await createSourcePng({ width: 900, height: 1200 })
+    const heroCutout = await createHeroCutoutPng({ width: 900, height: 1200 })
+    const withCutout = await __testables.renderDeterministicTokenIcon({
+      size: 512,
+      sourceBytes: source,
+      heroCutoutSourceBytes: heroCutout,
+      symbol: 'AKITA',
+    })
+    const meta = await sharp(Buffer.from(withCutout)).metadata()
     expect(meta.width).toBe(512)
     expect(meta.height).toBe(512)
   }, 15_000)

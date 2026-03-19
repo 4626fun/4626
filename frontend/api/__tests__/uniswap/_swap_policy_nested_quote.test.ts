@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv, createMockReq, createMockRes } from '../helpers'
 
+const readRequestPrincipalAddressMock = vi.hoisted(() => vi.fn(() => '0x00000000000000000000000000000000000000aa'))
+
+vi.mock('../../../server/_lib/requestPrincipal.js', () => ({
+  readRequestPrincipalAddress: (...args: unknown[]) => readRequestPrincipalAddressMock(...args),
+}))
+
 async function loadSwapHandler() {
   const mod = await import('../../_handlers/uniswap/_swap.ts')
   return mod.default
@@ -13,6 +19,7 @@ describe('/api/uniswap/swap token policy with nested quote tokens', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
   })
 
   afterEach(() => {

@@ -97,6 +97,23 @@ const COINBASE_SMART_WALLET_OWNER_ABI = [
   },
 ] as const
 
+const COINBASE_SMART_WALLET_PROVENANCE_ABI = [
+  {
+    type: 'function',
+    name: 'entryPoint',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'implementation',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+] as const
+
 const COINBASE_SMART_WALLET_FACTORY_ABI = [
   {
     inputs: [
@@ -114,6 +131,13 @@ const COINBASE_SMART_WALLET_FACTORY_ABI = [
       { name: 'nonce', type: 'uint256' },
     ],
     name: 'getAddress',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'implementation',
     outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
@@ -1511,12 +1535,89 @@ function extractUserOpAndEntryPoint(method: string, params: unknown): { userOp: 
   return { userOp, entryPoint: getAddress(entryPointRaw), chainId }
 }
 
+async function readAllowedCoinbaseSmartWalletImplementations(client: Awaited<ReturnType<typeof getBaseClient>>): Promise<Set<Address>> {
+  const implementationResults = await Promise.all(
+    Array.from(COINBASE_SMART_WALLET_FACTORIES).map((factory) =>
+      client
+        .readContract({
+          address: factory,
+          abi: COINBASE_SMART_WALLET_FACTORY_ABI,
+          functionName: 'implementation',
+        })
+        .catch(() => null),
+    ),
+  )
+  const implementations = new Set<Address>()
+  for (const candidate of implementationResults) {
+    if (candidate && isAddress(candidate)) implementations.add(getAddress(candidate))
+  }
+  if (implementations.size === 0) throw new Error('csw_factory_implementation_unavailable')
+  return implementations
+}
+
+async function assertSenderCoinbaseSmartWalletProvenance(params: {
+  client: Awaited<ReturnType<typeof getBaseClient>>
+  sender: Address
+}) {
+  const [entryPointRaw, implementationRaw, allowedImplementations] = await Promise.all([
+    params.client
+      .readContract({
+        address: params.sender,
+        abi: COINBASE_SMART_WALLET_PROVENANCE_ABI,
+        functionName: 'entryPoint',
+      })
+      .catch(() => null),
+    params.client
+      .readContract({
+        address: params.sender,
+        abi: COINBASE_SMART_WALLET_PROVENANCE_ABI,
+        functionName: 'implementation',
+      })
+      .catch(() => null),
+    readAllowedCoinbaseSmartWalletImplementations(params.client),
+  ])
+
+  if (!entryPointRaw || !isAddress(entryPointRaw) || getAddress(entryPointRaw) !== ENTRYPOINT_V06) {
+    throw new Error('sender_entrypoint_not_allowed')
+  }
+  if (!implementationRaw || !isAddress(implementationRaw)) throw new Error('sender_implementation_missing')
+  const implementation = getAddress(implementationRaw)
+  if (!allowedImplementations.has(implementation)) {
+    throw new Error('sender_implementation_not_allowed')
+  }
+}
+
+function matchesPhase1DeployedLog(
+  log: any,
+  expected: {
+    vault: Address
+    wrapper?: Address | null
+    shareOFT?: Address | null
+  },
+): boolean {
+  const vault = log?.args?.vault
+  if (!vault || !isAddress(vault) || getAddress(vault) !== getAddress(expected.vault)) return false
+
+  if (expected.wrapper) {
+    const wrapper = log?.args?.wrapper
+    if (!wrapper || !isAddress(wrapper) || getAddress(wrapper) !== getAddress(expected.wrapper)) return false
+  }
+
+  if (expected.shareOFT) {
+    const shareOft = log?.args?.shareOFT
+    if (!shareOft || !isAddress(shareOft) || getAddress(shareOft) !== getAddress(expected.shareOFT)) return false
+  }
+
+  return true
+}
+
 async function assertSessionOwnsSender(params: { sender: Address; sessionAddress: Address; initCode: Hex | null; factory?: Address | null; factoryData?: Hex | null }) {
   const client = await getBaseClient()
 
   // Deployed accounts: verify onchain ownership.
   const code = await client.getBytecode({ address: params.sender })
   if (code && code !== '0x') {
+    await assertSenderCoinbaseSmartWalletProvenance({ client, sender: params.sender })
     const isOwner = await client.readContract({
       address: params.sender,
       abi: COINBASE_SMART_WALLET_OWNER_ABI,
@@ -1910,8 +2011,26 @@ async function validateInnerCalls(params: {
             functionName: 'asset',
           }).catch(() => null)) as Address | null
           if (!asset || !isAddress(asset)) throw new Error('legacy_vault_asset_not_found')
+          const creatorToken = getAddress(asset)
+          const phase1Logs = await client
+            .getLogs({
+              address: creatorVaultBatcher,
+              event: CREATOR_VAULT_BATCHER_PHASE1_EVENT[0],
+              args: { creatorToken, owner: params.sender },
+              fromBlock: 0n,
+              toBlock: 'latest',
+            })
+            .catch(() => [])
+          const matchedPhase1 = phase1Logs.some((log: any) =>
+            matchesPhase1DeployedLog(log, {
+              vault: getAddress(legacyVault as Address),
+              wrapper: legacyWrapper,
+              shareOFT: legacyShareOFT,
+            }),
+          )
+          if (!matchedPhase1) throw new Error('legacy_vault_provenance_mismatch')
           return {
-            creatorToken: getAddress(asset),
+            creatorToken,
             vault: legacyVault,
             wrapper: legacyWrapper,
             shareOFT: legacyShareOFT,
@@ -2008,6 +2127,31 @@ async function validateInnerCalls(params: {
     if (asset && getAddress(asset) !== getAddress(expectedCreatorToken as Address)) {
       throw new Error('vault_asset_mismatch')
     }
+    if (mode === 'deploy_phase2') {
+      if (!expectedWrapper || !expectedShareOFT) throw new Error('missing_wrapper_or_shareoft')
+      const [wrapperCode, shareCode] = (await Promise.all([
+        client.getBytecode({ address: expectedWrapper }),
+        client.getBytecode({ address: expectedShareOFT }),
+      ])) as [Hex | undefined, Hex | undefined]
+      if (!wrapperCode || wrapperCode === '0x') throw new Error('wrapper_not_deployed')
+      if (!shareCode || shareCode === '0x') throw new Error('shareoft_not_deployed')
+      const [wrapperVault, wrapperShare, wrapperCreatorCoin, wrapperOwner, shareVault, shareOwner] = (await Promise.all([
+        client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'vault' }).catch(() => null),
+        client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'shareOFT' }).catch(() => null),
+        client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'creatorCoin' }).catch(() => null),
+        client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'owner' }).catch(() => null),
+        client.readContract({ address: expectedShareOFT, abi: SHARE_OFT_VIEW_ABI, functionName: 'vault' }).catch(() => null),
+        client.readContract({ address: expectedShareOFT, abi: SHARE_OFT_VIEW_ABI, functionName: 'owner' }).catch(() => null),
+      ])) as [Address | null, Address | null, Address | null, Address | null, Address | null, Address | null]
+      if (!wrapperVault || getAddress(wrapperVault) !== expectedVault) throw new Error('wrapper_vault_mismatch')
+      if (!wrapperShare || getAddress(wrapperShare) !== expectedShareOFT) throw new Error('wrapper_shareoft_mismatch')
+      if (!wrapperCreatorCoin || getAddress(wrapperCreatorCoin) !== getAddress(expectedCreatorToken as Address)) {
+        throw new Error('wrapper_creator_token_mismatch')
+      }
+      if (!shareVault || getAddress(shareVault) !== expectedVault) throw new Error('shareoft_vault_mismatch')
+      if (wrapperOwner && getAddress(wrapperOwner) !== creatorVaultBatcher) throw new Error('wrapper_owner_mismatch')
+      if (shareOwner && getAddress(shareOwner) !== creatorVaultBatcher) throw new Error('shareoft_owner_mismatch')
+    }
     const [vaultName, vaultSymbol] = (await Promise.all([
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'name' }),
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'symbol' }),
@@ -2067,8 +2211,11 @@ async function validateInnerCalls(params: {
         })
         .catch(() => [])
       const matchedPhase1 = phase1Logs.some((log: any) => {
-        const vault = log.args?.vault
-        return vault && getAddress(vault) === expectedVault
+        return matchesPhase1DeployedLog(log, {
+          vault: expectedVault as Address,
+          wrapper: expectedWrapper,
+          shareOFT: expectedShareOFT,
+        })
       })
       if (!matchedPhase1) {
         throw new Error('vault_address_mismatch(phase1_event_miss)')

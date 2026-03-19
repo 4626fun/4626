@@ -75,17 +75,12 @@ function getPrivyPolicyId(): string | null {
   return optionalEnv('PRIVY_WALLET_POLICY_ID')
 }
 
-let warnedMissingPrivyPolicyId = false
-
 function requirePrivyPolicyId(): string | null {
   const id = getPrivyPolicyId()
   const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase()
   const isProd = nodeEnv === 'production' || Boolean((process.env.VERCEL ?? '').trim())
-  if (isProd && !id && !warnedMissingPrivyPolicyId) {
-    warnedMissingPrivyPolicyId = true
-    console.warn(
-      '[privy] PRIVY_WALLET_POLICY_ID missing; creating wallets without policy_ids. Configure a policy ID to enforce server-wallet policy constraints.',
-    )
+  if (isProd && !id) {
+    throw new Error('PRIVY_WALLET_POLICY_ID missing in production')
   }
   return id
 }

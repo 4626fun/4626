@@ -6,7 +6,7 @@ import sharp from 'sharp'
 import { requireServerKey } from '../../../server/zora/_shared.js'
 import { fetchBytes } from '../../../server/_lib/blob.js'
 import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/imageProjects.js'
-import { parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
+import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 
 const FRAME_SVG_URL = new URL('../../../public/brand/4626v2.svg', import.meta.url)
 const AUTO_ASSET_MAX_BODY_BYTES = 20_000
@@ -21,6 +21,9 @@ type Body = {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApiAuthenticated(req, res)) return
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' })
+  const actor = getImageApiActor(req)
+  if (!actor) return res.status(401).json({ success: false, error: 'Sign in required' })
+  const actorAddress = actor.toLowerCase()
 
   let body: Body
   try {
@@ -37,24 +40,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'creatorCoinAddress must be a valid EVM address' })
   }
 
+  // Enforce project ownership before mutating assets.
+  const existingProject = await getImageGenerationProject(projectId).catch(() => null)
+  if (!existingProject) {
+    return res.status(404).json({ success: false, error: 'Project not found' })
+  }
+  const projectOwner = existingProject.ownerAddress ? String(existingProject.ownerAddress).toLowerCase() : null
+  if (!projectOwner || projectOwner !== actorAddress) {
+    return res.status(403).json({ success: false, error: 'Not authorized for this project' })
+  }
+
   // Idempotency: if frame + subject are already attached to this project, skip
   // the Zora fetch and the Supabase uploads. Return the existing subject blob URL
   // so the caller still has a preview image to display.
-  const existingProject = await getImageGenerationProject(projectId).catch(() => null)
-  if (existingProject) {
-    const existingAssets = (existingProject.assets as any[]) ?? []
-    const existingFrame = existingAssets.find((a) => a.role === 'frame') ?? null
-    const existingSubject = existingAssets.find((a) => a.role === 'subject') ?? null
-    if (existingFrame && existingSubject) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          subjectAssetId: existingSubject.id,
-          subjectImageUrl: existingSubject.blobUrl,
-          cached: true,
-        },
-      })
-    }
+  const existingAssets = (existingProject.assets as any[]) ?? []
+  const existingFrame = existingAssets.find((a) => a.role === 'frame') ?? null
+  const existingSubject = existingAssets.find((a) => a.role === 'subject') ?? null
+  if (existingFrame && existingSubject) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        subjectAssetId: existingSubject.id,
+        subjectImageUrl: existingSubject.blobUrl,
+        cached: true,
+      },
+    })
   }
 
   // 4626v2.svg is a stroke-only ring (no background fill). Inject a strong
@@ -134,7 +144,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(422).json({ success: false, error: 'Could not resolve creator coin image from Zora' })
   }
 
-  const { bytes: subjectBytes, contentType: subjectContentType } = await fetchBytes(subjectUrl)
+  let subjectBytes: Uint8Array
+  let subjectContentType: string | null
+  try {
+    const fetched = await fetchBytes(subjectUrl, {
+      maxBytes: AUTO_ASSET_MAX_BYTES,
+      requireImageContentType: true,
+    })
+    subjectBytes = fetched.bytes
+    subjectContentType = fetched.contentType
+  } catch {
+    return res.status(422).json({ success: false, error: 'Could not fetch a safe creator coin image' })
+  }
 
   const [, subjectAsset] = await Promise.all([
     attachImageGenerationAsset({

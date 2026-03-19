@@ -952,7 +952,8 @@ export function Swap() {
   const swapTokenOptions = useMemo<SwapTokenOption[]>(() => {
     return allTokenOptions.map((option) => ({
       ...option,
-      verified: option.verified ?? (option.group === 'core' || option.group === 'creator' || option.group === 'share'),
+      // Never auto-trust URL-injected creator/share tokens; only core defaults to verified.
+      verified: option.verified ?? (option.group === 'core'),
       sectionTag:
         option.group === 'creator' ? 'creator' : option.group === 'share' ? 'content' : undefined,
     }))

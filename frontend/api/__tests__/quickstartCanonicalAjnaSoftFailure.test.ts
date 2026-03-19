@@ -65,9 +65,15 @@ vi.mock('../../server/_lib/logger.js', () => ({
 
 function createDb() {
   return {
-    sql: vi.fn(async (strings: TemplateStringsArray) => {
+    sql: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-      if (text.includes('select address from allowlist')) return { rows: [] }
+      if (text.includes('select address from allowlist')) {
+        const addr = typeof values[0] === 'string' ? values[0].toLowerCase() : ''
+        if (addr === CREATOR_ADDRESS.toLowerCase()) {
+          return { rows: [{ address: CREATOR_ADDRESS.toLowerCase() }] }
+        }
+        return { rows: [] }
+      }
       if (text.includes('insert into allowlist')) return { rows: [] }
       return { rows: [] }
     }),

@@ -14,6 +14,21 @@ const HOP_DELAY_MS = 250
 
 /** Hard ceiling on recursive hops to prevent runaway chains. */
 const MAX_HOPS_CEILING = 5
+const MAX_MULTI_CHAIN_IDS = 5
+const DEFAULT_TRACE_CHAIN_IDS = [8453, 1] as const
+const SUPPORTED_TRACE_CHAIN_IDS = new Set<number>([1, 10, 137, 8453, 42161])
+
+function normalizeTraceChainIds(chainIds: number[] | undefined): number[] {
+  const requested = chainIds && chainIds.length > 0 ? chainIds : [...DEFAULT_TRACE_CHAIN_IDS]
+  const normalized = Array.from(
+    new Set(
+      requested
+        .map((id) => Math.floor(id))
+        .filter((id) => Number.isFinite(id) && id > 0 && SUPPORTED_TRACE_CHAIN_IDS.has(id)),
+    ),
+  ).slice(0, MAX_MULTI_CHAIN_IDS)
+  return normalized.length > 0 ? normalized : [...DEFAULT_TRACE_CHAIN_IDS]
+}
 
 export type FunderHop = {
   /** The address being traced at this hop. */
@@ -170,7 +185,7 @@ export async function traceFundersMultiChain(
   address: string,
   options: { hops?: number; chainIds?: number[] } = {},
 ): Promise<FunderTraceResult & { chains: Record<number, FunderTraceResult> }> {
-  const chainIds = options.chainIds ?? [8453, 1] // Base + Ethereum mainnet
+  const chainIds = normalizeTraceChainIds(options.chainIds)
   const hops = options.hops ?? 3
 
   const results = await Promise.all(

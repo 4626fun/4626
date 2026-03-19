@@ -159,6 +159,27 @@ contract CreatorOVaultReportTest is Test {
         assertEq(vault.totalAssetsAtLastReport(), redepositAssets);
     }
 
+    function test_reportAfterBaselineZero_countsSubsequentProfit() public {
+        uint256 assetsBefore = vault.totalAssets();
+        vault.setFlashLoanProtection(0, type(uint256).max, 0);
+
+        vm.prank(alice);
+        vault.withdraw(assetsBefore, alice, alice);
+
+        assertEq(vault.totalAssets(), 0);
+        assertEq(vault.totalAssetsAtLastReport(), 0);
+
+        uint256 donatedAssets = 100_000e18;
+        vm.prank(donor);
+        vault.injectCapital(donatedAssets);
+
+        (uint256 profit, uint256 loss) = vault.report();
+
+        assertEq(profit, donatedAssets);
+        assertEq(loss, 0);
+        assertEq(vault.totalAssetsAtLastReport(), vault.totalAssets());
+    }
+
     function test_reportAfterQueuedClaim_doesNotTreatUserPrincipalAsLoss() public {
         uint256 lockedBefore = _lockProfit(PROFIT_ASSETS);
 
