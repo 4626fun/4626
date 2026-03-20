@@ -7,6 +7,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
+import { hasTelegramMiniAppEntrypointContext } from '@/lib/telegramWebApp'
 import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
@@ -294,6 +295,27 @@ function RequireAccepted(props: { children?: React.ReactNode }) {
   return <RequireRouteAccess routeId="accepted">{props.children}</RequireRouteAccess>
 }
 
+function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode }) {
+  const access = useAccessContext()
+  const location = useLocation()
+
+  if (hasTelegramMiniAppEntrypointContext()) {
+    return props.children ? <>{props.children}</> : <Outlet />
+  }
+
+  const acceptedDecision = resolveAccess('accepted', access)
+  if (acceptedDecision.reason === 'loading') return <GuardPending />
+  if (acceptedDecision.allow) {
+    return <Navigate to="/swap" replace state={{ from: location.pathname }} />
+  }
+  const to = acceptedDecision.redirectTo ?? withReason('/', acceptedDecision.reason)
+  if (to.startsWith('http://') || to.startsWith('https://')) {
+    if (typeof window !== 'undefined') window.location.replace(to)
+    return null
+  }
+  return <Navigate to={to} replace />
+}
+
 function RequireAdmin(props: { children?: React.ReactNode }) {
   return <RequireRouteAccess routeId="admin">{props.children}</RequireRouteAccess>
 }
@@ -570,7 +592,14 @@ function App() {
 
             {/* Session-gated routes */}
             <Route element={<RequireSession />}>
-              <Route path="/telegram/swap" element={<Swap />} />
+              <Route
+                path="/telegram/swap"
+                element={
+                  <RequireTelegramMiniAppEntry>
+                    <Swap />
+                  </RequireTelegramMiniAppEntry>
+                }
+              />
               <Route element={<RequireAccepted />}>
                 <Route path="/explore/creators" element={<ExploreCreators />} />
                 <Route path="/explore/content" element={<ExploreContent />} />

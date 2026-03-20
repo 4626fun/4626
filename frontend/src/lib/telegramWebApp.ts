@@ -175,6 +175,11 @@ export function isTelegramMiniAppContext(): boolean {
   return readTelegramMiniAppInitData().length > 0
 }
 
+export function hasTelegramMiniAppEntrypointContext(): boolean {
+  if (isTelegramMiniAppContext()) return true
+  return Boolean(readStoredSession())
+}
+
 function hashString(value: string): string {
   let hash = 0
   for (let index = 0; index < value.length; index += 1) {
