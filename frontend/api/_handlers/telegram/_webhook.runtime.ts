@@ -1282,6 +1282,11 @@ function resolveTelegramBaseAppInviteUrl(): string {
   return raw || 'https://base.app/invite/4626/T9Y9BZYK'
 }
 
+/** Telegram HTML parse_mode: escape & and " inside href="..." */
+function escapeTelegramHtmlHrefAttribute(url: string): string {
+  return url.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
 function buildTelegramLinkFlowResponse(params: {
   chatId: string
   telegramUserId: string
@@ -1364,19 +1369,19 @@ function buildTelegramLinkFlowResponse(params: {
     text: 'Open Mini App',
     url: linkUrl,
   })
-  const markdownSafeLinkUrl = linkUrl.replace(/\)/g, '%29')
+  const linkHtmlHref = escapeTelegramHtmlHrefAttribute(linkUrl)
   const baseInviteUrl = resolveTelegramBaseAppInviteUrl()
   const linkBodyLines =
     params.zoraOnboardingBranch === 'need'
       ? [
           '<b>Base app | 4626.fun</b>',
           '',
-          'Need a new Coinbase Smart Wallet? Install the Base app first, then continue here to finish 4626 setup.',
+          'Need a Coinbase Smart Wallet? Install the Base app first, then finish setup here.',
           '',
           '1) Tap Get Base app.',
           '2) Tap Open Mini App.',
           '3) Authenticate with Privy.',
-          '4) Create or connect your Coinbase Smart Wallet when prompted (canonical account for Telegram).',
+          '4) Create or connect your Coinbase Smart Wallet (canonical account for Telegram).',
           '',
           '4626 never holds your keys — you approve actions in your wallet.',
           'Telegram setup is separate from full app access — team approval may still apply for trading.',
@@ -1385,13 +1390,13 @@ function buildTelegramLinkFlowResponse(params: {
         ? [
             '<b>Link | 4626.fun</b>',
             '',
-            'Use the wallet tied to 4626.fun (your Privy embedded wallet from the app). Approve it as an owner on your existing Coinbase Smart Wallet, then confirm in the Mini App.',
+            'Use your in-app Privy wallet: add it as an owner on your Coinbase Smart Wallet, then confirm in the Mini App.',
             '',
-            '4626 never holds your keys — you approve actions; backup or export in the wallet app where offered.',
+            '4626 never holds your keys — you approve actions in your wallet.',
             '',
             '1) Tap Open Mini App.',
-            '2) Authenticate with Privy.',
-            '3) Complete the owner step on your existing Coinbase Smart Wallet (canonical account).',
+            '2) Sign in with Privy.',
+            '3) Complete the owner step on your CSW (canonical account).',
             '',
             'Telegram setup is separate from full app access — team approval may still apply for trading.',
           ]
@@ -1426,7 +1431,7 @@ function buildTelegramLinkFlowResponse(params: {
       ...linkBodyLines,
       ...(linkToken ? ['', 'Link expires in ~15 minutes.'] : []),
       '',
-      `If the button fails: [Open Mini App](${markdownSafeLinkUrl})`,
+      `If the button fails: <a href="${linkHtmlHref}">Open Mini App</a>`,
       'Then tap Check Link Status.',
     ].join('\n'),
     replyMarkup: {

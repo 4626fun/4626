@@ -46,9 +46,15 @@ export type CanonicalMachineTransition = {
   commands: CanonicalMachineCommand[]
 }
 
+/** Shallow Partial<> does not partial-ize nested `context`; patches must merge field-by-field. */
+type CanonicalMachineSnapshotPatch = {
+  state?: CanonicalMachineState
+  context?: Partial<CanonicalMachineContext>
+}
+
 function withSnapshot(
   snapshot: CanonicalMachineSnapshot,
-  patch: Partial<CanonicalMachineSnapshot>,
+  patch: CanonicalMachineSnapshotPatch,
   commands: CanonicalMachineCommand[] = [],
 ): CanonicalMachineTransition {
   return {

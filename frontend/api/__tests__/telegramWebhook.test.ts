@@ -1724,6 +1724,7 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Tap Open Mini App.')
     expect(String(payload.text ?? '')).toContain('If the button fails')
+    expect(String(payload.text ?? '')).toMatch(/<a href="[^"]+">Open Mini App<\/a>/)
     expect(String(payload.parse_mode ?? '')).toBe('HTML')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(true)
