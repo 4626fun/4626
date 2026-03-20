@@ -1,6 +1,10 @@
 import { logger } from '../_lib/logger.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import { toAgentError } from '../agent/eliza/_errors.js'
+import { parsePositiveNumber } from '../agent/eliza/_rateLimit.js'
+import { withRetry, withTimeout } from '../agent/eliza/_retry.js'
+import { getActionRetryBudget } from '../agent/eliza/_runtimePolicy.js'
+import { buildContinuityContextBlock } from '../agent/eliza/_stateHelpers.js'
 import { resolveCharacterRuntimeConfig } from '../agent/eliza/character.js'
 import { getElizaLlmService } from '../agent/eliza/llm.js'
 import { createRuntimeBridge } from '../agent/eliza/runtimeBridge.js'
@@ -13,65 +17,15 @@ import {
 
 const llmService = getElizaLlmService()
 const CHAT_MEMORY_AGENT_KEY = 'keepr-ai-chat'
-const HISTORY_TURN_LIMIT = 10
-const HISTORY_CHAR_BUDGET = 1_800
 type ChatRuntimeBridge = ReturnType<typeof createRuntimeBridge>
-let chatRuntimeBridgePromise: Promise<ChatRuntimeBridge> | null = null
 
-async function getChatRuntimeBridge(): Promise<ChatRuntimeBridge> {
-  if (chatRuntimeBridgePromise) return chatRuntimeBridgePromise
-  chatRuntimeBridgePromise = (async () => {
-    // Lazy-load plugin wiring to avoid module init cycles with command handlers.
-    const [
-      { keeprPlugin },
-      { zoraPlugin },
-      { uniswapPlugin },
-      { bankrPlugin },
-      { lensPlugin },
-      { walletIntelPlugin },
-      { reputationPlugin },
-      { crePlugin },
-      { knowledgePlugin },
-    ] = await Promise.all([
-      import('../agent/eliza/plugins/keepr/index.js'),
-      import('../agent/eliza/plugins/zora/index.js'),
-      import('../agent/eliza/plugins/uniswap/index.js'),
-      import('../agent/eliza/plugins/bankr/index.js'),
-      import('../agent/eliza/plugins/lens/index.js'),
-      import('../agent/eliza/plugins/walletIntel/index.js'),
-      import('../agent/eliza/plugins/reputation/index.js'),
-      import('../agent/eliza/plugins/cre/index.js'),
-      import('../agent/eliza/plugins/knowledge/index.js'),
-    ])
-    const characterRuntimeConfig = resolveCharacterRuntimeConfig()
-    return createRuntimeBridge({
-      agentKey: CHAT_MEMORY_AGENT_KEY,
-      plugins: [
-        keeprPlugin,
-        zoraPlugin,
-        uniswapPlugin,
-        bankrPlugin,
-        lensPlugin,
-        walletIntelPlugin,
-        reputationPlugin,
-        crePlugin,
-        knowledgePlugin,
-      ],
-      settings: characterRuntimeConfig.settings,
-      character: {
-        systemPrompt: characterRuntimeConfig.systemPrompt,
-        preferredModel: characterRuntimeConfig.preferredModel,
-      },
-      history: {
-        maxConversations: 500,
-        maxMessagesPerConversation: 40,
-      },
-    })
-  })().catch((error) => {
-    chatRuntimeBridgePromise = null
-    throw error
-  })
-  return chatRuntimeBridgePromise
+type ChatRuntimeContext = {
+  bridge: ChatRuntimeBridge
+  contextProviders: Array<{
+    name?: string
+    get: (runtime: unknown, memory: unknown, state: unknown) => Promise<{ text?: string } | null | undefined>
+  }>
+  characterConfig: { systemPrompt: string; preferredModel: string }
 }
 
 const ACTION_TIMEOUT_MS = Math.floor(parsePositiveNumber(
@@ -215,8 +169,6 @@ function classifyIdentityIntent(text: string): IdentityIntent {
   }
   return null
 }
-
-type ChatRuntimeBridge = ReturnType<typeof createRuntimeBridge>
 
 function buildStackSnapshotReply(conversationType: string, runtimeTruth: AssistantRuntimeTruth): string {
   const platform = platformLabelForPrompt(conversationType)
@@ -393,32 +345,6 @@ function toSenderAddress(senderWallet: string): string | null {
   return normalized
 }
 
-function isExplicitAiInvocation(text: string): boolean {
-  const trimmed = String(text ?? '').trim().toLowerCase()
-  if (!trimmed) return false
-  return (
-    trimmed.startsWith('/ai') ||
-    trimmed.startsWith('ai ') ||
-    trimmed.startsWith('@keepr') ||
-    trimmed.startsWith('@bot')
-  )
-}
-
-function redactConversationId(groupId: string): string {
-  const normalized = String(groupId ?? '').trim()
-  if (!normalized) return 'unknown'
-  const sep = normalized.indexOf(':')
-  if (sep <= 0) {
-    if (normalized.length <= 14) return normalized
-    return `${normalized.slice(0, 8)}...${normalized.slice(-4)}`
-  }
-  const prefix = normalized.slice(0, sep)
-  const value = normalized.slice(sep + 1)
-  if (!value) return `${prefix}:unknown`
-  if (value.length <= 12) return `${prefix}:${value}`
-  return `${prefix}:${value.slice(0, 8)}...${value.slice(-4)}`
-}
-
 function extractRecentTurns(state: Record<string, unknown>): ConversationTurn[] {
   const recent = Array.isArray((state as any)?.recentMessages) ? (state as any).recentMessages : []
   const turns: ConversationTurn[] = []
@@ -435,17 +361,54 @@ function extractRecentTurns(state: Record<string, unknown>): ConversationTurn[] 
   return turns
 }
 
-function normalizeAiPrompt(text: string): string {
+function normalizeHistoryText(text: unknown): string {
   return String(text ?? '')
-    .replace(/^\/?ai\s*/i, '')
-    .replace(/^@(keepr|bot)\s*/i, '')
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
-function toSenderAddress(senderWallet: string): string | null {
-  const normalized = String(senderWallet ?? '').trim().toLowerCase()
-  if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null
-  return normalized
+function trimTrailingCurrentUserTurn(turns: ConversationTurn[], userText: string): ConversationTurn[] {
+  if (turns.length === 0) return turns
+  const last = turns[turns.length - 1]
+  if (last.role !== 'user') return turns
+  const nLast = normalizeHistoryText(last.text)
+  const nUser = normalizeHistoryText(userText)
+  if (nLast && nUser && nLast === nUser) return turns.slice(0, -1)
+  return turns
+}
+
+function buildStructuredMemoryContext(state: Record<string, unknown>): string {
+  const parts: string[] = []
+  const snap = String((state as any)?.memorySnapshotBlock ?? '').trim()
+  const facts = String((state as any)?.factCardsBlock ?? '').trim()
+  const tasks = String((state as any)?.openTasksBlock ?? '').trim()
+  const semantic = String((state as any)?.semanticRecallBlock ?? '').trim()
+  if (snap) parts.push(snap)
+  if (facts) parts.push(facts)
+  if (tasks) parts.push(tasks)
+  if (semantic) parts.push(semantic)
+  return parts.join('\n\n')
+}
+
+function isLikelyIdentityDrift(text: string): boolean {
+  const t = String(text ?? '').toLowerCase()
+  if (!t) return false
+  if (/\bmeta\s+ai\b/.test(t)) return true
+  if (/\b(claude|chatgpt|gpt-4|openai)\b/.test(t)) return true
+  if (/\bi\s+am\s+(an|the)\s+ai\b/.test(t)) return true
+  if (/\bi\s+am\s+(an|the)\s+assistant\b/.test(t) && !/\bakitai\b/.test(t)) return true
+  return false
+}
+
+function isHandledSlashPrefix(raw: string): boolean {
+  const l = raw.toLowerCase()
+  return (
+    l.startsWith('/ai') ||
+    l.startsWith('/keepr') ||
+    l.startsWith('/send') ||
+    l.startsWith('@keepr') ||
+    l.startsWith('@bot')
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -458,28 +421,40 @@ export async function generateLlmResponse(params: {
   text: string
   vault: KeeprVaultRow | null
   runtimeTruth?: AssistantRuntimeTruthInput
-}): Promise<{ ok: true; response: string } | { ok: false; response: string }> {
+}): Promise<
+  | { ok: true; response: string; handledByRuntime: boolean }
+  | { ok: false; response: string; handledByRuntime: boolean }
+> {
   const conversationType = resolveConversationType(params.groupId)
   const conversationSource = resolveConversationSource(conversationType)
-  const rawText = String(params.text ?? '')
-  const normalizedPrompt = normalizeAiPrompt(rawText)
-  const userText = normalizedPrompt || rawText.trim()
-  const senderAddress = toSenderAddress(params.senderWallet)
-  const isPlainPrompt = !isExplicitAiInvocation(rawText)
-  if (isPlainPrompt && !senderAddress) {
-    return { ok: false, response: 'Connect wallet first to use plain-chat AI prompts.' }
-  }
-  const safeConversationId = redactConversationId(params.groupId)
+  const rawText = String(params.text ?? '').trim()
+  const normalizedPrompt = normalizeAiPrompt(params.text)
+  const userText = normalizedPrompt || rawText
   let runtimeTruth = resolveAssistantRuntimeTruth(params.runtimeTruth)
   const identityIntent = classifyIdentityIntent(userText)
+
+  if (!userText.trim()) {
+    return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: true }
+  }
+
+  if (rawText.startsWith('/') && !isHandledSlashPrefix(rawText)) {
+    return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: true }
+  }
+
   let runtimeBridge: ChatRuntimeBridge | null = null
-  let historyContext = ''
+  let handledByRuntime = false
   let historyTurns = 0
   let actionReply = ''
+  let state: Record<string, unknown> = {}
+  let stateForContinuity: Record<string, unknown> = {}
+  let inbound: any = null
 
   try {
-    runtimeBridge = await getChatRuntimeBridge()
-    const inbound = runtimeBridge.createInboundMemory({
+    const ctx = await getChatRuntimeContext()
+    runtimeBridge = ctx.bridge
+    handledByRuntime = true
+    const senderAddress = toSenderAddress(params.senderWallet)
+    inbound = runtimeBridge.createInboundMemory({
       conversationId: params.groupId,
       conversationType,
       senderAddress,
@@ -488,13 +463,13 @@ export async function generateLlmResponse(params: {
       content: userText,
     })
     await runtimeBridge.runtime.createMemory(inbound as any, 'messages' as any)
-    const state = await (runtimeBridge.runtime as any).composeState(inbound as any)
+    state = (await (runtimeBridge.runtime as any).composeState(inbound as any)) as Record<string, unknown>
     const turns = trimTrailingCurrentUserTurn(extractRecentTurns(state), userText)
     historyTurns = turns.length
-    historyContext = buildConversationHistoryContext(turns)
     const structuredMemoryContext = buildStructuredMemoryContext(state)
-    if (structuredMemoryContext) {
-      historyContext = [historyContext, structuredMemoryContext].filter(Boolean).join('\n\n')
+    stateForContinuity = {
+      ...state,
+      recentMessages: turns.map((t) => ({ role: t.role, text: t.text })),
     }
     runtimeTruth = {
       ...runtimeTruth,
@@ -506,22 +481,56 @@ export async function generateLlmResponse(params: {
         Boolean(structuredMemoryContext),
     }
     logger.info('[ai/chat] runtime state loaded', {
-      groupId: safeConversationId,
+      groupId: params.groupId,
       turns: historyTurns,
       persistedInbound: (inbound as any)?.__persistedToDb === true,
     })
 
-    await (runtimeBridge.runtime as any).processActions(
-      inbound as any,
-      [inbound as any],
-      state as any,
-      async (responseContent: any) => {
-        const chunk = String(responseContent?.text ?? '').trim()
-        if (!chunk) return [inbound as any]
-        actionReply = actionReply ? `${actionReply}\n\n${chunk}` : chunk
-        return [inbound as any]
-      },
-    )
+    const correlationId = `keepr-${params.groupId}-${Date.now()}`
+    const rankedActions = await runtimeBridge.rankActions(userText, inbound as any)
+    const maxCandidates = Math.max(1, ACTION_MAX_CANDIDATES)
+    const candidates = rankedActions.slice(0, maxCandidates)
+    for (const candidate of candidates) {
+      const handler = candidate.action?.handler
+      if (typeof handler !== 'function') continue
+      const actionName = String(candidate.action?.name ?? 'unknown')
+      const parts: string[] = []
+      try {
+        const actionRetryBudget = getActionRetryBudget(actionName, ACTION_MAX_RETRIES)
+        await withRetry({
+          operation: `action_${actionName.toLowerCase()}`,
+          maxRetries: actionRetryBudget,
+          correlationId,
+          run: async () =>
+            withTimeout(
+              handler(
+                runtimeBridge!.runtime as any,
+                inbound as any,
+                state as any,
+                undefined,
+                async (content: any) => {
+                  if (content?.text) parts.push(String(content.text))
+                  return []
+                },
+              ),
+              ACTION_TIMEOUT_MS,
+              `action_timeout_${actionName.toLowerCase()}`,
+            ),
+        })
+        const joined = parts.join('\n\n').trim()
+        if (joined) {
+          actionReply = joined
+          break
+        }
+      } catch (error) {
+        const agentError = toAgentError(error, 'ACTION_FAILED', 'Action execution failed')
+        logger.warn('[ai/chat] action candidate failed', {
+          action: actionName,
+          error: agentError.message,
+          code: agentError.code,
+        })
+      }
+    }
 
     if (actionReply) {
       try {
@@ -538,10 +547,16 @@ export async function generateLlmResponse(params: {
         }
       } catch (error) {
         logger.warn('[ai/chat] action reply memory persistence failed (non-blocking)', {
-          groupId: safeConversationId,
+          groupId: params.groupId,
           error: error instanceof Error ? error.message : String(error),
         })
       }
+      logger.info('[ai/chat] Unified Eliza runtime response', {
+        groupId: params.groupId,
+        historyTurns,
+        usedAction: true,
+      })
+      return { ok: true, response: actionReply.trim(), handledByRuntime: true }
     }
   } catch (error) {
     runtimeTruth = {
@@ -550,95 +565,152 @@ export async function generateLlmResponse(params: {
       hasConversationMemory: false,
       hasPersistentMemory: false,
     }
+    handledByRuntime = false
     logger.warn('[ai/chat] eliza runtime unavailable; returning bounded fallback', {
-      groupId: safeConversationId,
+      groupId: params.groupId,
       error: error instanceof Error ? error.message : String(error),
     })
     if (identityIntent === 'stack') {
-      return { ok: true, response: buildStackSnapshotReply(conversationType, runtimeTruth) }
+      return { ok: true, response: buildStackSnapshotReply(conversationType, runtimeTruth), handledByRuntime: false }
     }
     if (identityIntent === 'eliza') {
-      return { ok: true, response: buildElizaConnectionReply(conversationType, runtimeTruth) }
+      return { ok: true, response: buildElizaConnectionReply(conversationType, runtimeTruth), handledByRuntime: false }
     }
     if (identityIntent === 'memory') {
-      return { ok: true, response: buildMemoryReply(conversationType, runtimeTruth) }
+      return { ok: true, response: buildMemoryReply(conversationType, runtimeTruth), handledByRuntime: false }
     }
     if (identityIntent === 'vault_deployment') {
-      return { ok: true, response: buildVaultDeploymentReply(runtimeTruth) }
+      return { ok: true, response: buildVaultDeploymentReply(runtimeTruth), handledByRuntime: false }
     }
     if (identityIntent === 'identity') {
-      return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth) }
+      return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: false }
     }
-    return { ok: true, response: buildRuntimeUnavailableFallback(conversationType) }
+    return { ok: true, response: buildRuntimeUnavailableFallback(conversationType), handledByRuntime: false }
+  }
+
+  if (!handledByRuntime || !runtimeBridge) {
+    return { ok: true, response: buildRuntimeUnavailableFallback(conversationType), handledByRuntime: false }
   }
 
   if (identityIntent === 'stack') {
-    return { ok: true, response: buildStackSnapshotReply(conversationType, runtimeTruth) }
+    return { ok: true, response: buildStackSnapshotReply(conversationType, runtimeTruth), handledByRuntime: true }
   }
   if (identityIntent === 'eliza') {
-    return { ok: true, response: buildElizaConnectionReply(conversationType, runtimeTruth) }
+    return { ok: true, response: buildElizaConnectionReply(conversationType, runtimeTruth), handledByRuntime: true }
   }
   if (identityIntent === 'memory') {
-    return { ok: true, response: buildMemoryReply(conversationType, runtimeTruth) }
+    return { ok: true, response: buildMemoryReply(conversationType, runtimeTruth), handledByRuntime: true }
   }
   if (identityIntent === 'vault_deployment') {
-    return { ok: true, response: buildVaultDeploymentReply(runtimeTruth) }
+    return { ok: true, response: buildVaultDeploymentReply(runtimeTruth), handledByRuntime: true }
   }
   if (identityIntent === 'identity') {
-    return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth) }
+    return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: true }
   }
 
   let finalText = actionReply.trim()
 
   if (!finalText) {
     if (!canCallLlm(params.groupId)) {
-      return { ok: false, response: 'AI is rate-limited. Try again in a few seconds.' }
+      return {
+        ok: false,
+        response: 'AI is rate-limited. Try again in a few seconds.',
+        handledByRuntime: true,
+      }
     }
 
     if (llmService.getAvailableProviders().length === 0) {
-      return { ok: false, response: '' }
+      return { ok: false, response: '', handledByRuntime: true }
     }
 
     recordLlmCall(params.groupId)
     try {
-      const identityHint = senderAddress
-        ? `[${senderAddress.slice(0, 6)}...${senderAddress.slice(-4)}]`
-        : '[anonymous]'
+      const ctx = await getChatRuntimeContext()
+      const characterConfig = ctx.characterConfig
+      const correlationId = `keepr-${params.groupId}-${Date.now()}`
+      let vaultContext = ''
+      for (const provider of ctx.contextProviders) {
+        try {
+          const result = await withRetry({
+            operation: `context_provider_${String(provider.name ?? 'unknown').toLowerCase()}`,
+            maxRetries: EXTERNAL_MAX_RETRIES,
+            correlationId,
+            run: async () =>
+              withTimeout(
+                provider.get(runtimeBridge!.runtime as any, inbound as any, state as any),
+                5_000,
+                `context_provider_timeout_${String(provider.name ?? 'unknown').toLowerCase()}`,
+              ),
+          })
+          if (result?.text) vaultContext += `${String(result.text).trim()}\n`
+        } catch (providerError) {
+          logger.warn('[ai/chat] context provider failed', {
+            provider: String(provider.name ?? 'unknown'),
+            error: providerError instanceof Error ? providerError.message : String(providerError),
+          })
+        }
+      }
+      const senderAddress = toSenderAddress(params.senderWallet)
+      if (senderAddress) {
+        vaultContext +=
+          '\n[wallet_context]\n' +
+          `primary_sender_wallet=${senderAddress}\n` +
+          'When the user says "my wallet", "my balance", or "my portfolio", default to this wallet unless they provide another address.\n' +
+          '[/wallet_context]\n'
+      }
+
+      const continuityBlock = buildContinuityContextBlock(stateForContinuity)
+      const truthBlock = buildSystemPrompt(params.vault, conversationType, runtimeTruth)
+      const systemPrompt = `${characterConfig.systemPrompt}\n\n${continuityBlock}`.trim()
+      const combinedVaultContext = [vaultContext.trim(), truthBlock].filter(Boolean).join('\n\n')
+
+      const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
       const result = await llmService.generateResponse({
         agentKey: params.groupId,
         userMessage: `${identityHint}: ${userText}`,
-        systemPrompt: buildSystemPrompt(params.vault, conversationType, runtimeTruth),
-        vaultContext: historyContext,
-        correlationId: `keepr-${params.groupId}-${Date.now()}`,
+        systemPrompt,
+        vaultContext: combinedVaultContext.trim(),
+        correlationId,
+        preferredModel: characterConfig.preferredModel,
       })
       if (!result.text?.trim()) {
-        return { ok: false, response: '' }
+        return { ok: false, response: '', handledByRuntime: true }
       }
       finalText = result.text.trim()
     } catch (error) {
       const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM generation failed')
       if (agentError.code === 'BUDGET_EXCEEDED') {
-        return { ok: false, response: 'Daily AI budget limit reached for this agent. Please try again tomorrow.' }
+        return {
+          ok: false,
+          response: 'Daily AI budget limit reached for this agent. Please try again tomorrow.',
+          handledByRuntime: true,
+        }
       }
       if (agentError.code === 'RATE_LIMITED') {
-        return { ok: false, response: 'AI provider is rate-limited. Please try again shortly.' }
+        return {
+          ok: false,
+          response: 'AI provider is rate-limited. Please try again shortly.',
+          handledByRuntime: true,
+        }
       }
       if (agentError.code === 'UPSTREAM_TIMEOUT') {
-        return { ok: false, response: 'AI request timed out. Please retry.' }
+        return { ok: false, response: 'AI request timed out. Please retry.', handledByRuntime: true }
       }
       if (agentError.code === 'DEPENDENCY_UNAVAILABLE') {
-        return { ok: false, response: 'AI provider is temporarily unavailable. Please retry shortly.' }
+        return {
+          ok: false,
+          response: 'AI provider is temporarily unavailable. Please retry shortly.',
+          handledByRuntime: true,
+        }
       }
       logger.error('[ai/chat] Unified Eliza LLM call failed', {
         code: agentError.code,
         message: agentError.message,
       })
-      return { ok: false, response: '' }
+      return { ok: false, response: '', handledByRuntime: true }
     }
   }
 
-  // Defense-in-depth: if identity/stack intent somehow reached LLM and drifted,
-  // force canonical replies instead of leaking generic model self-descriptions.
   if (isLikelyIdentityDrift(finalText)) {
     const fallbackIntent = classifyIdentityIntent(userText)
     if (fallbackIntent === 'stack') {
@@ -669,16 +741,16 @@ export async function generateLlmResponse(params: {
       }
     } catch (error) {
       logger.warn('[ai/chat] assistant memory persistence failed (non-blocking)', {
-        groupId: safeConversationId,
+        groupId: params.groupId,
         error: error instanceof Error ? error.message : String(error),
       })
     }
   }
 
   logger.info('[ai/chat] Unified Eliza runtime response', {
-    groupId: safeConversationId,
+    groupId: params.groupId,
     historyTurns,
     usedAction: Boolean(actionReply),
   })
-  return { ok: true, response: finalText }
+  return { ok: true, response: finalText, handledByRuntime: true }
 }
