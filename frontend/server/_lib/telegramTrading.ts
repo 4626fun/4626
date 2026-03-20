@@ -1081,11 +1081,97 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       CREATE INDEX IF NOT EXISTS telegram_arena_watchers_enabled_poll_idx
       ON telegram_arena_watchers (enabled, next_poll_after);
     `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_onboarding_sessions (
+        telegram_user_id BIGINT PRIMARY KEY,
+        step TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_onboarding_sessions_expires_idx
+      ON telegram_onboarding_sessions (expires_at);
+    `
 
     telegramTradingSchemaEnsured = true
   } catch (error) {
     telegramTradingSchemaEnsured = false
     throw error
+  }
+}
+
+export type TelegramOnboardingStep = 'welcome' | 'zora' | 'branch_yes' | 'branch_no'
+
+export type TelegramOnboardingSession = {
+  telegramUserId: string
+  step: TelegramOnboardingStep
+  expiresAt: string
+}
+
+const TELEGRAM_ONBOARDING_SESSION_TTL_DAYS = 7
+
+function isTelegramOnboardingStep(value: unknown): value is TelegramOnboardingStep {
+  return (
+    value === 'welcome' ||
+    value === 'zora' ||
+    value === 'branch_yes' ||
+    value === 'branch_no'
+  )
+}
+
+export async function upsertTelegramOnboardingSession(params: {
+  db: Db
+  telegramUserId: string | number | bigint
+  step: TelegramOnboardingStep
+}): Promise<void> {
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  if (!userId) return
+  const expiresAt = new Date()
+  expiresAt.setUTCDate(expiresAt.getUTCDate() + TELEGRAM_ONBOARDING_SESSION_TTL_DAYS)
+  await params.db.sql`
+    INSERT INTO telegram_onboarding_sessions (telegram_user_id, step, expires_at, updated_at)
+    VALUES (${userId}, ${params.step}, ${expiresAt.toISOString()}, NOW())
+    ON CONFLICT (telegram_user_id) DO UPDATE SET
+      step = EXCLUDED.step,
+      expires_at = EXCLUDED.expires_at,
+      updated_at = NOW();
+  `
+}
+
+export async function readTelegramOnboardingSession(params: {
+  db: Db
+  telegramUserId: string | number | bigint
+}): Promise<TelegramOnboardingSession | null> {
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  if (!userId) return null
+
+  const result = await params.db.sql`
+    SELECT telegram_user_id, step, expires_at
+    FROM telegram_onboarding_sessions
+    WHERE telegram_user_id = ${userId}
+    LIMIT 1;
+  `
+  const row = result.rows?.[0]
+  if (!row) return null
+  const expiresAtMs = new Date(String(row.expires_at)).getTime()
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
+    await params.db.sql`
+      DELETE FROM telegram_onboarding_sessions WHERE telegram_user_id = ${userId};
+    `
+    return null
+  }
+  const stepRaw = asTrimmed(row.step)
+  if (!isTelegramOnboardingStep(stepRaw)) {
+    await params.db.sql`
+      DELETE FROM telegram_onboarding_sessions WHERE telegram_user_id = ${userId};
+    `
+    return null
+  }
+  return {
+    telegramUserId: String(row.telegram_user_id),
+    step: stepRaw,
+    expiresAt: toIso(row.expires_at) ?? new Date(expiresAtMs).toISOString(),
   }
 }
 

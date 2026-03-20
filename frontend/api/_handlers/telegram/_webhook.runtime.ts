@@ -33,7 +33,9 @@ import {
   listTelegramScopedVaults,
   listTelegramSignals,
   listTelegramUserBids,
+  readTelegramOnboardingSession,
   revokeTelegramLink,
+  upsertTelegramOnboardingSession,
   upsertTelegramTradePercentPrompt,
   upsertHolderRoomMember,
 } from '../../../server/_lib/telegramTrading.js'
@@ -1279,6 +1281,7 @@ function buildTelegramLinkFlowResponse(params: {
   telegramUserId: string
   telegramUsername?: string | null
   linkButtonText: string
+  zoraOnboardingBranch?: 'has' | 'need'
 }): TelegramCommandResponse {
   if (!isPrivateChatId(params.chatId)) {
     return {
@@ -1287,7 +1290,10 @@ function buildTelegramLinkFlowResponse(params: {
         '',
         'For security, linking is only available in a private chat with this bot.',
         'Linking creates your 4626 Privy session and connects your Zora Coinbase Smart Wallet.',
-        'Open a DM with the bot, run /link there, then return here and tap Check Link Status.',
+        'Open a DM with the bot and enter:',
+        '- /start',
+        '- /link',
+        'After linking, return here and tap Check Link Status.',
       ].join('\n'),
       replyMarkup: {
         inline_keyboard: [[{ text: 'Check Link Status', callback_data: 'menu:linked' }]],
@@ -1330,6 +1336,9 @@ function buildTelegramLinkFlowResponse(params: {
     chatAction: 'link-account',
     tgChatId: params.chatId,
   }
+  if (params.zoraOnboardingBranch) {
+    linkQuery.tgZoraBranch = params.zoraOnboardingBranch
+  }
   if (linkToken?.token) {
     linkQuery.tgLinkToken = linkToken.token
   }
@@ -1348,15 +1357,30 @@ function buildTelegramLinkFlowResponse(params: {
     url: linkUrl,
   })
   const markdownSafeLinkUrl = linkUrl.replace(/\)/g, '%29')
+  const linkBodyLines =
+    params.zoraOnboardingBranch === 'need'
+      ? [
+          'Link 4626 after you have (or create) a Zora account',
+          '',
+          '1) If you do not have a Zora account yet, create one at zora.co (you can also sign up in the Mini App).',
+          '2) Tap Open Mini App.',
+          '3) Authenticate with Privy.',
+          '4) Connect your Zora Coinbase Smart Wallet when prompted (canonical account for Telegram trades).',
+          '',
+          'Why this matters: Telegram trades execute from your canonical Zora wallet holdings.',
+        ]
+      : [
+          'Link your 4626 account (one time)',
+          '',
+          '1) Tap Open Mini App.',
+          '2) Authenticate with Privy.',
+          '3) Connect your existing Zora Coinbase Smart Wallet (canonical account).',
+          '',
+          'Why this matters: Telegram trades execute from your canonical Zora wallet holdings.',
+        ]
   return {
     text: [
-      'Link your 4626 account (one time)',
-      '',
-      '1) Tap Open Mini App.',
-      '2) Authenticate with Privy.',
-      '3) Connect your existing Zora Coinbase Smart Wallet (canonical account).',
-      '',
-      'Why this matters: Telegram trades execute from your canonical Zora wallet holdings.',
+      ...linkBodyLines,
       ...(linkToken ? ['', 'Link expires in ~15 minutes.'] : []),
       '',
       `If the button fails: [Open Mini App](${markdownSafeLinkUrl})`,
@@ -1386,6 +1410,55 @@ function isDefaultHelpCommand(rawText: string): boolean {
   return isHelpCommand(rawText) && !isHelpCategoryCommand(rawText)
 }
 
+function buildOnboardingWelcomeText(): string {
+  return [
+    '<b>Welcome to 4626.fun on Telegram.</b>',
+    '',
+    'Tap “Start” to begin the onboarding process for 4626.fun via your Zora Coinbase Smart Wallet on Telegram.',
+    '',
+    'This setup will help us:',
+    '- connect your Telegram account to Zora',
+    '- give you access to your wallet directly from Telegram',
+    '- enable actions like buy, sell, deposit, withdraw, and participation in Uniswap CCA auctions',
+  ].join('\n')
+}
+
+function buildOnboardingWelcomeReplyMarkup(): Record<string, unknown> {
+  return {
+    inline_keyboard: [[{ text: 'Start', callback_data: 'onboard:begin' }]],
+  }
+}
+
+function buildZoraBranchText(): string {
+  return ['<b>Do you have a Zora account?</b>', '', 'Tap a button to continue.'].join('\n')
+}
+
+function buildZoraBranchReplyMarkup(): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Yes, I have Zora', callback_data: 'onboard:zora:yes' },
+        { text: 'No, I need one', callback_data: 'onboard:zora:no' },
+      ],
+    ],
+  }
+}
+
+function buildUnlinkedGroupStartLandingText(): string {
+  return [
+    '<b>4626 on Telegram</b>',
+    '',
+    '<blockquote>Open a private chat with this bot for setup. Groups stay discovery-first.</blockquote>',
+    '',
+    '<u>In your DM with this bot</u>',
+    '<code>/start</code> — home (tap <b>Start</b> to begin onboarding)',
+    '<code>/link</code> — continue wallet linking after onboarding',
+    '<code>/linked</code> — verify link + owner status',
+    '',
+    'After /linked shows ready, use /buy, /sell, /bid, and /wallet.',
+  ].join('\n')
+}
+
 function buildStartLandingText(params: { isLinked: boolean }): string {
   if (params.isLinked) {
     return [
@@ -1400,16 +1473,15 @@ function buildStartLandingText(params: { isLinked: boolean }): string {
       '<code>/wallet</code> — wallet, positions, and recent actions',
     ].join('\n')
   }
-  return [
-    '<b>4626 on Telegram</b>',
-    '',
-    '<blockquote>Connect once, then trade and track directly from Telegram.</blockquote>',
-    '',
-    '<u>Fast path</u>',
-    '<code>/link</code> — create your 4626 Privy session + connect your canonical Zora Coinbase Smart Wallet',
-    '<code>/buy</code> — guided buy flow',
-    '<code>/wallet</code> — wallet, positions, and recent actions',
-  ].join('\n')
+  return buildUnlinkedGroupStartLandingText()
+}
+
+function buildStartAndLinkNudgeText(): string {
+  return buildOnboardingWelcomeText()
+}
+
+function buildStartAndLinkNudgeReplyMarkup(): Record<string, unknown> {
+  return buildOnboardingWelcomeReplyMarkup()
 }
 
 function buildFocusedHelpText(): string {
@@ -1419,7 +1491,8 @@ function buildFocusedHelpText(): string {
     `<blockquote>Core loop: ${menuLabel('connect')} -> ${menuLabel('trade')} -> ${menuLabel('wallet')} -> Repeat.</blockquote>`,
     '',
     '<u>Core commands</u>',
-    '<code>/link</code> — connect Telegram to your 4626 Privy + Zora CSW',
+    '<code>/start</code> — onboarding entry (private DM: tap Start, then follow prompts)',
+    '<code>/link</code> — continue Mini App linking (after onboarding Start, or to refresh)',
     '<code>/linked</code> — check link status',
     '<code>/buy</code> — guided buy flow',
     '<code>/sell</code> — guided sell flow',
@@ -1572,9 +1645,21 @@ function resolveStaticMenuCallbackResponse(params: {
 }): TelegramCommandResponse | null {
   const token = asTrimmed(params.callbackData).toLowerCase()
   if (token === 'menu:start') {
+    if (params.isLinked) {
+      return {
+        text: buildStartLandingText({ isLinked: true }),
+        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+      }
+    }
+    if (!isPrivateChatId(params.chatId)) {
+      return {
+        text: buildUnlinkedGroupStartLandingText(),
+        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+      }
+    }
     return {
-      text: buildStartLandingText({ isLinked: params.isLinked }),
-      replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: params.isLinked }),
+      text: buildOnboardingWelcomeText(),
+      replyMarkup: buildOnboardingWelcomeReplyMarkup(),
     }
   }
   if (token === 'menu:explore') {
@@ -1775,13 +1860,101 @@ async function isTelegramUserLinked(params: {
   return Boolean(link && link.linkStatus === 'active' && link.ownerVerified)
 }
 
+async function handleTelegramOnboardingCallback(params: {
+  callbackDataLower: string
+  chatId: string
+  userId: string
+  telegramUsername?: string | null
+}): Promise<{ response: TelegramCommandResponse; callbackToast: string } | null> {
+  if (!params.callbackDataLower.startsWith('onboard:')) return null
+  if (!isPrivateChatId(params.chatId)) {
+    return {
+      response: {
+        text: [
+          'Onboarding',
+          '',
+          'Open a private chat with this bot and send /start to begin (tap Start when it appears).',
+        ].join('\n'),
+      },
+      callbackToast: 'Use a private chat',
+    }
+  }
+
+  const db = await getDb()
+  if (!db) {
+    return {
+      response: {
+        text: ['Onboarding paused', '', '- database unavailable — retry in a few seconds'].join('\n'),
+      },
+      callbackToast: 'Unavailable',
+    }
+  }
+  await ensureTelegramTradingSchema(db as any)
+
+  const isLinked = await isTelegramUserLinked({ telegramUserId: params.userId, db })
+  if (isLinked) {
+    return {
+      response: {
+        text: buildStartLandingText({ isLinked: true }),
+        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+      },
+      callbackToast: 'Already connected',
+    }
+  }
+
+  const token = params.callbackDataLower
+
+  if (token === 'onboard:begin') {
+    await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId, step: 'zora' })
+    return {
+      response: {
+        text: buildZoraBranchText(),
+        replyMarkup: buildZoraBranchReplyMarkup(),
+      },
+      callbackToast: 'Next step',
+    }
+  }
+
+  if (token === 'onboard:zora:yes' || token === 'onboard:zora:no') {
+    const session = await readTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId })
+    if (!session || session.step !== 'zora') {
+      await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId, step: 'welcome' })
+      return {
+        response: {
+          text: buildOnboardingWelcomeText(),
+          replyMarkup: buildOnboardingWelcomeReplyMarkup(),
+        },
+        callbackToast: 'Tap Start first',
+      }
+    }
+    const branch: 'has' | 'need' = token === 'onboard:zora:yes' ? 'has' : 'need'
+    await upsertTelegramOnboardingSession({
+      db: db as any,
+      telegramUserId: params.userId,
+      step: branch === 'has' ? 'branch_yes' : 'branch_no',
+    })
+    return {
+      response: buildTelegramLinkFlowResponse({
+        chatId: params.chatId,
+        telegramUserId: params.userId,
+        telegramUsername: params.telegramUsername ?? null,
+        linkButtonText: 'Refresh Connect',
+        zoraOnboardingBranch: branch,
+      }),
+      callbackToast: 'Open Mini App',
+    }
+  }
+
+  return null
+}
+
 function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByUserId>>): string {
   if (!link) {
     return [
       'Link Status',
       '',
       '- linked: no',
-      '- next: run /link to start one-time Telegram + Privy linking',
+      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step)',
     ].join('\n')
   }
   return [
@@ -1802,7 +1975,7 @@ function formatWalletText(summary: Awaited<ReturnType<typeof getTelegramPortfoli
       'Wallet',
       '',
       '- linked: no',
-      '- next: run /link, then /wallet again',
+      '- next: finish onboarding (/start → Start in DM), then /wallet again',
     ].join('\n')
   }
 
@@ -2243,13 +2416,74 @@ async function executeTelegramNativeCommand(params: {
       telegramUserId: params.userId,
       db: params.db,
     })
+    if (!isLinked && isPrivateChatId(params.chatId)) {
+      const db = params.db ?? (await getDb())
+      if (db) {
+        await ensureTelegramTradingSchema(db as any)
+        await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId, step: 'welcome' })
+      }
+      return {
+        text: buildOnboardingWelcomeText(),
+        replyMarkup: buildOnboardingWelcomeReplyMarkup(),
+      }
+    }
+    if (!isLinked && !isPrivateChatId(params.chatId)) {
+      return {
+        text: buildUnlinkedGroupStartLandingText(),
+        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+      }
+    }
     return {
-      text: buildStartLandingText({ isLinked }),
-      replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked }),
+      text: buildStartLandingText({ isLinked: true }),
+      replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
     }
   }
 
   if (head === 'link') {
+    if (!isPrivateChatId(params.chatId)) {
+      return buildTelegramLinkFlowResponse({
+        chatId: params.chatId,
+        telegramUserId: params.userId,
+        linkButtonText: 'Refresh Connect',
+      })
+    }
+    const db = params.db ?? (await getDb())
+    const isLinked = await isTelegramUserLinked({ telegramUserId: params.userId, db: db ?? undefined })
+    if (isLinked) {
+      return buildTelegramLinkFlowResponse({
+        chatId: params.chatId,
+        telegramUserId: params.userId,
+        linkButtonText: 'Refresh Connect',
+      })
+    }
+    if (!db) {
+      return {
+        text: ['Link', '', '- database unavailable — retry in a few seconds', '- then send /start'].join('\n'),
+      }
+    }
+    await ensureTelegramTradingSchema(db as any)
+    const session = await readTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId })
+    const step = session?.step
+    if (!step || step === 'welcome') {
+      return {
+        text: buildOnboardingWelcomeText(),
+        replyMarkup: buildOnboardingWelcomeReplyMarkup(),
+      }
+    }
+    if (step === 'zora') {
+      return {
+        text: buildZoraBranchText(),
+        replyMarkup: buildZoraBranchReplyMarkup(),
+      }
+    }
+    if (step === 'branch_yes' || step === 'branch_no') {
+      return buildTelegramLinkFlowResponse({
+        chatId: params.chatId,
+        telegramUserId: params.userId,
+        linkButtonText: 'Refresh Connect',
+        zoraOnboardingBranch: step === 'branch_yes' ? 'has' : 'need',
+      })
+    }
     return buildTelegramLinkFlowResponse({
       chatId: params.chatId,
       telegramUserId: params.userId,
@@ -4780,7 +5014,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parsedTipCallback = parseTipCallbackData(callbackData)
     const mappedCommand = resolveHelpCallbackCommand(callbackData)
     const isMenuNavigationCallback = callbackData.startsWith('menu:') || callbackData.startsWith('help:')
-    const canReplaceMenuMessage = isMenuNavigationCallback && typeof callbackMessageId === 'number'
+    const isOnboardingCallback = asTrimmed(callbackData).toLowerCase().startsWith('onboard:')
+    const canReplaceMenuMessage =
+      (isMenuNavigationCallback || isOnboardingCallback) && typeof callbackMessageId === 'number'
     const adminUserIds = parseAdminUserIds()
     const isAdmin = userId ? adminUserIds.has(userId) : false
 
@@ -4834,6 +5070,89 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             replyToMessageId: callbackMessageId,
           }).catch(() => {})
         }
+      }
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
+
+    const callbackDataLower = asTrimmed(callbackData).toLowerCase()
+    if (isOnboardingCallback) {
+      const cbFrom = callbackQuery.from && typeof callbackQuery.from === 'object' ? callbackQuery.from : null
+      const cbUsername = cbFrom && typeof cbFrom.username === 'string' ? cbFrom.username : undefined
+      const onboardResult = await handleTelegramOnboardingCallback({
+        callbackDataLower,
+        chatId,
+        userId,
+        telegramUsername: cbUsername,
+      })
+      if (onboardResult) {
+        try {
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: onboardResult.callbackToast,
+          })
+        } catch (error) {
+          console.error('[telegram/webhook] onboarding callback acknowledgement failed', {
+            updateId: update.update_id ?? null,
+            callbackQueryId,
+            err: error instanceof Error ? error.message : String(error),
+          })
+        }
+        if (canReplaceMenuMessage) {
+          await replaceTelegramMenuMessage({
+            botToken,
+            chatId,
+            messageId: callbackMessageId as number,
+            text: onboardResult.response.text,
+            replyMarkup: onboardResult.response.replyMarkup,
+          })
+        } else {
+          const chunks = splitTelegramMessage(onboardResult.response.text)
+          for (let idx = 0; idx < chunks.length; idx += 1) {
+            const chunk = chunks[idx]
+            if (!chunk) continue
+            await sendTelegramMessage({
+              botToken,
+              chatId,
+              text: chunk,
+              replyToMessageId: idx === 0 ? callbackMessageId : undefined,
+              replyMarkup: idx === 0 ? onboardResult.response.replyMarkup : undefined,
+            })
+          }
+        }
+        const signalChunks = splitTelegramMessage(asTrimmed(onboardResult.response.signalText ?? ''))
+        const signalDestination = resolveSignalsDestination(chatId)
+        for (let idx = 0; idx < signalChunks.length; idx += 1) {
+          const signalChunk = signalChunks[idx]
+          if (!signalChunk) continue
+          await sendTelegramMessage({
+            botToken,
+            chatId: signalDestination.chatId,
+            text: signalChunk,
+            messageThreadId: signalDestination.messageThreadId,
+            replyMarkup: idx === 0 ? onboardResult.response.signalReplyMarkup : undefined,
+          })
+        }
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
+      try {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'Unknown onboarding action. Send /start.',
+        })
+      } catch (error) {
+        console.error('[telegram/webhook] unknown onboarding callback acknowledgement failed', {
+          updateId: update.update_id ?? null,
+          callbackQueryId,
+          err: error instanceof Error ? error.message : String(error),
+        })
       }
       return res.status(200).json({
         success: true,
@@ -4955,6 +5274,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const menuIsLinked = await isTelegramUserLinked({ telegramUserId: userId })
+    if (asTrimmed(callbackData).toLowerCase() === 'menu:start' && !menuIsLinked && isPrivateChatId(chatId)) {
+      const db = await getDb()
+      if (db) {
+        await ensureTelegramTradingSchema(db as any)
+        await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: userId, step: 'welcome' })
+      }
+    }
     const staticMenuResponse = resolveStaticMenuCallbackResponse({
       callbackData,
       chatId,
@@ -5147,6 +5473,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+
+  const shouldGuidePrivateDmSetup =
+    isPrivateChatId(chatId) &&
+    commandText === normalizedText &&
+    !normalizedText.startsWith('/') &&
+    !isLikelyCommandText(normalizedText)
+  if (shouldGuidePrivateDmSetup) {
+    const linked = await isTelegramUserLinked({ telegramUserId: userId })
+    if (!linked) {
+      const db = await getDb()
+      if (db) {
+        await ensureTelegramTradingSchema(db as any)
+        await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: userId, step: 'welcome' })
+      }
+      await sendTelegramMessage({
+        botToken,
+        chatId,
+        text: buildStartAndLinkNudgeText(),
+        replyToMessageId: messageId,
+        replyMarkup: buildStartAndLinkNudgeReplyMarkup(),
+      })
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
   }
 
   if (isInlineLauncherCommand(normalizedText)) {

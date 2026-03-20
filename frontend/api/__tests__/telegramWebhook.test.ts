@@ -35,6 +35,8 @@ const {
   createPublicClientMock,
   resolvePrivyCoinbaseSmartWalletOwnerContextMock,
   sendPrivyCoinbaseSmartWalletUserOperationMock,
+  readTelegramOnboardingSessionMock,
+  upsertTelegramOnboardingSessionMock,
 } = vi.hoisted(() => ({
   handleKeeprCommandMock: vi.fn(),
   handleTwitterCommandMock: vi.fn(),
@@ -68,6 +70,8 @@ const {
   createPublicClientMock: vi.fn(),
   resolvePrivyCoinbaseSmartWalletOwnerContextMock: vi.fn(),
   sendPrivyCoinbaseSmartWalletUserOperationMock: vi.fn(),
+  readTelegramOnboardingSessionMock: vi.fn(),
+  upsertTelegramOnboardingSessionMock: vi.fn(),
 }))
 
 vi.mock('@privy-io/server-auth', () => ({
@@ -139,6 +143,8 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   upsertHolderRoomMember: upsertHolderRoomMemberMock,
   revokeTelegramLink: revokeTelegramLinkMock,
   logTelegramActionAudit: logTelegramActionAuditMock,
+  readTelegramOnboardingSession: readTelegramOnboardingSessionMock,
+  upsertTelegramOnboardingSession: upsertTelegramOnboardingSessionMock,
 }))
 
 describe('telegram webhook handler', () => {
@@ -199,6 +205,8 @@ describe('telegram webhook handler', () => {
     upsertHolderRoomMemberMock.mockResolvedValue(null)
     revokeTelegramLinkMock.mockResolvedValue({ revoked: false, link: null })
     logTelegramActionAuditMock.mockResolvedValue(undefined)
+    readTelegramOnboardingSessionMock.mockResolvedValue(null)
+    upsertTelegramOnboardingSessionMock.mockResolvedValue(undefined)
     checkSharesEligibilityMock.mockResolvedValue({
       eligible: false,
       reason: 'share_balance<threshold',
@@ -418,7 +426,7 @@ describe('telegram webhook handler', () => {
     expect(text).not.toContain('- `/keepr status — vault status and config`')
   })
 
-  it('handles /start in DM as a native landing with primary connect CTA', async () => {
+  it('handles /start in DM as onboarding welcome with a single Start inline CTA', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -438,18 +446,53 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.parse_mode ?? '')).toBe('HTML')
-    expect(String(payload.text ?? '')).toContain('4626 on Telegram')
+    const body = String(payload.text ?? '')
+    expect(body).toContain('Welcome to 4626.fun on Telegram')
+    expect(body.toLowerCase()).not.toContain('do you have a zora account')
+    expect(body).not.toContain('/link')
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
-    const buttons = payload.reply_markup.inline_keyboard.flat()
-    const connectButton = buttons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
-    expect(Boolean(connectButton)).toBe(true)
-    expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
-    expect(
-      buttons.some(
-        (button: any) =>
-          typeof button?.web_app?.url === 'string' && String(button.web_app.url).includes('tgEntry=trade'),
-      ),
-    ).toBe(true)
+    expect(payload.reply_markup.inline_keyboard).toEqual([[{ text: 'Start', callback_data: 'onboard:begin' }]])
+    expect(upsertTelegramOnboardingSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ telegramUserId: '42', step: 'welcome' }),
+    )
+  })
+
+  it('handles /start in DM when already linked with the full trade-focused menu', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '42',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: null,
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_1,
+        message: { message_id: 91, text: '/start', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Connected and ready')
+    const flat = (payload.reply_markup?.inline_keyboard ?? []).flat()
+    expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:trade')).toBe(true)
+    expect(flat.some((b: any) => String(b?.text ?? '').trim() === 'Start')).toBe(false)
   })
 
   it('normalizes /help@botname to /help and still returns help menu keyboard', async () => {
@@ -1003,9 +1046,8 @@ describe('telegram webhook handler', () => {
     }
   })
 
-  it('keeps plain private-chat followups as normal command text', async () => {
+  it('guides unlinked private-chat plain text with the same welcome + Start keyboard as /start', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
 
     const req = createMockReq({
       method: 'POST',
@@ -1014,6 +1056,51 @@ describe('telegram webhook handler', () => {
         update_id: 7_1,
         message: {
           message_id: 12_1,
+          text: 'Why?',
+          chat: { id: 7726886643 },
+          from: { id: 42 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Welcome to 4626.fun on Telegram')
+    expect(String(payload.text ?? '').toLowerCase()).not.toContain('do you have a zora account')
+    expect(payload.reply_markup.inline_keyboard).toEqual([[{ text: 'Start', callback_data: 'onboard:begin' }]])
+  })
+
+  it('keeps plain private-chat followups as normal command text once linked', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '42',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: null,
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 7_1_0,
+        message: {
+          message_id: 12_1_0,
           text: 'Why?',
           chat: { id: 7726886643 },
           from: { id: 42 },
@@ -1477,7 +1564,8 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Link Status')
     expect(String(payload.text ?? '')).toContain('- linked: no')
-    expect(String(payload.text ?? '')).toContain('- next: run')
+    expect(String(payload.text ?? '')).toContain('- next:')
+    expect(String(payload.text ?? '')).toContain('/start')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
     expect(allButtons.length).toBeGreaterThan(0)
   })
@@ -1549,7 +1637,8 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Link your 4626 account (one time)')
     expect(String(payload.text ?? '')).toContain('only available in a private chat')
-    expect(String(payload.text ?? '')).toContain('/link there')
+    expect(String(payload.text ?? '')).toContain('/start')
+    expect(String(payload.text ?? '')).toContain('/link')
     expect(String(payload.text ?? '')).not.toContain('Tap Open Mini App.')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
     expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:linked')).toBe(true)
@@ -1557,14 +1646,42 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(false)
   })
 
-  it('renders /link in private chats with mini app launch and signed link token', async () => {
+  it('renders /link in private chats as onboarding alias before Zora branch (welcome + Start)', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    readTelegramOnboardingSessionMock.mockResolvedValueOnce(null)
 
     const req = createMockReq({
       method: 'POST',
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 12_15,
+        message: { message_id: 16, text: '/link', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Welcome to 4626.fun on Telegram')
+    expect(payload.reply_markup.inline_keyboard).toEqual([[{ text: 'Start', callback_data: 'onboard:begin' }]])
+  })
+
+  it('renders /link in private chats with mini app after onboarding Zora branch (yes)', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    readTelegramOnboardingSessionMock.mockResolvedValueOnce({
+      telegramUserId: '42',
+      step: 'branch_yes',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_15_1,
         message: { message_id: 16, text: '/link', chat: { id: 7726886643 }, from: { id: 42 } },
       },
     })
@@ -1587,8 +1704,107 @@ describe('telegram webhook handler', () => {
     expect(decodeURIComponent(launchUrl)).toContain('tgEntry=link')
     expect(decodeURIComponent(launchUrl)).toContain('tgChatId=')
     expect(decodeURIComponent(launchUrl)).toContain('tgLinkToken=')
+    expect(decodeURIComponent(launchUrl)).toContain('tgZoraBranch=has')
     expect(decodeURIComponent(launchUrl)).not.toContain('/continue?')
     expect(decodeURIComponent(launchUrl)).not.toContain('autologin=1')
+  })
+
+  it('callback onboard:begin advances to Zora branch with expected inline labels', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    readTelegramOnboardingSessionMock.mockResolvedValue(null)
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_21,
+        callback_query: {
+          id: 'cb-onb-begin',
+          data: 'onboard:begin',
+          from: { id: 42 },
+          message: { message_id: 501, chat: { id: 7726886643 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    const ackPayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(ackPayload.text ?? '')).toContain('Next step')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    const body = String(payload.text ?? '')
+    expect(body.toLowerCase()).toContain('do you have a zora account')
+    expect(body.toLowerCase()).not.toContain('welcome to 4626.fun')
+    expect(payload.reply_markup?.inline_keyboard).toEqual([
+      [
+        { text: 'Yes, I have Zora', callback_data: 'onboard:zora:yes' },
+        { text: 'No, I need one', callback_data: 'onboard:zora:no' },
+      ],
+    ])
+    expect(upsertTelegramOnboardingSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ telegramUserId: '42', step: 'zora' }),
+    )
+  })
+
+  it('callback onboard:zora:yes without Start step re-shows welcome and nudges Tap Start first', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    readTelegramOnboardingSessionMock.mockResolvedValueOnce({
+      telegramUserId: '42',
+      step: 'welcome',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    })
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_22,
+        callback_query: {
+          id: 'cb-onb-zora-early',
+          data: 'onboard:zora:yes',
+          from: { id: 42 },
+          message: { message_id: 502, chat: { id: 7726886643 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const ackPayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(ackPayload.text ?? '')).toContain('Tap Start first')
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Welcome to 4626.fun on Telegram')
+    expect(payload.reply_markup?.inline_keyboard).toEqual([[{ text: 'Start', callback_data: 'onboard:begin' }]])
   })
 
   it('renders /help connect CTA as menu callback for deterministic /link flow', async () => {

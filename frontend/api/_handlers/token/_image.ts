@@ -315,11 +315,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // SVG stays self-contained so wallets and crawlers see the same deterministic composition.
     if (format === 'svg') {
       const sourceBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: artworkUrl }))
+      const hasHeroCutoutUrl = !!(heroCutoutArtworkUrl && heroCutoutArtworkUrl.trim().length > 0)
       const heroCutoutSourceBytes = await fetchSourceArtworkBytes({ upstreamUrl: heroCutoutArtworkUrl })
+      const suppressBreakout = hasHeroCutoutUrl && !heroCutoutSourceBytes
       const iconPng = await renderDeterministicTokenIcon({
         size,
         sourceBytes,
         heroCutoutSourceBytes,
+        suppressBreakout,
         symbol: renderedSymbol,
       })
       const b64 = Buffer.from(iconPng).toString('base64')
@@ -2179,6 +2182,7 @@ async function renderDeterministicTokenIcon(params: {
   size: number
   sourceBytes: Uint8Array | null
   heroCutoutSourceBytes?: Uint8Array | null
+  suppressBreakout?: boolean
   symbol: string
 }): Promise<Uint8Array> {
   try {
@@ -2186,6 +2190,7 @@ async function renderDeterministicTokenIcon(params: {
       size: params.size,
       sourceImage: params.sourceBytes ?? undefined,
       heroCutoutSourceImage: params.heroCutoutSourceBytes ?? undefined,
+      suppressBreakout: params.suppressBreakout,
       symbol: params.symbol,
     })
     return new Uint8Array(premium)
@@ -2365,11 +2370,14 @@ async function getOrCreatePng(params: {
   }
 
   const sourceBytes = params.sourceBytesOverride ?? (await fetchSourceArtworkBytes({ upstreamUrl: params.upstreamUrl }))
+  const hasHeroCutoutUrl = !!(params.heroCutoutUpstreamUrl && params.heroCutoutUpstreamUrl.trim().length > 0)
   const heroCutoutSourceBytes = await fetchSourceArtworkBytes({ upstreamUrl: params.heroCutoutUpstreamUrl ?? null })
+  const suppressBreakout = hasHeroCutoutUrl && !heroCutoutSourceBytes
   const pngBytes = await renderDeterministicTokenIcon({
     size: params.size,
     sourceBytes,
     heroCutoutSourceBytes,
+    suppressBreakout,
     symbol: params.symbol,
   })
 

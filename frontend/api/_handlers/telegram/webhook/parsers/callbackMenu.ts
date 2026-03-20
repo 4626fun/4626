@@ -72,6 +72,8 @@ export function resolveNavigationCallbackToast(rawData: string, mappedCommand: s
   if (token === 'menu:bid') return 'Bid flow'
   if (token === 'menu:deploy') return 'Deploy wizard'
   if (token === 'menu:zora') return 'Zora setup'
+  if (token === 'onboard:begin') return 'Onboarding'
+  if (token === 'onboard:zora:yes' || token === 'onboard:zora:no') return 'Zora check'
   if (token === 'menu:connect' || token === 'menu:link') return 'Connect flow'
   if (token === 'menu:linked') return 'Link status'
   if (token === 'menu:unlink') return 'Unlink flow'

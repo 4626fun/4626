@@ -353,7 +353,7 @@ function formatGroupConnectGuidance(groupId: string): string {
     'I can help once this Telegram chat is linked to a 4626 vault.',
     '',
     'Setup steps:',
-    '1) In this chat, run /link and complete wallet linking',
+    '1) In this chat, run /link, then open the bot DM and send /start + /link to complete wallet linking',
     '2) Run /linked and confirm ownerVerified is true',
     '3) Scope at least one vault to this chat in 4626',
     '4) Run /vaults, then /keepr status to confirm config',

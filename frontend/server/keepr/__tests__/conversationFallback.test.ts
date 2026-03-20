@@ -49,6 +49,7 @@ describe('keepr conversational fallback behavior', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('Group Setup (4626)')
+    expect(result.response).toContain('/start')
     expect(result.response).toContain('/link')
     expect(result.response).toContain('/linked')
     expect(result.response).toContain('/vaults')
