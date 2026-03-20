@@ -3,6 +3,7 @@ import { PrivyClient } from '@privy-io/server-auth'
 import { createPublicClient, getAddress, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 
+import { resolveBaseAppInviteUrl } from './baseAppInvite.js'
 import { isOwner } from './coinbaseSmartWalletOwner.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
@@ -37,8 +38,9 @@ export type BootstrapDelegationState = {
 }
 
 type StructuredDelegationError = Error & {
-  needsConnectedOwnerWallet?: boolean
-  needsZoraIdentitySignal?: boolean
+  needsEmbeddedWallet?: boolean
+  needsBaseAppSetup?: boolean
+  baseAppUrl?: string
 }
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
@@ -87,12 +89,22 @@ function getPrivyTokenFromRequest(req: VercelRequest): string {
 
 function buildStructuredError(
   message: string,
-  opts: { needsConnectedOwnerWallet?: boolean; needsZoraIdentitySignal?: boolean } = {},
+  opts: {
+    needsEmbeddedWallet?: boolean
+    needsBaseAppSetup?: boolean
+    baseAppUrl?: string | null
+  } = {},
 ): StructuredDelegationError {
   const error = new Error(message) as StructuredDelegationError
-  if (opts.needsConnectedOwnerWallet === true) error.needsConnectedOwnerWallet = true
-  if (opts.needsZoraIdentitySignal === true) error.needsZoraIdentitySignal = true
+  if (opts.needsEmbeddedWallet === true) error.needsEmbeddedWallet = true
+  if (opts.needsBaseAppSetup === true) error.needsBaseAppSetup = true
+  if (typeof opts.baseAppUrl === 'string' && opts.baseAppUrl.trim()) error.baseAppUrl = opts.baseAppUrl.trim()
   return error
+}
+
+function normalizeCanonicalSource(value: unknown, fallback: string): string {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  return raw || fallback
 }
 
 function getBaseRpcUrls(): string[] {
@@ -239,7 +251,7 @@ async function ensureDelegationColumns(db: Db): Promise<void> {
   try {
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS chain_id INT NOT NULL DEFAULT 8453;`
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_zora_csw_address TEXT NULL;`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_source TEXT NOT NULL DEFAULT 'zora_readonly';`
+    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_source TEXT NOT NULL DEFAULT 'wallet_sync';`
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS privy_embedded_eoa_address TEXT NULL;`
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS privy_is_owner BOOLEAN NOT NULL DEFAULT false;`
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ NULL;`
@@ -288,7 +300,7 @@ export async function resolveCanonicalZoraCSW(params: {
       return {
         profileId,
         canonicalCswAddress: persisted.canonicalCswAddress,
-        canonicalSource: persisted.canonicalSource ?? 'zora_readonly',
+        canonicalSource: normalizeCanonicalSource(persisted.canonicalSource, 'wallet_sync'),
       }
     }
   }
@@ -296,6 +308,11 @@ export async function resolveCanonicalZoraCSW(params: {
   const syncResult = await syncUserWallets(db, privyUser)
   profileId = syncResult.profileId
   const syncedCanonical = normalizeAddress(syncResult.canonicalSmartWallet?.address ?? null)
+  const syncedCanonicalSource = syncedCanonical
+    ? syncResult.canonicalSmartWallet?.provider === 'coinbase_wallet'
+      ? 'base_account'
+      : 'wallet_sync'
+    : null
 
   let fallbackCanonical: string | null = null
   if (!syncedCanonical) {
@@ -311,19 +328,22 @@ export async function resolveCanonicalZoraCSW(params: {
       normalizeAddress(row?.csw_address) ??
       normalizeAddress(row?.base_sub_account)
   }
+  const fallbackCanonicalSource = fallbackCanonical ? 'profile_seed' : null
 
   const canonical = syncedCanonical ?? fallbackCanonical
   if (!canonical) {
-    throw buildStructuredError('Unable to resolve canonical Zora smart wallet for this profile.', {
-      needsZoraIdentitySignal: true,
+    throw buildStructuredError('No canonical Coinbase Smart Wallet is linked to this account yet.', {
+      needsBaseAppSetup: true,
+      baseAppUrl: resolveBaseAppInviteUrl(),
     })
   }
+  const canonicalSource = syncedCanonicalSource ?? fallbackCanonicalSource ?? 'wallet_sync'
 
   await ensureCanonicalWalletRow({
     db,
     profileId,
     canonicalCswAddress: canonical,
-    canonicalSource: 'zora_readonly',
+    canonicalSource,
     privyEmbeddedEoaAddress: null,
   })
 
@@ -341,7 +361,7 @@ export async function resolveCanonicalZoraCSW(params: {
   return {
     profileId,
     canonicalCswAddress: canonical,
-    canonicalSource: 'zora_readonly',
+    canonicalSource,
   }
 }
 
@@ -364,8 +384,8 @@ export async function getPrivyEmbeddedEOA(params: {
   const persisted = normalizeAddress(row?.primary_embedded_eoa) ?? normalizeAddress(row?.embedded_wallet)
   if (persisted) return persisted
 
-  throw buildStructuredError('No Privy embedded EOA found for this profile.', {
-    needsConnectedOwnerWallet: true,
+  throw buildStructuredError('Privy embedded EOA is not ready for this account yet. Retry in a moment.', {
+    needsEmbeddedWallet: true,
   })
 }
 
@@ -521,12 +541,16 @@ export async function confirmOwnerState(params: {
 }
 
 export function extractDelegationFlags(error: unknown): {
-  needsConnectedOwnerWallet?: boolean
-  needsZoraIdentitySignal?: boolean
+  needsEmbeddedWallet?: boolean
+  needsBaseAppSetup?: boolean
+  baseAppUrl?: string
 } {
   const structured = error as StructuredDelegationError
   return {
-    ...(structured?.needsConnectedOwnerWallet === true ? { needsConnectedOwnerWallet: true } : null),
-    ...(structured?.needsZoraIdentitySignal === true ? { needsZoraIdentitySignal: true } : null),
+    ...(structured?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
+    ...(structured?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
+    ...(typeof structured?.baseAppUrl === 'string' && structured.baseAppUrl.trim()
+      ? { baseAppUrl: structured.baseAppUrl.trim() }
+      : null),
   }
 }

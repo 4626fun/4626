@@ -327,9 +327,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     try {
       if (privyAuthed) {
         const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
-        if (!linked) {
-          await login(buildWaitlistEmailLoginOptions() as any)
-        }
+        if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
         await runBootstrap()
       } else {
         await login(buildWaitlistEmailLoginOptions() as any)
@@ -450,10 +448,21 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setBusy(true)
     setError(null)
     try {
-      if (typeof privy?.linkWallet !== 'function') {
-        throw new Error('Wallet linking is unavailable in this environment.')
+      if (loginWithCrossAppAccount || linkCrossAppAccount) {
+        await performZoraCrossAppAuth({
+          privyAuthed,
+          appId: ZORA_PRIVY_APP_ID,
+          linkCrossAppAccount,
+          loginWithCrossAppAccount,
+          sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
+          isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
+        })
+      } else {
+        if (typeof privy?.linkWallet !== 'function') {
+          throw new Error('Zora linking is unavailable in this environment.')
+        }
+        await privy.linkWallet()
       }
-      await privy.linkWallet()
 
       const token = await getAccessToken()
       if (!token) throw new Error('Missing auth token after linking wallet.')
@@ -463,11 +472,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       applyZoraResult(data)
       await runBootstrap()
     } catch (zoraError: any) {
-      setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link wallet.')
+      setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
     } finally {
       setBusy(false)
     }
-  }, [applyZoraResult, busy, getAccessToken, privy, resolveZora, runBootstrap])
+  }, [applyZoraResult, busy, getAccessToken, linkCrossAppAccount, loginWithCrossAppAccount, privy, privyAuthed, resolveZora, runBootstrap])
 
   const onFinish = useCallback(async () => {
     if (busy) return

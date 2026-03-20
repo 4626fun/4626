@@ -90,4 +90,26 @@ describe('resolveCanonicalZoraCSW', () => {
     expect(second.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000aa')
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
   })
+
+  it('surfaces Base setup when no canonical CSW can be resolved', async () => {
+    syncUserWalletsMock.mockResolvedValueOnce({
+      profileId: 11,
+      canonicalSmartWallet: null,
+    })
+
+    const db = createMockDb()
+    const privyUser = { id: 'did:privy:test-user', linkedAccounts: [] } as any
+
+    await expect(
+      resolveCanonicalZoraCSW({
+        db: db as any,
+        privyUserId: 'did:privy:test-user',
+        privyUser,
+      }),
+    ).rejects.toMatchObject({
+      message: 'No canonical Coinbase Smart Wallet is linked to this account yet.',
+      needsBaseAppSetup: true,
+      baseAppUrl: 'https://base.app/invite/4626/T9Y9BZYK',
+    })
+  })
 })

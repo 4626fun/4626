@@ -227,7 +227,12 @@ export function TelegramLink() {
               ? 'Sign in to 4626'
               : 'Ready to link'
 
-  const canSignIn = sessionState === 'ready' && Boolean(telegramLinkContext) && !privyAuthenticated && linkState !== 'authenticating'
+  const canSignIn =
+    sessionState === 'ready' &&
+    Boolean(telegramLinkContext) &&
+    linkState !== 'authenticating' &&
+    linkState !== 'linking' &&
+    linkState !== 'linked'
   const canRetryLink = sessionState === 'ready' && Boolean(telegramLinkContext) && linkState === 'error'
 
   return (
@@ -249,7 +254,7 @@ export function TelegramLink() {
             (sessionState === 'verifying'
               ? 'Checking your Telegram Mini App session...'
               : privyAuthenticated
-                ? 'Your 4626 session is ready. Finishing the Telegram link now.'
+                ? 'Your 4626 session is ready. Verify email if prompted, then we will finish the Telegram link.'
                 : 'Verify your email with 4626 to finish linking.')}
         </Alert>
 
@@ -282,7 +287,7 @@ export function TelegramLink() {
               onClick={onSignIn}
               className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300"
             >
-              Continue with 4626
+              {privyAuthenticated ? 'Verify email' : 'Continue with 4626'}
             </button>
           ) : null}
 

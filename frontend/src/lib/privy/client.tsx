@@ -108,9 +108,9 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   }
 
   const appearance = createPrivyAppearance({ showWalletLoginFirst })
-  // Keep generic web login methods free of Telegram OAuth.
-  // Telegram auth/linking is handled via dedicated mini-app + `useLoginWithTelegram` flows.
-  const loginMethods = ['wallet', 'email', 'google', 'twitter'] as const
+  // Keep generic web login methods aligned with the canonical account model:
+  // verified email first, wallet-native Base second. Zora uses cross-app auth.
+  const loginMethods = ['email', 'wallet'] as const
 
   // Privy OAuth redirects are validated against an allowlist and must match exactly (no query params).
   // Our marketing waitlist commonly adds `?wl=1` / `?ref=...`, so defaulting to `window.location.href`

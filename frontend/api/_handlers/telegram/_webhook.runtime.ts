@@ -8,6 +8,7 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
 import {
   isCoinbaseSmartWalletHelperError,
   resolvePrivyCoinbaseSmartWalletOwnerContext,
@@ -1280,8 +1281,7 @@ function buildTelegramMiniAppUrl(params: {
 }
 
 function resolveTelegramBaseAppInviteUrl(): string {
-  const raw = asTrimmed(process.env.TELEGRAM_BASE_APP_INVITE_URL ?? '')
-  return raw || 'https://base.app/invite/4626/T9Y9BZYK'
+  return resolveBaseAppInviteUrlShared()
 }
 
 /** Telegram HTML parse_mode: escape & and " inside href="..." */

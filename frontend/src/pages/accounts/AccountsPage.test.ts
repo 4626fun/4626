@@ -35,6 +35,7 @@ describe('AccountsPage', () => {
           me: {
             privyUserId: 'did:privy:test-user',
             email: 'user@example.com',
+            emailVerified: true,
             linkedMethods: {
               email: ['user@example.com'],
               google: ['google-sub-1'],
@@ -71,4 +72,3 @@ describe('AccountsPage', () => {
     expect(html).toContain('Points:')
   })
 })
-

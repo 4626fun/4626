@@ -147,9 +147,9 @@ export function deriveOwnerInstallMappingStatus(params: {
   walletsReady: boolean
   embeddedEoaAddress: string | null
   embeddedWalletCreating: boolean
-  zoraLinked: boolean
-  zoraLinking: boolean
-  canonicalZoraCswAddress: string | null
+  walletSetupReady: boolean
+  walletSetupInProgress: boolean
+  canonicalCswAddress: string | null
   canonicalResolving: boolean
   embeddedEoaOwnerInstalled: boolean | null
   ownerInstallBusy: boolean
@@ -159,9 +159,9 @@ export function deriveOwnerInstallMappingStatus(params: {
     walletsReady,
     embeddedEoaAddress,
     embeddedWalletCreating,
-    zoraLinked,
-    zoraLinking,
-    canonicalZoraCswAddress,
+    walletSetupReady,
+    walletSetupInProgress,
+    canonicalCswAddress,
     canonicalResolving,
     embeddedEoaOwnerInstalled,
     ownerInstallBusy,
@@ -171,14 +171,13 @@ export function deriveOwnerInstallMappingStatus(params: {
   if (!walletsReady) return 'WAITING_FOR_WALLETS'
   if (!embeddedEoaAddress) return embeddedWalletCreating ? 'EMBEDDED_WALLET_CREATING' : 'EMBEDDED_WALLET_MISSING'
   // If we already have a canonical CSW from profile/wallet inference, proceed directly to owner install checks.
-  if (canonicalZoraCswAddress) {
+  if (canonicalCswAddress) {
     if (ownerInstallBusy) return 'OWNER_INSTALLING'
     if (embeddedEoaOwnerInstalled === null) return 'OWNER_INSTALL_CHECKING'
     if (!embeddedEoaOwnerInstalled) return 'OWNER_INSTALL_REQUIRED'
     return 'READY_FOR_OWNER_INSTALL'
   }
-  if (!zoraLinked) return zoraLinking ? 'ZORA_LINKING' : 'ZORA_LINK_REQUIRED'
-  if (!canonicalZoraCswAddress) return canonicalResolving ? 'CANONICAL_RESOLVING' : 'CANONICAL_UNRESOLVED'
+  if (!walletSetupReady) return walletSetupInProgress ? 'BASE_SETUP_IN_PROGRESS' : 'BASE_SETUP_REQUIRED'
+  if (!canonicalCswAddress) return canonicalResolving ? 'CANONICAL_RESOLVING' : 'CANONICAL_UNRESOLVED'
   return 'READY_FOR_OWNER_INSTALL'
 }
-

@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import handler from '../_handlers/wallet/_prepare-add-privy-owner.ts'
 import { createMockReq, createMockRes } from './helpers'
 
-const { getDbMock, bootstrapCanonicalDelegationStateMock } = vi.hoisted(() => ({
+const { getDbMock, bootstrapCanonicalDelegationStateMock, extractDelegationFlagsMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   bootstrapCanonicalDelegationStateMock: vi.fn(),
+  extractDelegationFlagsMock: vi.fn(() => ({})),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -14,7 +15,7 @@ vi.mock('../../server/_lib/postgres.js', () => ({
 
 vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
   bootstrapCanonicalDelegationState: bootstrapCanonicalDelegationStateMock,
-  extractDelegationFlags: vi.fn(() => ({})),
+  extractDelegationFlags: extractDelegationFlagsMock,
 }))
 
 describe('POST /api/wallet/prepare-add-privy-owner', () => {
@@ -43,5 +44,30 @@ describe('POST /api/wallet/prepare-add-privy-owner', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).toEqual({ alreadyOwner: true })
+  })
+
+  it('returns Base setup flags when canonical CSW is missing', async () => {
+    bootstrapCanonicalDelegationStateMock.mockRejectedValue(
+      Object.assign(new Error('No canonical Coinbase Smart Wallet is linked to this account yet.'), {
+        needsBaseAppSetup: true,
+        baseAppUrl: 'https://base.app/invite/4626/T9Y9BZYK',
+      }),
+    )
+    extractDelegationFlagsMock.mockReturnValue({
+      needsBaseAppSetup: true,
+      baseAppUrl: 'https://base.app/invite/4626/T9Y9BZYK',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.needsBaseAppSetup).toBe(true)
+    expect(res.body?.baseAppUrl).toBe('https://base.app/invite/4626/T9Y9BZYK')
   })
 })

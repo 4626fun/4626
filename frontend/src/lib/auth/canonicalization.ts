@@ -4,8 +4,9 @@ type ApiEnvelope<T> = {
   success: boolean
   data?: T
   error?: string
-  needsConnectedOwnerWallet?: boolean
-  needsZoraIdentitySignal?: boolean
+  needsEmbeddedWallet?: boolean
+  needsBaseAppSetup?: boolean
+  baseAppUrl?: string
 }
 
 type OnboardingBootstrapResponse = {
@@ -20,8 +21,9 @@ export type CanonicalizationResult = {
   onboardingBootstrapped: boolean
   onboarding: OnboardingBootstrapResponse | null
   flags: {
-    needsConnectedOwnerWallet: boolean
-    needsZoraIdentitySignal: boolean
+    needsEmbeddedWallet: boolean
+    needsBaseAppSetup: boolean
+    baseAppUrl: string | null
   }
 }
 
@@ -34,8 +36,9 @@ type CanonicalizationParams = {
 type CanonicalizationError = Error & {
   recoveryRequired?: boolean
   code?: string
-  needsConnectedOwnerWallet?: boolean
-  needsZoraIdentitySignal?: boolean
+  needsEmbeddedWallet?: boolean
+  needsBaseAppSetup?: boolean
+  baseAppUrl?: string
 }
 
 function readApiError(payload: unknown, fallback: string): string {
@@ -74,8 +77,9 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
       onboardingBootstrapped: false,
       onboarding: null,
       flags: {
-        needsConnectedOwnerWallet: false,
-        needsZoraIdentitySignal: false,
+        needsEmbeddedWallet: false,
+        needsBaseAppSetup: false,
+        baseAppUrl: null,
       },
     }
   }
@@ -122,26 +126,31 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
       onboardingBootstrapped: true,
       onboarding: onboardingPayload.data,
       flags: {
-        needsConnectedOwnerWallet: false,
-        needsZoraIdentitySignal: false,
+        needsEmbeddedWallet: false,
+        needsBaseAppSetup: false,
+        baseAppUrl: null,
       },
     }
   }
 
   const flags = {
-    needsConnectedOwnerWallet: onboardingPayload?.needsConnectedOwnerWallet === true,
-    needsZoraIdentitySignal: onboardingPayload?.needsZoraIdentitySignal === true,
+    needsEmbeddedWallet: onboardingPayload?.needsEmbeddedWallet === true,
+    needsBaseAppSetup: onboardingPayload?.needsBaseAppSetup === true,
+    baseAppUrl: typeof onboardingPayload?.baseAppUrl === 'string' && onboardingPayload.baseAppUrl.trim()
+      ? onboardingPayload.baseAppUrl.trim()
+      : null,
   }
   if (strict) {
     const error = new Error(readApiError(onboardingPayload, 'Failed to bootstrap canonical delegation.')) as CanonicalizationError
-    if (flags.needsConnectedOwnerWallet) error.needsConnectedOwnerWallet = true
-    if (flags.needsZoraIdentitySignal) error.needsZoraIdentitySignal = true
+    if (flags.needsEmbeddedWallet) error.needsEmbeddedWallet = true
+    if (flags.needsBaseAppSetup) error.needsBaseAppSetup = true
+    if (flags.baseAppUrl) error.baseAppUrl = flags.baseAppUrl
     throw error
   }
 
   // In non-strict mode we only tolerate actionable delegation flags.
   // Any other onboarding bootstrap failure should still surface as an error.
-  if (!flags.needsConnectedOwnerWallet && !flags.needsZoraIdentitySignal) {
+  if (!flags.needsEmbeddedWallet && !flags.needsBaseAppSetup) {
     throw new Error(readApiError(onboardingPayload, 'Failed to bootstrap canonical delegation.'))
   }
 

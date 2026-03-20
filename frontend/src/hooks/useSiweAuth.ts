@@ -428,12 +428,7 @@ export function useSiweAuth() {
       if (allowPrivy) {
         if (privyReady && !privyAuthenticated && typeof login === 'function') {
           try {
-            if (method === 'privy') {
-              await login({ loginMethods: [...PRIVY_INTERACTIVE_LOGIN_METHODS] })
-            } else {
-              // Auto path stays wallet-first to keep the primary onboarding flow one-tap.
-              await login({ loginMethods: ['wallet'] })
-            }
+            await login({ loginMethods: [...PRIVY_INTERACTIVE_LOGIN_METHODS] })
           } catch {
             // If Privy auth fails/cancels, fall back to SIWE below (only for method=auto).
           }

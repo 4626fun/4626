@@ -16,8 +16,9 @@ import { PageMeta } from '@/components/seo/PageMeta'
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type OwnerDelegationFlags = {
-  needsConnectedOwnerWallet?: boolean
-  needsZoraIdentitySignal?: boolean
+  needsEmbeddedWallet?: boolean
+  needsBaseAppSetup?: boolean
+  baseAppUrl?: string
 }
 
 type AccountLinkProvider = 'google' | 'apple' | 'twitter' | 'telegram' | 'tiktok' | 'external_eoa' | 'email' | 'zora_cross_app'
@@ -25,6 +26,7 @@ type AccountLinkProvider = 'google' | 'apple' | 'twitter' | 'telegram' | 'tiktok
 type AccountsMeResponse = {
   privyUserId: string
   email: string | null
+  emailVerified: boolean
   linkedMethods: Record<string, string[]>
   zora: {
     linked: boolean
@@ -109,22 +111,24 @@ function readOwnerDelegationFlags(payload: unknown): OwnerDelegationFlags {
   if (!payload || typeof payload !== 'object') return {}
   const record = payload as Record<string, unknown>
   return {
-    ...(record.needsConnectedOwnerWallet === true ? { needsConnectedOwnerWallet: true } : null),
-    ...(record.needsZoraIdentitySignal === true ? { needsZoraIdentitySignal: true } : null),
+    ...(record.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
+    ...(record.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
+    ...(typeof record.baseAppUrl === 'string' && record.baseAppUrl.trim() ? { baseAppUrl: record.baseAppUrl.trim() } : null),
   }
 }
 
 function buildOwnerDelegationError(payload: unknown, fallback: string): Error & OwnerDelegationFlags {
   const flags = readOwnerDelegationFlags(payload)
-  const hint = flags.needsZoraIdentitySignal
-    ? 'Link Zora first so we can resolve your canonical CSW.'
-    : flags.needsConnectedOwnerWallet
-      ? 'Connect an owner wallet (for example Coinbase Wallet) and retry.'
+  const hint = flags.needsBaseAppSetup
+    ? 'Open Base app, create or connect your Coinbase Smart Wallet, then return here to resume.'
+    : flags.needsEmbeddedWallet
+      ? 'Your Privy embedded wallet is still provisioning. Retry in a moment.'
       : ''
   const message = hint ? `${readApiError(payload, fallback)} ${hint}` : readApiError(payload, fallback)
   const error = new Error(message) as Error & OwnerDelegationFlags
-  if (flags.needsConnectedOwnerWallet) error.needsConnectedOwnerWallet = true
-  if (flags.needsZoraIdentitySignal) error.needsZoraIdentitySignal = true
+  if (flags.needsEmbeddedWallet) error.needsEmbeddedWallet = true
+  if (flags.needsBaseAppSetup) error.needsBaseAppSetup = true
+  if (flags.baseAppUrl) error.baseAppUrl = flags.baseAppUrl
   return error
 }
 
@@ -238,9 +242,18 @@ export function AccountsPage(props: {
     try {
       const token = await getAccessToken()
       if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
-      await runCanonicalizationPipeline({
+      const canonicalization = await runCanonicalizationPipeline({
         privyToken: token,
       })
+      const actionableDelegationFlags =
+        canonicalization.flags.needsBaseAppSetup || canonicalization.flags.needsEmbeddedWallet
+          ? {
+              ...(canonicalization.flags.needsBaseAppSetup ? { needsBaseAppSetup: true } : null),
+              ...(canonicalization.flags.needsEmbeddedWallet ? { needsEmbeddedWallet: true } : null),
+              ...(canonicalization.flags.baseAppUrl ? { baseAppUrl: canonicalization.flags.baseAppUrl } : null),
+            }
+          : null
+      setOwnerDelegationFlags(actionableDelegationFlags)
       const headers = {
         'Content-Type': 'application/json',
         'X-Privy-Token': token,
@@ -263,6 +276,7 @@ export function AccountsPage(props: {
       setMe(mePayload.data)
       setZoraStatus(zoraPayload.data)
     } catch (loadError: any) {
+      setOwnerDelegationFlags(null)
       setError(typeof loadError?.message === 'string' ? loadError.message : 'Failed to load account state.')
     } finally {
       setLoading(false)
@@ -296,7 +310,9 @@ export function AccountsPage(props: {
 
       if (provider === 'external_eoa') {
         const called = await maybeCallMethod(privy, ['linkWallet'])
-        if (!called && typeof login === 'function') await login()
+        if (!called && typeof login === 'function') {
+          await login({ loginMethods: ['wallet'] } as any)
+        }
         return
       }
 
@@ -324,7 +340,11 @@ export function AccountsPage(props: {
       }
       const called = await maybeCallMethod(privy, linkMethods[provider])
       if (!called && typeof login === 'function') {
-        await login()
+        if (provider === 'email') {
+          await login({ loginMethods: ['email'] } as any)
+        } else {
+          throw new Error(`${provider.replace(/_/g, ' ')} linking is unavailable in this client.`)
+        }
       }
     },
     [linkCrossAppAccount, login, loginWithCrossAppAccount, privy, privyAuthed],
@@ -536,8 +556,11 @@ export function AccountsPage(props: {
       await loadMe()
     } catch (ownerError: any) {
       const flags = {
-        ...(ownerError?.needsConnectedOwnerWallet === true ? { needsConnectedOwnerWallet: true } : null),
-        ...(ownerError?.needsZoraIdentitySignal === true ? { needsZoraIdentitySignal: true } : null),
+        ...(ownerError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
+        ...(ownerError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
+        ...(typeof ownerError?.baseAppUrl === 'string' && ownerError.baseAppUrl.trim()
+          ? { baseAppUrl: ownerError.baseAppUrl.trim() }
+          : null),
       }
       setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
       setError(typeof ownerError?.message === 'string' ? ownerError.message : 'Failed to enable 4626 signing.')
@@ -594,8 +617,11 @@ export function AccountsPage(props: {
       await loadMe()
     } catch (rabbyError: any) {
       const flags = {
-        ...(rabbyError?.needsConnectedOwnerWallet === true ? { needsConnectedOwnerWallet: true } : null),
-        ...(rabbyError?.needsZoraIdentitySignal === true ? { needsZoraIdentitySignal: true } : null),
+        ...(rabbyError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
+        ...(rabbyError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
+        ...(typeof rabbyError?.baseAppUrl === 'string' && rabbyError.baseAppUrl.trim()
+          ? { baseAppUrl: rabbyError.baseAppUrl.trim() }
+          : null),
       }
       setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
       setError(typeof rabbyError?.message === 'string' ? rabbyError.message : 'Failed to add Rabby co-owner.')
@@ -618,7 +644,7 @@ export function AccountsPage(props: {
     <div className="min-h-screen bg-black text-white">
       <PageMeta
         title="Accounts"
-        description="Link identities, refresh Zora signals, and manage advanced 4626 wallet permissions."
+        description="Link identities, refresh optional Zora signals, and manage canonical Coinbase Smart Wallet permissions."
         canonicalPath="/accounts"
       />
       <div className="mx-auto w-full max-w-4xl px-6 py-10 space-y-6">
@@ -626,14 +652,14 @@ export function AccountsPage(props: {
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Accounts</div>
           <h1 className="text-3xl font-semibold">Identity management</h1>
           <p className="text-sm text-zinc-400">
-            Accounts is the canonical place to link identities, refresh Zora signals, and manage optional advanced wallet permissions.
+            Accounts is the canonical place to link identities, refresh optional Zora signals, and manage canonical Coinbase Smart Wallet permissions.
           </p>
         </div>
 
         {!privyAuthed ? (
           <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">
             <p className="text-sm text-zinc-300">Sign in with Privy to manage account identities.</p>
-            <button type="button" onClick={() => void login()} className="btn-accent btn-no-icon inline-flex">
+            <button type="button" onClick={() => void login({ loginMethods: ['email', 'wallet'] } as any)} className="btn-accent btn-no-icon inline-flex">
               Sign in / Continue
             </button>
             <Link to="/#waitlist" className="text-xs text-zinc-500 hover:text-zinc-300">Back to waitlist</Link>
@@ -653,7 +679,7 @@ export function AccountsPage(props: {
               <h2 className="text-lg font-medium">Notifications</h2>
               <div className="text-sm text-zinc-300">
                 <div>Email: <span className="text-zinc-100">{me.email ?? 'Not linked'}</span></div>
-                <div>Verified: <span className="text-zinc-100">{selectLinkedValues(me, 'email').length > 0 ? 'Yes' : 'No'}</span></div>
+                <div>Verified: <span className="text-zinc-100">{me.emailVerified ? 'Yes' : 'No'}</span></div>
               </div>
               <button
                 type="button"
@@ -755,17 +781,46 @@ export function AccountsPage(props: {
                 <div className="space-y-4">
                   {!canShowAdvanced ? (
                     <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-sm text-zinc-400">
-                      Resolve a canonical Zora CSW first to enable advanced owner management.
+                      <div>No canonical Coinbase Smart Wallet is linked yet.</div>
+                      {ownerDelegationFlags?.needsBaseAppSetup ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <a
+                            href={ownerDelegationFlags.baseAppUrl ?? '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn-secondary btn-no-icon inline-flex"
+                          >
+                            Get Base app
+                          </a>
+                          <span className="text-xs text-zinc-500">Create or connect your CSW in Base app, then return here to resume.</span>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <>
                       {ownerDelegationFlags ? (
                         <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
-                          {ownerDelegationFlags.needsZoraIdentitySignal ? (
-                            <div>Link Zora first so we can resolve your canonical CSW before signer setup.</div>
+                          {ownerDelegationFlags.needsBaseAppSetup ? (
+                            <div>
+                              Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
+                              {ownerDelegationFlags.baseAppUrl ? (
+                                <>
+                                  {' '}
+                                  <a
+                                    href={ownerDelegationFlags.baseAppUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline underline-offset-2"
+                                  >
+                                    Open Base app
+                                  </a>
+                                  .
+                                </>
+                              ) : null}
+                            </div>
                           ) : null}
-                          {ownerDelegationFlags.needsConnectedOwnerWallet ? (
-                            <div>Connect an owner EOA wallet and retry signer setup.</div>
+                          {ownerDelegationFlags.needsEmbeddedWallet ? (
+                            <div>Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.</div>
                           ) : null}
                         </div>
                       ) : null}
@@ -821,4 +876,3 @@ export function AccountsPage(props: {
     </div>
   )
 }
-

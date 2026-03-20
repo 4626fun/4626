@@ -439,8 +439,8 @@ export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectBu
                     void auth.signIn({ method: 'privy' })
                   }}
                 >
-                  <span className="label block">Sign in with email or social</span>
-                  <span className="app-meta-value text-zinc-500 block mt-1">Email, Google, or Apple</span>
+                  <span className="label block">Sign in with email or wallet</span>
+                  <span className="app-meta-value text-zinc-500 block mt-1">Verified email first, or continue with wallet</span>
                 </button>
                 <div className="h-px bg-white/8 my-1" />
                 <div className="px-4 py-1 text-[10px] text-zinc-600 uppercase tracking-wider">External wallets</div>

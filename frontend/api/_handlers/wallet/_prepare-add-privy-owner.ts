@@ -21,6 +21,8 @@ type PrepareResponse =
     }
 
 function resolveStatusCode(error: unknown): number {
+  const flags = extractDelegationFlags(error)
+  if (flags.needsBaseAppSetup || flags.needsEmbeddedWallet) return 409
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
   if (
@@ -32,12 +34,6 @@ function resolveStatusCode(error: unknown): number {
     lower.includes('forbidden')
   ) {
     return 401
-  }
-  if (
-    lower.includes('unable to resolve canonical zora smart wallet') ||
-    lower.includes('no privy embedded eoa found')
-  ) {
-    return 409
   }
   if (lower.includes('not configured')) return 503
   return 500

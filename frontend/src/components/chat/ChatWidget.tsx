@@ -83,7 +83,7 @@ function ConnectToChatPrompt() {
     if (busy) return
     setBusy(true)
     try {
-      await login()
+      await login({ loginMethods: ['email', 'wallet'] } as any)
     } catch {
       // user dismissed
     } finally {
