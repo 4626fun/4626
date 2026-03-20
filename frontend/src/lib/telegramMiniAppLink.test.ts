@@ -70,6 +70,8 @@ describe('telegramMiniAppLink', () => {
       tgEntry: 'link',
       tgLinkToken: 'token-abc',
       tgUsername: 'akita',
+      tgZoraBranch: 'need',
+      tgCswIntent: 'need',
       token: '0x1234',
       share: '0xabcd',
     })
@@ -77,6 +79,8 @@ describe('telegramMiniAppLink', () => {
     const cleaned = stripTelegramMiniAppLinkParams(params)
     expect(cleaned.get('tgEntry')).toBeNull()
     expect(cleaned.get('tgLinkToken')).toBeNull()
+    expect(cleaned.get('tgZoraBranch')).toBeNull()
+    expect(cleaned.get('tgCswIntent')).toBeNull()
     expect(cleaned.get('token')).toBe('0x1234')
     expect(cleaned.get('share')).toBe('0xabcd')
   })

@@ -35,6 +35,7 @@ import {
   listTelegramUserBids,
   readTelegramOnboardingSession,
   revokeTelegramLink,
+  tryInsertTelegramPrivateDmWelcomeSent,
   upsertTelegramOnboardingSession,
   upsertTelegramTradePercentPrompt,
   upsertHolderRoomMember,
@@ -1276,11 +1277,17 @@ function buildTelegramMiniAppUrl(params: {
   return buildTelegramMiniAppUrlShared(params)
 }
 
+function resolveTelegramBaseAppInviteUrl(): string {
+  const raw = asTrimmed(process.env.TELEGRAM_BASE_APP_INVITE_URL ?? '')
+  return raw || 'https://base.app/invite/4626/T9Y9BZYK'
+}
+
 function buildTelegramLinkFlowResponse(params: {
   chatId: string
   telegramUserId: string
   telegramUsername?: string | null
   linkButtonText: string
+  /** Legacy name: has = link existing CSW, need = create new (Base app first). */
   zoraOnboardingBranch?: 'has' | 'need'
 }): TelegramCommandResponse {
   if (!isPrivateChatId(params.chatId)) {
@@ -1289,7 +1296,7 @@ function buildTelegramLinkFlowResponse(params: {
         'Link your 4626 account (one time)',
         '',
         'For security, linking is only available in a private chat with this bot.',
-        'Linking creates your 4626 Privy session and connects your Zora Coinbase Smart Wallet.',
+        'Linking creates your 4626 Privy session and connects your Coinbase Smart Wallet.',
         'Open a DM with the bot and enter:',
         '- /start',
         '- /link',
@@ -1338,6 +1345,7 @@ function buildTelegramLinkFlowResponse(params: {
   }
   if (params.zoraOnboardingBranch) {
     linkQuery.tgZoraBranch = params.zoraOnboardingBranch
+    linkQuery.tgCswIntent = params.zoraOnboardingBranch
   }
   if (linkToken?.token) {
     linkQuery.tgLinkToken = linkToken.token
@@ -1357,26 +1365,61 @@ function buildTelegramLinkFlowResponse(params: {
     url: linkUrl,
   })
   const markdownSafeLinkUrl = linkUrl.replace(/\)/g, '%29')
+  const baseInviteUrl = resolveTelegramBaseAppInviteUrl()
   const linkBodyLines =
     params.zoraOnboardingBranch === 'need'
       ? [
-          'Link 4626 after you have (or create) a Zora account',
+          '<b>Base app | 4626.fun</b>',
           '',
-          '1) If you do not have a Zora account yet, create one at zora.co (you can also sign up in the Mini App).',
+          'Need a new Coinbase Smart Wallet? Install the Base app first, then continue here to finish 4626 setup.',
+          '',
+          '1) Tap Get Base app.',
           '2) Tap Open Mini App.',
           '3) Authenticate with Privy.',
-          '4) Connect your Zora Coinbase Smart Wallet when prompted (canonical account for Telegram trades).',
+          '4) Create or connect your Coinbase Smart Wallet when prompted (canonical account for Telegram).',
           '',
-          'Why this matters: Telegram trades execute from your canonical Zora wallet holdings.',
+          '4626 never holds your keys — you approve actions in your wallet.',
+          'Telegram setup is separate from full app access — team approval may still apply for trading.',
+        ]
+      : params.zoraOnboardingBranch === 'has'
+        ? [
+            '<b>Link | 4626.fun</b>',
+            '',
+            'Use the wallet tied to 4626.fun (your Privy embedded wallet from the app). Approve it as an owner on your existing Coinbase Smart Wallet, then confirm in the Mini App.',
+            '',
+            '4626 never holds your keys — you approve actions; backup or export in the wallet app where offered.',
+            '',
+            '1) Tap Open Mini App.',
+            '2) Authenticate with Privy.',
+            '3) Complete the owner step on your existing Coinbase Smart Wallet (canonical account).',
+            '',
+            'Telegram setup is separate from full app access — team approval may still apply for trading.',
+          ]
+        : [
+            'Link your 4626 account (one time)',
+            '',
+            '1) Tap Open Mini App.',
+            '2) Authenticate with Privy.',
+            '3) Connect your Coinbase Smart Wallet (canonical account).',
+            '',
+            '4626 never holds your keys — you approve actions in your wallet.',
+          ]
+  const createBranchKeyboard: Array<Array<Record<string, unknown>>> =
+    params.zoraOnboardingBranch === 'need'
+      ? [
+          [{ text: 'Get Base app', url: baseInviteUrl }],
+          [openMiniAppButton],
+          [
+            { text: 'Check Link Status', callback_data: 'menu:linked' },
+            { text: params.linkButtonText, callback_data: 'menu:connect' },
+          ],
         ]
       : [
-          'Link your 4626 account (one time)',
-          '',
-          '1) Tap Open Mini App.',
-          '2) Authenticate with Privy.',
-          '3) Connect your existing Zora Coinbase Smart Wallet (canonical account).',
-          '',
-          'Why this matters: Telegram trades execute from your canonical Zora wallet holdings.',
+          [openMiniAppButton],
+          [
+            { text: 'Check Link Status', callback_data: 'menu:linked' },
+            { text: params.linkButtonText, callback_data: 'menu:connect' },
+          ],
         ]
   return {
     text: [
@@ -1387,13 +1430,7 @@ function buildTelegramLinkFlowResponse(params: {
       'Then tap Check Link Status.',
     ].join('\n'),
     replyMarkup: {
-      inline_keyboard: [
-        [openMiniAppButton],
-        [
-          { text: 'Check Link Status', callback_data: 'menu:linked' },
-          { text: params.linkButtonText, callback_data: 'menu:connect' },
-        ],
-      ],
+      inline_keyboard: createBranchKeyboard,
     },
   }
 }
@@ -1412,14 +1449,11 @@ function isDefaultHelpCommand(rawText: string): boolean {
 
 function buildOnboardingWelcomeText(): string {
   return [
-    '<b>Welcome to 4626.fun on Telegram.</b>',
+    '<b>Welcome to 4626.fun on Telegram</b>',
     '',
-    'Tap “Start” to begin the onboarding process for 4626.fun via your Zora Coinbase Smart Wallet on Telegram.',
+    'Tap <b>Start</b> to begin setup.',
     '',
-    'This setup will help us:',
-    '- connect your Telegram account to Zora',
-    '- give you access to your wallet directly from Telegram',
-    '- enable actions like buy, sell, deposit, withdraw, and participation in Uniswap CCA auctions',
+    'Trade with your Coinbase Smart Wallet from Telegram — link once, then buy, sell, bid, and manage your wallet from chats.',
   ].join('\n')
 }
 
@@ -1429,16 +1463,22 @@ function buildOnboardingWelcomeReplyMarkup(): Record<string, unknown> {
   }
 }
 
-function buildZoraBranchText(): string {
-  return ['<b>Do you have a Zora account?</b>', '', 'Tap a button to continue.'].join('\n')
+function buildCswForkText(): string {
+  return [
+    '<b>Coinbase Smart Wallet | 4626.fun</b>',
+    '',
+    'Link an existing Coinbase Smart Wallet, or create a new one after installing the Base app.',
+    '',
+    'Tap a button to continue.',
+  ].join('\n')
 }
 
-function buildZoraBranchReplyMarkup(): Record<string, unknown> {
+function buildCswForkReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: 'Yes, I have Zora', callback_data: 'onboard:zora:yes' },
-        { text: 'No, I need one', callback_data: 'onboard:zora:no' },
+        { text: 'Link existing CSW', callback_data: 'onboard:csw:link' },
+        { text: 'Create new CSW', callback_data: 'onboard:csw:create' },
       ],
     ],
   }
@@ -1491,7 +1531,7 @@ function buildFocusedHelpText(): string {
     `<blockquote>Core loop: ${menuLabel('connect')} -> ${menuLabel('trade')} -> ${menuLabel('wallet')} -> Repeat.</blockquote>`,
     '',
     '<u>Core commands</u>',
-    '<code>/start</code> — onboarding entry (private DM: tap Start, then follow prompts)',
+    '<code>/start</code> — onboarding entry (private DM: tap Start, then follow prompts). Setup ≠ operator-approved app access.',
     '<code>/link</code> — continue Mini App linking (after onboarding Start, or to refresh)',
     '<code>/linked</code> — check link status',
     '<code>/buy</code> — guided buy flow',
@@ -1905,19 +1945,21 @@ async function handleTelegramOnboardingCallback(params: {
   const token = params.callbackDataLower
 
   if (token === 'onboard:begin') {
-    await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId, step: 'zora' })
+    await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId, step: 'csw_fork' })
     return {
       response: {
-        text: buildZoraBranchText(),
-        replyMarkup: buildZoraBranchReplyMarkup(),
+        text: buildCswForkText(),
+        replyMarkup: buildCswForkReplyMarkup(),
       },
       callbackToast: 'Next step',
     }
   }
 
-  if (token === 'onboard:zora:yes' || token === 'onboard:zora:no') {
+  const isLinkExisting = token === 'onboard:csw:link' || token === 'onboard:zora:yes'
+  const isCreateNew = token === 'onboard:csw:create' || token === 'onboard:zora:no'
+  if (isLinkExisting || isCreateNew) {
     const session = await readTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId })
-    if (!session || session.step !== 'zora') {
+    if (!session || session.step !== 'csw_fork') {
       await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId, step: 'welcome' })
       return {
         response: {
@@ -1927,11 +1969,11 @@ async function handleTelegramOnboardingCallback(params: {
         callbackToast: 'Tap Start first',
       }
     }
-    const branch: 'has' | 'need' = token === 'onboard:zora:yes' ? 'has' : 'need'
+    const branch: 'has' | 'need' = isLinkExisting ? 'has' : 'need'
     await upsertTelegramOnboardingSession({
       db: db as any,
       telegramUserId: params.userId,
-      step: branch === 'has' ? 'branch_yes' : 'branch_no',
+      step: branch === 'has' ? 'branch_link' : 'branch_create',
     })
     return {
       response: buildTelegramLinkFlowResponse({
@@ -1954,7 +1996,7 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
       'Link Status',
       '',
       '- linked: no',
-      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step)',
+      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram + wallet; full app access may still require team approval.',
     ].join('\n')
   }
   return [
@@ -2470,18 +2512,18 @@ async function executeTelegramNativeCommand(params: {
         replyMarkup: buildOnboardingWelcomeReplyMarkup(),
       }
     }
-    if (step === 'zora') {
+    if (step === 'csw_fork') {
       return {
-        text: buildZoraBranchText(),
-        replyMarkup: buildZoraBranchReplyMarkup(),
+        text: buildCswForkText(),
+        replyMarkup: buildCswForkReplyMarkup(),
       }
     }
-    if (step === 'branch_yes' || step === 'branch_no') {
+    if (step === 'branch_link' || step === 'branch_create') {
       return buildTelegramLinkFlowResponse({
         chatId: params.chatId,
         telegramUserId: params.userId,
         linkButtonText: 'Refresh Connect',
-        zoraOnboardingBranch: step === 'branch_yes' ? 'has' : 'need',
+        zoraOnboardingBranch: step === 'branch_link' ? 'has' : 'need',
       })
     }
     return buildTelegramLinkFlowResponse({
@@ -5484,10 +5526,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const linked = await isTelegramUserLinked({ telegramUserId: userId })
     if (!linked) {
       const db = await getDb()
-      if (db) {
-        await ensureTelegramTradingSchema(db as any)
-        await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: userId, step: 'welcome' })
+      if (!db) {
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
       }
+      await ensureTelegramTradingSchema(db as any)
+      const inserted = await tryInsertTelegramPrivateDmWelcomeSent({ db: db as any, telegramUserId: userId })
+      if (!inserted) {
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
+      await upsertTelegramOnboardingSession({ db: db as any, telegramUserId: userId, step: 'welcome' })
       await sendTelegramMessage({
         botToken,
         chatId,

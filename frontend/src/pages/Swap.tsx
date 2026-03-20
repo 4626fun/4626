@@ -470,6 +470,12 @@ export function Swap() {
   const telegramLinkFlowActive = Boolean(telegramLinkContext)
   const telegramMiniAppFlag = useMemo(() => String(searchParams.get('tgMiniApp') ?? '').trim().toLowerCase(), [searchParams])
   const telegramEntry = useMemo(() => String(searchParams.get('tgEntry') ?? '').trim().toLowerCase(), [searchParams])
+  const telegramCswIntent = useMemo(() => {
+    const raw = searchParams.get('tgCswIntent') ?? searchParams.get('tgZoraBranch')
+    const v = String(raw ?? '').trim().toLowerCase()
+    if (v === 'need' || v === 'has') return v as 'need' | 'has'
+    return null
+  }, [searchParams])
   const telegramDiscoveryEnabled = telegramEntry.length > 0 && telegramEntry !== 'link'
   const likelyTelegramMiniAppFlow =
     telegramMiniAppFlag === '1' ||
@@ -1505,7 +1511,12 @@ export function Swap() {
                     : 'Preparing Telegram link'
             }
           >
-            {telegramLinkMessage ?? 'Finalizing your Telegram + 4626 account link.'}
+            {telegramLinkMessage ??
+              (telegramCswIntent === 'need'
+                ? 'Install the Base app if you need a new Coinbase Smart Wallet, then finish linking here.'
+                : telegramCswIntent === 'has'
+                  ? 'Use the wallet tied to 4626.fun and approve it as an owner on your existing Coinbase Smart Wallet.'
+                  : 'Finalizing your Telegram + 4626 account link.')}
             {telegramLinkState === 'error' ? (
               <div className="mt-3">
                 {telegramLinkExpiredError ? (

@@ -1093,6 +1093,12 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       CREATE INDEX IF NOT EXISTS telegram_onboarding_sessions_expires_idx
       ON telegram_onboarding_sessions (expires_at);
     `
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_private_dm_welcome_sent (
+        telegram_user_id BIGINT PRIMARY KEY,
+        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
 
     telegramTradingSchemaEnsured = true
   } catch (error) {
@@ -1101,7 +1107,7 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
   }
 }
 
-export type TelegramOnboardingStep = 'welcome' | 'zora' | 'branch_yes' | 'branch_no'
+export type TelegramOnboardingStep = 'welcome' | 'csw_fork' | 'branch_create' | 'branch_link'
 
 export type TelegramOnboardingSession = {
   telegramUserId: string
@@ -1111,13 +1117,29 @@ export type TelegramOnboardingSession = {
 
 const TELEGRAM_ONBOARDING_SESSION_TTL_DAYS = 7
 
-function isTelegramOnboardingStep(value: unknown): value is TelegramOnboardingStep {
-  return (
-    value === 'welcome' ||
-    value === 'zora' ||
-    value === 'branch_yes' ||
-    value === 'branch_no'
-  )
+function parseTelegramOnboardingStep(raw: unknown): TelegramOnboardingStep | null {
+  const value = asTrimmed(raw)
+  if (value === 'welcome') return 'welcome'
+  if (value === 'csw_fork' || value === 'zora') return 'csw_fork'
+  if (value === 'branch_create' || value === 'branch_no') return 'branch_create'
+  if (value === 'branch_link' || value === 'branch_yes') return 'branch_link'
+  return null
+}
+
+/** Returns true when this was the first insert for the user (idempotent welcome gate). */
+export async function tryInsertTelegramPrivateDmWelcomeSent(params: {
+  db: Db
+  telegramUserId: string | number | bigint
+}): Promise<boolean> {
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  if (!userId) return false
+  const result = await params.db.sql`
+    INSERT INTO telegram_private_dm_welcome_sent (telegram_user_id, sent_at)
+    VALUES (${userId}, NOW())
+    ON CONFLICT (telegram_user_id) DO NOTHING
+    RETURNING telegram_user_id;
+  `
+  return Boolean(result.rows?.length)
 }
 
 export async function upsertTelegramOnboardingSession(params: {
@@ -1161,8 +1183,8 @@ export async function readTelegramOnboardingSession(params: {
     `
     return null
   }
-  const stepRaw = asTrimmed(row.step)
-  if (!isTelegramOnboardingStep(stepRaw)) {
+  const step = parseTelegramOnboardingStep(row.step)
+  if (!step) {
     await params.db.sql`
       DELETE FROM telegram_onboarding_sessions WHERE telegram_user_id = ${userId};
     `
@@ -1170,7 +1192,7 @@ export async function readTelegramOnboardingSession(params: {
   }
   return {
     telegramUserId: String(row.telegram_user_id),
-    step: stepRaw,
+    step,
     expiresAt: toIso(row.expires_at) ?? new Date(expiresAtMs).toISOString(),
   }
 }

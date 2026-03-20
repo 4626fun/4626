@@ -6,6 +6,8 @@ const TELEGRAM_LINK_QUERY_KEYS = [
   'tgChatId',
   'tgLinkToken',
   'tgUsername',
+  'tgZoraBranch',
+  'tgCswIntent',
 ] as const
 
 const TELEGRAM_LINK_CONTEXT_STORAGE_KEY = 'cv_tg_link_context_v1'
