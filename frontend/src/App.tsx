@@ -500,6 +500,11 @@ const AppContinue = lazy(async () => {
   return { default: m.AppContinue }
 })
 
+const TelegramLink = lazy(async () => {
+  const m = await import('./pages/TelegramLink')
+  return { default: m.TelegramLink }
+})
+
 function NotFoundPage() {
   const location = useLocation()
   const access = useAccessContext()
@@ -587,6 +592,14 @@ function App() {
             />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/continue" element={<AppContinue />} />
+            <Route
+              path="/telegram/link"
+              element={
+                <RequireTelegramMiniAppEntry>
+                  <TelegramLink />
+                </RequireTelegramMiniAppEntry>
+              }
+            />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account" element={<AccountsPage />} />
 

@@ -12,15 +12,17 @@ describe('telegram webhook config', () => {
     restoreEnv = null
   })
 
-  it('caps replay ttl at the session ttl to avoid renewal dead zones', () => {
+  it('caps init data, session, and replay ttl to Privy-aligned five-minute windows', () => {
     restoreEnv = applyEnv({
       TELEGRAM_MINIAPP_SESSION_TTL_SECONDS: '600',
+      TELEGRAM_MINIAPP_INITDATA_MAX_AGE_SECONDS: '1200',
       TELEGRAM_MINIAPP_REPLAY_TTL_SECONDS: '900',
     })
 
     const config = getTelegramWebhookConfig()
-    expect(config.miniAppSessionTtlSeconds).toBe(600)
-    expect(config.miniAppReplayTtlSeconds).toBe(600)
+    expect(config.miniAppInitDataMaxAgeSeconds).toBe(300)
+    expect(config.miniAppSessionTtlSeconds).toBe(300)
+    expect(config.miniAppReplayTtlSeconds).toBe(300)
   })
 
   it('defaults replay ttl to the session ttl when unset', () => {
@@ -30,7 +32,7 @@ describe('telegram webhook config', () => {
     })
 
     const config = getTelegramWebhookConfig()
-    expect(config.miniAppSessionTtlSeconds).toBe(480)
-    expect(config.miniAppReplayTtlSeconds).toBe(480)
+    expect(config.miniAppSessionTtlSeconds).toBe(300)
+    expect(config.miniAppReplayTtlSeconds).toBe(300)
   })
 })

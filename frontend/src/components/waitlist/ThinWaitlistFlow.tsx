@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useLogin, useLoginWithTelegram, usePrivy } from '@privy-io/react-auth'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
@@ -8,7 +8,6 @@ import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { getAppBaseUrl } from '@/lib/host'
-import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 
 import type { Variant } from './waitlistTypes'
@@ -17,7 +16,6 @@ import {
   runWaitlistPrivyLogout,
   shouldAutoStartWaitlistPrivyAuth,
   shouldStopWaitlistAutoAuthRetry,
-  shouldShowWaitlistTelegramCta,
 } from './waitlistAuthState'
 import { buildWaitlistPrivyLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import {
@@ -72,13 +70,6 @@ type HandoffCreateResponse = {
 }
 
 type WaitlistStep = 'email' | 'auth' | 'zora' | 'done'
-type TelegramAuthFlowState =
-  | { status: 'initial' }
-  | { status: 'loading' }
-  | { status: 'done' }
-  | { status: 'error'; error: Error | null }
-
-type PrivyTelegramLinkWithLaunchParams = (options?: { launchParams: { initDataRaw?: string } }) => void
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDOFF_QUERY_KEY = 'cv_handoff'
@@ -135,26 +126,6 @@ function useSafeLogin() {
   }
 }
 
-function useSafeLoginWithTelegram() {
-  try {
-    return useLoginWithTelegram() as { login: () => Promise<void>; state: TelegramAuthFlowState }
-  } catch {
-    return {
-      login: async () => {},
-      state: { status: 'initial' } as TelegramAuthFlowState,
-    }
-  }
-}
-
-function hasLinkedTelegramAccount(user: unknown): boolean {
-  const record = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
-  if (!record) return false
-  const camel = Array.isArray(record.linkedAccounts) ? (record.linkedAccounts as any[]) : []
-  const snake = Array.isArray(record.linked_accounts) ? (record.linked_accounts as any[]) : []
-  const linked = [...camel, ...snake]
-  return linked.some((account) => String((account as any)?.type ?? '').trim().toLowerCase() === 'telegram')
-}
-
 function shortAddress(value: string | null | undefined): string {
   if (!value) return '—'
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
@@ -190,7 +161,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const privy = useSafePrivy()
   const { login } = useSafeLogin()
-  const { login: loginWithTelegram, state: telegramAuthState } = useSafeLoginWithTelegram()
 
   const privyReady = Boolean(privy?.ready)
   const privyAuthed = Boolean(privy?.authenticated)
@@ -216,14 +186,10 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
-  const pendingTelegramMiniAppLinkRef = useRef(false)
   const zoraAutoResolvedRef = useRef(false)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
-  const telegramAuthLoading = telegramAuthState.status === 'loading'
-  const telegramAlreadyLinked = useMemo(() => hasLinkedTelegramAccount((privy as any)?.user), [privy])
-  const isTelegramMiniApp = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
 
   const isPage = variant === 'page'
 
@@ -326,11 +292,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       if (privyAuthed) {
         await runBootstrap()
       } else {
-        if (isTelegramMiniApp) {
-          await loginWithTelegram()
-        } else {
-          await login(buildWaitlistPrivyLoginOptions() as any)
-        }
+        await login(buildWaitlistPrivyLoginOptions() as any)
       }
       authAttemptInFlightRef.current = false
       setBusy(false)
@@ -351,7 +313,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, isTelegramMiniApp, login, loginWithTelegram, privyAuthed, runBootstrap])
+  }, [busy, login, privyAuthed, runBootstrap])
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -370,82 +332,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setBusy(false)
     }
   }, [busy, login])
-
-  const onContinueWithTelegram = useCallback(async () => {
-    if (step !== 'auth') return
-    if (busy || authAttemptInFlightRef.current || telegramAuthLoading) return
-    authAttemptInFlightRef.current = true
-    setBusy(true)
-    setError(null)
-    setRecoveryRequired(false)
-    pendingTelegramMiniAppLinkRef.current = false
-    try {
-      if (privyAuthed) {
-        if (telegramAlreadyLinked) {
-          await runBootstrap()
-        } else {
-          const launchParams = readPrivyTelegramLaunchParams()
-          const linkTelegram =
-            typeof (privy as any)?.linkTelegram === 'function'
-              ? ((privy as any).linkTelegram as PrivyTelegramLinkWithLaunchParams)
-              : null
-          if (launchParams?.initDataRaw && linkTelegram) {
-            pendingTelegramMiniAppLinkRef.current = true
-            linkTelegram({ launchParams })
-          } else {
-            await loginWithTelegram()
-            await runBootstrap()
-          }
-        }
-      } else {
-        await loginWithTelegram()
-      }
-    } catch (authError: any) {
-      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start Telegram sign-in.')
-    } finally {
-      authAttemptInFlightRef.current = false
-      setBusy(false)
-    }
-  }, [busy, loginWithTelegram, privy, privyAuthed, runBootstrap, step, telegramAlreadyLinked, telegramAuthLoading])
-
-  useEffect(() => {
-    if (step !== 'auth') return
-    if (telegramAuthState.status !== 'error') return
-    const errorMessage =
-      typeof telegramAuthState.error?.message === 'string' && telegramAuthState.error.message.trim()
-        ? telegramAuthState.error.message
-        : 'Telegram sign-in was cancelled. Try again.'
-    setError(errorMessage)
-    setBusy(false)
-    authAttemptInFlightRef.current = false
-  }, [step, telegramAuthState])
-
-  useEffect(() => {
-    if (step !== 'auth') return
-    if (!privyAuthed) return
-    if (!pendingTelegramMiniAppLinkRef.current) return
-    if (!telegramAlreadyLinked) return
-    if (busy) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        setBusy(true)
-        setError(null)
-        await runBootstrap()
-      } catch (bootstrapError: any) {
-        if (cancelled) return
-        setError(
-          typeof bootstrapError?.message === 'string' ? bootstrapError.message : 'Failed to load account state.',
-        )
-      } finally {
-        pendingTelegramMiniAppLinkRef.current = false
-        if (!cancelled) setBusy(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [busy, privyAuthed, runBootstrap, step, telegramAlreadyLinked])
 
   const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
     const response = await apiFetch('/api/zora/resolve', {
@@ -576,14 +462,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         busy,
         authAttemptInFlight: authAttemptInFlightRef.current,
         authAutoAttempted: authAutoAttemptedRef.current,
-        isTelegramMiniApp,
       })
     ) {
       return
     }
     authAutoAttemptedRef.current = true
     void onContinueAuth()
-  }, [busy, isTelegramMiniApp, onContinueAuth, privyAuthed, privyReady, step])
+  }, [busy, onContinueAuth, privyAuthed, privyReady, step])
 
   useEffect(() => {
     if (step !== 'auth' || !privyAuthed) {
@@ -641,7 +526,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
-      pendingTelegramMiniAppLinkRef.current = false
       setRecoveryRequired(false)
     }
   }, [step])
@@ -760,7 +644,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
             <button
               type="button"
               disabled={step === 'email' ? !emailIsValid || busy : busy}
-              onClick={() => void (step === 'auth' ? onContinueAuth() : onJoinWaitlist())}
+              onClick={() =>
+                void (
+                  step === 'email'
+                    ? onJoinWaitlist()
+                    : onContinueAuth()
+                )
+              }
               className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {busy ? (
@@ -772,32 +662,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 emailUi.ctaLabel
               )}
             </button>
-
-            {shouldShowWaitlistTelegramCta({
-              step,
-              busy,
-              recoveryRequired,
-              isTelegramMiniApp,
-            }) ? (
-              <button
-                type="button"
-                disabled={busy || telegramAuthLoading}
-                onClick={() => void onContinueWithTelegram()}
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-sm font-medium text-white transition hover:border-[#229ED9]/60 hover:bg-[#229ED9]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#229ED9]/40 disabled:opacity-50 inline-flex items-center justify-center gap-2"
-              >
-                {telegramAuthLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Connecting Telegram…
-                  </>
-                ) : (
-                  <>
-                    <img src="/brands/telegram.svg" alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
-                    Continue with Telegram
-                  </>
-                )}
-              </button>
-            ) : null}
 
             {error ? (
               <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
@@ -1004,4 +868,3 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     </section>
   )
 }
-

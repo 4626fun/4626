@@ -71,6 +71,7 @@ import {
 import {
   buildMiniAppLaunchButton as buildMiniAppLaunchButtonShared,
   buildTelegramMiniAppUrl as buildTelegramMiniAppUrlShared,
+  TELEGRAM_MINI_APP_LINK_PATH,
   TELEGRAM_MINI_APP_SWAP_PATH,
 } from './webhook/miniApp.js'
 import {
@@ -1362,7 +1363,7 @@ function buildTelegramLinkFlowResponse(params: {
   }
   const linkUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
+    pathname: TELEGRAM_MINI_APP_LINK_PATH,
     query: linkQuery,
   })
   const openMiniAppButton = buildMiniAppLaunchButton({

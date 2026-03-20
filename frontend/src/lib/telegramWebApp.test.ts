@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ensureTelegramMiniAppSession, readPrivyTelegramLaunchParams } from './telegramWebApp'
+import { ensureTelegramMiniAppSession, hasTelegramMiniAppEntrypointContext, readPrivyTelegramLaunchParams } from './telegramWebApp'
 
 type MockWindowState = {
   Telegram?: { WebApp?: { initData?: string } }
@@ -11,8 +11,8 @@ type MockWindowState = {
   }
 }
 
-function installMockWindow(initData: string): () => void {
-  const storage = new Map<string, string>()
+function installMockWindow(initData: string, initialStorage?: Record<string, string>): () => void {
+  const storage = new Map<string, string>(Object.entries(initialStorage ?? {}))
   const mockWindow: MockWindowState = {
     Telegram: { WebApp: { initData } },
     sessionStorage: {
@@ -141,5 +141,32 @@ describe('telegramWebApp mini app session bootstrap', () => {
   it('returns null launch params when Telegram initData is missing', () => {
     restoreWindow = installMockWindow('')
     expect(readPrivyTelegramLaunchParams()).toBeNull()
+  })
+
+  it('treats live Telegram initData as valid Telegram entry context', () => {
+    restoreWindow = installMockWindow('auth_date=1710000000&user=%7B%22id%22%3A42%7D&hash=abc')
+    expect(hasTelegramMiniAppEntrypointContext()).toBe(true)
+  })
+
+  it('treats a fresh stored mini app session as valid Telegram entry context', async () => {
+    restoreWindow = installMockWindow('', {
+      cv_tg_miniapp_session_v1: JSON.stringify({
+        initData: 'auth_date=1710000000&user=%7B%22id%22%3A42%7D&hash=abc',
+        sessionToken: 'mini-session-token',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        telegramUserId: '42',
+        telegramUsername: 'akita',
+        chatId: null,
+        chatType: null,
+        chatInstance: null,
+      }),
+    })
+
+    expect(hasTelegramMiniAppEntrypointContext()).toBe(true)
+  })
+
+  it('rejects non-Telegram entry context when initData and fresh session are absent', () => {
+    restoreWindow = installMockWindow('')
+    expect(hasTelegramMiniAppEntrypointContext()).toBe(false)
   })
 })
