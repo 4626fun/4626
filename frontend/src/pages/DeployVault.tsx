@@ -54,6 +54,12 @@ import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonce } from '@/lib/deploy/permit2'
+import {
+  postDeploySessionRequestWithAuthRetry,
+  resumeAndPollDeploySession,
+  shouldRetryDeploySessionAuth,
+  type DeploySessionStatusData,
+} from '@/lib/deploy/sessionClient'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
@@ -2577,23 +2583,12 @@ function DeployVaultBatcher({
   ])
 
   const pollServerDeploySession = useCallback(async (sessionId: string) => {
-    let delayMs = 2000
-    let backoff = false
-    const started = Date.now()
-    let sentStepWithoutHash = ''
-    let sentStepWithoutHashSinceMs: number | null = null
     const isHexHash = (value: unknown): value is Hex => typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value)
-    while (true) {
-      const { response: sres, json: sjson } = await postJsonWithTimeout<any>({
-        url: '/api/deploy/session/status',
-        body: { sessionId },
-        label: 'deploy session status',
-      })
-      if (!sres.ok || !sjson?.success) throw new Error(sjson?.error || 'Failed to fetch deploy status')
-      const step = String(sjson.data?.step ?? '')
-      const lastTxHash = typeof sjson.data?.lastTxHash === 'string' ? sjson.data.lastTxHash : null
-      const lastUserOpHash = typeof sjson.data?.lastUserOpHash === 'string' ? sjson.data.lastUserOpHash : null
-      const lastError = sjson.data?.lastError ? String(sjson.data.lastError) : null
+    const applyStatus = (statusData: DeploySessionStatusData) => {
+      const step = String(statusData.step ?? '')
+      const lastTxHash = typeof statusData.lastTxHash === 'string' ? statusData.lastTxHash : null
+      const lastUserOpHash = typeof statusData.lastUserOpHash === 'string' ? statusData.lastUserOpHash : null
+      const lastError = statusData.lastError ? String(statusData.lastError) : null
       if (lastPolledStepRef.current !== step) {
         lastPolledStepRef.current = step
         // Keep plain console logs visible even when debug logger is disabled.
@@ -2618,59 +2613,35 @@ function DeployVaultBatcher({
           return s
         })
       }
-      if (step === 'completed') {
-        const completedTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
-        if (completedTxHash) {
-          setTxId(completedTxHash)
-          setPhaseTxs((s) => (s.tx4 ? s : { ...s, tx4: completedTxHash }))
-        }
-        setPhase('done')
-        clearDeploySession()
-        if (expectedRef.current) {
-          logger.info('[DeployVault] deploy_success (server-continued)', { creatorToken, owner, deploymentVersion, sessionId })
-          onSuccess(expectedRef.current)
-        }
-        return
-      }
-      if (step === 'failed' || step === 'cancelled') {
-        clearDeploySession()
-        throw new Error(String(sjson.data?.lastError ?? 'Server deploy failed'))
-      }
-      if (step.endsWith('_sent') || step === 'cleanup_sent') {
-        const hasUserOpHash = isHexHash(lastUserOpHash)
-        if (!hasUserOpHash) {
-          if (sentStepWithoutHash !== step) {
-            sentStepWithoutHash = step
-            sentStepWithoutHashSinceMs = Date.now()
-          }
-          const stalledMs = sentStepWithoutHashSinceMs ? Date.now() - sentStepWithoutHashSinceMs : 0
-          if (lastError) {
-            throw new Error(`Deploy stalled at ${step}: ${lastError}`)
-          }
-          if (stalledMs > 90_000) {
-            throw new Error(
-              `Deploy stalled at ${step}. No UserOp hash was recorded for over 90 seconds. ` +
-                'Retry deploy to create a fresh session.',
-            )
-          }
-        } else {
-          sentStepWithoutHash = ''
-          sentStepWithoutHashSinceMs = null
-        }
-      } else {
-        sentStepWithoutHash = ''
-        sentStepWithoutHashSinceMs = null
-      }
-      if (Date.now() - started > 10 * 60 * 1000) {
-        throw new Error('Server deploy did not complete in time. Check status and retry continue.')
-      }
-      if (step.endsWith('_sent') || step === 'cleanup_sent') {
-        backoff = true
-      }
-      if (backoff) delayMs = Math.min(delayMs * 2, 8000)
-      await new Promise((r) => setTimeout(r, delayMs))
     }
-  }, [clearDeploySession, creatorToken, deploymentVersion, onSuccess, owner])
+
+    const completed = await resumeAndPollDeploySession({
+      sessionId,
+      postJson: postJsonWithTimeout,
+      ensurePaymasterSession,
+      ensureDeploySessionSignerInstalled,
+      clearDeploySession,
+      onStatus: applyStatus,
+    })
+    const completedTxHash = (completed.lastTxHash ?? null) as Hex | null
+    if (completedTxHash) {
+      setTxId(completedTxHash)
+      setPhaseTxs((s) => (s.tx4 ? s : { ...s, tx4: completedTxHash }))
+    }
+    setPhase('done')
+    if (expectedRef.current) {
+      logger.info('[DeployVault] deploy_success (server-continued)', { creatorToken, owner, deploymentVersion, sessionId })
+      onSuccess(expectedRef.current)
+    }
+  }, [
+    clearDeploySession,
+    creatorToken,
+    deploymentVersion,
+    ensureDeploySessionSignerInstalled,
+    ensurePaymasterSession,
+    onSuccess,
+    owner,
+  ])
 
   useEffect(() => {
     if (!useServerContinue) return
@@ -2685,31 +2656,6 @@ function DeployVaultBatcher({
       setPhase('phase1')
       lastPolledStepRef.current = ''
       try {
-        await ensurePaymasterSession()
-        const { response: statusRes, json: statusJson } = await postJsonWithTimeout<any>({
-          url: '/api/deploy/session/status',
-          body: { sessionId },
-          label: 'deploy session resume status',
-        })
-        if (!statusRes.ok || !statusJson?.success) throw new Error(statusJson?.error || 'Failed to fetch deploy status')
-        const step = String(statusJson.data?.step ?? '')
-        if (step === 'created') {
-          const sessionSignerRaw = String(
-            statusJson.data?.sessionSignerAddress ?? statusJson.data?.sessionOwner ?? '',
-          ).trim()
-          if (!isAddress(sessionSignerRaw)) {
-            throw new Error('Invalid deploy session status response')
-          }
-          await ensureDeploySessionSignerInstalled(getAddress(sessionSignerRaw) as Address)
-          const { response: continueRes, json: continueJson } = await postJsonWithTimeout<any>({
-            url: '/api/deploy/session/continue',
-            body: { sessionId },
-            label: 'deploy session resume continue',
-          })
-          if (!continueRes.ok || !continueJson?.success) {
-            throw new Error(continueJson?.error || 'Failed to continue deploy')
-          }
-        }
         await pollServerDeploySession(sessionId)
       } catch (e) {
         if (!cancelled) setError(formatDeployError(e))
@@ -5148,34 +5094,18 @@ function DeployVaultBatcher({
               return false
             }
           }
-          const shouldRetrySessionAuth = (message: string): boolean => {
-            const lower = String(message || '').toLowerCase()
-            return (
-              lower.includes('not authenticated') ||
-              lower.includes('no_session') ||
-              lower.includes('deploy ownership mismatch')
-            )
-          }
           const postDeploySessionCreate = async (preflightOnly: boolean): Promise<ApiEnvelope<any>> => {
-            let attemptedReauth = false
-            while (true) {
-              const body: DeploySessionCreateRequest = preflightOnly
-                ? { ...sessionCreatePayload, preflightOnly: true }
-                : sessionCreatePayload
-              const { response: createRes, json: createJson } = await postJsonWithTimeout<any>({
-                url: '/api/deploy/session/create',
-                body,
-                label: preflightOnly ? 'deploy session preflight create' : 'deploy session create',
-              })
-              if (createRes.ok && createJson?.success) return createJson
-              const errMsg = String(createJson?.error || 'Failed to create deploy session')
-              if (!attemptedReauth && shouldRetrySessionAuth(errMsg)) {
-                attemptedReauth = true
-                await ensurePaymasterSession()
-                continue
-              }
-              throw new Error(errMsg)
-            }
+            const body: DeploySessionCreateRequest = preflightOnly
+              ? { ...sessionCreatePayload, preflightOnly: true }
+              : sessionCreatePayload
+            return await postDeploySessionRequestWithAuthRetry<any>({
+              postJson: postJsonWithTimeout,
+              url: '/api/deploy/session/create',
+              body,
+              label: preflightOnly ? 'deploy session preflight create' : 'deploy session create',
+              ensurePaymasterSession,
+              shouldRetryAuth: shouldRetryDeploySessionAuth,
+            })
           }
 
           try {
@@ -5196,14 +5126,14 @@ function DeployVaultBatcher({
             await ensureDeploySessionSignerInstalled(sessionOwner)
 
             // Kick off server continuation; status polling will advance remaining phases.
-            const { response: continueRes, json: continueJson } = await postJsonWithTimeout<any>({
+            await postDeploySessionRequestWithAuthRetry({
+              postJson: postJsonWithTimeout,
               url: '/api/deploy/session/continue',
               body: { sessionId },
               label: 'deploy session continue',
+              ensurePaymasterSession,
+              shouldRetryAuth: shouldRetryDeploySessionAuth,
             })
-            if (!continueRes.ok || !continueJson?.success) {
-              throw new Error(continueJson?.error || 'Failed to continue deploy')
-            }
 
             await pollServerDeploySession(sessionId)
             return null

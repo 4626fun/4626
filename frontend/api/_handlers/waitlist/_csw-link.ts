@@ -1,5 +1,6 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { isCswOwner } from '../../../server/_lib/cswOwner.js'
+import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
+import { isCswOwner, verifyCswProvenance } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -89,15 +90,20 @@ export default async function handler(req: any, res: any) {
     return res.status(404).json({ success: false, error: 'Waitlist entry not found' } satisfies ApiEnvelope<never>)
   }
 
-  const ownsProfile =
-    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === principalAddress) ||
-    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === principalAddress) ||
-    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === principalAddress)
-  if (!ownsProfile) {
+  const authorized = await isAuthorizedWalletForProfile({
+    db: db as any,
+    profileId: signupId,
+    address: principalAddress,
+  })
+  if (!authorized) {
     return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
   }
 
   try {
+    const isGenuineCsw = await verifyCswProvenance(cswAddress)
+    if (!isGenuineCsw) {
+      return res.status(403).json({ success: false, error: 'Wallet ownership verification failed' } satisfies ApiEnvelope<never>)
+    }
     const ok = await isCswOwner(principalAddress, cswAddress)
     if (!ok) {
       return res.status(403).json({ success: false, error: 'Wallet ownership verification failed' } satisfies ApiEnvelope<never>)

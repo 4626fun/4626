@@ -163,28 +163,24 @@ function makeCanonicalDb() {
     query: vi.fn(async () => ({ rows: [{}] })),
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-      if (text.includes('is_canonical_smart_wallet = true')) return { rows: [{ profile_id: 99 }] }
-      if (text.includes('select lower(address) as address') && text.includes('from profile_wallets')) {
-        return {
-          rows: [
-            { address: '0x0000000000000000000000000000000000000001' },
-            { address: '0x0000000000000000000000000000000000000002' },
-          ],
-        }
-      }
-      if (text.includes('from profiles') && text.includes('where id =')) {
+      if (text.includes('from profiles p') && text.includes('where p.id =')) {
         return {
           rows: [
             {
+              id: 99,
               primary_wallet: '0x0000000000000000000000000000000000000001',
               embedded_wallet: null,
               primary_embedded_eoa: null,
               primary_smart_wallet: '0x0000000000000000000000000000000000000002',
               csw_address: '0x0000000000000000000000000000000000000002',
               base_sub_account: null,
+              canonical_wallet: '0x0000000000000000000000000000000000000002',
             },
           ],
         }
+      }
+      if (text.includes('from profile_wallets') && text.includes('select profile_id') && text.includes('is_canonical_smart_wallet = true')) {
+        return { rows: [{ profile_id: 99 }] }
       }
       return { rows: [] }
     }),

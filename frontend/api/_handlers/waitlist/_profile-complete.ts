@@ -2,7 +2,7 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { isCswOwner, verifyCswProvenance } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { isAddressLike, normalizeAddress, normalizeEmail } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -55,88 +55,69 @@ export default async function handler(req: any, res: any) {
   await ensureWaitlistSchema(db as any)
   await ensureWaitlistPointsSchema(db as any)
 
-  // Mark profile completed (idempotent).
-  const updated = await db.sql`
-    UPDATE profiles
-    SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
+  const exists = await db.sql`
+    SELECT id, csw_address, primary_smart_wallet, base_sub_account
+    FROM profiles
     WHERE email = ${email}
-      AND (
-        LOWER(primary_wallet) = ${principalAddress}
-        OR LOWER(embedded_wallet) = ${principalAddress}
-        OR LOWER(csw_address) = ${principalAddress}
-        OR LOWER(primary_smart_wallet) = ${principalAddress}
-        OR LOWER(base_sub_account) = ${principalAddress}
-      )
-    RETURNING id, profile_completed_at;
+    LIMIT 1;
   `
-  const row = updated?.rows?.[0] ?? null
-  let signupId = typeof row?.id === 'number' ? (row.id as number) : null
-  let profileCompleted = Boolean(row?.profile_completed_at)
-  if (!signupId) {
-    const exists = await db.sql`
-      SELECT id, csw_address, primary_smart_wallet, base_sub_account
-      FROM profiles
-      WHERE email = ${email}
-      LIMIT 1;
-    `
-    const existingRow = exists?.rows?.[0]
-    if (existingRow?.id) {
-      const existingId = Number(existingRow.id)
-      const authorized = await isAuthorizedWalletForProfile({
-        db: db as any,
-        profileId: existingId,
-        address: principalAddress,
-      })
-      if (authorized) {
-        const authorizedUpdate = await db.sql`
-          UPDATE profiles
-          SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
-          WHERE id = ${existingId}
-          RETURNING id, profile_completed_at;
-        `
-        signupId = existingId
-        profileCompleted = Boolean(authorizedUpdate?.rows?.[0]?.profile_completed_at)
-      }
-
-      // Final fallback: check if principal wallet is an owner of the profile's linked CSW.
-      // Requires CSW provenance validation to prevent spoofed contracts.
-      const cswCandidates = [
-        normalizeAddress(existingRow.csw_address),
-        normalizeAddress(existingRow.primary_smart_wallet),
-        normalizeAddress(existingRow.base_sub_account),
-      ].filter((candidate): candidate is `0x${string}` => Boolean(candidate))
-      if (!signupId && cswCandidates.length > 0 && isAddressLike(principalAddress)) {
-        for (const cswAddr of cswCandidates) {
-          try {
-            const isGenuineCsw = await verifyCswProvenance(cswAddr)
-            if (!isGenuineCsw) continue
-            const owned = await isCswOwner(principalAddress, cswAddr)
-            if (!owned) continue
-            const ownerUpdate = await db.sql`
-              UPDATE profiles
-              SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
-              WHERE id = ${existingId}
-              RETURNING id, profile_completed_at;
-            `
-            signupId = existingId
-            profileCompleted = Boolean(ownerUpdate?.rows?.[0]?.profile_completed_at)
-            break
-          } catch {
-            continue
-          }
-        }
-      }
-      if (!signupId) {
-        return res.status(403).json({
-          success: false,
-          error: 'Not authorized to update this profile. Sign in with the same wallet you used for the waitlist, or with a wallet that owns your linked CSW.',
-        } satisfies ApiEnvelope<never>)
-      }
-    }
+  const existingRow = exists?.rows?.[0]
+  if (!existingRow?.id) {
     // Not on waitlist (yet). Return success with a clear state so the client can ignore.
     const data: ProfileCompleteResponse = { email, profileCompleted: false, qualifiedReferral: false }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ProfileCompleteResponse>)
   }
+  const existingId = Number(existingRow.id)
+
+  const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req).catch(() => null)
+  let authorized = authorizedPrincipal?.profileId === existingId
+  if (!authorized) {
+    authorized = await isAuthorizedWalletForProfile({
+      db: db as any,
+      profileId: existingId,
+      address: principalAddress,
+    })
+  }
+
+  // Final fallback: check if principal wallet is an owner of the profile's linked CSW.
+  // Requires CSW provenance validation to prevent spoofed contracts.
+  if (!authorized) {
+    const cswCandidates = [
+      normalizeAddress(existingRow.csw_address),
+      normalizeAddress(existingRow.primary_smart_wallet),
+      normalizeAddress(existingRow.base_sub_account),
+    ].filter((candidate): candidate is `0x${string}` => Boolean(candidate))
+    if (cswCandidates.length > 0 && isAddressLike(principalAddress)) {
+      for (const cswAddr of cswCandidates) {
+        try {
+          const isGenuineCsw = await verifyCswProvenance(cswAddr)
+          if (!isGenuineCsw) continue
+          const owned = await isCswOwner(principalAddress, cswAddr)
+          if (!owned) continue
+          authorized = true
+          break
+        } catch {
+          continue
+        }
+      }
+    }
+  }
+  if (!authorized) {
+    return res.status(403).json({
+      success: false,
+      error: 'Not authorized to update this profile. Sign in with the same wallet you used for the waitlist, or with a wallet that owns your linked CSW.',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const updated = await db.sql`
+    UPDATE profiles
+    SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
+    WHERE id = ${existingId}
+    RETURNING id, profile_completed_at;
+  `
+  const row = updated?.rows?.[0] ?? null
+  const signupId = typeof row?.id === 'number' ? (row.id as number) : existingId
+  const profileCompleted = Boolean(row?.profile_completed_at)
 
   // If this signup has a referrer conversion, qualify it and award points to the referrer (idempotent via ledger).
   const conv = await db.sql`

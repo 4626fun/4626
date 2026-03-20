@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deploy Session Resume Regression</title>
+  </head>
+  <body>
+    <pre id="output">idle</pre>
+    <script type="module">
+      import { resumeAndPollDeploySession } from '/src/lib/deploy/sessionClient.ts'
+
+      const output = document.getElementById('output')
+
+      const postJson = async ({ url, body }) => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        let json = null
+        try {
+          json = await response.json()
+        } catch {
+          json = null
+        }
+        return { response, json }
+      }
+
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+      const steps = []
+
+      async function run() {
+        try {
+          const completed = await resumeAndPollDeploySession({
+            sessionId: 'sess_browser',
+            postJson,
+            ensurePaymasterSession: async () => {
+              window.__ensurePaymasterSessionCalls = (window.__ensurePaymasterSessionCalls ?? 0) + 1
+            },
+            ensureDeploySessionSignerInstalled: async (sessionSigner) => {
+              window.__sessionSignerAddress = sessionSigner
+            },
+            clearDeploySession: () => {
+              window.__deploySessionCleared = true
+            },
+            onStatus: (status) => {
+              steps.push(String(status.step ?? ''))
+              output.textContent = JSON.stringify({ state: 'running', steps }, null, 2)
+            },
+            initialDelayMs: 5,
+            maxDelayMs: 10,
+            maxDurationMs: 5_000,
+            sleep: (ms) => sleep(Math.min(ms, 10)),
+          })
+
+          output.textContent = JSON.stringify(
+            {
+              state: 'completed',
+              steps,
+              completed,
+              ensurePaymasterSessionCalls: window.__ensurePaymasterSessionCalls ?? 0,
+              sessionSignerAddress: window.__sessionSignerAddress ?? null,
+              cleared: window.__deploySessionCleared === true,
+            },
+            null,
+            2,
+          )
+        } catch (error) {
+          output.textContent = JSON.stringify(
+            {
+              state: 'failed',
+              error: String(error?.message ?? error),
+              ensurePaymasterSessionCalls: window.__ensurePaymasterSessionCalls ?? 0,
+              sessionSignerAddress: window.__sessionSignerAddress ?? null,
+              cleared: window.__deploySessionCleared === true,
+            },
+            null,
+            2,
+          )
+        }
+      }
+
+      window.startDeploySessionResumeRegression = run
+      if (new URL(window.location.href).searchParams.get('autorun') === '1') {
+        void run()
+      }
+    </script>
+  </body>
+</html>

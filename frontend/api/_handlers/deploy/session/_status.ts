@@ -11,7 +11,6 @@ import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDep
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
-import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { DEFAULT_CHAIN_ID } from '../../../../server/zora/_shared.js'
 import {
@@ -26,6 +25,7 @@ import {
 import { ingestShareOftIntoManagedTokenlist } from '../../token/_managedTokenList.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
+import { DeploySessionAccessError, loadAuthorizedDeploySession } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -2592,22 +2592,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<null>)
   }
 
-  const auth = readDeployAuthFromRequest(req)
-  if (!auth?.address) {
-    return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
-  }
-
   const body = await readJsonBody<StatusRequest>(req)
   const sessionId = body?.sessionId ? String(body.sessionId).trim() : ''
   if (!sessionId) return res.status(400).json({ success: false, error: 'Missing sessionId' } satisfies ApiEnvelope<null>)
 
-  let rec = await getDeploySessionById(sessionId)
-  if (!rec) return res.status(404).json({ success: false, error: 'Not found' } satisfies ApiEnvelope<null>)
-
-  // Ensure the SIWE session matches the recorded sessionAddress.
-  const sessionAddress = getAddress(auth.address)
-  if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
-    return res.status(403).json({ success: false, error: 'Forbidden' } satisfies ApiEnvelope<null>)
+  let rec!: NonNullable<Awaited<ReturnType<typeof getDeploySessionById>>>
+  let sessionAddress!: Address
+  try {
+    const access = await loadAuthorizedDeploySession({
+      req,
+      sessionId,
+      getDeploySessionById,
+    })
+    rec = access.rec
+    sessionAddress = access.sessionAddress
+  } catch (error) {
+    if (error instanceof DeploySessionAccessError) {
+      return res.status(error.status).json({ success: false, error: error.message } satisfies ApiEnvelope<null>)
+    }
+    throw error
   }
 
   const isTerminalStep = ['cancelled', 'completed', 'failed'].includes(String(rec.step ?? ''))

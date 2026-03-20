@@ -4,8 +4,8 @@ import handler from '../_handlers/waitlist/_profile-complete.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 const {
-  readSessionFromRequestMock,
-  readSiwaAgentFromRequestMock,
+  readRequestPrincipalAddressMock,
+  resolveAuthorizedRequestPrincipalMock,
   getDbMock,
   ensureWaitlistSchemaMock,
   ensureWaitlistPointsSchemaMock,
@@ -13,9 +13,12 @@ const {
   checkRateLimitMock,
   rateLimitKeyMock,
   getClientIpMock,
+  isAuthorizedWalletForProfileMock,
+  isCswOwnerMock,
+  verifyCswProvenanceMock,
 } = vi.hoisted(() => ({
-  readSessionFromRequestMock: vi.fn(),
-  readSiwaAgentFromRequestMock: vi.fn(),
+  readRequestPrincipalAddressMock: vi.fn(() => ''),
+  resolveAuthorizedRequestPrincipalMock: vi.fn(async () => null),
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   ensureWaitlistPointsSchemaMock: vi.fn(async () => {}),
@@ -23,6 +26,9 @@ const {
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   rateLimitKeyMock: vi.fn(() => 'rl-key'),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
+  isAuthorizedWalletForProfileMock: vi.fn(async () => false),
+  isCswOwnerMock: vi.fn(async () => false),
+  verifyCswProvenanceMock: vi.fn(async () => false),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -30,11 +36,11 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setCors: vi.fn(),
   setNoStore: vi.fn(),
   readJsonBody: vi.fn(async (req: any) => req.body),
-  readSessionFromRequest: readSessionFromRequestMock,
 }))
 
-vi.mock('../../server/auth/_siwa.js', () => ({
-  readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
+vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+  readRequestPrincipalAddress: readRequestPrincipalAddressMock,
+  resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -57,14 +63,22 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
   getClientIp: getClientIpMock,
 }))
 
+vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  isAuthorizedWalletForProfile: isAuthorizedWalletForProfileMock,
+}))
+
 vi.mock('../../server/_lib/cswOwner.js', () => ({
-  isCswOwner: vi.fn(async () => false),
+  isCswOwner: isCswOwnerMock,
+  verifyCswProvenance: verifyCswProvenanceMock,
 }))
 
 function createDb() {
   return {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from profiles') && text.includes('where email')) {
+        return { rows: [{ id: 1, csw_address: null, primary_smart_wallet: null, base_sub_account: null }] }
+      }
       if (text.includes('update profiles') && text.includes('set profile_completed_at')) {
         return { rows: [{ id: 1, profile_completed_at: new Date().toISOString() }] }
       }
@@ -103,8 +117,11 @@ describe('waitlist/profile-complete auth parity', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue(createDb())
-    readSessionFromRequestMock.mockReturnValue(null)
-    readSiwaAgentFromRequestMock.mockReturnValue(null)
+    readRequestPrincipalAddressMock.mockReturnValue('')
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValue(null)
+    isAuthorizedWalletForProfileMock.mockResolvedValue(false)
+    isCswOwnerMock.mockResolvedValue(false)
+    verifyCswProvenanceMock.mockResolvedValue(false)
   })
 
   it('returns 401 when no session and no SIWA', async () => {
@@ -115,7 +132,16 @@ describe('waitlist/profile-complete auth parity', () => {
   })
 
   it('accepts session principal', async () => {
-    readSessionFromRequestMock.mockReturnValue({ address: '0x00000000000000000000000000000000000000aa' } as any)
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValue({
+      profileId: 1,
+      address: '0x00000000000000000000000000000000000000aa',
+      source: 'session',
+      authSource: 'session',
+      canonicalSmartWalletAddress: null,
+      activeOwnerWalletAddress: '0x00000000000000000000000000000000000000aa',
+      signerRole: 'active_owner_wallet',
+    } as any)
     const req = createMockReq({ method: 'POST', body: { email: 'user@example.com' } })
     const res = createMockRes()
     await handler(req as any, res as any)
@@ -124,12 +150,15 @@ describe('waitlist/profile-complete auth parity', () => {
   })
 
   it('accepts SIWA principal when session is missing', async () => {
-    readSessionFromRequestMock.mockReturnValue(null)
-    readSiwaAgentFromRequestMock.mockReturnValue({
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000bb')
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValue({
+      profileId: 1,
       address: '0x00000000000000000000000000000000000000bb',
-      agentId: 42,
-      agentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',
-      chainId: 8453,
+      source: 'siwa',
+      authSource: 'siwa',
+      canonicalSmartWalletAddress: null,
+      activeOwnerWalletAddress: '0x00000000000000000000000000000000000000bb',
+      signerRole: 'active_owner_wallet',
     } as any)
     const req = createMockReq({ method: 'POST', body: { email: 'user@example.com' } })
     const res = createMockRes()
@@ -140,7 +169,7 @@ describe('waitlist/profile-complete auth parity', () => {
 
   it('rejects principals that are only historical linked wallets', async () => {
     getDbMock.mockResolvedValue(createDbHistoricalLinkedWallet())
-    readSessionFromRequestMock.mockReturnValue({ address: '0x00000000000000000000000000000000000000aa' } as any)
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
     const req = createMockReq({ method: 'POST', body: { email: 'user@example.com' } })
     const res = createMockRes()
     await handler(req as any, res as any)

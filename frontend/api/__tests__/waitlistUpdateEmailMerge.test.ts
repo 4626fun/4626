@@ -7,6 +7,7 @@ const {
   getDbMock,
   ensureWaitlistSchemaMock,
   readRequestPrincipalAddressMock,
+  resolveAuthorizedRequestPrincipalMock,
   checkRateLimitMock,
   rateLimitKeyMock,
   getClientIpMock,
@@ -15,6 +16,7 @@ const {
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   readRequestPrincipalAddressMock: vi.fn(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),
+  resolveAuthorizedRequestPrincipalMock: vi.fn(async () => null),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   rateLimitKeyMock: vi.fn(() => 'rl-key'),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
@@ -38,6 +40,7 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
 
 vi.mock('../../server/_lib/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
+  resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
 }))
 
 vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
@@ -111,6 +114,7 @@ describe('waitlist/update-email merge-on-conflict', () => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue(createDb({ ownTargetEmail: true }))
     isAuthorizedWalletForProfileMock.mockImplementation(async ({ profileId }: { profileId: number }) => profileId === 267 || profileId === 1)
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValue(null)
   })
 
   it('merges synthetic profile into existing owned profile when target email is already taken', async () => {
@@ -158,5 +162,20 @@ describe('waitlist/update-email merge-on-conflict', () => {
     expect(res.body?.success).toBe(false)
     expect(String(res.body?.error ?? '')).toContain('Email already in use')
   })
-})
 
+  it('rejects currentEmail-omitted updates when the principal is not strictly authorized for a profile', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        newEmail: 'akitav2@proton.me',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req as any, res as any)
+
+    expect(resolveAuthorizedRequestPrincipalMock).toHaveBeenCalledTimes(1)
+    expect(res.statusCode).toBe(404)
+    expect(res.body?.success).toBe(false)
+  })
+})

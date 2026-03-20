@@ -1,7 +1,7 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
 
@@ -69,26 +69,15 @@ async function findOwnedProfileByEmail(params: {
   return { id, email: typeof row.email === 'string' ? row.email : email }
 }
 
-async function findOwnedProfileByPrincipal(params: {
+async function findOwnedProfileById(params: {
   db: any
-  principalAddress: string
+  profileId: number
 }): Promise<OwnedProfile | null> {
-  const { db, principalAddress } = params
+  const { db, profileId } = params
   const q = await db.sql`
     SELECT p.id, p.email
     FROM profiles p
-    WHERE (
-      LOWER(p.primary_wallet) = ${principalAddress}
-      OR LOWER(p.embedded_wallet) = ${principalAddress}
-      OR LOWER(p.csw_address) = ${principalAddress}
-      OR LOWER(p.base_sub_account) = ${principalAddress}
-      OR LOWER(p.primary_smart_wallet) = ${principalAddress}
-      OR LOWER(p.primary_embedded_eoa) = ${principalAddress}
-    )
-    ORDER BY
-      CASE WHEN p.email IS NULL THEN 2 WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' OR LOWER(p.email) LIKE '%@wallet.4626.fun' THEN 1 ELSE 0 END ASC,
-      p.updated_at DESC,
-      p.created_at ASC
+    WHERE p.id = ${profileId}
     LIMIT 1;
   `
   const row = q?.rows?.[0] as { id?: unknown; email?: unknown } | undefined
@@ -348,16 +337,20 @@ export default async function handler(req: any, res: any) {
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureWaitlistSchema(db as any)
 
+  const authorizedPrincipal = hasCurrentEmail ? null : await resolveAuthorizedRequestPrincipal(req).catch(() => null)
+
   const currentOwnedProfile = hasCurrentEmail
     ? await findOwnedProfileByEmail({
         db,
         email: currentEmail,
         principalAddress,
       })
-    : await findOwnedProfileByPrincipal({
+    : authorizedPrincipal
+      ? await findOwnedProfileById({
         db,
-        principalAddress,
+        profileId: authorizedPrincipal.profileId,
       })
+      : null
   if (!currentOwnedProfile) {
     return res.status(hasCurrentEmail ? 403 : 404).json({
       success: false,

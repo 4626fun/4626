@@ -244,13 +244,8 @@ export function setCors(req: VercelRequest, res: VercelResponse) {
 }
 
 export function readSessionFromRequest(req: VercelRequest): { address: string } | null {
-  // Primary: HttpOnly cookie session (preferred when available).
-  const cookies = parseCookies(req)
-  const cookieToken = cookies[COOKIE_SESSION]
-  const cookieSession = readSessionToken(cookieToken)
-  if (cookieSession) return cookieSession
-
-  // Fallback: Authorization bearer token (helps in embedded/mini-app contexts where cookies may be blocked).
+  // Prefer an explicit bearer token over ambient cookies so embedded/cross-origin
+  // clients can intentionally override stale browser cookie state.
   const h = req.headers?.authorization
   const auth = typeof h === 'string' ? h.trim() : ''
   if (auth.toLowerCase().startsWith('bearer ')) {
@@ -258,6 +253,12 @@ export function readSessionFromRequest(req: VercelRequest): { address: string } 
     const headerSession = readSessionToken(token)
     if (headerSession) return headerSession
   }
+
+  // Fallback: HttpOnly cookie session when no valid explicit bearer token was supplied.
+  const cookies = parseCookies(req)
+  const cookieToken = cookies[COOKIE_SESSION]
+  const cookieSession = readSessionToken(cookieToken)
+  if (cookieSession) return cookieSession
 
   return null
 }

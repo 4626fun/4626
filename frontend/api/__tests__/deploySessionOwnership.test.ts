@@ -196,28 +196,51 @@ function makeCanonicalDb() {
     query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-      if (text.includes('is_canonical_smart_wallet = true')) return { rows: [{ profile_id: 99 }] }
-      if (text.includes('select lower(address) as address') && text.includes('from profile_wallets')) {
-        return {
-          rows: [
-            { address: '0x0000000000000000000000000000000000000001' },
-            { address: '0x0000000000000000000000000000000000000002' },
-          ],
-        }
-      }
-      if (text.includes('from profiles') && text.includes('where id =')) {
+      if (text.includes('from profiles p') && text.includes('where p.id =')) {
         return {
           rows: [
             {
+              id: 99,
               primary_wallet: '0x0000000000000000000000000000000000000001',
-              embedded_wallet: null,
               primary_embedded_eoa: null,
               primary_smart_wallet: '0x0000000000000000000000000000000000000002',
               csw_address: '0x0000000000000000000000000000000000000002',
               base_sub_account: null,
+              canonical_wallet: '0x0000000000000000000000000000000000000002',
             },
           ],
         }
+      }
+      if (text.includes('from profile_wallets') && text.includes('select profile_id') && text.includes('is_canonical_smart_wallet = true')) {
+        return { rows: [{ profile_id: 99 }] }
+      }
+      return { rows: [] }
+    }),
+  }
+}
+
+function makeCanonicalDbWithHistoricalSessionOnly() {
+  return {
+    query: vi.fn(async () => ({ rows: [{}] })),
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from profiles p') && text.includes('where p.id =')) {
+        return {
+          rows: [
+            {
+              id: 99,
+              primary_wallet: '0x0000000000000000000000000000000000000004',
+              primary_embedded_eoa: '0x0000000000000000000000000000000000000004',
+              primary_smart_wallet: '0x0000000000000000000000000000000000000002',
+              csw_address: '0x0000000000000000000000000000000000000002',
+              base_sub_account: null,
+              canonical_wallet: '0x0000000000000000000000000000000000000002',
+            },
+          ],
+        }
+      }
+      if (text.includes('from profile_wallets') && text.includes('select profile_id') && text.includes('is_canonical_smart_wallet = true')) {
+        return { rows: [{ profile_id: 99 }] }
       }
       return { rows: [] }
     }),
@@ -337,6 +360,19 @@ describe('deploy session ownership guardrails', () => {
         return { rows: [] }
       }),
     })
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error || '')).toContain('ownership')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale historical session wallets that are no longer current deploy authority', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDbWithHistoricalSessionOnly())
+    readSessionFromRequestMock.mockReturnValue({ address: '0x0000000000000000000000000000000000000001' } as any)
 
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()

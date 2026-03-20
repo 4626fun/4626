@@ -28,6 +28,7 @@ import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permi
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/coinParties.js'
 import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/charmVaults.js'
+import { readProfileWalletAuthority } from '../../../../server/_lib/canonicalWalletResolver.js'
 import {
   normalizeSolanaAssetMintOrigin,
   parseSolanaOvaultMintCompatibilityHints,
@@ -895,57 +896,25 @@ async function checkCanonicalWalletOwnership(params: {
     return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }
   }
 
-  const linked = new Set<string>([smartWalletLc])
-  const linkedRows = await db.sql`
-    SELECT LOWER(address) AS address
-    FROM profile_wallets
-    WHERE profile_id = ${profileId}
-      AND address IS NOT NULL;
-  `
-  for (const row of linkedRows.rows ?? []) {
-    const addr = typeof row?.address === 'string' ? String(row.address).trim().toLowerCase() : ''
-    if (addr) linked.add(addr)
-  }
-
-  if (legacyProfileFallbackEnabled) {
-    const compatibilityProfileRow = await db.sql`
-      SELECT
-        LOWER(primary_wallet) AS primary_wallet,
-        LOWER(embedded_wallet) AS embedded_wallet,
-        LOWER(primary_embedded_eoa) AS primary_embedded_eoa,
-        LOWER(primary_smart_wallet) AS primary_smart_wallet,
-        LOWER(csw_address) AS csw_address,
-        LOWER(base_sub_account) AS base_sub_account
-      FROM profiles
-      WHERE id = ${profileId}
-      LIMIT 1;
-    `
-    const compatibilityProfile = (compatibilityProfileRow.rows?.[0] ?? null) as Record<string, unknown> | null
-    if (compatibilityProfile) {
-      for (const value of Object.values(compatibilityProfile)) {
-        const addr = typeof value === 'string' ? value.trim().toLowerCase() : ''
-        if (addr) linked.add(addr)
-      }
-    }
-  }
-
-  const belongs = async (addr: string): Promise<boolean> => {
-    return linked.has(addr)
-  }
-
-  const ownerBelongs = await belongs(ownerLc)
-  if (!ownerBelongs) {
+  const authority = await readProfileWalletAuthority({
+    db: db as any,
+    profileId: Number(profileId),
+  })
+  if (!authority) {
     const onchain = await onchainOwnerCheck()
-    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'owner_not_linked' }
+    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }
   }
 
-  const sessionBelongs = await belongs(sessionLc)
-  if (!sessionBelongs) {
+  if (authority.canonicalSmartWalletAddress !== smartWalletLc) {
     const onchain = await onchainOwnerCheck()
-    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'session_not_linked' }
+    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }
   }
 
-  return { ok: true }
+  if (sessionLc === smartWalletLc) return { ok: true }
+  if (authority.activeOwnerWalletAddress === sessionLc) return { ok: true }
+
+  const onchain = await onchainOwnerCheck()
+  return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'session_not_authorized' }
 }
 
 export async function validateDeploySessionRequest(params: {

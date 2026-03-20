@@ -5,13 +5,14 @@ import sharp from 'sharp'
 type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
 type ArtworkFitMode = 'cover' | 'contain'
 type SourceClass = 'brightBadge' | 'portraitPhoto' | 'illustration' | 'pixelArt' | 'generic'
+type RenderPreset = 'standard' | 'hero' | 'pixel'
 
 export type PremiumTokenIconParams = {
   size: number
   sourceImage?: Uint8Array
   heroCutoutSourceImage?: Uint8Array
-  suppressBreakout?: boolean
   symbol?: string
+  renderPreset?: RenderPreset
 }
 
 type PremiumLayout = {
@@ -145,16 +146,16 @@ const BACKGROUND_COLORS = {
   edge: '#000000',
 } as const
 
-const OUTER_GLOW_COLOR = '#2F6FFF'
+const OUTER_GLOW_COLOR = '#3B82FF'
 const FRAME_GRADIENT = {
-  topLeft: '#E8EDF6',
-  middle: '#CED6E5',
-  bottomRight: '#3A74FF',
+  topLeft: '#F7FAFF',
+  middle: '#DCE6FA',
+  bottomRight: '#3A7BFF',
 } as const
 
 const CHAMBER_GRADIENT = {
-  top: '#050A14',
-  bottom: '#010307',
+  top: '#08101F',
+  bottom: '#02050B',
 } as const
 
 function clamp(value: number, min: number, max: number): number {
@@ -201,18 +202,40 @@ async function applyOpacity(layer: Buffer, opacity: number): Promise<Buffer> {
     .toBuffer()
 }
 
-function getTokenIconLayout(size: number): PremiumLayout {
-  const frameInset = Math.round(size * 0.168)
+function resolveRenderPreset(userPreset: RenderPreset | undefined, sourceClass: SourceClass | undefined): RenderPreset {
+  if (userPreset) return userPreset
+  if (sourceClass === 'pixelArt') return 'pixel'
+  if (sourceClass === 'illustration' || sourceClass === 'portraitPhoto') return 'hero'
+  return 'standard'
+}
+
+function getTokenIconLayout(size: number, preset: RenderPreset = 'standard'): PremiumLayout {
+  const frameInsetRatio =
+    preset === 'hero' ? 0.148
+    : preset === 'pixel' ? 0.156
+    : 0.154
+  const frameInset = Math.round(size * frameInsetRatio)
   const frameSize = Math.max(1, size - frameInset * 2)
-  const frameStroke = clamp(Math.round(frameSize * 0.069), Math.round(frameSize * 0.063), Math.round(frameSize * 0.079))
-  const chamberInset = Math.max(Math.round(frameStroke * 1.08), Math.round(frameSize * 0.036))
+  const frameStrokeRatio =
+    preset === 'hero' ? 0.048
+    : preset === 'pixel' ? 0.051
+    : 0.053
+  const frameStroke = clamp(
+    Math.round(frameSize * frameStrokeRatio),
+    Math.round(frameSize * (preset === 'hero' ? 0.044 : preset === 'pixel' ? 0.047 : 0.048)),
+    Math.round(frameSize * (preset === 'hero' ? 0.054 : preset === 'pixel' ? 0.056 : 0.059)),
+  )
+  const chamberInset = Math.max(
+    Math.round(frameStroke * (preset === 'hero' ? 1.04 : preset === 'pixel' ? 1.08 : 1.12)),
+    Math.round(frameSize * (preset === 'hero' ? 0.027 : preset === 'pixel' ? 0.029 : 0.031)),
+  )
   const chamberSize = Math.max(1, frameSize - chamberInset * 2)
   const chamberX = frameInset + chamberInset
   const chamberY = chamberX
-  const breakoutWidth = Math.max(1, Math.round(chamberSize * 0.20))
-  const breakoutHeight = Math.max(1, Math.round(chamberSize * 0.10))
+  const breakoutWidth = Math.max(1, Math.round(chamberSize * (preset === 'hero' ? 0.24 : preset === 'pixel' ? 0.18 : 0.20)))
+  const breakoutHeight = Math.max(1, Math.round(chamberSize * (preset === 'hero' ? 0.15 : preset === 'pixel' ? 0.09 : 0.10)))
   const breakoutX = chamberX + Math.round((chamberSize - breakoutWidth) / 2)
-  const breakoutY = Math.max(0, chamberY - Math.round(chamberSize * 0.068))
+  const breakoutY = Math.max(0, chamberY - Math.round(chamberSize * (preset === 'hero' ? 0.09 : preset === 'pixel' ? 0.058 : 0.068)))
 
   return {
     size,
@@ -220,12 +243,12 @@ function getTokenIconLayout(size: number): PremiumLayout {
     frameX: frameInset,
     frameY: frameInset,
     frameSize,
-    frameRadius: Math.round(frameSize * 0.215),
+    frameRadius: Math.round(frameSize * 0.207),
     frameStroke,
     chamberX,
     chamberY,
     chamberSize,
-    chamberRadius: Math.round(chamberSize * 0.154),
+    chamberRadius: Math.round(chamberSize * (preset === 'pixel' ? 0.14 : 0.148)),
     breakoutX,
     breakoutY,
     breakoutWidth,
@@ -668,9 +691,9 @@ function createFrameGradientSvg(size: number, layout: PremiumLayout): string {
   <defs>
     <linearGradient id="frameStroke" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="20%" stop-color="${FRAME_GRADIENT.topLeft}"/>
-      <stop offset="48%" stop-color="${FRAME_GRADIENT.middle}"/>
-      <stop offset="74%" stop-color="#9FB3E6"/>
+      <stop offset="14%" stop-color="${FRAME_GRADIENT.topLeft}"/>
+      <stop offset="44%" stop-color="${FRAME_GRADIENT.middle}"/>
+      <stop offset="72%" stop-color="#AFC4FF"/>
       <stop offset="100%" stop-color="${FRAME_GRADIENT.bottomRight}"/>
     </linearGradient>
   </defs>
@@ -692,13 +715,6 @@ function resolveBreakoutSourceKind(params: {
   return 'none'
 }
 
-function resolveSourceAlphaBreakoutAllowed(params: {
-  allowBreakout: boolean
-  suppressBreakout?: boolean
-}): boolean {
-  return !params.suppressBreakout && params.allowBreakout
-}
-
 export async function renderBackgroundCard(params: {
   size: number
   layout: PremiumLayout
@@ -706,35 +722,46 @@ export async function renderBackgroundCard(params: {
   const { size, layout } = params
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="cardGradient" cx="50%" cy="43%" r="61%">
-      <stop offset="0%" stop-color="#000001"/>
-      <stop offset="28%" stop-color="${BACKGROUND_COLORS.mid}"/>
-      <stop offset="100%" stop-color="${BACKGROUND_COLORS.edge}"/>
+    <radialGradient id="cardGradient" cx="50%" cy="42%" r="63%">
+      <stop offset="0%" stop-color="#010207"/>
+      <stop offset="36%" stop-color="#03040A"/>
+      <stop offset="100%" stop-color="#000000"/>
     </radialGradient>
-    <radialGradient id="cardAtmosphere" cx="26%" cy="22%" r="54%">
-      <stop offset="0%" stop-color="rgba(8,18,34,0.016)"/>
-      <stop offset="46%" stop-color="rgba(2,7,18,0.0036)"/>
+    <radialGradient id="cardAuraTl" cx="28%" cy="23%" r="56%">
+      <stop offset="0%" stop-color="rgba(110,150,255,0.09)"/>
+      <stop offset="34%" stop-color="rgba(39,83,190,0.032)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
-    <radialGradient id="cardAtmosphereBr" cx="78%" cy="79%" r="50%">
-      <stop offset="0%" stop-color="rgba(12,30,78,0.014)"/>
-      <stop offset="54%" stop-color="rgba(3,10,28,0.0032)"/>
+    <radialGradient id="cardAuraBr" cx="77%" cy="78%" r="60%">
+      <stop offset="0%" stop-color="rgba(58,123,255,0.13)"/>
+      <stop offset="40%" stop-color="rgba(36,76,172,0.042)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
-    <radialGradient id="cardVignette" cx="50%" cy="56%" r="70%">
-      <stop offset="43%" stop-color="rgba(0,0,0,0)"/>
-      <stop offset="100%" stop-color="rgba(0,0,0,0.79)"/>
+    <radialGradient id="cardVignette" cx="50%" cy="56%" r="72%">
+      <stop offset="48%" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.82)"/>
     </radialGradient>
     <linearGradient id="chamberGradient" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${CHAMBER_GRADIENT.top}"/>
       <stop offset="100%" stop-color="${CHAMBER_GRADIENT.bottom}"/>
     </linearGradient>
+    <radialGradient id="chamberAmbient" cx="50%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="rgba(170,205,255,0.085)"/>
+      <stop offset="28%" stop-color="rgba(77,132,255,0.048)"/>
+      <stop offset="68%" stop-color="rgba(18,34,78,0.018)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </radialGradient>
+    <radialGradient id="chamberFloorGlow" cx="50%" cy="100%" r="70%">
+      <stop offset="0%" stop-color="rgba(47,111,255,0.095)"/>
+      <stop offset="40%" stop-color="rgba(47,111,255,0.03)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </radialGradient>
   </defs>
 
   <rect width="${size}" height="${size}" fill="#000000"/>
   <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardGradient)"/>
-  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardAtmosphere)"/>
-  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardAtmosphereBr)"/>
+  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardAuraTl)"/>
+  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardAuraBr)"/>
   <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardVignette)"/>
   <rect
     x="${layout.chamberX}"
@@ -743,6 +770,22 @@ export async function renderBackgroundCard(params: {
     height="${layout.chamberSize}"
     rx="${layout.chamberRadius}"
     fill="url(#chamberGradient)"
+  />
+  <rect
+    x="${layout.chamberX}"
+    y="${layout.chamberY}"
+    width="${layout.chamberSize}"
+    height="${layout.chamberSize}"
+    rx="${layout.chamberRadius}"
+    fill="url(#chamberAmbient)"
+  />
+  <rect
+    x="${layout.chamberX}"
+    y="${layout.chamberY}"
+    width="${layout.chamberSize}"
+    height="${layout.chamberSize}"
+    rx="${layout.chamberRadius}"
+    fill="url(#chamberFloorGlow)"
   />
 </svg>`
 
@@ -767,14 +810,14 @@ export async function renderBackgroundCard(params: {
 
   const chamberDepthSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="chamberVignette" cx="50%" cy="50%" r="66%">
-      <stop offset="58%" stop-color="rgba(0,0,0,0)"/>
-      <stop offset="100%" stop-color="rgba(0,0,0,0.7)"/>
+    <radialGradient id="chamberVignette" cx="50%" cy="48%" r="68%">
+      <stop offset="54%" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.74)"/>
     </radialGradient>
     <linearGradient id="chamberTopShade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="rgba(0,0,0,0.28)"/>
-      <stop offset="28%" stop-color="rgba(0,0,0,0.02)"/>
-t      <stop offset="100%" stop-color="rgba(0,0,0,0.25)"/>
+      <stop offset="0%" stop-color="rgba(0,0,0,0.36)"/>
+      <stop offset="20%" stop-color="rgba(0,0,0,0.08)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.29)"/>
     </linearGradient>
   </defs>
   <rect
@@ -812,7 +855,7 @@ export async function renderOuterGlow(params: {
   layout: PremiumLayout
 }): Promise<Buffer> {
   const { size, layout } = params
-  const glowStroke = Math.max(21, Math.round(layout.frameStroke * 1.28))
+  const glowStroke = Math.max(18, Math.round(layout.frameStroke * 1.1))
   const inset = glowStroke / 2
   const glowSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <rect
@@ -830,33 +873,33 @@ export async function renderOuterGlow(params: {
   const glowBase = await sharp(Buffer.from(glowSvg)).png().toBuffer()
   const core = await applyOpacity(glowBase, 0.058)
   const blurNear = await sharp(glowBase)
-    .blur(Math.max(24, size * 0.08))
+    .blur(Math.max(18, size * 0.056))
     .png()
     .toBuffer()
   const blurMid = await sharp(glowBase)
-    .blur(Math.max(60, size * 0.22))
+    .blur(Math.max(46, size * 0.16))
     .png()
     .toBuffer()
   const blurFar = await sharp(glowBase)
-    .blur(Math.max(220, size * 0.58))
+    .blur(Math.max(118, size * 0.33))
     .png()
     .toBuffer()
   const blurAmbient = await sharp(glowBase)
-    .blur(Math.min(1000, Math.max(400, size * 0.96)))
+    .blur(Math.min(720, Math.max(220, size * 0.6)))
     .png()
     .toBuffer()
   const directionalAuraSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <radialGradient id="auraTl" cx="24%" cy="22%" r="72%">
-      <stop offset="0%" stop-color="rgba(246,250,255,0.11)"/>
-      <stop offset="34%" stop-color="rgba(176,205,255,0.058)"/>
-      <stop offset="74%" stop-color="rgba(88,142,255,0.013)"/>
+      <stop offset="0%" stop-color="rgba(246,250,255,0.12)"/>
+      <stop offset="30%" stop-color="rgba(176,205,255,0.065)"/>
+      <stop offset="72%" stop-color="rgba(88,142,255,0.02)"/>
       <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
     </radialGradient>
     <radialGradient id="auraBr" cx="80%" cy="82%" r="82%">
-      <stop offset="0%" stop-color="rgba(58,116,255,0.26)"/>
-      <stop offset="38%" stop-color="rgba(58,116,255,0.14)"/>
-      <stop offset="78%" stop-color="rgba(58,116,255,0.038)"/>
+      <stop offset="0%" stop-color="rgba(58,123,255,0.36)"/>
+      <stop offset="40%" stop-color="rgba(58,123,255,0.16)"/>
+      <stop offset="78%" stop-color="rgba(58,123,255,0.05)"/>
       <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
     </radialGradient>
   </defs>
@@ -866,17 +909,17 @@ export async function renderOuterGlow(params: {
   const directionalAura = await sharp(Buffer.from(directionalAuraSvg)).png().toBuffer()
   const merged = await createTransparentCanvas(size)
     .composite([
-      { input: await applyOpacity(blurAmbient, 0.72), blend: 'screen' },
-      { input: await applyOpacity(blurFar, 0.84), blend: 'screen' },
-      { input: await applyOpacity(blurMid, 0.62), blend: 'screen' },
-      { input: await applyOpacity(blurNear, 0.75), blend: 'screen' },
-      { input: core, blend: 'screen' },
-      { input: await applyOpacity(directionalAura, 0.62), blend: 'screen' },
+      { input: await applyOpacity(blurAmbient, 0.48), blend: 'screen' },
+      { input: await applyOpacity(blurFar, 0.82), blend: 'screen' },
+      { input: await applyOpacity(blurMid, 0.78), blend: 'screen' },
+      { input: await applyOpacity(blurNear, 0.92), blend: 'screen' },
+      { input: await applyOpacity(core, 0.26), blend: 'screen' },
+      { input: await applyOpacity(directionalAura, 0.82), blend: 'screen' },
     ])
     .png()
     .toBuffer()
 
-  const innerCutInset = Math.max(1, Math.round(layout.frameStroke * 0.62))
+  const innerCutInset = Math.max(1, Math.round(layout.frameStroke * 0.72))
   const holeSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <rect
     x="${layout.frameX + innerCutInset}"
@@ -897,7 +940,7 @@ export async function renderOuterGlow(params: {
     .png()
     .toBuffer()
 
-  return applyOpacity(outsideOnly, 0.95)
+  return applyOpacity(outsideOnly, 0.98)
 }
 
 export async function renderFrameBloom(params: {
@@ -907,18 +950,18 @@ export async function renderFrameBloom(params: {
   const { size, layout } = params
   const strokeLayer = await sharp(Buffer.from(createFrameGradientSvg(size, layout))).png().toBuffer()
   const bloomNear = await sharp(strokeLayer)
-    .blur(Math.max(3.9, size * 0.0087))
+    .blur(Math.max(2.4, size * 0.006))
     .png()
     .toBuffer()
   const bloomFar = await sharp(strokeLayer)
-    .blur(Math.max(28, size * 0.054))
+    .blur(Math.max(18, size * 0.036))
     .png()
     .toBuffer()
   const merged = await sharp(bloomFar)
     .composite([{ input: await applyOpacity(bloomNear, 0.68), blend: 'screen' }])
     .png()
     .toBuffer()
-  return applyOpacity(merged, 0.88)
+  return applyOpacity(merged, 0.94)
 }
 
 export async function renderPremiumFrame(params: {
@@ -936,14 +979,14 @@ export async function renderPremiumFrame(params: {
   const faceRolloverSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="faceRoll" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="rgba(255,255,255,0.34)"/>
-      <stop offset="38%" stop-color="rgba(255,255,255,0.17)"/>
-      <stop offset="72%" stop-color="rgba(120,166,255,0.13)"/>
-      <stop offset="100%" stop-color="rgba(47,111,255,0.07)"/>
+      <stop offset="0%" stop-color="rgba(255,255,255,0.28)"/>
+      <stop offset="34%" stop-color="rgba(255,255,255,0.12)"/>
+      <stop offset="74%" stop-color="rgba(120,166,255,0.15)"/>
+      <stop offset="100%" stop-color="rgba(47,111,255,0.11)"/>
     </linearGradient>
     <radialGradient id="specularTl" cx="28%" cy="24%" r="40%">
-      <stop offset="0%" stop-color="rgba(255,255,255,0.39)"/>
-      <stop offset="36%" stop-color="rgba(255,255,255,0.14)"/>
+      <stop offset="0%" stop-color="rgba(255,255,255,0.33)"/>
+      <stop offset="32%" stop-color="rgba(255,255,255,0.11)"/>
       <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
     </radialGradient>
   </defs>
@@ -958,11 +1001,11 @@ export async function renderPremiumFrame(params: {
     .toBuffer()
 
   const faceSoft = await sharp(strokeLayer)
-    .blur(Math.max(0.9, size * 0.0025))
+    .blur(Math.max(0.7, size * 0.0018))
     .png()
     .toBuffer()
   const faceEmission = await sharp(strokeLayer)
-    .blur(Math.max(1.6, size * 0.0045))
+    .blur(Math.max(1.2, size * 0.0032))
     .png()
     .toBuffer()
 
@@ -999,12 +1042,34 @@ export async function renderPremiumFrame(params: {
     .png()
     .toBuffer()
 
+  const innerHairlineSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="innerHairline" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.34)"/>
+      <stop offset="55%" stop-color="rgba(220,232,255,0.1)"/>
+      <stop offset="100%" stop-color="rgba(58,123,255,0.24)"/>
+    </linearGradient>
+  </defs>
+  <rect
+    x="${layout.frameX + layout.frameStroke * 0.68}"
+    y="${layout.frameY + layout.frameStroke * 0.68}"
+    width="${Math.max(1, layout.frameSize - layout.frameStroke * 1.36)}"
+    height="${Math.max(1, layout.frameSize - layout.frameStroke * 1.36)}"
+    rx="${Math.max(1, layout.frameRadius - layout.frameStroke * 0.68)}"
+    fill="none"
+    stroke="url(#innerHairline)"
+    stroke-width="${Math.max(1, Math.round(layout.frameStroke * 0.18))}"
+  />
+</svg>`
+  const innerHairline = await sharp(Buffer.from(innerHairlineSvg)).png().toBuffer()
+
   return sharp(strokeLayer)
     .composite([
-      { input: await applyOpacity(faceSoft, 0.2), blend: 'screen' },
-      { input: await applyOpacity(faceEmission, 0.17), blend: 'screen' },
-      { input: await applyOpacity(faceRollover, 0.58), blend: 'screen' },
+      { input: await applyOpacity(faceSoft, 0.16), blend: 'screen' },
+      { input: await applyOpacity(faceEmission, 0.22), blend: 'screen' },
+      { input: await applyOpacity(faceRollover, 0.52), blend: 'screen' },
       { input: contactShadowInside, blend: 'multiply' },
+      { input: await applyOpacity(innerHairline, 0.8), blend: 'screen' },
     ])
     .png()
     .toBuffer()
@@ -1068,7 +1133,7 @@ async function renderPlacedSourceCanvas(params: {
     .resize(artSize, artSize, {
       fit,
       position: params.cropPosition ?? 'centre',
-      kernel: sharp.kernel.lanczos3,
+      kernel: params.sourceClass === 'pixelArt' ? sharp.kernel.nearest : sharp.kernel.lanczos3,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png()
@@ -1637,6 +1702,7 @@ export async function renderArtworkLayer(params: {
     .toBuffer()
 
   const isBrightTone = params.tone === 'bright'
+  const isPixelArt = params.sourceClass === 'pixelArt'
   const toned = isBrightTone
     ? await sharp(clipped)
         .modulate({
@@ -1646,14 +1712,23 @@ export async function renderArtworkLayer(params: {
         .linear(1.1, -12)
         .png()
         .toBuffer()
-    : await sharp(clipped)
-        .modulate({
-          brightness: 0.98,
-          saturation: 1.03,
-        })
-        .linear(1.05, -6)
-        .png()
-        .toBuffer()
+    : isPixelArt
+      ? await sharp(clipped)
+          .modulate({
+            brightness: 1.0,
+            saturation: 1.0,
+          })
+          .linear(1.0, 0)
+          .png()
+          .toBuffer()
+      : await sharp(clipped)
+          .modulate({
+            brightness: 0.98,
+            saturation: 1.03,
+          })
+          .linear(1.05, -6)
+          .png()
+          .toBuffer()
 
   const isPortraitHero = params.sourceClass === 'portraitPhoto'
   let integratedArtwork = toned
@@ -1671,10 +1746,10 @@ export async function renderArtworkLayer(params: {
     }
   }
 
-  const vignetteOuterOpacity = isBrightTone ? 0.50 : isPortraitHero ? 0.40 : 0.32
-  const bottomScrimOpacity = isBrightTone ? 0.42 : isPortraitHero ? 0.30 : 0.22
-  const topScrimOpacity = isBrightTone ? 0.02 : 0
-  const edgeContactOpacity = isBrightTone ? 0.32 : isPortraitHero ? 0.28 : 0.22
+  const vignetteOuterOpacity = isBrightTone ? 0.50 : isPixelArt ? 0.16 : isPortraitHero ? 0.40 : 0.32
+  const bottomScrimOpacity = isBrightTone ? 0.42 : isPixelArt ? 0.08 : isPortraitHero ? 0.30 : 0.22
+  const topScrimOpacity = isBrightTone ? 0.02 : isPixelArt ? 0 : 0
+  const edgeContactOpacity = isBrightTone ? 0.32 : isPixelArt ? 0.12 : isPortraitHero ? 0.28 : 0.22
   const vignetteSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <radialGradient id="artVignette" cx="50%" cy="50%" r="64%">
@@ -1730,7 +1805,7 @@ export async function renderArtworkLayer(params: {
 </svg>`
   const vignette = await sharp(Buffer.from(vignetteSvg)).png().toBuffer()
   // Narrower top-edge lift so it doesn't create a thick bright border at the top
-  const topEdgeLiftOpacity = isBrightTone ? 0.028 : isPortraitHero ? 0.058 : 0.048
+  const topEdgeLiftOpacity = isBrightTone ? 0.028 : isPixelArt ? 0.01 : isPortraitHero ? 0.058 : 0.048
   const topEdgeLiftSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="topEdgeLift" x1="0" y1="0" x2="0" y2="1">
@@ -2173,7 +2248,26 @@ function buildCompositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptio
 
 export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
   const size = sanitizeSize(params.size)
-  const layout = getTokenIconLayout(size)
+
+  let normalizedSource: Buffer | null = null
+  let analysis: SourceAnalysis | null = null
+  if (params.sourceImage && params.sourceImage.length > 0) {
+    try {
+      normalizedSource = await normalizeSourceImage(params.sourceImage)
+      await writeBreakoutDebugAsset('0-original-source-art.png', normalizedSource)
+      analysis = await analyzeSourceImage({
+        sourceImage: normalizedSource,
+        size,
+      })
+    } catch (error) {
+      console.warn('[token/image] premium renderer source decode failed; using symbol fallback:', error)
+      normalizedSource = null
+      analysis = null
+    }
+  }
+
+  const resolvedPreset = resolveRenderPreset(params.renderPreset, analysis?.sourceClass)
+  const layout = getTokenIconLayout(size, resolvedPreset)
 
   const backgroundCard = await renderBackgroundCard({ size, layout })
   const outerGlow = await renderOuterGlow({ size, layout })
@@ -2185,106 +2279,101 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   let breakoutLayer: Buffer | null = null
   let sourceClassForHero: SourceClass = 'generic'
 
-  if (params.sourceImage && params.sourceImage.length > 0) {
-    try {
-      const normalized = await normalizeSourceImage(params.sourceImage)
-      await writeBreakoutDebugAsset('0-original-source-art.png', normalized)
-      const analysis = await analyzeSourceImage({
-        sourceImage: normalized,
-        size,
-      })
-      sourceClassForHero = analysis.sourceClass
-      const hasHeroCutoutSource = !!params.heroCutoutSourceImage && params.heroCutoutSourceImage.length > 0
-      const breakoutAllowedByPreparedHeroCutout =
-        hasHeroCutoutSource &&
-        analysis.fitMode === 'cover' &&
-        !analysis.brightBadgeLike
-      const breakoutSourceKind = resolveBreakoutSourceKind({
-        sourceAlphaBreakoutAllowed: resolveSourceAlphaBreakoutAllowed({
-          allowBreakout: analysis.allowBreakout,
-          suppressBreakout: params.suppressBreakout,
-        }),
-        preparedHeroCutoutAvailable: hasHeroCutoutSource,
-        preparedHeroCutoutBreakoutAllowed: breakoutAllowedByPreparedHeroCutout,
-      })
-      const allowBreakoutForLayout = breakoutSourceKind !== 'none'
-      const topBiasPx =
-        analysis.fitMode === 'cover' && analysis.sourceClass === 'portraitPhoto'
-          ? Math.max(1, Math.round(layout.chamberSize * (allowBreakoutForLayout ? 0.022 : 0.018)))
-          : analysis.fitMode === 'cover' && allowBreakoutForLayout && analysis.sourceClass === 'illustration'
-            ? Math.max(1, Math.round(layout.chamberSize * 0.009))
-            : 0
-      stackedUnderlay = await renderStackedArtworkUnderlay({
-        size,
-        layout,
-        sourceImage: normalized,
-        scale: analysis.preferredScale,
-        fit: analysis.fitMode,
-        sourceClass: analysis.sourceClass,
-        hasTransparency: analysis.hasTransparency,
-        topBiasPx,
-      })
-      artworkLayer = await renderArtworkLayer({
-        size,
-        layout,
-        sourceImage: new Uint8Array(normalized),
-        scale: analysis.preferredScale,
-        fit: analysis.fitMode,
-        tone: analysis.artworkTone,
-        sourceClass: analysis.sourceClass,
-        topBiasPx,
-        symbol: params.symbol,
-      })
-      await writeBreakoutDebugAsset('1-clipped-in-frame-art.png', artworkLayer)
+  if (normalizedSource && analysis) {
+    sourceClassForHero = analysis.sourceClass
+    const hasHeroCutoutSource = !!params.heroCutoutSourceImage && params.heroCutoutSourceImage.length > 0
+    const breakoutAllowedByPreparedHeroCutout =
+      hasHeroCutoutSource &&
+      analysis.fitMode === 'cover' &&
+      !analysis.brightBadgeLike
+    const breakoutSourceKind = resolveBreakoutSourceKind({
+      sourceAlphaBreakoutAllowed: analysis.allowBreakout,
+      preparedHeroCutoutAvailable: hasHeroCutoutSource,
+      preparedHeroCutoutBreakoutAllowed: breakoutAllowedByPreparedHeroCutout,
+    })
+    const allowBreakoutForLayout = breakoutSourceKind !== 'none'
+    const presetScaleBoost =
+      resolvedPreset === 'hero' ? (analysis.sourceClass === 'illustration' ? 1.038 : 1.024)
+      : resolvedPreset === 'pixel' ? 0.994
+      : 1
+    const renderScale = clamp(analysis.preferredScale * presetScaleBoost, 0.79, 1.12)
+    const topBiasPx =
+      analysis.fitMode === 'cover' && analysis.sourceClass === 'portraitPhoto'
+        ? Math.max(1, Math.round(layout.chamberSize * (allowBreakoutForLayout ? 0.024 : 0.018)))
+        : analysis.fitMode === 'cover' && allowBreakoutForLayout && analysis.sourceClass === 'illustration'
+          ? Math.max(1, Math.round(layout.chamberSize * (resolvedPreset === 'hero' ? 0.016 : 0.009)))
+          : 0
+    stackedUnderlay = await renderStackedArtworkUnderlay({
+      size,
+      layout,
+      sourceImage: normalizedSource,
+      scale: renderScale,
+      fit: analysis.fitMode,
+      sourceClass: analysis.sourceClass,
+      hasTransparency: analysis.hasTransparency,
+      topBiasPx,
+    })
+    artworkLayer = await renderArtworkLayer({
+      size,
+      layout,
+      sourceImage: new Uint8Array(normalizedSource),
+      scale: renderScale,
+      fit: analysis.fitMode,
+      tone: analysis.artworkTone,
+      sourceClass: analysis.sourceClass,
+      topBiasPx,
+      symbol: params.symbol,
+    })
+    await writeBreakoutDebugAsset('1-clipped-in-frame-art.png', artworkLayer)
 
-      if (allowBreakoutForLayout) {
-        const breakoutOpacity = analysis.sourceClass === 'illustration' ? 0.92 : 0.22
-        const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
-          ? Math.max(1, Math.round(layout.chamberSize * 0.042))
-          : topBiasPx
-        const breakoutSource = breakoutSourceKind === 'heroCutout'
-          ? new Uint8Array(params.heroCutoutSourceImage!)
-          : new Uint8Array(normalized)
-        try {
-          breakoutLayer = await renderBreakoutLayer({
-            size,
-            layout,
-            sourceImage: breakoutSource,
-            opacity: breakoutOpacity,
-            scale: analysis.preferredScale,
-            topBiasPx: breakoutTopBiasPx,
-            sourceClass: analysis.sourceClass,
-          })
-        } catch (breakoutError) {
-          // Never fail the full premium render due to optional breakout source failure.
-          breakoutLayer = null
-          console.warn('[token/image] premium breakout render failed; rendering contained icon:', {
-            sourceKind: breakoutSourceKind,
-            message: breakoutError instanceof Error ? breakoutError.message : String(breakoutError ?? ''),
-          })
-        }
-        if (BREAKOUT_DEBUG_LOG_ENABLED) {
-          console.info('[breakout-debug]', JSON.stringify({
-            step: 'renderPremiumTokenIcon:breakout-layer',
-            sourceClass: analysis.sourceClass,
-            breakoutOpacity,
-            breakoutTopBiasPx,
-            breakoutAllowed: allowBreakoutForLayout,
-            breakoutSource: breakoutSourceKind,
-            breakoutAllowedByPreparedHeroCutout,
-          }))
-        }
+    if (allowBreakoutForLayout) {
+      const breakoutOpacity =
+        analysis.sourceClass === 'illustration'
+          ? (resolvedPreset === 'hero' ? 0.98 : 0.92)
+          : analysis.sourceClass === 'portraitPhoto'
+            ? 0.34
+            : 0.22
+      const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
+        ? Math.max(1, Math.round(layout.chamberSize * (resolvedPreset === 'hero' ? 0.052 : 0.042)))
+        : topBiasPx
+      const breakoutScale = clamp(
+        renderScale * (analysis.sourceClass === 'illustration' && resolvedPreset === 'hero' ? 1.03 : 1),
+        0.84,
+        1.16,
+      )
+      const breakoutSource = breakoutSourceKind === 'heroCutout'
+        ? new Uint8Array(params.heroCutoutSourceImage!)
+        : new Uint8Array(normalizedSource)
+      try {
+        breakoutLayer = await renderBreakoutLayer({
+          size,
+          layout,
+          sourceImage: breakoutSource,
+          opacity: breakoutOpacity,
+          scale: breakoutScale,
+          topBiasPx: breakoutTopBiasPx,
+          sourceClass: analysis.sourceClass,
+        })
+      } catch (breakoutError) {
+        breakoutLayer = null
+        console.warn('[token/image] premium breakout render failed; rendering contained icon:', {
+          sourceKind: breakoutSourceKind,
+          message: breakoutError instanceof Error ? breakoutError.message : String(breakoutError ?? ''),
+        })
       }
-    } catch (error) {
-      console.warn('[token/image] premium renderer source decode failed; using symbol fallback:', error)
-      artworkLayer = await renderArtworkLayer({
-        size,
-        layout,
-        symbol: params.symbol,
-      })
-      stackedUnderlay = { rearLayerB: null, rearLayerA: null }
-      breakoutLayer = null
-      sourceClassForHero = 'generic'
+      if (BREAKOUT_DEBUG_LOG_ENABLED) {
+        console.info('[breakout-debug]', JSON.stringify({
+          step: 'renderPremiumTokenIcon:breakout-layer',
+          preset: resolvedPreset,
+          sourceClass: analysis.sourceClass,
+          breakoutOpacity,
+          breakoutTopBiasPx,
+          breakoutScale,
+          breakoutAllowed: allowBreakoutForLayout,
+          breakoutSource: breakoutSourceKind,
+          breakoutAllowedByPreparedHeroCutout,
+        }))
+      }
     }
   } else {
     artworkLayer = await renderArtworkLayer({
@@ -2339,6 +2428,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     console.info('[breakout-debug]', JSON.stringify({
       step: 'renderPremiumTokenIcon:composite',
       breakoutDrawCount: breakoutLayer ? 1 : 0,
+      preset: resolvedPreset,
       layerOrder: [
         'backgroundCard',
         'outerGlow',
@@ -2364,6 +2454,5 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 
 export const __testables = {
   resolveBreakoutSourceKind,
-  resolveSourceAlphaBreakoutAllowed,
 }
 
