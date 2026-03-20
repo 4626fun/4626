@@ -2,6 +2,10 @@ Coins Metadata
 
 Coins follow the ERC-7572 metadata standard for fungible tokens.
 
+Related:
+
+- `docs/token-image.md` — Uniswap Token Lists logoURI + SVG/PNG ingestion requirements for our generated token images.
+
 This is conceptually based on the same JSON conventions as NFT metadata (name/description/image) but adapted for coin metadata and Zora-compatible clients.
 
 The metadata URI is specified during coin deployment and can be updated by coin owners after deployment.

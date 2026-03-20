@@ -234,3 +234,7 @@ Managed multi-token list (stable URL for tokenlists ingestion):
   `https://api.4626.fun/api/tokenlist.json`
 
 When enabled, deploy automation can append newly deployed `shareOFT` addresses into the stable multi-token document so ingestion can pick them up without changing the URL.
+
+Related:
+
+- `docs/coins-metadata.md` — recommended ERC-7572 coin metadata JSON format and how to validate it with `@zoralabs/coins-sdk`.
