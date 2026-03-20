@@ -34,13 +34,13 @@ jobs:
         run: pnpm --dir frontend install --frozen-lockfile
 
       - name: Verify Railway readiness probe is strict
-        run: rg 'healthcheckPath\\s*=\\s*\"/readyz\"' railway.toml
+        run: grep -Eq 'healthcheckPath[[:space:]]*=[[:space:]]*"/readyz"' railway.toml
 
       - name: Verify runtime env contract is documented
         run: |
-          rg 'AGENT_RUNTIME_ROLE=' frontend/.env.example
-          rg 'AGENT_CONSUME_XMTP=' frontend/.env.example
-          rg 'TEE_ENFORCEMENT_ENABLED' frontend/.env.example
+          grep -Fq 'AGENT_RUNTIME_ROLE=' frontend/.env.example
+          grep -Fq 'AGENT_CONSUME_XMTP=' frontend/.env.example
+          grep -Fq 'TEE_ENFORCEMENT_ENABLED' frontend/.env.example
 
       - name: Run Eliza runtime unit guardrails
         run: |

@@ -1,4 +1,9 @@
-import { createPrivateKey, sign } from 'node:crypto'
+import * as nodeCrypto from 'node:crypto'
+
+const crypto = nodeCrypto as unknown as {
+  createPrivateKey(key: unknown): unknown
+  sign(algorithm: string, data: unknown, key: unknown): { toString(encoding: 'base64'): string }
+}
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -62,8 +67,8 @@ function makePrivyAuthorizationSignature(params: {
 
   const serialized = stableCanonicalize(payload)
   const keyPem = getAuthorizationKeyPrivateKeyPem()
-  const key = createPrivateKey({ key: keyPem, format: 'pem' })
-  const sig = sign('sha256', Buffer.from(serialized, 'utf8'), key)
+  const key = crypto.createPrivateKey({ key: keyPem, format: 'pem' })
+  const sig = crypto.sign('sha256', Buffer.from(serialized, 'utf8'), key)
   return sig.toString('base64')
 }
 

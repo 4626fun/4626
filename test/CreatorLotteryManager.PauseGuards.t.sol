@@ -367,7 +367,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
     }
 
     function test_VrfCallback_UsesStoredVoteDirectedGaugeBoost() public {
-        uint256 tradeAmount = 1 ether;
+        uint256 tradeAmount = 2 ether;
         vaultGaugeVoting.setGaugeBoostPPM(vault, 10_000);
 
         vm.prank(authorizedSwap);
@@ -376,12 +376,18 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
-        assertEq(effectiveWinChancePPM, baseWinChance + 10_000, "request should include full flat gauge boost");
+        uint256 expectedGaugeBoost = (10_000 * (amountUSD - 1_000_000)) / 9_999_000_000;
+        assertGt(expectedGaugeBoost, 0, "expected scaled gauge boost");
+        assertEq(
+            effectiveWinChancePPM,
+            baseWinChance + expectedGaugeBoost,
+            "request should include stored scaled gauge boost"
+        );
 
         vaultGaugeVoting.setGaugeBoostPPM(vault, 0);
 
         uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = baseWinChance + 1; // Loses at base odds, wins with stored gauge boost.
+        randomWords[0] = baseWinChance; // Loses at base odds, wins with stored gauge boost.
 
         vm.prank(address(localVrfConsumer));
         lotteryManager.receiveRandomWords(requestId, randomWords);
