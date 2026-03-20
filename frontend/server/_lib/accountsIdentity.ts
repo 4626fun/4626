@@ -32,6 +32,7 @@ export type AccountScore = {
 export type AccountsMePayload = {
   privyUserId: string
   email: string | null
+  emailVerified: boolean
   appAccessStatus: string | null
   linkedMethods: Record<string, string[]>
   zora: {
@@ -794,7 +795,7 @@ export async function buildAccountsMePayload(params: {
   const { db, privyUserId, privyUser } = params
   await ensureAccountsIdentitySchema(db)
   const accountRowResult = await db.sql`
-    SELECT email
+    SELECT email, email_verified
     FROM accounts
     WHERE privy_user_id = ${privyUserId}
     LIMIT 1;
@@ -817,6 +818,7 @@ export async function buildAccountsMePayload(params: {
   return {
     privyUserId,
     email: normalizeEmail(accountRow?.email),
+    emailVerified: accountRow?.email_verified === true,
     appAccessStatus: normalizeString(profileStatusRow?.app_access_status),
     linkedMethods,
     zora: {
@@ -955,4 +957,3 @@ export async function recordProviderUnlink(params: {
 export async function verifyPrivyForAccounts(req: VercelRequest): Promise<PrivyRequestContext> {
   return await verifyPrivyRequest(req)
 }
-

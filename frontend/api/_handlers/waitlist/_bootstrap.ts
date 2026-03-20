@@ -144,24 +144,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
-    // Once authenticated, prefer Privy's verified email and only fall back
-    // to pre-auth input if Privy doesn't expose an email.
-    const emailToPersist = privyEmail ?? email
-    if (emailToPersist) {
+    // Only Privy's verified email is allowed to become the canonical account email.
+    // Pre-auth form input is intent, not proof.
+    if (privyEmail) {
       await assertNoEmailPrivyCollision({
         db: db as any,
-        email: emailToPersist,
+        email: privyEmail,
         privyUserId: context.privyUserId,
       })
       await upsertAccount({
         db: db as any,
         privyUserId: context.privyUserId,
-        email: emailToPersist,
+        email: privyEmail,
         emailVerified: true,
       })
       await upsertBootstrapProfile({
         db: db as any,
-        email: emailToPersist,
+        email: privyEmail,
         privyUserId: context.privyUserId,
       })
     }

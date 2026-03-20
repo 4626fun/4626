@@ -1,27 +1,33 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  WAITLIST_PRIVY_LOGIN_METHODS,
+  WAITLIST_BASE_LOGIN_METHODS,
+  WAITLIST_EMAIL_LOGIN_METHODS,
   WAITLIST_RECOVERY_LOGIN_METHODS,
-  buildWaitlistPrivyLoginOptions,
+  buildWaitlistBaseLoginOptions,
+  buildWaitlistEmailLoginOptions,
   buildWaitlistRecoveryLoginOptions,
 } from './waitlistLoginOptions'
 
 describe('waitlist Privy login options', () => {
-  it('prefers email and social methods before wallet for waitlist auth', () => {
-    expect(WAITLIST_PRIVY_LOGIN_METHODS).toEqual(['email', 'google', 'twitter', 'wallet'])
-  })
-
-  it('builds login options with the waitlist-specific method order', () => {
-    expect(buildWaitlistPrivyLoginOptions()).toEqual({
-      loginMethods: ['email', 'google', 'twitter', 'wallet'],
+  it('uses email-only login for canonical account creation', () => {
+    expect(WAITLIST_EMAIL_LOGIN_METHODS).toEqual(['email'])
+    expect(buildWaitlistEmailLoginOptions()).toEqual({
+      loginMethods: ['email'],
     })
   })
 
-  it('uses non-wallet methods for recovery retries', () => {
-    expect(WAITLIST_RECOVERY_LOGIN_METHODS).toEqual(['email', 'google', 'twitter'])
+  it('keeps a dedicated wallet-native Base option', () => {
+    expect(WAITLIST_BASE_LOGIN_METHODS).toEqual(['wallet'])
+    expect(buildWaitlistBaseLoginOptions()).toEqual({
+      loginMethods: ['wallet'],
+    })
+  })
+
+  it('uses verified email for recovery retries', () => {
+    expect(WAITLIST_RECOVERY_LOGIN_METHODS).toEqual(['email'])
     expect(buildWaitlistRecoveryLoginOptions()).toEqual({
-      loginMethods: ['email', 'google', 'twitter'],
+      loginMethods: ['email'],
     })
   })
 })

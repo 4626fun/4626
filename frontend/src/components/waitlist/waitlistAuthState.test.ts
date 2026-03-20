@@ -5,7 +5,6 @@ import {
   runWaitlistPrivyLogout,
   shouldAutoStartWaitlistPrivyAuth,
   shouldStopWaitlistAutoAuthRetry,
-  shouldShowWaitlistTelegramCta,
 } from './waitlistAuthState'
 
 describe('shouldAutoStartWaitlistPrivyAuth', () => {
@@ -18,7 +17,6 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
-        isTelegramMiniApp: false,
       }),
     ).toBe(true)
   })
@@ -32,7 +30,6 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
-        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -44,7 +41,6 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: true,
         authAttemptInFlight: false,
         authAutoAttempted: false,
-        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -56,7 +52,6 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: true,
         authAutoAttempted: false,
-        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -68,7 +63,6 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: true,
-        isTelegramMiniApp: false,
       }),
     ).toBe(false)
   })
@@ -82,7 +76,6 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
-        isTelegramMiniApp: false,
       }),
     ).toBe(false)
 
@@ -94,21 +87,6 @@ describe('shouldAutoStartWaitlistPrivyAuth', () => {
         busy: false,
         authAttemptInFlight: false,
         authAutoAttempted: false,
-        isTelegramMiniApp: false,
-      }),
-    ).toBe(false)
-  })
-
-  it('does not auto-start generic auth in Telegram Mini App context', () => {
-    expect(
-      shouldAutoStartWaitlistPrivyAuth({
-        step: 'auth',
-        privyReady: true,
-        privyAuthed: false,
-        busy: false,
-        authAttemptInFlight: false,
-        authAutoAttempted: false,
-        isTelegramMiniApp: true,
       }),
     ).toBe(false)
   })
@@ -150,57 +128,6 @@ describe('shouldStopWaitlistAutoAuthRetry', () => {
       shouldStopWaitlistAutoAuthRetry({
         isSessionMismatch: false,
         isRecoveryRequired: false,
-      }),
-    ).toBe(false)
-  })
-})
-
-describe('shouldShowWaitlistTelegramCta', () => {
-  it('shows Telegram fallback only on auth step when not busy and not in recovery mode', () => {
-    expect(
-      shouldShowWaitlistTelegramCta({
-        step: 'auth',
-        busy: false,
-        recoveryRequired: false,
-        isTelegramMiniApp: true,
-      }),
-    ).toBe(true)
-  })
-
-  it('hides Telegram fallback while busy, during recovery, outside auth step, or outside Telegram Mini App', () => {
-    expect(
-      shouldShowWaitlistTelegramCta({
-        step: 'auth',
-        busy: true,
-        recoveryRequired: false,
-        isTelegramMiniApp: true,
-      }),
-    ).toBe(false)
-
-    expect(
-      shouldShowWaitlistTelegramCta({
-        step: 'auth',
-        busy: false,
-        recoveryRequired: true,
-        isTelegramMiniApp: true,
-      }),
-    ).toBe(false)
-
-    expect(
-      shouldShowWaitlistTelegramCta({
-        step: 'email',
-        busy: false,
-        recoveryRequired: false,
-        isTelegramMiniApp: true,
-      }),
-    ).toBe(false)
-
-    expect(
-      shouldShowWaitlistTelegramCta({
-        step: 'auth',
-        busy: false,
-        recoveryRequired: false,
-        isTelegramMiniApp: false,
       }),
     ).toBe(false)
   })

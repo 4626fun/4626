@@ -50,10 +50,10 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
 export function deriveWaitlistEmailUi(step: 'email' | 'auth'): WaitlistEmailUi {
   if (step === 'auth') {
     return {
-      title: 'Secure your spot',
-      subtitle: 'We saved your email. Finish connecting your 4626 account to continue.',
-      ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue`,
-      busyLabel: 'Opening sign-in…',
+      title: 'Verify your email',
+      subtitle: 'Finish creating your 4626 account with email OTP. Base and Zora are optional entry paths after that.',
+      ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue with email`,
+      busyLabel: 'Opening email sign-in…',
     }
   }
 

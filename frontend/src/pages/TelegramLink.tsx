@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
-import { usePrivy } from '@privy-io/react-auth'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { Alert } from '@/components/ui/Alert'
@@ -17,7 +17,6 @@ import {
   loadTelegramWebApp,
   setupTelegramMiniAppUi,
 } from '@/lib/telegramWebApp'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -46,7 +45,7 @@ export function TelegramLink() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const privy = usePrivy()
-  const { signIn } = useSiweAuth()
+  const { login } = useLogin()
 
   const privyReady = Boolean(privy.ready)
   const privyAuthenticated = Boolean(privy.authenticated)
@@ -191,9 +190,17 @@ export function TelegramLink() {
 
   const onSignIn = useCallback(async () => {
     setLinkState('authenticating')
-    setLinkMessage('Open the 4626 sign-in prompt to continue.')
+    setLinkMessage('Verify your email to continue.')
     try {
-      await signIn({ method: 'privy' })
+      if (privyAuthenticated) {
+        const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
+        if (typeof linkEmail !== 'function') {
+          throw new Error('Email verification is unavailable in this client. Retry from a normal 4626 session.')
+        }
+        await linkEmail()
+      } else {
+        await login({ loginMethods: ['email'] } as any)
+      }
       setLinkState('idle')
       setLinkMessage(null)
     } catch (error: unknown) {
@@ -204,7 +211,7 @@ export function TelegramLink() {
       setLinkState('error')
       setLinkMessage(message)
     }
-  }, [signIn])
+  }, [login, privy, privyAuthenticated])
 
   const statusVariant = sessionState === 'error' || linkState === 'error' ? 'warning' : linkState === 'linked' ? 'success' : 'info'
   const statusTitle =
@@ -231,8 +238,8 @@ export function TelegramLink() {
           <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-cyan-300/80">Telegram Mini App</div>
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Link Telegram to your 4626 account</h1>
           <p className="max-w-xl text-sm leading-6 text-zinc-400">
-            This page is only for the Telegram account-link handshake. It verifies the Mini App session first, then binds the
-            Telegram identity to the 4626 account you sign into here.
+            This page is only for the Telegram account-link handshake. It verifies the Mini App session first, then binds your
+            Telegram identity after you verify your email with 4626.
           </p>
         </div>
 
@@ -243,7 +250,7 @@ export function TelegramLink() {
               ? 'Checking your Telegram Mini App session...'
               : privyAuthenticated
                 ? 'Your 4626 session is ready. Finishing the Telegram link now.'
-                : 'Sign in with your existing 4626 account to finish linking.')}
+                : 'Verify your email with 4626 to finish linking.')}
         </Alert>
 
         {!telegramLinkContext && linkState !== 'linked' ? (

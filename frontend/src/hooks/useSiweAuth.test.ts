@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { PRIVY_INTERACTIVE_LOGIN_METHODS, deriveSiweSessionState, shouldResetPrivyBridgeState } from './useSiweAuth'
 
 describe('PRIVY_INTERACTIVE_LOGIN_METHODS', () => {
-  it('prefers email/social before wallet for explicit Privy sign-in', () => {
-    expect(PRIVY_INTERACTIVE_LOGIN_METHODS).toEqual(['email', 'google', 'twitter', 'wallet'])
+  it('prefers email before wallet for explicit Privy sign-in', () => {
+    expect(PRIVY_INTERACTIVE_LOGIN_METHODS).toEqual(['email', 'wallet'])
   })
 })
 

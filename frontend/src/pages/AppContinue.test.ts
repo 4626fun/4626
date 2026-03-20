@@ -3,21 +3,21 @@ import { describe, expect, it } from 'vitest'
 import { getAppContinueRetryDirective, shouldScheduleReadyWithoutSessionTimeout } from './AppContinue'
 
 describe('getAppContinueRetryDirective', () => {
-  it('uses wallet-only Privy login for waitlist handoff recovery', () => {
+  it('uses email-first Privy login for waitlist handoff recovery', () => {
     expect(getAppContinueRetryDirective({ privyAuthenticated: false })).toEqual({
       resetState: 'idle',
       clearError: true,
       shouldForceLogout: false,
-      loginOptions: { loginMethods: ['wallet'] },
+      loginOptions: { loginMethods: ['email', 'wallet'] },
     })
   })
 
-  it('forces logout before wallet-only reauth when Privy is already authenticated', () => {
+  it('forces logout before email-first reauth when Privy is already authenticated', () => {
     expect(getAppContinueRetryDirective({ privyAuthenticated: true })).toEqual({
       resetState: 'idle',
       clearError: true,
       shouldForceLogout: true,
-      loginOptions: { loginMethods: ['wallet'] },
+      loginOptions: { loginMethods: ['email', 'wallet'] },
     })
   })
 })

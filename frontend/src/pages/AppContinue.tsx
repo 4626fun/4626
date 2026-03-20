@@ -24,7 +24,7 @@ type AppContinueRetryDirective = {
   resetState: 'idle'
   clearError: true
   shouldForceLogout: boolean
-  loginOptions: { loginMethods: ['wallet'] }
+  loginOptions: { loginMethods: ['email', 'wallet'] }
 }
 
 type AppContinueReadyTimeoutInput = {
@@ -41,7 +41,7 @@ export function getAppContinueRetryDirective(input: { privyAuthenticated: boolea
     resetState: 'idle',
     clearError: true,
     shouldForceLogout: input.privyAuthenticated,
-    loginOptions: { loginMethods: ['wallet'] },
+    loginOptions: { loginMethods: ['email', 'wallet'] },
   }
 }
 
@@ -91,8 +91,14 @@ export function AppContinue() {
   const { login } = useSafeAppContinueLogin()
   const privyReady = Boolean(privy.ready)
   const privyAuthenticated = Boolean(privy.authenticated)
-  const getAccessToken = typeof privy.getAccessToken === 'function' ? privy.getAccessToken : async () => null
-  const logout = typeof privy.logout === 'function' ? privy.logout : async () => {}
+  const getAccessToken = useMemo(
+    () => (typeof privy.getAccessToken === 'function' ? privy.getAccessToken : async () => null),
+    [privy.getAccessToken],
+  )
+  const logout = useMemo(
+    () => (typeof privy.logout === 'function' ? privy.logout : async () => {}),
+    [privy.logout],
+  )
 
   const nextPath = useMemo(() => readSafeNextPath(searchParams.get('next')), [searchParams])
   const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()

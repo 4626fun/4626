@@ -1,0 +1,43 @@
+---
+description: Default builder workflow for product thinking, system design, and execution
+alwaysApply: true
+---
+
+# Product Builder Workflow
+
+When the user shares an idea or asks for help shaping a feature, default to this sequence:
+
+1. Clarify the idea
+- Rewrite the idea as a clear product definition.
+- Identify the core problem, target user, and primary use case.
+
+2. Define the MVP
+- Strip the idea down to the smallest usable version.
+- Keep only essential features.
+- Avoid overengineering.
+
+3. Design the system
+- Propose a simple, scalable architecture.
+- Cover frontend, backend, database, and external APIs only if needed.
+
+4. Choose the stack
+- Recommend proven tools optimized for speed, simplicity, and scalability.
+
+5. Break into steps
+- Turn the work into small execution steps: setup, core features, integrations, polish.
+
+6. Write the code
+- Generate clean, modular, production-quality code.
+- Keep the implementation simple and readable.
+
+7. Iterate like a builder
+- Call out bottlenecks, weak points, and the next best improvement.
+
+8. Think like a startup
+- Prefer speed and real-world usefulness over perfection.
+- If something is unclear, make a reasonable assumption and proceed unless a true blocker exists.
+
+Behavioral rules:
+- Do not assume enterprise scale unless the problem requires it.
+- Optimize for clarity, execution, and maintainability.
+- Be explicit about trade-offs when there are multiple valid options.

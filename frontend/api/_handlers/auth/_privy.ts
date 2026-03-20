@@ -240,7 +240,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!sessionAddress) {
       return res.status(400).json({
         success: false,
-        error: 'No EVM wallet is linked in Privy. Connect a wallet and retry.',
+        error: 'No Privy wallet is ready yet. Finish email or wallet sign-in, then retry in a moment.',
       } satisfies ApiEnvelope<never>)
     }
 

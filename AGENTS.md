@@ -13,6 +13,10 @@
 
 Optional components: XMTP Keepr Agent (`frontend/server/agent/eliza/`), CRE automation (`cre/`), Docs site (`apps/docs-site/`), Solana program (`programs/creator-share-hook/`).
 
+### Default working style
+
+When a user brings an idea or asks for a feature, default to a builder workflow: clarify the problem, reduce the MVP, design a simple system, choose the smallest proven stack, break work into steps, then implement and iterate. Prefer speed, clarity, and maintainability over enterprise-style overengineering.
+
 ### Running services
 
 - **Frontend**: `cd frontend && pnpm dev` starts Vite at `http://localhost:5173/`. Hot-reloads on file changes. The app is in waitlist mode by default — unauthenticated routes redirect to `/` or show the waitlist modal.
@@ -36,6 +40,34 @@ Standard commands are documented in `frontend/package.json` scripts:
 - **API routing**: Vercel API routes go through `frontend/api/[...path].ts` dispatching to `frontend/api/_handlers/_routes.ts`. New endpoints must be registered in the static route map (no dynamic imports).
 - **`pnpm.onlyBuiltDependencies`** is configured in `frontend/package.json` to avoid interactive `pnpm approve-builds` prompts.
 - **Waitlist/marketing page on localhost**: By default, `localhost` is treated as the "app" domain and redirects unauthenticated users to `4626.fun`. To test the waitlist/marketing page locally, set `VITE_HOST_MODE_OVERRIDE=marketing` and `VITE_MARKETING_ORIGIN=http://localhost:5173` in `frontend/.env`. This is already configured in the Cloud Agent `.env`.
+
+### Account and auth invariants
+
+These are product-level rules, not implementation suggestions. Future auth/onboarding work must preserve them unless product explicitly changes direction.
+
+- **Verified email is the canonical 4626 identity and recovery key.**
+- **No 4626 account is considered fully created until email OTP verification completes.**
+- **All entry points converge to the same account model**: website, Base app, and Telegram must resolve into one 4626 account model keyed by verified email.
+- **Privy remains the auth/session backend** for email OTP and account sessions, so the embedded EOA is created through Privy during signup/auth.
+- **Normal web auth should present three entry paths**:
+  - email OTP first/default
+  - Base Account as the wallet-native path
+  - Zora cross-app as the Zora-native path
+- **Telegram is a linked identity and acquisition channel, not the canonical recovery key.**
+- **Telegram Mini App verification must stay enabled for Telegram-launched flows.** Its role is to prove Telegram user/chat context, not to replace verified email as the canonical account key.
+- **Telegram onboarding must collect and verify email inside the Mini App.** After OTP success:
+  - if the email is new, create the 4626 account through Privy
+  - if the email already exists, attach Telegram to that existing account
+- **Base and Zora are login/linking paths, not separate account systems.** They must still resolve into the same verified-email-based 4626 account model.
+- **Every fully onboarded account must have a Privy embedded EOA.**
+- **If the user has a canonical Coinbase Smart Wallet, the Privy embedded EOA must be installed as an owner on that CSW and confirmed onchain.**
+- **If the user does not yet have a CSW, route them to Base app with the referral flow, then resume CSW owner-installation when they return.**
+- **Features that require canonical wallet execution must stay gated until CSW setup and owner confirmation are complete.**
+- **Cross-account Telegram conflicts must not auto-merge silently.** If a Telegram identity is already attached elsewhere, force explicit recovery/merge UX.
+- **Website sign-in should use email OTP by default.** Do not assume Telegram is the primary website login flow unless product explicitly changes this rule later.
+- **Do not preserve legacy auth paths just for backward compatibility.** If an old path conflicts with these invariants, remove or migrate it.
+
+Authoritative implementation notes live in `frontend/docs/account-auth-invariants.md` and `frontend/docs/waitlist-accounts-architecture.md`.
 
 ### Solana program deployment
 

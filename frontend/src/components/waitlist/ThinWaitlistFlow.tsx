@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
@@ -8,7 +8,10 @@ import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { getAppBaseUrl } from '@/lib/host'
+import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { StepIndicator } from '@/components/ui/StepIndicator'
+import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 
 import type { Variant } from './waitlistTypes'
 import {
@@ -17,7 +20,11 @@ import {
   shouldAutoStartWaitlistPrivyAuth,
   shouldStopWaitlistAutoAuthRetry,
 } from './waitlistAuthState'
-import { buildWaitlistPrivyLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
+import {
+  buildWaitlistBaseLoginOptions,
+  buildWaitlistEmailLoginOptions,
+  buildWaitlistRecoveryLoginOptions,
+} from './waitlistLoginOptions'
 import {
   canEnterAppFromAccountState,
   deriveWaitlistDoneUi,
@@ -36,6 +43,7 @@ type WaitlistJoinResponse = {
 type AccountsSummary = {
   privyUserId: string
   email: string | null
+  emailVerified: boolean
   appAccessStatus: string | null
   linkedMethods: Record<string, string[]>
   zora: {
@@ -126,6 +134,28 @@ function useSafeLogin() {
   }
 }
 
+function useSafeCrossApp() {
+  try {
+    return useCrossAppAccounts() as any
+  } catch {
+    return {
+      loginWithCrossAppAccount: null,
+      linkCrossAppAccount: null,
+    } as any
+  }
+}
+
+async function maybeCallMethod(target: any, methodNames: string[], args: unknown[] = []): Promise<boolean> {
+  if (!target) return false
+  for (const methodName of methodNames) {
+    if (typeof target?.[methodName] === 'function') {
+      await target[methodName](...args)
+      return true
+    }
+  }
+  return false
+}
+
 function shortAddress(value: string | null | undefined): string {
   if (!value) return '—'
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
@@ -161,6 +191,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const privy = useSafePrivy()
   const { login } = useSafeLogin()
+  const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
 
   const privyReady = Boolean(privy?.ready)
   const privyAuthed = Boolean(privy?.authenticated)
@@ -253,6 +284,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     const nextAccount = payload.data
     setAccount(nextAccount)
     setRecoveryRequired(false)
+    if (!nextAccount.emailVerified) {
+      setStep('auth')
+      setError('Verify your email with 4626 to finish creating this account.')
+      return
+    }
     setStep('zora')
   }, [email, emailIsValid, getAccessToken])
 
@@ -290,9 +326,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setRecoveryRequired(false)
     try {
       if (privyAuthed) {
+        const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
+        if (!linked) {
+          await login(buildWaitlistEmailLoginOptions() as any)
+        }
         await runBootstrap()
       } else {
-        await login(buildWaitlistPrivyLoginOptions() as any)
+        await login(buildWaitlistEmailLoginOptions() as any)
       }
       authAttemptInFlightRef.current = false
       setBusy(false)
@@ -305,7 +345,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       }
       setError(
         isRecoveryRequired
-          ? 'Recovery required: this email is already linked to another account. Sign in with your original email/social account to recover, then continue.'
+          ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
           : typeof authError?.message === 'string'
             ? authError.message
             : 'Failed to start sign-in.',
@@ -313,7 +353,55 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privyAuthed, runBootstrap])
+  }, [busy, login, privy, privyAuthed, runBootstrap])
+
+  const onContinueWithBase = useCallback(async () => {
+    if (busy || authAttemptInFlightRef.current) return
+    authAttemptInFlightRef.current = true
+    setBusy(true)
+    setError(null)
+    setRecoveryRequired(false)
+    try {
+      if (privyAuthed) {
+        const linked = await maybeCallMethod(privy, ['linkWallet'])
+        if (!linked) throw new Error('Base wallet linking is unavailable in this environment.')
+        await runBootstrap()
+      } else {
+        await login(buildWaitlistBaseLoginOptions() as any)
+      }
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    } catch (authError: any) {
+      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start Base sign-in.')
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    }
+  }, [busy, login, privy, privyAuthed, runBootstrap])
+
+  const onContinueWithZora = useCallback(async () => {
+    if (busy || authAttemptInFlightRef.current) return
+    authAttemptInFlightRef.current = true
+    setBusy(true)
+    setError(null)
+    setRecoveryRequired(false)
+    try {
+      await performZoraCrossAppAuth({
+        privyAuthed,
+        appId: ZORA_PRIVY_APP_ID,
+        linkCrossAppAccount,
+        loginWithCrossAppAccount,
+        sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
+        isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
+      })
+      if (privyAuthed) await runBootstrap()
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    } catch (authError: any) {
+      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start Zora sign-in.')
+      authAttemptInFlightRef.current = false
+      setBusy(false)
+    }
+  }, [busy, linkCrossAppAccount, loginWithCrossAppAccount, privyAuthed, runBootstrap])
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -508,7 +596,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
             isSessionMismatch
               ? 'Signed in as a different account. Click Continue to sign in again.'
               : isRecoveryRequired
-                ? 'Recovery required: this email is already linked to another account. Sign in with your original email/social account to recover, then continue.'
+                ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
                 : message,
           )
         }
@@ -662,6 +750,27 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 emailUi.ctaLabel
               )}
             </button>
+
+            {step === 'auth' ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onContinueWithBase()}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+                >
+                  Continue with Base
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onContinueWithZora()}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+                >
+                  Continue with Zora
+                </button>
+              </div>
+            ) : null}
 
             {error ? (
               <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
