@@ -12,6 +12,34 @@ function countDbFiles(dirPath: string): number {
   }
 }
 
+/**
+ * List all `.db3` files under an XMTP root (e.g. `/data/.xmtp-data`).
+ * The XMTP SDK may nest DBs under subfolders such as `v3/` — a flat directory
+ * scan misses them and incorrectly logs "no .db3 files" on every boot.
+ */
+export function listXmtpDb3FilesUnderRoot(rootDir: string, maxDepth = 6): string[] {
+  const out: string[] = []
+  const walk = (dir: string, depth: number): void => {
+    if (depth > maxDepth) return
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name)
+      if (ent.isDirectory()) {
+        walk(full, depth + 1)
+      } else if (ent.isFile() && ent.name.endsWith('.db3')) {
+        out.push(full)
+      }
+    }
+  }
+  walk(rootDir, 0)
+  return out
+}
+
 function ensureWritableDir(dirPath: string): boolean {
   try {
     fs.mkdirSync(dirPath, { recursive: true, mode: 0o700 })

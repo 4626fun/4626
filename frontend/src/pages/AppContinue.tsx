@@ -8,7 +8,7 @@ import { readSafeNextPath } from '@/lib/auth/appEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 import { PageMeta } from '@/components/seo/PageMeta'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useSiweAuth, writeStoredSessionToken } from '@/hooks/useSiweAuth'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -51,6 +51,34 @@ export function shouldScheduleReadyWithoutSessionTimeout(input: AppContinueReady
   return !(typeof input.authAddress === 'string' && input.authAddress.trim().length > 0)
 }
 
+function useSafeAppContinuePrivy() {
+  try {
+    return usePrivy() as {
+      ready?: boolean
+      authenticated?: boolean
+      getAccessToken?: () => Promise<string | null>
+      logout?: () => Promise<void>
+    }
+  } catch {
+    return {
+      ready: false,
+      authenticated: false,
+      getAccessToken: async () => null,
+      logout: async () => {},
+    }
+  }
+}
+
+function useSafeAppContinueLogin() {
+  try {
+    return useLogin({}) as { login: (options?: unknown) => Promise<void> }
+  } catch {
+    return {
+      login: async () => {},
+    }
+  }
+}
+
 export function AppContinue() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -59,8 +87,12 @@ export function AppContinue() {
   const refreshSiweSession = siwe.refresh
   const signInWithPrivyToken = siwe.signInWithPrivyToken
   const privyClientStatus = usePrivyClientStatus()
-  const { ready: privyReady, authenticated: privyAuthenticated, getAccessToken, logout } = usePrivy()
-  const { login } = useLogin({})
+  const privy = useSafeAppContinuePrivy()
+  const { login } = useSafeAppContinueLogin()
+  const privyReady = Boolean(privy.ready)
+  const privyAuthenticated = Boolean(privy.authenticated)
+  const getAccessToken = typeof privy.getAccessToken === 'function' ? privy.getAccessToken : async () => null
+  const logout = typeof privy.logout === 'function' ? privy.logout : async () => {}
 
   const nextPath = useMemo(() => readSafeNextPath(searchParams.get('next')), [searchParams])
   const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
@@ -160,11 +192,7 @@ export function AppContinue() {
         const sessionToken =
           json?.data && typeof json.data.sessionToken === 'string' ? json.data.sessionToken.trim() : ''
         if (sessionToken) {
-          try {
-            sessionStorage.setItem('cv_siwe_session_token', sessionToken)
-          } catch {
-            // ignore
-          }
+          writeStoredSessionToken(sessionToken)
         }
 
         // Bridge the Privy session from the marketing origin so the

@@ -483,15 +483,16 @@ export default async function handler(req: any, res: any) {
         solanaWallet = privy.solanaWallet
       }
       if (privyUserId || embeddedWallet) {
+        const redactAddr = (a: string | undefined | null) => a ? `${a.slice(0, 6)}...${a.slice(-4)}` : undefined
         console.info(
           'waitlist: privy user',
           JSON.stringify({
-            email,
-            privyUserId,
-            embeddedWallet,
+            emailDomain: email.split('@')[1] ?? 'unknown',
+            hasPrivyUserId: Boolean(privyUserId),
+            embeddedWallet: redactAddr(embeddedWallet),
             embeddedWalletChain,
             embeddedWalletClientType,
-            solanaWallet: privy.solanaWallet,
+            solanaWallet: redactAddr(privy.solanaWallet),
             created: privy.created,
           }),
         )
@@ -872,8 +873,9 @@ export default async function handler(req: any, res: any) {
       // Existing profile found with a different email (likely synthetic).
       // Adopt it: update the email to the real one and merge all fields.
       if (existingEmailNorm !== nextEmailNorm) {
+        const walletHint = walletForDedup ? `${walletForDedup.slice(0, 6)}...${walletForDedup.slice(-4)}` : embeddedForDedup ? `${embeddedForDedup.slice(0, 6)}...${embeddedForDedup.slice(-4)}` : 'N/A'
         console.info(
-          `waitlist: dedup — adopting profile #${existingRow.id} (${existingRow.email}) → ${nextEmail} for wallet ${walletForDedup ?? embeddedForDedup ?? 'N/A'}`,
+          `waitlist: dedup — adopting profile #${existingRow.id} for wallet ${walletHint}`,
         )
       }
       const adopted = await db.sql`

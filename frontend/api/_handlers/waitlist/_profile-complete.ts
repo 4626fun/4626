@@ -1,6 +1,6 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
-import { isCswOwner } from '../../../server/_lib/cswOwner.js'
+import { isCswOwner, verifyCswProvenance } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { isAddressLike, normalizeAddress, normalizeEmail } from '../../../server/_lib/trust.js'
@@ -99,6 +99,7 @@ export default async function handler(req: any, res: any) {
       }
 
       // Final fallback: check if principal wallet is an owner of the profile's linked CSW.
+      // Requires CSW provenance validation to prevent spoofed contracts.
       const cswCandidates = [
         normalizeAddress(existingRow.csw_address),
         normalizeAddress(existingRow.primary_smart_wallet),
@@ -107,6 +108,8 @@ export default async function handler(req: any, res: any) {
       if (!signupId && cswCandidates.length > 0 && isAddressLike(principalAddress)) {
         for (const cswAddr of cswCandidates) {
           try {
+            const isGenuineCsw = await verifyCswProvenance(cswAddr)
+            if (!isGenuineCsw) continue
             const owned = await isCswOwner(principalAddress, cswAddr)
             if (!owned) continue
             const ownerUpdate = await db.sql`
@@ -119,7 +122,6 @@ export default async function handler(req: any, res: any) {
             profileCompleted = Boolean(ownerUpdate?.rows?.[0]?.profile_completed_at)
             break
           } catch {
-            // On-chain check failed; try next candidate and then fall through to 403.
             continue
           }
         }

@@ -4222,6 +4222,10 @@ async function executeTelegramCommand(params: {
     return { text: asTrimmed(twitterResult.response) }
   }
 
+  if (isPrivateChatId(params.chatId) && isSensitiveDmCommand(params.text)) {
+    return { text: 'This command is only available in group chats, not private DMs.' }
+  }
+
   const keeprResult = await handleKeeprCommand({
     groupId: params.groupId,
     senderWallet: params.senderWallet,
@@ -4230,6 +4234,13 @@ async function executeTelegramCommand(params: {
     userId: params.userId,
   })
   return { text: asTrimmed(keeprResult?.response ?? '') || 'Command received.' }
+}
+
+const SENSITIVE_DM_COMMAND_PREFIXES = ['/send', 'send ', '/lock', '/unlock', '/coin create', '/coin deploy'] as const
+
+function isSensitiveDmCommand(text: string): boolean {
+  const lower = text.trim().toLowerCase()
+  return SENSITIVE_DM_COMMAND_PREFIXES.some((prefix) => lower.startsWith(prefix))
 }
 
 function formatTradeTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {

@@ -92,10 +92,15 @@ export function resolveCreatorIdentity(params: {
 
     // No Privy wallet - fall back to connected wallet check
     let blockingReason: string | null = null
-    if (connectedWallet && connectedWallet.toLowerCase() !== canonical.toLowerCase()) {
-      warnings.push('CONNECTED_WALLET_MISMATCH')
-      blockingReason = `This creator coin's canonical identity is ${canonical}. You're connected as ${connectedWallet}. Sign in with Privy using the account you used on Zora.`
-    } else if (!connectedWallet) {
+    if (connectedWallet) {
+      const connectedLc = connectedWallet.toLowerCase()
+      const isCreatorMatch = connectedLc === canonical.toLowerCase()
+      const isPayoutMatch = zoraCoinPayoutRecipient && connectedLc === zoraCoinPayoutRecipient.toLowerCase()
+      if (!isCreatorMatch && !isPayoutMatch) {
+        warnings.push('CONNECTED_WALLET_MISMATCH')
+        blockingReason = `This creator coin's canonical identity is ${canonical}. You're connected as ${connectedWallet}. Sign in with Privy using the account you used on Zora.`
+      }
+    } else {
       blockingReason = `Sign in to continue.`
     }
 

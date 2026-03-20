@@ -96,8 +96,10 @@ export async function getOwnerAt(coinAddress: Address, index: number): Promise<A
   }
 }
 
+const MAX_OWNERS_SCAN = 128
+
 /**
- * Get all owners of a CreatorCoin
+ * Get all owners of a CreatorCoin (capped to prevent DoS from malicious contracts).
  */
 export async function getAllOwners(coinAddress: Address): Promise<Address[]> {
   try {
@@ -107,8 +109,9 @@ export async function getAllOwners(coinAddress: Address): Promise<Address[]> {
       functionName: 'totalOwners',
     })
     
+    const count = Math.min(Number(totalOwners), MAX_OWNERS_SCAN)
     const owners: Address[] = []
-    for (let i = 0; i < Number(totalOwners); i++) {
+    for (let i = 0; i < count; i++) {
       const owner = await getOwnerAt(coinAddress, i)
       if (owner) {
         owners.push(owner)

@@ -41,7 +41,7 @@ describe('swapUtils token identity', () => {
     expect(options.find((o) => o.group === 'share')?.logoUrl).toBe(shareTokenLogo(share))
   })
 
-  it('deduplicates repeated addresses and falls back share metadata', () => {
+  it('deduplicates repeated addresses and falls back share metadata to short address', () => {
     const duplicateCore = '0x4200000000000000000000000000000000000006'
     const share = '0x3333333333333333333333333333333333333333'
     const options = buildTokenOptions({
@@ -52,11 +52,11 @@ describe('swapUtils token identity', () => {
 
     expect(options.filter((o) => o.address.toLowerCase() === duplicateCore.toLowerCase())).toHaveLength(1)
     const shareOption = options.find((o) => o.address.toLowerCase() === share.toLowerCase())
-    expect(shareOption?.symbol).toBe('Share Token')
-    expect(shareOption?.name).toBe('Share Token')
+    expect(shareOption?.symbol).toBe(shortAddress(share))
+    expect(shareOption?.name).toBe(shortAddress(share))
   })
 
-  it('ignores unverified share labels by default', () => {
+  it('ignores unverified share labels and uses short address by default', () => {
     const share = '0x9999999999999999999999999999999999999999'
     const options = buildTokenOptions({
       coreTokens: CORE_TOKENS,
@@ -65,8 +65,8 @@ describe('swapUtils token identity', () => {
       shareName: 'USD Coin',
     })
     const shareOption = options.find((o) => o.address.toLowerCase() === share.toLowerCase())
-    expect(shareOption?.symbol).toBe('Share Token')
-    expect(shareOption?.name).toBe('Share Token')
+    expect(shareOption?.symbol).toBe(shortAddress(share))
+    expect(shareOption?.name).toBe(shortAddress(share))
   })
 
   it('keeps share labels when explicitly marked verified', () => {

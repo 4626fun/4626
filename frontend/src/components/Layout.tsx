@@ -115,7 +115,7 @@ export function Layout() {
       </main>
 
       {/* Chat widget — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
-      {hostMode === 'app' && <ChatWidget />}
+      {hostMode === 'app' ? <ChatWidget /> : null}
 
       {/* Mobile Nav - Minimal */}
       <nav

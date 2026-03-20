@@ -874,9 +874,11 @@ async function checkCanonicalWalletOwnership(params: {
     LIMIT 1;
   `
   let profileId = canonicalRow.rows?.[0]?.profile_id ?? null
-  if (!profileId) {
+  const legacyProfileFallbackEnabled = process.env.DEPLOY_LEGACY_PROFILE_FALLBACK !== 'false'
+  if (!profileId && legacyProfileFallbackEnabled) {
     // Fallback for compatibility rows that have canonical wallet fields populated
     // but have not yet been fully synced into `profile_wallets`.
+    // Gated by DEPLOY_LEGACY_PROFILE_FALLBACK (set to 'false' to disable after migration).
     const compatibilityCanonicalRow = await db.sql`
       SELECT id
       FROM profiles
@@ -905,23 +907,25 @@ async function checkCanonicalWalletOwnership(params: {
     if (addr) linked.add(addr)
   }
 
-  const compatibilityProfileRow = await db.sql`
-    SELECT
-      LOWER(primary_wallet) AS primary_wallet,
-      LOWER(embedded_wallet) AS embedded_wallet,
-      LOWER(primary_embedded_eoa) AS primary_embedded_eoa,
-      LOWER(primary_smart_wallet) AS primary_smart_wallet,
-      LOWER(csw_address) AS csw_address,
-      LOWER(base_sub_account) AS base_sub_account
-    FROM profiles
-    WHERE id = ${profileId}
-    LIMIT 1;
-  `
-  const compatibilityProfile = (compatibilityProfileRow.rows?.[0] ?? null) as Record<string, unknown> | null
-  if (compatibilityProfile) {
-    for (const value of Object.values(compatibilityProfile)) {
-      const addr = typeof value === 'string' ? value.trim().toLowerCase() : ''
-      if (addr) linked.add(addr)
+  if (legacyProfileFallbackEnabled) {
+    const compatibilityProfileRow = await db.sql`
+      SELECT
+        LOWER(primary_wallet) AS primary_wallet,
+        LOWER(embedded_wallet) AS embedded_wallet,
+        LOWER(primary_embedded_eoa) AS primary_embedded_eoa,
+        LOWER(primary_smart_wallet) AS primary_smart_wallet,
+        LOWER(csw_address) AS csw_address,
+        LOWER(base_sub_account) AS base_sub_account
+      FROM profiles
+      WHERE id = ${profileId}
+      LIMIT 1;
+    `
+    const compatibilityProfile = (compatibilityProfileRow.rows?.[0] ?? null) as Record<string, unknown> | null
+    if (compatibilityProfile) {
+      for (const value of Object.values(compatibilityProfile)) {
+        const addr = typeof value === 'string' ? value.trim().toLowerCase() : ''
+        if (addr) linked.add(addr)
+      }
     }
   }
 

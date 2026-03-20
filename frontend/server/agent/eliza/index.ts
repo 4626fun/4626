@@ -86,7 +86,7 @@ import {
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
-import { resolveXmtpDbDirectory } from '../../_lib/xmtpDbDirectory.js'
+import { listXmtpDb3FilesUnderRoot, resolveXmtpDbDirectory } from '../../_lib/xmtpDbDirectory.js'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -193,9 +193,7 @@ function fileLooksLikePlainSqlite(filePath: string): boolean {
 
 function hasLegacyPlaintextDbInDir(): boolean {
   try {
-    const files = fs.readdirSync(XMTP_DB_DIR).filter((f: string) => f.endsWith('.db3'))
-    for (const f of files) {
-      const p = path.join(XMTP_DB_DIR, f)
+    for (const p of listXmtpDb3FilesUnderRoot(XMTP_DB_DIR)) {
       if (fileLooksLikePlainSqlite(p)) return true
     }
     return false
@@ -284,16 +282,15 @@ function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
  */
 function rotateCorruptXmtpDbFiles(): void {
   try {
-    const files = fs.readdirSync(XMTP_DB_DIR).filter((f: string) => f.endsWith('.db3'))
+    const paths = listXmtpDb3FilesUnderRoot(XMTP_DB_DIR)
     const ts = Date.now()
-    for (const f of files) {
-      const src = path.join(XMTP_DB_DIR, f)
+    for (const src of paths) {
       const dest = `${src}.corrupt.${ts}`
       try {
         fs.renameSync(src, dest)
-        console.warn(`[xmtp] Rotated corrupt DB: ${f} → ${path.basename(dest)}`)
+        console.warn(`[xmtp] Rotated corrupt DB: ${path.basename(src)} → ${path.basename(dest)}`)
       } catch (err) {
-        console.error(`[xmtp] Failed to rotate ${f}:`, err)
+        console.error(`[xmtp] Failed to rotate ${src}:`, err)
       }
     }
   } catch (err) {
@@ -328,16 +325,19 @@ type DbPersistenceCheckResult = {
 function checkDbPersistence(): DbPersistenceCheckResult {
   const errors: string[] = []
   try {
-    const files = fs.readdirSync(XMTP_DB_DIR).filter((f: string) => f.endsWith('.db3'))
-    if (files.length > 0) {
-      logger.info(`[xmtp] ✅ Found ${files.length} existing DB file(s) in ${XMTP_DB_DIR} — will reuse installation`)
-      for (const f of files) {
-        const stat = fs.statSync(path.join(XMTP_DB_DIR, f))
-        logger.info(`[xmtp]   ${f} (${(stat.size / 1024).toFixed(1)} KB, modified ${stat.mtime.toISOString()})`)
+    const dbPaths = listXmtpDb3FilesUnderRoot(XMTP_DB_DIR)
+    if (dbPaths.length > 0) {
+      logger.info(
+        `[xmtp] ✅ Found ${dbPaths.length} existing DB file(s) under ${XMTP_DB_DIR} — will reuse installation`,
+      )
+      for (const fullPath of dbPaths) {
+        const rel = path.relative(XMTP_DB_DIR, fullPath) || path.basename(fullPath)
+        const stat = fs.statSync(fullPath)
+        logger.info(`[xmtp]   ${rel} (${(stat.size / 1024).toFixed(1)} KB, modified ${stat.mtime.toISOString()})`)
       }
     } else {
       logger.warn(
-        `[xmtp] ⚠️  No .db3 files found in ${XMTP_DB_DIR} — a NEW installation will be created.\n` +
+        `[xmtp] ⚠️  No .db3 files found under ${XMTP_DB_DIR} (including subfolders like v3/) — a NEW installation will be created.\n` +
         `    If this keeps happening on every restart, your volume is not persisting.\n` +
         `    → Railway: add a volume at /data/.xmtp-data in the dashboard or railway.toml\n` +
         `    → Docker: use -v xmtp-data:/data/.xmtp-data\n` +
@@ -645,7 +645,9 @@ const XMTP_REQUIRE_DB_ENCRYPTION = parseEnvBoolean(
 
 function wrapWriteWithNoiseFilter(write: (chunk: any, encoding?: any, cb?: any) => boolean) {
   const ignoredPatterns = [
+    // Native / SQLite may prefix with "WARN CORE" or similar; still non-fatal for XMTP.
     /sqlcipherCodecAttach:\s*no codec attached to db/i,
+    /WARN CORE\s+sqlcipherCodecAttach/i,
     /^\[WARNING\]\s+You have "\d+"\s+installations\./i,
   ]
   return ((chunk: any, encoding?: any, cb?: any) => {
@@ -840,6 +842,14 @@ const RUNTIME_LEASE_TABLE_SQL = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE agent_runtime_leases ENABLE ROW LEVEL SECURITY;
+  DO $$ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies WHERE tablename = 'agent_runtime_leases' AND policyname = 'deny_all_non_service'
+    ) THEN
+      CREATE POLICY deny_all_non_service ON agent_runtime_leases FOR ALL USING (false);
+    END IF;
+  END $$;
 `
 
 let runtimeLeaseSchemaEnsured = false

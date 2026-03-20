@@ -8,11 +8,13 @@ const {
   computeConfigHashMock,
   upsertKeeprVaultMock,
   validateCreatorRegistryBindingMock,
+  createPublicClientMock,
 } = vi.hoisted(() => ({
   getSessionAddressMock: vi.fn(),
   computeConfigHashMock: vi.fn(),
   upsertKeeprVaultMock: vi.fn(),
   validateCreatorRegistryBindingMock: vi.fn(),
+  createPublicClientMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/session.js', () => ({
@@ -27,6 +29,14 @@ vi.mock('../../server/_lib/keeprRegistry.js', () => ({
 vi.mock('../../server/_lib/creatorRegistryVerification.js', () => ({
   validateCreatorRegistryBinding: validateCreatorRegistryBindingMock,
 }))
+
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal() as any
+  return {
+    ...actual,
+    createPublicClient: createPublicClientMock,
+  }
+})
 
 const OWNER = '0x00000000000000000000000000000000000000aa'
 const VAULT = '0x00000000000000000000000000000000000000bb'
@@ -65,6 +75,9 @@ describe('keepr/vault/upsert', () => {
     getSessionAddressMock.mockReturnValue(OWNER)
     computeConfigHashMock.mockReturnValue('cfg-hash-1')
     validateCreatorRegistryBindingMock.mockResolvedValue({ ok: true })
+    createPublicClientMock.mockReturnValue({
+      readContract: vi.fn().mockResolvedValue(OWNER),
+    })
     upsertKeeprVaultMock.mockResolvedValue({
       vaultAddress: VAULT,
       chainId: 8453,

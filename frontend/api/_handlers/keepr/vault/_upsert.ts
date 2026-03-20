@@ -1,9 +1,28 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { createPublicClient, getAddress, http, type Address } from 'viem'
+import { base } from 'viem/chains'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { getSessionAddress } from '../../../../server/_lib/session.js'
 import { computeConfigHash, type KeeprConfigV1, upsertKeeprVault } from '../../../../server/_lib/keeprRegistry.js'
 import { validateCreatorRegistryBinding } from '../../../../server/_lib/creatorRegistryVerification.js'
+
+const VAULT_OWNER_ABI = [
+  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com'] as const
+
+function getBaseRpcUrl(): string {
+  const raw = (process.env.BASE_RPC_URL ?? '').trim()
+  return raw.split(',')[0]?.trim() || DEFAULT_BASE_RPCS[0]
+}
+
+async function readOnchainVaultOwner(vaultAddr: Address): Promise<Address> {
+  const client = createPublicClient({ chain: base, transport: http(getBaseRpcUrl(), { timeout: 10_000 }) })
+  const ownerRaw = await client.readContract({ address: vaultAddr, abi: VAULT_OWNER_ABI, functionName: 'owner' })
+  return getAddress(ownerRaw as Address)
+}
 
 type UpsertBody = {
   config?: KeeprConfigV1
@@ -94,6 +113,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({
       success: false,
       error: 'Onchain registry verification unavailable',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  try {
+    const onchainOwner = await readOnchainVaultOwner(vaultAddress as Address)
+    if (onchainOwner.toLowerCase() !== owner.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Caller does not match on-chain vault owner',
+      } satisfies ApiEnvelope<never>)
+    }
+  } catch (err) {
+    console.error('[keepr/vault/upsert] On-chain vault owner verification failed:', err)
+    return res.status(503).json({
+      success: false,
+      error: 'On-chain vault owner verification unavailable',
     } satisfies ApiEnvelope<never>)
   }
 

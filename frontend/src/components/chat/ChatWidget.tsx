@@ -65,8 +65,18 @@ type PendingDeepLinkIntent = {
   peerName: string
 }
 
+function useSafeChatLogin() {
+  try {
+    return useLogin({}) as { login: (options?: unknown) => Promise<void> }
+  } catch {
+    return {
+      login: async () => {},
+    }
+  }
+}
+
 function ConnectToChatPrompt() {
-  const { login } = useLogin({})
+  const { login } = useSafeChatLogin()
   const [busy, setBusy] = useState(false)
 
   const handleConnect = useCallback(async () => {

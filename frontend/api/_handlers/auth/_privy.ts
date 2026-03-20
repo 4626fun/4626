@@ -11,7 +11,7 @@ import {
 } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { classifyLinkedAccounts } from '../../../server/_lib/walletMapping.js'
+import { classifyLinkedAccounts, type ClassifiedLinkedAccounts } from '../../../server/_lib/walletMapping.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
 
@@ -44,6 +44,55 @@ function normalizeEvmAddress(value: unknown): string | null {
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
   if (!/^0x[a-f0-9]{40}$/.test(raw)) return null
   return raw
+}
+
+function collectCurrentLinkedEvmAddresses(classified: ClassifiedLinkedAccounts): Set<string> {
+  const out = new Set<string>()
+
+  for (const wallet of classified.allWallets) {
+    if (wallet.chain !== 'evm') continue
+    const normalized = normalizeEvmAddress(wallet.address)
+    if (normalized) out.add(normalized)
+  }
+
+  const canonical = normalizeEvmAddress(classified.canonicalSmartWallet?.address)
+  if (canonical) out.add(canonical)
+
+  const activeOwner = normalizeEvmAddress(classified.activeOwnerWallet?.address)
+  if (activeOwner) out.add(activeOwner)
+
+  const primary = normalizeEvmAddress(classified.primaryWalletAddress)
+  if (primary) out.add(primary)
+
+  return out
+}
+
+function pickPrivySessionAddress(params: {
+  classified: ClassifiedLinkedAccounts
+  classifiedSessionAddress: string | null
+  persistedSessionAddress?: string | null
+  syncedCanonicalAddress?: string | null
+  syncedPrimaryAddress?: string | null
+  syncedActiveOwnerAddress?: string | null
+}): string | null {
+  const currentLinked = collectCurrentLinkedEvmAddresses(params.classified)
+  const candidates = [
+    params.syncedCanonicalAddress,
+    params.syncedPrimaryAddress,
+    params.syncedActiveOwnerAddress,
+    params.classifiedSessionAddress,
+    params.persistedSessionAddress,
+  ].map((value) => normalizeEvmAddress(value))
+
+  for (const candidate of candidates) {
+    if (candidate && currentLinked.has(candidate)) return candidate
+  }
+
+  for (const candidate of candidates) {
+    if (candidate) return candidate
+  }
+
+  return null
 }
 
 function shouldBypassWalletSyncThrottle(params: {
@@ -152,9 +201,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (db) {
         await ensureWaitlistSchema(db as any)
         const persistedSessionAddress = await resolvePersistedSessionAddress(db as any, claims.userId)
-        if (persistedSessionAddress) {
-          sessionAddress = persistedSessionAddress
-        }
+        sessionAddress = pickPrivySessionAddress({
+          classified,
+          classifiedSessionAddress,
+          persistedSessionAddress,
+        })
 
         const now = Date.now()
         const minInterval = getPrivyAuthDbSyncMinIntervalMs()
@@ -166,7 +217,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
         if (shouldSyncNow) {
           const syncResult = await syncUserWallets(db as any, user as any)
-          sessionAddress = syncResult.canonicalSmartWallet?.address ?? syncResult.primaryWalletAddress ?? sessionAddress
+          sessionAddress = pickPrivySessionAddress({
+            classified,
+            classifiedSessionAddress,
+            persistedSessionAddress,
+            syncedCanonicalAddress: syncResult.canonicalSmartWallet?.address ?? null,
+            syncedPrimaryAddress: syncResult.primaryWalletAddress ?? null,
+            syncedActiveOwnerAddress: syncResult.activeOwnerWallet?.address ?? null,
+          })
           lastPrivyAuthDbSyncAtMs = now
         }
       }

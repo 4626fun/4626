@@ -1300,6 +1300,18 @@ function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
   }
 }
 
+// Universal Router command opcodes allowed for paymaster-sponsored swaps.
+// See https://docs.uniswap.org/contracts/universal-router/technical-reference
+const ALLOWED_SWAP_COMMAND_OPCODES = new Set<number>([
+  0x00, // V3_SWAP_EXACT_IN
+  0x01, // V3_SWAP_EXACT_OUT
+  0x08, // V2_SWAP_EXACT_IN
+  0x09, // V2_SWAP_EXACT_OUT
+  0x10, // V4_SWAP
+  0x0b, // WRAP_ETH
+  0x0c, // UNWRAP_ETH
+])
+
 function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void {
   let decoded: any
   try {
@@ -1324,6 +1336,13 @@ function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void
   if (commandBytes === 0) throw new Error('swap_router_empty_commands')
   if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length !== commandBytes) {
     throw new Error('swap_router_inputs_mismatch')
+  }
+
+  for (let i = 0; i < commandBytes; i++) {
+    const opcode = parseInt(commands.slice(2 + i * 2, 2 + i * 2 + 2), 16)
+    if (!ALLOWED_SWAP_COMMAND_OPCODES.has(opcode & 0x3f)) {
+      throw new Error('swap_router_command_not_allowed')
+    }
   }
 
   const tokenNeedle = token.slice(2).toLowerCase()

@@ -97,7 +97,7 @@ const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolea
   admin: { session: true, admin: true },
 }
 
-function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
+export function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
   if (req.session && !state.sessionValid) {

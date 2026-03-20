@@ -25,6 +25,7 @@ type DerivedSiweSessionState = {
 }
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
+const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
 
 type PrivySessionResponse = { address: string; sessionToken: string; privyUserId?: string } | null
 
@@ -120,16 +121,29 @@ function getStoredSessionToken(): string | null {
   }
 }
 
-function setStoredSessionToken(token: string | null) {
+function notifyStoredSessionTokenChanged() {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(SESSION_TOKEN_CHANGED_EVENT))
+}
+
+export function writeStoredSessionToken(token: string | null) {
+  const normalized = typeof token === 'string' ? token.trim() : ''
+  const nextToken = normalized.length > 0 ? normalized : null
+  const prevToken = getStoredSessionToken()
+  if (prevToken === nextToken) return
+
+  let persisted = false
   try {
-    if (!token) {
+    if (!nextToken) {
       sessionStorage.removeItem(SESSION_TOKEN_KEY)
-      return
+    } else {
+      sessionStorage.setItem(SESSION_TOKEN_KEY, nextToken)
     }
-    sessionStorage.setItem(SESSION_TOKEN_KEY, token)
+    persisted = true
   } catch {
     // ignore
   }
+  if (persisted) notifyStoredSessionTokenChanged()
 }
 
 async function readPrivyAccessTokenWithRetry(
@@ -197,6 +211,7 @@ export function useSiweAuth() {
   const [error, setError] = useState<string | null>(null)
   const autoPrivyAttemptKeyRef = useRef<string>('')
   const autoPrivyGlobalAttemptRef = useRef(false)
+  const refreshRequestIdRef = useRef(0)
 
   const sessionState = useMemo(
     () =>
@@ -209,6 +224,8 @@ export function useSiweAuth() {
   const isSignedIn = sessionState.walletMatchesSession
 
   const refresh = useCallback(async () => {
+    const requestId = ++refreshRequestIdRef.current
+    let nextAddress: string | null = null
     try {
       const token = getStoredSessionToken()
       const res = await apiFetch('/api/auth/me', {
@@ -218,11 +235,16 @@ export function useSiweAuth() {
         },
       })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<MeResponse> | null
-      const a = json?.data && typeof (json.data as any)?.address === 'string' ? String((json.data as any).address) : null
-      setAuthAddress(a)
+      nextAddress = json?.data && typeof (json.data as any)?.address === 'string' ? String((json.data as any).address) : null
     } catch {
-      setAuthAddress(null)
+      nextAddress = null
     }
+
+    if (requestId === refreshRequestIdRef.current) {
+      setAuthAddress(nextAddress)
+    }
+
+    return nextAddress
   }, [])
 
   useEffect(() => {
@@ -233,6 +255,25 @@ export function useSiweAuth() {
     })()
     return () => {
       cancelled = true
+    }
+  }, [refresh])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    let cancelled = false
+    const handleSessionTokenChanged = () => {
+      setSessionHydrated(false)
+      void (async () => {
+        await refresh()
+        if (!cancelled) setSessionHydrated(true)
+      })()
+    }
+
+    window.addEventListener(SESSION_TOKEN_CHANGED_EVENT, handleSessionTokenChanged)
+    return () => {
+      cancelled = true
+      window.removeEventListener(SESSION_TOKEN_CHANGED_EVENT, handleSessionTokenChanged)
     }
   }, [refresh])
 
@@ -277,7 +318,7 @@ export function useSiweAuth() {
         const address = json?.data && typeof (json.data as any)?.address === 'string' ? String((json.data as any).address) : ''
         if (!sessionToken || !address) throw new Error('Privy sign-in failed')
 
-        setStoredSessionToken(sessionToken)
+        writeStoredSessionToken(sessionToken)
         setAuthAddress(address)
         setCswOwnership(null)
         try {
@@ -289,7 +330,7 @@ export function useSiweAuth() {
       } catch (e: unknown) {
         const message = coerceErrorMessage(e, 'Privy sign-in failed')
         if (shouldResetPrivyBridgeState(message)) {
-          setStoredSessionToken(null)
+          writeStoredSessionToken(null)
           setAuthAddress(null)
           setCswOwnership(null)
           autoPrivyAttemptKeyRef.current = ''
@@ -480,7 +521,7 @@ export function useSiweAuth() {
       const signed = verifyJson?.data?.address
       const sessionToken = verifyJson?.data?.sessionToken
       if (typeof sessionToken === 'string' && sessionToken.trim().length > 0) {
-        setStoredSessionToken(sessionToken.trim())
+        writeStoredSessionToken(sessionToken.trim())
       }
       const resolved = typeof signed === 'string' ? signed : null
       setAuthAddress(resolved)
@@ -515,7 +556,7 @@ export function useSiweAuth() {
     setError(null)
     try {
       await apiFetch('/api/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } })
-      setStoredSessionToken(null)
+      writeStoredSessionToken(null)
       setAuthAddress(null)
       setCswOwnership(null)
     } finally {

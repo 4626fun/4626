@@ -122,8 +122,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  if (lastError) {
+    console.error('[smartWalletOwner] All RPC attempts failed:', lastError)
+  }
   return res.status(500).json({
     success: false,
-    error: lastError?.message || 'Failed to check ownership',
+    error: 'Failed to check ownership',
   } satisfies ApiEnvelope<never>)
 }

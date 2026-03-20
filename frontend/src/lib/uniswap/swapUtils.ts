@@ -222,15 +222,17 @@ export function buildTokenOptions(params: {
   shareSymbol?: string | null
   shareName?: string | null
   shareLabelVerified?: boolean
+  creatorCoinVerified?: boolean
   chainId?: number
 }): TokenOption[] {
   const out: TokenOption[] = [...params.coreTokens]
 
   const creatorCoin = normalizeTokenAddress(params.creatorCoin)
   if (creatorCoin) {
+    const creatorLabel = params.creatorCoinVerified === true ? 'Creator Coin' : shortAddress(creatorCoin)
     out.push({
-      symbol: 'Creator Coin',
-      name: 'Creator Coin',
+      symbol: creatorLabel,
+      name: creatorLabel,
       address: creatorCoin,
       group: 'creator',
     })
@@ -241,9 +243,10 @@ export function buildTokenOptions(params: {
     const shareLabelVerified = params.shareLabelVerified === true
     const shareSymbol = shareLabelVerified ? String(params.shareSymbol ?? '').trim() : ''
     const shareName = shareLabelVerified ? String(params.shareName ?? '').trim() : ''
+    const fallbackLabel = shortAddress(shareCoin)
     out.push({
-      symbol: shareSymbol || 'Share Token',
-      name: shareName || shareSymbol || 'Share Token',
+      symbol: shareSymbol || fallbackLabel,
+      name: shareName || shareSymbol || fallbackLabel,
       address: shareCoin,
       group: 'share',
       logoUrl: shareTokenLogo(shareCoin, params.chainId ?? BASE_CHAIN_ID),

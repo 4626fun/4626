@@ -27,6 +27,7 @@ vi.mock('../../server/_lib/walletSync.js', () => ({
 
 import {
   resolveCanonicalSmartWalletAddress,
+  resolveAuthorizedWalletProfile,
   resolvePersistedWalletIdentity,
 } from '../../server/_lib/canonicalWalletResolver.js'
 
@@ -155,6 +156,49 @@ function createBroadProfileLookupDb() {
   }
 }
 
+function createAuthorityResolutionDb(params: {
+  lookupAddress: string
+  authorityRow: {
+    primary_wallet?: string | null
+    primary_embedded_eoa?: string | null
+    primary_smart_wallet?: string | null
+    csw_address?: string | null
+    base_sub_account?: string | null
+    canonical_wallet?: string | null
+  }
+}) {
+  return {
+    sql: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = normalizeSql(strings)
+
+      if (sql.includes('from profiles p') && sql.includes('where p.id =')) {
+        return {
+          rows: [
+            {
+              id: PROFILE_ID,
+              primary_wallet: params.authorityRow.primary_wallet ?? null,
+              primary_embedded_eoa: params.authorityRow.primary_embedded_eoa ?? null,
+              primary_smart_wallet: params.authorityRow.primary_smart_wallet ?? null,
+              csw_address: params.authorityRow.csw_address ?? null,
+              base_sub_account: params.authorityRow.base_sub_account ?? null,
+              canonical_wallet: params.authorityRow.canonical_wallet ?? null,
+            },
+          ],
+        }
+      }
+
+      if (sql.includes('from profiles p')) {
+        const input = String(values[0] ?? '').toLowerCase()
+        return {
+          rows: input === params.lookupAddress.toLowerCase() ? [{ id: PROFILE_ID }] : [],
+        }
+      }
+
+      return { rows: [] }
+    }),
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   isDbConfiguredMock.mockReturnValue(true)
@@ -204,5 +248,42 @@ describe('resolvePersistedWalletIdentity', () => {
     getDbMock.mockResolvedValue(createBroadProfileLookupDb())
 
     await expect(resolvePersistedWalletIdentity(staleHistoricalWallet)).resolves.toBeNull()
+  })
+})
+
+describe('resolveAuthorizedWalletProfile', () => {
+  it('returns authority for an active owner wallet', async () => {
+    getDbMock.mockResolvedValue(
+      createAuthorityResolutionDb({
+        lookupAddress: EMBEDDED_EOA,
+        authorityRow: {
+          primary_wallet: PROFILE_WALLET_ALIAS,
+          primary_embedded_eoa: EMBEDDED_EOA,
+          canonical_wallet: CANONICAL_CSW,
+        },
+      }),
+    )
+
+    await expect(resolveAuthorizedWalletProfile(EMBEDDED_EOA)).resolves.toEqual({
+      profileId: PROFILE_ID,
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      activeOwnerWalletAddress: EMBEDDED_EOA,
+    })
+  })
+
+  it('fails closed for broad profile matches that are not current authority wallets', async () => {
+    const historicalEmbeddedWallet = buildBroadOnlyAddress('6')
+    getDbMock.mockResolvedValue(
+      createAuthorityResolutionDb({
+        lookupAddress: historicalEmbeddedWallet,
+        authorityRow: {
+          primary_wallet: PROFILE_WALLET_ALIAS,
+          primary_embedded_eoa: EMBEDDED_EOA,
+          canonical_wallet: CANONICAL_CSW,
+        },
+      }),
+    )
+
+    await expect(resolveAuthorizedWalletProfile(historicalEmbeddedWallet)).resolves.toBeNull()
   })
 })
