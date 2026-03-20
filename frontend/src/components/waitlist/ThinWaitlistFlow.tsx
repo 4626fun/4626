@@ -20,7 +20,13 @@ import {
   shouldShowWaitlistTelegramCta,
 } from './waitlistAuthState'
 import { buildWaitlistPrivyLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
-import { canEnterAppFromAccountState, deriveWaitlistDoneUi, deriveWaitlistEmailUi, deriveWaitlistZoraUi } from './waitlistFlowUi'
+import {
+  canEnterAppFromAccountState,
+  deriveWaitlistDoneUi,
+  deriveWaitlistEmailUi,
+  deriveWaitlistZoraUi,
+  hasZoraProfileSignals,
+} from './waitlistFlowUi'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -76,6 +82,19 @@ type PrivyTelegramLinkWithLaunchParams = (options?: { launchParams: { initDataRa
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDOFF_QUERY_KEY = 'cv_handoff'
+
+const ZORA_AUTO_RESOLVE_TIMEOUT_MS = 45_000
+const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => clearTimeout(t))
+  })
+}
 
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase()
@@ -443,6 +462,15 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setZoraSummary(data)
   }, [])
 
+  const getAccessTokenRef = useRef(getAccessToken)
+  getAccessTokenRef.current = getAccessToken
+  const runBootstrapRef = useRef(runBootstrap)
+  runBootstrapRef.current = runBootstrap
+  const resolveZoraRef = useRef(resolveZora)
+  resolveZoraRef.current = resolveZora
+  const applyZoraResultRef = useRef(applyZoraResult)
+  applyZoraResultRef.current = applyZoraResult
+
   const onLinkZora = useCallback(async () => {
     if (busy) return
     setBusy(true)
@@ -619,6 +647,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   }, [step])
 
   useEffect(() => {
+    if (step !== 'zora') {
+      zoraAutoResolvedRef.current = false
+    }
+  }, [step])
+
+  useEffect(() => {
     if (step !== 'zora') return
     if (zoraAutoResolvedRef.current || zoraSummary) return
     zoraAutoResolvedRef.current = true
@@ -626,23 +660,35 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     ;(async () => {
       setZoraAutoResolving(true)
       try {
-        const token = await getAccessToken()
+        const token = await withTimeout(
+          getAccessTokenRef.current(),
+          GET_ACCESS_TOKEN_TIMEOUT_MS,
+          'Sign-in token',
+        ).catch(() => null)
         if (!token || cancelled) return
-        const data = await resolveZora(token)
+        const data = await withTimeout(
+          resolveZoraRef.current(token),
+          ZORA_AUTO_RESOLVE_TIMEOUT_MS,
+          'Zora profile check',
+        ).catch(() => null)
         if (cancelled || !data) return
         const hasProfile = !!(data.zoraHandle || data.canonicalCswAddress || data.creatorCoin)
         if (hasProfile) {
-          applyZoraResult(data)
-          await runBootstrap()
+          applyZoraResultRef.current(data)
+          await runBootstrapRef.current()
         }
       } catch {
         // best-effort
       } finally {
-        if (!cancelled) setZoraAutoResolving(false)
+        setZoraAutoResolving(false)
       }
     })()
-    return () => { cancelled = true }
-  }, [applyZoraResult, getAccessToken, resolveZora, runBootstrap, step, zoraSummary])
+    return () => {
+      cancelled = true
+      zoraAutoResolvedRef.current = false
+      setZoraAutoResolving(false)
+    }
+  }, [step, zoraSummary])
 
   const zoraStatus = useMemo(() => {
     const summary: ZoraResolveResponse | null = zoraSummary ?? (account ? {
@@ -652,8 +698,9 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     } : null)
     return summary
   }, [account, zoraSummary])
+  const hasLinkedZora = hasZoraProfileSignals(zoraStatus)
   const emailUi = step === 'auth' ? deriveWaitlistEmailUi('auth') : deriveWaitlistEmailUi('email')
-  const zoraUi = deriveWaitlistZoraUi(Boolean(zoraStatus))
+  const zoraUi = deriveWaitlistZoraUi(hasLinkedZora)
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
     tier: account?.score?.tier ?? 0,
@@ -794,7 +841,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 <Loader2 className="w-4 h-4 animate-spin text-zinc-400 shrink-0" />
                 <span className="text-xs text-zinc-400">Checking your wallets for a Zora profile…</span>
               </div>
-            ) : zoraStatus ? (
+            ) : hasLinkedZora && zoraStatus ? (
               <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
                 <p className="text-xs font-medium text-emerald-400">{zoraUi.connectedLabel}</p>
                 <div className="space-y-2">

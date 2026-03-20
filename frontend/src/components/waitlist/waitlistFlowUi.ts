@@ -17,6 +17,23 @@ export type WaitlistZoraUi = {
   resolvingLabel: string
 }
 
+/** True when resolve/bootstrap returned at least one displayable Zora signal (not merely a non-null placeholder object). */
+export function hasZoraProfileSignals(
+  summary: {
+    zoraHandle?: string | null
+    canonicalCswAddress?: string | null
+    creatorCoin?: { address?: string | null } | null
+  } | null,
+): boolean {
+  if (!summary) return false
+  const h = typeof summary.zoraHandle === 'string' ? summary.zoraHandle.trim() : ''
+  if (h) return true
+  const csw = typeof summary.canonicalCswAddress === 'string' ? summary.canonicalCswAddress.trim() : ''
+  if (csw) return true
+  const coin = typeof summary.creatorCoin?.address === 'string' ? summary.creatorCoin.address.trim() : ''
+  return coin.length > 0
+}
+
 export type WaitlistDoneUi = {
   title: string
   subtitle: string

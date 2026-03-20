@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { canEnterAppFromAccountState, deriveWaitlistDoneUi, deriveWaitlistEmailUi, deriveWaitlistZoraUi } from './waitlistFlowUi'
+import {
+  canEnterAppFromAccountState,
+  deriveWaitlistDoneUi,
+  deriveWaitlistEmailUi,
+  deriveWaitlistZoraUi,
+  hasZoraProfileSignals,
+} from './waitlistFlowUi'
 
 describe('deriveWaitlistEmailUi', () => {
   it('uses the join-waitlist copy and black-square glyph on the email step', () => {
@@ -19,6 +25,37 @@ describe('deriveWaitlistEmailUi', () => {
       ctaLabel: '■ Continue',
       busyLabel: 'Opening sign-in…',
     })
+  })
+})
+
+describe('hasZoraProfileSignals', () => {
+  it('is false for null or empty placeholders', () => {
+    expect(hasZoraProfileSignals(null)).toBe(false)
+    expect(
+      hasZoraProfileSignals({
+        zoraHandle: null,
+        canonicalCswAddress: null,
+        creatorCoin: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('is true when any display field is present', () => {
+    expect(hasZoraProfileSignals({ zoraHandle: 'alice', canonicalCswAddress: null, creatorCoin: null })).toBe(true)
+    expect(
+      hasZoraProfileSignals({
+        zoraHandle: null,
+        canonicalCswAddress: '0x0000000000000000000000000000000000000001',
+        creatorCoin: null,
+      }),
+    ).toBe(true)
+    expect(
+      hasZoraProfileSignals({
+        zoraHandle: null,
+        canonicalCswAddress: null,
+        creatorCoin: { address: '0x0000000000000000000000000000000000000002' },
+      }),
+    ).toBe(true)
   })
 })
 
