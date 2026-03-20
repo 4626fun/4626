@@ -81,6 +81,23 @@ describe('waitlist to gated-app route regression', () => {
     })
   })
 
+  it('allows telegram swap entry with a valid session even when acceptance fails', () => {
+    expect(
+      resolveAccess('session', {
+        loading: false,
+        walletConnected: false,
+        sessionValid: true,
+        accepted: false,
+        creator: false,
+        admin: false,
+        allowlistEnforced: true,
+        effectiveAddress: SESSION_ADDRESS,
+        marketingUrl: 'https://4626.fun',
+        hostMode: 'app',
+      }),
+    ).toEqual({ allow: true, reason: 'ok' })
+  })
+
   it('redirects missing-session app traffic to the marketing waitlist entry', () => {
     expect(
       resolveAccess('accepted', {

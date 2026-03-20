@@ -2090,6 +2090,22 @@ function DeployVaultBatcher({
       // If we can't bridge, we still let the paymaster decide.
     }
   }, [getAccessToken, signInWithPrivyToken])
+  const postDeploySessionJson = useCallback(
+    async <T,>(params: {
+      url: string
+      body: unknown
+      label: string
+    }): Promise<ApiEnvelope<T>> => {
+      return await postDeploySessionRequestWithAuthRetry<T>({
+        postJson: postJsonWithTimeout,
+        url: params.url,
+        body: params.body,
+        label: params.label,
+        ensurePaymasterSession,
+      })
+    },
+    [ensurePaymasterSession],
+  )
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
 
   const lastAuthAtMs = useMemo(() => {
@@ -5067,12 +5083,10 @@ function DeployVaultBatcher({
           const cancelSession = async () => {
             if (!sessionId) return
             try {
-              await postDeploySessionRequestWithAuthRetry({
-                postJson: postJsonWithTimeout,
+              await postDeploySessionJson({
                 url: '/api/deploy/session/cancel',
                 body: { sessionId },
                 label: 'deploy session cancel',
-                ensurePaymasterSession,
               })
             } catch {
               // ignore cleanup failures
@@ -5081,12 +5095,10 @@ function DeployVaultBatcher({
           const shouldCancelSessionAfterError = async (): Promise<boolean> => {
             if (!sessionId) return false
             try {
-              const statusJson = await postDeploySessionRequestWithAuthRetry<any>({
-                postJson: postJsonWithTimeout,
+              const statusJson = await postDeploySessionJson<any>({
                 url: '/api/deploy/session/status',
                 body: { sessionId },
                 label: 'deploy session post-error status',
-                ensurePaymasterSession,
               })
               const step = String(statusJson.data?.step ?? '')
               // Preserve progressed sessions (phase*_sent / confirmed) so retries can resume.
@@ -5100,12 +5112,10 @@ function DeployVaultBatcher({
             const body: DeploySessionCreateRequest = preflightOnly
               ? { ...sessionCreatePayload, preflightOnly: true }
               : sessionCreatePayload
-            return await postDeploySessionRequestWithAuthRetry<any>({
-              postJson: postJsonWithTimeout,
+            return await postDeploySessionJson<any>({
               url: '/api/deploy/session/create',
               body,
               label: preflightOnly ? 'deploy session preflight create' : 'deploy session create',
-              ensurePaymasterSession,
             })
           }
 
@@ -5127,12 +5137,10 @@ function DeployVaultBatcher({
             await ensureDeploySessionSignerInstalled(sessionOwner)
 
             // Kick off server continuation; status polling will advance remaining phases.
-            await postDeploySessionRequestWithAuthRetry({
-              postJson: postJsonWithTimeout,
+            await postDeploySessionJson({
               url: '/api/deploy/session/continue',
               body: { sessionId },
               label: 'deploy session continue',
-              ensurePaymasterSession,
             })
 
             await pollServerDeploySession(sessionId)
@@ -5308,12 +5316,10 @@ function DeployVaultBatcher({
       const plan = await submit({ planOnly: true })
       if (!plan) throw new Error('Could not prepare deployment plan.')
 
-      const json = await postDeploySessionRequestWithAuthRetry<DeploySessionDryRunResponse>({
-        postJson: postJsonWithTimeout,
+      const json = await postDeploySessionJson<DeploySessionDryRunResponse>({
         url: '/api/deploy/session/dry-run',
         body: plan.sessionCreateRequest,
         label: 'deploy session dry-run',
-        ensurePaymasterSession,
       })
       if (!json.data) throw new Error('Dry-run failed')
       setDryRunResult(json.data)

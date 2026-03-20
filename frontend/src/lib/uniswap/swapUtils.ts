@@ -127,12 +127,6 @@ export function shortAddress(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
-export function formatDisplayAmount(value: string): string {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return value
-  return n.toFixed(6)
-}
-
 export function sanitizeDecimalInput(value: string, maxFractionDigits = 18): string {
   const raw = String(value ?? '')
   const normalized = raw.replace(',', '.').replace(/[^\d.]/g, '')
@@ -288,4 +282,3 @@ export function resolveTokenDisplay(params: {
 
   return { symbol, name, logoUrl, logoUrls: uniqueLogoCandidates }
 }
-

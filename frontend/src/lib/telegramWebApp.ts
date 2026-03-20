@@ -62,6 +62,8 @@ const TELEGRAM_WEB_APP_SCRIPT_URL = 'https://telegram.org/js/telegram-web-app.js
 const TELEGRAM_SESSION_STORAGE_KEY = 'cv_tg_miniapp_session_v1'
 let telegramScriptLoadPromise: Promise<void> | null = null
 let memoizedMiniAppSession: TelegramMiniAppSession | null = null
+let inFlightMiniAppSessionInitData = ''
+let inFlightMiniAppSessionPromise: Promise<EnsureTelegramMiniAppSessionResult> | null = null
 
 function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -173,6 +175,20 @@ export function isTelegramMiniAppContext(): boolean {
   return readTelegramMiniAppInitData().length > 0
 }
 
+function hashString(value: string): string {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0
+  }
+  return `tg-${Math.abs(hash)}`
+}
+
+export function readTelegramMiniAppIdentityKey(): string {
+  const initData = readTelegramMiniAppInitData()
+  if (!initData) return ''
+  return hashString(initData)
+}
+
 export type PrivyTelegramLaunchParams = {
   initDataRaw?: string
 }
@@ -272,40 +288,56 @@ export async function ensureTelegramMiniAppSession(params?: {
     return { ok: true, session: cached }
   }
 
+  if (inFlightMiniAppSessionPromise && inFlightMiniAppSessionInitData === initData) {
+    return inFlightMiniAppSessionPromise
+  }
+
   const fetcher = params?.fetcher ?? apiFetch
-  const response = await fetcher('/api/telegram/miniapp/session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ initData }),
+  const requestPromise = (async (): Promise<EnsureTelegramMiniAppSessionResult> => {
+    const response = await fetcher('/api/telegram/miniapp/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ initData }),
+    })
+    const json = (await response.json().catch(() => null)) as MiniAppSessionEnvelope | null
+    if (!response.ok || !json?.success || !json.data) {
+      return {
+        ok: false,
+        error: asTrimmed(json?.error ?? '') || 'telegram_miniapp_session_failed',
+        statusCode: response.status || 500,
+      }
+    }
+
+    const session: TelegramMiniAppSession = {
+      initData,
+      sessionToken: asTrimmed(json.data.sessionToken),
+      expiresAt: asTrimmed(json.data.expiresAt),
+      telegramUserId: asTrimmed(json.data.telegramUserId),
+      telegramUsername: asTrimmed(json.data.telegramUsername ?? '') || null,
+      chatId: asTrimmed(json.data.chatId ?? '') || null,
+      chatType: asTrimmed(json.data.chatType ?? '') || null,
+      chatInstance: asTrimmed(json.data.chatInstance ?? '') || null,
+    }
+    if (!session.sessionToken || !session.telegramUserId || !isTimestampFresh(session.expiresAt)) {
+      clearStoredSession()
+      return {
+        ok: false,
+        error: 'telegram_miniapp_session_invalid_response',
+        statusCode: 500,
+      }
+    }
+
+    storeSession(session)
+    return { ok: true, session }
+  })()
+
+  const wrappedPromise = requestPromise.finally(() => {
+    if (inFlightMiniAppSessionPromise === wrappedPromise) {
+      inFlightMiniAppSessionPromise = null
+      inFlightMiniAppSessionInitData = ''
+    }
   })
-  const json = (await response.json().catch(() => null)) as MiniAppSessionEnvelope | null
-  if (!response.ok || !json?.success || !json.data) {
-    return {
-      ok: false,
-      error: asTrimmed(json?.error ?? '') || 'telegram_miniapp_session_failed',
-      statusCode: response.status || 500,
-    }
-  }
-
-  const session: TelegramMiniAppSession = {
-    initData,
-    sessionToken: asTrimmed(json.data.sessionToken),
-    expiresAt: asTrimmed(json.data.expiresAt),
-    telegramUserId: asTrimmed(json.data.telegramUserId),
-    telegramUsername: asTrimmed(json.data.telegramUsername ?? '') || null,
-    chatId: asTrimmed(json.data.chatId ?? '') || null,
-    chatType: asTrimmed(json.data.chatType ?? '') || null,
-    chatInstance: asTrimmed(json.data.chatInstance ?? '') || null,
-  }
-  if (!session.sessionToken || !session.telegramUserId || !isTimestampFresh(session.expiresAt)) {
-    clearStoredSession()
-    return {
-      ok: false,
-      error: 'telegram_miniapp_session_invalid_response',
-      statusCode: 500,
-    }
-  }
-
-  storeSession(session)
-  return { ok: true, session }
+  inFlightMiniAppSessionInitData = initData
+  inFlightMiniAppSessionPromise = wrappedPromise
+  return wrappedPromise
 }

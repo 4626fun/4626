@@ -37,11 +37,12 @@ import {
   type TradeQuoteResponse,
   type TransactionRequest,
 } from '@/lib/uniswap/tradingApi'
-import type { TxLifecycleState } from '@/components/trade/TransactionLifecycle'
 import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
 
 const QUOTE_TTL_MS = 30_000
 const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
+
+type TxLifecycleState = 'idle' | 'review' | 'signing' | 'pending' | 'success' | 'error'
 
 type Swap7702Diagnostics = {
   at: number

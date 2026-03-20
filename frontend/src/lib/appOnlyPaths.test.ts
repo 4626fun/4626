@@ -17,6 +17,7 @@ describe('appOnlyPaths', () => {
 
   it('continues marking core app routes as app-only', () => {
     expect(isAppOnlyPath('/swap')).toBe(true)
+    expect(isAppOnlyPath('/telegram/swap')).toBe(true)
     expect(isAppOnlyPath('/deploy')).toBe(true)
     expect(isAppOnlyPath('/continue')).toBe(true)
     expect(isAppOnlyPath('/portfolio/0xabc')).toBe(true)

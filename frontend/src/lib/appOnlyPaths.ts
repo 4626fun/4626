@@ -4,6 +4,7 @@ export const APP_ONLY_PATHS = [
   '/home',
   '/trade',
   '/swap',
+  '/telegram',
   '/continue',
   '/positions',
   '/portfolio',

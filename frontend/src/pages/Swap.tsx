@@ -25,7 +25,13 @@ import {
   resolveTelegramMiniAppLinkContext,
   stripTelegramMiniAppLinkParams,
 } from '@/lib/telegramMiniAppLink'
-import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
+import {
+  ensureTelegramMiniAppSession,
+  isTelegramMiniAppContext,
+  loadTelegramWebApp,
+  readTelegramMiniAppIdentityKey,
+  setupTelegramMiniAppUi,
+} from '@/lib/telegramWebApp'
 import {
   claimLiquidityFees,
   createPosition,
@@ -466,6 +472,7 @@ export function Swap() {
   const telegramLinkContext = useMemo(() => resolveTelegramMiniAppLinkContext(searchParams), [searchParams])
   const [telegramLinkState, setTelegramLinkState] = useState<'idle' | 'linking' | 'linked' | 'error'>('idle')
   const [telegramLinkMessage, setTelegramLinkMessage] = useState<string | null>(null)
+  const [telegramMiniAppIdentityKey, setTelegramMiniAppIdentityKey] = useState('')
   const telegramLinkAttemptRef = useRef<string>('')
   const telegramLinkFlowActive = Boolean(telegramLinkContext)
   const telegramMiniAppFlag = useMemo(() => String(searchParams.get('tgMiniApp') ?? '').trim().toLowerCase(), [searchParams])
@@ -484,7 +491,7 @@ export function Swap() {
     (typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp))
 
   const telegramDiscoveryQuery = useQuery({
-    queryKey: ['telegram-miniapp-discovery', telegramEntry],
+    queryKey: ['telegram-miniapp-discovery', telegramEntry, telegramMiniAppIdentityKey],
     enabled: telegramDiscoveryEnabled,
     staleTime: 30_000,
     queryFn: async () => {
@@ -515,6 +522,7 @@ export function Swap() {
     void (async () => {
       await loadTelegramWebApp().catch(() => null)
       if (isCancelled) return
+      setTelegramMiniAppIdentityKey(readTelegramMiniAppIdentityKey())
       teardown = setupTelegramMiniAppUi({ requestExpand: true })
       if (!isTelegramMiniAppContext()) return
       await ensureTelegramMiniAppSession().catch(() => null)

@@ -135,7 +135,11 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   )
   const miniAppReplayTtlSeconds = Math.max(
     60,
-    Math.min(60 * 60, parseOptionalPositiveInteger(raw.TELEGRAM_MINIAPP_REPLAY_TTL_SECONDS ?? '') ?? 60 * 15),
+    Math.min(
+      miniAppSessionTtlSeconds,
+      60 * 60,
+      parseOptionalPositiveInteger(raw.TELEGRAM_MINIAPP_REPLAY_TTL_SECONDS ?? '') ?? miniAppSessionTtlSeconds,
+    ),
   )
 
   const paymasterUrlCandidates = [

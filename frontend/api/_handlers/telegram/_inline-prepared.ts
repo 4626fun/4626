@@ -6,7 +6,7 @@ import { ensureTelegramTradingSchema } from '../../../server/_lib/telegramTradin
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import { isTelegramInlinePreparedEnabled } from './webhook/env.js'
 import { verifyTelegramMiniAppInitData, resolveTelegramMiniAppVerificationStatusCode } from './webhook/miniAppAuth.js'
-import { buildTelegramMiniAppUrl, resolveTelegramMiniAppUrl } from './webhook/miniApp.js'
+import { TELEGRAM_MINI_APP_SWAP_PATH, buildTelegramMiniAppUrl, resolveTelegramMiniAppUrl } from './webhook/miniApp.js'
 import { classifyInlineQuery } from './webhook/parsers/inline.js'
 import { emitTelegramFunnelEvent } from './webhook/services/funnel.js'
 import { isTelegramMiniAppSessionEnabled, verifyTelegramLinkApiSecret } from './webhook/services/access.js'
@@ -113,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const switchInlineQuery = asTrimmed(body.switchInlineQuery ?? '') || command.replace(/^\//, '')
   const switchBackMiniAppUrl = buildTelegramMiniAppUrl({
     baseUrl: resolveTelegramMiniAppUrl(),
-    pathname: '/swap',
+    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
     query: {
       tgMiniApp: '1',
       tgEntry: 'inline-prepared',

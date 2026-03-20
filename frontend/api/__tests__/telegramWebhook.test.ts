@@ -1730,7 +1730,7 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(true)
     const openMiniAppButton = allButtons.find((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')
     const launchUrl = String(openMiniAppButton?.web_app?.url ?? openMiniAppButton?.url ?? '')
-    expect(decodeURIComponent(launchUrl)).toContain('/swap?')
+    expect(decodeURIComponent(launchUrl)).toContain('/telegram/swap?')
     expect(decodeURIComponent(launchUrl)).toContain('tgMiniApp=1')
     expect(decodeURIComponent(launchUrl)).toContain('tgEntry=link')
     expect(decodeURIComponent(launchUrl)).toContain('tgChatId=')

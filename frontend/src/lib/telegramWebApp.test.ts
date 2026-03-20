@@ -80,6 +80,45 @@ describe('telegramWebApp mini app session bootstrap', () => {
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
+  it('dedupes concurrent mini app session bootstrap requests', async () => {
+    restoreWindow = installMockWindow('auth_date=1710001111&user=%7B%22id%22%3A42%7D&hash=dedupe')
+    let resolveFetch: ((value: any) => void) | null = null
+    const fetcher = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve
+        }),
+    )
+
+    const firstPromise = ensureTelegramMiniAppSession({ fetcher })
+    const secondPromise = ensureTelegramMiniAppSession({ fetcher })
+    await Promise.resolve()
+
+    expect(fetcher).toHaveBeenCalledTimes(1)
+
+    resolveFetch?.({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          sessionToken: 'mini-session-token',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          telegramUserId: '42',
+          telegramUsername: 'akita',
+          chatId: null,
+          chatType: null,
+          chatInstance: null,
+        },
+      }),
+    })
+
+    const [first, second] = await Promise.all([firstPromise, secondPromise])
+    expect(first.ok).toBe(true)
+    expect(second.ok).toBe(true)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
   it('returns a typed failure when initData is missing', async () => {
     restoreWindow = installMockWindow('')
     const fetcher = vi.fn()

@@ -71,6 +71,7 @@ import {
 import {
   buildMiniAppLaunchButton as buildMiniAppLaunchButtonShared,
   buildTelegramMiniAppUrl as buildTelegramMiniAppUrlShared,
+  TELEGRAM_MINI_APP_SWAP_PATH,
 } from './webhook/miniApp.js'
 import {
   resolveHelpCallbackCommand as resolveHelpCallbackCommandShared,
@@ -1361,7 +1362,7 @@ function buildTelegramLinkFlowResponse(params: {
   }
   const linkUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: '/swap',
+    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
     query: linkQuery,
   })
   const openMiniAppButton = buildMiniAppLaunchButton({
@@ -1384,7 +1385,7 @@ function buildTelegramLinkFlowResponse(params: {
           '4) Create or connect your Coinbase Smart Wallet (canonical account for Telegram).',
           '',
           '4626 never holds your keys — you approve actions in your wallet.',
-          'Telegram setup is separate from full app access — team approval may still apply for trading.',
+          'Telegram setup unlocks Mini App trading. Full 4626 web app access may still require team approval.',
         ]
       : params.zoraOnboardingBranch === 'has'
         ? [
@@ -1398,7 +1399,7 @@ function buildTelegramLinkFlowResponse(params: {
             '2) Sign in with Privy.',
             '3) Complete the owner step on your CSW (canonical account).',
             '',
-            'Telegram setup is separate from full app access — team approval may still apply for trading.',
+            'Telegram setup unlocks Mini App trading. Full 4626 web app access may still require team approval.',
           ]
         : [
             'Link your 4626 account (one time)',
@@ -1557,7 +1558,7 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
   const miniAppUrl = resolveTelegramMiniAppUrl()
   const walletAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: '/swap',
+    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
     query: {
       tgMiniApp: '1',
       tgEntry: 'wallet',
@@ -1565,7 +1566,7 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
   })
   const tradeAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: '/swap',
+    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
     query: {
       tgMiniApp: '1',
       tgEntry: 'trade',
@@ -1631,7 +1632,7 @@ function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
   const miniAppUrl = resolveTelegramMiniAppUrl()
   const statusAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: '/swap',
+    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
     query: {
       tgMiniApp: '1',
       tgEntry: 'vault-status',
@@ -1641,7 +1642,7 @@ function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
   })
   const aiAppUrl = buildTelegramMiniAppUrl({
     baseUrl: miniAppUrl,
-    pathname: '/swap',
+    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
     query: {
       tgMiniApp: '1',
       tgEntry: 'ai',
@@ -2001,7 +2002,7 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
       'Link Status',
       '',
       '- linked: no',
-      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram + wallet; full app access may still require team approval.',
+      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram + wallet; Mini App trading is available there, while full 4626 web app access may still require team approval.',
     ].join('\n')
   }
   return [
@@ -3172,7 +3173,7 @@ async function executeTelegramNativeCommand(params: {
               text: menuLabel('wallet'),
               url: buildTelegramMiniAppUrl({
                 baseUrl: resolveTelegramMiniAppUrl(),
-                pathname: '/swap',
+                pathname: TELEGRAM_MINI_APP_SWAP_PATH,
                 query: {
                   tgMiniApp: '1',
                   tgEntry: 'wallet',
