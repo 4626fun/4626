@@ -13,9 +13,9 @@ import {
 import { getDeploymentsForOwner } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
-import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 
 export { AjnaAutomationOptInCard } from '@/components/DeploymentSuccess'
 export { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
@@ -340,10 +340,7 @@ export function AdminAgentSetup() {
     [privyEmbeddedEoaWallet],
   )
 
-  const zoraHandoffHref = useMemo(() => {
-    const returnPath = '/admin/agent-setup?from=zora&gate=agent'
-    return buildZoraHandoffUrl({ returnPath, context: 'agent' })
-  }, [])
+  const baseAppInviteHref = useMemo(() => resolveBaseAppInviteUrl(), [])
 
   // -----------------------------------------------------------------------
   // Agent status
@@ -645,7 +642,7 @@ export function AdminAgentSetup() {
       publish: PublishData
     }> => {
       if (!creatorAddress) throw new Error('Connect your wallet first')
-      if (!canonicalCswAddress) throw new Error('Create or connect your Zora Coinbase Smart Wallet first.')
+      if (!canonicalCswAddress) throw new Error('Create or connect your canonical Coinbase Smart Wallet first.')
 
       const wallet = serverWallet ?? (await provisionServerWallet(canonicalCswAddress))
       let ownerTxHash: `0x${string}` | null = null
@@ -928,15 +925,15 @@ export function AdminAgentSetup() {
                 <div className="space-y-3 rounded-lg border border-emerald-500/10 bg-emerald-500/2 p-4">
                   {!canonicalCswAddress ? (
                     <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3">
-                      <div className="text-[11px] text-amber-200 font-medium">Canonical Zora CSW required</div>
+                      <div className="text-[11px] text-amber-200 font-medium">Canonical Coinbase Smart Wallet required</div>
                       <div className="mt-1 text-[10px] text-amber-100/80">
-                        One-click agent setup is locked until your canonical Zora Coinbase Smart Wallet is connected.
+                        One-click agent setup is locked until your canonical Coinbase Smart Wallet is connected.
                       </div>
                       <a
-                        href={zoraHandoffHref}
+                        href={baseAppInviteHref}
                         className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-300/30 bg-amber-400/10 px-2.5 py-1 text-[10px] text-amber-100 hover:bg-amber-400/20"
                       >
-                        Create or connect on Zora <ExternalLink className="w-3 h-3" />
+                        Open Base app <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   ) : null}

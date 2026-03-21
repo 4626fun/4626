@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { bootstrapCanonicalDelegationState } from '../../../server/_lib/canonicalCswDelegation.js'
+import { loadCanonicalDelegationState } from '../../../server/_lib/canonicalCswDelegation.js'
+import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import { ensureAccountsIdentitySchema, upsertAccount, verifyPrivyForAccounts } from '../../../server/_lib/accountsIdentity.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import {
   readTelegramMiniAppSession,
@@ -12,6 +14,7 @@ import {
   runTelegramMergePreflight,
   upsertTelegramUserLink,
 } from '../../../server/_lib/telegramTrading.js'
+import { extractPrivyVerifiedEmail } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 import { readTelegramMiniAppSessionToken } from './webhook/miniAppAuth.js'
@@ -23,6 +26,64 @@ type MiniAppLinkBody = {
   telegramUsername?: string | null
   miniAppSessionToken?: string
   sessionToken?: string
+}
+
+function isPrivyUserIdUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('profiles_privy_user_id_unique') ||
+    (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
+  )
+}
+
+async function ensureProfileIdForPrivyUser(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  privyUserId: string
+  email: string | null
+}): Promise<number> {
+  const { db, privyUserId, email } = params
+  if (email) {
+    await assertNoEmailPrivyCollision({ db, email, privyUserId })
+  }
+
+  const existing = await db.sql`
+    SELECT id
+    FROM profiles
+    WHERE privy_user_id = ${privyUserId}
+    LIMIT 1;
+  `
+  const existingIdRaw = existing.rows?.[0]?.id
+  const existingId = typeof existingIdRaw === 'number' ? existingIdRaw : Number(existingIdRaw)
+  if (Number.isFinite(existingId) && existingId > 0) return existingId
+
+  try {
+    const inserted = await db.sql`
+      INSERT INTO profiles (email, privy_user_id, created_at, updated_at)
+      VALUES (${email}, ${privyUserId}, NOW(), NOW())
+      ON CONFLICT (email) DO UPDATE
+        SET privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
+            updated_at = NOW()
+      RETURNING id;
+    `
+    const insertedIdRaw = inserted.rows?.[0]?.id
+    const insertedId = typeof insertedIdRaw === 'number' ? insertedIdRaw : Number(insertedIdRaw)
+    if (Number.isFinite(insertedId) && insertedId > 0) return insertedId
+  } catch (error) {
+    if (!isPrivyUserIdUniqueViolation(error)) throw error
+  }
+
+  const recovered = await db.sql`
+    SELECT id
+    FROM profiles
+    WHERE privy_user_id = ${privyUserId}
+    LIMIT 1;
+  `
+  const recoveredIdRaw = recovered.rows?.[0]?.id
+  const recoveredId = typeof recoveredIdRaw === 'number' ? recoveredIdRaw : Number(recoveredIdRaw)
+  if (Number.isFinite(recoveredId) && recoveredId > 0) return recoveredId
+
+  throw new Error('telegram_link_profile_upsert_failed')
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -108,11 +169,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
+    const context = await verifyPrivyForAccounts(req)
+    const verifiedEmail = extractPrivyVerifiedEmail(context.privyUser)
+    if (!verifiedEmail) {
+      return res.status(409).json({
+        success: false,
+        error: 'Verify your email with 4626 before linking Telegram.',
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        emailVerificationRequired: true,
+      } as ApiEnvelope<never> & { code: string; emailVerificationRequired: true })
+    }
+    await ensureAccountsIdentitySchema(db as any)
+    await upsertAccount({
+      db: db as any,
+      privyUserId: context.privyUserId,
+      email: verifiedEmail,
+      emailVerified: true,
+    })
+    const profileId = await ensureProfileIdForPrivyUser({
+      db: db as any,
+      privyUserId: context.privyUserId,
+      email: verifiedEmail,
+    })
+    const delegation = await loadCanonicalDelegationState({
+      db: db as any,
+      privyUserId: context.privyUserId,
+    })
     const mergePreflight = await runTelegramMergePreflight({
       db: db as any,
       telegramUserId: parsed.telegramUserId,
-      privyUserId: bootstrap.privyUserId,
+      privyUserId: context.privyUserId,
     })
     if (!mergePreflight.ok) {
       return res.status(409).json({
@@ -127,10 +213,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db: db as any,
       telegramUserId: parsed.telegramUserId,
       telegramUsername: asTrimmed(body.telegramUsername ?? '') || null,
-      profileId: bootstrap.profileId,
-      privyUserId: bootstrap.privyUserId,
-      canonicalCswAddress: bootstrap.canonicalCswAddress,
-      ownerVerified: bootstrap.privyIsOwner,
+      profileId,
+      privyUserId: context.privyUserId,
+      canonicalCswAddress: delegation?.canonicalCswAddress ?? null,
+      ownerVerified: delegation?.privyIsOwner === true,
     })
     if (!link) {
       return res.status(500).json({ success: false, error: 'Failed to persist telegram link' } satisfies ApiEnvelope<never>)
@@ -166,12 +252,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chatId: string
       profileId: number
       privyUserId: string
-      canonicalCswAddress: string
+      canonicalCswAddress: string | null
       ownerVerified: boolean
       linkStatus: string
       linkedAt: string | null
     }>)
   } catch (error) {
+    if (isIdentityRecoveryRequiredError(error)) {
+      return res.status(409).json({
+        success: false,
+        error: `Recovery required: email "${error.email}" is already linked to another account. Recover that account to continue.`,
+        code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
     if ((error as any)?.code === 'IDENTITY_RECOVERY_REQUIRED') {
       return res.status(409).json({
         success: false,

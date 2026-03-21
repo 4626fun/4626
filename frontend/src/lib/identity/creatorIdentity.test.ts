@@ -15,7 +15,7 @@ describe('resolveCreatorIdentity', () => {
 
     expect(identity.canonicalIdentity.address).toBeNull()
     expect(identity.execution.address).toBe(A.toLowerCase())
-    expect(identity.blockingReason).toContain('No canonical Zora Coinbase Smart Wallet found yet')
+    expect(identity.blockingReason).toContain('No canonical Coinbase Smart Wallet found yet')
   })
 
   it('keeps existing creator coin creator as canonical identity', () => {

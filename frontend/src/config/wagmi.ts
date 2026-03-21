@@ -56,6 +56,7 @@ const OPTIMISM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=optimism' : ''
 const POLYGON_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=polygon' : ''
 const ENABLE_INJECTED_CONNECTOR =
   !['0', 'false', 'no', 'off'].includes(String(import.meta.env.VITE_ENABLE_INJECTED_CONNECTOR ?? '1').toLowerCase())
+const RPC_PROXY_PREFIX = '/api/rpc?chain='
 
 function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string[] {
   const out: string[] = []
@@ -69,6 +70,18 @@ function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string
     out.push(s)
   }
   return out
+}
+
+function buildReadTransport(url: string) {
+  const normalized = String(url || '').trim()
+  if (normalized.startsWith(RPC_PROXY_PREFIX)) {
+    // Same-origin proxy already retries upstream; keep client retries minimal.
+    return http(normalized, {
+      retryCount: 0,
+      retryDelay: 150,
+    })
+  }
+  return http(normalized)
 }
 
 // Browser RPC reality: some providers (or API keys) block browser `fetch` via CORS / allowlists.
@@ -157,11 +170,11 @@ export const wagmiConfig = createConfig({
   connectors: buildConnectors(),
   ...(DATA_SUFFIX ? { dataSuffix: DATA_SUFFIX } : {}),
   transports: {
-    [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map((url) => http(url))) : http(),
-    [mainnet.id]: MAINNET_READ_RPC_URLS.length > 0 ? fallback(MAINNET_READ_RPC_URLS.map((url) => http(url))) : http(),
-    [arbitrum.id]: ARBITRUM_READ_RPC_URLS.length > 0 ? fallback(ARBITRUM_READ_RPC_URLS.map((url) => http(url))) : http(),
-    [optimism.id]: OPTIMISM_READ_RPC_URLS.length > 0 ? fallback(OPTIMISM_READ_RPC_URLS.map((url) => http(url))) : http(),
-    [polygon.id]: POLYGON_READ_RPC_URLS.length > 0 ? fallback(POLYGON_READ_RPC_URLS.map((url) => http(url))) : http(),
+    [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map(buildReadTransport)) : http(),
+    [mainnet.id]: MAINNET_READ_RPC_URLS.length > 0 ? fallback(MAINNET_READ_RPC_URLS.map(buildReadTransport)) : http(),
+    [arbitrum.id]: ARBITRUM_READ_RPC_URLS.length > 0 ? fallback(ARBITRUM_READ_RPC_URLS.map(buildReadTransport)) : http(),
+    [optimism.id]: OPTIMISM_READ_RPC_URLS.length > 0 ? fallback(OPTIMISM_READ_RPC_URLS.map(buildReadTransport)) : http(),
+    [polygon.id]: POLYGON_READ_RPC_URLS.length > 0 ? fallback(POLYGON_READ_RPC_URLS.map(buildReadTransport)) : http(),
   },
 })
 

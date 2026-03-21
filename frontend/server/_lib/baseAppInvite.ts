@@ -7,6 +7,6 @@ function asTrimmed(value: unknown): string {
 }
 
 export function resolveBaseAppInviteUrl(): string {
-  const raw = asTrimmed(process.env.BASE_APP_INVITE_URL ?? process.env.TELEGRAM_BASE_APP_INVITE_URL ?? '')
+  const raw = asTrimmed(process.env.BASE_APP_INVITE_URL ?? '')
   return raw || DEFAULT_BASE_APP_INVITE_URL
 }

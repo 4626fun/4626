@@ -273,6 +273,7 @@ const XMTP_ENV: 'production' | 'dev' | 'local' =
     ? (RAW_XMTP_ENV as 'production' | 'dev' | 'local')
     : 'production'
 const XMTP_APP_VERSION = '4626.fun-web'
+const XMTP_CONNECT_FAILURE_COOLDOWN_MS = 5_000
 const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
 const inMemoryEncKeys = new Map<string, string>()
 
@@ -571,6 +572,7 @@ function isXmtpVerboseLoggingEnabled(): boolean {
 }
 
 const XMTP_VERBOSE_LOGS = isXmtpVerboseLoggingEnabled()
+const XMTP_DEFAULT_LOG_LEVEL = ((LogLevel as any).Error ?? LogLevel.Warn) as LogLevel
 
 function xmtpDebug(...args: unknown[]): void {
   if (!XMTP_VERBOSE_LOGS) return
@@ -757,6 +759,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
   const connectInFlightRef = useRef(false)
+  const connectCooldownUntilRef = useRef(0)
   const resolvedIdentityByWalletRef = useRef<
     Map<string, { identityAddress: string; isCanonicalSmartWallet: boolean }>
   >(new Map())
@@ -1051,6 +1054,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!address || !walletClient) return
     if (clientRef.current) return // already connected
     if (connectInFlightRef.current) return
+    const now = Date.now()
+    if (connectCooldownUntilRef.current > now) {
+      const retryIn = Math.max(1, Math.ceil((connectCooldownUntilRef.current - now) / 1000))
+      if (mountedRef.current) {
+        setStatus('error')
+        setError(`XMTP reconnect is cooling down. Retry in ${retryIn}s.`)
+      }
+      return
+    }
 
     // XMTP installations are scoped to a browser origin. Allowing messaging on
     // preview/staging origins would create additional installations and can
@@ -1090,7 +1102,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const baseOptions = {
         env: XMTP_ENV as any,
         appVersion: XMTP_APP_VERSION,
-        loggingLevel: XMTP_VERBOSE_LOGS ? LogLevel.Info : LogLevel.Warn,
+        loggingLevel: XMTP_VERBOSE_LOGS ? LogLevel.Info : XMTP_DEFAULT_LOG_LEVEL,
         structuredLogging: XMTP_VERBOSE_LOGS,
         performanceLogging: false,
       }
@@ -1610,6 +1622,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // revoke only on-demand: when the 10/10 limit is actually hit (inside
       // tryCreate above) or via the manual resetInstallations() escape hatch.
     } catch (e) {
+      connectCooldownUntilRef.current = Date.now() + XMTP_CONNECT_FAILURE_COOLDOWN_MS
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'

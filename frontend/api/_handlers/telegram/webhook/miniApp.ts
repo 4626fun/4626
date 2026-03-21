@@ -1,7 +1,6 @@
 import { getTelegramWebhookConfig } from './config.js'
 import { asTrimmed } from './utils.js'
 
-export const TELEGRAM_MINI_APP_SWAP_PATH = '/telegram/swap'
 export const TELEGRAM_MINI_APP_LINK_PATH = '/telegram/link'
 
 function isPrivateChatId(chatId: string): boolean {
@@ -33,25 +32,6 @@ export function buildTelegramMiniAppUrl(params: {
   } catch {
     return params.baseUrl
   }
-}
-
-export function buildTelegramLinkSwapNextPath(params: {
-  token: string
-  chatId: string
-  telegramUsername?: string | null
-}): string {
-  const query = new URLSearchParams({
-    tgMiniApp: '1',
-    tgEntry: 'link',
-    chatAction: 'link-account',
-    tgChatId: params.chatId,
-    tgLinkToken: params.token,
-  })
-  const username = asTrimmed(params.telegramUsername ?? '')
-  if (username) {
-    query.set('tgUsername', username)
-  }
-  return `${TELEGRAM_MINI_APP_LINK_PATH}?${query.toString()}`
 }
 
 export function buildMiniAppLaunchButton(params: {

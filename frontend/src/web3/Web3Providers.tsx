@@ -4,12 +4,29 @@ import { TransactionProvider } from 'ethereum-identity-kit'
 import { WagmiProvider } from 'wagmi'
 import { wagmiConfig } from '@/config/wagmi'
 
+function isRateLimitedError(error: unknown): boolean {
+  const asAny = error as { status?: unknown; details?: unknown; shortMessage?: unknown; message?: unknown }
+  const status = Number(asAny?.status ?? NaN)
+  if (status === 429) return true
+  const message = String(
+    asAny?.details ??
+      asAny?.shortMessage ??
+      asAny?.message ??
+      '',
+  ).toLowerCase()
+  return (
+    message.includes('429') ||
+    message.includes('rate limit') ||
+    message.includes('too many requests')
+  )
+}
+
 // Single QueryClient instance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
-      retry: 1,
+      retry: (failureCount, error) => failureCount < 1 && !isRateLimitedError(error),
     },
   },
 })

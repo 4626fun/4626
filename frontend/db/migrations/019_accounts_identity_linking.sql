@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS public.account_zora_signals (
   privy_user_id TEXT PRIMARY KEY REFERENCES public.accounts(privy_user_id) ON DELETE CASCADE,
   zora_linked BOOLEAN NOT NULL DEFAULT false,
   zora_handle TEXT NULL,
-  canonical_zora_csw_address TEXT NULL,
+  canonical_csw_address TEXT NULL,
   creator_coin_address TEXT NULL,
   last_resolved_at TIMESTAMPTZ NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

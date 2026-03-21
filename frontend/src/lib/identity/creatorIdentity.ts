@@ -44,7 +44,7 @@ function normalizeAddress(value: unknown): Address | null {
  * - Existing creator coin creator address is the canonical identity.
  * - Privy smart wallet can execute only when it matches creator/payout for an existing coin.
  * - If no creator coin exists, never auto-promote Privy/EOA as canonical identity.
- * - Require an explicit canonical Zora Coinbase Smart Wallet before irreversible deploy actions.
+ * - Require an explicit canonical Coinbase Smart Wallet before irreversible deploy actions.
  */
 export function resolveCreatorIdentity(params: {
   connectedWallet: Address | null
@@ -122,7 +122,7 @@ export function resolveCreatorIdentity(params: {
     execution: { address: executionFallback },
     hasExistingCreatorCoinIdentity: false,
     blockingReason: executionFallback
-      ? 'No canonical Zora Coinbase Smart Wallet found yet. Privy wallets are sign-in only. Connect or create your canonical Coinbase Smart Wallet on Zora before deploying.'
+      ? 'No canonical Coinbase Smart Wallet found yet. Privy wallets are sign-in only. Connect or create your canonical Coinbase Smart Wallet before deploying.'
       : 'Sign in to continue.',
     warnings,
   }

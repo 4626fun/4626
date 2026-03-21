@@ -30,6 +30,7 @@ import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
 import { getChatCommandById } from './commandCenter'
 import { rekeyOpenWindows, type OpenWindow } from './chatWidgetState'
+import { shouldAutoConnectMessaging } from './autoConnectPolicy'
 
 const MAX_OPEN_WINDOWS = 3
 const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
@@ -142,7 +143,7 @@ function ChatWidgetInner() {
   const newDmPreviewCacheRef = useRef<Map<string, DmRecipientResolution | null>>(new Map())
 
   const maybeConnectMessaging = useCallback(() => {
-    if (status === 'idle' || status === 'error') {
+    if (shouldAutoConnectMessaging(status)) {
       void connect()
     }
   }, [connect, status])

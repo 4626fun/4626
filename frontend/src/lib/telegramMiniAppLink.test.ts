@@ -141,7 +141,7 @@ describe('telegramMiniAppLink', () => {
         savedAtMs: now,
       }),
     })
-    const params = new URLSearchParams({ tgMiniApp: '1', tgEntry: 'trade' })
+    const params = new URLSearchParams()
     expect(resolveTelegramMiniAppLinkContext(params)).toEqual({
       linkToken: 'token-abc',
       chatId: '-100123',
@@ -149,4 +149,3 @@ describe('telegramMiniAppLink', () => {
     })
   })
 })
-

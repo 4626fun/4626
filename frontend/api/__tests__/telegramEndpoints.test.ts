@@ -19,6 +19,7 @@ function createMockReq(options: MockReqOptions = {}) {
 
 const {
   getDbMock,
+  dbSqlMock,
   ensureWaitlistSchemaMock,
   ensureTelegramTradingSchemaMock,
   getTelegramLinkByUserIdMock,
@@ -41,13 +42,17 @@ const {
   listTelegramScopedVaultsMock,
   listTelegramAuctionsMock,
   listTelegramSignalsMock,
-  bootstrapCanonicalDelegationStateMock,
+  loadCanonicalDelegationStateMock,
   verifyPrivyForAccountsMock,
+  ensureAccountsIdentitySchemaMock,
+  upsertAccountMock,
+  assertNoEmailPrivyCollisionMock,
   setTelegramMyCommandsMock,
   setTelegramChatMenuButtonMock,
   resolveTelegramBotTokenMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
+  dbSqlMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(),
   ensureTelegramTradingSchemaMock: vi.fn(),
   getTelegramLinkByUserIdMock: vi.fn(),
@@ -70,8 +75,11 @@ const {
   listTelegramScopedVaultsMock: vi.fn(),
   listTelegramAuctionsMock: vi.fn(),
   listTelegramSignalsMock: vi.fn(),
-  bootstrapCanonicalDelegationStateMock: vi.fn(),
+  loadCanonicalDelegationStateMock: vi.fn(),
   verifyPrivyForAccountsMock: vi.fn(),
+  ensureAccountsIdentitySchemaMock: vi.fn(),
+  upsertAccountMock: vi.fn(),
+  assertNoEmailPrivyCollisionMock: vi.fn(),
   setTelegramMyCommandsMock: vi.fn(),
   setTelegramChatMenuButtonMock: vi.fn(),
   resolveTelegramBotTokenMock: vi.fn(),
@@ -110,11 +118,22 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
 }))
 
 vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
-  bootstrapCanonicalDelegationState: bootstrapCanonicalDelegationStateMock,
+  loadCanonicalDelegationState: loadCanonicalDelegationStateMock,
 }))
 
 vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   verifyPrivyForAccounts: verifyPrivyForAccountsMock,
+  ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
+  upsertAccount: upsertAccountMock,
+}))
+
+vi.mock('../../server/_lib/identityRecovery.js', () => ({
+  assertNoEmailPrivyCollision: assertNoEmailPrivyCollisionMock,
+  isIdentityRecoveryRequiredError: (error: unknown) =>
+    Boolean(error) &&
+    typeof error === 'object' &&
+    (error as { code?: unknown }).code === 'IDENTITY_RECOVERY_REQUIRED' &&
+    (error as { reason?: unknown }).reason === 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
 }))
 
 vi.mock('../../server/_lib/telegramBotApi.js', () => ({
@@ -161,9 +180,22 @@ describe('telegram endpoint handlers', () => {
       TELEGRAM_FUNNEL_METRICS_ENABLED: 'true',
       TELEGRAM_MINIAPP_SESSION_ENABLED: 'true',
     })
-    getDbMock.mockResolvedValue({ sql: vi.fn() })
+    dbSqlMock.mockImplementation(async (strings: TemplateStringsArray) => {
+      const query = strings.join(' ').replace(/\s+/g, ' ').trim().toLowerCase()
+      if (query.includes('from profiles') && query.includes('where privy_user_id')) {
+        return { rows: [] }
+      }
+      if (query.includes('insert into profiles')) {
+        return { rows: [{ id: 11 }] }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue({ sql: dbSqlMock })
     ensureWaitlistSchemaMock.mockResolvedValue(undefined)
     ensureTelegramTradingSchemaMock.mockResolvedValue(undefined)
+    ensureAccountsIdentitySchemaMock.mockResolvedValue(undefined)
+    upsertAccountMock.mockResolvedValue(undefined)
+    assertNoEmailPrivyCollisionMock.mockResolvedValue(undefined)
     getTelegramLinkStatusMock.mockImplementation(async (...args: any[]) => getTelegramLinkByUserIdMock(...args))
     isTelegramFunnelEventsEnabledForChatMock.mockReturnValue(true)
     isTelegramFunnelMetricsEnabledMock.mockReturnValue(true)
@@ -247,17 +279,23 @@ describe('telegram endpoint handlers', () => {
         expiresAt: '2026-03-13T00:10:00.000Z',
       },
     })
-    bootstrapCanonicalDelegationStateMock.mockResolvedValue({
+    loadCanonicalDelegationStateMock.mockResolvedValue({
       profileId: 11,
-      privyUserId: 'did:privy:11',
       canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+      canonicalSource: 'wallet_sync',
       privyIsOwner: true,
       privyEmbeddedEoaAddress: '0x2222222222222222222222222222222222222222',
-      chainId: 8453,
+      lastCheckedAt: null,
     })
     verifyPrivyForAccountsMock.mockResolvedValue({
       privyUserId: 'did:privy:11',
-      privyUser: { id: 'did:privy:11' },
+      privyUser: {
+        id: 'did:privy:11',
+        email: {
+          address: 'akita@4626.fun',
+          verified: true,
+        },
+      },
     })
     upsertTelegramUserLinkMock.mockResolvedValue({
       telegramUserId: '42',
@@ -528,10 +566,94 @@ describe('telegram endpoint handlers', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(bootstrapCanonicalDelegationStateMock).toHaveBeenCalledTimes(1)
+    expect(loadCanonicalDelegationStateMock).toHaveBeenCalledTimes(1)
+    expect(upsertAccountMock).toHaveBeenCalledWith({
+      db: expect.any(Object),
+      privyUserId: 'did:privy:11',
+      email: 'akita@4626.fun',
+      emailVerified: true,
+    })
     expect(upsertTelegramUserLinkMock).toHaveBeenCalledTimes(1)
     expect(res.body?.data?.linked).toBe(true)
     expect(res.body?.data?.canonicalCswAddress).toBe('0x1111111111111111111111111111111111111111')
+  })
+
+  it('POST /api/telegram/miniapp/link allows pending wallet setup after verified email', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_miniapp-link.ts')
+    loadCanonicalDelegationStateMock.mockResolvedValueOnce(null)
+    upsertTelegramUserLinkMock.mockResolvedValueOnce({
+      telegramUserId: '42',
+      profileId: 11,
+      privyUserId: 'did:privy:11',
+      canonicalCswAddress: null,
+      ownerVerified: false,
+      linkStatus: 'pending_wallet_setup',
+      linkedAt: '2026-03-13T00:00:01.000Z',
+      telegramUsername: 'akita',
+      lastVerifiedAt: null,
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { token: 'token-abc', telegramUsername: 'akita', miniAppSessionToken: 'mini-session-token' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.linked).toBe(false)
+    expect(res.body?.data?.linkStatus).toBe('pending_wallet_setup')
+    expect(res.body?.data?.canonicalCswAddress).toBeNull()
+  })
+
+  it('POST /api/telegram/miniapp/link requires verified email before linking', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_miniapp-link.ts')
+    verifyPrivyForAccountsMock.mockResolvedValueOnce({
+      privyUserId: 'did:privy:11',
+      privyUser: { id: 'did:privy:11' },
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { token: 'token-abc', telegramUsername: 'akita', miniAppSessionToken: 'mini-session-token' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('EMAIL_VERIFICATION_REQUIRED')
+    expect(upsertTelegramUserLinkMock).not.toHaveBeenCalled()
+  })
+
+  it('POST /api/telegram/miniapp/link returns recovery-required on verified email collision', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_miniapp-link.ts')
+    assertNoEmailPrivyCollisionMock.mockRejectedValueOnce(
+      Object.assign(new Error('email collision'), {
+        code: 'IDENTITY_RECOVERY_REQUIRED',
+        reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+        email: 'akita@4626.fun',
+      }),
+    )
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { token: 'token-abc', telegramUsername: 'akita', miniAppSessionToken: 'mini-session-token' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
+    expect(upsertTelegramUserLinkMock).not.toHaveBeenCalled()
   })
 
   it('POST /api/telegram/miniapp/link accepts browser requests without x-telegram-link-secret', async () => {
@@ -595,37 +717,6 @@ describe('telegram endpoint handlers', () => {
     expect(upsertTelegramUserLinkMock).not.toHaveBeenCalled()
   })
 
-  it('GET /api/telegram/discovery returns mini app discovery data', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_discovery.ts')
-    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
-      telegramUserId: '42',
-      canonicalCswAddress: '0x1111111111111111111111111111111111111111',
-      ownerVerified: true,
-      linkStatus: 'active',
-    })
-    getTelegramPortfolioSummaryMock.mockResolvedValueOnce({
-      link: { telegramUserId: '42', linkStatus: 'active' },
-      successfulActions: 2,
-      buyCount: 1,
-      sellCount: 1,
-      bidCount: 0,
-      recentActions: [],
-    })
-    const req = createMockReq({
-      method: 'GET',
-      headers: { 'x-telegram-miniapp-session': 'mini-session-token' },
-      query: { limit: '6' },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.linked).toBe(true)
-    expect(listTelegramScopedVaultsMock).toHaveBeenCalledTimes(1)
-  })
-
   it('POST /api/telegram/merge-preflight returns ok when no collision exists', async () => {
     const { default: handler } = await import('../_handlers/telegram/_merge-preflight.ts')
     runTelegramMergePreflightMock.mockResolvedValueOnce({ ok: true })
@@ -685,46 +776,6 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.data?.conversion?.tradePreviewToConfirmRatePct).toBe(66.67)
   })
 
-  it('POST /api/telegram/inline/prepared saves prepared inline message', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_inline-prepared.ts')
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true, result: { id: 'prepared-inline-1' } }),
-      }),
-    )
-
-    try {
-      const req = createMockReq({
-        method: 'POST',
-        body: {
-          telegramUserId: '42',
-          chatId: '-100123',
-          command: '/buy',
-          title: 'One tap buy',
-        },
-      })
-      const res = createMockRes()
-
-      await handler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(res.body?.success).toBe(true)
-      expect(res.body?.data?.preparedInlineMessageId).toBe('prepared-inline-1')
-      expect(res.body?.data?.switchInlineQuery).toBe('buy')
-      expect(String((fetch as any).mock.calls[0][0])).toContain('/savePreparedInlineMessage')
-      expect(logTelegramFunnelEventMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventName: 'inline_prepared_sent',
-        }),
-      )
-    } finally {
-      vi.unstubAllGlobals()
-    }
-  })
-
   it('GET /api/telegram/metrics returns 404 when rollout flag is disabled', async () => {
     const { default: handler } = await import('../_handlers/telegram/_metrics.ts')
     isTelegramFunnelMetricsEnabledMock.mockReturnValueOnce(false)
@@ -765,8 +816,8 @@ describe('telegram endpoint handlers', () => {
     expect(await getApiHandler('telegram/link/status')).toBeNull()
     expect(await getApiHandler('telegram/merge-preflight')).toBeTypeOf('function')
     expect(await getApiHandler('telegram/miniapp/session')).toBeTypeOf('function')
-    expect(await getApiHandler('telegram/discovery')).toBeTypeOf('function')
-    expect(await getApiHandler('telegram/inline/prepared')).toBeTypeOf('function')
+    expect(await getApiHandler('telegram/discovery')).toBeNull()
+    expect(await getApiHandler('telegram/inline/prepared')).toBeNull()
     expect(await getApiHandler('telegram/metrics')).toBeTypeOf('function')
   })
 
@@ -791,4 +842,3 @@ describe('telegram endpoint handlers', () => {
     expect(await getApiHandler('telegram/bot-config')).toBeTypeOf('function')
   })
 })
-

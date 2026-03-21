@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
@@ -18,20 +17,7 @@ import { useSwapExecution } from '@/hooks/useSwapExecution'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/apiBase'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import {
-  clearStoredTelegramMiniAppLinkContext,
-  resolveTelegramMiniAppLinkContext,
-  stripTelegramMiniAppLinkParams,
-} from '@/lib/telegramMiniAppLink'
-import {
-  ensureTelegramMiniAppSession,
-  isTelegramMiniAppContext,
-  loadTelegramWebApp,
-  readTelegramMiniAppIdentityKey,
-  setupTelegramMiniAppUi,
-} from '@/lib/telegramWebApp'
 import {
   claimLiquidityFees,
   createPosition,
@@ -112,51 +98,6 @@ const CORE_TOKENS: TokenOption[] = [
 
 type QuoteShape = Record<string, unknown>
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-type TelegramLinkCompleteResponse = {
-  linked: boolean
-}
-type TelegramDiscoveryData = {
-  telegramUserId: string
-  chatId: string | null
-  linked: boolean
-  linkStatus: string
-  ownerVerified: boolean
-  canonicalCswAddress: string | null
-  portfolio: {
-    successfulActions: number
-    buyCount: number
-    sellCount: number
-    bidCount: number
-    recentActions: Array<{
-      actionType: string
-      status: string
-      txHash: string | null
-      createdAt: string
-    }>
-  } | null
-  vaults: Array<{
-    vaultAddress: string
-    creatorCoinAddress: string
-    chainId: number
-    groupId: string
-    isSettled: boolean
-    ccaStrategyAddress: string | null
-  }>
-  auctions: Array<{
-    vaultAddress: string
-    ccaStrategyAddress: string
-    creatorCoinAddress: string
-    chainId: number
-    isSettled: boolean
-  }>
-  signals: Array<{
-    telegramUserId: string
-    actionType: string
-    status: string
-    txHash: string | null
-    createdAt: string
-  }>
-}
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
   {
     type: 'function',
@@ -400,7 +341,6 @@ function LpPositionCard(props: {
 
 export function Swap() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const privyClientStatus = usePrivyClientStatus()
@@ -469,173 +409,12 @@ export function Swap() {
   const [lpPositionId, setLpPositionId] = useState<string>('')
   const [lpStatus, setLpStatus] = useState<string>('')
   const [lpError, setLpError] = useState<string>('')
-  const telegramLinkContext = useMemo(() => resolveTelegramMiniAppLinkContext(searchParams), [searchParams])
-  const [telegramLinkState, setTelegramLinkState] = useState<'idle' | 'linking' | 'linked' | 'error'>('idle')
-  const [telegramLinkMessage, setTelegramLinkMessage] = useState<string | null>(null)
-  const [telegramMiniAppIdentityKey, setTelegramMiniAppIdentityKey] = useState('')
-  const telegramLinkAttemptRef = useRef<string>('')
-  const telegramLinkFlowActive = Boolean(telegramLinkContext)
-  const telegramMiniAppFlag = useMemo(() => String(searchParams.get('tgMiniApp') ?? '').trim().toLowerCase(), [searchParams])
-  const telegramEntry = useMemo(() => String(searchParams.get('tgEntry') ?? '').trim().toLowerCase(), [searchParams])
-  const telegramCswIntent = useMemo(() => {
-    const raw = searchParams.get('tgCswIntent') ?? searchParams.get('tgZoraBranch')
-    const v = String(raw ?? '').trim().toLowerCase()
-    if (v === 'need' || v === 'has') return v as 'need' | 'has'
-    return null
-  }, [searchParams])
-  const telegramDiscoveryEnabled = telegramEntry.length > 0 && telegramEntry !== 'link'
-  const likelyTelegramMiniAppFlow =
-    telegramMiniAppFlag === '1' ||
-    telegramEntry.length > 0 ||
-    telegramLinkFlowActive ||
-    (typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp))
-
-  const telegramDiscoveryQuery = useQuery({
-    queryKey: ['telegram-miniapp-discovery', telegramEntry, telegramMiniAppIdentityKey],
-    enabled: telegramDiscoveryEnabled,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const miniAppSession = await ensureTelegramMiniAppSession()
-      if (!miniAppSession.ok) {
-        throw new Error('Telegram Mini App session unavailable')
-      }
-      const res = await apiFetch('/api/telegram/discovery?limit=6', {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'x-telegram-miniapp-session': miniAppSession.session.sessionToken,
-        },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramDiscoveryData> | null
-      if (!res.ok || !json?.success || !json.data) {
-        const errorMessage = typeof json?.error === 'string' && json.error.trim() ? json.error.trim() : 'Discovery request failed'
-        throw new Error(errorMessage)
-      }
-      return json.data
-    },
-  })
-
-  useEffect(() => {
-    if (!likelyTelegramMiniAppFlow) return
-    let isCancelled = false
-    let teardown: (() => void) | null = null
-    void (async () => {
-      await loadTelegramWebApp().catch(() => null)
-      if (isCancelled) return
-      setTelegramMiniAppIdentityKey(readTelegramMiniAppIdentityKey())
-      teardown = setupTelegramMiniAppUi({ requestExpand: true })
-      if (!isTelegramMiniAppContext()) return
-      await ensureTelegramMiniAppSession().catch(() => null)
-    })()
-    return () => {
-      isCancelled = true
-      teardown?.()
-    }
-  }, [likelyTelegramMiniAppFlow])
-
-  const retryTelegramLink = useCallback(() => {
-    telegramLinkAttemptRef.current = ''
-    setTelegramLinkState('idle')
-    setTelegramLinkMessage(null)
-  }, [])
 
   // ─── URL params ───────────────────────────────────────────────────────────
   useEffect(() => {
     const qToken = (searchParams.get('token') ?? '').trim()
     if (isAddress(qToken)) setTokenOut(getAddress(qToken))
   }, [searchParams, setTokenOut])
-
-  useEffect(() => {
-    if (!telegramLinkContext) return
-    if (telegramLinkState === 'linking' || telegramLinkState === 'linked') return
-    if (!privyReady) return
-    if (!getAccessToken) {
-      setTelegramLinkState('error')
-      setTelegramLinkMessage('Privy is not available. Reload and try Telegram linking again.')
-      return
-    }
-    if (telegramLinkAttemptRef.current === telegramLinkContext.linkToken) return
-    telegramLinkAttemptRef.current = telegramLinkContext.linkToken
-
-    void (async () => {
-      setTelegramLinkState('linking')
-      setTelegramLinkMessage('Verifying Telegram Mini App session…')
-
-      const miniAppSession = await ensureTelegramMiniAppSession()
-      if (!miniAppSession.ok) {
-        if (miniAppSession.statusCode === 409) {
-          throw new Error('Telegram session was already consumed. Close and reopen the Mini App from Telegram, then retry.')
-        }
-        throw new Error('Could not verify Telegram Mini App session. Re-open the app from Telegram and retry linking.')
-      }
-
-      let accessToken = ''
-      if (privyAuthenticated) {
-        accessToken = (await getAccessToken().catch(() => null))?.trim() ?? ''
-      }
-      if (!accessToken) {
-        await signIn({ method: 'privy' })
-        accessToken = (await getAccessToken().catch(() => null))?.trim() ?? ''
-      }
-      if (!accessToken) {
-        throw new Error('Could not read your Privy access token. Please retry linking.')
-      }
-
-      const res = await apiFetch('/api/telegram/miniapp/link', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'x-privy-token': accessToken,
-        },
-        body: JSON.stringify({
-          token: telegramLinkContext.linkToken,
-          telegramUsername: telegramLinkContext.telegramUsername ?? miniAppSession.session.telegramUsername,
-          miniAppSessionToken: miniAppSession.session.sessionToken,
-        }),
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteResponse> | null
-      if (!res.ok || !json?.success || json?.data?.linked !== true) {
-        const message = typeof json?.error === 'string' && json.error.trim() ? json.error.trim() : 'Telegram linking failed.'
-        if (res.status === 410 || /expired/i.test(message)) {
-          throw new Error('Telegram link expired. Go back to Telegram, tap Refresh Link, then open Mini App again.')
-        }
-        throw new Error(message)
-      }
-
-      setTelegramLinkState('linked')
-      setTelegramLinkMessage('Telegram linked successfully. Return to Telegram, tap Check Link Status, then pick Buy, Sell, or Bid.')
-      clearStoredTelegramMiniAppLinkContext()
-      const cleaned = stripTelegramMiniAppLinkParams(searchParams)
-      const next = cleaned.toString()
-      navigate(
-        {
-          pathname: '/swap',
-          search: next ? `?${next}` : '',
-        },
-        { replace: true },
-      )
-    })().catch((error: unknown) => {
-      const message =
-        error instanceof Error && error.message.trim().length > 0
-          ? error.message
-          : 'Could not complete Telegram linking. Retry in a moment.'
-      if (/expired/i.test(message)) {
-        clearStoredTelegramMiniAppLinkContext()
-      }
-      setTelegramLinkState('error')
-      setTelegramLinkMessage(message)
-    })
-  }, [
-    getAccessToken,
-    navigate,
-    privyAuthenticated,
-    privyReady,
-    searchParams,
-    signIn,
-    telegramLinkContext,
-    telegramLinkState,
-  ])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1398,9 +1177,6 @@ export function Swap() {
     if (Array.isArray(data)) return data as LpPosition[]
     return []
   }, [lpPositionsQuery.data])
-  const telegramLinkExpiredError =
-    telegramLinkState === 'error' && /expired/i.test(String(telegramLinkMessage ?? ''))
-
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
@@ -1504,101 +1280,6 @@ export function Swap() {
         title="Swap"
         subtitle="1-Click Swaps on Base"
       />
-
-      {telegramLinkFlowActive ? (
-        <div className="mx-auto mt-4 max-w-4xl">
-          <Alert
-            variant={telegramLinkState === 'error' ? 'warning' : telegramLinkState === 'linked' ? 'success' : 'info'}
-            title={
-              telegramLinkState === 'linking'
-                ? 'Linking Telegram account'
-                : telegramLinkState === 'linked'
-                  ? 'Telegram account linked'
-                  : telegramLinkState === 'error'
-                    ? 'Telegram linking needs attention'
-                    : 'Preparing Telegram link'
-            }
-          >
-            {telegramLinkMessage ??
-              (telegramCswIntent === 'need'
-                ? 'Install the Base app if you need a new Coinbase Smart Wallet, then finish linking here.'
-                : telegramCswIntent === 'has'
-                  ? 'Use the wallet tied to 4626.fun and approve it as an owner on your existing Coinbase Smart Wallet.'
-                  : 'Finalizing your Telegram + 4626 account link.')}
-            {telegramLinkState === 'error' ? (
-              <div className="mt-3">
-                {telegramLinkExpiredError ? (
-                  <div className="text-xs text-zinc-300">Open a fresh /link from Telegram, then tap Open Mini App again.</div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={retryTelegramLink}
-                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white transition hover:bg-white/10"
-                  >
-                    Retry link
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </Alert>
-        </div>
-      ) : null}
-
-      {telegramDiscoveryEnabled ? (
-        <div className="mx-auto mt-4 max-w-4xl vault-surface p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-wide text-zinc-100">Telegram Discovery</h2>
-            {telegramDiscoveryQuery.isFetching ? <span className="text-xs text-zinc-400">Refreshing…</span> : null}
-          </div>
-          {telegramDiscoveryQuery.isLoading ? (
-            <div className="text-sm text-zinc-400">Loading your Telegram-linked discovery snapshot…</div>
-          ) : telegramDiscoveryQuery.isError ? (
-            <div className="text-sm text-rose-300">
-              {(telegramDiscoveryQuery.error as Error | undefined)?.message || 'Could not load Telegram discovery data.'}
-            </div>
-          ) : telegramDiscoveryQuery.data ? (
-            <div className="space-y-3 text-sm text-zinc-300">
-              <div className="grid gap-2 md:grid-cols-4">
-                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Link</div>
-                  <div className="font-medium text-zinc-100">
-                    {telegramDiscoveryQuery.data.linked ? 'Linked' : 'Not linked'}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Portfolio Actions</div>
-                  <div className="font-medium text-zinc-100">
-                    {telegramDiscoveryQuery.data.portfolio?.successfulActions ?? 0}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Scoped Vaults</div>
-                  <div className="font-medium text-zinc-100">{telegramDiscoveryQuery.data.vaults.length}</div>
-                </div>
-                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500">Active Signals</div>
-                  <div className="font-medium text-zinc-100">{telegramDiscoveryQuery.data.signals.length}</div>
-                </div>
-              </div>
-              {telegramDiscoveryQuery.data.vaults.length > 0 ? (
-                <div>
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-500">Vault Discovery</div>
-                  <div className="flex flex-wrap gap-2">
-                    {telegramDiscoveryQuery.data.vaults.slice(0, 4).map((vault) => (
-                      <span
-                        key={vault.vaultAddress}
-                        className="rounded-md border border-white/10 bg-black/40 px-2 py-1 font-mono text-[11px] text-zinc-200"
-                      >
-                        {vault.vaultAddress.slice(0, 8)}...{vault.vaultAddress.slice(-4)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
 
       {activePanel === 'swap' && needsPrivyCanonicalAuth ? (
         <div className="mx-auto mt-4 max-w-4xl">

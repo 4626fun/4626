@@ -2161,7 +2161,7 @@ function DeployVaultBatcher({
       lower.includes('privy smart wallet client required') ||
       lower.includes('smart wallet required')
     ) {
-      return 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.'
+      return 'Smart wallet required. Sign in with wallet to access your canonical Coinbase Smart Wallet, or use Coinbase Wallet (Base Account), then retry.'
     }
     if (lower.includes('wallet_sendcalls') && lower.includes('unsupported method')) {
       return 'Your wallet does not support call batching (wallet_sendCalls). Use Coinbase Wallet (Base Account) or Privy smart wallet, then retry.'
@@ -2257,7 +2257,7 @@ function DeployVaultBatcher({
         reasonCode === 'canonical_wallet_not_verified' ||
         reasonCode === 'session_not_onchain_owner' ||
         reasonCode === 'session_not_linked'
-          ? ' Complete the one-time owner approval to add your app Privy wallet as an owner of your canonical Zora smart wallet, then retry.'
+          ? ' Complete the one-time owner approval to add your app Privy wallet as an owner of your canonical Coinbase Smart Wallet, then retry.'
           : ''
       return (
         'Deploy session ownership validation failed' +
@@ -3832,7 +3832,7 @@ function DeployVaultBatcher({
         const hasOwnerEoaServerContinuePath = useServerContinue && !strictNoEoaEnforced && connectedEoaOwnerReady
         if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls && !hasOwnerEoaServerContinuePath) {
           throw new Error(
-            'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
+            'Smart wallet required. Sign in with wallet to access your canonical Coinbase Smart Wallet, or use Coinbase Wallet (Base Account), then retry.',
           )
         }
 
@@ -6508,7 +6508,7 @@ function DeployVaultMain() {
     }
     if (!opts?.skipConfirm && typeof window !== 'undefined') {
       const ok = window.confirm(
-        'This will add your app smart wallet as an owner of your canonical Zora smart wallet. ' +
+        'This will add your app smart wallet as an owner of your canonical Coinbase Smart Wallet. ' +
           'The canonical wallet will remain the sender. Proceed?'
       )
       if (!ok) return false
@@ -6526,7 +6526,7 @@ function DeployVaultMain() {
       })
 
       if (!connectedWalletAddress || !walletClient || !publicClient) {
-        throw new Error('Wallet not connected. Please connect a wallet that is an owner of your Zora smart wallet.')
+        throw new Error('Wallet not connected. Please connect a wallet that is an owner of your canonical Coinbase Smart Wallet.')
       }
       if (connectedWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()) {
         throw new Error(
@@ -6543,7 +6543,7 @@ function DeployVaultMain() {
 
       if (!isOwner) {
         throw new Error(
-          'Your connected wallet is not an owner of your Zora smart wallet.\n\n' +
+          'Your connected wallet is not an owner of your canonical Coinbase Smart Wallet.\n\n' +
             'Connect with a wallet that controls your Zora identity.'
         )
       }
@@ -7110,7 +7110,7 @@ function DeployVaultMain() {
     )
   }, [smartWalletClient])
   
-  // Check if Privy smart wallet matches the canonical identity (Zora smart wallet)
+  // Check if Privy smart wallet matches the canonical identity (canonical Coinbase Smart Wallet)
   // If they don't match, user can add the app smart wallet as an owner (EIP-1271)
   const smartWalletMatchesCanonical = useMemo(() => {
     if (!privySmartWalletAddress || !canonicalIdentityAddress) return false
@@ -7350,7 +7350,7 @@ function DeployVaultMain() {
         : tokenIsValid && zoraCoin && !isCreatorCoin
           ? 'Only Creator Coins can deploy a vault.'
           : tokenIsValid && zoraCoin && canonicalIdentityType === 'eoa'
-            ? 'Deploy requires your canonical Zora Coinbase Smart Wallet as sender. Connect with the canonical smart wallet identity.'
+            ? 'Deploy requires your canonical Coinbase Smart Wallet as sender. Connect with the canonical smart wallet identity.'
           : tokenIsValid && zoraCoin && isCreatorCoin && !coinAgeOk
             ? `Creator Coin must be at least ${minCoinAgeDays} days old to deploy.`
           : creatorAllowlistQuery.isLoading
@@ -7375,12 +7375,12 @@ function DeployVaultMain() {
                         ? 'Solana decimals override must be 0-255.'
                       : oneTimePrivyOwnerApprovalNeeded
                         ? connectedWalletAddress
-                          ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Zora smart wallet.'
+                          ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Coinbase Smart Wallet.'
                           : 'One-time owner approval required. Connect an owner wallet, approve once, then deploy.'
                       : !smartWalletCapabilityReady
                         ? hasDetectedZoraCrossAppWallet
                           ? 'Detected your Zora wallet, but this session is read-only for deploy signing. Connect Coinbase Wallet (owner EOA) to sign ERC-4337 UserOps, then retry.'
-                          : 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, connect an owner EOA, or use Coinbase Wallet (Base Account).'
+                          : 'Smart wallet required. Sign in with wallet to access your canonical Coinbase Smart Wallet, connect an owner EOA, or use Coinbase Wallet (Base Account).'
                     : bytecodeInfraQuery.isFetching
                       ? 'Checking deployment bytecode store…'
                       : bytecodeInfraQuery.isError
@@ -7488,7 +7488,7 @@ function DeployVaultMain() {
               <div id="owner-approval-setup" className="rounded-lg border border-purple-500/28 bg-linear-to-b from-purple-500/16 to-purple-500/8 p-4 space-y-3 backdrop-blur-sm">
                 <div className="text-sm font-medium text-purple-200">One-time wallet approval (recommended first step)</div>
                 <div className="text-[11px] text-purple-200/75 leading-relaxed">
-                  Before deploy, approve your app Privy wallet once as an owner of your canonical Zora smart wallet (EIP-1271).
+                  Before deploy, approve your app Privy wallet once as an owner of your canonical Coinbase Smart Wallet (EIP-1271).
                   This is a one-time setup per canonical wallet.
                 </div>
                 <div className="text-[11px] text-zinc-300/90">

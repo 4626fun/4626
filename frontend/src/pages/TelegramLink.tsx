@@ -22,9 +22,15 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type TelegramLinkCompleteResponse = {
   linked: boolean
+  linkStatus: string
+  canonicalCswAddress: string | null
+  ownerVerified: boolean
 }
 
-function formatTelegramSessionError(error: string, statusCode: number): string {
+export type TelegramLinkSessionState = 'verifying' | 'ready' | 'error'
+export type TelegramLinkFlowState = 'idle' | 'authenticating' | 'linking' | 'linked' | 'error'
+
+export function formatTelegramSessionError(error: string, statusCode: number): string {
   const normalized = String(error ?? '').trim().toLowerCase()
   if (statusCode === 409 || normalized.includes('replay')) {
     return 'This Telegram Mini App session was already used. Re-open the Mini App from Telegram, then tap Link again.'
@@ -39,6 +45,61 @@ function formatTelegramSessionError(error: string, statusCode: number): string {
     return 'Telegram Mini App session unavailable. Open this flow from Telegram.'
   }
   return 'Could not verify your Telegram Mini App session. Re-open the Mini App from Telegram and retry.'
+}
+
+export function getTelegramLinkSuccessMessage(linkStatus: string): string {
+  return linkStatus === 'active'
+    ? 'Telegram linked successfully. You can return to Telegram or continue into 4626.'
+    : 'Telegram linked. Finish Coinbase Smart Wallet setup in 4626 before trading from Telegram.'
+}
+
+export function getTelegramLinkViewState(params: {
+  sessionState: TelegramLinkSessionState
+  linkState: TelegramLinkFlowState
+  sessionError: string | null
+  linkMessage: string | null
+  privyAuthenticated: boolean
+  hasLinkContext: boolean
+}) {
+  const { sessionState, linkState, sessionError, linkMessage, privyAuthenticated, hasLinkContext } = params
+  const statusVariant = sessionState === 'error' || linkState === 'error' ? 'warning' : linkState === 'linked' ? 'success' : 'info'
+  const statusTitle =
+    sessionState === 'verifying'
+      ? 'Verifying Telegram session'
+      : sessionState === 'error' || linkState === 'error'
+        ? 'Telegram linking needs attention'
+        : linkState === 'linked'
+          ? 'Telegram account linked'
+          : linkState === 'linking'
+            ? 'Linking Telegram account'
+            : linkState === 'authenticating'
+              ? 'Sign in to 4626'
+              : 'Ready to link'
+
+  const statusMessage =
+    sessionError ??
+    linkMessage ??
+    (sessionState === 'verifying'
+      ? 'Checking your Telegram Mini App session...'
+      : privyAuthenticated
+        ? 'Your 4626 session is ready. Verify email if prompted, then we will finish the Telegram link.'
+        : 'Verify your email with 4626 to finish linking.')
+
+  const canSignIn =
+    sessionState === 'ready' &&
+    hasLinkContext &&
+    linkState !== 'authenticating' &&
+    linkState !== 'linking' &&
+    linkState !== 'linked'
+  const canRetryLink = sessionState === 'ready' && hasLinkContext && linkState === 'error'
+
+  return {
+    statusVariant,
+    statusTitle,
+    statusMessage,
+    canSignIn,
+    canRetryLink,
+  }
 }
 
 export function TelegramLink() {
@@ -136,7 +197,7 @@ export function TelegramLink() {
         }),
       })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteResponse> | null
-      if (!res.ok || !json?.success || json.data?.linked !== true) {
+      if (!res.ok || !json?.success || !json.data) {
         const message =
           typeof json?.error === 'string' && json.error.trim() ? json.error.trim() : 'Telegram linking failed.'
         if (res.status === 410 || /expired/i.test(message)) {
@@ -156,7 +217,7 @@ export function TelegramLink() {
         { replace: true },
       )
       setLinkState('linked')
-      setLinkMessage('Telegram linked successfully. You can return to Telegram or continue into 4626.')
+      setLinkMessage(getTelegramLinkSuccessMessage(json.data.linkStatus))
     })().catch((error: unknown) => {
       const message =
         error instanceof Error && error.message.trim().length > 0
@@ -213,27 +274,14 @@ export function TelegramLink() {
     }
   }, [login, privy, privyAuthenticated])
 
-  const statusVariant = sessionState === 'error' || linkState === 'error' ? 'warning' : linkState === 'linked' ? 'success' : 'info'
-  const statusTitle =
-    sessionState === 'verifying'
-      ? 'Verifying Telegram session'
-      : sessionState === 'error'
-        ? 'Telegram linking needs attention'
-        : linkState === 'linked'
-          ? 'Telegram account linked'
-          : linkState === 'linking'
-            ? 'Linking Telegram account'
-            : linkState === 'authenticating'
-              ? 'Sign in to 4626'
-              : 'Ready to link'
-
-  const canSignIn =
-    sessionState === 'ready' &&
-    Boolean(telegramLinkContext) &&
-    linkState !== 'authenticating' &&
-    linkState !== 'linking' &&
-    linkState !== 'linked'
-  const canRetryLink = sessionState === 'ready' && Boolean(telegramLinkContext) && linkState === 'error'
+  const { statusVariant, statusTitle, statusMessage, canSignIn, canRetryLink } = getTelegramLinkViewState({
+    sessionState,
+    linkState,
+    sessionError,
+    linkMessage,
+    privyAuthenticated,
+    hasLinkContext: Boolean(telegramLinkContext),
+  })
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-2xl items-center px-4 py-10 sm:px-6">
@@ -249,13 +297,7 @@ export function TelegramLink() {
         </div>
 
         <Alert variant={statusVariant} title={statusTitle} className="mt-6">
-          {sessionError ??
-            linkMessage ??
-            (sessionState === 'verifying'
-              ? 'Checking your Telegram Mini App session...'
-              : privyAuthenticated
-                ? 'Your 4626 session is ready. Verify email if prompted, then we will finish the Telegram link.'
-                : 'Verify your email with 4626 to finish linking.')}
+          {statusMessage}
         </Alert>
 
         {!telegramLinkContext && linkState !== 'linked' ? (

@@ -6,7 +6,7 @@ import { verifyPrivyRequest } from './canonicalCswDelegation.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
-import { resolveCanonicalZoraCSW } from './canonicalCswDelegation.js'
+import { resolveCanonicalCsw } from './canonicalCswDelegation.js'
 import { fetchZoraProfile } from './zoraProfile.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -312,11 +312,26 @@ export async function ensureAccountsIdentitySchema(db: Db): Promise<void> {
         privy_user_id TEXT PRIMARY KEY REFERENCES accounts(privy_user_id) ON DELETE CASCADE,
         zora_linked BOOLEAN NOT NULL DEFAULT false,
         zora_handle TEXT NULL,
-        canonical_zora_csw_address TEXT NULL,
+        canonical_csw_address TEXT NULL,
         creator_coin_address TEXT NULL,
         last_resolved_at TIMESTAMPTZ NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `
+    await db.sql`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'account_zora_signals'
+            AND column_name = 'canonical_zora_csw_address'
+        ) THEN
+          ALTER TABLE public.account_zora_signals
+            RENAME COLUMN canonical_zora_csw_address TO canonical_csw_address;
+        END IF;
+      END $$;
     `
     await db.sql`
       CREATE TABLE IF NOT EXISTS account_points (
@@ -520,7 +535,7 @@ async function readZoraSignals(db: Db, privyUserId: string): Promise<ZoraSignalR
   const result = await db.sql`
     SELECT
       zora_linked,
-      canonical_zora_csw_address,
+      canonical_csw_address,
       creator_coin_address,
       zora_handle,
       last_resolved_at
@@ -531,7 +546,7 @@ async function readZoraSignals(db: Db, privyUserId: string): Promise<ZoraSignalR
   const row = result.rows?.[0] ?? null
   return {
     zoraLinked: row?.zora_linked === true,
-    canonicalCswAddress: normalizeEvmAddress(row?.canonical_zora_csw_address),
+    canonicalCswAddress: normalizeEvmAddress(row?.canonical_csw_address),
     creatorCoinAddress: normalizeEvmAddress(row?.creator_coin_address),
     zoraHandle: normalizeString(row?.zora_handle),
     lastResolvedAt:
@@ -688,14 +703,14 @@ export async function resolveAndPersistZoraSignals(params: {
   }
 
   let canonical = existing.canonicalCswAddress
-  let canonicalSource = existing.canonicalCswAddress ? 'persisted' : 'zora_readonly'
+  let canonicalSource = existing.canonicalCswAddress ? 'persisted' : 'wallet_sync'
   if (!canonical) {
     try {
-      const resolved = await resolveCanonicalZoraCSW({ db, privyUserId, privyUser })
+      const resolved = await resolveCanonicalCsw({ db, privyUserId, privyUser })
       const resolvedCanonical = normalizeEvmAddress(resolved.canonicalCswAddress)
       if (resolvedCanonical) {
         canonical = resolvedCanonical
-        canonicalSource = normalizeString(resolved.canonicalSource) ?? 'zora_readonly'
+        canonicalSource = normalizeString(resolved.canonicalSource) ?? 'wallet_sync'
       }
     } catch {
       // best-effort; keep nullable canonical
@@ -732,7 +747,7 @@ export async function resolveAndPersistZoraSignals(params: {
       privy_user_id,
       zora_linked,
       zora_handle,
-      canonical_zora_csw_address,
+      canonical_csw_address,
       creator_coin_address,
       last_resolved_at,
       updated_at
@@ -750,7 +765,7 @@ export async function resolveAndPersistZoraSignals(params: {
     SET
       zora_linked = EXCLUDED.zora_linked,
       zora_handle = COALESCE(EXCLUDED.zora_handle, account_zora_signals.zora_handle),
-      canonical_zora_csw_address = COALESCE(account_zora_signals.canonical_zora_csw_address, EXCLUDED.canonical_zora_csw_address),
+      canonical_csw_address = COALESCE(account_zora_signals.canonical_csw_address, EXCLUDED.canonical_csw_address),
       creator_coin_address = COALESCE(EXCLUDED.creator_coin_address, account_zora_signals.creator_coin_address),
       last_resolved_at = EXCLUDED.last_resolved_at,
       updated_at = NOW();

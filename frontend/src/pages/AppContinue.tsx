@@ -108,9 +108,8 @@ export function AppContinue() {
   const handoffCode = (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim()
   const likelyTelegramMiniAppFlow = useMemo(() => {
     if (typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp)) return true
-    const nextRaw = searchParams.get('next') ?? ''
-    return nextRaw.includes('tgMiniApp=1') || nextRaw.includes('tgEntry=') || nextRaw.includes('tgWebAppStartParam')
-  }, [searchParams])
+    return nextPath.startsWith('/telegram/link')
+  }, [nextPath])
 
   const canNavigate = useMemo(
     () =>

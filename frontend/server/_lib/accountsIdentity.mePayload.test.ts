@@ -25,7 +25,7 @@ describe('buildAccountsMePayload', () => {
             rows: [
               {
                 zora_linked: false,
-                canonical_zora_csw_address: null,
+                canonical_csw_address: null,
                 creator_coin_address: null,
                 zora_handle: null,
                 last_resolved_at: null,

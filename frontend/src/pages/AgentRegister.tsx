@@ -488,12 +488,12 @@ export function AgentRegister() {
     if (!canSubmit) return
     if (!connectedAddress || !walletClient || !publicClient) return
     if (!canonicalSmartWalletAddress) {
-      setError('No canonical Zora Coinbase Smart Wallet found. Connect/sync your canonical CSW first.')
+      setError('No canonical Coinbase Smart Wallet found. Connect or sync your canonical CSW first.')
       return
     }
     if (!canOperateCanonicalCsw) {
       setError(
-        `Connect your canonical Zora CSW (${canonicalSmartWalletAddress}) or an owner wallet of that CSW before registering.`,
+        `Connect your canonical CSW (${canonicalSmartWalletAddress}) or an owner wallet of that CSW before registering.`,
       )
       return
     }
@@ -795,7 +795,7 @@ export function AgentRegister() {
         </div>
         {!canOperateCanonicalCsw ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
-            Registration is locked to your canonical Zora CSW so the agent owner is your existing smart wallet.
+            Registration is locked to your canonical CSW so the agent owner is your existing smart wallet.
             {canonicalSmartWalletAddress ? (
               <>
                 {' '}Expected wallet: <span>{canonicalSmartWalletAddress}</span>.

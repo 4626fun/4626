@@ -1730,7 +1730,7 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(true)
     const openMiniAppButton = allButtons.find((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')
     const launchUrl = String(openMiniAppButton?.web_app?.url ?? openMiniAppButton?.url ?? '')
-    expect(decodeURIComponent(launchUrl)).toContain('/telegram/swap?')
+    expect(decodeURIComponent(launchUrl)).toContain('/telegram/link?')
     expect(decodeURIComponent(launchUrl)).toContain('tgMiniApp=1')
     expect(decodeURIComponent(launchUrl)).toContain('tgEntry=link')
     expect(decodeURIComponent(launchUrl)).toContain('tgChatId=')
@@ -2690,13 +2690,7 @@ describe('telegram webhook handler', () => {
         (button: any) => String(button?.text ?? '').trim() === 'Open Wallet' && String(button?.callback_data ?? '') === 'menu:wallet',
       ),
     ).toBe(true)
-    expect(
-      signalButtons.some(
-        (button: any) =>
-          String(button?.text ?? '').trim() === 'View Vault' &&
-          String(button?.url ?? '').includes('/vault/0x2222222222222222222222222222222222222222'),
-      ),
-    ).toBe(true)
+    expect(signalButtons.some((button: any) => String(button?.text ?? '').trim() === 'View Vault')).toBe(false)
   })
 
   it('adds Stars tip buttons to signal posts when tips are enabled', async () => {
@@ -3020,10 +3014,9 @@ describe('telegram webhook handler', () => {
     expect(
       signalButtons.some(
         (button: any) =>
-          String(button?.text ?? '').trim() === 'View Vault' &&
-          String(button?.url ?? '').includes('/vault/0x1111111111111111111111111111111111111111'),
+          String(button?.text ?? '').trim() === 'View Vault',
       ),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('handles tip callback by sending a Telegram Stars invoice', async () => {
@@ -3277,13 +3270,7 @@ describe('telegram webhook handler', () => {
             String(button?.text ?? '').trim() === 'Open Wallet' && String(button?.callback_data ?? '') === 'menu:wallet',
         ),
       ).toBe(true)
-      expect(
-        signalButtons.some(
-          (button: any) =>
-            String(button?.text ?? '').trim() === 'View Vault' &&
-            String(button?.url ?? '').includes('/vault/0x2222222222222222222222222222222222222222'),
-        ),
-      ).toBe(true)
+      expect(signalButtons.some((button: any) => String(button?.text ?? '').trim() === 'View Vault')).toBe(false)
     } finally {
       restoreSignalsEnv()
     }
@@ -3386,13 +3373,7 @@ describe('telegram webhook handler', () => {
         (button: any) => String(button?.text ?? '').trim() === 'Open Wallet' && String(button?.callback_data ?? '') === 'menu:wallet',
       ),
     ).toBe(true)
-    expect(
-      signalButtons.some(
-        (button: any) =>
-          String(button?.text ?? '').trim() === 'View Vault' &&
-          String(button?.url ?? '').includes('/vault/0x1111111111111111111111111111111111111111'),
-      ),
-    ).toBe(true)
+    expect(signalButtons.some((button: any) => String(button?.text ?? '').trim() === 'View Vault')).toBe(false)
   })
 
   it('rejects bid callback when requote drift exceeds safety limit', async () => {
@@ -4104,7 +4085,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '').toLowerCase()).toContain('not available')
   })
 
-  it('handles /zora as a telegram-native command with guided app link', async () => {
+  it('handles /zora as a telegram-native command with web-first guidance', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -4125,5 +4106,8 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Zora')
     expect(String(payload.text ?? '')).toContain('/link')
+    expect(String(payload.text ?? '')).toContain('Open 4626 on the web')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
+    expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Zora Linking')).toBe(false)
   })
 })

@@ -73,7 +73,6 @@ import {
   buildMiniAppLaunchButton as buildMiniAppLaunchButtonShared,
   buildTelegramMiniAppUrl as buildTelegramMiniAppUrlShared,
   TELEGRAM_MINI_APP_LINK_PATH,
-  TELEGRAM_MINI_APP_SWAP_PATH,
 } from './webhook/miniApp.js'
 import {
   resolveHelpCallbackCommand as resolveHelpCallbackCommandShared,
@@ -1386,7 +1385,7 @@ function buildTelegramLinkFlowResponse(params: {
           '4) Create or connect your Coinbase Smart Wallet (canonical account for Telegram).',
           '',
           '4626 never holds your keys — you approve actions in your wallet.',
-          'Telegram setup unlocks Mini App trading. Full 4626 web app access may still require team approval.',
+          'After linking, Telegram actions run directly through the bot.',
         ]
       : params.zoraOnboardingBranch === 'has'
         ? [
@@ -1400,7 +1399,7 @@ function buildTelegramLinkFlowResponse(params: {
             '2) Sign in with Privy.',
             '3) Complete the owner step on your CSW (canonical account).',
             '',
-            'Telegram setup unlocks Mini App trading. Full 4626 web app access may still require team approval.',
+            'After linking, Telegram actions run directly through the bot.',
           ]
         : [
             'Link your 4626 account (one time)',
@@ -1556,33 +1555,15 @@ function buildFocusedHelpText(): string {
 }
 
 function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
-  const miniAppUrl = resolveTelegramMiniAppUrl()
-  const walletAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'wallet',
-    },
-  })
-  const tradeAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'trade',
-    },
-  })
   const keyboard: Array<Array<Record<string, unknown>>> = params.isLinked
     ? [
-        [buildMiniAppLaunchButton({ chatId: params.chatId, text: menuLabel('wallet'), url: walletAppUrl })],
+        [{ text: menuLabel('wallet'), callback_data: 'menu:wallet' }],
         [
           { text: menuLabel('trade'), callback_data: 'menu:trade' },
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
-        [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
       ]
     : [
         [{ text: menuLabel('connect'), callback_data: 'menu:connect' }],
@@ -1591,7 +1572,6 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
-        [buildMiniAppLaunchButton({ chatId: params.chatId, text: 'Open Mini App', url: tradeAppUrl })],
       ]
 
   return {
@@ -1630,28 +1610,6 @@ function buildTradeMenuReplyMarkup(): Record<string, unknown> {
 }
 
 function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
-  const miniAppUrl = resolveTelegramMiniAppUrl()
-  const statusAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'vault-status',
-      chatAction: 'vault-status',
-      chatName: 'akita',
-    },
-  })
-  const aiAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: TELEGRAM_MINI_APP_SWAP_PATH,
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'ai',
-      chatAction: 'ai-assistant',
-      chatName: 'akita',
-    },
-  })
-
   return {
     inline_keyboard: [
       [
@@ -1667,10 +1625,6 @@ function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
       [
         { text: 'Draft X Post', switch_inline_query_current_chat: 'x post your update here' },
         { text: 'Help Topics', callback_data: 'menu:topics' },
-      ],
-      [
-        buildMiniAppLaunchButton({ chatId, text: 'Mini App: Vault', url: statusAppUrl }),
-        buildMiniAppLaunchButton({ chatId, text: 'Mini App: Ask AI', url: aiAppUrl }),
       ],
       [{ text: 'Back to Main', callback_data: 'menu:start' }],
     ],
@@ -2003,7 +1957,7 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
       'Link Status',
       '',
       '- linked: no',
-      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram + wallet; Mini App trading is available there, while full 4626 web app access may still require team approval.',
+      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram + wallet so bot actions can run from Telegram. Full 4626 web app access may still require team approval.',
     ].join('\n')
   }
   return [
@@ -3169,18 +3123,7 @@ async function executeTelegramNativeCommand(params: {
       replyMarkup: {
         inline_keyboard: [
           [
-            buildMiniAppLaunchButton({
-              chatId: params.chatId,
-              text: menuLabel('wallet'),
-              url: buildTelegramMiniAppUrl({
-                baseUrl: resolveTelegramMiniAppUrl(),
-                pathname: TELEGRAM_MINI_APP_SWAP_PATH,
-                query: {
-                  tgMiniApp: '1',
-                  tgEntry: 'wallet',
-                },
-              }),
-            }),
+            { text: menuLabel('wallet'), callback_data: 'menu:wallet' },
           ],
           [
             { text: menuLabel('trade'), callback_data: 'menu:trade' },
@@ -3931,45 +3874,22 @@ function formatDeployTypeText(deployType: DeployWizardType): string {
 }
 
 function formatTelegramZoraText(chatId: string): string {
-  const miniAppUrl = resolveTelegramMiniAppUrl()
-  const zoraAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: '/accounts',
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'zora-signup',
-      chatAction: 'zora-signup',
-      tgChatId: chatId,
-    },
-  })
+  void chatId
   return [
     'Zora Sign Up',
     '',
     '1) Run `/link` if your Telegram account is not linked yet',
-    '2) Open the app link below',
-    '3) Tap "Link Zora" in Accounts',
-    '',
-    `Open: ${zoraAppUrl}`,
+    '2) Open 4626 on the web',
+    '3) Go to Accounts and use "Link Zora"',
   ].join('\n')
 }
 
 function buildTelegramZoraResponse(chatId: string): TelegramCommandResponse {
-  const miniAppUrl = resolveTelegramMiniAppUrl()
-  const zoraAppUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: '/accounts',
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'zora-signup',
-      chatAction: 'zora-signup',
-      tgChatId: chatId,
-    },
-  })
   return {
     text: formatTelegramZoraText(chatId),
     replyMarkup: {
       inline_keyboard: [
-        [buildMiniAppLaunchButton({ chatId, text: 'Open Zora Linking', url: zoraAppUrl })],
+        [{ text: menuLabel('connect'), callback_data: 'menu:connect' }],
         [{ text: 'Back', callback_data: 'menu:start' }],
       ],
     },
@@ -4315,22 +4235,7 @@ function buildTradeSignalReplyMarkup(params: {
   const reuseButton = useCopyText
     ? { text: reuseLabel, copy_text: { text: command } }
     : { text: reuseLabel, switch_inline_query_current_chat: command }
-  const miniAppUrl = resolveTelegramMiniAppUrl()
-  const vaultUrl = buildTelegramMiniAppUrl({
-    baseUrl: miniAppUrl,
-    pathname: `/vault/${target}`,
-    query: {
-      tgMiniApp: '1',
-      tgEntry: 'signal',
-      chatAction: 'vault-detail',
-      vaultAddress: target,
-    },
-  })
-
-  const keyboard: Array<Array<Record<string, unknown>>> = [
-    [reuseButton, { text: 'Open Wallet', callback_data: 'menu:wallet' }],
-    [{ text: 'View Vault', url: vaultUrl }],
-  ]
+  const keyboard: Array<Array<Record<string, unknown>>> = [[reuseButton, { text: 'Open Wallet', callback_data: 'menu:wallet' }]]
   if (isStarsTipsEnabledForChat(asTrimmed(params.chatId ?? ''))) {
     const tipContext = `signal-${params.actionType}`
     keyboard.push([

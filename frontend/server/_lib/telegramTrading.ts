@@ -9,7 +9,7 @@ export type TelegramUserLink = {
   telegramUsername: string | null
   profileId: number
   privyUserId: string
-  canonicalCswAddress: string
+  canonicalCswAddress: string | null
   ownerVerified: boolean
   linkStatus: string
   linkedAt: string | null
@@ -844,7 +844,7 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
         telegram_username TEXT NULL,
         profile_id BIGINT NOT NULL,
         privy_user_id TEXT NOT NULL,
-        canonical_csw_address TEXT NOT NULL,
+        canonical_csw_address TEXT NULL,
         owner_verified BOOLEAN NOT NULL DEFAULT false,
         link_status TEXT NOT NULL DEFAULT 'active',
         linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -856,6 +856,7 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
         unlink_requested_at TIMESTAMPTZ NULL
       );
     `
+    await db.sql`ALTER TABLE telegram_user_links ALTER COLUMN canonical_csw_address DROP NOT NULL;`
     await db.sql`
       CREATE TABLE IF NOT EXISTS telegram_action_tokens (
         token_hash TEXT PRIMARY KEY,
@@ -1231,7 +1232,7 @@ export async function getTelegramLinkByUserId(params: {
     telegramUsername: asTrimmed(row.telegram_username) || null,
     profileId: Number(row.profile_id),
     privyUserId: String(row.privy_user_id),
-    canonicalCswAddress: String(row.canonical_csw_address).toLowerCase(),
+    canonicalCswAddress: normalizeAddress(row.canonical_csw_address),
     ownerVerified: Boolean(row.owner_verified),
     linkStatus: asTrimmed(row.link_status) || 'unknown',
     linkedAt: toIso(row.linked_at),
@@ -1301,7 +1302,7 @@ export async function upsertTelegramUserLink(params: {
   telegramUsername?: string | null
   profileId: number
   privyUserId: string
-  canonicalCswAddress: string
+  canonicalCswAddress?: string | null
   ownerVerified: boolean
 }): Promise<TelegramUserLink | null> {
   const userId = normalizeTelegramUserId(params.telegramUserId)
@@ -1309,8 +1310,10 @@ export async function upsertTelegramUserLink(params: {
   const profileId = Number(params.profileId)
   if (!Number.isFinite(profileId) || profileId <= 0) return null
   const privyUserId = asTrimmed(params.privyUserId)
-  const canonicalCswAddress = asTrimmed(params.canonicalCswAddress).toLowerCase()
-  if (!privyUserId || !/^0x[a-fA-F0-9]{40}$/.test(canonicalCswAddress)) return null
+  const canonicalCswAddress = normalizeAddress(params.canonicalCswAddress)
+  if (!privyUserId) return null
+  const ownerVerified = canonicalCswAddress ? Boolean(params.ownerVerified) : false
+  const linkStatus = canonicalCswAddress ? 'active' : 'pending_wallet_setup'
 
   const mergePreflight = await runTelegramMergePreflight({
     db: params.db,
@@ -1353,8 +1356,8 @@ export async function upsertTelegramUserLink(params: {
       ${profileId},
       ${privyUserId},
       ${canonicalCswAddress},
-      ${Boolean(params.ownerVerified)},
-      'active',
+      ${ownerVerified},
+      ${linkStatus},
       NOW(),
       NOW(),
       NOW(),
@@ -1370,7 +1373,7 @@ export async function upsertTelegramUserLink(params: {
       privy_user_id = EXCLUDED.privy_user_id,
       canonical_csw_address = EXCLUDED.canonical_csw_address,
       owner_verified = EXCLUDED.owner_verified,
-      link_status = 'active',
+      link_status = EXCLUDED.link_status,
       last_verified_at = NOW(),
       last_used_at = NOW(),
       revoked_at = NULL,
@@ -2340,4 +2343,3 @@ export async function getTelegramFunnelMetrics(params: {
     },
   }
 }
-

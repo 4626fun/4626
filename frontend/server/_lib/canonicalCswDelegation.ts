@@ -141,7 +141,7 @@ async function readPersistedDelegationState(db: Db, profileId: number): Promise<
     SELECT
       pw.profile_id,
       pw.chain_id,
-      pw.canonical_zora_csw_address,
+      pw.canonical_csw_address,
       pw.canonical_source,
       pw.privy_embedded_eoa_address,
       pw.privy_is_owner,
@@ -152,13 +152,13 @@ async function readPersistedDelegationState(db: Db, profileId: number): Promise<
     WHERE pw.profile_id = ${profileId}
       AND (pw.chain_id = 8453 OR pw.chain_id IS NULL)
     ORDER BY
-      CASE WHEN pw.canonical_zora_csw_address IS NOT NULL THEN 0 ELSE 1 END ASC,
+      CASE WHEN pw.canonical_csw_address IS NOT NULL THEN 0 ELSE 1 END ASC,
       CASE WHEN pw.is_canonical_smart_wallet = true THEN 0 ELSE 1 END ASC,
       pw.updated_at DESC
     LIMIT 1;
   `
   const row = rows.rows?.[0] ?? null
-  const canonicalFromColumns = normalizeAddress(row?.canonical_zora_csw_address)
+  const canonicalFromColumns = normalizeAddress(row?.canonical_csw_address)
   const canonicalFromAddress = row?.is_canonical_smart_wallet === true ? normalizeAddress(row?.address) : null
   const canonicalCswAddress = canonicalFromColumns ?? canonicalFromAddress ?? null
   const embedded = normalizeAddress(row?.privy_embedded_eoa_address)
@@ -219,7 +219,7 @@ async function ensureCanonicalWalletRow(params: {
       verified_at,
       updated_at,
       chain_id,
-      canonical_zora_csw_address,
+      canonical_csw_address,
       canonical_source,
       privy_embedded_eoa_address
     )
@@ -240,7 +240,7 @@ async function ensureCanonicalWalletRow(params: {
       verified_at = COALESCE(profile_wallets.verified_at, NOW()),
       updated_at = NOW(),
       chain_id = 8453,
-      canonical_zora_csw_address = EXCLUDED.canonical_zora_csw_address,
+      canonical_csw_address = EXCLUDED.canonical_csw_address,
       canonical_source = EXCLUDED.canonical_source,
       privy_embedded_eoa_address = COALESCE(EXCLUDED.privy_embedded_eoa_address, profile_wallets.privy_embedded_eoa_address);
   `
@@ -249,8 +249,23 @@ async function ensureCanonicalWalletRow(params: {
 async function ensureDelegationColumns(db: Db): Promise<void> {
   if (delegationColumnsEnsured) return
   try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'profile_wallets'
+            AND column_name = 'canonical_zora_csw_address'
+        ) THEN
+          ALTER TABLE public.profile_wallets
+            RENAME COLUMN canonical_zora_csw_address TO canonical_csw_address;
+        END IF;
+      END $$;
+    `
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS chain_id INT NOT NULL DEFAULT 8453;`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_zora_csw_address TEXT NULL;`
+    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_csw_address TEXT NULL;`
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_source TEXT NOT NULL DEFAULT 'wallet_sync';`
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS privy_embedded_eoa_address TEXT NULL;`
     await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS privy_is_owner BOOLEAN NOT NULL DEFAULT false;`
@@ -282,7 +297,7 @@ export async function verifyPrivyRequest(req: VercelRequest): Promise<PrivyReque
   }
 }
 
-export async function resolveCanonicalZoraCSW(params: {
+export async function resolveCanonicalCsw(params: {
   db: Db
   privyUserId: string
   privyUser: PrivyUserLike
@@ -424,7 +439,7 @@ export async function bootstrapCanonicalDelegationState(params: {
 }): Promise<BootstrapDelegationState> {
   const { db, req } = params
   const context = await verifyPrivyRequest(req)
-  const canonical = await resolveCanonicalZoraCSW({
+  const canonical = await resolveCanonicalCsw({
     db,
     privyUserId: context.privyUserId,
     privyUser: context.privyUser,
@@ -452,7 +467,7 @@ export async function bootstrapCanonicalDelegationState(params: {
     UPDATE profile_wallets
     SET
       chain_id = 8453,
-      canonical_zora_csw_address = ${canonical.canonicalCswAddress},
+      canonical_csw_address = ${canonical.canonicalCswAddress},
       canonical_source = ${canonical.canonicalSource},
       privy_embedded_eoa_address = ${privyEmbeddedEoaAddress},
       privy_is_owner = ${privyIsOwner},

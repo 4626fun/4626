@@ -63,6 +63,12 @@ const RPC_RATE_LIMIT_MAX_REQUESTS = 120
 const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
 const rpcRateLimitState = new Map<string, { count: number; resetAt: number }>()
 
+type RateLimitBucketResult = {
+  allowed: boolean
+  remaining: number
+  resetAt: number
+}
+
 const BLOCKED_RPC_METHOD_PREFIXES = ['eth_send', 'personal_', 'wallet_', 'admin_', 'debug_', 'trace_'] as const
 const BLOCKED_RPC_METHODS = new Set<string>([
   'eth_sign',
@@ -214,17 +220,57 @@ function isBlockedRpcMethod(method: string): boolean {
   return BLOCKED_RPC_METHOD_PREFIXES.some((prefix) => lower.startsWith(prefix))
 }
 
-function consumeRateLimitBucket(key: string): boolean {
+function parseRetryAfterSeconds(value: string | null | undefined): number | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const asNumber = Number(raw)
+  if (Number.isFinite(asNumber) && asNumber > 0) return Math.ceil(asNumber)
+  const at = Date.parse(raw)
+  if (!Number.isFinite(at)) return null
+  const diffMs = at - Date.now()
+  if (diffMs <= 0) return 1
+  return Math.ceil(diffMs / 1000)
+}
+
+function toRetryAfterSeconds(resetAt: number): number {
+  return Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
+}
+
+function setRateLimitHeaders(
+  res: VercelResponse,
+  data: { remaining: number; resetAt: number },
+) {
+  res.setHeader('X-RateLimit-Limit', String(RPC_RATE_LIMIT_MAX_REQUESTS))
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, data.remaining)))
+  res.setHeader('X-RateLimit-Reset', String(Math.floor(data.resetAt / 1000)))
+}
+
+function consumeRateLimitBucket(key: string): RateLimitBucketResult {
   const now = Date.now()
   const existing = rpcRateLimitState.get(key)
   if (!existing || existing.resetAt <= now) {
-    rpcRateLimitState.set(key, { count: 1, resetAt: now + RPC_RATE_LIMIT_WINDOW_MS })
-    return true
+    const resetAt = now + RPC_RATE_LIMIT_WINDOW_MS
+    rpcRateLimitState.set(key, { count: 1, resetAt })
+    return {
+      allowed: true,
+      remaining: RPC_RATE_LIMIT_MAX_REQUESTS - 1,
+      resetAt,
+    }
   }
-  if (existing.count >= RPC_RATE_LIMIT_MAX_REQUESTS) return false
+  if (existing.count >= RPC_RATE_LIMIT_MAX_REQUESTS) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: existing.resetAt,
+    }
+  }
   existing.count += 1
   rpcRateLimitState.set(key, existing)
-  return true
+  return {
+    allowed: true,
+    remaining: RPC_RATE_LIMIT_MAX_REQUESTS - existing.count,
+    resetAt: existing.resetAt,
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -240,8 +286,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Authentication required' })
   }
-  if (!consumeRateLimitBucket(principalAddress.toLowerCase())) {
-    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  const rateLimit = consumeRateLimitBucket(principalAddress.toLowerCase())
+  setRateLimitHeaders(res, { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt })
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimit.resetAt)))
+    return res.status(429).json({
+      success: false,
+      error: 'Rate limit exceeded',
+      code: 'rpc_local_rate_limited',
+    })
   }
 
   const body = await readJsonBody<unknown>(req, { maxBytes: 512_000 })
@@ -263,6 +316,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
   let lastStatus = 502
   let lastError: string | null = null
+  let lastRetryAfterSeconds: number | null = null
 
   for (const rpc of rpcUrls) {
     if (envRpcUrls.has(rpc) && expectedChainId) {
@@ -301,6 +355,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const text = await response.text().catch(() => '')
         const retryable = RETRYABLE_STATUS.has(status) || status >= 500
         if (retryable) {
+          if (status === 429) {
+            lastRetryAfterSeconds = parseRetryAfterSeconds(response.headers.get('retry-after'))
+          }
           lastStatus = status
           lastError = text || `Upstream RPC error (${status})`
           if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
@@ -324,8 +381,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  if (lastStatus === 429 && lastRetryAfterSeconds && lastRetryAfterSeconds > 0) {
+    res.setHeader('Retry-After', String(lastRetryAfterSeconds))
+  }
+
   return res.status(lastStatus).json({
     success: false,
     error: lastError || `RPC proxy failed (${chain})`,
+    code: lastStatus === 429 ? 'rpc_upstream_rate_limited' : 'rpc_proxy_failed',
   })
 }

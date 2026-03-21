@@ -8,7 +8,7 @@ import type { Address } from 'viem'
 export interface DeploymentRecord {
   /** The creator token (Zora coin) address deployed for */
   creatorToken: Address
-  /** The owner address (canonical Zora Coinbase Smart Wallet) */
+  /** The owner address (canonical Coinbase Smart Wallet) */
   owner: Address
   /** Deployment version from VITE_DEPLOYMENT_VERSION */
   version: string

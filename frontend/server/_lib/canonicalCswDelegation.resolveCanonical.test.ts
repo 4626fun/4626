@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { resolveCanonicalZoraCSW } from './canonicalCswDelegation'
+import { resolveCanonicalCsw } from './canonicalCswDelegation'
 
 const { ensureWaitlistSchemaMock, syncUserWalletsMock } = vi.hoisted(() => ({
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -25,6 +25,7 @@ function createMockDb() {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
       const text = normalizeSql(strings)
 
+      if (text.startsWith('do $$')) return { rows: [] }
       if (text.startsWith('alter table profile_wallets')) return { rows: [] }
       if (text.includes('select id from profiles where privy_user_id =')) return { rows: [{ id: 11 }] }
       if (text.includes('select pw.profile_id')) return { rows: canonicalRow ? [canonicalRow] : [] }
@@ -36,8 +37,8 @@ function createMockDb() {
         canonicalRow = {
           profile_id: 11,
           chain_id: 8453,
-          canonical_zora_csw_address: String(canonicalAddress).toLowerCase(),
-          canonical_source: 'zora_readonly',
+          canonical_csw_address: String(canonicalAddress).toLowerCase(),
+          canonical_source: 'wallet_sync',
           privy_embedded_eoa_address: null,
           privy_is_owner: false,
           last_checked_at: null,
@@ -56,7 +57,7 @@ function createMockDb() {
   }
 }
 
-describe('resolveCanonicalZoraCSW', () => {
+describe('resolveCanonicalCsw', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -75,12 +76,12 @@ describe('resolveCanonicalZoraCSW', () => {
     const db = createMockDb()
     const privyUser = { id: 'did:privy:test-user', linkedAccounts: [] } as any
 
-    const first = await resolveCanonicalZoraCSW({
+    const first = await resolveCanonicalCsw({
       db: db as any,
       privyUserId: 'did:privy:test-user',
       privyUser,
     })
-    const second = await resolveCanonicalZoraCSW({
+    const second = await resolveCanonicalCsw({
       db: db as any,
       privyUserId: 'did:privy:test-user',
       privyUser,
@@ -101,7 +102,7 @@ describe('resolveCanonicalZoraCSW', () => {
     const privyUser = { id: 'did:privy:test-user', linkedAccounts: [] } as any
 
     await expect(
-      resolveCanonicalZoraCSW({
+      resolveCanonicalCsw({
         db: db as any,
         privyUserId: 'did:privy:test-user',
         privyUser,

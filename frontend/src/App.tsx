@@ -605,14 +605,6 @@ function App() {
 
             {/* Session-gated routes */}
             <Route element={<RequireSession />}>
-              <Route
-                path="/telegram/swap"
-                element={
-                  <RequireTelegramMiniAppEntry>
-                    <Swap />
-                  </RequireTelegramMiniAppEntry>
-                }
-              />
               <Route element={<RequireAccepted />}>
                 <Route path="/explore/creators" element={<ExploreCreators />} />
                 <Route path="/explore/content" element={<ExploreContent />} />
