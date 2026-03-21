@@ -2,7 +2,7 @@ import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { AccountsPage } from './AccountsPage'
+import { AccountsPage, readOptionalZoraStatus, shouldRefreshAccountsOnForeground } from './AccountsPage'
 
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
@@ -41,7 +41,7 @@ describe('AccountsPage', () => {
               google: ['google-sub-1'],
               zora_cross_app: ['0x1111111111111111111111111111111111111111'],
             },
-            zora: {
+            accountSignals: {
               linked: true,
               canonicalCswAddress: '0x2222222222222222222222222222222222222222',
               creatorCoin: { address: '0x3333333333333333333333333333333333333333' },
@@ -70,5 +70,40 @@ describe('AccountsPage', () => {
     expect(html).toContain('Zora')
     expect(html).toContain('Advanced')
     expect(html).toContain('Points:')
+  })
+
+  it('treats Zora status as optional when the response is unavailable', () => {
+    expect(
+      readOptionalZoraStatus({
+        responseOk: false,
+        payload: null,
+      }),
+    ).toBeNull()
+  })
+
+  it('refreshes on foreground return only while wallet finalization still needs action', () => {
+    expect(
+      shouldRefreshAccountsOnForeground({
+        privyAuthed: true,
+        ownerDelegationFlags: { needsBaseAppSetup: true },
+        advancedBusy: false,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldRefreshAccountsOnForeground({
+        privyAuthed: true,
+        ownerDelegationFlags: null,
+        advancedBusy: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldRefreshAccountsOnForeground({
+        privyAuthed: true,
+        ownerDelegationFlags: { needsEmbeddedWallet: true },
+        advancedBusy: true,
+      }),
+    ).toBe(false)
   })
 })

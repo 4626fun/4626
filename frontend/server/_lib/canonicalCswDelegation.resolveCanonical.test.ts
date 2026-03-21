@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { resolveCanonicalCsw } from './canonicalCswDelegation'
+import { resolveCanonicalCsw, resolveConfirmOwnerCanonicalCsw } from './canonicalCswDelegation'
 
 const { ensureWaitlistSchemaMock, syncUserWalletsMock } = vi.hoisted(() => ({
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -19,7 +19,13 @@ function normalizeSql(strings: TemplateStringsArray): string {
   return strings.join(' ').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
-function createMockDb() {
+function createMockDb(options: {
+  profileSeedRow?: {
+    primary_smart_wallet?: string | null
+    csw_address?: string | null
+    base_sub_account?: string | null
+  }
+} = {}) {
   let canonicalRow: any = null
   return {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
@@ -49,7 +55,15 @@ function createMockDb() {
       }
       if (text.includes('update profiles')) return { rows: [] }
       if (text.includes('select primary_smart_wallet')) {
-        return { rows: [{ primary_smart_wallet: null, csw_address: null, base_sub_account: null }] }
+        return {
+          rows: [
+            options.profileSeedRow ?? {
+              primary_smart_wallet: null,
+              csw_address: null,
+              base_sub_account: null,
+            },
+          ],
+        }
       }
 
       throw new Error(`Unhandled SQL in test: ${text}`)
@@ -112,5 +126,51 @@ describe('resolveCanonicalCsw', () => {
       needsBaseAppSetup: true,
       baseAppUrl: 'https://base.app/invite/4626/T9Y9BZYK',
     })
+  })
+
+  it('ignores legacy profile seed wallet columns when no canonical CSW sync exists', async () => {
+    syncUserWalletsMock.mockResolvedValueOnce({
+      profileId: 11,
+      canonicalSmartWallet: null,
+    })
+
+    const db = createMockDb({
+      profileSeedRow: {
+        primary_smart_wallet: '0x00000000000000000000000000000000000000cc',
+        csw_address: '0x00000000000000000000000000000000000000dd',
+        base_sub_account: '0x00000000000000000000000000000000000000ee',
+      },
+    })
+    const privyUser = { id: 'did:privy:test-user', linkedAccounts: [] } as any
+
+    await expect(
+      resolveCanonicalCsw({
+        db: db as any,
+        privyUserId: 'did:privy:test-user',
+        privyUser,
+      }),
+    ).rejects.toMatchObject({
+      message: 'No canonical Coinbase Smart Wallet is linked to this account yet.',
+      needsBaseAppSetup: true,
+    })
+  })
+})
+
+describe('resolveConfirmOwnerCanonicalCsw', () => {
+  it('uses the persisted canonical CSW when no override is provided', () => {
+    expect(
+      resolveConfirmOwnerCanonicalCsw({
+        persistedCanonicalCswAddress: '0x00000000000000000000000000000000000000aa',
+      }),
+    ).toBe('0x00000000000000000000000000000000000000aa')
+  })
+
+  it('rejects a caller-supplied CSW that does not match the account canonical wallet', () => {
+    expect(() =>
+      resolveConfirmOwnerCanonicalCsw({
+        persistedCanonicalCswAddress: '0x00000000000000000000000000000000000000aa',
+        requestedCswAddress: '0x00000000000000000000000000000000000000bb',
+      }),
+    ).toThrow('Requested Coinbase Smart Wallet does not match the canonical wallet for this account.')
   })
 })

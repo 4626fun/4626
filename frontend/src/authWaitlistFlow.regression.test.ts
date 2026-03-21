@@ -9,7 +9,7 @@ const SESSION_ADDRESS = '0x1234567890123456789012345678901234567890'
 
 describe('waitlist to gated-app route regression', () => {
   it('allows the canonical waitlist handoff into an accepted app route once the session is established', () => {
-    expect(buildAppEntryPath('/swap')).toBe('/continue?from=waitlist&autologin=1&auth=wallet&next=%2Fswap')
+    expect(buildAppEntryPath('/swap')).toBe('/continue?from=waitlist&autologin=1&next=%2Fswap')
 
     expect(
       shouldNavigateAfterWaitlistHandoff({
@@ -81,7 +81,7 @@ describe('waitlist to gated-app route regression', () => {
     })
   })
 
-  it('allows telegram swap entry with a valid session even when acceptance fails', () => {
+  it('allows telegram link entry with a valid session even when acceptance fails', () => {
     expect(
       resolveAccess('session', {
         loading: false,

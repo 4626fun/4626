@@ -4,6 +4,7 @@ import { getAddress } from 'viem'
 
 import { verifyPrivyRequest } from './canonicalCswDelegation.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
+import { extractPrivyVerifiedEmail } from './trust.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
 import { resolveCanonicalCsw } from './canonicalCswDelegation.js'
@@ -35,7 +36,7 @@ export type AccountsMePayload = {
   emailVerified: boolean
   appAccessStatus: string | null
   linkedMethods: Record<string, string[]>
-  zora: {
+  accountSignals: {
     linked: boolean
     canonicalCswAddress: string | null
     creatorCoin: { address: string } | null
@@ -155,20 +156,6 @@ function readAccountIdentifier(account: any): string | null {
   )
 }
 
-function extractPrivyEmail(user: PrivyUserLike): string | null {
-  const direct = normalizeEmail((user as any)?.email?.address)
-  if (direct) return direct
-
-  const linked = linkedAccounts(user)
-  for (const account of linked) {
-    const type = normalizeLower((account as any)?.type)
-    if (!type.includes('email')) continue
-    const email = normalizeEmail((account as any)?.address ?? (account as any)?.email ?? (account as any)?.emailAddress)
-    if (email) return email
-  }
-  return null
-}
-
 function valuesForProviderFromPrivy(user: PrivyUserLike, provider: AccountLinkProvider): string[] {
   const linked = linkedAccounts(user)
   const seen = new Set<string>()
@@ -183,7 +170,7 @@ function valuesForProviderFromPrivy(user: PrivyUserLike, provider: AccountLinkPr
   }
 
   if (provider === 'email') {
-    push(extractPrivyEmail(user))
+    push(extractPrivyVerifiedEmail(user))
     return out
   }
 
@@ -606,7 +593,7 @@ export async function syncEmailIdentity(params: {
   privyUser: PrivyUserLike
 }): Promise<void> {
   const { db, privyUserId, privyUser } = params
-  const email = extractPrivyEmail(privyUser)
+  const email = extractPrivyVerifiedEmail(privyUser)
   await upsertAccount({ db, privyUserId, email, emailVerified: Boolean(email) })
   if (!email) return
   await upsertLinkedMethod({
@@ -836,7 +823,7 @@ export async function buildAccountsMePayload(params: {
     emailVerified: accountRow?.email_verified === true,
     appAccessStatus: normalizeString(profileStatusRow?.app_access_status),
     linkedMethods,
-    zora: {
+    accountSignals: {
       linked: zoraRow.zoraLinked,
       canonicalCswAddress: zoraRow.canonicalCswAddress,
       creatorCoin: zoraRow.creatorCoinAddress ? { address: zoraRow.creatorCoinAddress } : null,
@@ -885,8 +872,8 @@ export async function recordProviderLink(params: {
   }
 
   if (provider === 'email') {
-    const email = normalizeEmail(targetValues[0])
-    if (!email) throw new Error('Email is not linked in Privy yet.')
+    const email = extractPrivyVerifiedEmail(privyUser)
+    if (!email) throw new Error('Email is not verified in Privy yet.')
     await upsertAccount({ db, privyUserId, email, emailVerified: true })
   }
 

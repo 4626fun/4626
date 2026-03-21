@@ -9,7 +9,7 @@ import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
-import { selectZoraCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
+import { selectCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { PageMeta } from '@/components/seo/PageMeta'
 
@@ -28,7 +28,7 @@ type AccountsMeResponse = {
   email: string | null
   emailVerified: boolean
   linkedMethods: Record<string, string[]>
-  zora: {
+  accountSignals: {
     linked: boolean
     canonicalCswAddress: string | null
     creatorCoin: { address: string } | null
@@ -132,6 +132,24 @@ function buildOwnerDelegationError(payload: unknown, fallback: string): Error & 
   return error
 }
 
+export function shouldRefreshAccountsOnForeground(input: {
+  privyAuthed: boolean
+  ownerDelegationFlags: OwnerDelegationFlags | null
+  advancedBusy: boolean
+}): boolean {
+  if (!input.privyAuthed || input.advancedBusy) return false
+  return Boolean(input.ownerDelegationFlags?.needsBaseAppSetup || input.ownerDelegationFlags?.needsEmbeddedWallet)
+}
+
+export function readOptionalZoraStatus(params: {
+  responseOk: boolean
+  payload: ApiEnvelope<ZoraLinkStatusResponse> | null
+}): ZoraLinkStatusResponse | null {
+  if (!params.responseOk) return null
+  if (!params.payload?.success || !params.payload.data) return null
+  return params.payload.data
+}
+
 function useSafePrivy() {
   try {
     return usePrivy() as any
@@ -214,8 +232,8 @@ export function AccountsPage(props: {
   const [advancedOwnerAddress, setAdvancedOwnerAddress] = useState('')
   const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
 
-  const canonicalCswAddress = me?.zora?.canonicalCswAddress ?? null
-  const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.zora?.linked)
+  const canonicalCswAddress = me?.accountSignals?.canonicalCswAddress ?? null
+  const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
   const telegramLaunchParamsAvailable = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
 
   const authHeaders = useCallback(
@@ -258,25 +276,28 @@ export function AccountsPage(props: {
         'Content-Type': 'application/json',
         'X-Privy-Token': token,
       }
-      const [meRes, zoraRes] = await Promise.all([
+      const [meResult, zoraResult] = await Promise.allSettled([
         apiFetch('/api/accounts/me', { method: 'GET', headers }),
         apiFetch('/api/zora/link/status', { method: 'POST', headers, body: JSON.stringify({}) }),
       ])
+      if (meResult.status !== 'fulfilled') {
+        throw meResult.reason instanceof Error ? meResult.reason : new Error('Failed to load account state.')
+      }
+      const meRes = meResult.value
 
       const mePayload = (await meRes.json().catch(() => null)) as ApiEnvelope<AccountsMeResponse> | null
       if (!meRes.ok || !mePayload?.success || !mePayload.data) {
         throw new Error(readApiError(mePayload, 'Failed to load account state.'))
       }
 
-      const zoraPayload = (await zoraRes.json().catch(() => null)) as ApiEnvelope<ZoraLinkStatusResponse> | null
-      if (!zoraRes.ok || !zoraPayload?.success || !zoraPayload.data) {
-        throw new Error(readApiError(zoraPayload, 'Failed to load Zora status.'))
-      }
-
       setMe(mePayload.data)
-      setZoraStatus(zoraPayload.data)
+      if (zoraResult.status !== 'fulfilled') {
+        setZoraStatus(null)
+      } else {
+        const zoraPayload = (await zoraResult.value.json().catch(() => null)) as ApiEnvelope<ZoraLinkStatusResponse> | null
+        setZoraStatus(readOptionalZoraStatus({ responseOk: zoraResult.value.ok, payload: zoraPayload }))
+      }
     } catch (loadError: any) {
-      setOwnerDelegationFlags(null)
       setError(typeof loadError?.message === 'string' ? loadError.message : 'Failed to load account state.')
     } finally {
       setLoading(false)
@@ -288,10 +309,28 @@ export function AccountsPage(props: {
     void loadMe()
   }, [loadMe, props.initialData])
 
+  useEffect(() => {
+    if (!shouldRefreshAccountsOnForeground({ privyAuthed, ownerDelegationFlags, advancedBusy })) return
+
+    const refresh = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return
+      void loadMe()
+    }
+
+    const onVisibilityChange = () => refresh()
+    const onFocus = () => refresh()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [advancedBusy, loadMe, ownerDelegationFlags, privyAuthed])
+
   const performClientSideLink = useCallback(
     async (provider: AccountLinkProvider) => {
       if (provider === 'zora_cross_app') {
-        const action = selectZoraCrossAppAuthAction({
+        const action = selectCrossAppAuthAction({
           privyAuthed,
           linkCrossAppAccount,
           loginWithCrossAppAccount,
@@ -644,7 +683,7 @@ export function AccountsPage(props: {
     <div className="min-h-screen bg-black text-white">
       <PageMeta
         title="Accounts"
-        description="Link identities, refresh optional Zora signals, and manage canonical Coinbase Smart Wallet permissions."
+        description="Link identities, refresh optional Zora profile signals, and manage your canonical Coinbase Smart Wallet."
         canonicalPath="/accounts"
       />
       <div className="mx-auto w-full max-w-4xl px-6 py-10 space-y-6">
@@ -652,7 +691,7 @@ export function AccountsPage(props: {
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Accounts</div>
           <h1 className="text-3xl font-semibold">Identity management</h1>
           <p className="text-sm text-zinc-400">
-            Accounts is the canonical place to link identities, refresh optional Zora signals, and manage canonical Coinbase Smart Wallet permissions.
+            Accounts is the canonical place to link identities, refresh optional Zora profile signals, and manage your canonical Coinbase Smart Wallet.
           </p>
         </div>
 
@@ -750,9 +789,9 @@ export function AccountsPage(props: {
               <div className="grid gap-2 text-sm text-zinc-300">
                 <div>Zora linked: <span className="text-zinc-100">{zoraLinked ? 'Yes' : 'No'}</span></div>
                 <div>Cross-app accounts: <span className="text-zinc-100">{zoraCrossAppCount}</span></div>
-                <div>Canonical CSW: <span className="text-zinc-100">{shortValue(me.zora.canonicalCswAddress)}</span></div>
-                <div>Creator coin: <span className="text-zinc-100">{shortValue(me.zora.creatorCoin?.address)}</span></div>
-                <div>Zora handle: <span className="text-zinc-100">{me.zora.zoraHandle ? `@${me.zora.zoraHandle}` : '—'}</span></div>
+                <div>Canonical CSW: <span className="text-zinc-100">{shortValue(me.accountSignals.canonicalCswAddress)}</span></div>
+                <div>Creator coin: <span className="text-zinc-100">{shortValue(me.accountSignals.creatorCoin?.address)}</span></div>
+                <div>Zora handle: <span className="text-zinc-100">{me.accountSignals.zoraHandle ? `@${me.accountSignals.zoraHandle}` : '—'}</span></div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {!zoraLinked ? (

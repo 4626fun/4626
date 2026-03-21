@@ -83,8 +83,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
     }
     const message = typeof error?.message === 'string' ? error.message : 'Failed to link provider'
-    const status = /token|unauthorized|forbidden|privy/i.test(message) ? 401 : /no linked value|not linked/i.test(message) ? 409 : 500
+    const status =
+      /no linked value|not linked|not verified/i.test(message)
+        ? 409
+        : /token|unauthorized|forbidden|privy/i.test(message)
+          ? 401
+          : 500
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 }
-

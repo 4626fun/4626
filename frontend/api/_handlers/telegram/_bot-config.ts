@@ -60,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const menuMode = asTrimmed(body.menuMode || config.menuButtonMode || 'web_app').toLowerCase() === 'commands'
     ? 'commands'
     : 'web_app'
-  const menuText = asTrimmed(body.menuText || config.menuButtonText || '4626 Mini App') || '4626 Mini App'
+  const menuText = asTrimmed(body.menuText || config.menuButtonText || 'Link 4626') || 'Link 4626'
   const miniAppUrl = resolveMiniAppUrl(body, config.miniAppUrl)
   const chatId = readChatId(body)
 

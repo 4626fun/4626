@@ -4,12 +4,12 @@ import { APP_ENTRY_DEFAULT_NEXT, buildAppEntryPath, buildAppEntryUrl, readSafeNe
 
 describe('appEntry helpers', () => {
   it('builds the canonical waitlist handoff path to the app landing route', () => {
-    expect(buildAppEntryPath()).toBe('/continue?from=waitlist&autologin=1&auth=wallet&next=%2Fswap')
+    expect(buildAppEntryPath()).toBe('/continue?from=waitlist&autologin=1&next=%2Fswap')
   })
 
   it('builds a full app-entry URL from an origin', () => {
     expect(buildAppEntryUrl('https://app.4626.fun')).toBe(
-      'https://app.4626.fun/continue?from=waitlist&autologin=1&auth=wallet&next=%2Fswap',
+      'https://app.4626.fun/continue?from=waitlist&autologin=1&next=%2Fswap',
     )
   })
 

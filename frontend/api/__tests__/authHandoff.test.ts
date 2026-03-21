@@ -168,4 +168,31 @@ describe('auth handoff endpoints', () => {
     expect(redeemRes.statusCode).toBe(200)
     expect(redeemRes.body?.data?.privyToken).toBe('test-privy-jwt-abc123')
   })
+
+  it('rate-limits handoff creation requests', async () => {
+    getDbMock.mockResolvedValue(createHandoffDb())
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await createHandoffHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
+  })
+
+  it('rejects malformed handoff codes before touching the database', async () => {
+    getDbMock.mockResolvedValue(createHandoffDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: { code: 'not-a-real-code' },
+    })
+    const res = createMockRes()
+    await redeemHandoffHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Invalid handoff code')
+  })
 })

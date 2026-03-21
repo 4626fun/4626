@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   deriveOwnerInstallMappingStatus,
   extractZoraCrossAppAccounts,
-  extractZoraProviderAddresses,
-  resolveCanonicalZoraCswCandidate,
-  selectZoraCrossAppAuthAction,
+  extractCrossAppWalletAddresses,
+  resolveCanonicalCswCandidate,
+  selectCrossAppAuthAction,
 } from './ownerInstallMapping'
 
 const ZORA_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -167,9 +167,9 @@ describe('extractZoraCrossAppAccounts', () => {
   })
 })
 
-describe('extractZoraProviderAddresses', () => {
+describe('extractCrossAppWalletAddresses', () => {
   it('extracts and deduplicates provider/smart/embedded addresses', () => {
-    const result = extractZoraProviderAddresses([
+    const result = extractCrossAppWalletAddresses([
       {
         address: '0x1111111111111111111111111111111111111111',
         smartWallets: [{ address: '0x2222222222222222222222222222222222222222' }],
@@ -191,9 +191,9 @@ describe('extractZoraProviderAddresses', () => {
   })
 })
 
-describe('resolveCanonicalZoraCswCandidate', () => {
+describe('resolveCanonicalCswCandidate', () => {
   it('prefers known canonical first', async () => {
-    const resolved = await resolveCanonicalZoraCswCandidate({
+    const resolved = await resolveCanonicalCswCandidate({
       knownCanonicalAddress: '0x9999999999999999999999999999999999999999',
       smartWalletAddresses: ['0x2222222222222222222222222222222222222222'],
       providerAddresses: ['0x1111111111111111111111111111111111111111'],
@@ -203,7 +203,7 @@ describe('resolveCanonicalZoraCswCandidate', () => {
   })
 
   it('falls back from smart candidates to profile fallback', async () => {
-    const resolved = await resolveCanonicalZoraCswCandidate({
+    const resolved = await resolveCanonicalCswCandidate({
       knownCanonicalAddress: null,
       smartWalletAddresses: ['0x2222222222222222222222222222222222222222'],
       providerAddresses: ['0x1111111111111111111111111111111111111111'],
@@ -214,12 +214,12 @@ describe('resolveCanonicalZoraCswCandidate', () => {
   })
 })
 
-describe('selectZoraCrossAppAuthAction', () => {
+describe('selectCrossAppAuthAction', () => {
   const noop = async () => null
 
   it('prefers link helper for authenticated users', () => {
     expect(
-      selectZoraCrossAppAuthAction({
+      selectCrossAppAuthAction({
         privyAuthed: true,
         linkCrossAppAccount: noop,
         loginWithCrossAppAccount: noop,
@@ -229,7 +229,7 @@ describe('selectZoraCrossAppAuthAction', () => {
 
   it('falls back to login helper when link helper is unavailable', () => {
     expect(
-      selectZoraCrossAppAuthAction({
+      selectCrossAppAuthAction({
         privyAuthed: true,
         linkCrossAppAccount: null,
         loginWithCrossAppAccount: noop,
@@ -239,7 +239,7 @@ describe('selectZoraCrossAppAuthAction', () => {
 
   it('uses login helper first for unauthenticated users', () => {
     expect(
-      selectZoraCrossAppAuthAction({
+      selectCrossAppAuthAction({
         privyAuthed: false,
         linkCrossAppAccount: noop,
         loginWithCrossAppAccount: noop,
@@ -249,7 +249,7 @@ describe('selectZoraCrossAppAuthAction', () => {
 
   it('returns null when no helper is available', () => {
     expect(
-      selectZoraCrossAppAuthAction({
+      selectCrossAppAuthAction({
         privyAuthed: true,
         linkCrossAppAccount: null,
         loginWithCrossAppAccount: null,

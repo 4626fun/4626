@@ -31,7 +31,7 @@ const {
     email: 'user@example.com',
     appAccessStatus: null,
     linkedMethods: {},
-    zora: {
+    accountSignals: {
       linked: false,
       canonicalCswAddress: null,
       creatorCoin: null,

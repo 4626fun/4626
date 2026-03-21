@@ -34,6 +34,24 @@ type AppContinueReadyTimeoutInput = {
   authAddress: string | null | undefined
 }
 
+type AppContinueAutologinDecisionInput = {
+  autoLogin: boolean
+  fromWaitlist: boolean
+  handoffState: 'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'
+  handoffCode: string
+  handoffRedeemAttempted: boolean
+  privyReady: boolean
+  privyAuthenticated: boolean
+  autoLoginAttempted: boolean
+}
+
+export type AppContinueAutologinDecision =
+  | 'skip'
+  | 'redeem_handoff'
+  | 'wait_for_privy'
+  | 'start_login'
+  | 'bridge_existing_session'
+
 const READY_WITHOUT_SESSION_TIMEOUT_MS = 10_000
 
 export function getAppContinueRetryDirective(input: { privyAuthenticated: boolean }): AppContinueRetryDirective {
@@ -49,6 +67,26 @@ export function shouldScheduleReadyWithoutSessionTimeout(input: AppContinueReady
   if (!input.autoLogin || !input.fromWaitlist) return false
   if (input.handoffState !== 'ready') return false
   return !(typeof input.authAddress === 'string' && input.authAddress.trim().length > 0)
+}
+
+export function shouldBootstrapTelegramMiniAppFlow(input: {
+  nextPath: string
+  hasTelegramWebApp: boolean
+}): boolean {
+  return input.hasTelegramWebApp || input.nextPath.startsWith('/telegram/link')
+}
+
+export function resolveAppContinueAutologinDecision(
+  input: AppContinueAutologinDecisionInput,
+): AppContinueAutologinDecision {
+  if (!input.autoLogin || !input.fromWaitlist) return 'skip'
+  if (input.handoffState === 'ready' || input.handoffState === 'error') return 'skip'
+  if (input.handoffCode.trim() && !input.handoffRedeemAttempted) return 'redeem_handoff'
+  if (!input.privyReady) return 'wait_for_privy'
+  if (!input.privyAuthenticated) {
+    return input.autoLoginAttempted ? 'wait_for_privy' : 'start_login'
+  }
+  return 'bridge_existing_session'
 }
 
 function useSafeAppContinuePrivy() {
@@ -106,10 +144,14 @@ export function AppContinue() {
   const autoLogin = autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes'
   const fromWaitlist = fromRaw === 'waitlist'
   const handoffCode = (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim()
-  const likelyTelegramMiniAppFlow = useMemo(() => {
-    if (typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp)) return true
-    return nextPath.startsWith('/telegram/link')
-  }, [nextPath])
+  const likelyTelegramMiniAppFlow = useMemo(
+    () =>
+      shouldBootstrapTelegramMiniAppFlow({
+        nextPath,
+        hasTelegramWebApp: typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp),
+      }),
+    [nextPath],
+  )
 
   const canNavigate = useMemo(
     () =>
@@ -228,13 +270,36 @@ export function AppContinue() {
 
     void (async () => {
       if (handoffState === 'idle') setHandoffState('signingIn')
-      const redeemed = await redeemOneTimeHandoff()
-      if (redeemed) return
+      const decision = resolveAppContinueAutologinDecision({
+        autoLogin,
+        fromWaitlist,
+        handoffState,
+        handoffCode,
+        handoffRedeemAttempted: autoHandoffRedeemAttemptRef.current,
+        privyReady,
+        privyAuthenticated,
+        autoLoginAttempted: autoLoginAttemptRef.current,
+      })
 
-      // No handoff code or redeem failed — fall back to Privy login.
-      if (!privyReady) return
-      if (!privyAuthenticated) {
-        if (autoLoginAttemptRef.current) return
+      if (decision === 'skip' || decision === 'wait_for_privy') return
+      let nextDecision = decision
+      if (decision === 'redeem_handoff') {
+        const redeemed = await redeemOneTimeHandoff()
+        if (redeemed) return
+        nextDecision = resolveAppContinueAutologinDecision({
+          autoLogin,
+          fromWaitlist,
+          handoffState,
+          handoffCode,
+          handoffRedeemAttempted: true,
+          privyReady,
+          privyAuthenticated,
+          autoLoginAttempted: autoLoginAttemptRef.current,
+        })
+      }
+
+      if (nextDecision === 'skip' || nextDecision === 'wait_for_privy') return
+      if (nextDecision === 'start_login') {
         autoLoginAttemptRef.current = true
         try {
           setHandoffError(null)
@@ -248,8 +313,10 @@ export function AppContinue() {
         return
       }
 
+      if (nextDecision !== 'bridge_existing_session') return
+
       // Privy is already authenticated on this domain (e.g. user had
-      // a prior session).  Bridge into a server session.
+      // a prior session). Bridge into a server session.
       try {
         setHandoffError(null)
         setHandoffState('bridging')

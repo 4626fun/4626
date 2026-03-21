@@ -14,7 +14,6 @@ export function buildAppEntryPath(next: string = APP_ENTRY_DEFAULT_NEXT): string
   const params = new URLSearchParams({
     from: 'waitlist',
     autologin: '1',
-    auth: 'wallet',
     next: safeNext,
   })
   return `/continue?${params.toString()}`

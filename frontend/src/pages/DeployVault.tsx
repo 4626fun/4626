@@ -111,7 +111,7 @@ const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
 const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
 const BATCHER_VAULT_ADMIN_MODULE_SELECTOR = '822f9d9b'
 const NO_EOA_STRICT_BLOCKER =
-  'No-EOA deploy requires a preconfigured Privy owner signer that can sign on Base. Switch to wallet sign-in to refresh wallet linkage.'
+  'No-EOA deploy requires a preconfigured Privy owner signer that can sign on Base. Restore your 4626 connection to refresh wallet linkage.'
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',
@@ -2144,24 +2144,24 @@ function DeployVaultBatcher({
     if (lower.includes('blocked the raw signature method') && lower.includes('eth_sign')) {
       return (
         "Your current wallet can’t sign the UserOp hash required for smart wallet execution (`eth_sign`). " +
-        'Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account), then retry.'
+        'Sign in to 4626 to restore your embedded signer, or use Coinbase Wallet (Base Account), then retry.'
       )
     }
     if (lower.includes('method not supported') && lower.includes('eth_sign')) {
       return (
         "Your signer doesn’t support `eth_sign`, which is required to sign smart wallet UserOp hashes. " +
-        'Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account), then retry.'
+        'Sign in to 4626 to restore your embedded signer, or use Coinbase Wallet (Base Account), then retry.'
       )
     }
     if (lower.includes('no-eoa deploy requires') || lower.includes('no-eoa deploy is only available')) {
-      return `${NO_EOA_STRICT_BLOCKER} Click “${switchAuthLabel ?? 'Sign in with wallet'}” and retry.`
+      return `${NO_EOA_STRICT_BLOCKER} Click “${switchAuthLabel ?? 'Restore account connection'}” and retry.`
     }
     if (
       lower.includes('smart wallet client required') ||
       lower.includes('privy smart wallet client required') ||
       lower.includes('smart wallet required')
     ) {
-      return 'Smart wallet required. Sign in with wallet to access your canonical Coinbase Smart Wallet, or use Coinbase Wallet (Base Account), then retry.'
+      return 'Smart wallet required. Sign in to 4626 to restore your canonical Coinbase Smart Wallet session, or use Coinbase Wallet (Base Account), then retry.'
     }
     if (lower.includes('wallet_sendcalls') && lower.includes('unsupported method')) {
       return 'Your wallet does not support call batching (wallet_sendCalls). Use Coinbase Wallet (Base Account) or Privy smart wallet, then retry.'
@@ -2240,12 +2240,12 @@ function DeployVaultBatcher({
       return 'Bundler / paymaster is not configured. Set `VITE_CDP_PAYMASTER_URL=/api/paymaster` and configure `CDP_PAYMASTER_URL` server-side, then retry.'
     }
     if (lower.includes('no_session') || lower.includes('not authenticated') || lower.includes('request denied - no_session')) {
-      return `Gas sponsorship requires a session. Click “${switchAuthLabel ?? 'Sign in with wallet'}” and retry.`
+      return `Gas sponsorship requires a session. Click “${switchAuthLabel ?? 'Restore account connection'}” and retry.`
     }
     if (lower.includes('session address must match owner or smart wallet')) {
       return (
         'Your current auth session does not match the deploy sender expected by the server. ' +
-        `Click “${switchAuthLabel ?? 'Sign in with wallet'}” to re-auth, or disable server-continue (` +
+        `Click “${switchAuthLabel ?? 'Restore account connection'}” to re-auth, or disable server-continue (` +
         'set `VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and retry.'
       )
     }
@@ -2304,7 +2304,7 @@ function DeployVaultBatcher({
     if (lower.includes('signature check failed') || lower.includes('invalid userop signature')) {
       return (
         "UserOp signature failed. This usually means the signer isn’t an onchain owner or didn’t sign the raw UserOp hash with `eth_sign`. " +
-        'Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account), then retry. If you just added a new owner, refresh and retry.'
+        'Sign in to 4626 to restore your embedded signer, or use Coinbase Wallet (Base Account), then retry. If you just added a new owner, refresh and retry.'
       )
     }
     if (lower.includes('failed to fetch')) {
@@ -3832,7 +3832,7 @@ function DeployVaultBatcher({
         const hasOwnerEoaServerContinuePath = useServerContinue && !strictNoEoaEnforced && connectedEoaOwnerReady
         if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls && !hasOwnerEoaServerContinuePath) {
           throw new Error(
-            'Smart wallet required. Sign in with wallet to access your canonical Coinbase Smart Wallet, or use Coinbase Wallet (Base Account), then retry.',
+            'Smart wallet required. Sign in to 4626 to restore your canonical Coinbase Smart Wallet session, or use Coinbase Wallet (Base Account), then retry.',
           )
         }
 
@@ -5983,14 +5983,14 @@ function DeployVaultMain() {
         // ignore
       }
       try {
-        await login({ loginMethods: ['wallet'] })
+        await login({ loginMethods: ['email', 'wallet'] })
       } catch {
         setHandoffState('error')
-        setHandoffError('Sign-in cancelled. Click “Sign in with wallet” to retry.')
+        setHandoffError('Sign-in cancelled. Click “Restore account connection” to retry.')
       }
     }
     return {
-      label: privyAuthenticated ? 'Switch to wallet sign-in' : 'Sign in with wallet',
+      label: privyAuthenticated ? 'Switch account connection' : 'Restore account connection',
       onClick: () => void run(),
     }
   }, [login, logout, privyAuthenticated, privyReady])
@@ -6064,8 +6064,8 @@ function DeployVaultMain() {
     }
   }, [cdpPaymasterUrl])
 
-  // Smooth waitlist → deploy:
-  // If we arrived with `autologin=1&from=waitlist`, prompt wallet login on app host
+  // Smooth waitlist -> deploy:
+  // If we arrived with `autologin=1&from=waitlist`, prompt email-first auth on app host
   // and bridge into a 4626 session.
   useEffect(() => {
     if (!autoLogin || !fromWaitlist) return
@@ -6086,11 +6086,11 @@ function DeployVaultMain() {
         try {
           setHandoffError(null)
           setHandoffState('signingIn')
-          const loginMethods = ['wallet'] as const
+          const loginMethods = ['email', 'wallet'] as const
           await login({ loginMethods: loginMethods as any })
         } catch {
           autoLoginAttemptRef.current = false
-          failHandoff('Sign-in cancelled. Click “Sign in with wallet” to continue.')
+          failHandoff('Sign-in cancelled. Click "Restore account connection" to continue.')
         }
       })()
       return
@@ -6100,7 +6100,7 @@ function DeployVaultMain() {
     autoBridgeAttemptRef.current = true
 
     if (typeof getAccessToken !== 'function') {
-      failHandoff('Privy token bridge is unavailable. Click “Sign in with wallet” to retry.')
+      failHandoff('Privy token bridge is unavailable. Click "Restore account connection" to retry.')
       return
     }
     void (async () => {
@@ -6109,20 +6109,20 @@ function DeployVaultMain() {
         setHandoffState('bridging')
         const token = await getAccessToken()
         if (!token) {
-          failHandoff('Could not read Privy access token. Click “Sign in with wallet” to retry.')
+          failHandoff('Could not read Privy access token. Click "Restore account connection" to retry.')
           return
         }
         if (token) {
           const addr = await siwe.signInWithPrivyToken(token)
           if (!addr) {
-            failHandoff('Could not establish a session. Click “Sign in with wallet” and retry.')
+            failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
             return
           }
           setHandoffState('ready')
           setHandoffError(null)
         }
       } catch {
-        failHandoff('Could not establish a session. Click “Sign in with wallet” and retry.')
+        failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
       }
     })()
   }, [autoLogin, fromWaitlist, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
@@ -6143,7 +6143,7 @@ function DeployVaultMain() {
     if (handoffState !== 'signingIn' && handoffState !== 'bridging') return
     const t = window.setTimeout(() => {
       setHandoffState('error')
-      setHandoffError('This is taking longer than expected. Click “Sign in with wallet” to continue.')
+      setHandoffError('This is taking longer than expected. Click "Restore account connection" to continue.')
     }, 25_000)
     return () => window.clearTimeout(t)
   }, [autoLogin, fromWaitlist, handoffState])
@@ -7380,7 +7380,7 @@ function DeployVaultMain() {
                       : !smartWalletCapabilityReady
                         ? hasDetectedZoraCrossAppWallet
                           ? 'Detected your Zora wallet, but this session is read-only for deploy signing. Connect Coinbase Wallet (owner EOA) to sign ERC-4337 UserOps, then retry.'
-                          : 'Smart wallet required. Sign in with wallet to access your canonical Coinbase Smart Wallet, connect an owner EOA, or use Coinbase Wallet (Base Account).'
+                          : 'Smart wallet required. Sign in to 4626 to restore your canonical Coinbase Smart Wallet session, connect an owner EOA, or use Coinbase Wallet (Base Account).'
                     : bytecodeInfraQuery.isFetching
                       ? 'Checking deployment bytecode store…'
                       : bytecodeInfraQuery.isError

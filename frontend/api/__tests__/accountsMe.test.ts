@@ -40,7 +40,7 @@ describe('GET /api/accounts/me', () => {
       privyUserId: 'did:privy:test-user',
       email: 'user@example.com',
       linkedMethods: { email: ['user@example.com'] },
-      zora: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
+      accountSignals: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
       score: { points: 10, tier: 1 },
     })
   })
@@ -60,5 +60,27 @@ describe('GET /api/accounts/me', () => {
     expect(res.body?.data?.linkedMethods?.email).toEqual(['user@example.com'])
     expect(buildAccountsMePayloadMock).toHaveBeenCalled()
   })
-})
 
+  it('preserves explicit emailVerified=false state from account payload', async () => {
+    buildAccountsMePayloadMock.mockResolvedValueOnce({
+      privyUserId: 'did:privy:test-user',
+      email: 'user@example.com',
+      emailVerified: false,
+      linkedMethods: { email: ['user@example.com'], telegram: ['akita'] },
+      accountSignals: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
+      score: { points: 10, tier: 1 },
+    })
+
+    const req = createMockReq({
+      method: 'GET',
+      headers: { 'x-privy-token': 'test-token' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.emailVerified).toBe(false)
+    expect(res.body?.data?.linkedMethods?.telegram).toEqual(['akita'])
+  })
+})

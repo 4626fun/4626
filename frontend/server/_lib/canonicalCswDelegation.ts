@@ -329,30 +329,14 @@ export async function resolveCanonicalCsw(params: {
       : 'wallet_sync'
     : null
 
-  let fallbackCanonical: string | null = null
-  if (!syncedCanonical) {
-    const profileRow = await db.sql`
-      SELECT primary_smart_wallet, csw_address, base_sub_account
-      FROM profiles
-      WHERE id = ${profileId}
-      LIMIT 1;
-    `
-    const row = profileRow.rows?.[0] ?? null
-    fallbackCanonical =
-      normalizeAddress(row?.primary_smart_wallet) ??
-      normalizeAddress(row?.csw_address) ??
-      normalizeAddress(row?.base_sub_account)
-  }
-  const fallbackCanonicalSource = fallbackCanonical ? 'profile_seed' : null
-
-  const canonical = syncedCanonical ?? fallbackCanonical
+  const canonical = syncedCanonical
   if (!canonical) {
     throw buildStructuredError('No canonical Coinbase Smart Wallet is linked to this account yet.', {
       needsBaseAppSetup: true,
       baseAppUrl: resolveBaseAppInviteUrl(),
     })
   }
-  const canonicalSource = syncedCanonicalSource ?? fallbackCanonicalSource ?? 'wallet_sync'
+  const canonicalSource = syncedCanonicalSource ?? 'wallet_sync'
 
   await ensureCanonicalWalletRow({
     db,
@@ -378,6 +362,21 @@ export async function resolveCanonicalCsw(params: {
     canonicalCswAddress: canonical,
     canonicalSource,
   }
+}
+
+export function resolveConfirmOwnerCanonicalCsw(params: {
+  persistedCanonicalCswAddress: string
+  requestedCswAddress?: string | null
+}): string {
+  const persistedCanonical = normalizeAddress(params.persistedCanonicalCswAddress)
+  if (!persistedCanonical) {
+    throw new Error('Canonical Coinbase Smart Wallet is missing for this account.')
+  }
+  const requestedCanonical = normalizeAddress(params.requestedCswAddress)
+  if (requestedCanonical && requestedCanonical !== persistedCanonical) {
+    throw new Error('Requested Coinbase Smart Wallet does not match the canonical wallet for this account.')
+  }
+  return requestedCanonical ?? persistedCanonical
 }
 
 export async function getPrivyEmbeddedEOA(params: {
@@ -504,8 +503,10 @@ export async function confirmOwnerState(params: {
 }): Promise<{ isOwner: boolean; canonicalCswAddress: string; ownerAddress: string }> {
   const { db, req } = params
   const bootstrap = await bootstrapCanonicalDelegationState({ db, req })
-  const canonicalFromInput = normalizeAddress(params.cswAddress)
-  const canonicalCswAddress = canonicalFromInput ?? bootstrap.canonicalCswAddress
+  const canonicalCswAddress = resolveConfirmOwnerCanonicalCsw({
+    persistedCanonicalCswAddress: bootstrap.canonicalCswAddress,
+    requestedCswAddress: params.cswAddress,
+  })
 
   const requestedOwner = normalizeAddress(params.ownerAddress)
   const ownerAddress = requestedOwner ?? bootstrap.privyEmbeddedEoaAddress
@@ -516,18 +517,22 @@ export async function confirmOwnerState(params: {
   })
 
   if (ownerAddress === bootstrap.privyEmbeddedEoaAddress) {
-    await db.sql`
+    const updated = await db.sql`
       UPDATE profile_wallets
       SET
         privy_is_owner = ${isOwnerNow},
         last_checked_at = NOW(),
         updated_at = NOW()
       WHERE profile_id = ${bootstrap.profileId}
-        AND LOWER(address) = ${canonicalCswAddress};
+        AND LOWER(address) = ${canonicalCswAddress}
+      RETURNING address;
     `
+    if (!updated.rows?.[0]?.address) {
+      throw new Error('Canonical Coinbase Smart Wallet is not persisted for this account.')
+    }
   } else if (isOwnerNow) {
     const metadataKey = `advanced_owner_${ownerAddress.toLowerCase()}`
-    await db.sql`
+    const updated = await db.sql`
       UPDATE profile_wallets
       SET
         metadata = COALESCE(metadata, '{}'::jsonb) ||
@@ -538,8 +543,12 @@ export async function confirmOwnerState(params: {
         last_checked_at = NOW(),
         updated_at = NOW()
       WHERE profile_id = ${bootstrap.profileId}
-        AND LOWER(address) = ${canonicalCswAddress};
+        AND LOWER(address) = ${canonicalCswAddress}
+      RETURNING address;
     `
+    if (!updated.rows?.[0]?.address) {
+      throw new Error('Canonical Coinbase Smart Wallet is not persisted for this account.')
+    }
   }
 
   await db.sql`

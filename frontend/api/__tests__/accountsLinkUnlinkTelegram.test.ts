@@ -56,7 +56,7 @@ describe('accounts link/unlink telegram provider', () => {
       email: 'user@example.com',
       appAccessStatus: null,
       linkedMethods: { telegram: ['akita_telegram'] },
-      zora: {
+      accountSignals: {
         linked: false,
         canonicalCswAddress: null,
         creatorCoin: null,
@@ -101,5 +101,21 @@ describe('accounts link/unlink telegram provider', () => {
         provider: 'telegram',
       }),
     )
+  })
+
+  it('returns 409 when explicit email link is not verified in Privy yet', async () => {
+    recordProviderLinkMock.mockRejectedValueOnce(new Error('Email is not verified in Privy yet.'))
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+      body: { provider: 'email' },
+    })
+    const res = createMockRes()
+
+    await linkHandler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.error).toBe('Email is not verified in Privy yet.')
   })
 })

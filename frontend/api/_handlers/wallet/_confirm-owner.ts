@@ -23,6 +23,13 @@ function resolveStatusCode(error: unknown): number {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
   if (
+    lower.includes('does not match the canonical wallet') ||
+    lower.includes('invalid csw address') ||
+    lower.includes('invalid owner address')
+  ) {
+    return 400
+  }
+  if (
     lower.includes('missing privy auth token') ||
     lower.includes('invalid privy auth token') ||
     lower.includes('privy verification failed') ||

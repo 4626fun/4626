@@ -33,13 +33,13 @@ export type ZoraCrossAppAddressSet = {
   embeddedWalletAddresses: string[]
 }
 
-export type ZoraCrossAppAuthAction = 'link' | 'login'
+export type CrossAppAuthAction = 'link' | 'login'
 
-export function selectZoraCrossAppAuthAction(params: {
+export function selectCrossAppAuthAction(params: {
   privyAuthed: boolean
   linkCrossAppAccount: unknown
   loginWithCrossAppAccount: unknown
-}): ZoraCrossAppAuthAction | null {
+}): CrossAppAuthAction | null {
   const hasLink = typeof params.linkCrossAppAccount === 'function'
   const hasLogin = typeof params.loginWithCrossAppAccount === 'function'
 
@@ -93,7 +93,7 @@ function extractAccountWalletAddresses(account: any, keyCamel: string, keySnake:
   return uniqueAddresses(wallets.map((wallet) => wallet?.address))
 }
 
-export function extractZoraProviderAddresses(accounts: any[]): ZoraCrossAppAddressSet {
+export function extractCrossAppWalletAddresses(accounts: any[]): ZoraCrossAppAddressSet {
   const safeAccounts = Array.isArray(accounts) ? accounts : []
   const providerAddresses = uniqueAddresses(safeAccounts.map((account) => (account as any)?.address))
   const smartWalletAddresses = uniqueAddresses(
@@ -110,7 +110,7 @@ export function extractZoraProviderAddresses(accounts: any[]): ZoraCrossAppAddre
   }
 }
 
-export async function resolveCanonicalZoraCswCandidate(params: {
+export async function resolveCanonicalCswCandidate(params: {
   knownCanonicalAddress: string | null
   smartWalletAddresses: string[]
   providerAddresses: string[]

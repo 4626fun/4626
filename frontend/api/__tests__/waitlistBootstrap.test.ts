@@ -57,7 +57,7 @@ describe('POST /api/waitlist/bootstrap', () => {
       privyUserId: 'did:privy:test-user',
       email: 'user@example.com',
       linkedMethods: { email: ['user@example.com'] },
-      zora: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
+      accountSignals: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
       score: { points: 0, tier: 0 },
     })
   })
@@ -101,5 +101,67 @@ describe('POST /api/waitlist/bootstrap', () => {
     expect(res.body?.success).toBe(false)
     expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
     expect(res.body?.recoveryRequired).toBe(true)
+  })
+
+  it('returns requiresPrivyAuth plus existing waitlist entry id before auth', async () => {
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('select id from profiles where email =')) {
+          return { rows: [{ id: 42 }] }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data).toEqual({
+      requiresPrivyAuth: true,
+      email: 'user@example.com',
+      waitlistEntryId: 42,
+    })
+  })
+
+  it('does not upsert a canonical account email until Privy email is verified', async () => {
+    verifyPrivyForAccountsMock.mockResolvedValueOnce({
+      privyUserId: 'did:privy:test-user',
+      privyUser: { id: 'did:privy:test-user', email: null },
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(upsertAccountMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 401 for explicit session email mismatch errors', async () => {
+    verifyPrivyForAccountsMock.mockRejectedValueOnce(new Error('Email does not match authenticated user'))
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.error).toBe('Session email mismatch. Please sign in again.')
   })
 })

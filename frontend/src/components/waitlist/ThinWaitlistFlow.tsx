@@ -46,7 +46,7 @@ type AccountsSummary = {
   emailVerified: boolean
   appAccessStatus: string | null
   linkedMethods: Record<string, string[]>
-  zora: {
+  accountSignals: {
     linked: boolean
     canonicalCswAddress: string | null
     creatorCoin: { address: string } | null
@@ -673,9 +673,9 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const zoraStatus = useMemo(() => {
     const summary: ZoraResolveResponse | null = zoraSummary ?? (account ? {
-      canonicalCswAddress: account.zora.canonicalCswAddress,
-      creatorCoin: account.zora.creatorCoin ? { address: account.zora.creatorCoin.address, name: null, symbol: null, imageUrl: null } : null,
-      zoraHandle: account.zora.zoraHandle,
+      canonicalCswAddress: account.accountSignals.canonicalCswAddress,
+      creatorCoin: account.accountSignals.creatorCoin ? { address: account.accountSignals.creatorCoin.address, name: null, symbol: null, imageUrl: null } : null,
+      zoraHandle: account.accountSignals.zoraHandle,
     } : null)
     return summary
   }, [account, zoraSummary])

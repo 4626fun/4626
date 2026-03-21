@@ -1302,7 +1302,7 @@ function buildTelegramLinkFlowResponse(params: {
         'Link your 4626 account (one time)',
         '',
         'For security, linking is only available in a private chat with this bot.',
-        'Linking creates your 4626 Privy session and connects your Coinbase Smart Wallet.',
+        'Linking verifies your 4626 account and finishes the wallet setup required for bot actions.',
         'Open a DM with the bot and enter:',
         '- /start',
         '- /link',
@@ -1377,12 +1377,13 @@ function buildTelegramLinkFlowResponse(params: {
       ? [
           '<b>Base app | 4626.fun</b>',
           '',
-          'Need a Coinbase Smart Wallet? Install the Base app first, then finish setup here.',
+          'Need a Coinbase Smart Wallet? Install the Base app first, then come back here to finish linking.',
           '',
           '1) Tap Get Base app.',
           '2) Tap Open Mini App.',
-          '3) Authenticate with Privy.',
-          '4) Create or connect your Coinbase Smart Wallet (canonical account for Telegram).',
+          '3) Sign in to 4626 and verify your email.',
+          '4) Create or connect your Coinbase Smart Wallet.',
+          '5) Add your 4626 embedded wallet as an owner so bot actions can execute safely.',
           '',
           '4626 never holds your keys — you approve actions in your wallet.',
           'After linking, Telegram actions run directly through the bot.',
@@ -1391,13 +1392,13 @@ function buildTelegramLinkFlowResponse(params: {
         ? [
             '<b>Link | 4626.fun</b>',
             '',
-            'Use your in-app Privy wallet: add it as an owner on your Coinbase Smart Wallet, then confirm in the Mini App.',
+            'Finish linking your Telegram account, then confirm that your 4626 embedded wallet is an owner on your Coinbase Smart Wallet.',
             '',
             '4626 never holds your keys — you approve actions in your wallet.',
             '',
             '1) Tap Open Mini App.',
-            '2) Sign in with Privy.',
-            '3) Complete the owner step on your CSW (canonical account).',
+            '2) Sign in to 4626 and verify your email.',
+            '3) Confirm the owner step on your Coinbase Smart Wallet.',
             '',
             'After linking, Telegram actions run directly through the bot.',
           ]
@@ -1405,8 +1406,9 @@ function buildTelegramLinkFlowResponse(params: {
             'Link your 4626 account (one time)',
             '',
             '1) Tap Open Mini App.',
-            '2) Authenticate with Privy.',
-            '3) Connect your Coinbase Smart Wallet (canonical account).',
+            '2) Sign in to 4626 and verify your email.',
+            '3) Connect your Coinbase Smart Wallet if you have one.',
+            '4) Confirm your 4626 embedded wallet is installed as an owner.',
             '',
             '4626 never holds your keys — you approve actions in your wallet.',
           ]
@@ -1459,7 +1461,7 @@ function buildOnboardingWelcomeText(): string {
     '',
     'Tap <b>Start</b> to begin setup.',
     '',
-    'Trade with your Coinbase Smart Wallet from Telegram — link once, then buy, sell, bid, and manage your wallet from chats.',
+    'Link once, then buy, sell, bid, and manage your connected Coinbase Smart Wallet directly from chats.',
   ].join('\n')
 }
 
@@ -1473,7 +1475,7 @@ function buildCswForkText(): string {
   return [
     '<b>Coinbase Smart Wallet | 4626.fun</b>',
     '',
-    'Link an existing Coinbase Smart Wallet, or create a new one after installing the Base app.',
+    'Finish account linking and wallet setup. Link an existing Coinbase Smart Wallet, or create a new one after installing the Base app.',
     '',
     'Tap a button to continue.',
   ].join('\n')
@@ -1957,7 +1959,7 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
       'Link Status',
       '',
       '- linked: no',
-      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram + wallet so bot actions can run from Telegram. Full 4626 web app access may still require team approval.',
+      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram to your 4626 account and finishes the wallet checks required for bot actions. Full 4626 web app access may still require team approval.',
     ].join('\n')
   }
   return [

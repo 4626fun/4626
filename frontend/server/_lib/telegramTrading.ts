@@ -1227,12 +1227,12 @@ export async function getTelegramLinkByUserId(params: {
   const row = result.rows?.[0]
   if (!row) return null
 
-  return {
+  const link: TelegramUserLink = {
     telegramUserId: String(row.telegram_user_id),
     telegramUsername: asTrimmed(row.telegram_username) || null,
     profileId: Number(row.profile_id),
     privyUserId: String(row.privy_user_id),
-    canonicalCswAddress: normalizeAddress(row.canonical_csw_address),
+    canonicalCswAddress: normalizeAddress(row.canonical_csw_address) || null,
     ownerVerified: Boolean(row.owner_verified),
     linkStatus: asTrimmed(row.link_status) || 'unknown',
     linkedAt: toIso(row.linked_at),
@@ -1241,6 +1241,86 @@ export async function getTelegramLinkByUserId(params: {
     failureCount: Number(row.failure_count || 0),
     lastFailureReason: asTrimmed(row.last_failure_reason) || null,
     unlinkRequestedAt: toIso(row.unlink_requested_at),
+  }
+  if (link.linkStatus === 'revoked') return link
+
+  const walletStateResult = await params.db.sql`
+    SELECT
+      canonical_csw_address,
+      privy_is_owner,
+      address,
+      is_canonical_smart_wallet
+    FROM profile_wallets
+    WHERE profile_id = ${link.profileId}
+      AND (chain_id = 8453 OR chain_id IS NULL)
+    ORDER BY
+      CASE WHEN canonical_csw_address IS NOT NULL THEN 0 ELSE 1 END ASC,
+      CASE WHEN is_canonical_smart_wallet = true THEN 0 ELSE 1 END ASC,
+      updated_at DESC
+    LIMIT 1;
+  `
+  const walletRow = walletStateResult.rows?.[0] ?? null
+  const canonicalFromColumns = normalizeAddress(walletRow?.canonical_csw_address) || null
+  const canonicalFromAddress = walletRow?.is_canonical_smart_wallet === true ? normalizeAddress(walletRow?.address) || null : null
+  const canonicalCswAddress = canonicalFromColumns ?? canonicalFromAddress ?? null
+  const ownerVerified = canonicalCswAddress ? Boolean(walletRow?.privy_is_owner) : false
+  const linkStatus = canonicalCswAddress ? 'active' : 'pending_wallet_setup'
+
+  if (
+    canonicalCswAddress === link.canonicalCswAddress &&
+    ownerVerified === link.ownerVerified &&
+    linkStatus === link.linkStatus
+  ) {
+    return link
+  }
+
+  const updated = await params.db.sql`
+    UPDATE telegram_user_links
+    SET
+      canonical_csw_address = ${canonicalCswAddress},
+      owner_verified = ${ownerVerified},
+      link_status = ${linkStatus},
+      last_verified_at = NOW()
+    WHERE telegram_user_id = ${userId}
+    RETURNING
+      telegram_user_id,
+      telegram_username,
+      profile_id,
+      privy_user_id,
+      canonical_csw_address,
+      owner_verified,
+      link_status,
+      linked_at,
+      last_verified_at,
+      revoked_at,
+      failure_count,
+      last_failure_reason,
+      unlink_requested_at;
+  `
+  const updatedRow = updated.rows?.[0]
+  if (!updatedRow) {
+    return {
+      ...link,
+      canonicalCswAddress,
+      ownerVerified,
+      linkStatus,
+    }
+  }
+
+  return {
+    telegramUserId: String(updatedRow.telegram_user_id),
+    telegramUsername: asTrimmed(updatedRow.telegram_username) || null,
+    profileId: Number(updatedRow.profile_id),
+    privyUserId: String(updatedRow.privy_user_id),
+    canonicalCswAddress: normalizeAddress(updatedRow.canonical_csw_address) || null,
+    ownerVerified: Boolean(updatedRow.owner_verified),
+    linkStatus: asTrimmed(updatedRow.link_status) || 'unknown',
+    linkedAt: toIso(updatedRow.linked_at),
+    lastVerifiedAt: toIso(updatedRow.last_verified_at),
+    revokedAt: toIso(updatedRow.revoked_at),
+    failureCount: Number(updatedRow.failure_count || 0),
+    lastFailureReason: asTrimmed(updatedRow.last_failure_reason) || null,
+    unlinkRequestedAt: toIso(updatedRow.unlink_requested_at),
   }
 }
 
@@ -1562,7 +1642,7 @@ function mapHolderRoomMemberRow(row: any): TelegramHolderRoomMember {
   return {
     roomChatId: asTrimmed(row.room_chat_id),
     telegramUserId: String(row.telegram_user_id),
-    canonicalCswAddress: normalizeAddress(row.canonical_csw_address),
+    canonicalCswAddress: normalizeAddress(row.canonical_csw_address) || null,
     status: normalizeHolderRoomMemberStatus(row.status),
     lastEligibleAt: toIso(row.last_eligible_at),
     graceUntil: toIso(row.grace_until),
@@ -2190,7 +2270,7 @@ export async function listHolderRoomMembersNeedingRecheck(params: {
     graceHours: parseGraceHours(row.grace_hours, 24),
     enabled: Boolean(row.enabled),
     telegramUserId: String(row.telegram_user_id),
-    canonicalCswAddress: normalizeAddress(row.canonical_csw_address),
+    canonicalCswAddress: normalizeAddress(row.canonical_csw_address) || null,
     status: normalizeHolderRoomMemberStatus(row.status),
     lastEligibleAt: toIso(row.last_eligible_at),
     graceUntil: toIso(row.grace_until),

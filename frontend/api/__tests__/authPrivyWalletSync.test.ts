@@ -281,4 +281,59 @@ describe('auth privy wallet sync', () => {
     expect(res.body?.data?.address).toBe('0x0000000000000000000000000000000000000099')
   })
 
+  it('returns 503 when Privy server auth is not configured', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      PRIVY_APP_ID: undefined,
+      PRIVY_APP_SECRET: undefined,
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(503)
+    expect(res.body?.error).toContain('Privy server auth is not configured')
+  })
+
+  it('returns 401 when the Privy bearer token is missing', async () => {
+    const req = createMockReq({
+      method: 'POST',
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.error).toBe('Missing Privy auth token')
+  })
+
+  it('returns 400 when no Privy wallet is ready yet', async () => {
+    getUserByIdMock.mockResolvedValueOnce({
+      id: 'did:privy:test-user',
+      linkedAccounts: [],
+    })
+    syncUserWalletsMock.mockResolvedValueOnce({
+      profileId: 1,
+      canonicalSmartWallet: null,
+      activeOwnerWallet: null,
+      embeddedEoa: null,
+      connectedWallets: [],
+      primaryWalletAddress: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toContain('No Privy wallet is ready yet')
+  })
+
 })

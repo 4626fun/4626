@@ -381,15 +381,15 @@ function DetailPanel({
           <DetailField label="Canonical CSW (resolved)" value={detail.resolvedCswAddress || detail.cswAddress} mono />
           <DetailField label="Privy smart wallet (4626.fun)" value={detail.privySmartWallet} mono />
           <DetailField label="Privy embedded EOA (4626.fun)" value={detail.embeddedWallet4626 || detail.embeddedWallet} mono />
-          <DetailField label="Privy embedded EOA (Zora cross-app)" value={detail.embeddedWalletZora} mono />
+          <DetailField label="Privy embedded EOA (cross-app)" value={detail.embeddedWalletZora} mono />
           {crossAppEmbeddedWallets.length > 0 && (
             <DetailField label="Cross-app embedded wallets" value={crossAppEmbeddedWallets.join(', ')} mono />
           )}
           {crossAppSmartWallets.length > 0 && (
             <DetailField label="Cross-app smart wallets" value={crossAppSmartWallets.join(', ')} mono />
           )}
-          <DetailField label="Legacy profile primary wallet" value={detail.primaryWallet} mono />
-          <DetailField label="Legacy CSW address" value={detail.cswAddress} mono />
+          <DetailField label="Profile primary wallet (source)" value={detail.primaryWallet} mono />
+          <DetailField label="Profile CSW address (source)" value={detail.cswAddress} mono />
           <DetailField label="Embedded wallet" value={detail.embeddedWallet} mono />
           {(detail.embeddedWalletChain || detail.embeddedWalletClientType) && (
             <DetailField

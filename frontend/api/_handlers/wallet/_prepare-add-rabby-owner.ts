@@ -5,6 +5,7 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { getDb } from '../../../server/_lib/postgres.js'
 import {
   bootstrapCanonicalDelegationState,
+  confirmOwnerState,
   extractDelegationFlags,
 } from '../../../server/_lib/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/coinbaseSmartWalletOwner.js'
@@ -14,14 +15,17 @@ type PrepareRabbyBody = {
   confirmedAdvanced?: boolean
 }
 
-type PrepareRabbyResponse = {
-  txRequest: {
-    chainId: 8453
-    to: `0x${string}`
-    data: `0x${string}`
-    value: '0x0'
-  }
-}
+type PrepareRabbyResponse =
+  | { alreadyOwner: true }
+  | {
+      alreadyOwner: false
+      txRequest: {
+        chainId: 8453
+        to: `0x${string}`
+        data: `0x${string}`
+        value: '0x0'
+      }
+    }
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 
@@ -88,10 +92,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
+    const ownerState = await confirmOwnerState({
+      db: db as any,
+      req,
+      ownerAddress: rabbyAddress,
+      cswAddress: bootstrap.canonicalCswAddress,
+    })
+    if (ownerState.isOwner) {
+      return res.status(200).json({
+        success: true,
+        data: { alreadyOwner: true } satisfies PrepareRabbyResponse,
+      } satisfies ApiEnvelope<PrepareRabbyResponse>)
+    }
     const txRequest = prepareAddOwnerTx(bootstrap.canonicalCswAddress, rabbyAddress)
     return res.status(200).json({
       success: true,
-      data: { txRequest } satisfies PrepareRabbyResponse,
+      data: { alreadyOwner: false, txRequest } satisfies PrepareRabbyResponse,
     } satisfies ApiEnvelope<PrepareRabbyResponse>)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to prepare advanced owner install'

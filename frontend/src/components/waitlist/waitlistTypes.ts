@@ -89,9 +89,9 @@ export type WaitlistState = {
   miniAppAddSupported: boolean | null
   // Owner-install prerequisites from waitlist verification.
   embeddedEoaAddress: string | null
-  zoraProviderAddresses: string[]
-  canonicalZoraCswAddress: string | null
-  canonicalZoraCswUnresolvedReason: string | null
+  crossAppProviderAddresses: string[]
+  canonicalCswAddress: string | null
+  canonicalCswUnresolvedReason: string | null
   mappingStatus: OwnerInstallMappingStatus
   mappingError: string | null
   // CSW linking status
