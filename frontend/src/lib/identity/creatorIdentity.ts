@@ -40,7 +40,7 @@ function normalizeAddress(value: unknown): Address | null {
 /**
  * Resolve canonical creator identity in a way that prevents fragmentation.
  *
- * Rules (canonical-CSW-first approach):
+ * Rules (creator-identity safety approach):
  * - Existing creator coin creator address is the canonical identity.
  * - Privy smart wallet can execute only when it matches creator/payout for an existing coin.
  * - If no creator coin exists, never auto-promote Privy/EOA as canonical identity.

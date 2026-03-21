@@ -1,5 +1,7 @@
 # Codex Security Second-Pass Review
 
+> Archival note: this document is a security review record, not current product or architecture guidance. Where its finding text quotes older code, wording may reflect historical states rather than current account-model terminology.
+
 Re-evaluation of all findings in `docs/codex-security-second-pass.csv` against current `HEAD` code. This pass explicitly checks for false positives, superficial fixes, and security-theater remediations.
 
 ## Summary

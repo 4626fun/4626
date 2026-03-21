@@ -4,6 +4,8 @@ Date: 2026-03-13
 Status: Approved  
 Owner: 4626 Product + Agent Platform
 
+> Historical note (2026-03-20): this design predates the current Telegram model. Telegram now uses the Mini App only for secure account linking and wallet-finalization steps; ongoing actions run through the bot. The canonical 4626 identity is the verified email, while the canonical CSW remains the execution wallet. See [frontend/docs/account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
+
 ## Implementation Snapshot (2026-03-13)
 
 - Phase A+ shipped: link/unlink/status, read command set, callback menu wiring, and Telegram audit/schema helpers.
@@ -23,12 +25,12 @@ Owner: 4626 Product + Agent Platform
 
 The current command and messaging model works, but user behavior is concentrated in Telegram and X. Users want a Friendtech-like social experience where discovery and coordination happen in Telegram, while onchain actions stay constrained to the 4626 ecosystem.
 
-Target model:
+Historical target model:
 
 - Telegram-first social surface
 - one-time identity/linking handshake in app
-- ongoing onchain actions from Telegram inline flows (no repeated Mini App opens)
-- strict canonical wallet enforcement (Zora Coinbase Smart Wallet as sender/account)
+- ongoing onchain actions from Telegram bot flows without repeated link handshakes
+- strict canonical wallet enforcement (canonical Coinbase Smart Wallet as sender/account)
 
 ## Goals
 

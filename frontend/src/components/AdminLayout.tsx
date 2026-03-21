@@ -95,7 +95,7 @@ export function AdminLayout() {
               disabled={authBusy}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
             >
-              {authBusy ? 'Signing in...' : 'Sign in with wallet'}
+              {authBusy ? 'Signing in...' : 'Restore admin connection'}
             </button>
 
             {authError ? <div className="text-[11px] text-red-400/90">{authError}</div> : null}

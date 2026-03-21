@@ -31,11 +31,11 @@ Current automation does not align with the desired wallet model:
 - Ajna automation is modeled as a generic keeper actor rather than "the creator's canonical wallet acting through an offchain executor"
 - there is no persisted per-vault signer context that ties a vault to the creator's canonical CSW plus the Privy embedded signer that can operate it
 
-The desired direction is to keep the creator's Zora-linked CSW as the canonical onchain actor for Ajna automation and make the offchain keeper service only the orchestrator that signs through the same `Privy embedded EOA -> canonical CSW` relationship already used in the Zora pattern.
+The desired direction is to keep the creator's canonical CSW as the canonical onchain actor for Ajna automation and make the offchain keeper service only the orchestrator that signs through the same `Privy embedded EOA -> canonical CSW` relationship already used elsewhere in the product.
 
 ## Goals
 
-- Keep the creator's existing Zora Coinbase Smart Wallet as the canonical sender for Ajna automation.
+- Keep the creator's existing canonical Coinbase Smart Wallet as the canonical sender for Ajna automation.
 - Use the existing Privy embedded EOA relationship as the signing bridge into that canonical CSW.
 - Make Ajna automation opt-in, revocable, and auditable per vault.
 - Refactor `CRE` from a single-wallet keeper into a per-vault canonical-sender router.

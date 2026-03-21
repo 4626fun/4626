@@ -2,9 +2,11 @@
 
 This runbook is for getting 4626 onto [bankr.bot/agents](https://bankr.bot/agents) without violating canonical wallet invariants.
 
+The canonical 4626 account identity is the user's verified email. This runbook is about canonical CSW execution constraints for Bankr, not account identity.
+
 ## Guardrails
 
-- Canonical account remains the Zora Coinbase Smart Wallet (CSW).
+- Canonical execution wallet remains the user's canonical Coinbase Smart Wallet (CSW).
 - Bankr write actions are blocked unless Bankr EVM wallet identity matches canonical CSW.
 - All mutating profile operations require explicit `confirmed=true` and admin authorization.
 

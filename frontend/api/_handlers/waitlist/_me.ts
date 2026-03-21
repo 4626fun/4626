@@ -318,7 +318,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     connectedAccounts,
   }
 
-  // If the chosen profile only has a historical synthetic email, surface it as null.
+  // If the chosen profile only has a historical placeholder email, surface it as null.
   if (isSyntheticEmail(data.email)) data.email = null
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistMeResponse>)

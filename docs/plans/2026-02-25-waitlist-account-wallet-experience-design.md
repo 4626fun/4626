@@ -1,5 +1,7 @@
 # Waitlist Wallet Snapshot and Account Experience (Design)
 
+> Historical note (2026-03-20): this design predates the email-first account-model reset. The canonical 4626 identity is now the verified email. References below to wallet snapshots and canonical smart wallets are about wallet-finalization UX, not account identity.
+
 ## Context
 
 Users on the waitlist completion modal need immediate confidence about wallet identity and activation setup. The existing modal emphasizes verification and referrals but does not surface the connected owner wallet and canonical Coinbase Smart Wallet together in one clear, actionable snapshot.
@@ -18,7 +20,7 @@ The `/account` surface already contains rich data and management controls, but t
 
 1. Add a wallet snapshot section to waitlist done modal with:
    - Connected owner wallet (EOA)
-   - Canonical Zora Coinbase Smart Wallet
+   - Canonical Coinbase Smart Wallet
    - Account links (current host and explicit app host)
 2. Improve account page visual hierarchy for:
    - Wallet architecture understanding
@@ -78,4 +80,3 @@ The `/account` surface already contains rich data and management controls, but t
   - Waitlist done modal renders connected + canonical wallets.
   - Links open correct account paths on both domains.
   - `/account` accessible on both hosts when authenticated; redirects to waitlist when not.
-

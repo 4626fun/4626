@@ -234,7 +234,7 @@ describe('waitlist/position', () => {
     expect(res.body?.data?.points?.total).toBe(150)
   })
 
-  it('redacts email for wallet-only lookup and checks extended wallet fields', async () => {
+  it('redacts email for wallet-address lookup and checks extended wallet fields', async () => {
     readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000aa')
     getDbMock.mockResolvedValue(createPositionDb({ id: '7', email: 'wallet-owner@proton.me' }) as any)
 
@@ -257,7 +257,7 @@ describe('waitlist/position', () => {
     expect(sqlCalls.some((q: string) => q.includes('lower(p.csw_address)'))).toBe(true)
   })
 
-  it('returns null for wallet-only lookup when caller is not authorized', async () => {
+  it('returns null for wallet-address lookup when caller is not authorized', async () => {
     readRequestPrincipalAddressMock.mockReturnValueOnce('')
     getDbMock.mockResolvedValue(createPositionDb({ id: '7', email: 'wallet-owner@proton.me' }) as any)
 

@@ -3586,7 +3586,7 @@ function LegacyWithdrawals() {
                   </div>
                 ) : (
                   <div className="text-xs text-amber-300/80">
-                    CSW not detected yet. Sign in with wallet or connect the CSW directly.
+                    CSW not detected yet. Restore your admin connection or connect the CSW directly.
                   </div>
                 )}
                 {detectedCswMismatch ? (
