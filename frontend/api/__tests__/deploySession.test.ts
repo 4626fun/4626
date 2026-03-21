@@ -158,12 +158,6 @@ describe('deploy session optimistic concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readSiwaAgentFromRequestMock.mockReturnValue(null)
-    delete process.env.DEPLOY_SOLANA_OVAULT_KILL_SWITCH
-    delete process.env.SOLANA_OVAULT_KILL_SWITCH
-    delete process.env.DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE
-    delete process.env.SOLANA_PREFLIGHT_ROUTE_MODE
-    delete process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED
-    delete process.env.SOLANA_LEGACY_WRITE_DISABLED
     delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
     delete process.env.SOLANA_REGISTRATION_ORIGINS
   })
@@ -1340,7 +1334,7 @@ describe('deploy session optimistic concurrency', () => {
     }
   })
 
-  it('status falls back to legacy preflight route when OVault mesh route is unavailable', async () => {
+  it('status fails preflight without retrying legacy route when OVault mesh route is unavailable', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
@@ -1348,146 +1342,6 @@ describe('deploy session optimistic concurrency', () => {
         phase3Calls: [makeCall('0xphase3target')],
       }),
     }
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        text: async () => JSON.stringify({ success: false, error: 'Not found' }),
-      } as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            success: true,
-            data: {
-              registered: true,
-              existingMintCompatible: true,
-              depositEligible: true,
-              redeemEligible: true,
-            },
-          }),
-      } as any)
-
-    try {
-      ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return true
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(fetchMock).toHaveBeenCalledTimes(2)
-      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/setupSolanaOvaultMesh')
-      expect(String((fetchMock.mock.calls as any[])[1]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
-      expect(res.body?.data?.step).toBe('phase3_sent')
-    } finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
-  })
-
-  it('status uses legacy preflight route when OVault kill switch is enabled', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
-      }),
-    }
-    process.env.DEPLOY_SOLANA_OVAULT_KILL_SWITCH = '1'
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
-
-    try {
-      ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return true
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
-      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).not.toContain('/api/deploy/setupSolanaOvaultMesh')
-    } finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
-  })
-
-  it('status honors ovault_only route mode and skips legacy fallback', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
-      }),
-    }
-    process.env.DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE = 'ovault_only'
     const originalFetch = globalThis.fetch
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: false,
@@ -1512,7 +1366,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
-              return false
+              return true
             default:
               return '0xownerbytes'
           }
@@ -1532,62 +1386,6 @@ describe('deploy session optimistic concurrency', () => {
       expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/setupSolanaOvaultMesh')
       expect(transitionDeploySessionMock).not.toHaveBeenCalled()
       expect(updateDeploySessionMock).toHaveBeenCalled()
-    } finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
-  })
-
-  it('status fails fast when legacy_only mode is combined with disabled legacy writes', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
-      }),
-    }
-    process.env.DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE = 'legacy_only'
-    process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED = '1'
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn()
-
-    try {
-      ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return false
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'Solana preflight misconfigured' })
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(fetchMock).not.toHaveBeenCalled()
-      expect(transitionDeploySessionMock).not.toHaveBeenCalled()
-      expect(updateDeploySessionMock).toHaveBeenCalled()
-      const updateArg = (updateDeploySessionMock.mock.calls as any[])[0]?.[0] as any
-      expect(String(updateArg?.lastError ?? '')).toContain('legacy_only route mode')
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }

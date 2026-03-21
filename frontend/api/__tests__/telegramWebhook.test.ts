@@ -435,6 +435,206 @@ describe('telegram webhook handler', () => {
     expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
   })
 
+  it('allows /x post for vault owner when sender wallet is explicitly mapped to Telegram user', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    const ownerWallet = '0x1111111111111111111111111111111111111111'
+    const restoreWalletMap = applyEnv({
+      TELEGRAM_USER_WALLET_MAP_JSON: JSON.stringify({ '99': ownerWallet }),
+    })
+    const sql = vi.fn(async (...args: any[]) => {
+      const [queryParts] = args
+      const query = Array.isArray(queryParts) ? queryParts.join(' ') : String(queryParts ?? '')
+      if (query.includes('FROM keepr_vaults WHERE group_id')) {
+        return {
+          rows: [{
+            vault_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            chain_id: 8453,
+            group_id: 'xmtp-group-1',
+            lens_group_address: null,
+            creator_coin_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            canonical_owner_address: ownerWallet,
+            share_token_address: '0xcccccccccccccccccccccccccccccccccccccccc',
+            gating_enabled: true,
+            join_locked: false,
+            gating_mode: 'shares',
+            min_shares: null,
+            fail_closed: true,
+            config_version: 1,
+            config_hash: 'test-hash',
+            config_json: {
+              roles: {
+                owner: ownerWallet,
+                admins: ['0x2222222222222222222222222222222222222222'],
+              },
+            },
+          }],
+        }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue({ sql })
+    handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 2_1,
+          message: { message_id: 81, text: '/x post owner tweet --confirm', chat: { id: -100123 }, from: { id: 99 } },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
+      expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+        groupId: 'xmtp-group-1',
+        senderWallet: ownerWallet,
+        text: '/x post owner tweet --confirm',
+        role: 'OWNER',
+      })
+    } finally {
+      restoreWalletMap()
+    }
+  })
+
+  it('allows /x post for vault admin when sender wallet is explicitly mapped to Telegram user', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    const ownerWallet = '0x1111111111111111111111111111111111111111'
+    const adminWallet = '0x2222222222222222222222222222222222222222'
+    const restoreWalletMap = applyEnv({
+      TELEGRAM_USER_WALLET_MAP_JSON: JSON.stringify({ '99': adminWallet }),
+    })
+    const sql = vi.fn(async (...args: any[]) => {
+      const [queryParts] = args
+      const query = Array.isArray(queryParts) ? queryParts.join(' ') : String(queryParts ?? '')
+      if (query.includes('FROM keepr_vaults WHERE group_id')) {
+        return {
+          rows: [{
+            vault_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            chain_id: 8453,
+            group_id: 'xmtp-group-1',
+            lens_group_address: null,
+            creator_coin_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            canonical_owner_address: ownerWallet,
+            share_token_address: '0xcccccccccccccccccccccccccccccccccccccccc',
+            gating_enabled: true,
+            join_locked: false,
+            gating_mode: 'shares',
+            min_shares: null,
+            fail_closed: true,
+            config_version: 1,
+            config_hash: 'test-hash',
+            config_json: {
+              roles: {
+                owner: ownerWallet,
+                admins: [adminWallet],
+              },
+            },
+          }],
+        }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue({ sql })
+    handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 2_1_1,
+          message: { message_id: 81_1, text: '/x post admin tweet --confirm', chat: { id: -100123 }, from: { id: 99 } },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
+      expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+        groupId: 'xmtp-group-1',
+        senderWallet: adminWallet,
+        text: '/x post admin tweet --confirm',
+        role: 'ADMIN',
+      })
+    } finally {
+      restoreWalletMap()
+    }
+  })
+
+  it('does not elevate /x role from default sender wallet fallback', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    const ownerWallet = '0x1111111111111111111111111111111111111111'
+    const restoreWalletDefaults = applyEnv({
+      TELEGRAM_USER_WALLET_MAP_JSON: undefined,
+      TELEGRAM_DEFAULT_SENDER_WALLET: ownerWallet,
+    })
+    const sql = vi.fn(async (...args: any[]) => {
+      const [queryParts] = args
+      const query = Array.isArray(queryParts) ? queryParts.join(' ') : String(queryParts ?? '')
+      if (query.includes('FROM keepr_vaults WHERE group_id')) {
+        return {
+          rows: [{
+            vault_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            chain_id: 8453,
+            group_id: 'xmtp-group-1',
+            lens_group_address: null,
+            creator_coin_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            canonical_owner_address: ownerWallet,
+            share_token_address: '0xcccccccccccccccccccccccccccccccccccccccc',
+            gating_enabled: true,
+            join_locked: false,
+            gating_mode: 'shares',
+            min_shares: null,
+            fail_closed: true,
+            config_version: 1,
+            config_hash: 'test-hash',
+            config_json: {
+              roles: {
+                owner: ownerWallet,
+                admins: ['0x2222222222222222222222222222222222222222'],
+              },
+            },
+          }],
+        }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue({ sql })
+    handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Denied: ADMIN or OWNER only.' })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 2_2,
+          message: { message_id: 82, text: '/x post fallback tweet --confirm', chat: { id: -100123 }, from: { id: 99 } },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
+      expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+        groupId: 'xmtp-group-1',
+        senderWallet: ownerWallet,
+        text: '/x post fallback tweet --confirm',
+        role: 'MEMBER',
+      })
+    } finally {
+      restoreWalletDefaults()
+    }
+  })
+
   it('routes normal commands to keepr handler', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })

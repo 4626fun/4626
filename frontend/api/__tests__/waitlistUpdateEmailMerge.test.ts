@@ -66,6 +66,14 @@ function createDb(options: DbOptions) {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
 
+      // Ownership check helper query by profile id.
+      if (text.includes('from profiles p') && text.includes('where p.id =')) {
+        const profileId = Number(values[0] ?? 0)
+        if (profileId === 267) return { rows: [{ id: 267, email: currentEmail }] }
+        if (profileId === 1) return { rows: [{ id: 1, email: newEmail }] }
+        return { rows: [] }
+      }
+
       // Ownership check helper query.
       if (text.includes('from profiles p') && text.includes('where p.email =')) {
         const email = String(values[0] ?? '').toLowerCase()
@@ -114,14 +122,13 @@ describe('waitlist/update-email merge-on-conflict', () => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue(createDb({ ownTargetEmail: true }))
     isAuthorizedWalletForProfileMock.mockImplementation(async ({ profileId }: { profileId: number }) => profileId === 267 || profileId === 1)
-    resolveAuthorizedRequestPrincipalMock.mockResolvedValue(null)
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValue({ profileId: 267 } as any)
   })
 
   it('merges synthetic profile into existing owned profile when target email is already taken', async () => {
     const req = createMockReq({
       method: 'POST',
       body: {
-        currentEmail: '0xb05cf0+1ktesbv@noemail.4626.fun',
         newEmail: 'akitav2@proton.me',
       },
     })
@@ -150,7 +157,6 @@ describe('waitlist/update-email merge-on-conflict', () => {
     const req = createMockReq({
       method: 'POST',
       body: {
-        currentEmail: '0xb05cf0+1ktesbv@noemail.4626.fun',
         newEmail: 'akitav2@proton.me',
       },
     })
@@ -163,7 +169,8 @@ describe('waitlist/update-email merge-on-conflict', () => {
     expect(String(res.body?.error ?? '')).toContain('Email already in use')
   })
 
-  it('rejects currentEmail-omitted updates when the principal is not strictly authorized for a profile', async () => {
+  it('rejects updates when the principal is not strictly authorized for a profile', async () => {
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValueOnce(null)
     const req = createMockReq({
       method: 'POST',
       body: {

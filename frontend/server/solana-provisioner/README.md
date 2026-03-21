@@ -6,7 +6,7 @@ This service is designed for VM/container runtimes where the bridge CLI is avail
 
 ## Why this exists
 
-`/api/deploy/registerSolanaBridgeToken` in the app can auto-register Solana bridge tokens, but on serverless runtimes it cannot execute local bridge CLI paths.
+`/api/deploy/setupSolanaOvaultMesh` in the app can auto-register Solana bridge tokens, but on serverless runtimes it cannot execute local bridge CLI paths.
 
 Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endpoint.
 For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`

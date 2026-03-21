@@ -758,76 +758,8 @@ function readAdditionalSolanaRegistrationOrigins(): string[] {
   return out
 }
 
-type SolanaPreflightRoutePath =
-  | '/api/deploy/setupSolanaOvaultMesh'
-  | '/api/deploy/registerSolanaBridgeToken'
-
-type SolanaPreflightRouteMode =
-  | 'ovault_first'
-  | 'legacy_first'
-  | 'ovault_only'
-  | 'legacy_only'
-
-function readSolanaOvaultKillSwitchEnabled(): boolean {
-  const raw =
-    process.env.DEPLOY_SOLANA_OVAULT_KILL_SWITCH ??
-    process.env.SOLANA_OVAULT_KILL_SWITCH
-  return isTruthyEnv(raw, false)
-}
-
-function readCompatibilitySolanaWriteDisabled(): boolean {
-  const raw =
-    process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED ??
-    process.env.SOLANA_LEGACY_WRITE_DISABLED
-  return isTruthyEnv(raw, false)
-}
-
-function readSolanaPreflightRouteMode(): SolanaPreflightRouteMode {
-  if (readSolanaOvaultKillSwitchEnabled()) return 'legacy_only'
-  const raw = String(
-    process.env.DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE ??
-      process.env.SOLANA_PREFLIGHT_ROUTE_MODE ??
-      '',
-  )
-    .trim()
-    .toLowerCase()
-
-  if (!raw) return 'ovault_first'
-  if (raw === 'legacy' || raw === 'legacy_only' || raw === 'rollback') return 'legacy_only'
-  if (raw === 'legacy_first') return 'legacy_first'
-  if (raw === 'ovault_only') return 'ovault_only'
-  if (raw === 'ovault_first' || raw === 'default') return 'ovault_first'
-  return 'ovault_first'
-}
-
-function resolveSolanaPreflightRoutes(mode: SolanaPreflightRouteMode): {
-  primary: SolanaPreflightRoutePath
-  fallback: SolanaPreflightRoutePath | null
-} {
-  switch (mode) {
-    case 'legacy_only':
-      return {
-        primary: '/api/deploy/registerSolanaBridgeToken',
-        fallback: null,
-      }
-    case 'legacy_first':
-      return {
-        primary: '/api/deploy/registerSolanaBridgeToken',
-        fallback: '/api/deploy/setupSolanaOvaultMesh',
-      }
-    case 'ovault_only':
-      return {
-        primary: '/api/deploy/setupSolanaOvaultMesh',
-        fallback: null,
-      }
-    case 'ovault_first':
-    default:
-      return {
-        primary: '/api/deploy/setupSolanaOvaultMesh',
-        fallback: '/api/deploy/registerSolanaBridgeToken',
-      }
-  }
-}
+type SolanaPreflightRoutePath = '/api/deploy/setupSolanaOvaultMesh'
+const SOLANA_PREFLIGHT_ROUTE_PATH: SolanaPreflightRoutePath = '/api/deploy/setupSolanaOvaultMesh'
 
 function dedupeOrigins(origins: string[]): string[] {
   const out: string[] = []
@@ -1682,20 +1614,11 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
       '',
   ).trim()
-  const routeMode = readSolanaPreflightRouteMode()
-  const compatibilityWriteDisabled = readCompatibilitySolanaWriteDisabled()
-  if (routeMode === 'legacy_only' && compatibilityWriteDisabled) {
-    throw new Error(
-      'Solana preflight misconfigured: legacy_only route mode requires DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=0.',
-    )
-  }
-  const routes = resolveSolanaPreflightRoutes(routeMode)
+  const routePath: SolanaPreflightRoutePath = SOLANA_PREFLIGHT_ROUTE_PATH
   const tryRegister = async (
     origin: string,
-    routePath: SolanaPreflightRoutePath,
   ): Promise<{
     ok: boolean
-    statusCode: number | null
     failure: string | null
     ovault: {
       existingMintCompatible: boolean
@@ -1755,7 +1678,6 @@ async function ensureSolanaRouteReadyForPhase3(params: {
               : null
           return {
             ok: false,
-            statusCode: registerRes.status,
             failure:
               `${origin}${routePath} (ovault eligibility): ` +
               `existingMintCompatible=${String(data?.existingMintCompatible)} ` +
@@ -1767,7 +1689,6 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         }
         return {
           ok: true,
-          statusCode: registerRes.status,
           failure: null,
           ovault: {
             existingMintCompatible,
@@ -1787,28 +1708,21 @@ async function ensureSolanaRouteReadyForPhase3(params: {
             : `http_${registerRes.status}`
       return {
         ok: false,
-        statusCode: registerRes.status,
         failure: `${origin}${routePath} (${registerRes.status}): ${detail}`,
         ovault: null,
       }
     } catch {
-      return { ok: false, statusCode: null, failure: `${origin}${routePath}: request_failed`, ovault: null }
+      return { ok: false, failure: `${origin}${routePath}: request_failed`, ovault: null }
     }
   }
   const failures: string[] = []
   for (const origin of candidateOrigins) {
-    const primary = await tryRegister(origin, routes.primary)
-    if (primary.ok) return primary.ovault ?? defaultStatus
-    if (primary.failure) failures.push(primary.failure)
-    // Fallback route applies only when primary route appears unavailable in this runtime.
-    if (routes.fallback && (primary.statusCode === 404 || primary.statusCode === 405 || primary.statusCode === null)) {
-      const fallback = await tryRegister(origin, routes.fallback)
-      if (fallback.ok) return fallback.ovault ?? defaultStatus
-      if (fallback.failure) failures.push(fallback.failure)
-    }
+    const registration = await tryRegister(origin)
+    if (registration.ok) return registration.ovault ?? defaultStatus
+    if (registration.failure) failures.push(registration.failure)
   }
   throw new Error(
-    `Solana preflight failed (mode=${routeMode}): ${failures.join(' | ') || 'setupSolanaOvaultMesh/registerSolanaBridgeToken call failed.'}`,
+    `Solana preflight failed: ${failures.join(' | ') || `${routePath} call failed.`}`,
   )
 }
 

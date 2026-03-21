@@ -5,7 +5,7 @@ import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
 
-type Body = { currentEmail?: string; newEmail?: string }
+type Body = { newEmail?: string }
 
 type UpdateEmailResponse = {
   email: string
@@ -316,65 +316,46 @@ export default async function handler(req: any, res: any) {
   }
 
   const body = await readJsonBody<Body>(req)
-  const currentEmailInput = typeof body?.currentEmail === 'string' ? body.currentEmail : ''
-  const currentEmail = normalizeEmail(currentEmailInput)
-  const hasCurrentEmail = currentEmail.length > 0
   const newEmail = normalizeEmail(typeof body?.newEmail === 'string' ? body.newEmail : '')
 
-  if ((hasCurrentEmail && !isValidEmail(currentEmail)) || !isValidEmail(newEmail)) {
+  if (!isValidEmail(newEmail)) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
   if (isAnySyntheticEmail(newEmail)) {
     return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
   }
 
-  if (hasCurrentEmail && currentEmail === newEmail) {
-    const data: UpdateEmailResponse = { email: newEmail }
-    return res.status(200).json({ success: true, data } satisfies ApiEnvelope<UpdateEmailResponse>)
-  }
-
   const db = await getDb()
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureWaitlistSchema(db as any)
 
-  const authorizedPrincipal = hasCurrentEmail ? null : await resolveAuthorizedRequestPrincipal(req).catch(() => null)
-
-  const currentOwnedProfile = hasCurrentEmail
-    ? await findOwnedProfileByEmail({
-        db,
-        email: currentEmail,
-        principalAddress,
-      })
-    : authorizedPrincipal
-      ? await findOwnedProfileById({
-        db,
-        profileId: authorizedPrincipal.profileId,
-      })
-      : null
+  const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req).catch(() => null)
+  const currentOwnedProfile = authorizedPrincipal
+    ? await findOwnedProfileById({
+      db,
+      profileId: authorizedPrincipal.profileId,
+    })
+    : null
   if (!currentOwnedProfile) {
-    return res.status(hasCurrentEmail ? 403 : 404).json({
+    return res.status(404).json({
       success: false,
-      error: hasCurrentEmail ? 'Not authorized to update this profile' : 'Signup not found.',
+      error: 'Signup not found.',
     } satisfies ApiEnvelope<never>)
   }
 
+  if (normalizeEmail(currentOwnedProfile.email) === newEmail) {
+    const data: UpdateEmailResponse = { email: newEmail }
+    return res.status(200).json({ success: true, data } satisfies ApiEnvelope<UpdateEmailResponse>)
+  }
+
   // Atomic update with NOT EXISTS to prevent TOCTOU race.
-  // Keep the "update by currentEmail" branch for compatibility with existing clients/tests.
-  const updated = hasCurrentEmail
-    ? await db.sql`
-        UPDATE profiles
-        SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
-        WHERE email = ${currentEmail}
-          AND NOT EXISTS (SELECT 1 FROM profiles WHERE email = ${newEmail})
-        RETURNING id, email;
-      `
-    : await db.sql`
-        UPDATE profiles
-        SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
-        WHERE id = ${currentOwnedProfile.id}
-          AND NOT EXISTS (SELECT 1 FROM profiles WHERE email = ${newEmail} AND id <> ${currentOwnedProfile.id})
-        RETURNING id, email;
-      `
+  const updated = await db.sql`
+    UPDATE profiles
+    SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
+    WHERE id = ${currentOwnedProfile.id}
+      AND NOT EXISTS (SELECT 1 FROM profiles WHERE email = ${newEmail} AND id <> ${currentOwnedProfile.id})
+    RETURNING id, email;
+  `
   const row = updated?.rows?.[0] ?? null
   if (!row?.id) {
     // Could be: profile not found, or email already taken (race condition)

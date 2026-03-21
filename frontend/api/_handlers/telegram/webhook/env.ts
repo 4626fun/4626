@@ -75,16 +75,40 @@ export function isPrivateChatId(chatId: string): boolean {
   return !chatId.startsWith('-')
 }
 
-export function resolveSenderWallet(userId: string): `0x${string}` {
+export type SenderWalletResolutionSource = 'user_map' | 'default' | 'zero'
+
+export type SenderWalletResolution = {
+  wallet: `0x${string}`
+  source: SenderWalletResolutionSource
+}
+
+export function resolveSenderWalletWithSource(userId: string): SenderWalletResolution {
   const config = getTelegramWebhookConfig()
   const userWalletMap = parseJsonObject(config.userWalletMapJsonRaw)
   const mapped = asTrimmed(userWalletMap[userId])
-  if (isAddressLike(mapped)) return mapped.toLowerCase() as `0x${string}`
+  if (isAddressLike(mapped)) {
+    return {
+      wallet: mapped.toLowerCase() as `0x${string}`,
+      source: 'user_map',
+    }
+  }
 
   const fallback = config.defaultSenderWallet
-  if (isAddressLike(fallback)) return fallback.toLowerCase() as `0x${string}`
+  if (isAddressLike(fallback)) {
+    return {
+      wallet: fallback.toLowerCase() as `0x${string}`,
+      source: 'default',
+    }
+  }
 
-  return ZERO_ADDRESS
+  return {
+    wallet: ZERO_ADDRESS,
+    source: 'zero',
+  }
+}
+
+export function resolveSenderWallet(userId: string): `0x${string}` {
+  return resolveSenderWalletWithSource(userId).wallet
 }
 
 export function resolveGroupId(chatId: string): string {

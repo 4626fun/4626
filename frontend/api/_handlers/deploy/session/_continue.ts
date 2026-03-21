@@ -416,47 +416,46 @@ async function ensureOvaultPreflight(params: {
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
       '',
   ).trim()
+  const routePath = '/api/deploy/setupSolanaOvaultMesh'
   const failures: string[] = []
-  for (const routePath of ['/api/deploy/setupSolanaOvaultMesh', '/api/deploy/registerSolanaBridgeToken']) {
-    try {
-      const body: Record<string, unknown> = {
-        bridgeToken,
-        batcherAddress: getAddress(finalizeCall.to),
-        buildOnly: true,
-        assetMintOrigin,
-        enforceCompatibility: true,
-      }
-      if (mintCompatibilityHints) body.mintCompatibilityHints = mintCompatibilityHints
-      if (expectedSolanaAmount && expectedSolanaAmount > 0n) {
-        body.creatorToken = bridgeToken
-        body.expectedSolanaAmount = expectedSolanaAmount.toString()
-      }
-      const response = await fetch(`${origin}${routePath}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(cookie ? { Cookie: cookie } : {}),
-          ...(authz ? { Authorization: authz } : {}),
-          ...(siwaReceipt ? { 'X-SIWA-Receipt': siwaReceipt } : {}),
-          ...(privyToken ? { 'X-Privy-Token': privyToken } : {}),
-          ...(internalRegistrationSecret ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret } : {}),
-        },
-        body: JSON.stringify(body),
-      })
-      const rawBody = await response.text().catch(() => '')
-      const json = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
-      if (response.ok && json?.success) {
-        const data = json.data ?? {}
-        const existingMintCompatible = data?.existingMintCompatible === true
-        const depositEligible = data?.depositEligible === true
-        const redeemEligible = data?.redeemEligible === true
-        if (!existingMintCompatible || !depositEligible || !redeemEligible) {
-          failures.push(
-            `${routePath} ovault eligibility: existingMintCompatible=${String(data?.existingMintCompatible)} ` +
-              `depositEligible=${String(data?.depositEligible)} redeemEligible=${String(data?.redeemEligible)}`,
-          )
-          continue
-        }
+  try {
+    const body: Record<string, unknown> = {
+      bridgeToken,
+      batcherAddress: getAddress(finalizeCall.to),
+      buildOnly: true,
+      assetMintOrigin,
+      enforceCompatibility: true,
+    }
+    if (mintCompatibilityHints) body.mintCompatibilityHints = mintCompatibilityHints
+    if (expectedSolanaAmount && expectedSolanaAmount > 0n) {
+      body.creatorToken = bridgeToken
+      body.expectedSolanaAmount = expectedSolanaAmount.toString()
+    }
+    const response = await fetch(`${origin}${routePath}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(authz ? { Authorization: authz } : {}),
+        ...(siwaReceipt ? { 'X-SIWA-Receipt': siwaReceipt } : {}),
+        ...(privyToken ? { 'X-Privy-Token': privyToken } : {}),
+        ...(internalRegistrationSecret ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret } : {}),
+      },
+      body: JSON.stringify(body),
+    })
+    const rawBody = await response.text().catch(() => '')
+    const json = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
+    if (response.ok && json?.success) {
+      const data = json.data ?? {}
+      const existingMintCompatible = data?.existingMintCompatible === true
+      const depositEligible = data?.depositEligible === true
+      const redeemEligible = data?.redeemEligible === true
+      if (!existingMintCompatible || !depositEligible || !redeemEligible) {
+        failures.push(
+          `${routePath} ovault eligibility: existingMintCompatible=${String(data?.existingMintCompatible)} ` +
+            `depositEligible=${String(data?.depositEligible)} redeemEligible=${String(data?.redeemEligible)}`,
+        )
+      } else {
         return {
           existingMintCompatible,
           depositEligible,
@@ -466,14 +465,13 @@ async function ensureOvaultPreflight(params: {
           meshStep: 'ovault_mesh_confirmed',
         }
       }
-      if (response.status === 404 || response.status === 405) {
-        failures.push(`${routePath} unavailable (${response.status})`)
-        continue
-      }
-      failures.push(`${routePath} failed (${response.status}): ${json?.error ? String(json.error) : rawBody.slice(0, 160)}`)
-    } catch (error) {
-      failures.push(`${routePath} request_failed: ${error instanceof Error ? error.message : String(error)}`)
+    } else {
+      failures.push(
+        `${routePath} failed (${response.status}): ${json?.error ? String(json.error) : rawBody.slice(0, 160)}`,
+      )
     }
+  } catch (error) {
+    failures.push(`${routePath} request_failed: ${error instanceof Error ? error.message : String(error)}`)
   }
   throw new Error(`Solana preflight failed: ${failures.join(' | ')}`)
 }

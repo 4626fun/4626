@@ -8,7 +8,7 @@ import { base } from 'viem/chains'
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
 import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/accountsIdentity.js'
-import { getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
+import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
@@ -74,7 +74,7 @@ import {
   readInlineQueryResultCap as readInlineQueryResultCapShared,
   readShareUsdFallback as readShareUsdFallbackShared,
   resolveGroupId as resolveGroupIdShared,
-  resolveSenderWallet as resolveSenderWalletShared,
+  resolveSenderWalletWithSource as resolveSenderWalletWithSourceShared,
   resolveSignalsDestination as resolveSignalsDestinationShared,
   resolveTelegramMiniAppUrl as resolveTelegramMiniAppUrlShared,
 } from './webhook/env.js'
@@ -383,8 +383,14 @@ function isPrivateChatId(chatId: string): boolean {
   return isPrivateChatIdShared(chatId)
 }
 
-function resolveSenderWallet(userId: string): `0x${string}` {
-  return resolveSenderWalletShared(userId)
+type SenderWalletSource = 'user_map' | 'default' | 'zero'
+
+function resolveSenderWalletWithSource(userId: string): { senderWallet: `0x${string}`; source: SenderWalletSource } {
+  const resolved = resolveSenderWalletWithSourceShared(userId)
+  return {
+    senderWallet: resolved.wallet,
+    source: resolved.source,
+  }
 }
 
 function resolveGroupId(chatId: string): string {
@@ -398,17 +404,21 @@ function resolveCommandExecutionContext(params: {
 }): {
   groupId: string
   senderWallet: `0x${string}`
+  senderWalletSource: SenderWalletSource
 } {
   if (isPrivateChatId(params.chatId) && !params.isAdmin) {
     // Prevent private-DM fallback defaults from inheriting privileged group/sender context.
     return {
       groupId: `telegram:${params.chatId}`,
       senderWallet: ZERO_ADDRESS as `0x${string}`,
+      senderWalletSource: 'zero',
     }
   }
+  const resolvedSenderWallet = resolveSenderWalletWithSource(params.userId)
   return {
     groupId: resolveGroupId(params.chatId),
-    senderWallet: resolveSenderWallet(params.userId),
+    senderWallet: resolvedSenderWallet.senderWallet,
+    senderWalletSource: resolvedSenderWallet.source,
   }
 }
 
@@ -434,6 +444,46 @@ function splitTelegramMessage(text: string, maxLen = 3500): string[] {
 function isTwitterCommand(rawText: string): boolean {
   const lower = asTrimmed(rawText).toLowerCase()
   return /^(\/x|x)(\s|$)/.test(lower) || /^(\/tweet|tweet)(\s|$)/.test(lower)
+}
+
+function normalizeWalletAddress(value: unknown): `0x${string}` | null {
+  const normalized = asTrimmed(value)
+  if (!isAddressLike(normalized)) return null
+  return normalized.toLowerCase() as `0x${string}`
+}
+
+async function resolveTwitterCommandRole(params: {
+  isAdmin: boolean
+  groupId: string
+  senderWallet: `0x${string}`
+  senderWalletSource: SenderWalletSource
+}): Promise<'OWNER' | 'ADMIN' | 'MEMBER'> {
+  if (params.isAdmin) return 'ADMIN'
+  if (params.senderWalletSource !== 'user_map') return 'MEMBER'
+
+  const senderWallet = normalizeWalletAddress(params.senderWallet)
+  if (!senderWallet || senderWallet === ZERO_ADDRESS) return 'MEMBER'
+
+  try {
+    const vault = await getKeeprVaultByGroupId(params.groupId)
+    if (!vault) return 'MEMBER'
+
+    const ownerWallet = normalizeWalletAddress(vault.canonicalOwnerAddress ?? vault.config?.roles?.owner)
+    if (ownerWallet && senderWallet === ownerWallet) return 'OWNER'
+
+    const adminWallets = Array.isArray(vault.config?.roles?.admins) ? vault.config.roles.admins : []
+    for (const adminWallet of adminWallets) {
+      const normalizedAdminWallet = normalizeWalletAddress(adminWallet)
+      if (normalizedAdminWallet && senderWallet === normalizedAdminWallet) return 'ADMIN'
+    }
+  } catch (error) {
+    console.warn('[telegram/webhook] failed to resolve vault role for twitter command', {
+      groupId: params.groupId,
+      err: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  return 'MEMBER'
 }
 
 function isInlineLauncherCommand(rawText: string): boolean {
@@ -5740,6 +5790,7 @@ async function executeTelegramCommand(params: {
   userId: string
   groupId: string
   senderWallet: `0x${string}`
+  senderWalletSource: SenderWalletSource
   isAdmin: boolean
   messageId?: number
 }): Promise<TelegramCommandResponse> {
@@ -5762,11 +5813,17 @@ async function executeTelegramCommand(params: {
   if (nativeResponse) return nativeResponse
 
   if (isTwitterCommand(params.text)) {
+    const role = await resolveTwitterCommandRole({
+      isAdmin: params.isAdmin,
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      senderWalletSource: params.senderWalletSource,
+    })
     const twitterResult = await handleTwitterCommand({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
       text: params.text,
-      role: params.isAdmin ? 'ADMIN' : 'MEMBER',
+      role,
     })
     return { text: asTrimmed(twitterResult.response) }
   }
@@ -6942,6 +6999,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const groupId = executionContext.groupId
     const senderWallet = executionContext.senderWallet
+    const senderWalletSource = executionContext.senderWalletSource
     const callbackResponse =
       (await handleTelegramVaultDeployCallback({
         callbackData,
@@ -7127,6 +7185,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         userId,
         groupId,
         senderWallet,
+        senderWalletSource,
         isAdmin,
         messageId: callbackMessageId,
       })
@@ -7379,6 +7438,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   const senderWallet = executionContext.senderWallet
   const groupId = executionContext.groupId
+  const senderWalletSource = executionContext.senderWalletSource
 
   let response: TelegramCommandResponse = { text: '' }
   try {
@@ -7388,6 +7448,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId,
       groupId,
       senderWallet,
+      senderWalletSource,
       isAdmin,
       messageId,
     })
