@@ -30,6 +30,20 @@ type TelegramLinkCompleteResponse = {
 export type TelegramLinkSessionState = 'verifying' | 'ready' | 'error'
 export type TelegramLinkFlowState = 'idle' | 'authenticating' | 'linking' | 'linked' | 'error'
 const OPEN_FROM_TELEGRAM_SESSION_ERROR = 'Open this link from Telegram so 4626 can verify your Mini App session.'
+const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 15_000
+const TELEGRAM_LINK_REQUEST_TIMEOUT_MS = 25_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => {
+        clearTimeout(timeoutId)
+      })
+  })
+}
 
 export function formatTelegramSessionError(error: string, statusCode: number): string {
   const normalized = String(error ?? '').trim().toLowerCase()
@@ -78,6 +92,26 @@ export function shouldShowRetryTelegramSession(params: {
   telegramMiniAppContext: boolean
 }): boolean {
   return params.sessionState === 'error' && params.telegramMiniAppContext
+}
+
+export function shouldAutoStartTelegramLink(params: {
+  hasLinkContext: boolean
+  sessionState: TelegramLinkSessionState
+  sessionToken: string
+  privyReady: boolean
+  privyAuthenticated: boolean
+  linkState: TelegramLinkFlowState
+  alreadyAttemptedForToken: boolean
+}): boolean {
+  if (!params.hasLinkContext) return false
+  if (params.sessionState !== 'ready') return false
+  if (!params.sessionToken) return false
+  if (!params.privyReady || !params.privyAuthenticated) return false
+  // Auto-submit only from the initial idle state. After any error,
+  // require explicit user intent via "Retry link" to avoid request storms.
+  if (params.linkState !== 'idle') return false
+  if (params.alreadyAttemptedForToken) return false
+  return true
 }
 
 export function getTelegramLinkViewState(params: {
@@ -199,35 +233,59 @@ export function TelegramLink() {
   }, [verifySession])
 
   useEffect(() => {
-    if (!telegramLinkContext) return
-    if (sessionState !== 'ready' || !sessionToken) return
-    if (!privyReady || !privyAuthenticated) return
-    if (linkState === 'linking' || linkState === 'linked') return
-    if (linkAttemptRef.current === telegramLinkContext.linkToken) return
+    const shouldAutoStart = shouldAutoStartTelegramLink({
+      hasLinkContext: Boolean(telegramLinkContext),
+      sessionState,
+      sessionToken,
+      privyReady,
+      privyAuthenticated,
+      linkState,
+      alreadyAttemptedForToken: Boolean(telegramLinkContext && linkAttemptRef.current === telegramLinkContext.linkToken),
+    })
+    if (!telegramLinkContext || !shouldAutoStart) return
 
     linkAttemptRef.current = telegramLinkContext.linkToken
     void (async () => {
       setLinkState('linking')
       setLinkMessage('Linking your Telegram identity to your 4626 account...')
 
-      const accessToken = (await getAccessToken().catch(() => null))?.trim() ?? ''
+      const accessToken = (
+        await withTimeout(
+          getAccessToken().catch(() => null),
+          PRIVY_ACCESS_TOKEN_TIMEOUT_MS,
+          'Reading your 4626 session',
+        ).catch(() => null)
+      )?.trim() ?? ''
       if (!accessToken) {
         throw new Error('Could not read your 4626 session. Sign in again and retry linking.')
       }
 
-      const res = await apiFetch('/api/telegram/miniapp/link', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'x-privy-token': accessToken,
-        },
-        body: JSON.stringify({
-          token: telegramLinkContext.linkToken,
-          telegramUsername: telegramLinkContext.telegramUsername,
-          miniAppSessionToken: sessionToken,
-        }),
-      })
+      const abortController = new AbortController()
+      const requestTimeoutId = setTimeout(() => abortController.abort(), TELEGRAM_LINK_REQUEST_TIMEOUT_MS)
+      let res: Response
+      try {
+        res = await apiFetch('/api/telegram/miniapp/link', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'x-privy-token': accessToken,
+          },
+          body: JSON.stringify({
+            token: telegramLinkContext.linkToken,
+            telegramUsername: telegramLinkContext.telegramUsername,
+            miniAppSessionToken: sessionToken,
+          }),
+          signal: abortController.signal,
+        })
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          throw new Error('Telegram linking timed out. Tap Retry link to try again.')
+        }
+        throw error
+      } finally {
+        clearTimeout(requestTimeoutId)
+      }
       const json = (await res.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteResponse> | null
       if (!res.ok || !json?.success || !json.data) {
         const message =
@@ -257,7 +315,6 @@ export function TelegramLink() {
           : 'Could not complete Telegram linking. Retry in a moment.'
       setLinkState('error')
       setLinkMessage(message)
-      linkAttemptRef.current = ''
     })
   }, [
     getAccessToken,

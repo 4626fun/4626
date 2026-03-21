@@ -4,6 +4,7 @@ import {
   formatTelegramSessionError,
   getTelegramLinkSuccessMessage,
   getTelegramLinkViewState,
+  shouldAutoStartTelegramLink,
   shouldShowRetryTelegramSession,
 } from './TelegramLink'
 
@@ -99,5 +100,31 @@ describe('TelegramLink helpers', () => {
         telegramMiniAppContext: true,
       }),
     ).toBe(true)
+  })
+
+  it('auto-starts linking only once from idle state', () => {
+    expect(
+      shouldAutoStartTelegramLink({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        sessionToken: 'mini-session',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+        alreadyAttemptedForToken: false,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldAutoStartTelegramLink({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        sessionToken: 'mini-session',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'error',
+        alreadyAttemptedForToken: true,
+      }),
+    ).toBe(false)
   })
 })
