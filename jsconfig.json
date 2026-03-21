@@ -1,0 +1,12 @@
+{
+  "exclude": [
+    "lib/**",
+    "**/node_modules/**",
+    "out/**",
+    "target/**",
+    "broadcast/**",
+    "cache/**",
+    "dist/**",
+    "build/**"
+  ]
+}
