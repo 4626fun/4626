@@ -12,7 +12,7 @@
 
 > `const` **APP\_ONLY\_PATHS**: `string`[]
 
-Defined in: [src/lib/appOnlyPaths.ts:2](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/appOnlyPaths.ts#L2)
+Defined in: [src/lib/appOnlyPaths.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/lib/appOnlyPaths.ts#L2)
 
 App-only paths that should always run on app.4626.fun.
 
@@ -22,7 +22,7 @@ App-only paths that should always run on app.4626.fun.
 
 > **isAppOnlyPath**(`pathname`): `boolean`
 
-Defined in: [src/lib/appOnlyPaths.ts:25](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/appOnlyPaths.ts#L25)
+Defined in: [src/lib/appOnlyPaths.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/appOnlyPaths.ts#L25)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **resolveActiveAccount**(`params`): `object`
 
-Defined in: [src/wallet/accountContext/resolveActiveAccount.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/wallet/accountContext/resolveActiveAccount.ts#L3)
+Defined in: [src/wallet/accountContext/resolveActiveAccount.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/resolveActiveAccount.ts#L3)
 
 #### Parameters
 

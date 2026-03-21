@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/uniswap/\_liquidity.ts:43](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/uniswap/_liquidity.ts#L43)
+Defined in: [api/\_handlers/uniswap/\_liquidity.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_liquidity.ts#L43)
 
 #### Parameters
 

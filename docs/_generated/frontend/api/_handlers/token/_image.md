@@ -12,7 +12,7 @@
 
 > `const` **\_\_testables**: `object`
 
-Defined in: [api/\_handlers/token/\_image.ts:2458](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/token/_image.ts#L2458)
+Defined in: [api/\_handlers/token/\_image.ts:2458](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2458)
 
 #### Type Declaration
 
@@ -140,7 +140,7 @@ Defined in: [api/\_handlers/token/\_image.ts:2458](https://github.com/wenakita/4
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/token/\_image.ts:135](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/token/_image.ts#L135)
+Defined in: [api/\_handlers/token/\_image.ts:135](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L135)
 
 Token Image Generator API
 

@@ -12,7 +12,7 @@
 
 > **readPreferredAccountMode**(`params`): [`AccountModePreference`](types.md#accountmodepreference) \| `null`
 
-Defined in: [src/wallet/accountContext/storage.ts:10](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/wallet/accountContext/storage.ts#L10)
+Defined in: [src/wallet/accountContext/storage.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/storage.ts#L10)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/wallet/accountContext/storage.ts:10](https://github.com/wenakit
 
 > **writePreferredAccountMode**(`params`, `mode`): `void`
 
-Defined in: [src/wallet/accountContext/storage.ts:25](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/wallet/accountContext/storage.ts#L25)
+Defined in: [src/wallet/accountContext/storage.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/storage.ts#L25)
 
 #### Parameters
 

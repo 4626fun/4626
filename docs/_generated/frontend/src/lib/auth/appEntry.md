@@ -12,7 +12,7 @@
 
 > `const` **APP\_ENTRY\_DEFAULT\_NEXT**: `"/swap"` = `CANONICAL_SWAP_ROUTE`
 
-Defined in: [src/lib/auth/appEntry.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appEntry.ts#L3)
+Defined in: [src/lib/auth/appEntry.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appEntry.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/auth/appEntry.ts:3](https://github.com/wenakita/4626/blob/c
 
 > **buildAppEntryPath**(`next`): `string`
 
-Defined in: [src/lib/auth/appEntry.ts:12](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appEntry.ts#L12)
+Defined in: [src/lib/auth/appEntry.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appEntry.ts#L12)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/lib/auth/appEntry.ts:12](https://github.com/wenakita/4626/blob/
 
 > **buildAppEntryUrl**(`baseUrl`, `next`): `string`
 
-Defined in: [src/lib/auth/appEntry.ts:22](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appEntry.ts#L22)
+Defined in: [src/lib/auth/appEntry.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appEntry.ts#L22)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [src/lib/auth/appEntry.ts:22](https://github.com/wenakita/4626/blob/
 
 > **readSafeNextPath**(`value`): `string`
 
-Defined in: [src/lib/auth/appEntry.ts:5](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appEntry.ts#L5)
+Defined in: [src/lib/auth/appEntry.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appEntry.ts#L5)
 
 #### Parameters
 

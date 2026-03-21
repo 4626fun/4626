@@ -12,7 +12,7 @@
 
 > `const` **TELEGRAM\_MINI\_APP\_LINK\_PATH**: `"/telegram/link"` = `'/telegram/link'`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:4](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/miniApp.ts#L4)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L4)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:4](https://github.com/we
 
 > **buildMiniAppLaunchButton**(`params`): `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/miniApp.ts#L37)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L37)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/w
 
 > **buildTelegramMiniAppUrl**(`params`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/miniApp.ts#L16)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L16)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/w
 
 > **resolveTelegramMiniAppUrl**(): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:10](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/miniApp.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L10)
 
 #### Returns
 

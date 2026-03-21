@@ -12,7 +12,7 @@
 
 > **BootstrapSwapPrefs** = `object`
 
-Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:5](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L5)
+Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L5)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:5](https://github.com/wenakita
 
 > **allowFallback**: `boolean`
 
-Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:7](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L7)
+Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L7)
 
 ##### provider
 
 > **provider**: [`BootstrapSwapProvider`](#bootstrapswapprovider)
 
-Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:6](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L6)
+Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L6)
 
 ##### slippageBps
 
 > **slippageBps**: `number`
 
-Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:8](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L8)
+Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L8)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:8](https://github.com/wenakita
 
 > **BootstrapSwapProvider** = `"uniswap"` \| `"0x"` \| `"defillama"`
 
-Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L3)
+Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L3)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:3](https://github.com/wenakita
 
 > **readBootstrapSwapPrefs**(`env`): [`BootstrapSwapPrefs`](#bootstrapswapprefs)
 
-Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:42](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L42)
+Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L42)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:42](https://github.com/wenakit
 
 > **readClientBootstrapSwapPrefs**(): [`BootstrapSwapPrefs`](#bootstrapswapprefs)
 
-Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:50](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L50)
+Defined in: [src/lib/deploy/bootstrapSwapPrefs.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/bootstrapSwapPrefs.ts#L50)
 
 #### Returns
 

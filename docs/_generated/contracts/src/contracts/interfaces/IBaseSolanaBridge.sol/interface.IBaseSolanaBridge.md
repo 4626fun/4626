@@ -1,5 +1,5 @@
 # IBaseSolanaBridge
-[Git Source](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/contracts/interfaces/IBaseSolanaBridge.sol)
+[Git Source](https://github.com/wenakita/4626/blob/main/contracts/interfaces/IBaseSolanaBridge.sol)
 
 Minimal interface for Base's Solana Bridge contract on Base mainnet.
 References:

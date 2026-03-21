@@ -1,8 +1,6 @@
-import { lazy, Suspense } from 'react'
 import { Modal } from '@/components/ui/Modal'
-import { Skeleton } from '@/components/ui/Skeleton'
 
-const WaitlistFlowWithProviders = lazy(async () => import('./WaitlistFlowWithProviders'))
+import WaitlistFlowWithProviders from './WaitlistFlowWithProviders'
 
 type WaitlistModalProps = {
   open: boolean
@@ -11,19 +9,20 @@ type WaitlistModalProps = {
 
 export function WaitlistModal({ open, onClose }: WaitlistModalProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Waitlist" maxWidth="sm:max-w-[480px]" placement="center">
-      <Suspense
-        fallback={
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-64" />
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-4 w-40" />
-          </div>
-        }
-      >
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Join the waitlist"
+      description="Enter your email only in the sign-in window that opens next. Base and Zora linking appear on the next step after your email is verified."
+      maxWidth="sm:max-w-[480px]"
+      placement="center"
+    >
+      <div className="space-y-5">
+        <p className="text-[13px] leading-snug text-zinc-400 rounded-xl border border-white/10 bg-white/3 px-3 py-2.5">
+          No email field below—use the sign-in window that opens when you continue. Base and Zora options show on the next step after your email is verified.
+        </p>
         <WaitlistFlowWithProviders variant="modal" />
-      </Suspense>
+      </div>
     </Modal>
   )
 }

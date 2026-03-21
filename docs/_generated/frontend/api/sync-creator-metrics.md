@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/sync-creator-metrics.ts:4](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/sync-creator-metrics.ts#L4)
+Defined in: [api/sync-creator-metrics.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/sync-creator-metrics.ts#L4)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/token/\_metadata.ts:30](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/token/_metadata.ts#L30)
+Defined in: [api/\_handlers/token/\_metadata.ts:30](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_metadata.ts#L30)
 
 ERC-7572 Token Metadata API
 

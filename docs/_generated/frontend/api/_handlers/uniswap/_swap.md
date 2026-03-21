@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/uniswap/\_swap.ts:68](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/uniswap/_swap.ts#L68)
+Defined in: [api/\_handlers/uniswap/\_swap.ts:68](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_swap.ts#L68)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/uniswap/\_swap.ts:68](https://github.com/wenakita/46
 
 > **validateSwapTransactionPayload**(`payload`): `string` \| `null`
 
-Defined in: [api/\_handlers/uniswap/\_swap.ts:19](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/uniswap/_swap.ts#L19)
+Defined in: [api/\_handlers/uniswap/\_swap.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_swap.ts#L19)
 
 #### Parameters
 

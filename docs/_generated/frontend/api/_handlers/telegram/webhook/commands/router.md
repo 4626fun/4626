@@ -12,7 +12,7 @@
 
 > **TelegramCommandRoute** = `"native"` \| `"external"`
 
-Defined in: [api/\_handlers/telegram/webhook/commands/router.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/commands/router.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/commands/router.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/commands/router.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/commands/router.ts:3](https://githu
 
 > **routeTelegramCommand**(`text`): [`TelegramCommandRoute`](#telegramcommandroute)
 
-Defined in: [api/\_handlers/telegram/webhook/commands/router.ts:5](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/commands/router.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/commands/router.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/commands/router.ts#L5)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **extractMigratedCoinAddressFromLog**(`log`): `string` \| `null`
 
-Defined in: [src/lib/zora/migrations.ts:146](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/zora/migrations.ts#L146)
+Defined in: [src/lib/zora/migrations.ts:146](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L146)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/zora/migrations.ts:146](https://github.com/wenakita/4626/bl
 
 > **fetchMigratedCoins**(): `Promise`\<`Set`\<`string`\>\>
 
-Defined in: [src/lib/zora/migrations.ts:227](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/zora/migrations.ts#L227)
+Defined in: [src/lib/zora/migrations.ts:227](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L227)
 
 Fetch all migrated coin addresses from LiquidityMigrated events
 
@@ -50,7 +50,7 @@ Fetch all migrated coin addresses from LiquidityMigrated events
 
 > **getMigrationStats**(): `Promise`\<\{ `count`: `number`; `lastUpdated`: `number`; \}\>
 
-Defined in: [src/lib/zora/migrations.ts:378](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/zora/migrations.ts#L378)
+Defined in: [src/lib/zora/migrations.ts:378](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L378)
 
 Get migration stats
 
@@ -64,7 +64,7 @@ Get migration stats
 
 > **hasCoinMigrated**(`coinAddress`): `Promise`\<`boolean`\>
 
-Defined in: [src/lib/zora/migrations.ts:344](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/zora/migrations.ts#L344)
+Defined in: [src/lib/zora/migrations.ts:344](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L344)
 
 Check if a specific coin has migrated to V4
 
@@ -88,7 +88,7 @@ true if the coin has migrated, false otherwise
 
 > **hasCoinMigratedSync**(`coinAddress`): `boolean` \| `undefined`
 
-Defined in: [src/lib/zora/migrations.ts:353](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/zora/migrations.ts#L353)
+Defined in: [src/lib/zora/migrations.ts:353](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L353)
 
 Synchronous check using cached data only
 Returns undefined if cache is not available
@@ -109,7 +109,7 @@ Returns undefined if cache is not available
 
 > **parseMinimalProxyImplementation**(`bytecode`): `string` \| `null`
 
-Defined in: [src/lib/zora/migrations.ts:137](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/zora/migrations.ts#L137)
+Defined in: [src/lib/zora/migrations.ts:137](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L137)
 
 #### Parameters
 
@@ -127,7 +127,7 @@ Defined in: [src/lib/zora/migrations.ts:137](https://github.com/wenakita/4626/bl
 
 > **preloadMigratedCoins**(): `void`
 
-Defined in: [src/lib/zora/migrations.ts:371](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/zora/migrations.ts#L371)
+Defined in: [src/lib/zora/migrations.ts:371](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L371)
 
 Preload migrated coins cache
 Call this early in the app lifecycle
