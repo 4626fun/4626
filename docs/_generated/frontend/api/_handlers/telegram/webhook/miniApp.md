@@ -12,7 +12,7 @@
 
 > `const` **TELEGRAM\_MINI\_APP\_LINK\_PATH**: `"/telegram/link"` = `'/telegram/link'`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:4](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/miniApp.ts#L4)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:4](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/miniApp.ts#L4)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:4](https://github.com/we
 
 > **buildMiniAppLaunchButton**(`params`): `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/miniApp.ts#L37)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/miniApp.ts#L37)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/w
 
 > **buildTelegramMiniAppUrl**(`params`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/miniApp.ts#L16)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/miniApp.ts#L16)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/w
 
 > **resolveTelegramMiniAppUrl**(): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:10](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/miniApp.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:10](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/miniApp.ts#L10)
 
 #### Returns
 

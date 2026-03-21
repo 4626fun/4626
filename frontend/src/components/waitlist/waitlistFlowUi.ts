@@ -47,21 +47,13 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
   return params.tier >= 1
 }
 
-export function deriveWaitlistEmailUi(step: 'email' | 'auth'): WaitlistEmailUi {
-  if (step === 'auth') {
-    return {
-      title: 'Verify your email',
-      subtitle: 'Finish creating your 4626 account with email OTP. Base and Zora are optional entry paths after that.',
-      ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue with email`,
-      busyLabel: 'Opening email sign-in…',
-    }
-  }
-
+/** Copy for the waitlist sign-in step (email is collected only in the Privy modal). */
+export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
     title: 'Get early access',
-    subtitle: 'Enter your email to join.',
-    ctaLabel: `${SHARE_SYMBOL_PREFIX} Join waitlist`,
-    busyLabel: 'Setting up…',
+    subtitle: 'Sign in with your email (one-time code). Base and Zora are optional after that.',
+    ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue with email`,
+    busyLabel: 'Opening email sign-in…',
   }
 }
 

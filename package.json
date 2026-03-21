@@ -2,7 +2,8 @@
   "scripts": {
     "docs:refresh": "node apps/docs-site/scripts/docs-refresh.mjs",
     "docs:check": "node apps/docs-site/scripts/docs-refresh.mjs --check",
-    "docs:build:strict": "NODE_OPTIONS=--max-old-space-size=4096 pnpm -C apps/docs-site build:strict",
+    "docs:build:strict": "pnpm docs:check",
+    "docs:bundle": "NODE_OPTIONS=--max-old-space-size=4096 pnpm -C apps/docs-site bundle:strict",
     "docs:drift": "node apps/docs-site/scripts/check-docs-drift.mjs"
   },
   "dependencies": {

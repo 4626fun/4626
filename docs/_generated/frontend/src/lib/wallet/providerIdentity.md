@@ -12,7 +12,7 @@
 
 > **WalletProviderId** = `"coinbase"` \| `"privy"` \| `"metamask"` \| `"rabby"` \| `"walletconnect"` \| `"unknown"`
 
-Defined in: [src/lib/wallet/providerIdentity.ts:1](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/wallet/providerIdentity.ts#L1)
+Defined in: [src/lib/wallet/providerIdentity.ts:1](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/wallet/providerIdentity.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/wallet/providerIdentity.ts:1](https://github.com/wenakita/4
 
 > **inferWalletProvider**(`params`): [`WalletProviderId`](#walletproviderid)
 
-Defined in: [src/lib/wallet/providerIdentity.ts:13](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/wallet/providerIdentity.ts#L13)
+Defined in: [src/lib/wallet/providerIdentity.ts:13](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/wallet/providerIdentity.ts#L13)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/wallet/providerIdentity.ts:13](https://github.com/wenakita/
 
 > **walletProviderLabel**(`provider`): `string`
 
-Defined in: [src/lib/wallet/providerIdentity.ts:51](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/wallet/providerIdentity.ts#L51)
+Defined in: [src/lib/wallet/providerIdentity.ts:51](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/wallet/providerIdentity.ts#L51)
 
 #### Parameters
 

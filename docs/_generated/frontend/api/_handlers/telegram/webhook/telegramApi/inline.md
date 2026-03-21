@@ -12,7 +12,7 @@
 
 > **TelegramInlineResultsButton** = \{ `start_parameter?`: `string`; `text`: `string`; `web_app?`: \{ `url`: `string`; \}; \} \| `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:1](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L1)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:1](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:1](https://gi
 
 > **answerTelegramInlineQuery**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:9](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L9)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:9](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L9)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:9](https://gi
 
 > **saveTelegramPreparedInlineMessage**(`params`): `Promise`\<\{ `preparedInlineMessageId`: `string` \| `null`; \}\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:42](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L42)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:42](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L42)
 
 #### Parameters
 

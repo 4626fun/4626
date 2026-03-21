@@ -12,7 +12,7 @@
 
 > **OwnershipCheckResult** = `object`
 
-Defined in: [src/wallet/accountContext/ownership.ts:13](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/wallet/accountContext/ownership.ts#L13)
+Defined in: [src/wallet/accountContext/ownership.ts:13](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/wallet/accountContext/ownership.ts#L13)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/wallet/accountContext/ownership.ts:13](https://github.com/wenak
 
 > **reason**: `"ok"` \| `"network_mismatch"` \| `"missing_params"` \| `"read_failed"`
 
-Defined in: [src/wallet/accountContext/ownership.ts:15](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/wallet/accountContext/ownership.ts#L15)
+Defined in: [src/wallet/accountContext/ownership.ts:15](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/wallet/accountContext/ownership.ts#L15)
 
 ##### value
 
 > **value**: `boolean` \| `null`
 
-Defined in: [src/wallet/accountContext/ownership.ts:14](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/wallet/accountContext/ownership.ts#L14)
+Defined in: [src/wallet/accountContext/ownership.ts:14](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/wallet/accountContext/ownership.ts#L14)
 
 ## Functions
 
@@ -34,7 +34,7 @@ Defined in: [src/wallet/accountContext/ownership.ts:14](https://github.com/wenak
 
 > **checkEoaOwnershipOfCsw**(`params`): `Promise`\<[`OwnershipCheckResult`](#ownershipcheckresult)\>
 
-Defined in: [src/wallet/accountContext/ownership.ts:18](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/wallet/accountContext/ownership.ts#L18)
+Defined in: [src/wallet/accountContext/ownership.ts:18](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/wallet/accountContext/ownership.ts#L18)
 
 #### Parameters
 

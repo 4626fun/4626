@@ -12,7 +12,7 @@
 
 > **handle**(`req`, `res`, `update`, `_config`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/telegram/webhook/updates/preCheckout.ts:9](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/updates/preCheckout.ts#L9)
+Defined in: [api/\_handlers/telegram/webhook/updates/preCheckout.ts:9](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/updates/preCheckout.ts#L9)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/telegram/webhook/updates/preCheckout.ts:9](https://g
 
 > **handlePreCheckoutUpdate**(`params`): `Promise`\<[`TelegramWebhookOk`](../types.md#telegramwebhookok) \| `null`\>
 
-Defined in: [api/\_handlers/telegram/webhook/updates/preCheckout.ts:19](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/updates/preCheckout.ts#L19)
+Defined in: [api/\_handlers/telegram/webhook/updates/preCheckout.ts:19](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/updates/preCheckout.ts#L19)
 
 #### Parameters
 

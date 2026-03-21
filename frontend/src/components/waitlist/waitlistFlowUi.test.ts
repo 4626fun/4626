@@ -2,28 +2,19 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canEnterAppFromAccountState,
+  deriveWaitlistAuthUi,
   deriveWaitlistDoneUi,
-  deriveWaitlistEmailUi,
   deriveWaitlistZoraUi,
   hasZoraProfileSignals,
 } from './waitlistFlowUi'
 
-describe('deriveWaitlistEmailUi', () => {
-  it('uses the join-waitlist copy and black-square glyph on the email step', () => {
-    expect(deriveWaitlistEmailUi('email')).toEqual({
+describe('deriveWaitlistAuthUi', () => {
+  it('uses sign-in copy and black-square glyph (email only in Privy)', () => {
+    expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Get early access',
-      subtitle: 'Enter your email to join.',
-      ctaLabel: '■ Join waitlist',
-      busyLabel: 'Setting up…',
-    })
-  })
-
-  it('uses continuation copy on the auth step', () => {
-    expect(deriveWaitlistEmailUi('auth')).toEqual({
-      title: 'Secure your spot',
-      subtitle: 'We saved your email. Finish connecting your 4626 account to continue.',
-      ctaLabel: '■ Continue',
-      busyLabel: 'Opening sign-in…',
+      subtitle: 'Sign in with your email (one-time code). Base and Zora are optional after that.',
+      ctaLabel: '■ Continue with email',
+      busyLabel: 'Opening email sign-in…',
     })
   })
 })

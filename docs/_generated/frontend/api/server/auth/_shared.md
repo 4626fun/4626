@@ -6,521 +6,140 @@
 
 # api/server/auth/\_shared
 
-## Type Aliases
+## References
 
 ### ApiEnvelope
 
-> **ApiEnvelope**\<`T`\> = `object`
-
-Defined in: [server/auth/\_shared.ts:6](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L6)
-
-#### Type Parameters
-
-##### T
-
-`T`
-
-#### Properties
-
-##### data?
-
-> `optional` **data**: `T`
-
-Defined in: [server/auth/\_shared.ts:6](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L6)
-
-##### error?
-
-> `optional` **error**: `string`
-
-Defined in: [server/auth/\_shared.ts:6](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L6)
-
-##### success
-
-> **success**: `boolean`
-
-Defined in: [server/auth/\_shared.ts:6](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L6)
+Re-exports [ApiEnvelope](../../../server/auth/_shared.md#apienvelope)
 
 ***
 
-### ParsedSiwe
+### clearCookie
 
-> **ParsedSiwe** = `object`
+Re-exports [clearCookie](../../../server/auth/_shared.md#clearcookie)
 
-Defined in: [server/auth/\_shared.ts:492](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L492)
+***
 
-#### Properties
+### consumeNonce
 
-##### address
+Re-exports [consumeNonce](../../../server/auth/_shared.md#consumenonce)
 
-> **address**: `string`
-
-Defined in: [server/auth/\_shared.ts:494](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L494)
-
-##### chainId
-
-> **chainId**: `number`
-
-Defined in: [server/auth/\_shared.ts:496](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L496)
-
-##### domain
-
-> **domain**: `string`
-
-Defined in: [server/auth/\_shared.ts:493](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L493)
-
-##### issuedAt
-
-> **issuedAt**: `string`
-
-Defined in: [server/auth/\_shared.ts:498](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L498)
-
-##### nonce
-
-> **nonce**: `string`
-
-Defined in: [server/auth/\_shared.ts:497](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L497)
-
-##### uri
-
-> **uri**: `string`
-
-Defined in: [server/auth/\_shared.ts:495](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L495)
-
-## Variables
+***
 
 ### COOKIE\_NONCE
 
-> `const` **COOKIE\_NONCE**: `"cv_auth_nonce"` = `'cv_auth_nonce'`
-
-Defined in: [server/auth/\_shared.ts:8](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L8)
+Re-exports [COOKIE_NONCE](../../../server/auth/_shared.md#cookie_nonce)
 
 ***
 
 ### COOKIE\_SESSION
 
-> `const` **COOKIE\_SESSION**: `"cv_auth_session"` = `'cv_auth_session'`
-
-Defined in: [server/auth/\_shared.ts:9](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L9)
-
-## Functions
-
-### clearCookie()
-
-> **clearCookie**(`req`, `res`, `name`): `void`
-
-Defined in: [server/auth/\_shared.ts:333](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L333)
-
-#### Parameters
-
-##### req
-
-`any`
-
-##### res
-
-`any`
-
-##### name
-
-`string`
-
-#### Returns
-
-`void`
+Re-exports [COOKIE_SESSION](../../../server/auth/_shared.md#cookie_session)
 
 ***
 
-### consumeNonce()
+### ensureNonceSchema
 
-> **consumeNonce**(`db`, `nonce`): `Promise`\<`boolean`\>
-
-Defined in: [server/auth/\_shared.ts:49](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L49)
-
-#### Parameters
-
-##### db
-
-`DbWithSql`
-
-##### nonce
-
-`string`
-
-#### Returns
-
-`Promise`\<`boolean`\>
+Re-exports [ensureNonceSchema](../../../server/auth/_shared.md#ensurenonceschema)
 
 ***
 
-### ensureNonceSchema()
+### handleOptions
 
-> **ensureNonceSchema**(`db`): `Promise`\<`void`\>
-
-Defined in: [server/auth/\_shared.ts:22](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L22)
-
-#### Parameters
-
-##### db
-
-`DbWithSql`
-
-#### Returns
-
-`Promise`\<`void`\>
+Re-exports [handleOptions](../../../server/auth/_shared.md#handleoptions)
 
 ***
 
-### handleOptions()
+### hostMatchesDomain
 
-> **handleOptions**(`req`, `res`): `boolean`
-
-Defined in: [server/auth/\_shared.ts:266](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L266)
-
-#### Parameters
-
-##### req
-
-`any`
-
-##### res
-
-`any`
-
-#### Returns
-
-`boolean`
+Re-exports [hostMatchesDomain](../../../server/auth/_shared.md#hostmatchesdomain)
 
 ***
 
-### hostMatchesDomain()
+### makeNonce
 
-> **hostMatchesDomain**(`host`, `domain`): `boolean`
-
-Defined in: [server/auth/\_shared.ts:531](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L531)
-
-#### Parameters
-
-##### host
-
-`string`
-
-##### domain
-
-`string`
-
-#### Returns
-
-`boolean`
+Re-exports [makeNonce](../../../server/auth/_shared.md#makenonce)
 
 ***
 
-### makeNonce()
+### makeNonceToken
 
-> **makeNonce**(): `string`
-
-Defined in: [server/auth/\_shared.ts:359](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L359)
-
-#### Returns
-
-`string`
+Re-exports [makeNonceToken](../../../server/auth/_shared.md#makenoncetoken)
 
 ***
 
-### makeNonceToken()
+### makeSessionToken
 
-> **makeNonceToken**(`params`): `string`
-
-Defined in: [server/auth/\_shared.ts:447](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L447)
-
-A signed nonce token used when cookies are blocked (embedded contexts).
-This mirrors the cookie nonce but is passed back explicitly by the client.
-
-#### Parameters
-
-##### params
-
-###### nonce
-
-`string`
-
-###### now?
-
-`number`
-
-#### Returns
-
-`string`
+Re-exports [makeSessionToken](../../../server/auth/_shared.md#makesessiontoken)
 
 ***
 
-### makeSessionToken()
+### parseCookies
 
-> **makeSessionToken**(`params`): `string`
-
-Defined in: [server/auth/\_shared.ts:391](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L391)
-
-#### Parameters
-
-##### params
-
-###### address
-
-`string`
-
-###### now?
-
-`number`
-
-#### Returns
-
-`string`
+Re-exports [parseCookies](../../../server/auth/_shared.md#parsecookies)
 
 ***
 
-### parseCookies()
+### ParsedSiwe
 
-> **parseCookies**(`req`): `Record`\<`string`, `string`\>
-
-Defined in: [server/auth/\_shared.ts:275](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L275)
-
-#### Parameters
-
-##### req
-
-`any`
-
-#### Returns
-
-`Record`\<`string`, `string`\>
+Re-exports [ParsedSiwe](../../../server/auth/_shared.md#parsedsiwe)
 
 ***
 
-### parseSiweMessage()
+### parseSiweMessage
 
-> **parseSiweMessage**(`message`): [`ParsedSiwe`](#parsedsiwe) \| `null`
-
-Defined in: [server/auth/\_shared.ts:501](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L501)
-
-#### Parameters
-
-##### message
-
-`string`
-
-#### Returns
-
-[`ParsedSiwe`](#parsedsiwe) \| `null`
+Re-exports [parseSiweMessage](../../../server/auth/_shared.md#parsesiwemessage)
 
 ***
 
-### readJsonBody()
+### readJsonBody
 
-> **readJsonBody**\<`T`\>(`req`, `opts`): `Promise`\<`T` \| `null`\>
-
-Defined in: [server/auth/\_shared.ts:337](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L337)
-
-#### Type Parameters
-
-##### T
-
-`T`
-
-#### Parameters
-
-##### req
-
-`any`
-
-##### opts
-
-###### maxBytes?
-
-`number`
-
-#### Returns
-
-`Promise`\<`T` \| `null`\>
+Re-exports [readJsonBody](../../../server/auth/_shared.md#readjsonbody)
 
 ***
 
-### readNonceToken()
+### readNonceToken
 
-> **readNonceToken**(`token`): \{ `nonce`: `string`; \} \| `null`
-
-Defined in: [server/auth/\_shared.ts:459](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L459)
-
-#### Parameters
-
-##### token
-
-`string` | `null` | `undefined`
-
-#### Returns
-
-\{ `nonce`: `string`; \} \| `null`
+Re-exports [readNonceToken](../../../server/auth/_shared.md#readnoncetoken)
 
 ***
 
-### readSessionFromRequest()
+### readSessionFromRequest
 
-> **readSessionFromRequest**(`req`): \{ `address`: `string`; \} \| `null`
-
-Defined in: [server/auth/\_shared.ts:246](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L246)
-
-#### Parameters
-
-##### req
-
-`any`
-
-#### Returns
-
-\{ `address`: `string`; \} \| `null`
+Re-exports [readSessionFromRequest](../../../server/auth/_shared.md#readsessionfromrequest)
 
 ***
 
-### readSessionToken()
+### readSessionToken
 
-> **readSessionToken**(`token`): \{ `address`: `string`; \} \| `null`
-
-Defined in: [server/auth/\_shared.ts:403](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L403)
-
-#### Parameters
-
-##### token
-
-`string` | `null` | `undefined`
-
-#### Returns
-
-\{ `address`: `string`; \} \| `null`
+Re-exports [readSessionToken](../../../server/auth/_shared.md#readsessiontoken)
 
 ***
 
-### setCookie()
+### setCookie
 
-> **setCookie**(`req`, `res`, `name`, `value`, `opts`): `void`
-
-Defined in: [server/auth/\_shared.ts:318](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L318)
-
-#### Parameters
-
-##### req
-
-`any`
-
-##### res
-
-`any`
-
-##### name
-
-`string`
-
-##### value
-
-`string`
-
-##### opts
-
-###### httpOnly?
-
-`boolean`
-
-###### maxAgeSeconds?
-
-`number`
-
-#### Returns
-
-`void`
+Re-exports [setCookie](../../../server/auth/_shared.md#setcookie)
 
 ***
 
-### setCors()
+### setCors
 
-> **setCors**(`req`, `res`): `void`
-
-Defined in: [server/auth/\_shared.ts:222](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L222)
-
-#### Parameters
-
-##### req
-
-`any`
-
-##### res
-
-`any`
-
-#### Returns
-
-`void`
+Re-exports [setCors](../../../server/auth/_shared.md#setcors)
 
 ***
 
-### setNoStore()
+### setNoStore
 
-> **setNoStore**(`res`): `void`
-
-Defined in: [server/auth/\_shared.ts:169](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L169)
-
-#### Parameters
-
-##### res
-
-`any`
-
-#### Returns
-
-`void`
+Re-exports [setNoStore](../../../server/auth/_shared.md#setnostore)
 
 ***
 
-### storeNonce()
+### storeNonce
 
-> **storeNonce**(`db`, `nonce`, `expiresAt`): `Promise`\<`void`\>
-
-Defined in: [server/auth/\_shared.ts:41](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L41)
-
-#### Parameters
-
-##### db
-
-`DbWithSql`
-
-##### nonce
-
-`string`
-
-##### expiresAt
-
-`Date`
-
-#### Returns
-
-`Promise`\<`void`\>
+Re-exports [storeNonce](../../../server/auth/_shared.md#storenonce)
 
 ***
 
-### verifySiweSignature()
+### verifySiweSignature
 
-> **verifySiweSignature**(`params`): `Promise`\<\{ `address`: `string`; \} \| `null`\>
-
-Defined in: [server/auth/\_shared.ts:540](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/server/auth/_shared.ts#L540)
-
-#### Parameters
-
-##### params
-
-###### message
-
-`string`
-
-###### signature
-
-`string`
-
-#### Returns
-
-`Promise`\<\{ `address`: `string`; \} \| `null`\>
+Re-exports [verifySiweSignature](../../../server/auth/_shared.md#verifysiwesignature)

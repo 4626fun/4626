@@ -114,7 +114,7 @@ const result = {
   changedFiles,
   docsSensitiveFiles,
   recommendedRefreshCommand: 'pnpm docs:refresh',
-  recommendedStrictBuildCommand: 'pnpm docs:build:strict',
+  recommendedStrictBuildCommand: 'pnpm docs:check',
 };
 
 if (outputGithub && process.env.GITHUB_OUTPUT) {

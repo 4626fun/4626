@@ -10,7 +10,7 @@
 
 ### ZoraCreator
 
-Defined in: [src/lib/zora-api.ts:8](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L8)
+Defined in: [src/lib/zora-api.ts:8](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L8)
 
 #### Properties
 
@@ -18,43 +18,43 @@ Defined in: [src/lib/zora-api.ts:8](https://github.com/wenakita/4626/blob/5dd4da
 
 > **address**: `string`
 
-Defined in: [src/lib/zora-api.ts:9](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L9)
+Defined in: [src/lib/zora-api.ts:9](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L9)
 
 ##### avatar?
 
 > `optional` **avatar**: `string`
 
-Defined in: [src/lib/zora-api.ts:12](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L12)
+Defined in: [src/lib/zora-api.ts:12](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L12)
 
 ##### description?
 
 > `optional` **description**: `string`
 
-Defined in: [src/lib/zora-api.ts:11](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L11)
+Defined in: [src/lib/zora-api.ts:11](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L11)
 
 ##### instagram?
 
 > `optional` **instagram**: `string`
 
-Defined in: [src/lib/zora-api.ts:15](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L15)
+Defined in: [src/lib/zora-api.ts:15](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L15)
 
 ##### name?
 
 > `optional` **name**: `string`
 
-Defined in: [src/lib/zora-api.ts:10](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L10)
+Defined in: [src/lib/zora-api.ts:10](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L10)
 
 ##### twitter?
 
 > `optional` **twitter**: `string`
 
-Defined in: [src/lib/zora-api.ts:14](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L14)
+Defined in: [src/lib/zora-api.ts:14](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L14)
 
 ##### website?
 
 > `optional` **website**: `string`
 
-Defined in: [src/lib/zora-api.ts:13](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L13)
+Defined in: [src/lib/zora-api.ts:13](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L13)
 
 ## Functions
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/zora-api.ts:13](https://github.com/wenakita/4626/blob/5dd4d
 
 > **getZoraCreatorProfile**(`address`): `Promise`\<[`ZoraCreator`](#zoracreator) \| `null`\>
 
-Defined in: [src/lib/zora-api.ts:23](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L23)
+Defined in: [src/lib/zora-api.ts:23](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L23)
 
 Fetch creator profile from Zora
 Note: This uses Zora's GraphQL API - you may need to adjust based on their current schema
@@ -83,7 +83,7 @@ Note: This uses Zora's GraphQL API - you may need to adjust based on their curre
 
 > **mergeCreatorData**(`props`, `talent`, `zora`): `object`
 
-Defined in: [src/lib/zora-api.ts:75](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora-api.ts#L75)
+Defined in: [src/lib/zora-api.ts:75](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/zora-api.ts#L75)
 
 Merge creator data from multiple sources (Zora, Talent, props)
 Priority: Props > Talent > Zora

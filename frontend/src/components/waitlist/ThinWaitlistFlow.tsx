@@ -14,12 +14,7 @@ import { StepIndicator } from '@/components/ui/StepIndicator'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 
 import type { Variant } from './waitlistTypes'
-import {
-  isRecoveryRequiredAuthError,
-  runWaitlistPrivyLogout,
-  shouldAutoStartWaitlistPrivyAuth,
-  shouldStopWaitlistAutoAuthRetry,
-} from './waitlistAuthState'
+import { isRecoveryRequiredAuthError, runWaitlistPrivyLogout, shouldStopWaitlistAutoAuthRetry } from './waitlistAuthState'
 import {
   buildWaitlistBaseLoginOptions,
   buildWaitlistEmailLoginOptions,
@@ -27,18 +22,13 @@ import {
 } from './waitlistLoginOptions'
 import {
   canEnterAppFromAccountState,
+  deriveWaitlistAuthUi,
   deriveWaitlistDoneUi,
-  deriveWaitlistEmailUi,
   deriveWaitlistZoraUi,
   hasZoraProfileSignals,
 } from './waitlistFlowUi'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-
-type WaitlistJoinResponse = {
-  ok: true
-  waitlistEntryId: number
-}
 
 type AccountsSummary = {
   privyUserId: string
@@ -77,9 +67,8 @@ type HandoffCreateResponse = {
   expiresAt: string
 }
 
-type WaitlistStep = 'email' | 'auth' | 'zora' | 'done'
+type WaitlistStep = 'auth' | 'zora' | 'done'
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 
 const ZORA_AUTO_RESOLVE_TIMEOUT_MS = 45_000
@@ -93,10 +82,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       .catch(reject)
       .finally(() => clearTimeout(t))
   })
-}
-
-function normalizeEmail(value: string): string {
-  return value.trim().toLowerCase()
 }
 
 function readApiErrorMessage(payload: unknown, fallback: string): string {
@@ -193,7 +178,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
 
-  const privyReady = Boolean(privy?.ready)
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
     () =>
@@ -203,8 +187,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     [privy],
   )
 
-  const [step, setStep] = useState<WaitlistStep>('email')
-  const [email, setEmail] = useState('')
+  const [step, setStep] = useState<WaitlistStep>('auth')
 
   const [busy, setBusy] = useState(false)
   const [enterAppBusy, setEnterAppBusy] = useState(false)
@@ -219,8 +202,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const authBootstrapAutoAttemptedRef = useRef(false)
   const zoraAutoResolvedRef = useRef(false)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
-
-  const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
 
   const isPage = variant === 'page'
 
@@ -249,14 +230,10 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         privyToken: token,
       })
     }
-    const emailForBootstrap = !token && emailIsValid ? normalizeEmail(email) : undefined
-
     const response = await apiFetch('/api/waitlist/bootstrap', {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        email: emailForBootstrap,
-      }),
+      body: JSON.stringify({}),
     })
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
     if (!response.ok || !payload?.success || !payload.data) {
@@ -290,33 +267,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       return
     }
     setStep('zora')
-  }, [email, emailIsValid, getAccessToken])
-
-  const onJoinWaitlist = useCallback(async () => {
-    if (!emailIsValid || busy) return
-    setBusy(true)
-    setError(null)
-    setRecoveryRequired(false)
-    try {
-      const response = await apiFetch('/api/waitlist/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizeEmail(email) }),
-      })
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistJoinResponse> | null
-      if (!response.ok || !payload?.success || !payload.data) {
-        throw new Error(readApiErrorMessage(payload, 'Failed to join waitlist.'))
-      }
-      setStep('auth')
-      if (privyAuthed) {
-        await runBootstrap()
-      }
-    } catch (joinError: any) {
-      setError(typeof joinError?.message === 'string' ? joinError.message : 'Failed to join waitlist.')
-    } finally {
-      setBusy(false)
-    }
-  }, [busy, email, emailIsValid, privyAuthed, runBootstrap])
+  }, [getAccessToken])
 
   const onContinueAuth = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -551,23 +502,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   }, [enterAppBusy, enterAppUrl, getAccessToken, privyAuthed])
 
   useEffect(() => {
-    if (
-      !shouldAutoStartWaitlistPrivyAuth({
-        step,
-        privyReady,
-        privyAuthed,
-        busy,
-        authAttemptInFlight: authAttemptInFlightRef.current,
-        authAutoAttempted: authAutoAttemptedRef.current,
-      })
-    ) {
-      return
-    }
-    authAutoAttemptedRef.current = true
-    void onContinueAuth()
-  }, [busy, onContinueAuth, privyAuthed, privyReady, step])
-
-  useEffect(() => {
     if (step !== 'auth' || !privyAuthed) {
       authBootstrapAutoAttemptedRef.current = false
       return
@@ -680,7 +614,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     return summary
   }, [account, zoraSummary])
   const hasLinkedZora = hasZoraProfileSignals(zoraStatus)
-  const emailUi = step === 'auth' ? deriveWaitlistEmailUi('auth') : deriveWaitlistEmailUi('email')
+  const authUi = deriveWaitlistAuthUi()
   const zoraUi = deriveWaitlistZoraUi(hasLinkedZora)
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
@@ -688,13 +622,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   })
   const doneUi = deriveWaitlistDoneUi(canEnterApp)
 
-  const stepOrder: WaitlistStep[] = ['email', 'auth', 'zora', 'done']
-  const stepIdx = stepOrder.indexOf(step)
-
   const indicatorSteps = [
     {
-      label: 'Email',
-      status: (stepIdx >= 2 ? 'complete' : stepIdx <= 1 ? (stepIdx === 0 || step === 'auth' ? 'active' : 'pending') : 'pending') as 'pending' | 'active' | 'complete',
+      label: 'Sign in',
+      status: (step === 'auth' ? 'active' : step === 'zora' || step === 'done' ? 'complete' : 'pending') as
+        | 'pending'
+        | 'active'
+        | 'complete',
     },
     {
       label: 'Zora',
@@ -712,74 +646,53 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         {/* Step progress indicator */}
         <StepIndicator steps={indicatorSteps} />
 
-        {/* Email step — also used while 'auth' is running in background */}
-        {(step === 'email' || step === 'auth') ? (
+        {step === 'auth' ? (
           <motion.div
-            key="step-email"
+            key="step-auth"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="space-y-5"
           >
             <div className="space-y-1">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">{emailUi.title}</h2>
-              <p className="text-sm text-zinc-400">{emailUi.subtitle}</p>
-            </div>
-
-            <div>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && emailIsValid && !busy) void onJoinWaitlist() }}
-                placeholder="you@example.com"
-                disabled={step === 'auth'}
-                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/20 disabled:opacity-60"
-              />
+              <h2 className="text-2xl font-semibold tracking-tight text-white">{authUi.title}</h2>
+              <p className="text-sm text-zinc-400">{authUi.subtitle}</p>
             </div>
 
             <button
               type="button"
-              disabled={step === 'email' ? !emailIsValid || busy : busy}
-              onClick={() =>
-                void (
-                  step === 'email'
-                    ? onJoinWaitlist()
-                    : onContinueAuth()
-                )
-              }
+              disabled={busy}
+              onClick={() => void onContinueAuth()}
               className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {busy ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  {emailUi.busyLabel}
+                  {authUi.busyLabel}
                 </>
               ) : (
-                emailUi.ctaLabel
+                authUi.ctaLabel
               )}
             </button>
 
-            {step === 'auth' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void onContinueWithBase()}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-                >
-                  Continue with Base
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void onContinueWithZora()}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-                >
-                  Continue with Zora
-                </button>
-              </div>
-            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onContinueWithBase()}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                Continue with Base
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onContinueWithZora()}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                Continue with Zora
+              </button>
+            </div>
 
             {error ? (
               <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

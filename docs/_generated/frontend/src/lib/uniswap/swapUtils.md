@@ -12,7 +12,7 @@
 
 > **ChainTokenConfig** = `object`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:69](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L69)
+Defined in: [src/lib/uniswap/swapUtils.ts:69](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L69)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [src/lib/uniswap/swapUtils.ts:69](https://github.com/wenakita/4626/b
 
 > **chainId**: `number`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:70](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L70)
+Defined in: [src/lib/uniswap/swapUtils.ts:70](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L70)
 
 ##### nativeName
 
 > **nativeName**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:72](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L72)
+Defined in: [src/lib/uniswap/swapUtils.ts:72](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L72)
 
 ##### nativeSymbol
 
 > **nativeSymbol**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:71](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L71)
+Defined in: [src/lib/uniswap/swapUtils.ts:71](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L71)
 
 ##### usdc
 
 > **usdc**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:74](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L74)
+Defined in: [src/lib/uniswap/swapUtils.ts:74](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L74)
 
 ##### weth
 
 > **weth**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:73](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L73)
+Defined in: [src/lib/uniswap/swapUtils.ts:73](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L73)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:73](https://github.com/wenakita/4626/b
 
 > **TokenDisplay** = `object`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:19](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L19)
+Defined in: [src/lib/uniswap/swapUtils.ts:19](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L19)
 
 #### Properties
 
@@ -60,25 +60,25 @@ Defined in: [src/lib/uniswap/swapUtils.ts:19](https://github.com/wenakita/4626/b
 
 > **logoUrl**: `string` \| `null`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:22](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L22)
+Defined in: [src/lib/uniswap/swapUtils.ts:22](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L22)
 
 ##### logoUrls?
 
 > `optional` **logoUrls**: `string`[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:23](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L23)
+Defined in: [src/lib/uniswap/swapUtils.ts:23](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L23)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:21](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L21)
+Defined in: [src/lib/uniswap/swapUtils.ts:21](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L21)
 
 ##### symbol
 
 > **symbol**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:20](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L20)
+Defined in: [src/lib/uniswap/swapUtils.ts:20](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L20)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:20](https://github.com/wenakita/4626/b
 
 > **TokenGroup** = `"core"` \| `"creator"` \| `"share"`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:6](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L6)
+Defined in: [src/lib/uniswap/swapUtils.ts:6](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L6)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:6](https://github.com/wenakita/4626/bl
 
 > **TokenOption** = `object`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:8](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L8)
+Defined in: [src/lib/uniswap/swapUtils.ts:8](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L8)
 
 #### Properties
 
@@ -102,49 +102,49 @@ Defined in: [src/lib/uniswap/swapUtils.ts:8](https://github.com/wenakita/4626/bl
 
 > **address**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:11](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L11)
+Defined in: [src/lib/uniswap/swapUtils.ts:11](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L11)
 
 ##### chainId?
 
 > `optional` **chainId**: `number`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:13](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L13)
+Defined in: [src/lib/uniswap/swapUtils.ts:13](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L13)
 
 ##### decimals?
 
 > `optional` **decimals**: `number`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:14](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L14)
+Defined in: [src/lib/uniswap/swapUtils.ts:14](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L14)
 
 ##### group
 
 > **group**: [`TokenGroup`](#tokengroup)
 
-Defined in: [src/lib/uniswap/swapUtils.ts:12](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L12)
+Defined in: [src/lib/uniswap/swapUtils.ts:12](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L12)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:15](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L15)
+Defined in: [src/lib/uniswap/swapUtils.ts:15](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L15)
 
 ##### logoUrls?
 
 > `optional` **logoUrls**: `string`[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:16](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L16)
+Defined in: [src/lib/uniswap/swapUtils.ts:16](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L16)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:10](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L10)
+Defined in: [src/lib/uniswap/swapUtils.ts:10](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L10)
 
 ##### symbol
 
 > **symbol**: `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:9](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L9)
+Defined in: [src/lib/uniswap/swapUtils.ts:9](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L9)
 
 ## Variables
 
@@ -152,7 +152,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:9](https://github.com/wenakita/4626/bl
 
 > `const` **BASE\_CHAIN\_ID**: `8453` = `8453`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:3](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L3)
+Defined in: [src/lib/uniswap/swapUtils.ts:3](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L3)
 
 ***
 
@@ -160,7 +160,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:3](https://github.com/wenakita/4626/bl
 
 > `const` **NATIVE\_TOKEN\_ADDRESS**: `"0x0000000000000000000000000000000000000000"` = `'0x0000000000000000000000000000000000000000'`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:4](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L4)
+Defined in: [src/lib/uniswap/swapUtils.ts:4](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L4)
 
 ## Functions
 
@@ -168,7 +168,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:4](https://github.com/wenakita/4626/bl
 
 > **areEquivalentSwapTokens**(`tokenA`, `tokenB`, `wrappedNativeAddress?`): `boolean`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:180](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L180)
+Defined in: [src/lib/uniswap/swapUtils.ts:180](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L180)
 
 #### Parameters
 
@@ -194,7 +194,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:180](https://github.com/wenakita/4626/
 
 > **buildTokenOptions**(`params`): [`TokenOption`](#tokenoption)[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:212](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L212)
+Defined in: [src/lib/uniswap/swapUtils.ts:212](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L212)
 
 #### Parameters
 
@@ -242,7 +242,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:212](https://github.com/wenakita/4626/
 
 > **getCoreTokensForChain**(`config`): [`TokenOption`](#tokenoption)[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:77](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L77)
+Defined in: [src/lib/uniswap/swapUtils.ts:77](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L77)
 
 #### Parameters
 
@@ -260,7 +260,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:77](https://github.com/wenakita/4626/b
 
 > **getNestedAmountOut**(`input`): `string` \| `null`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:153](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L153)
+Defined in: [src/lib/uniswap/swapUtils.ts:153](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L153)
 
 #### Parameters
 
@@ -278,7 +278,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:153](https://github.com/wenakita/4626/
 
 > **normalizeTokenAddress**(`value`): `string` \| `null`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:174](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L174)
+Defined in: [src/lib/uniswap/swapUtils.ts:174](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L174)
 
 #### Parameters
 
@@ -296,7 +296,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:174](https://github.com/wenakita/4626/
 
 > **resolveTokenDisplay**(`params`): [`TokenDisplay`](#tokendisplay)
 
-Defined in: [src/lib/uniswap/swapUtils.ts:253](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L253)
+Defined in: [src/lib/uniswap/swapUtils.ts:253](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L253)
 
 #### Parameters
 
@@ -328,7 +328,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:253](https://github.com/wenakita/4626/
 
 > **sanitizeDecimalInput**(`value`, `maxFractionDigits`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:130](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L130)
+Defined in: [src/lib/uniswap/swapUtils.ts:130](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L130)
 
 #### Parameters
 
@@ -350,7 +350,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:130](https://github.com/wenakita/4626/
 
 > **sanitizeIntegerInput**(`value`, `maxDigits`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:147](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L147)
+Defined in: [src/lib/uniswap/swapUtils.ts:147](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L147)
 
 #### Parameters
 
@@ -372,7 +372,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:147](https://github.com/wenakita/4626/
 
 > **shareTokenLogo**(`address`, `chainId`, `size`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:110](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L110)
+Defined in: [src/lib/uniswap/swapUtils.ts:110](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L110)
 
 #### Parameters
 
@@ -398,7 +398,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:110](https://github.com/wenakita/4626/
 
 > **shortAddress**(`value`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:125](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L125)
+Defined in: [src/lib/uniswap/swapUtils.ts:125](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L125)
 
 #### Parameters
 
@@ -416,7 +416,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:125](https://github.com/wenakita/4626/
 
 > **tokenLogoFallbacks**(`address`): `string`[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:38](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L38)
+Defined in: [src/lib/uniswap/swapUtils.ts:38](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L38)
 
 #### Parameters
 
@@ -434,7 +434,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:38](https://github.com/wenakita/4626/b
 
 > **tokenLogoFallbacksForChain**(`address`, `chainId`): `string`[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:60](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L60)
+Defined in: [src/lib/uniswap/swapUtils.ts:60](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L60)
 
 #### Parameters
 
@@ -456,7 +456,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:60](https://github.com/wenakita/4626/b
 
 > **trustWalletBaseLogo**(`address`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:30](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L30)
+Defined in: [src/lib/uniswap/swapUtils.ts:30](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L30)
 
 #### Parameters
 
@@ -474,7 +474,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:30](https://github.com/wenakita/4626/b
 
 > **uniqueTokenOptions**(`options`): [`TokenOption`](#tokenoption)[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:200](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L200)
+Defined in: [src/lib/uniswap/swapUtils.ts:200](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L200)
 
 #### Parameters
 
@@ -492,7 +492,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:200](https://github.com/wenakita/4626/
 
 > **uniswapBaseLogo**(`address`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:26](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L26)
+Defined in: [src/lib/uniswap/swapUtils.ts:26](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L26)
 
 #### Parameters
 
@@ -510,7 +510,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:26](https://github.com/wenakita/4626/b
 
 > **uniswapChainLogo**(`address`, `chainId`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:55](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L55)
+Defined in: [src/lib/uniswap/swapUtils.ts:55](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L55)
 
 #### Parameters
 
@@ -532,7 +532,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:55](https://github.com/wenakita/4626/b
 
 > **z0r0zBaseLogo**(`address`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:34](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/swapUtils.ts#L34)
+Defined in: [src/lib/uniswap/swapUtils.ts:34](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/uniswap/swapUtils.ts#L34)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **createTelegramHolderRoomInviteLink**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:3](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:3](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L3)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:3](https://git
 
 > **readTelegramChatMemberStatus**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:30](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L30)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:30](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L30)
 
 #### Parameters
 

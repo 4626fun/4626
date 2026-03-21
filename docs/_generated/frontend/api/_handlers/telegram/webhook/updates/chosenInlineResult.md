@@ -12,7 +12,7 @@
 
 > **handle**(`req`, `res`, `update`, `_config`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/telegram/webhook/updates/chosenInlineResult.ts:8](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/updates/chosenInlineResult.ts#L8)
+Defined in: [api/\_handlers/telegram/webhook/updates/chosenInlineResult.ts:8](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/updates/chosenInlineResult.ts#L8)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/telegram/webhook/updates/chosenInlineResult.ts:8](ht
 
 > **handleChosenInlineResultUpdate**(`params`): `Promise`\<[`TelegramWebhookOk`](../types.md#telegramwebhookok) \| `null`\>
 
-Defined in: [api/\_handlers/telegram/webhook/updates/chosenInlineResult.ts:18](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/telegram/webhook/updates/chosenInlineResult.ts#L18)
+Defined in: [api/\_handlers/telegram/webhook/updates/chosenInlineResult.ts:18](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/updates/chosenInlineResult.ts#L18)
 
 #### Parameters
 

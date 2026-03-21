@@ -12,7 +12,7 @@
 
 > **ApiHandler** = (`req`, `res`) => `unknown` \| `Promise`\<`unknown`\>
 
-Defined in: [api/\_handlers/\_routes.ts:3](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/_routes.ts#L3)
+Defined in: [api/\_handlers/\_routes.ts:3](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/_routes.ts#L3)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/\_routes.ts:3](https://github.com/wenakita/4626/blob
 
 > `const` **apiRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
 
-Defined in: [api/\_handlers/\_routes.ts:14](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/_routes.ts#L14)
+Defined in: [api/\_handlers/\_routes.ts:14](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/_routes.ts#L14)
 
 ## Functions
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/\_routes.ts:14](https://github.com/wenakita/4626/blo
 
 > **getApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.ts:309](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/api/_handlers/_routes.ts#L309)
+Defined in: [api/\_handlers/\_routes.ts:309](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/_routes.ts#L309)
 
 #### Parameters
 

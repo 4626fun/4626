@@ -23,6 +23,7 @@ This site publishes curated documentation from multiple sources across the monor
 - Documentation describing contracts lives in `docs/contracts/`.
 - Documentation describing frontend lives in `docs/frontend/` (manual) + `frontend/docs/` (workspace).
 - Missing documentation for some code areas is allowed and intentional.
+- Frontend API docs intentionally focus on stable library/config/wallet/auth/API layers, not every React page or component prop type.
 
 ### What the Sync Script Does
 
@@ -56,12 +57,14 @@ The postprocess script:
 Scripts:
 - `pnpm api:postprocess` - Run postprocessing
 - `pnpm api:postprocess:strict` - Fail on unresolved links
-- `pnpm build:strict` - Full strict docs-site build pipeline (heavier, optional for local validation)
+- `pnpm build:strict` - Full strict docs-site build pipeline
+- `pnpm bundle:strict` - Full strict docs-site bundle without minification (heavier, optional for local validation)
 
 Repo-level shortcuts:
 - `pnpm docs:refresh` - Regenerate frontend + contract docs, then sync and postprocess the docs site
 - `pnpm docs:check` - Regenerate docs, run strict sync/postprocess validation, and fail if generated output was not committed
-- `pnpm docs:build:strict` - Run the full strict docs-site build from the repo root
+- `pnpm docs:build:strict` - Alias for `pnpm docs:check`
+- `pnpm docs:bundle` - Run the heavyweight strict docs-site bundle from the repo root
 - `pnpm docs:drift` - Detect whether the current change set should trigger docs refresh/build checks
 
 ## Development
@@ -108,8 +111,10 @@ pnpm docs:check
 For an additional full site bundle check, run:
 
 ```bash
-pnpm docs:build:strict
+pnpm docs:bundle
 ```
+
+Note: the full Docusaurus production bundle is significantly more memory-hungry than sync/postprocess validation. On constrained local machines it may be killed by the OS even when the docs pipeline itself is correct.
 
 To quickly see whether a change set is docs-sensitive:
 

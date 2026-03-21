@@ -12,7 +12,7 @@
 
 > **SignInWithSiwaAgentParams** = `object`
 
-Defined in: [src/lib/siwaAgentAuth.ts:65](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L65)
+Defined in: [src/lib/siwaAgentAuth.ts:65](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L65)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [src/lib/siwaAgentAuth.ts:65](https://github.com/wenakita/4626/blob/
 
 > **agentId**: `number`
 
-Defined in: [src/lib/siwaAgentAuth.ts:66](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L66)
+Defined in: [src/lib/siwaAgentAuth.ts:66](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L66)
 
 ##### agentRegistry?
 
 > `optional` **agentRegistry**: `string`
 
-Defined in: [src/lib/siwaAgentAuth.ts:69](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L69)
+Defined in: [src/lib/siwaAgentAuth.ts:69](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L69)
 
 ##### ownerAddress?
 
 > `optional` **ownerAddress**: `string`
 
-Defined in: [src/lib/siwaAgentAuth.ts:68](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L68)
+Defined in: [src/lib/siwaAgentAuth.ts:68](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L68)
 
 ##### signMessage()
 
 > **signMessage**: (`message`) => `Promise`\<`string`\>
 
-Defined in: [src/lib/siwaAgentAuth.ts:67](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L67)
+Defined in: [src/lib/siwaAgentAuth.ts:67](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L67)
 
 ###### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/siwaAgentAuth.ts:67](https://github.com/wenakita/4626/blob/
 
 > `optional` **statement**: `string`
 
-Defined in: [src/lib/siwaAgentAuth.ts:70](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L70)
+Defined in: [src/lib/siwaAgentAuth.ts:70](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L70)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/siwaAgentAuth.ts:70](https://github.com/wenakita/4626/blob/
 
 > **SignInWithSiwaAgentResult** = `AgentVerifyResponse`
 
-Defined in: [src/lib/siwaAgentAuth.ts:73](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L73)
+Defined in: [src/lib/siwaAgentAuth.ts:73](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L73)
 
 ## Functions
 
@@ -70,7 +70,7 @@ Defined in: [src/lib/siwaAgentAuth.ts:73](https://github.com/wenakita/4626/blob/
 
 > **signInWithSiwaAgent**(`params`): `Promise`\<`AgentVerifyResponse`\>
 
-Defined in: [src/lib/siwaAgentAuth.ts:92](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/siwaAgentAuth.ts#L92)
+Defined in: [src/lib/siwaAgentAuth.ts:92](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/siwaAgentAuth.ts#L92)
 
 #### Parameters
 
