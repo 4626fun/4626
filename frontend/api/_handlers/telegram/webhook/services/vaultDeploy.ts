@@ -20,6 +20,8 @@ declare const process: { env: Record<string, string | undefined> }
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as const
 const OFT_BOOTSTRAP_LABEL = '4626:OFTBootstrapRegistry:v1'
+const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
+const DEFAULT_MIN_FIRST_DEPOSIT_WEI = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 
 const BATCHER_PHASE1_CORE_WITH_SALT_ABI = [
   {
@@ -257,6 +259,16 @@ const AKITA_TEMPLATE = {
 
 type SessionCall = { to: Address; value: string; data: Hex }
 
+export type VaultDeployContracts = {
+  creatorToken: Address
+  vault: Address | null
+  wrapper: Address | null
+  shareOFT: Address | null
+  gaugeController: Address | null
+  ccaStrategy: Address | null
+  oracle: Address | null
+}
+
 export type VaultDeployStartRequest = {
   smartWallet: Address
   creatorToken: Address
@@ -278,10 +290,34 @@ type StartPayload = {
   continueTriggered?: boolean
   nextAction?: string
   continueStatus?: number
+  predictedContracts?: VaultDeployContracts
 }
 
 export type VaultDeployStartResult =
   | { ok: true; status: number; data: StartPayload }
+  | { ok: false; status: number; error: string }
+
+type StatusPayload = {
+  id?: string
+  step?: string
+  expiresAt?: string
+  lastError?: string | null
+  lastUserOpHash?: string | null
+  lastTxHash?: string | null
+  launchImage?: {
+    shareOft?: Address | null
+    vaultAddress?: Address | null
+  } | null
+  diagnostics?: {
+    replay?: {
+      phase2CoreSkipRecorded?: boolean
+      phase2FinalizeSkipRecorded?: boolean
+    }
+  } | null
+}
+
+export type VaultDeployStatusResult =
+  | { ok: true; status: number; data: StatusPayload }
   | { ok: false; status: number; error: string }
 
 function lowerAscii(input: string): string {
@@ -601,6 +637,47 @@ async function predictDeployAddresses(params: {
   }
 }
 
+function extractPredictedContractsFromFinalizeCall(params: {
+  creatorToken: Address
+  finalizeCallData: Hex
+}): VaultDeployContracts {
+  const fallback: VaultDeployContracts = {
+    creatorToken: params.creatorToken,
+    vault: null,
+    wrapper: null,
+    shareOFT: null,
+    gaugeController: null,
+    ccaStrategy: null,
+    oracle: null,
+  }
+  try {
+    const decoded = decodeFunctionData({
+      abi: BATCHER_FINALIZE_PHASE2_ABI,
+      data: params.finalizeCallData,
+    }) as any
+    const callParams = (decoded?.args?.[0] ?? {}) as Record<string, unknown>
+    const normalizeMaybeAddress = (raw: unknown): Address | null => {
+      if (typeof raw !== 'string') return null
+      try {
+        return getAddress(raw as Address)
+      } catch {
+        return null
+      }
+    }
+    return {
+      creatorToken: params.creatorToken,
+      vault: normalizeMaybeAddress(callParams.vault),
+      wrapper: normalizeMaybeAddress(callParams.wrapper),
+      shareOFT: normalizeMaybeAddress(callParams.shareOFT),
+      gaugeController: normalizeMaybeAddress(callParams.gaugeController),
+      ccaStrategy: normalizeMaybeAddress(callParams.ccaStrategy),
+      oracle: normalizeMaybeAddress(callParams.oracle),
+    }
+  } catch {
+    return fallback
+  }
+}
+
 export function formatVaultDeployPreviewText(params: {
   version: string
   creatorToken: Address
@@ -716,6 +793,7 @@ export async function buildAkitaVaultDeployStartRequest(params: {
     gaugeController: predicted.gaugeController,
     ccaStrategy: predicted.ccaStrategy,
     oracle: predicted.oracle,
+    depositAmount: DEFAULT_MIN_FIRST_DEPOSIT_WEI,
     version: params.version,
   }
 
@@ -818,6 +896,10 @@ export async function startAkitaVaultDeployFromTelegram(params: {
       canonicalSmartWallet: params.canonicalSmartWallet,
       version: params.version,
     })
+    const predictedContracts = extractPredictedContractsFromFinalizeCall({
+      creatorToken: body.creatorToken,
+      finalizeCallData: (body.phase2FinalizeCalls[0]?.data ?? '0x') as Hex,
+    })
 
     const token = makeSessionToken({ address: body.smartWallet })
     const origin = getCanonicalOrigin().replace(/\/+$/, '')
@@ -843,7 +925,10 @@ export async function startAkitaVaultDeployFromTelegram(params: {
     return {
       ok: true,
       status: response.status,
-      data: payload.data,
+      data: {
+        ...payload.data,
+        predictedContracts,
+      },
     }
   } catch (error: any) {
     const message = asTrimmed(String(error?.message ?? 'vault_deploy_start_failed'))
@@ -851,6 +936,55 @@ export async function startAkitaVaultDeployFromTelegram(params: {
       ok: false,
       status: 500,
       error: message || 'vault_deploy_start_failed',
+    }
+  }
+}
+
+export async function fetchVaultDeployStatusFromTelegram(params: {
+  canonicalSmartWallet: Address
+  sessionId: string
+}): Promise<VaultDeployStatusResult> {
+  const sessionId = asTrimmed(params.sessionId)
+  if (!sessionId) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'missing_session_id',
+    }
+  }
+  try {
+    const smartWallet = getAddress(params.canonicalSmartWallet)
+    const token = makeSessionToken({ address: smartWallet })
+    const origin = getCanonicalOrigin().replace(/\/+$/, '')
+    const response = await fetch(`${origin}/api/deploy/session/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ sessionId }),
+    })
+    const payload = (await response.json().catch(() => null)) as
+      | { success?: boolean; data?: StatusPayload; error?: string }
+      | null
+    if (!response.ok || !payload?.success || !payload.data) {
+      return {
+        ok: false,
+        status: response.status,
+        error: asTrimmed(payload?.error ?? '') || 'vault_deploy_status_failed',
+      }
+    }
+    return {
+      ok: true,
+      status: response.status,
+      data: payload.data,
+    }
+  } catch (error: any) {
+    const message = asTrimmed(String(error?.message ?? 'vault_deploy_status_failed'))
+    return {
+      ok: false,
+      status: 500,
+      error: message || 'vault_deploy_status_failed',
     }
   }
 }

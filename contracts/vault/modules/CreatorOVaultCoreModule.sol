@@ -25,7 +25,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
     uint256 internal constant MAX_BPS = 10_000;
     uint256 internal constant MAX_BPS_EXTENDED = 1_000_000_000_000;
     uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000;
-    uint256 internal constant MINIMUM_FIRST_DEPOSIT = 5_000_000e18;
+    uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18;
 
     // ---- events (must match vault signatures) ----
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);

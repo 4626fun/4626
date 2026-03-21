@@ -56,8 +56,18 @@ export function parseTelegramVaultDeployIntent(rawText: string): ParsedTelegramV
 
 export function parseVaultDeployCallbackData(rawData: string):
   | { kind: 'confirm' | 'decline'; token: string }
+  | { kind: 'status'; token: string }
   | null {
   const data = asTrimmed(rawData)
+  const statusMatch = data.match(/^vaultdeploy:status:([a-zA-Z0-9._-]+)$/)
+  if (statusMatch) {
+    const token = asTrimmed(statusMatch[1])
+    if (!token) return null
+    return {
+      kind: 'status',
+      token,
+    }
+  }
   const actionMatch = data.match(/^vaultdeploy:(confirm|accept|decline|cancel):([a-zA-Z0-9._-]+)$/)
   if (!actionMatch) return null
   const action = asTrimmed(actionMatch[1]).toLowerCase()

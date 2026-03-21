@@ -67,7 +67,7 @@ import {
 } from '@/lib/aa/coinbaseErc4337'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 
-const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 5_000_000n
+const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')

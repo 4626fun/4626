@@ -21,6 +21,7 @@ export function resolveHelpCallbackCommand(rawData: string): string | null {
     if (action === 'mybids') return '/mybids'
     if (action === 'signals') return '/signals'
     if (action === 'deploy') return '/deploy'
+    if (action === 'vaultdeploy' || action === 'deploy_vault') return '/vaultdeploy akita v1.6.1'
     if (action === 'zora') return '/zora'
     if (action === 'help') return '/help'
     return null
@@ -71,6 +72,7 @@ export function resolveNavigationCallbackToast(rawData: string, mappedCommand: s
   if (token === 'menu:sell') return 'Sell flow'
   if (token === 'menu:bid') return 'Bid flow'
   if (token === 'menu:deploy') return 'Deploy wizard'
+  if (token === 'menu:vaultdeploy' || token === 'menu:deploy_vault') return 'Vault deploy'
   if (token === 'menu:zora') return 'Zora setup'
   if (token === 'onboard:begin') return 'Onboarding'
   if (token === 'onboard:csw:link' || token === 'onboard:csw:create') return 'CSW check'

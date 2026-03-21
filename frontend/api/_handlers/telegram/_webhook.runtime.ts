@@ -114,9 +114,11 @@ import { emitTelegramFunnelEvent as emitTelegramFunnelEventShared } from './webh
 import { buildDeployCommandFromIntent as buildDeployCommandFromIntentShared, formatDeployTokenFailure as formatDeployTokenFailureShared } from './webhook/services/deploy.js'
 import {
   buildVaultDeployPreviewReplyMarkup as buildVaultDeployPreviewReplyMarkupShared,
+  fetchVaultDeployStatusFromTelegram,
   formatVaultDeployPreviewText as formatVaultDeployPreviewTextShared,
   formatVaultDeployTokenFailure as formatVaultDeployTokenFailureShared,
   startAkitaVaultDeployFromTelegram,
+  type VaultDeployContracts,
 } from './webhook/services/vaultDeploy.js'
 import { checkTelegramTradeRateLimit as checkTelegramTradeRateLimitShared } from './webhook/services/trade.js'
 import {
@@ -922,6 +924,7 @@ function parseDeployCallbackData(rawData: string):
 
 function parseVaultDeployCallbackData(rawData: string):
   | { kind: 'confirm' | 'decline'; token: string }
+  | { kind: 'status'; token: string }
   | null {
   return parseVaultDeployCallbackDataShared(rawData)
 }
@@ -1576,6 +1579,7 @@ function buildFocusedHelpText(): string {
     '<code>/buy</code> — guided buy flow',
     '<code>/sell</code> — guided sell flow',
     '<code>/bid</code> — guided bid flow',
+    '<code>/vaultdeploy</code> — one-tap AKITA vault deploy preview',
     '<code>/wallet</code> — wallet, positions, and actions',
     '<code>/signals</code> — recent trade feed',
     '<code>/vaults</code> — browse vaults',
@@ -1591,6 +1595,7 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
   const keyboard: Array<Array<Record<string, unknown>>> = params.isLinked
     ? [
         [{ text: menuLabel('wallet'), callback_data: 'menu:wallet' }],
+        [{ text: 'Deploy Vault', callback_data: 'menu:vaultdeploy' }],
         [
           { text: menuLabel('trade'), callback_data: 'menu:trade' },
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
@@ -1620,6 +1625,7 @@ function buildExploreReplyMarkup(): Record<string, unknown> {
         { text: menuLabel('auctions'), callback_data: 'menu:auctions' },
         { text: menuLabel('signals'), callback_data: 'menu:signals' },
       ],
+      [{ text: 'Deploy Vault', callback_data: 'menu:vaultdeploy' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -1652,7 +1658,8 @@ function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
       ],
       [
         { text: 'Rooms', callback_data: 'menu:rooms' },
-        { text: 'Deploy', callback_data: 'menu:deploy' },
+        { text: 'Deploy Coin', callback_data: 'menu:deploy' },
+        { text: 'Deploy Vault', callback_data: 'menu:vaultdeploy' },
         { text: 'Zora', callback_data: 'menu:zora' },
       ],
       [
@@ -4087,6 +4094,232 @@ function formatVaultDeployTokenFailure(reason: 'not_found' | 'expired' | 'consum
   return formatVaultDeployTokenFailureShared(reason)
 }
 
+type VaultDeployStatusSnapshot = {
+  sessionId: string
+  step: string
+  lastError: string | null
+  lastUserOpHash: string | null
+  lastTxHash: string | null
+  contracts: VaultDeployContracts
+  phase1Done: boolean
+  phase2CoreDone: boolean
+  phase2FinalizeDone: boolean
+  phase4Done: boolean
+  terminal: boolean
+}
+
+function isStepIn(step: string, values: string[]): boolean {
+  const normalized = asTrimmed(step).toLowerCase()
+  return values.includes(normalized)
+}
+
+function isPhase1Complete(step: string): boolean {
+  return isStepIn(step, [
+    'phase1_confirmed',
+    'phase1_finalize_sent',
+    'phase1_finalize_confirmed',
+    'phase2_core_sent',
+    'phase2_core_confirmed',
+    'phase2_sent',
+    'phase2_confirmed',
+    'ovault_mesh_sent',
+    'ovault_mesh_confirmed',
+    'phase3_sent',
+    'phase3_confirmed',
+    'phase4_sent',
+    'phase4_confirmed',
+    'cleanup_sent',
+    'completed',
+  ])
+}
+
+function isPhase2CoreComplete(step: string, replaySkip: boolean): boolean {
+  if (replaySkip) return true
+  return isStepIn(step, [
+    'phase2_core_confirmed',
+    'phase2_sent',
+    'phase2_confirmed',
+    'ovault_mesh_sent',
+    'ovault_mesh_confirmed',
+    'phase3_sent',
+    'phase3_confirmed',
+    'phase4_sent',
+    'phase4_confirmed',
+    'cleanup_sent',
+    'completed',
+  ])
+}
+
+function isPhase2FinalizeComplete(step: string, replaySkip: boolean): boolean {
+  if (replaySkip) return true
+  return isStepIn(step, [
+    'phase2_confirmed',
+    'ovault_mesh_sent',
+    'ovault_mesh_confirmed',
+    'phase3_sent',
+    'phase3_confirmed',
+    'phase4_sent',
+    'phase4_confirmed',
+    'cleanup_sent',
+    'completed',
+  ])
+}
+
+function isPhase4Complete(step: string): boolean {
+  return isStepIn(step, ['phase4_confirmed', 'cleanup_sent', 'completed'])
+}
+
+function toBasescanAddressUrl(address: string): string {
+  return `https://basescan.org/address/${address}`
+}
+
+function toBasescanTxUrl(hash: string): string {
+  return `https://basescan.org/tx/${hash}`
+}
+
+function truncateHash(value: string): string {
+  const v = asTrimmed(value)
+  if (!/^0x[a-fA-F0-9]{64}$/.test(v)) return v
+  return `${v.slice(0, 10)}…${v.slice(-8)}`
+}
+
+function resolveVaultDeployContractsFromIntent(params: {
+  intent: Record<string, unknown>
+  launchImage?: { shareOft?: string | null; vaultAddress?: string | null } | null
+}): VaultDeployContracts {
+  const raw = (params.intent.predictedContracts as Record<string, unknown> | null) ?? null
+  const normalize = (value: unknown): `0x${string}` | null => {
+    if (typeof value !== 'string') return null
+    try {
+      return getAddress(value as Address)
+    } catch {
+      return null
+    }
+  }
+  const creatorToken =
+    normalize(raw?.creatorToken ?? params.intent.creatorToken) ?? getAddress('0x5b674196812451B7cEC024FE9d22D2c0b172fa75')
+  const launchVault = normalize(params.launchImage?.vaultAddress ?? null)
+  const launchShareOft = normalize(params.launchImage?.shareOft ?? null)
+  return {
+    creatorToken,
+    vault: launchVault ?? normalize(raw?.vault) ?? null,
+    wrapper: normalize(raw?.wrapper) ?? null,
+    shareOFT: launchShareOft ?? normalize(raw?.shareOFT) ?? null,
+    gaugeController: normalize(raw?.gaugeController) ?? null,
+    ccaStrategy: normalize(raw?.ccaStrategy) ?? null,
+    oracle: normalize(raw?.oracle) ?? null,
+  }
+}
+
+function formatVaultDeployContractRow(params: {
+  label: string
+  address: string | null
+  done: boolean
+}): string {
+  if (!params.address) return `${params.done ? '✅' : '⬜'} ${params.label}: pending`
+  return `${params.done ? '✅' : '⬜'} <a href="${toBasescanAddressUrl(params.address)}">${params.label}</a> <code>${truncateAddress(params.address)}</code>`
+}
+
+function buildVaultDeployStatusCard(snapshot: VaultDeployStatusSnapshot): string {
+  const lines = [
+    '<b>AKITA Vault Deploy</b>',
+    '',
+    `Session: <code>${snapshot.sessionId}</code>`,
+    `Step: <code>${snapshot.step}</code>`,
+    '',
+    '<u>Contracts</u>',
+    formatVaultDeployContractRow({ label: 'Vault', address: snapshot.contracts.vault, done: snapshot.phase1Done }),
+    formatVaultDeployContractRow({ label: 'Wrapper', address: snapshot.contracts.wrapper, done: snapshot.phase1Done }),
+    formatVaultDeployContractRow({ label: 'ShareOFT', address: snapshot.contracts.shareOFT, done: snapshot.phase1Done }),
+    formatVaultDeployContractRow({
+      label: 'Gauge',
+      address: snapshot.contracts.gaugeController,
+      done: snapshot.phase2CoreDone,
+    }),
+    formatVaultDeployContractRow({
+      label: 'CCA Strategy',
+      address: snapshot.contracts.ccaStrategy,
+      done: snapshot.phase2CoreDone,
+    }),
+    formatVaultDeployContractRow({
+      label: 'Oracle',
+      address: snapshot.contracts.oracle,
+      done: snapshot.phase2CoreDone,
+    }),
+    '',
+    '<u>Pipeline</u>',
+    `${snapshot.phase2FinalizeDone ? '✅' : '⬜'} Phase 2 finalize`,
+    `${snapshot.phase4Done ? '✅' : '⬜'} Deferred auction launch`,
+  ]
+  if (snapshot.lastUserOpHash) {
+    lines.push(`UserOp: <a href="${toBasescanTxUrl(snapshot.lastUserOpHash)}">${truncateHash(snapshot.lastUserOpHash)}</a>`)
+  }
+  if (snapshot.lastTxHash) {
+    lines.push(`Tx: <a href="${toBasescanTxUrl(snapshot.lastTxHash)}">${truncateHash(snapshot.lastTxHash)}</a>`)
+  }
+  if (snapshot.lastError) {
+    lines.push('')
+    lines.push(`<b>Error:</b> <code>${snapshot.lastError}</code>`)
+  }
+  if (!snapshot.terminal) {
+    lines.push('')
+    lines.push('Tap <b>Refresh Status</b> to update checks.')
+  }
+  return lines.join('\n')
+}
+
+function buildVaultDeployStatusReplyMarkup(params: {
+  refreshToken?: string | null
+  terminal: boolean
+  txHash?: string | null
+}): Record<string, unknown> | undefined {
+  const rows: Array<Array<Record<string, unknown>>> = []
+  if (!params.terminal && params.refreshToken) {
+    rows.push([{ text: 'Refresh Status', callback_data: `vaultdeploy:status:${params.refreshToken}` }])
+  }
+  if (params.txHash) {
+    rows.push([{ text: 'Open Tx', url: toBasescanTxUrl(params.txHash) }])
+  }
+  if (rows.length === 0) return undefined
+  return { inline_keyboard: rows }
+}
+
+async function buildVaultDeployStatusSnapshot(params: {
+  canonicalSmartWallet: `0x${string}`
+  sessionId: string
+  intent: Record<string, unknown>
+}): Promise<VaultDeployStatusSnapshot | null> {
+  const status = await fetchVaultDeployStatusFromTelegram({
+    canonicalSmartWallet: params.canonicalSmartWallet,
+    sessionId: params.sessionId,
+  })
+  if (!status.ok) return null
+  const step = asTrimmed(String(status.data.step ?? '')).toLowerCase() || 'unknown'
+  const replay = status.data.diagnostics?.replay
+  const contracts = resolveVaultDeployContractsFromIntent({
+    intent: params.intent,
+    launchImage: status.data.launchImage ?? null,
+  })
+  const phase1Done = isPhase1Complete(step)
+  const phase2CoreDone = isPhase2CoreComplete(step, replay?.phase2CoreSkipRecorded === true)
+  const phase2FinalizeDone = isPhase2FinalizeComplete(step, replay?.phase2FinalizeSkipRecorded === true)
+  const phase4Done = isPhase4Complete(step)
+  const terminal = isStepIn(step, ['completed', 'failed', 'cancelled'])
+  return {
+    sessionId: asTrimmed(String(status.data.id ?? params.sessionId)) || params.sessionId,
+    step,
+    lastError: asTrimmed(String(status.data.lastError ?? '')) || null,
+    lastUserOpHash: asTrimmed(String(status.data.lastUserOpHash ?? '')) || null,
+    lastTxHash: asTrimmed(String(status.data.lastTxHash ?? '')) || null,
+    contracts,
+    phase1Done,
+    phase2CoreDone,
+    phase2FinalizeDone,
+    phase4Done,
+    terminal,
+  }
+}
+
 async function handleTelegramVaultDeployCallback(params: {
   callbackData: string
   chatId: string
@@ -4108,30 +4341,6 @@ async function handleTelegramVaultDeployCallback(params: {
   await ensureKeeprSchema()
   await ensureTelegramTradingSchema(db as any)
 
-  const consumed = await consumeTelegramActionToken({
-    db: db as any,
-    token: callback.token,
-    telegramUserId: params.userId,
-    chatId: params.chatId,
-  })
-  if (!consumed.ok) {
-    const callbackToast =
-      consumed.reason === 'expired'
-        ? 'Preview expired'
-        : consumed.reason === 'consumed'
-          ? 'Already used'
-          : consumed.reason === 'scope_mismatch'
-            ? 'Wrong chat scope'
-            : 'Preview missing'
-    return {
-      text: formatVaultDeployTokenFailure(consumed.reason),
-      callbackToast,
-    }
-  }
-
-  const intent = consumed.intentPayload ?? {}
-  const version = asTrimmed(String(intent.version ?? 'v1.6.1')) || 'v1.6.1'
-
   const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
   if (!link || link.linkStatus !== 'active' || !link.ownerVerified) {
     const relinkFlow = buildTelegramLinkFlowResponse({
@@ -4152,6 +4361,118 @@ async function handleTelegramVaultDeployCallback(params: {
     }
   }
 
+  const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+  if (!canonicalSenderWallet) {
+    return {
+      text: 'Vault Deploy blocked: canonical wallet is not available.',
+      callbackToast: 'Canonical wallet missing',
+    }
+  }
+
+  if (callback.kind === 'status') {
+    const consumedStatus = await consumeTelegramActionToken({
+      db: db as any,
+      token: callback.token,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      actionType: 'vault_deploy_status',
+    })
+    if (!consumedStatus.ok) {
+      const callbackToast =
+        consumedStatus.reason === 'expired'
+          ? 'Status token expired'
+          : consumedStatus.reason === 'consumed'
+            ? 'Already refreshed'
+            : consumedStatus.reason === 'scope_mismatch'
+              ? 'Wrong chat scope'
+              : 'Status token missing'
+      return {
+        text: formatVaultDeployTokenFailure(consumedStatus.reason),
+        callbackToast,
+      }
+    }
+
+    const intent = consumedStatus.intentPayload ?? {}
+    const sessionId = asTrimmed(String(intent.sessionId ?? ''))
+    if (!sessionId) {
+      return {
+        text: 'Vault deploy status token is missing a session id. Start a new deploy preview.',
+        callbackToast: 'Invalid status token',
+      }
+    }
+
+    const snapshot = await buildVaultDeployStatusSnapshot({
+      canonicalSmartWallet: canonicalSenderWallet,
+      sessionId,
+      intent,
+    })
+    if (!snapshot) {
+      return {
+        text: [
+          'Vault Deploy status failed',
+          '',
+          '- unable to fetch deploy-session status right now',
+          '- tap refresh again in a few seconds',
+        ].join('\n'),
+        callbackToast: 'Status unavailable',
+      }
+    }
+
+    let refreshToken: string | null = null
+    if (!snapshot.terminal) {
+      const nextIntent = {
+        ...intent,
+        sessionId: snapshot.sessionId,
+        predictedContracts: snapshot.contracts,
+        updatedAt: new Date().toISOString(),
+      }
+      const nextToken = await createTelegramActionToken({
+        db: db as any,
+        telegramUserId: params.userId,
+        chatId: params.chatId,
+        actionType: 'vault_deploy_status',
+        intentPayload: nextIntent,
+        ttlSeconds: 60 * 15,
+      })
+      refreshToken = nextToken.token
+    }
+
+    return {
+      text: buildVaultDeployStatusCard(snapshot),
+      replyMarkup: buildVaultDeployStatusReplyMarkup({
+        refreshToken,
+        terminal: snapshot.terminal,
+        txHash: snapshot.lastTxHash,
+      }),
+      callbackToast: snapshot.terminal ? 'Deployment finalized' : 'Status updated',
+    }
+  }
+
+  const consumed = await consumeTelegramActionToken({
+    db: db as any,
+    token: callback.token,
+    telegramUserId: params.userId,
+    chatId: params.chatId,
+    actionType: 'vault_deploy',
+  })
+  if (!consumed.ok) {
+    const callbackToast =
+      consumed.reason === 'expired'
+        ? 'Preview expired'
+        : consumed.reason === 'consumed'
+          ? 'Already used'
+          : consumed.reason === 'scope_mismatch'
+            ? 'Wrong chat scope'
+            : 'Preview missing'
+    return {
+      text: formatVaultDeployTokenFailure(consumed.reason),
+      callbackToast,
+    }
+  }
+
+  const intent = consumed.intentPayload ?? {}
+  const version = asTrimmed(String(intent.version ?? 'v1.6.1')) || 'v1.6.1'
+
   if (callback.kind === 'decline') {
     await logTelegramActionAudit({
       db: db as any,
@@ -4167,29 +4488,6 @@ async function handleTelegramVaultDeployCallback(params: {
     return {
       text: 'Declined AKITA vault deploy preview.',
       callbackToast: 'Vault deploy declined',
-    }
-  }
-
-  const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
-  if (!canonicalSenderWallet) {
-    await logTelegramActionAudit({
-      db: db as any,
-      telegramUserId: params.userId,
-      chatId: params.chatId,
-      messageId: params.messageId,
-      profileId: link.profileId,
-      canonicalCswAddress: link.canonicalCswAddress,
-      actionType: 'vault_deploy',
-      intent,
-      execution: {
-        mode: 'deploy_session_start',
-      },
-      status: 'failed',
-      errorMessage: 'canonical_wallet_missing',
-    })
-    return {
-      text: 'Vault Deploy blocked: canonical wallet is not available.',
-      callbackToast: 'Canonical wallet missing',
     }
   }
 
@@ -4230,28 +4528,63 @@ async function handleTelegramVaultDeployCallback(params: {
   }
 
   const data = started.data
-  const nextAction = asTrimmed(String(data.nextAction ?? 'manual_continue')) || 'manual_continue'
-  const lines = [
-    'Vault Deploy started • AKITA',
-    '',
-    `- sessionId: ${asTrimmed(String(data.sessionId ?? '')) || 'n/a'}`,
-    `- sessionSigner: ${asTrimmed(String(data.sessionSignerAddress ?? '')) || 'n/a'}`,
-    `- nextAction: ${nextAction}`,
-    `- ownerInstalled: ${String(data.ownerInstalled ?? null)}`,
-    `- continueTriggered: ${String(data.continueTriggered ?? false)}`,
-  ]
-  if (nextAction === 'wait_for_owner_install') {
-    lines.push('- owner install is still required for the session signer')
-    lines.push('- once installed, the backend can continue this deploy session')
-  } else if (nextAction === 'poll_status') {
-    lines.push('- deployment is continuing in background')
-    lines.push('- wait for phase progression updates in deploy-session status')
+  const sessionId = asTrimmed(String(data.sessionId ?? ''))
+  if (!sessionId) {
+    return {
+      text: 'Vault Deploy started but no session id was returned. Please retry.',
+      callbackToast: 'Session missing',
+    }
   }
-  if (data.expiresAt) {
-    lines.push(`- expiresAt: ${data.expiresAt}`)
+
+  const statusIntent = {
+    token: 'akita',
+    version,
+    sessionId,
+    creatorToken: intent.creatorToken ?? getAddress('0x5b674196812451B7cEC024FE9d22D2c0b172fa75'),
+    smartWallet: canonicalSenderWallet,
+    predictedContracts: data.predictedContracts ?? null,
+    createdAt: new Date().toISOString(),
   }
+
+  const snapshot = await buildVaultDeployStatusSnapshot({
+    canonicalSmartWallet: canonicalSenderWallet,
+    sessionId,
+    intent: statusIntent,
+  })
+  const effectiveSnapshot: VaultDeployStatusSnapshot = snapshot ?? {
+    sessionId,
+    step: asTrimmed(String(data.nextAction ?? 'manual_continue')) || 'manual_continue',
+    lastError: null,
+    lastUserOpHash: null,
+    lastTxHash: null,
+    contracts: data.predictedContracts ?? resolveVaultDeployContractsFromIntent({ intent: statusIntent }),
+    phase1Done: false,
+    phase2CoreDone: false,
+    phase2FinalizeDone: false,
+    phase4Done: false,
+    terminal: false,
+  }
+
+  let refreshToken: string | null = null
+  if (!effectiveSnapshot.terminal) {
+    const refresh = await createTelegramActionToken({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      actionType: 'vault_deploy_status',
+      intentPayload: statusIntent,
+      ttlSeconds: 60 * 15,
+    })
+    refreshToken = refresh.token
+  }
+
   return {
-    text: lines.join('\n'),
+    text: buildVaultDeployStatusCard(effectiveSnapshot),
+    replyMarkup: buildVaultDeployStatusReplyMarkup({
+      refreshToken,
+      terminal: effectiveSnapshot.terminal,
+      txHash: effectiveSnapshot.lastTxHash,
+    }),
     callbackToast: 'Vault deploy started',
   }
 }
@@ -5308,6 +5641,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parsedTradeFlowCallback = parseTradeFlowCallbackData(callbackData)
     const parsedTradeCallback = parseTradeCallbackData(callbackData)
     const parsedDeployCallback = parseDeployCallbackData(callbackData)
+    const parsedVaultDeployCallback = parseVaultDeployCallbackData(callbackData)
     const parsedTipCallback = parseTipCallbackData(callbackData)
     const mappedCommand = resolveHelpCallbackCommand(callbackData)
     const isMenuNavigationCallback = callbackData.startsWith('menu:') || callbackData.startsWith('help:')
@@ -5459,16 +5793,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let callbackAcknowledged = false
     try {
+      const vaultDeployImmediateToast = parsedVaultDeployCallback
+        ? parsedVaultDeployCallback.kind === 'status'
+          ? 'Refreshing status...'
+          : parsedVaultDeployCallback.kind === 'confirm'
+            ? 'Starting deployment...'
+            : 'Deployment cancelled'
+        : ''
       await answerTelegramCallbackQuery({
         botToken,
         callbackQueryId,
-        text: resolveImmediateCallbackToast({
-          parsedTradeFlowCallback,
-          parsedTradeCallback,
-          parsedDeployCallback,
-          callbackData,
-          mappedCommand,
-        }),
+        text:
+          vaultDeployImmediateToast ||
+          resolveImmediateCallbackToast({
+            parsedTradeFlowCallback,
+            parsedTradeCallback,
+            parsedDeployCallback,
+            callbackData,
+            mappedCommand,
+          }),
       })
       callbackAcknowledged = true
     } catch (error) {

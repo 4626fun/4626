@@ -145,8 +145,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
 
     // ── Fixed Two-Way Split Constants ────────────────────────────────
-    /// @notice Minimum deposit amount (5M tokens, 18 decimals)
-    uint256 public constant MIN_DEPOSIT = 5_000_000e18;
+    /// @notice Minimum deposit amount (50M tokens, 18 decimals)
+    uint256 public constant MIN_DEPOSIT = 50_000_000e18;
     /// @notice Maximum deposit amount (50M tokens, 18 decimals)
     uint256 public constant MAX_DEPOSIT = 50_000_000e18;
     /// @notice Percentage of ■TOKENs allocated to CCA auction
@@ -852,7 +852,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (params.gaugeController == address(0) || params.ccaStrategy == address(0) || params.oracle == address(0)) {
             revert ZeroAddress();
         }
-        // Enforce deposit bounds: min 5M, max 50M.
+        // Enforce deposit bounds: min 50M, max 50M.
         if (params.depositAmount < MIN_DEPOSIT || params.depositAmount > MAX_DEPOSIT) revert InvalidDepositAmount();
 
         // Require phase-1 + phase-2 contracts to exist.
