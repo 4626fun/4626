@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeAcceptedFromAllowlist, resolveAllowlistMode } from './App'
+import { computeAcceptedFromAllowlist, hasTelegramLinkQueryContext, resolveAllowlistMode } from './App'
 
 describe('allowlist access resolution', () => {
   it('fails closed when allowlist mode is unresolved', () => {
@@ -18,5 +18,16 @@ describe('allowlist access resolution', () => {
     const mode = resolveAllowlistMode({ modeFromGlobal: 'enforced', modeFromAddress: null })
     expect(computeAcceptedFromAllowlist({ mode, allowlisted: false })).toBe(false)
     expect(computeAcceptedFromAllowlist({ mode, allowlisted: true })).toBe(true)
+  })
+})
+
+describe('telegram link query context', () => {
+  it('accepts valid tg link token query context', () => {
+    expect(hasTelegramLinkQueryContext('?tgEntry=link&tgLinkToken=token-123')).toBe(true)
+  })
+
+  it('rejects invalid tg link query context', () => {
+    expect(hasTelegramLinkQueryContext('?tgEntry=link')).toBe(false)
+    expect(hasTelegramLinkQueryContext('?tgEntry=other&tgLinkToken=token-123')).toBe(false)
   })
 })

@@ -4,6 +4,7 @@ import {
   formatTelegramSessionError,
   getTelegramLinkSuccessMessage,
   getTelegramLinkViewState,
+  shouldShowRetryTelegramSession,
 } from './TelegramLink'
 
 describe('TelegramLink helpers', () => {
@@ -78,5 +79,21 @@ describe('TelegramLink helpers', () => {
         statusMessage: 'Open this link from Telegram so 4626 can verify your Mini App session.',
       }),
     )
+  })
+
+  it('shows Retry Telegram session only inside Telegram Mini App context', () => {
+    expect(
+      shouldShowRetryTelegramSession({
+        sessionState: 'error',
+        telegramMiniAppContext: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldShowRetryTelegramSession({
+        sessionState: 'error',
+        telegramMiniAppContext: true,
+      }),
+    ).toBe(true)
   })
 })

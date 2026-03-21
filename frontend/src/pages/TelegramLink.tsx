@@ -29,6 +29,7 @@ type TelegramLinkCompleteResponse = {
 
 export type TelegramLinkSessionState = 'verifying' | 'ready' | 'error'
 export type TelegramLinkFlowState = 'idle' | 'authenticating' | 'linking' | 'linked' | 'error'
+const OPEN_FROM_TELEGRAM_SESSION_ERROR = 'Open this link from Telegram so 4626 can verify your Mini App session.'
 
 export function formatTelegramSessionError(error: string, statusCode: number): string {
   const normalized = String(error ?? '').trim().toLowerCase()
@@ -51,6 +52,13 @@ export function getTelegramLinkSuccessMessage(linkStatus: string): string {
   return linkStatus === 'active'
     ? 'Telegram linked successfully. You can return to Telegram or continue into 4626.'
     : 'Telegram linked. Finish Coinbase Smart Wallet setup in 4626 before trading from Telegram.'
+}
+
+export function shouldShowRetryTelegramSession(params: {
+  sessionState: TelegramLinkSessionState
+  telegramMiniAppContext: boolean
+}): boolean {
+  return params.sessionState === 'error' && params.telegramMiniAppContext
 }
 
 export function getTelegramLinkViewState(params: {
@@ -149,12 +157,17 @@ export function TelegramLink() {
     let teardown: (() => void) | null = null
 
     void (async () => {
-      await loadTelegramWebApp().catch(() => null)
+      const webApp = await loadTelegramWebApp().catch(() => null)
       if (cancelled) return
+      if (!webApp) {
+        setSessionState('error')
+        setSessionError(OPEN_FROM_TELEGRAM_SESSION_ERROR)
+        return
+      }
       teardown = setupTelegramMiniAppUi({ requestExpand: true })
       if (!isTelegramMiniAppContext()) {
         setSessionState('error')
-        setSessionError('Open this link from Telegram so 4626 can verify your Mini App session.')
+        setSessionError(OPEN_FROM_TELEGRAM_SESSION_ERROR)
         return
       }
       await verifySession()
@@ -240,6 +253,11 @@ export function TelegramLink() {
   ])
 
   const onRetrySession = useCallback(() => {
+    if (!isTelegramMiniAppContext()) {
+      setSessionState('error')
+      setSessionError(OPEN_FROM_TELEGRAM_SESSION_ERROR)
+      return
+    }
     void verifySession()
   }, [verifySession])
 
@@ -281,6 +299,10 @@ export function TelegramLink() {
     linkMessage,
     privyAuthenticated,
     hasLinkContext: Boolean(telegramLinkContext),
+  })
+  const showRetrySessionButton = shouldShowRetryTelegramSession({
+    sessionState,
+    telegramMiniAppContext: isTelegramMiniAppContext(),
   })
 
   return (
@@ -333,7 +355,7 @@ export function TelegramLink() {
             </button>
           ) : null}
 
-          {sessionState === 'error' ? (
+          {showRetrySessionButton ? (
             <button
               type="button"
               onClick={onRetrySession}

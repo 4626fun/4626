@@ -118,20 +118,23 @@ This app follows [Base Mini App guidelines](https://docs.base.org/mini-apps/quic
 
 ## Deployment
 
-- See `docs/erc7712-agent-permission-plan.md` for a proposed ERC-7712 delegated-permission rollout for deploy/agent flows.
-
-
 ### Vercel (Recommended)
 
+For the real launch path, start with:
+
+- `docs/operations/deployment/launch/ship-checklist.md`
+- `docs/guides/deploy-vault.md`
+
+Frontend build:
+
 ```bash
-npm run build
-vercel deploy
+pnpm build
 ```
 
 ### Manual
 
 ```bash
-npm run build
+pnpm build
 # Deploy dist/ folder
 ```
 

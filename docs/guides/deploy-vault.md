@@ -7,6 +7,8 @@ sidebar_position: 2
 
 Technical guide to deploying a 4626.
 
+For the launch order and go-live checklist, use [Ship Checklist](/operations/deployment/launch/ship-checklist).
+
 ## Via Web UI (Recommended)
 
 Preferred setup is a **1-click deploy**:

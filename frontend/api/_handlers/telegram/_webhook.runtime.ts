@@ -84,6 +84,11 @@ import { parseDeployCallbackData as parseDeployCallbackDataShared, parseTelegram
 import { parseHolderRoomIdentifier as parseHolderRoomIdentifierShared } from './webhook/parsers/holderRooms.js'
 import { parseTipCallbackData as parseTipCallbackDataShared, parseTipInvoicePayload as parseTipInvoicePayloadShared } from './webhook/parsers/tips.js'
 import {
+  formatVaultDeployUsageText as formatVaultDeployUsageTextShared,
+  parseTelegramVaultDeployIntent as parseTelegramVaultDeployIntentShared,
+  parseVaultDeployCallbackData as parseVaultDeployCallbackDataShared,
+} from './webhook/parsers/vaultDeploy.js'
+import {
   buildInlineQueryAnswer,
   classifyInlineQuery,
   type InlineMediaAsset,
@@ -107,6 +112,12 @@ import { sendTelegramStarsInvoice as sendTelegramStarsInvoiceShared } from './we
 import { isTelegramContextAllowed } from './webhook/services/access.js'
 import { emitTelegramFunnelEvent as emitTelegramFunnelEventShared } from './webhook/services/funnel.js'
 import { buildDeployCommandFromIntent as buildDeployCommandFromIntentShared, formatDeployTokenFailure as formatDeployTokenFailureShared } from './webhook/services/deploy.js'
+import {
+  buildVaultDeployPreviewReplyMarkup as buildVaultDeployPreviewReplyMarkupShared,
+  formatVaultDeployPreviewText as formatVaultDeployPreviewTextShared,
+  formatVaultDeployTokenFailure as formatVaultDeployTokenFailureShared,
+  startAkitaVaultDeployFromTelegram,
+} from './webhook/services/vaultDeploy.js'
 import { checkTelegramTradeRateLimit as checkTelegramTradeRateLimitShared } from './webhook/services/trade.js'
 import {
   collectPrivyWalletRows as collectPrivyWalletRowsShared,
@@ -409,6 +420,7 @@ const TELEGRAM_NATIVE_COMMANDS = new Set([
   'unlink',
   'zora',
   'deploy',
+  'vaultdeploy',
   'join',
   'rooms',
   'eligibility',
@@ -433,6 +445,7 @@ const TELEGRAM_COMMAND_HEADS = [
   'unlink',
   'zora',
   'deploy',
+  'vaultdeploy',
   'join',
   'rooms',
   'eligibility',
@@ -704,8 +717,20 @@ function formatDeployUsageText(reason?: string): string {
   return lines.join('\n')
 }
 
+function formatVaultDeployUsageText(reason?: string): string {
+  return formatVaultDeployUsageTextShared(reason)
+}
+
 function parseTelegramDeployIntent(rawText: string): ParsedTelegramDeployIntent | null {
   return parseTelegramDeployIntentShared(rawText)
+}
+
+function parseTelegramVaultDeployIntent(rawText: string):
+  | { kind: 'menu' }
+  | { kind: 'usage'; text: string }
+  | { kind: 'request'; token: 'akita'; version: string }
+  | null {
+  return parseTelegramVaultDeployIntentShared(rawText)
 }
 
 type CcaAuctionQuote = {
@@ -893,6 +918,12 @@ function parseDeployCallbackData(rawData: string):
   | { kind: 'confirm' | 'decline'; token: string }
   | null {
   return parseDeployCallbackDataShared(rawData)
+}
+
+function parseVaultDeployCallbackData(rawData: string):
+  | { kind: 'confirm' | 'decline'; token: string }
+  | null {
+  return parseVaultDeployCallbackDataShared(rawData)
 }
 
 function getPrivyServerAuth(): { appId: string; appSecret: string } {
@@ -1370,7 +1401,6 @@ function buildTelegramLinkFlowResponse(params: {
     text: 'Open Mini App',
     url: linkUrl,
   })
-  const linkHtmlHref = escapeTelegramHtmlHrefAttribute(linkUrl)
   const baseInviteUrl = resolveTelegramBaseAppInviteUrl()
   const linkBodyLines =
     params.zoraOnboardingBranch === 'need'
@@ -1434,7 +1464,8 @@ function buildTelegramLinkFlowResponse(params: {
       ...linkBodyLines,
       ...(linkToken ? ['', 'Link expires in ~15 minutes.'] : []),
       '',
-      `If the button fails: <a href="${linkHtmlHref}">Open Mini App</a>`,
+      'If the button fails, return to this DM and tap Open Mini App again.',
+      "Do not copy this URL into a browser — Telegram Mini App context is required.",
       'Then tap Check Link Status.',
     ].join('\n'),
     replyMarkup: {
@@ -2415,6 +2446,7 @@ async function executeTelegramNativeCommand(params: {
   const head = getCommandHead(params.text)
   const tradeIntent = parseTelegramTradeIntent(params.text)
   const deployIntent = parseTelegramDeployIntent(params.text)
+  const vaultDeployIntent = parseTelegramVaultDeployIntent(params.text)
 
   if (head === 'start') {
     const isLinked = await isTelegramUserLinked({
@@ -2598,6 +2630,26 @@ async function executeTelegramNativeCommand(params: {
         ].join('\n'),
       }
     }
+    if (head === 'vaultdeploy') {
+      if (!vaultDeployIntent || vaultDeployIntent.kind === 'menu') {
+        return {
+          text: formatVaultDeployUsageText(),
+        }
+      }
+      if (vaultDeployIntent.kind === 'usage') {
+        return {
+          text: vaultDeployIntent.text,
+        }
+      }
+      return {
+        text: [
+          'Vault Deploy',
+          '',
+          '- database unavailable',
+          '- retry in a few seconds',
+        ].join('\n'),
+      }
+    }
     if (head === 'deploy') {
       if (deployIntent?.kind === 'zora') {
         return buildTelegramZoraResponse(params.chatId)
@@ -2624,6 +2676,98 @@ async function executeTelegramNativeCommand(params: {
     await ensureWaitlistSchema(db as any)
     await ensureKeeprSchema()
     await ensureTelegramTradingSchema(db as any)
+  }
+
+  if (head === 'vaultdeploy') {
+    if (!vaultDeployIntent || vaultDeployIntent.kind === 'menu') {
+      return {
+        text: formatVaultDeployUsageText(),
+      }
+    }
+    if (vaultDeployIntent.kind === 'usage') {
+      return {
+        text: vaultDeployIntent.text,
+      }
+    }
+
+    const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+    if (!link || link.linkStatus !== 'active') {
+      return {
+        text: [
+          'Vault Deploy blocked',
+          '',
+          '- link required: run /link first',
+          '- after linking, retry /vaultdeploy',
+        ].join('\n'),
+      }
+    }
+    if (!link.ownerVerified) {
+      return {
+        text: [
+          'Vault Deploy blocked',
+          '',
+          '- owner verification required',
+          '- run /linked and ensure ownerVerified is true',
+        ].join('\n'),
+      }
+    }
+
+    const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+    if (!canonicalSenderWallet) {
+      return {
+        text: [
+          'Vault Deploy blocked',
+          '',
+          '- canonical wallet is unavailable',
+          '- relink your account and retry',
+        ].join('\n'),
+      }
+    }
+
+    const creatorToken = getAddress('0x5b674196812451B7cEC024FE9d22D2c0b172fa75')
+    const intentPayload: Record<string, unknown> = {
+      deployType: 'vault',
+      token: vaultDeployIntent.token,
+      version: vaultDeployIntent.version,
+      creatorToken,
+      smartWallet: canonicalSenderWallet,
+      createdAt: new Date().toISOString(),
+    }
+
+    const token = await createTelegramActionToken({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      actionType: 'vault_deploy',
+      intentPayload,
+      ttlSeconds: 60 * 5,
+    })
+
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: 'vault_deploy',
+      intent: intentPayload,
+      execution: {
+        mode: 'preview',
+        commandText: `/vaultdeploy ${vaultDeployIntent.token} ${vaultDeployIntent.version}`,
+      },
+      status: 'previewed',
+    })
+
+    return {
+      text: formatVaultDeployPreviewText({
+        version: vaultDeployIntent.version,
+        creatorToken,
+        smartWallet: canonicalSenderWallet,
+        expiresAt: token.expiresAt,
+      }),
+      replyMarkup: buildVaultDeployPreviewReplyMarkup(token.token),
+    }
   }
 
   if (head === 'deploy') {
@@ -3926,6 +4070,192 @@ function formatDeployTokenFailure(reason: 'not_found' | 'expired' | 'consumed' |
   return formatDeployTokenFailureShared(reason)
 }
 
+function buildVaultDeployPreviewReplyMarkup(token: string): Record<string, unknown> {
+  return buildVaultDeployPreviewReplyMarkupShared(token)
+}
+
+function formatVaultDeployPreviewText(params: {
+  version: string
+  creatorToken: `0x${string}`
+  smartWallet: `0x${string}`
+  expiresAt: string
+}): string {
+  return formatVaultDeployPreviewTextShared(params)
+}
+
+function formatVaultDeployTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {
+  return formatVaultDeployTokenFailureShared(reason)
+}
+
+async function handleTelegramVaultDeployCallback(params: {
+  callbackData: string
+  chatId: string
+  userId: string
+  messageId?: number
+}): Promise<TelegramCommandResponse | null> {
+  const callback = parseVaultDeployCallbackData(params.callbackData)
+  if (!callback) return null
+
+  const db = await getDb()
+  if (!db) {
+    return {
+      text: 'Vault deploy action unavailable while database is offline. Please retry in a few seconds.',
+      callbackToast: 'Temporarily unavailable',
+    }
+  }
+
+  await ensureWaitlistSchema(db as any)
+  await ensureKeeprSchema()
+  await ensureTelegramTradingSchema(db as any)
+
+  const consumed = await consumeTelegramActionToken({
+    db: db as any,
+    token: callback.token,
+    telegramUserId: params.userId,
+    chatId: params.chatId,
+  })
+  if (!consumed.ok) {
+    const callbackToast =
+      consumed.reason === 'expired'
+        ? 'Preview expired'
+        : consumed.reason === 'consumed'
+          ? 'Already used'
+          : consumed.reason === 'scope_mismatch'
+            ? 'Wrong chat scope'
+            : 'Preview missing'
+    return {
+      text: formatVaultDeployTokenFailure(consumed.reason),
+      callbackToast,
+    }
+  }
+
+  const intent = consumed.intentPayload ?? {}
+  const version = asTrimmed(String(intent.version ?? 'v1.6.1')) || 'v1.6.1'
+
+  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
+  if (!link || link.linkStatus !== 'active' || !link.ownerVerified) {
+    const relinkFlow = buildTelegramLinkFlowResponse({
+      chatId: params.chatId,
+      telegramUserId: params.userId,
+      telegramUsername: link?.telegramUsername,
+      linkButtonText: 'Reconnect',
+    })
+    return {
+      text: [
+        'Vault Deploy blocked',
+        '',
+        '- account link is no longer active/verified',
+        '- run /linked and /link again if needed',
+      ].join('\n'),
+      callbackToast: 'Reconnect required',
+      replyMarkup: relinkFlow.replyMarkup,
+    }
+  }
+
+  if (callback.kind === 'decline') {
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: 'vault_deploy',
+      intent,
+      status: 'cancelled',
+    })
+    return {
+      text: 'Declined AKITA vault deploy preview.',
+      callbackToast: 'Vault deploy declined',
+    }
+  }
+
+  const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+  if (!canonicalSenderWallet) {
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: 'vault_deploy',
+      intent,
+      execution: {
+        mode: 'deploy_session_start',
+      },
+      status: 'failed',
+      errorMessage: 'canonical_wallet_missing',
+    })
+    return {
+      text: 'Vault Deploy blocked: canonical wallet is not available.',
+      callbackToast: 'Canonical wallet missing',
+    }
+  }
+
+  const started = await startAkitaVaultDeployFromTelegram({
+    canonicalSmartWallet: canonicalSenderWallet,
+    version,
+  })
+  const status = started.ok ? 'executed' : 'failed'
+  await logTelegramActionAudit({
+    db: db as any,
+    telegramUserId: params.userId,
+    chatId: params.chatId,
+    messageId: params.messageId,
+    profileId: link.profileId,
+    canonicalCswAddress: link.canonicalCswAddress,
+    actionType: 'vault_deploy',
+    intent,
+    execution: {
+      mode: 'deploy_session_start',
+      commandText: `/vaultdeploy akita ${version}`,
+      details: started.ok ? started.data : null,
+    },
+    status,
+    errorMessage: started.ok ? null : started.error,
+  })
+
+  if (!started.ok) {
+    return {
+      text: [
+        'Vault Deploy failed • AKITA',
+        '',
+        `- status: ${started.status}`,
+        `- reason: ${started.error}`,
+        '- retry `/vaultdeploy akita v1.6.1`',
+      ].join('\n'),
+      callbackToast: 'Vault deploy failed',
+    }
+  }
+
+  const data = started.data
+  const nextAction = asTrimmed(String(data.nextAction ?? 'manual_continue')) || 'manual_continue'
+  const lines = [
+    'Vault Deploy started • AKITA',
+    '',
+    `- sessionId: ${asTrimmed(String(data.sessionId ?? '')) || 'n/a'}`,
+    `- sessionSigner: ${asTrimmed(String(data.sessionSignerAddress ?? '')) || 'n/a'}`,
+    `- nextAction: ${nextAction}`,
+    `- ownerInstalled: ${String(data.ownerInstalled ?? null)}`,
+    `- continueTriggered: ${String(data.continueTriggered ?? false)}`,
+  ]
+  if (nextAction === 'wait_for_owner_install') {
+    lines.push('- owner install is still required for the session signer')
+    lines.push('- once installed, the backend can continue this deploy session')
+  } else if (nextAction === 'poll_status') {
+    lines.push('- deployment is continuing in background')
+    lines.push('- wait for phase progression updates in deploy-session status')
+  }
+  if (data.expiresAt) {
+    lines.push(`- expiresAt: ${data.expiresAt}`)
+  }
+  return {
+    text: lines.join('\n'),
+    callbackToast: 'Vault deploy started',
+  }
+}
+
 async function handleTelegramDeployCallback(params: {
   callbackData: string
   chatId: string
@@ -5157,6 +5487,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const groupId = executionContext.groupId
     const senderWallet = executionContext.senderWallet
     const callbackResponse =
+      (await handleTelegramVaultDeployCallback({
+        callbackData,
+        chatId,
+        userId,
+        messageId: callbackMessageId,
+      })) ??
       (await handleTelegramDeployCallback({
         callbackData,
         chatId,

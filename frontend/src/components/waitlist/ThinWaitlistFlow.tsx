@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
@@ -182,6 +182,87 @@ function ZoraLogo({ className }: { className?: string }) {
       className={className}
       style={{ borderRadius: '50%' }}
     />
+  )
+}
+
+function WalletPathCard(props: {
+  eyebrow: string
+  title: string
+  body: string
+  bestFor: string
+  icon: ReactNode
+  emphasized?: boolean
+  busy?: boolean
+  busyLabel: string
+  label: string
+  onClick: () => void
+}) {
+  const { eyebrow, title, body, bestFor, icon, emphasized = false, busy = false, busyLabel, label, onClick } = props
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+      className={`flex h-full flex-col rounded-2xl border p-4 sm:p-5 ${
+        emphasized
+          ? 'border-brand-primary/35 bg-[linear-gradient(180deg,rgba(91,168,255,0.12)_0%,rgba(91,168,255,0.04)_100%)] shadow-[0_0_0_1px_rgba(91,168,255,0.08)]'
+          : 'border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.02)_100%)]'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{eyebrow}</span>
+            {emphasized ? (
+              <span className="rounded-full border border-brand-primary/25 bg-brand-primary/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-brand-primary">
+                Recommended
+              </span>
+            ) : null}
+          </div>
+          <div className="text-sm font-semibold text-white sm:text-[15px]">{title}</div>
+          <p className="text-xs leading-relaxed text-zinc-400 sm:text-[13px]">{body}</p>
+        </div>
+        <div
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${
+            emphasized
+              ? 'border-brand-primary/25 bg-brand-primary/15 shadow-[0_8px_30px_rgba(91,168,255,0.12)]'
+              : 'border-white/10 bg-white/[0.04]'
+          }`}
+        >
+          {icon}
+        </div>
+      </div>
+
+      <div
+        className={`mt-4 rounded-xl border px-3 py-2 text-[11px] sm:text-xs ${
+          emphasized ? 'border-brand-primary/20 bg-brand-primary/8 text-brand-primary/90' : 'border-white/8 bg-black/20 text-zinc-400'
+        }`}
+      >
+        <span className="font-medium uppercase tracking-[0.14em] text-[10px]">Best for</span>{' '}
+        <span>{bestFor}</span>
+      </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onClick}
+        className={`mt-4 w-full rounded-xl px-4 py-3 text-sm font-medium transition disabled:opacity-50 ${
+          emphasized
+            ? 'border border-brand-primary/30 bg-brand-primary/15 text-white hover:bg-brand-primary/20'
+            : 'border border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]'
+        }`}
+      >
+        {busy ? (
+          <>
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+            {busyLabel}
+          </>
+        ) : (
+          label
+        )}
+      </button>
+    </motion.div>
   )
 }
 
@@ -754,10 +835,69 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
               <h2 className="text-2xl font-semibold tracking-tight text-white">Set up your smart wallet</h2>
               <p className="text-sm text-zinc-400">
                 {walletSelectionNeeded
-                  ? 'Your verified email created the account and your Privy embedded wallet. Next, choose how you want to connect your canonical Coinbase Smart Wallet.'
-                  : 'Your canonical Coinbase Smart Wallet is connected. Finish 4626 signing by installing the Privy embedded EOA as an owner on that wallet.'}
+                  ? 'Your verified email created the account and your Privy signer. Next, choose the Coinbase Smart Wallet that 4626 should use.'
+                  : 'Your canonical Coinbase Smart Wallet is connected. Finish setup by enabling 4626 signing on that wallet.'}
               </p>
             </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+              className="grid gap-3 sm:grid-cols-2"
+            >
+              <div
+                className={`rounded-xl border p-4 space-y-2 ${
+                  walletSelectionNeeded
+                    ? 'border-brand-primary/35 bg-brand-primary/10'
+                    : 'border-emerald-500/25 bg-emerald-500/10'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Phase 1</span>
+                  <span
+                    className={`text-[10px] font-medium uppercase tracking-[0.18em] ${
+                      walletSelectionNeeded ? 'text-brand-primary' : 'text-emerald-300'
+                    }`}
+                  >
+                    {walletSelectionNeeded ? 'Active' : 'Complete'}
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-white">Choose your CSW path</div>
+                <p className="text-xs text-zinc-400">
+                  Pick the Coinbase Smart Wallet you want 4626 to use, or create one in Base app.
+                </p>
+              </div>
+
+              <div
+                className={`rounded-xl border p-4 space-y-2 ${
+                  ownerDelegationVerified
+                    ? 'border-emerald-500/25 bg-emerald-500/10'
+                    : walletSelectionNeeded
+                      ? 'border-white/10 bg-black/30'
+                      : 'border-brand-primary/35 bg-brand-primary/10'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Phase 2</span>
+                  <span
+                    className={`text-[10px] font-medium uppercase tracking-[0.18em] ${
+                      ownerDelegationVerified
+                        ? 'text-emerald-300'
+                        : walletSelectionNeeded
+                          ? 'text-zinc-500'
+                          : 'text-brand-primary'
+                    }`}
+                  >
+                    {ownerDelegationVerified ? 'Complete' : walletSelectionNeeded ? 'Pending' : 'Active'}
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-white">Enable 4626 signing</div>
+                <p className="text-xs text-zinc-400">
+                  Install the Privy embedded signer as an owner so 4626 can act through that wallet.
+                </p>
+              </div>
+            </motion.div>
 
             {notice ? (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
@@ -767,64 +907,64 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
             {walletSelectionNeeded ? (
               <>
-                <div className="grid gap-3">
-                  <button
-                    type="button"
-                    disabled={busy}
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <WalletPathCard
+                    eyebrow="Existing CSW"
+                    title="Link Base Smart Wallet"
+                    body="Use your existing Coinbase Smart Wallet from Base app and keep that wallet as the canonical CSW for 4626."
+                    bestFor="You already use Base app and want to keep that smart wallet."
+                    icon={<CoinbaseLogo className="h-6 w-6" />}
+                    busy={busy}
+                    busyLabel="Linking Base wallet..."
+                    label="Link Base Smart Wallet"
                     onClick={() => void onContinueWithBase()}
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-                  >
-                    {busy ? (
-                      <>
-                        <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                        Linking Base wallet…
-                      </>
-                    ) : (
-                      'Link Base Smart Wallet'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
+                  />
+                  <WalletPathCard
+                    eyebrow="Existing CSW"
+                    title="Link Zora Smart Wallet"
+                    body="Choose this when your canonical Coinbase Smart Wallet is already attached to your Zora account."
+                    bestFor="Your Zora account already resolves to the CSW you want 4626 to use."
+                    icon={<ZoraLogo className="h-6 w-6 rounded-full" />}
+                    busy={busy}
+                    busyLabel="Linking Zora wallet..."
+                    label="Link Zora Smart Wallet"
                     onClick={() => void onContinueWithZora()}
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-                  >
-                    {busy ? (
-                      <>
-                        <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                        Linking Zora wallet…
-                      </>
-                    ) : (
-                      'Link Zora Smart Wallet'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={onCreateInBaseApp}
-                    className="w-full rounded-xl border border-brand-primary/30 bg-brand-primary/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-primary/15 disabled:opacity-50"
-                  >
-                    Create new wallet in Base app
-                  </button>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Choose one path</p>
-                  <div className="space-y-2 text-xs text-zinc-400">
-                    <div className="flex items-start gap-2">
-                      <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>Use <span className="text-zinc-200">Link Base Smart Wallet</span> if you already have a Coinbase Smart Wallet in Base app.</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <ZoraLogo className="mt-0.5 h-4 w-4 shrink-0 rounded-full" />
-                      <span>Use <span className="text-zinc-200">Link Zora Smart Wallet</span> if your canonical CSW already lives on Zora.</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>Use <span className="text-zinc-200">Create new wallet in Base app</span> if you need a new CSW with the 4626 referral flow.</span>
-                    </div>
+                  />
+                  <div className="lg:col-span-2">
+                    <WalletPathCard
+                      eyebrow="New Base wallet"
+                      title="Create new wallet in Base app"
+                      body="Start a new Coinbase Smart Wallet in Base app with the 4626 referral flow, then come back here and continue setup."
+                      bestFor="You do not have a CSW yet, or you want a fresh Base-native setup."
+                      icon={<CoinbaseLogo className="h-6 w-6" />}
+                      emphasized
+                      busy={busy}
+                      busyLabel="Opening Base app..."
+                      label="Create new wallet in Base app"
+                      onClick={onCreateInBaseApp}
+                    />
                   </div>
                 </div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.24, delay: 0.04, ease: [0.4, 0, 0.2, 1] }}
+                  className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2"
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Quick guide</p>
+                  <div className="space-y-2 text-xs text-zinc-400">
+                    <div>
+                      Pick <span className="text-zinc-200">Link Base Smart Wallet</span> when you already use Base app and want that CSW to stay canonical.
+                    </div>
+                    <div>
+                      Pick <span className="text-zinc-200">Link Zora Smart Wallet</span> when Zora already resolves to the wallet you want 4626 to use.
+                    </div>
+                    <div>
+                      Pick <span className="text-zinc-200">Create new wallet in Base app</span> when you do not have a CSW yet or want a fresh Base-native setup.
+                    </div>
+                  </div>
+                </motion.div>
 
                 {ownerDelegationFlags ? (
                   <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
@@ -904,12 +1044,17 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 ) : null}
 
                 <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
-                  <div className="text-sm font-medium">Enable 4626 signing</div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium">Enable 4626 signing</div>
+                    <span className={`text-[10px] font-medium uppercase tracking-[0.18em] ${ownerDelegationVerified ? 'text-emerald-300' : 'text-brand-primary'}`}>
+                      {ownerDelegationVerified ? 'Complete' : 'Required'}
+                    </span>
+                  </div>
                   <p className="text-xs text-zinc-500">
-                    This adds your Privy embedded EOA as an owner on the canonical CSW. You will sign one transaction with the wallet that currently owns the CSW.
+                    This adds your Privy embedded signer as an owner on the canonical CSW. You will sign one transaction with the wallet that currently owns it.
                   </p>
                   <p className="text-xs text-zinc-500">
-                    If the owner wallet is not connected in this browser yet, reconnect it first and then retry.
+                    If the current owner wallet is not connected in this browser yet, reconnect it first and then retry.
                   </p>
                   <button
                     type="button"

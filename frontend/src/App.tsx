@@ -7,6 +7,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
+import { readTelegramMiniAppLinkContext } from '@/lib/telegramMiniAppLink'
 import { hasTelegramMiniAppEntrypointContext } from '@/lib/telegramWebApp'
 import { AdminLayout } from './components/AdminLayout'
 import { AppLoadingState } from '@/components/AppLoadingState'
@@ -66,6 +67,14 @@ export function computeAcceptedFromAllowlist(params: {
   if (params.mode === 'disabled') return true
   if (params.mode === 'enforced') return params.allowlisted
   return false
+}
+
+export function hasTelegramLinkQueryContext(search: string): boolean {
+  try {
+    return Boolean(readTelegramMiniAppLinkContext(new URLSearchParams(search)))
+  } catch {
+    return false
+  }
 }
 
 function withReason(to: string, reason: AccessReason | 'host-redirect' | 'external-redirect' | 'invalid-params'): string {
@@ -268,8 +277,9 @@ function RequireAccepted(props: { children?: React.ReactNode }) {
 function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode }) {
   const access = useAccessContext()
   const location = useLocation()
+  const hasLinkQueryContext = hasTelegramLinkQueryContext(location.search)
 
-  if (hasTelegramMiniAppEntrypointContext()) {
+  if (hasTelegramMiniAppEntrypointContext() || hasLinkQueryContext) {
     return props.children ? <>{props.children}</> : <Outlet />
   }
 
@@ -531,6 +541,14 @@ function App() {
               </>
             }
           >
+            <Route
+              path="/telegram/link"
+              element={
+                <RequireTelegramMiniAppEntry>
+                  <TelegramLink />
+                </RequireTelegramMiniAppEntry>
+              }
+            />
             <Route element={<Layout />}>
             {/* Public routes (no session required) */}
             <Route path="/" element={<Home />} />
@@ -562,14 +580,6 @@ function App() {
             />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/continue" element={<AppContinue />} />
-            <Route
-              path="/telegram/link"
-              element={
-                <RequireTelegramMiniAppEntry>
-                  <TelegramLink />
-                </RequireTelegramMiniAppEntry>
-              }
-            />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account" element={<AccountsPage />} />
 

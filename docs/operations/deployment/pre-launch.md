@@ -5,7 +5,9 @@ sidebar_position: 1
 
 # Pre-Launch Checklist
 
-Complete these steps before launching.
+Complete these prerequisites before launching.
+
+For the actual day-of launch sequence, use [Ship Checklist](/operations/deployment/launch/ship-checklist).
 
 ## Token Preparation
 

@@ -11,6 +11,7 @@ Guides for deploying 4626 infrastructure.
 
 | Guide | Description |
 |-------|-------------|
+| **[Ship Checklist](/operations/deployment/launch/ship-checklist)** | One ordered path from current state to launch |
 | **[Pre-Launch](/operations/deployment/pre-launch)** | Pre-launch checklist |
 | **[CCA Verification](/operations/deployment/cca-verification)** | Verify CCA deployment |
 | **[Solana OVault Canary Rollout](/operations/deployment/solana-ovault-canary-rollout)** | OVault preflight rollout + kill switch |

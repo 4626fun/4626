@@ -8,6 +8,8 @@ title: Verification
 
 Use the frontend `/deploy` deploy-session flow for production launches.
 
+For the launch order and required preconditions, start with [Ship Checklist](/operations/deployment/launch/ship-checklist).
+
 - It is the canonical path for the phased `DeploymentBatcher` flow.
 - It is the only path that is expected to complete with Charm, Ajna, and `SolanaStrategy` together.
 - It runs the Solana route / OVault preflight before phase 3.
