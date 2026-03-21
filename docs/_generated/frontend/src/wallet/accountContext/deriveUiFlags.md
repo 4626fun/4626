@@ -12,7 +12,7 @@
 
 > **deriveAccountUiFlags**(`params`): [`AccountUiFlags`](types.md#accountuiflags)
 
-Defined in: [src/wallet/accountContext/deriveUiFlags.ts:3](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/wallet/accountContext/deriveUiFlags.ts#L3)
+Defined in: [src/wallet/accountContext/deriveUiFlags.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/wallet/accountContext/deriveUiFlags.ts#L3)
 
 #### Parameters
 

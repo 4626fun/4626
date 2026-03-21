@@ -10,7 +10,7 @@
 
 ### DeploySessionAccessError
 
-Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:8](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L8)
+Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:8](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L8)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:8](https://github.
 
 > **new DeploySessionAccessError**(`status`, `message`): [`DeploySessionAccessError`](#deploysessionaccesserror)
 
-Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:11](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L11)
+Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:11](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L11)
 
 ###### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:11](https://github
 
 > **status**: `number`
 
-Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:9](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L9)
+Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:9](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L9)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:9](https://github.
 
 > **loadAuthorizedDeploySession**(`params`): `Promise`\<\{ `auth`: \{ `address`: `` `0x${string}` ``; `type`: `"session"`; \} \| \{ `address`: `` `0x${string}` ``; `agentId`: `number`; `agentRegistry`: `string`; `chainId`: `number`; `type`: `"siwa"`; \}; `rec`: `DeploySessionRecord`; `sessionAddress`: `` `0x${string}` ``; \}\>
 
-Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:18](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L18)
+Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:18](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L18)
 
 #### Parameters
 

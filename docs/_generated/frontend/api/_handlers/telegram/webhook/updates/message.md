@@ -12,7 +12,7 @@
 
 > **extractUpdateMessage**(`update`): [`TelegramMessage`](../types.md#telegrammessage) \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:18](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/updates/message.ts#L18)
+Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:18](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/updates/message.ts#L18)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:18](https://gith
 
 > **handle**(`req`, `res`, `update`, `_config`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:8](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/updates/message.ts#L8)
+Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:8](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/updates/message.ts#L8)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:8](https://githu
 
 > **normalizeMessageContext**(`message`): \{ `chatId`: `string`; `fromBot`: `boolean`; `messageId?`: `number`; `text`: `string`; `userId`: `string`; \} \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:28](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/updates/message.ts#L28)
+Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:28](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/updates/message.ts#L28)
 
 #### Parameters
 

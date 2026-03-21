@@ -12,7 +12,7 @@
 
 > **AppContinueGateInput** = `object`
 
-Defined in: [src/lib/auth/appContinueGate.ts:1](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L1)
+Defined in: [src/lib/auth/appContinueGate.ts:1](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L1)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [src/lib/auth/appContinueGate.ts:1](https://github.com/wenakita/4626
 
 > **autoLogin**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:2](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L2)
+Defined in: [src/lib/auth/appContinueGate.ts:2](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L2)
 
 ##### fromWaitlist
 
 > **fromWaitlist**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:3](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L3)
+Defined in: [src/lib/auth/appContinueGate.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L3)
 
 ##### privyAuthenticated
 
 > **privyAuthenticated**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:7](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L7)
+Defined in: [src/lib/auth/appContinueGate.ts:7](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L7)
 
 ##### privyClientStatus
 
 > **privyClientStatus**: `"disabled"` \| `"loading"` \| `"ready"`
 
-Defined in: [src/lib/auth/appContinueGate.ts:5](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L5)
+Defined in: [src/lib/auth/appContinueGate.ts:5](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L5)
 
 ##### privyReady
 
 > **privyReady**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:6](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L6)
+Defined in: [src/lib/auth/appContinueGate.ts:6](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L6)
 
 ##### siweAuthAddress
 
 > **siweAuthAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [src/lib/auth/appContinueGate.ts:4](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L4)
+Defined in: [src/lib/auth/appContinueGate.ts:4](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L4)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/lib/auth/appContinueGate.ts:4](https://github.com/wenakita/4626
 
 > **AppContinuePrivyWaitInput** = `object`
 
-Defined in: [src/lib/auth/appContinueGate.ts:23](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L23)
+Defined in: [src/lib/auth/appContinueGate.ts:23](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L23)
 
 #### Properties
 
@@ -66,31 +66,31 @@ Defined in: [src/lib/auth/appContinueGate.ts:23](https://github.com/wenakita/462
 
 > **handoffRedeemed**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:24](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L24)
+Defined in: [src/lib/auth/appContinueGate.ts:24](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L24)
 
 ##### privyAuthenticated
 
 > **privyAuthenticated**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:28](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L28)
+Defined in: [src/lib/auth/appContinueGate.ts:28](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L28)
 
 ##### privyClientStatus
 
 > **privyClientStatus**: `"disabled"` \| `"loading"` \| `"ready"`
 
-Defined in: [src/lib/auth/appContinueGate.ts:26](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L26)
+Defined in: [src/lib/auth/appContinueGate.ts:26](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L26)
 
 ##### privyReady
 
 > **privyReady**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:27](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L27)
+Defined in: [src/lib/auth/appContinueGate.ts:27](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L27)
 
 ##### siweAuthAddress
 
 > **siweAuthAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [src/lib/auth/appContinueGate.ts:25](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L25)
+Defined in: [src/lib/auth/appContinueGate.ts:25](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L25)
 
 ## Functions
 
@@ -98,7 +98,7 @@ Defined in: [src/lib/auth/appContinueGate.ts:25](https://github.com/wenakita/462
 
 > **shouldNavigateAfterWaitlistHandoff**(`input`): `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:10](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L10)
+Defined in: [src/lib/auth/appContinueGate.ts:10](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L10)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [src/lib/auth/appContinueGate.ts:10](https://github.com/wenakita/462
 
 > **shouldWaitForPrivyRehydrationAfterHandoff**(`_input`): `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:31](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/auth/appContinueGate.ts#L31)
+Defined in: [src/lib/auth/appContinueGate.ts:31](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/auth/appContinueGate.ts#L31)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **XmtpIdentitySource** = `"connected"` \| `"account-context"` \| `"waitlist"`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:4](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/xmtp/identityResolver.ts#L4)
+Defined in: [src/lib/xmtp/identityResolver.ts:4](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/xmtp/identityResolver.ts#L4)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/identityResolver.ts:4](https://github.com/wenakita/462
 
 > **XmtpModeOverride** = `"EOA"` \| `"SMART_WALLET"` \| `null` \| `undefined`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:3](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/xmtp/identityResolver.ts#L3)
+Defined in: [src/lib/xmtp/identityResolver.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/xmtp/identityResolver.ts#L3)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/xmtp/identityResolver.ts:3](https://github.com/wenakita/462
 
 > **resolveModePreferredIdentity**(`input`): `ResolveModePreferredIdentityResult`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:26](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/xmtp/identityResolver.ts#L26)
+Defined in: [src/lib/xmtp/identityResolver.ts:26](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/xmtp/identityResolver.ts#L26)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/xmtp/identityResolver.ts:26](https://github.com/wenakita/46
 
 > **shouldRequireAuthBackedXmtpIdentity**(`input`): `boolean`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:64](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/xmtp/identityResolver.ts#L64)
+Defined in: [src/lib/xmtp/identityResolver.ts:64](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/xmtp/identityResolver.ts#L64)
 
 #### Parameters
 

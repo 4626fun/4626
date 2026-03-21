@@ -675,25 +675,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
               )}
             </button>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onContinueWithBase()}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-              >
-                Continue with Base
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onContinueWithZora()}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-              >
-                Continue with Zora
-              </button>
-            </div>
-
             {error ? (
               <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
                 <div>{error}</div>
@@ -729,6 +710,25 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 </span>
               </div>
               <p className="text-sm text-zinc-400">{zoraUi.subtitle}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onContinueWithBase()}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                Continue with Base
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onContinueWithZora()}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                Continue with Zora
+              </button>
             </div>
 
             {zoraAutoResolving ? (

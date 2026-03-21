@@ -12,7 +12,7 @@
 
 > **TokenLogoLookup** = `object`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:19](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L19)
+Defined in: [src/lib/tokens/tokenLogo.ts:19](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L19)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [src/lib/tokens/tokenLogo.ts:19](https://github.com/wenakita/4626/bl
 
 > **cacheHit**: `boolean`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:22](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L22)
+Defined in: [src/lib/tokens/tokenLogo.ts:22](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L22)
 
 ##### cacheKey
 
 > **cacheKey**: `string`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:23](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L23)
+Defined in: [src/lib/tokens/tokenLogo.ts:23](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L23)
 
 ##### fallbackUrls
 
 > **fallbackUrls**: `string`[]
 
-Defined in: [src/lib/tokens/tokenLogo.ts:21](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L21)
+Defined in: [src/lib/tokens/tokenLogo.ts:21](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L21)
 
 ##### preferred
 
 > **preferred**: `string` \| `null`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:20](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L20)
+Defined in: [src/lib/tokens/tokenLogo.ts:20](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L20)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/tokens/tokenLogo.ts:20](https://github.com/wenakita/4626/bl
 
 > **TokenLogoSeed** = `Pick`\<[`TokenOption`](../uniswap/swapUtils.md#tokenoption), `"address"` \| `"logoUrl"` \| `"logoUrls"`\> & `object`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:13](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L13)
+Defined in: [src/lib/tokens/tokenLogo.ts:13](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L13)
 
 #### Type Declaration
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/tokens/tokenLogo.ts:13](https://github.com/wenakita/4626/bl
 
 > **getTokenLogo**(`token`): [`TokenLogoLookup`](#tokenlogolookup)
 
-Defined in: [src/lib/tokens/tokenLogo.ts:115](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L115)
+Defined in: [src/lib/tokens/tokenLogo.ts:115](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L115)
 
 Build a deterministic logo list in priority order.
 It includes curated metadata first, then curated fallbacks by chain.
@@ -90,7 +90,7 @@ Returns the cached successful URL separately to avoid stale broken chains.
 
 > **markTokenLogoSuccess**(`cacheKey`, `url`): `void`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:159](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/tokens/tokenLogo.ts#L159)
+Defined in: [src/lib/tokens/tokenLogo.ts:159](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/tokens/tokenLogo.ts#L159)
 
 #### Parameters
 

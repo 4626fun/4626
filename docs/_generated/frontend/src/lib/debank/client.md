@@ -12,7 +12,7 @@
 
 > **DebankChainBalance** = `object`
 
-Defined in: [src/lib/debank/client.ts:3](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L3)
+Defined in: [src/lib/debank/client.ts:3](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L3)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [src/lib/debank/client.ts:3](https://github.com/wenakita/4626/blob/d
 
 > **id**: `string`
 
-Defined in: [src/lib/debank/client.ts:4](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L4)
+Defined in: [src/lib/debank/client.ts:4](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L4)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [src/lib/debank/client.ts:6](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L6)
+Defined in: [src/lib/debank/client.ts:6](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L6)
 
 ##### name?
 
 > `optional` **name**: `string`
 
-Defined in: [src/lib/debank/client.ts:5](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L5)
+Defined in: [src/lib/debank/client.ts:5](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L5)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [src/lib/debank/client.ts:7](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L7)
+Defined in: [src/lib/debank/client.ts:7](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L7)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/debank/client.ts:7](https://github.com/wenakita/4626/blob/d
 
 > **DebankToken** = `object`
 
-Defined in: [src/lib/debank/client.ts:21](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L21)
+Defined in: [src/lib/debank/client.ts:21](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L21)
 
 #### Properties
 
@@ -54,55 +54,55 @@ Defined in: [src/lib/debank/client.ts:21](https://github.com/wenakita/4626/blob/
 
 > **amount**: `number`
 
-Defined in: [src/lib/debank/client.ts:28](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L28)
+Defined in: [src/lib/debank/client.ts:28](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L28)
 
 ##### chain?
 
 > `optional` **chain**: `string`
 
-Defined in: [src/lib/debank/client.ts:23](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L23)
+Defined in: [src/lib/debank/client.ts:23](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L23)
 
 ##### decimals?
 
 > `optional` **decimals**: `number`
 
-Defined in: [src/lib/debank/client.ts:26](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L26)
+Defined in: [src/lib/debank/client.ts:26](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L26)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/debank/client.ts:22](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L22)
+Defined in: [src/lib/debank/client.ts:22](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L22)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [src/lib/debank/client.ts:27](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L27)
+Defined in: [src/lib/debank/client.ts:27](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L27)
 
 ##### name?
 
 > `optional` **name**: `string`
 
-Defined in: [src/lib/debank/client.ts:24](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L24)
+Defined in: [src/lib/debank/client.ts:24](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L24)
 
 ##### price?
 
 > `optional` **price**: `number`
 
-Defined in: [src/lib/debank/client.ts:29](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L29)
+Defined in: [src/lib/debank/client.ts:29](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L29)
 
 ##### symbol?
 
 > `optional` **symbol**: `string`
 
-Defined in: [src/lib/debank/client.ts:25](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L25)
+Defined in: [src/lib/debank/client.ts:25](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L25)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [src/lib/debank/client.ts:30](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L30)
+Defined in: [src/lib/debank/client.ts:30](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L30)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [src/lib/debank/client.ts:30](https://github.com/wenakita/4626/blob/
 
 > **DebankTokenList** = `object`
 
-Defined in: [src/lib/debank/client.ts:33](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L33)
+Defined in: [src/lib/debank/client.ts:33](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L33)
 
 #### Properties
 
@@ -118,25 +118,25 @@ Defined in: [src/lib/debank/client.ts:33](https://github.com/wenakita/4626/blob/
 
 > **address**: `string`
 
-Defined in: [src/lib/debank/client.ts:35](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L35)
+Defined in: [src/lib/debank/client.ts:35](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L35)
 
 ##### asOf
 
 > **asOf**: `number`
 
-Defined in: [src/lib/debank/client.ts:34](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L34)
+Defined in: [src/lib/debank/client.ts:34](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L34)
 
 ##### chainId
 
 > **chainId**: `string`
 
-Defined in: [src/lib/debank/client.ts:36](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L36)
+Defined in: [src/lib/debank/client.ts:36](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L36)
 
 ##### tokens
 
 > **tokens**: [`DebankToken`](#debanktoken)[]
 
-Defined in: [src/lib/debank/client.ts:37](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L37)
+Defined in: [src/lib/debank/client.ts:37](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L37)
 
 ***
 
@@ -144,7 +144,7 @@ Defined in: [src/lib/debank/client.ts:37](https://github.com/wenakita/4626/blob/
 
 > **DebankTotalBalance** = `object`
 
-Defined in: [src/lib/debank/client.ts:10](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L10)
+Defined in: [src/lib/debank/client.ts:10](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L10)
 
 #### Properties
 
@@ -152,19 +152,19 @@ Defined in: [src/lib/debank/client.ts:10](https://github.com/wenakita/4626/blob/
 
 > **address**: `string`
 
-Defined in: [src/lib/debank/client.ts:11](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L11)
+Defined in: [src/lib/debank/client.ts:11](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L11)
 
 ##### chains
 
 > **chains**: [`DebankChainBalance`](#debankchainbalance)[]
 
-Defined in: [src/lib/debank/client.ts:13](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L13)
+Defined in: [src/lib/debank/client.ts:13](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L13)
 
 ##### totalUsdValue
 
 > **totalUsdValue**: `number`
 
-Defined in: [src/lib/debank/client.ts:12](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L12)
+Defined in: [src/lib/debank/client.ts:12](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L12)
 
 ***
 
@@ -172,7 +172,7 @@ Defined in: [src/lib/debank/client.ts:12](https://github.com/wenakita/4626/blob/
 
 > **DebankTotalBalanceBatch** = `object`
 
-Defined in: [src/lib/debank/client.ts:16](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L16)
+Defined in: [src/lib/debank/client.ts:16](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L16)
 
 #### Properties
 
@@ -180,13 +180,13 @@ Defined in: [src/lib/debank/client.ts:16](https://github.com/wenakita/4626/blob/
 
 > **asOf**: `number`
 
-Defined in: [src/lib/debank/client.ts:17](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L17)
+Defined in: [src/lib/debank/client.ts:17](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L17)
 
 ##### results
 
 > **results**: `Record`\<`string`, [`DebankTotalBalance`](#debanktotalbalance) \| `null`\>
 
-Defined in: [src/lib/debank/client.ts:18](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L18)
+Defined in: [src/lib/debank/client.ts:18](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L18)
 
 ## Functions
 
@@ -194,7 +194,7 @@ Defined in: [src/lib/debank/client.ts:18](https://github.com/wenakita/4626/blob/
 
 > **fetchDebankTokenList**(`params`): `Promise`\<[`DebankTokenList`](#debanktokenlist) \| `null`\>
 
-Defined in: [src/lib/debank/client.ts:103](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L103)
+Defined in: [src/lib/debank/client.ts:103](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L103)
 
 #### Parameters
 
@@ -218,7 +218,7 @@ Defined in: [src/lib/debank/client.ts:103](https://github.com/wenakita/4626/blob
 
 > **fetchDebankTotalBalanceBatch**(`params`): `Promise`\<[`DebankTotalBalanceBatch`](#debanktotalbalancebatch) \| `null`\>
 
-Defined in: [src/lib/debank/client.ts:70](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/debank/client.ts#L70)
+Defined in: [src/lib/debank/client.ts:70](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/debank/client.ts#L70)
 
 #### Parameters
 

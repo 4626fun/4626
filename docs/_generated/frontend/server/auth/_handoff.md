@@ -12,7 +12,7 @@
 
 > **consumeHandoffCode**(`db`, `code`): `Promise`\<\{ `address`: `string`; `privyToken`: `string` \| `null`; \} \| `null`\>
 
-Defined in: [server/auth/\_handoff.ts:73](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/server/auth/_handoff.ts#L73)
+Defined in: [server/auth/\_handoff.ts:73](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/server/auth/_handoff.ts#L73)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/auth/\_handoff.ts:73](https://github.com/wenakita/4626/blob/
 
 > **createHandoffCode**(`db`, `params`): `Promise`\<\{ `code`: `string`; `expiresAt`: `string`; \}\>
 
-Defined in: [server/auth/\_handoff.ts:57](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/server/auth/_handoff.ts#L57)
+Defined in: [server/auth/\_handoff.ts:57](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/server/auth/_handoff.ts#L57)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/auth/\_handoff.ts:57](https://github.com/wenakita/4626/blob/
 
 > **ensureHandoffSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/auth/\_handoff.ts:31](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/server/auth/_handoff.ts#L31)
+Defined in: [server/auth/\_handoff.ts:31](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/server/auth/_handoff.ts#L31)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/auth/\_handoff.ts:31](https://github.com/wenakita/4626/blob/
 
 > **makeHandoffCode**(): `string`
 
-Defined in: [server/auth/\_handoff.ts:11](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/server/auth/_handoff.ts#L11)
+Defined in: [server/auth/\_handoff.ts:11](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/server/auth/_handoff.ts#L11)
 
 #### Returns
 

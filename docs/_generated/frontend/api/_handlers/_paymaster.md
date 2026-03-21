@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/\_paymaster.ts:2533](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/_paymaster.ts#L2533)
+Defined in: [api/\_handlers/\_paymaster.ts:2533](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/_paymaster.ts#L2533)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/\_paymaster.ts:2533](https://github.com/wenakita/462
 
 > **validateSponsoredSmartWalletCalls**(`params`): `Promise`\<\{ `expectedCreatorToken`: `` `0x${string}` `` \| `null`; `mode`: `string`; \}\>
 
-Defined in: [api/\_handlers/\_paymaster.ts:1154](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/_paymaster.ts#L1154)
+Defined in: [api/\_handlers/\_paymaster.ts:1154](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/_paymaster.ts#L1154)
 
 #### Parameters
 

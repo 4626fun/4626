@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/wallet/solana/sweep/\_process.ts:26](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/wallet/solana/sweep/_process.ts#L26)
+Defined in: [api/\_handlers/wallet/solana/sweep/\_process.ts:26](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/wallet/solana/sweep/_process.ts#L26)
 
 #### Parameters
 

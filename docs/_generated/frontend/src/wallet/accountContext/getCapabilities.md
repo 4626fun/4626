@@ -12,7 +12,7 @@
 
 > **parseCapabilities**(`raw`, `chainIdHex`): [`AccountCapabilities`](types.md#accountcapabilities)
 
-Defined in: [src/wallet/accountContext/getCapabilities.ts:36](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/wallet/accountContext/getCapabilities.ts#L36)
+Defined in: [src/wallet/accountContext/getCapabilities.ts:36](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/wallet/accountContext/getCapabilities.ts#L36)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [src/wallet/accountContext/getCapabilities.ts:36](https://github.com
 
 > **probeWalletCapabilities**(`params`): `Promise`\<[`AccountCapabilities`](types.md#accountcapabilities)\>
 
-Defined in: [src/wallet/accountContext/getCapabilities.ts:61](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/wallet/accountContext/getCapabilities.ts#L61)
+Defined in: [src/wallet/accountContext/getCapabilities.ts:61](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/wallet/accountContext/getCapabilities.ts#L61)
 
 #### Parameters
 

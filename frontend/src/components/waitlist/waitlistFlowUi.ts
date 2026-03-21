@@ -51,7 +51,8 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
 export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
     title: 'Get early access',
-    subtitle: 'Sign in with your email (one-time code). Base and Zora are optional after that.',
+    subtitle:
+      'Sign in with your email (one-time code). After verification, you can optionally link Base or Zora on the next step.',
     ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue with email`,
     busyLabel: 'Opening email sign-in…',
   }

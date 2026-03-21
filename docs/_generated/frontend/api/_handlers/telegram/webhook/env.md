@@ -12,7 +12,7 @@
 
 > **TelegramInlineMediaAsset** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:5](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:5](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L5)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:5](https://github.com/wenaki
 
 > `optional` **documentMimeType**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:11](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L11)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:11](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L11)
 
 ##### documentUrl?
 
 > `optional` **documentUrl**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:10](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:10](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L10)
 
 ##### mpeg4GifUrl?
 
 > `optional` **mpeg4GifUrl**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:9](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L9)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:9](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L9)
 
 ##### photoUrl?
 
 > `optional` **photoUrl**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:6](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L6)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:6](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L6)
 
 ##### thumbnailUrl?
 
 > `optional` **thumbnailUrl**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:7](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L7)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:7](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L7)
 
 ##### videoMimeType?
 
 > `optional` **videoMimeType**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:12](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L12)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:12](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L12)
 
 ##### videoUrl?
 
 > `optional` **videoUrl**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:8](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L8)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:8](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L8)
 
 ## Functions
 
@@ -64,7 +64,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:8](https://github.com/wenaki
 
 > **areHolderRoomsEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:184](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L184)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:184](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L184)
 
 #### Returns
 
@@ -76,7 +76,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:184](https://github.com/wena
 
 > **areStarsTipsEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:45](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L45)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:45](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L45)
 
 #### Returns
 
@@ -88,7 +88,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:45](https://github.com/wenak
 
 > **getBaseRpcUrl**(): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:121](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L121)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:121](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L121)
 
 #### Returns
 
@@ -100,7 +100,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:121](https://github.com/wena
 
 > **getBundlerAndPaymasterUrl**(): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:126](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L126)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:126](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L126)
 
 #### Returns
 
@@ -112,7 +112,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:126](https://github.com/wena
 
 > **isPrivateChatId**(`chatId`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:74](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L74)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:74](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L74)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:74](https://github.com/wenak
 
 > **isStarsTipsEnabledForChat**(`chatId`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:49](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L49)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:49](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L49)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:49](https://github.com/wenak
 
 > **isTelegramAiFollowupEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:102](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L102)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:102](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L102)
 
 #### Returns
 
@@ -160,7 +160,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:102](https://github.com/wena
 
 > **isTelegramInlineGrowthModeEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:134](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L134)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:134](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L134)
 
 #### Returns
 
@@ -172,7 +172,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:134](https://github.com/wena
 
 > **isTelegramInlinePmHandoffEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:138](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L138)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:138](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L138)
 
 #### Returns
 
@@ -184,7 +184,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:138](https://github.com/wena
 
 > **isTelegramInlinePreparedEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:142](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L142)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:142](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L142)
 
 #### Returns
 
@@ -196,7 +196,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:142](https://github.com/wena
 
 > **isTelegramPrivateDmEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:41](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L41)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:41](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L41)
 
 #### Returns
 
@@ -208,7 +208,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:41](https://github.com/wenak
 
 > **isTradeMembershipCheckEnabled**(): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:201](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L201)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:201](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L201)
 
 #### Returns
 
@@ -220,7 +220,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:201](https://github.com/wena
 
 > **parseAdminUserIds**(): `Set`\<`string`\>
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:15](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L15)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:15](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L15)
 
 #### Returns
 
@@ -232,7 +232,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:15](https://github.com/wenak
 
 > **parseAllowedChatIds**(): `Set`\<`string`\>
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:26](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L26)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:26](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L26)
 
 #### Returns
 
@@ -244,7 +244,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:26](https://github.com/wenak
 
 > **readEthUsdPrice**(): `number`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:106](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L106)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:106](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L106)
 
 #### Returns
 
@@ -256,7 +256,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:106](https://github.com/wena
 
 > **readInlineMediaAssetMap**(): `Record`\<`string`, [`TelegramInlineMediaAsset`](#telegraminlinemediaasset)\>
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:152](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L152)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:152](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L152)
 
 #### Returns
 
@@ -268,7 +268,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:152](https://github.com/wena
 
 > **readInlineQueryResultCap**(): `number`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:130](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L130)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:130](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L130)
 
 #### Returns
 
@@ -280,7 +280,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:130](https://github.com/wena
 
 > **readShareUsdFallback**(): `number`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:115](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L115)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:115](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L115)
 
 #### Returns
 
@@ -292,7 +292,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:115](https://github.com/wena
 
 > **readTradeLimitFromEnv**(`key`, `fallback`): `number`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:188](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L188)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:188](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L188)
 
 #### Parameters
 
@@ -314,7 +314,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:188](https://github.com/wena
 
 > **resolveGroupId**(`chatId`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:90](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L90)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:90](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L90)
 
 #### Parameters
 
@@ -332,7 +332,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:90](https://github.com/wenak
 
 > **resolveSenderWallet**(`userId`): `` `0x${string}` ``
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:78](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L78)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:78](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L78)
 
 #### Parameters
 
@@ -350,7 +350,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:78](https://github.com/wenak
 
 > **resolveSignalsDestination**(`sourceChatId`): `object`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:57](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L57)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:57](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L57)
 
 #### Parameters
 
@@ -376,7 +376,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:57](https://github.com/wenak
 
 > **resolveTelegramMiniAppUrl**(): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:178](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L178)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:178](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L178)
 
 #### Returns
 
@@ -388,7 +388,7 @@ Defined in: [api/\_handlers/telegram/webhook/env.ts:178](https://github.com/wena
 
 > **tradeRateLimitForAction**(`actionType`): `object`
 
-Defined in: [api/\_handlers/telegram/webhook/env.ts:194](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/env.ts#L194)
+Defined in: [api/\_handlers/telegram/webhook/env.ts:194](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/env.ts#L194)
 
 #### Parameters
 

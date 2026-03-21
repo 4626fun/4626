@@ -12,7 +12,7 @@
 
 > **SmartWalletsRouteProvider**(`__namedParameters`): `Element`
 
-Defined in: [src/lib/privy/SmartWalletsRouteProvider.tsx:11](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/src/lib/privy/SmartWalletsRouteProvider.tsx#L11)
+Defined in: [src/lib/privy/SmartWalletsRouteProvider.tsx:11](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/src/lib/privy/SmartWalletsRouteProvider.tsx#L11)
 
 Route-scoped SmartWallets provider.
 

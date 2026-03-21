@@ -12,7 +12,7 @@
 
 > **deleteTelegramMessage**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:136](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L136)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:136](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L136)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:136](https
 
 > **editTelegramMessage**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:100](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L100)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:100](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L100)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:100](https
 
 > **replaceTelegramMenuMessage**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:160](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L160)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:160](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L160)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:160](https
 
 > **sendTelegramMessage**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:23](https://github.com/wenakita/4626/blob/db3b1a7b64a26903f2935b4e315ac3287b58748d/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L23)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:23](https://github.com/wenakita/4626/blob/c2a42e6230549df4595e4edc67f4bf4d17f49898/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L23)
 
 #### Parameters
 
