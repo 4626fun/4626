@@ -7,6 +7,8 @@ import { base } from 'viem/chains'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
+import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/accountsIdentity.js'
+import { getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
@@ -2322,6 +2324,204 @@ function buildTelegramIdSelectionText(selection: ReturnType<typeof extractShared
   return lines.join('\n')
 }
 
+type ResolvedTelegramPickerUserProfile = {
+  telegramUserId: string
+  telegramUsername: string | null
+  profileId: number | null
+  privyUserId: string | null
+  canonicalCswAddress: `0x${string}` | null
+  ownerVerified: boolean
+  linkStatus: string | null
+  zoraHandle: string | null
+  creatorCoinAddress: `0x${string}` | null
+  creatorCoinName: string | null
+  creatorCoinSymbol: string | null
+  marketCapUsd: number | null
+  volume24hUsd: number | null
+  vaultAddress: `0x${string}` | null
+  shareTokenAddress: `0x${string}` | null
+  ccaStrategyAddress: `0x${string}` | null
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function formatCompactUsd(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000_000) return `$${formatAmount(value / 1_000_000_000, 2)}B`
+  if (abs >= 1_000_000) return `$${formatAmount(value / 1_000_000, 2)}M`
+  if (abs >= 1_000) return `$${formatAmount(value / 1_000, 1)}K`
+  return `$${formatAmount(value, value >= 100 ? 0 : 2)}`
+}
+
+function mapKeeprVaultRowToScopedVault(vault: Awaited<ReturnType<typeof getKeeprVaultByVaultAddress>>): ScopedVaultRow | null {
+  if (!vault) return null
+  return {
+    vaultAddress: vault.vaultAddress,
+    creatorCoinAddress: vault.creatorCoinAddress,
+    chainId: vault.chainId,
+    groupId: vault.groupId,
+    isSettled: false,
+    ccaStrategyAddress: isAddressLike(vault.config?.contracts?.ccaStrategy)
+      ? (String(vault.config.contracts.ccaStrategy).toLowerCase() as `0x${string}`)
+      : null,
+  }
+}
+
+async function resolveTelegramPickerUserProfile(params: {
+  db: Awaited<ReturnType<typeof getDb>>
+  telegramUserId: string
+}): Promise<ResolvedTelegramPickerUserProfile | null> {
+  const db = params.db
+  if (!db) return null
+  await ensureAccountsIdentitySchema(db as any)
+  await ensureKeeprSchema()
+
+  const linkResult = await db.sql`
+    SELECT
+      telegram_user_id,
+      telegram_username,
+      profile_id,
+      privy_user_id,
+      canonical_csw_address,
+      owner_verified,
+      link_status
+    FROM telegram_user_links
+    WHERE telegram_user_id = ${params.telegramUserId}
+    LIMIT 1;
+  `
+  const linkRow = linkResult.rows?.[0] ?? null
+  if (!linkRow) return null
+
+  const profileId = Number(linkRow.profile_id)
+  const privyUserId = asTrimmed(linkRow.privy_user_id ?? '') || null
+  const zoraResult = privyUserId
+    ? await db.sql`
+        SELECT canonical_csw_address, creator_coin_address, zora_handle
+        FROM account_zora_signals
+        WHERE privy_user_id = ${privyUserId}
+        LIMIT 1;
+      `
+    : { rows: [] }
+  const zoraRow = zoraResult.rows?.[0] ?? null
+  const creatorCoinAddress = isAddressLike(zoraRow?.creator_coin_address)
+    ? (String(zoraRow.creator_coin_address).toLowerCase() as `0x${string}`)
+    : null
+  const coinSummary = creatorCoinAddress ? await fetchCreatorCoinSummary(creatorCoinAddress) : null
+  const metricsResult = creatorCoinAddress
+    ? await db.sql`
+        SELECT market_cap_usd, volume_24h_usd
+        FROM creator_coins
+        WHERE coin_address = ${creatorCoinAddress}
+        LIMIT 1;
+      `
+    : { rows: [] }
+  const metricsRow = metricsResult.rows?.[0] ?? null
+  const vaultResult = creatorCoinAddress
+    ? await db.sql`
+        SELECT vault_address, share_token_address, config_json, chain_id, group_id, settled_at, creator_coin_address
+        FROM keepr_vaults
+        WHERE creator_coin_address = ${creatorCoinAddress}
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT 1;
+      `
+    : { rows: [] }
+  const vaultRow = vaultResult.rows?.[0] ?? null
+  const vaultConfig = vaultRow?.config_json && typeof vaultRow.config_json === 'object'
+    ? (vaultRow.config_json as Record<string, unknown>)
+    : {}
+  const contracts =
+    vaultConfig.contracts && typeof vaultConfig.contracts === 'object' && !Array.isArray(vaultConfig.contracts)
+      ? (vaultConfig.contracts as Record<string, unknown>)
+      : {}
+
+  return {
+    telegramUserId: String(linkRow.telegram_user_id),
+    telegramUsername: asTrimmed(linkRow.telegram_username ?? '') || null,
+    profileId: Number.isFinite(profileId) && profileId > 0 ? profileId : null,
+    privyUserId,
+    canonicalCswAddress: isAddressLike(zoraRow?.canonical_csw_address)
+      ? (String(zoraRow.canonical_csw_address).toLowerCase() as `0x${string}`)
+      : isAddressLike(linkRow.canonical_csw_address)
+        ? (String(linkRow.canonical_csw_address).toLowerCase() as `0x${string}`)
+        : null,
+    ownerVerified: linkRow.owner_verified === true,
+    linkStatus: asTrimmed(linkRow.link_status ?? '') || null,
+    zoraHandle: asTrimmed(zoraRow?.zora_handle ?? '') || null,
+    creatorCoinAddress,
+    creatorCoinName: asTrimmed(coinSummary?.name ?? '') || null,
+    creatorCoinSymbol: asTrimmed(coinSummary?.symbol ?? '') || null,
+    marketCapUsd: toFiniteNumber(metricsRow?.market_cap_usd),
+    volume24hUsd: toFiniteNumber(metricsRow?.volume_24h_usd),
+    vaultAddress: isAddressLike(vaultRow?.vault_address) ? (String(vaultRow.vault_address).toLowerCase() as `0x${string}`) : null,
+    shareTokenAddress: isAddressLike(vaultRow?.share_token_address) ? (String(vaultRow.share_token_address).toLowerCase() as `0x${string}`) : null,
+    ccaStrategyAddress: isAddressLike(contracts.ccaStrategy) ? (String(contracts.ccaStrategy).toLowerCase() as `0x${string}`) : null,
+  }
+}
+
+function buildTelegramPickedUserProfileText(params: {
+  selectedUser: {
+    userId: string
+    firstName: string
+    lastName: string
+    username: string
+  }
+  profile: ResolvedTelegramPickerUserProfile | null
+}): string {
+  const selectedName = formatTelegramSharedUserName(params.selectedUser)
+  const summaryLines = [selectedName]
+  if (params.profile?.creatorCoinSymbol) summaryLines.push(`Coin: ${params.profile.creatorCoinSymbol}`)
+  if (!params.profile) summaryLines.push('No linked 4626 profile found')
+
+  const detailLines = [
+    `Telegram ID: ${params.selectedUser.userId}`,
+    `Telegram: ${params.selectedUser.username ? `@${params.selectedUser.username}` : 'n/a'}`,
+  ]
+  if (params.profile) {
+    detailLines.push(`Link: ${params.profile.linkStatus ?? 'unknown'}${params.profile.ownerVerified ? ' • owner verified' : ''}`)
+    detailLines.push(`Profile ID: ${params.profile.profileId ?? 'n/a'}`)
+    detailLines.push(`Creator coin: ${params.profile.creatorCoinAddress ?? 'n/a'}`)
+    detailLines.push(`Name: ${params.profile.creatorCoinName ?? 'n/a'}`)
+    detailLines.push(`Symbol: ${params.profile.creatorCoinSymbol ?? 'n/a'}`)
+    detailLines.push(`Market cap: ${formatCompactUsd(params.profile.marketCapUsd)}`)
+    detailLines.push(`Volume 24h: ${formatCompactUsd(params.profile.volume24hUsd)}`)
+    detailLines.push(`Vault: ${params.profile.vaultAddress ?? 'n/a'}`)
+    detailLines.push(`Vault token: ${params.profile.shareTokenAddress ?? 'n/a'}`)
+    detailLines.push(`Wallet: ${params.profile.canonicalCswAddress ?? 'n/a'}`)
+    if (params.profile.zoraHandle) detailLines.push(`Zora: ${params.profile.zoraHandle}`)
+  } else {
+    detailLines.push('This Telegram user has not linked a 4626 account yet.')
+  }
+
+  return buildTelegramCommandChrome({
+    title: 'AKITA | CREATOR',
+    command: '/id',
+    summaryLines,
+    detailLines,
+    expandableDetails: true,
+  })
+}
+
+function buildTelegramPickedUserActionsReplyMarkup(profile: ResolvedTelegramPickerUserProfile | null): Record<string, unknown> | undefined {
+  if (!profile?.vaultAddress) return undefined
+  const buttons: Array<Record<string, unknown>> = [
+    { text: `Buy ${profile.creatorCoinSymbol ?? 'Creator'}`, callback_data: `tradeflow:v:buy:${profile.vaultAddress}` },
+  ]
+  if (profile.creatorCoinAddress) {
+    buttons.push({ text: 'Coin', switch_inline_query_current_chat: `coin ${profile.creatorCoinAddress}` })
+  }
+  return {
+    inline_keyboard: [buttons],
+  }
+}
+
 async function isTelegramUserLinked(params: {
   telegramUserId: string
   db?: Awaited<ReturnType<typeof getDb>> | null
@@ -4296,7 +4496,10 @@ async function handleTelegramTradeFlowCallback(params: {
   await ensureTelegramTradingSchema(db as any)
 
   const scopedVaults = await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
-  const target = resolveScopedVaultByAddress(scopedVaults, callback.vaultAddress)
+  let target = resolveScopedVaultByAddress(scopedVaults, callback.vaultAddress)
+  if (!target && isPrivateChatId(params.chatId)) {
+    target = mapKeeprVaultRowToScopedVault(await getKeeprVaultByVaultAddress(callback.vaultAddress))
+  }
   if (!target) {
     return {
       text: [
@@ -4457,9 +4660,9 @@ async function handleTelegramTradeFlowCallback(params: {
     skipSchemaEnsure: true,
     tradePrefetch: {
       link,
-      scopedVaults,
-    },
-  })
+        scopedVaults: resolveScopedVaultByAddress(scopedVaults, callback.vaultAddress) ? scopedVaults : [target],
+      },
+    })
   if (!previewResponse) {
     return {
       text: 'Trade preview unavailable. Please retry /buy, /sell, or /bid.',
@@ -7046,13 +7249,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (sharedSelection) {
-    await sendTelegramMessage({
-      botToken,
-      chatId,
-      text: buildTelegramIdSelectionText(sharedSelection),
-      replyToMessageId: messageId,
-      replyMarkup: { remove_keyboard: true },
-    })
+    if (sharedSelection.kind === 'users') {
+      const selectedUser = sharedSelection.users[0] ?? null
+      const db = await getDb()
+      const pickedProfile = selectedUser && db
+        ? await resolveTelegramPickerUserProfile({ db, telegramUserId: selectedUser.userId })
+        : null
+      await sendTelegramMessage({
+        botToken,
+        chatId,
+        text: selectedUser
+          ? buildTelegramPickedUserProfileText({
+              selectedUser,
+              profile: pickedProfile,
+            })
+          : buildTelegramIdSelectionText(sharedSelection),
+        replyToMessageId: messageId,
+        replyMarkup: { remove_keyboard: true },
+      })
+      const actionMarkup = buildTelegramPickedUserActionsReplyMarkup(pickedProfile)
+      if (selectedUser && actionMarkup) {
+        await sendTelegramMessage({
+          botToken,
+          chatId,
+          text: buildTelegramCommandChrome({
+            title: 'Actions',
+            command: '/buy',
+            summaryLines: [`Trade ${pickedProfile?.creatorCoinSymbol ?? 'creator coin'} from this card.`],
+          }),
+          replyMarkup: actionMarkup,
+        })
+      }
+    } else {
+      await sendTelegramMessage({
+        botToken,
+        chatId,
+        text: buildTelegramIdSelectionText(sharedSelection),
+        replyToMessageId: messageId,
+        replyMarkup: { remove_keyboard: true },
+      })
+    }
     return res.status(200).json({
       success: true,
       data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,

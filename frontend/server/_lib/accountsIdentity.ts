@@ -612,7 +612,7 @@ export async function syncEmailIdentity(params: {
   })
 }
 
-async function fetchCreatorCoinSummary(address: string): Promise<CoinSummary | null> {
+export async function fetchCreatorCoinSummary(address: string): Promise<CoinSummary | null> {
   const normalized = normalizeEvmAddress(address)
   if (!normalized) return null
   const key = String(process.env.ZORA_SERVER_API_KEY ?? '').trim()

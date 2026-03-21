@@ -553,10 +553,97 @@ describe('telegram webhook handler', () => {
     expect(handleKeeprCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(payload.text).toContain('<b>User ID</b>')
-    expect(payload.text).toContain('<code>123456789</code>')
+    expect(payload.text).toContain('<b>AKITA | CREATOR</b>')
+    expect(payload.text).toContain('Telegram ID: 123456789')
     expect(payload.text).toContain('@akita_user')
     expect(payload.reply_markup).toEqual({ remove_keyboard: true })
+  })
+
+  it('renders creator coin details for a selected linked user and adds a buy action card', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getDbMock.mockResolvedValueOnce({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase()
+        if (text.includes('from telegram_user_links') && text.includes('where telegram_user_id =')) {
+          return {
+            rows: [{
+              telegram_user_id: '123456789',
+              telegram_username: 'akita_user',
+              profile_id: 77,
+              privy_user_id: 'did:privy:creator',
+              canonical_csw_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              owner_verified: true,
+              link_status: 'active',
+            }],
+          }
+        }
+        if (text.includes('from account_zora_signals')) {
+          return {
+            rows: [{
+              canonical_csw_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              creator_coin_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              zora_handle: 'akita',
+            }],
+          }
+        }
+        if (text.includes('from creator_coins')) {
+          return {
+            rows: [{
+              market_cap_usd: '1250000',
+              volume_24h_usd: '45231',
+            }],
+          }
+        }
+        if (text.includes('from keepr_vaults') && text.includes('where creator_coin_address =')) {
+          return {
+            rows: [{
+              vault_address: '0x1111111111111111111111111111111111111111',
+              share_token_address: '0x3333333333333333333333333333333333333333',
+              config_json: { contracts: { ccaStrategy: '0x4444444444444444444444444444444444444444' } },
+              chain_id: 8453,
+              group_id: 'xmtp-group-1',
+              settled_at: null,
+              creator_coin_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            }],
+          }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_25,
+        message: {
+          message_id: 23,
+          chat: { id: 7726886643 },
+          from: { id: 42 },
+          users_shared: {
+            request_id: 1001,
+            users: [{ user_id: 123456789, first_name: 'Akita', username: 'akita_user' }],
+          },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(2)
+    const infoPayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(infoPayload.text).toContain('Creator coin')
+    expect(infoPayload.text).toContain('$1.25M')
+    expect(infoPayload.text).toContain('$45.2K')
+    expect(infoPayload.reply_markup).toEqual({ remove_keyboard: true })
+
+    const actionPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(actionPayload.text).toContain('Trade creator coin from this card.')
+    const buttons = actionPayload.reply_markup.inline_keyboard.flat()
+    expect(buttons.some((button: any) => button?.callback_data === 'tradeflow:v:buy:0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
   })
 
   it('renders a selected Telegram chat from the native ID picker and removes the keyboard', async () => {
