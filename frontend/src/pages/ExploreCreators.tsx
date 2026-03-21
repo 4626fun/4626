@@ -6,7 +6,6 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreMetricSparkline } from '@/components/explore/ExploreMetricSparkline'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
 import { getExploreColumns } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
@@ -443,11 +442,22 @@ export function ExploreCreators() {
       : Number.POSITIVE_INFINITY
   const canonicalMetricsStale = metricsAgeMs > LIVE_METRICS_REFETCH_MS * 3
   const useLiveMetricCards = !exactMetrics || metricsTotals?.partial === true || canonicalMetricsStale
-  const creatorsTotalDisplay = coalesceMetricValue(metricsTotals?.creatorsTotal, localMetricsFallback.creatorsTotal)
-  const creatorsNew24hDisplay = coalesceMetricValue(metricsTotals?.creatorsNew24h, localMetricsFallback.creatorsNew24h)
-  const marketCapDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
-  const volume24hDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsVolume24hUsd, localMetricsFallback.creatorCoinsVolume24hUsd)
-  const fees24hDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
+  const preferLiveTotals = useLiveMetricCards && liveMetricCoins.length > 0
+  const creatorsTotalDisplay = preferLiveTotals
+    ? coalesceMetricValue(localMetricsFallback.creatorsTotal, metricsTotals?.creatorsTotal)
+    : coalesceMetricValue(metricsTotals?.creatorsTotal, localMetricsFallback.creatorsTotal)
+  const creatorsNew24hDisplay = preferLiveTotals
+    ? coalesceMetricValue(localMetricsFallback.creatorsNew24h, metricsTotals?.creatorsNew24h)
+    : coalesceMetricValue(metricsTotals?.creatorsNew24h, localMetricsFallback.creatorsNew24h)
+  const marketCapDisplay = preferLiveTotals
+    ? coalesceMetricValue(localMetricsFallback.creatorCoinsMarketCapUsd, metricsTotals?.creatorCoinsMarketCapUsd)
+    : coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
+  const volume24hDisplay = preferLiveTotals
+    ? coalesceMetricValue(localMetricsFallback.creatorCoinsVolume24hUsd, metricsTotals?.creatorCoinsVolume24hUsd)
+    : coalesceMetricValue(metricsTotals?.creatorCoinsVolume24hUsd, localMetricsFallback.creatorCoinsVolume24hUsd)
+  const fees24hDisplay = preferLiveTotals
+    ? coalesceMetricValue(localMetricsFallback.creatorCoinsFees24hUsd, metricsTotals?.creatorCoinsFees24hUsd)
+    : coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
   const creatorsTotalCount = creatorsTotalDisplay ?? 0
   const canonicalUpdatedAt = syncMeta?.lastFullSyncAt ?? null
   const updatedTimeDisplay = canonicalUpdatedAt
@@ -632,16 +642,13 @@ export function ExploreCreators() {
               </div>
             </div>
 
-            <div className="vault-surface-elevated vault-hover-lift relative overflow-hidden rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
-              <ExploreMetricSparkline history={metricsQuery.data?.history30d} fallbackValue={marketCapDisplay} />
-              <div className="relative z-10">
-                <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">{marketLabel}</div>
-                <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                  {formatCompactUsd(marketCapDisplay)}
-                </div>
-                <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                  30-day trend overlay (hover for daily value)
-                </div>
+            <div className="vault-surface-elevated vault-hover-lift rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">{marketLabel}</div>
+              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
+                {formatCompactUsd(marketCapDisplay)}
+              </div>
+              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+                Live market-cap snapshot
               </div>
             </div>
 

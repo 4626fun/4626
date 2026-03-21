@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
@@ -9,6 +8,7 @@ import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
+import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 import { selectCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -701,7 +701,13 @@ export function AccountsPage(props: {
             <button type="button" onClick={() => void login({ loginMethods: ['email', 'wallet'] } as any)} className="btn-accent btn-no-icon inline-flex">
               Sign in / Continue
             </button>
-            <Link to="/#waitlist" className="text-xs text-zinc-500 hover:text-zinc-300">Back to waitlist</Link>
+            <JoinWaitlistCta
+              className="text-xs text-zinc-500 hover:text-zinc-300"
+              showArrow={false}
+              onPrivyDisabled={() => window.location.assign('/#waitlist')}
+            >
+              Back to waitlist
+            </JoinWaitlistCta>
           </div>
         ) : null}
 

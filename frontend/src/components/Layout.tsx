@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
@@ -7,6 +7,7 @@ import { AccountModeIndicator } from './account/AccountModeIndicator'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
+import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
 type MobileNavItem = {
   label: string
@@ -47,6 +48,7 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: Mobil
 
 export function Layout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
@@ -128,6 +130,33 @@ export function Layout() {
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
+            if (path === '/#waitlist') {
+              return (
+                <JoinWaitlistCta
+                  key={path}
+                  className={`flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
+                    isActive
+                      ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
+                      : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
+                  }`}
+                  showArrow={false}
+                  ariaLabel={label}
+                  onPrivyDisabled={() => navigate('/#waitlist')}
+                >
+                  <>
+                    <Icon
+                      aria-hidden="true"
+                      className={`h-4 w-4 transition-colors ${
+                        isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
+                      }`}
+                    />
+                    <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
+                      {label}
+                    </span>
+                  </>
+                </JoinWaitlistCta>
+              )
+            }
             return (
               <Link
                 key={path}

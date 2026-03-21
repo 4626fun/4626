@@ -13,7 +13,7 @@ describe('deriveWaitlistAuthUi', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Get early access',
       subtitle:
-        'Sign in with your email (one-time code). After verification, you can optionally link Base or Zora on the next step.',
+        'Sign in with your email (one-time code). After verification, continue directly into smart-wallet setup.',
       ctaLabel: '■ Continue with email',
       busyLabel: 'Opening email sign-in…',
     })

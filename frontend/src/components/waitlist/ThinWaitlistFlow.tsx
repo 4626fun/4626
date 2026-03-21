@@ -7,6 +7,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
+import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
@@ -16,7 +17,6 @@ import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth }
 import type { Variant } from './waitlistTypes'
 import { isRecoveryRequiredAuthError, runWaitlistPrivyLogout, shouldStopWaitlistAutoAuthRetry } from './waitlistAuthState'
 import {
-  buildWaitlistBaseLoginOptions,
   buildWaitlistEmailLoginOptions,
   buildWaitlistRecoveryLoginOptions,
 } from './waitlistLoginOptions'
@@ -24,8 +24,6 @@ import {
   canEnterAppFromAccountState,
   deriveWaitlistAuthUi,
   deriveWaitlistDoneUi,
-  deriveWaitlistZoraUi,
-  hasZoraProfileSignals,
 } from './waitlistFlowUi'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -67,12 +65,11 @@ type HandoffCreateResponse = {
   expiresAt: string
 }
 
-type WaitlistStep = 'auth' | 'zora' | 'done'
+type WaitlistStep = 'auth' | 'wallet' | 'done'
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
-
-const ZORA_AUTO_RESOLVE_TIMEOUT_MS = 45_000
 const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
+const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -146,6 +143,11 @@ function shortAddress(value: string | null | undefined): string {
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
+export function resolveWaitlistStep(account: Pick<AccountsSummary, 'emailVerified' | 'accountSignals'>): WaitlistStep {
+  if (!account.emailVerified) return 'auth'
+  return account.accountSignals.canonicalCswAddress ? 'done' : 'wallet'
+}
+
 function CoinbaseLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -191,16 +193,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const [busy, setBusy] = useState(false)
   const [enterAppBusy, setEnterAppBusy] = useState(false)
-  const [zoraAutoResolving, setZoraAutoResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [recoveryRequired, setRecoveryRequired] = useState(false)
 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
-  const [zoraSummary, setZoraSummary] = useState<ZoraResolveResponse | null>(null)
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
-  const zoraAutoResolvedRef = useRef(false)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
   const isPage = variant === 'page'
@@ -221,7 +220,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     privyLogoutRef.current = null
   }, [privy])
 
-  const runBootstrap = useCallback(async () => {
+  const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
     const token = await getAccessToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) {
@@ -255,7 +254,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
     if (payload.data.requiresPrivyAuth) {
       setStep('auth')
-      return
+      return null
     }
 
     const nextAccount = payload.data
@@ -264,9 +263,10 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     if (!nextAccount.emailVerified) {
       setStep('auth')
       setError('Verify your email with 4626 to finish creating this account.')
-      return
+      return nextAccount
     }
-    setStep('zora')
+    setStep(resolveWaitlistStep(nextAccount))
+    return nextAccount
   }, [getAccessToken])
 
   const onContinueAuth = useCallback(async () => {
@@ -311,21 +311,23 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setError(null)
     setRecoveryRequired(false)
     try {
-      if (privyAuthed) {
-        const linked = await maybeCallMethod(privy, ['linkWallet'])
-        if (!linked) throw new Error('Base wallet linking is unavailable in this environment.')
-        await runBootstrap()
-      } else {
-        await login(buildWaitlistBaseLoginOptions() as any)
+      if (!privyAuthed) throw new Error('Verify your email first, then continue with wallet setup.')
+      const linked = await maybeCallMethod(privy, ['linkWallet'])
+      if (!linked) throw new Error('Base wallet linking is unavailable in this environment.')
+      const nextAccount = await runBootstrap()
+      if (!nextAccount?.accountSignals?.canonicalCswAddress) {
+        throw new Error(
+          'We could not confirm a Coinbase Smart Wallet from that Base connection. If you need a new one, create one in Base app and then come back.',
+        )
       }
       authAttemptInFlightRef.current = false
       setBusy(false)
     } catch (authError: any) {
-      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start Base sign-in.')
+      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to link your Base Smart Wallet.')
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privy, privyAuthed, runBootstrap])
+  }, [busy, privy, privyAuthed, runBootstrap])
 
   const onContinueWithZora = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -334,6 +336,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setError(null)
     setRecoveryRequired(false)
     try {
+      if (!privyAuthed) throw new Error('Verify your email first, then continue with wallet setup.')
       await performZoraCrossAppAuth({
         privyAuthed,
         appId: ZORA_PRIVY_APP_ID,
@@ -342,15 +345,38 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
         isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
       })
-      if (privyAuthed) await runBootstrap()
+      const token = await withTimeout(
+        getAccessToken(),
+        GET_ACCESS_TOKEN_TIMEOUT_MS,
+        'Sign-in token',
+      ).catch(() => null)
+      if (!token) throw new Error('Missing auth token after linking your Zora wallet.')
+      const data = await resolveZora(token)
+      if (!data?.canonicalCswAddress) {
+        throw new Error('We could not find a Coinbase Smart Wallet on that Zora account. Choose Base app if you need to create a new one.')
+      }
+      const nextAccount = await runBootstrap()
+      if (!nextAccount?.accountSignals?.canonicalCswAddress) {
+        throw new Error('Your Zora wallet linked, but the canonical Coinbase Smart Wallet is still unavailable. Retry in a moment.')
+      }
       authAttemptInFlightRef.current = false
       setBusy(false)
     } catch (authError: any) {
-      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to start Zora sign-in.')
+      setError(typeof authError?.message === 'string' ? authError.message : 'Failed to link your Zora Smart Wallet.')
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, linkCrossAppAccount, loginWithCrossAppAccount, privyAuthed, runBootstrap])
+  }, [busy, getAccessToken, linkCrossAppAccount, loginWithCrossAppAccount, privyAuthed, resolveZora, runBootstrap])
+
+  const onCreateInBaseApp = useCallback(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
+    } catch {
+      // ignore
+    }
+    window.location.assign(resolveBaseAppInviteUrl())
+  }, [])
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -380,71 +406,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     if (!response.ok || !payload?.success || !payload.data) return null
     return payload.data
   }, [])
-
-  const applyZoraResult = useCallback((data: ZoraResolveResponse) => {
-    setZoraSummary(data)
-  }, [])
-
-  const getAccessTokenRef = useRef(getAccessToken)
-  getAccessTokenRef.current = getAccessToken
-  const runBootstrapRef = useRef(runBootstrap)
-  runBootstrapRef.current = runBootstrap
-  const resolveZoraRef = useRef(resolveZora)
-  resolveZoraRef.current = resolveZora
-  const applyZoraResultRef = useRef(applyZoraResult)
-  applyZoraResultRef.current = applyZoraResult
-
-  const onLinkZora = useCallback(async () => {
-    if (busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      if (loginWithCrossAppAccount || linkCrossAppAccount) {
-        await performZoraCrossAppAuth({
-          privyAuthed,
-          appId: ZORA_PRIVY_APP_ID,
-          linkCrossAppAccount,
-          loginWithCrossAppAccount,
-          sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
-          isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
-        })
-      } else {
-        if (typeof privy?.linkWallet !== 'function') {
-          throw new Error('Zora linking is unavailable in this environment.')
-        }
-        await privy.linkWallet()
-      }
-
-      const token = await getAccessToken()
-      if (!token) throw new Error('Missing auth token after linking wallet.')
-
-      const data = await resolveZora(token)
-      if (!data) throw new Error('Could not find a Zora profile for that wallet.')
-      applyZoraResult(data)
-      await runBootstrap()
-    } catch (zoraError: any) {
-      setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
-    } finally {
-      setBusy(false)
-    }
-  }, [applyZoraResult, busy, getAccessToken, linkCrossAppAccount, loginWithCrossAppAccount, privy, privyAuthed, resolveZora, runBootstrap])
-
-  const onFinish = useCallback(async () => {
-    if (busy) return
-    setError(null)
-    try {
-      if (privyAuthed) {
-        setBusy(true)
-        await runBootstrap()
-      }
-      setStep('done')
-    } catch (finishError: any) {
-      setError(typeof finishError?.message === 'string' ? finishError.message : 'Failed to refresh account state.')
-    } finally {
-      if (privyAuthed) setBusy(false)
-    }
-  }, [busy, privyAuthed, runBootstrap])
-
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
     setEnterAppBusy(true)
@@ -561,61 +522,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
   }, [step])
 
-  useEffect(() => {
-    if (step !== 'zora') {
-      zoraAutoResolvedRef.current = false
-    }
-  }, [step])
-
-  useEffect(() => {
-    if (step !== 'zora') return
-    if (zoraAutoResolvedRef.current || zoraSummary) return
-    zoraAutoResolvedRef.current = true
-    let cancelled = false
-    ;(async () => {
-      setZoraAutoResolving(true)
-      try {
-        const token = await withTimeout(
-          getAccessTokenRef.current(),
-          GET_ACCESS_TOKEN_TIMEOUT_MS,
-          'Sign-in token',
-        ).catch(() => null)
-        if (!token || cancelled) return
-        const data = await withTimeout(
-          resolveZoraRef.current(token),
-          ZORA_AUTO_RESOLVE_TIMEOUT_MS,
-          'Zora profile check',
-        ).catch(() => null)
-        if (cancelled || !data) return
-        const hasProfile = !!(data.zoraHandle || data.canonicalCswAddress || data.creatorCoin)
-        if (hasProfile) {
-          applyZoraResultRef.current(data)
-          await runBootstrapRef.current()
-        }
-      } catch {
-        // best-effort
-      } finally {
-        setZoraAutoResolving(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-      zoraAutoResolvedRef.current = false
-      setZoraAutoResolving(false)
-    }
-  }, [step, zoraSummary])
-
-  const zoraStatus = useMemo(() => {
-    const summary: ZoraResolveResponse | null = zoraSummary ?? (account ? {
-      canonicalCswAddress: account.accountSignals.canonicalCswAddress,
-      creatorCoin: account.accountSignals.creatorCoin ? { address: account.accountSignals.creatorCoin.address, name: null, symbol: null, imageUrl: null } : null,
-      zoraHandle: account.accountSignals.zoraHandle,
-    } : null)
-    return summary
-  }, [account, zoraSummary])
-  const hasLinkedZora = hasZoraProfileSignals(zoraStatus)
   const authUi = deriveWaitlistAuthUi()
-  const zoraUi = deriveWaitlistZoraUi(hasLinkedZora)
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
     tier: account?.score?.tier ?? 0,
@@ -625,14 +532,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const indicatorSteps = [
     {
       label: 'Sign in',
-      status: (step === 'auth' ? 'active' : step === 'zora' || step === 'done' ? 'complete' : 'pending') as
+      status: (step === 'auth' ? 'active' : step === 'wallet' || step === 'done' ? 'complete' : 'pending') as
         | 'pending'
         | 'active'
         | 'complete',
     },
     {
-      label: 'Zora',
-      status: (step === 'zora' ? 'active' : step === 'done' ? 'complete' : 'pending') as 'pending' | 'active' | 'complete',
+      label: 'Wallet',
+      status: (step === 'wallet' ? 'active' : step === 'done' ? 'complete' : 'pending') as 'pending' | 'active' | 'complete',
     },
     {
       label: 'Done',
@@ -693,33 +600,37 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
           </motion.div>
         ) : null}
 
-        {/* Zora step */}
-        {step === 'zora' ? (
+        {/* Wallet setup step */}
+        {step === 'wallet' ? (
           <motion.div
-            key="step-zora"
+            key="step-wallet"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="space-y-5"
           >
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-semibold tracking-tight text-white">Connect Zora</h2>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                  Optional
-                </span>
-              </div>
-              <p className="text-sm text-zinc-400">{zoraUi.subtitle}</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">Set up your smart wallet</h2>
+              <p className="text-sm text-zinc-400">
+                Your verified email created the account and your Privy embedded wallet. Next, choose how you want to connect your canonical Coinbase Smart Wallet.
+              </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void onContinueWithBase()}
                 className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
               >
-                Continue with Base
+                {busy ? (
+                  <>
+                    <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                    Linking Base wallet…
+                  </>
+                ) : (
+                  'Link Base Smart Wallet'
+                )}
               </button>
               <button
                 type="button"
@@ -727,88 +638,42 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 onClick={() => void onContinueWithZora()}
                 className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
               >
-                Continue with Zora
+                {busy ? (
+                  <>
+                    <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                    Linking Zora wallet…
+                  </>
+                ) : (
+                  'Link Zora Smart Wallet'
+                )}
               </button>
-            </div>
-
-            {zoraAutoResolving ? (
-              <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 p-4">
-                <Loader2 className="w-4 h-4 animate-spin text-zinc-400 shrink-0" />
-                <span className="text-xs text-zinc-400">Checking your wallets for a Zora profile…</span>
-              </div>
-            ) : hasLinkedZora && zoraStatus ? (
-              <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
-                <p className="text-xs font-medium text-emerald-400">{zoraUi.connectedLabel}</p>
-                <div className="space-y-2">
-                  {zoraStatus.zoraHandle ? (
-                    <div className="flex items-center gap-2 text-xs">
-                      <ZoraLogo className="w-4 h-4 shrink-0 rounded-full" />
-                      <span className="text-zinc-400">@{zoraStatus.zoraHandle}</span>
-                    </div>
-                  ) : null}
-                  {zoraStatus.canonicalCswAddress ? (
-                    <div className="flex items-center gap-2 text-xs pl-1">
-                      <CoinbaseLogo className="w-4 h-4 shrink-0" />
-                      <span className="text-zinc-500">Smart Wallet</span>
-                      <span className="text-zinc-400 font-mono">{shortAddress(zoraStatus.canonicalCswAddress)}</span>
-                    </div>
-                  ) : null}
-                  {zoraStatus.creatorCoin?.address ? (
-                    <div className="flex items-center gap-2 text-xs pl-1">
-                      {zoraStatus.creatorCoin.imageUrl ? (
-                        <img
-                          src={zoraStatus.creatorCoin.imageUrl}
-                          alt={zoraStatus.creatorCoin.symbol ?? 'coin'}
-                          className="w-4 h-4 rounded-full shrink-0 object-cover"
-                        />
-                      ) : (
-                        <ZoraLogo className="w-4 h-4 shrink-0 rounded-full" />
-                      )}
-                      <span className="text-zinc-500">Creator coin</span>
-                      {zoraStatus.creatorCoin.symbol ? (
-                        <span className="text-zinc-400">{zoraStatus.creatorCoin.symbol}</span>
-                      ) : (
-                        <span className="text-zinc-400 font-mono">{shortAddress(zoraStatus.creatorCoin.address)}</span>
-                      )}
-                    </div>
-                  ) : null}
-                  {!zoraStatus.zoraHandle && !zoraStatus.canonicalCswAddress && !zoraStatus.creatorCoin?.address ? (
-                    <div className="flex items-center gap-2 text-xs text-zinc-500">
-                      <ZoraLogo className="w-4 h-4 shrink-0 rounded-full opacity-80" />
-                      <span>{zoraUi.resolvingLabel}</span>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            {!zoraAutoResolving ? (
-              <div className="space-y-3">
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void (zoraUi.primaryAction === 'finish' ? onFinish() : onLinkZora())}
-                  className="btn-primary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+                  onClick={onCreateInBaseApp}
+                  className="w-full rounded-xl border border-brand-primary/30 bg-brand-primary/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-primary/15 disabled:opacity-50"
                 >
-                  {busy ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Linking…
-                    </>
-                  ) : (
-                    zoraUi.primaryLabel
-                  )}
+                  Create new wallet in Base app
                 </button>
+            </div>
 
-                <button
-                  type="button"
-                  onClick={() => void (zoraUi.secondaryAction === 'reconnect' ? onLinkZora() : onFinish())}
-                  className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
-                >
-                  {zoraUi.secondaryLabel}
-                </button>
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Choose one path</p>
+              <div className="space-y-2 text-xs text-zinc-400">
+                <div className="flex items-start gap-2">
+                  <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Use <span className="text-zinc-200">Link Base Smart Wallet</span> if you already have a Coinbase Smart Wallet in Base app.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <ZoraLogo className="mt-0.5 h-4 w-4 shrink-0 rounded-full" />
+                  <span>Use <span className="text-zinc-200">Link Zora Smart Wallet</span> if your canonical CSW already lives on Zora.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Use <span className="text-zinc-200">Create new wallet in Base app</span> if you need a new CSW with the 4626 referral flow.</span>
+                </div>
               </div>
-            ) : null}
+            </div>
 
             {error ? (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
@@ -855,6 +720,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
               <div className="space-y-1">
                 <h2 className="text-2xl font-semibold tracking-tight text-white">{doneUi.title}</h2>
                 <p className="text-sm text-zinc-400 max-w-xs mx-auto">{doneUi.subtitle}</p>
+                {account?.accountSignals?.canonicalCswAddress ? (
+                  <p className="text-xs text-zinc-500">
+                    Canonical CSW <span className="font-mono text-zinc-300">{shortAddress(account.accountSignals.canonicalCswAddress)}</span>
+                  </p>
+                ) : null}
               </div>
             </div>
 

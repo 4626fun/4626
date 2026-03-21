@@ -5,6 +5,7 @@ import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
 type FaqItem = {
   id: string
@@ -957,9 +958,9 @@ export function Faq() {
             <h2 className="headline text-4xl sm:text-5xl lg:text-6xl mb-8">
               Ready to start earning?
             </h2>
-            <Link to="/#waitlist" className="btn-accent inline-flex items-center">
+            <JoinWaitlistCta className="btn-accent inline-flex items-center" onPrivyDisabled={() => window.location.assign('/#waitlist')}>
               Join waitlist <ArrowRight className="w-4 h-4 ml-2" />
-            </Link>
+            </JoinWaitlistCta>
           </motion.div>
         </div>
       </section>

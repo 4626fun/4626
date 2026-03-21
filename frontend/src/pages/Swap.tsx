@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
+import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 
@@ -97,7 +98,6 @@ const CORE_TOKENS: TokenOption[] = [
 ]
 
 type QuoteShape = Record<string, unknown>
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
   {
     type: 'function',

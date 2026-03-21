@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from '@/components/ui/Alert'
 import { apiFetch } from '@/lib/apiBase'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
 type PointsType = 'invite' | 'total' | 'agent'
 
@@ -121,9 +122,13 @@ export function Leaderboard() {
             </div>
             {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
           </div>
-          <a className="btn-accent btn-compact h-fit inline-flex items-center" href="/#waitlist">
+          <JoinWaitlistCta
+            className="btn-accent btn-compact h-fit inline-flex items-center"
+            showArrow={false}
+            onPrivyDisabled={() => window.location.assign('/#waitlist')}
+          >
             Invite friends
-          </a>
+          </JoinWaitlistCta>
         </div>
 
         <div className="mt-8 flex items-center gap-2">

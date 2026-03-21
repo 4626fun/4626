@@ -30,6 +30,19 @@ function run(command, commandArgs, label) {
   }
 }
 
+function runCapture(command, commandArgs, label) {
+  console.log(`\n[docs] ${label}`);
+  const result = spawnSync(command, commandArgs, {
+    stdio: 'inherit',
+    cwd: process.cwd(),
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+  console.log(`[docs] ${label} OK`);
+}
+
 async function walkMarkdownFiles(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const files = [];
@@ -77,9 +90,9 @@ run('pnpm', ['-C', 'apps/docs-site', syncCommand], 'Sync docs site sources');
 run('pnpm', ['-C', 'apps/docs-site', postprocessCommand], 'Postprocess docs site API output');
 
 if (shouldCheck) {
-  run(
+  runCapture(
     'git',
-    ['diff', '--exit-code', '--', ...generatedTargets],
+    ['--no-pager', 'diff', '--quiet', '--exit-code', '--', ...generatedTargets],
     'Verify generated docs are committed',
   );
 }

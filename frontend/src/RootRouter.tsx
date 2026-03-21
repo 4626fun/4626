@@ -3,22 +3,10 @@ import { Route, Routes, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode } from '@/lib/host'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
+import { AppLoadingState } from '@/components/AppLoadingState'
 import { Home } from './pages/Home'
 
 const ProtectedApp = lazy(async () => import('./ProtectedApp'))
-
-function LoadingAppShell() {
-  return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="max-w-3xl mx-auto px-6 py-16">
-        <div className="card rounded-xl p-8 space-y-3">
-          <div className="text-lg font-medium">Loading app…</div>
-          <div className="text-sm text-zinc-400">Preparing wallet and session providers.</div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 export function RootRouter() {
   const location = useLocation()
@@ -51,7 +39,7 @@ export function RootRouter() {
         <Route
           path="*"
           element={
-            <Suspense fallback={<LoadingAppShell />}>
+            <Suspense fallback={<AppLoadingState />}>
               <ProtectedApp />
             </Suspense>
           }

@@ -7,6 +7,7 @@ import { AKITA } from '@/config/contracts'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 
@@ -134,9 +135,13 @@ export function FaqHowItWorks() {
                   New vaults can use a Uniswap Continuous Clearing Auction (CCA) to bootstrap fair price discovery and initial liquidity.
                 </p>
                 <div className="flex flex-col gap-2">
-                  <Link to="/#waitlist" className="text-brand-accent hover:text-brand-400 underline underline-offset-4 text-sm">
+                  <JoinWaitlistCta
+                    className="text-brand-accent hover:text-brand-400 underline underline-offset-4 text-sm"
+                    showArrow={false}
+                    onPrivyDisabled={() => window.location.assign('/#waitlist')}
+                  >
                     Join waitlist
-                  </Link>
+                  </JoinWaitlistCta>
                 </div>
               </div>
             </div>

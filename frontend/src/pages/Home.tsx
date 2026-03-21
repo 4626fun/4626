@@ -5,6 +5,7 @@ import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, type HostMode } from '@/lib/host'
 import { useEffect, useMemo, useState } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
+import { JoinWaitlistCtaWithProvider } from '@/components/waitlist/JoinWaitlistCta'
 import { PageMeta } from '@/components/seo/PageMeta'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
@@ -215,10 +216,7 @@ export function Home() {
               transition={{ duration: 0.8, delay: 1.12 }}
               className="pt-4 sm:pt-6"
             >
-              <Link to="/#waitlist" className={heroCtaClass}>
-                Join waitlist
-                <ArrowRight className="w-4 h-4" />
-              </Link>
+              <JoinWaitlistCtaWithProvider className={heroCtaClass} onPrivyDisabled={() => navigate('/#waitlist')} />
             </motion.div>
           ) : null}
           {showExploreCreatorsCta ? (

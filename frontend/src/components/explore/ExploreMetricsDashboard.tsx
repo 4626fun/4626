@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '@/lib/apiBase'
-import { ExploreMetricSparkline, type ExploreMetricHistoryPoint } from './ExploreMetricSparkline'
+import type { ExploreMetricHistoryPoint } from './ExploreMetricSparkline'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -90,16 +90,13 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           </div>
         </div>
 
-        <div className="vault-surface-elevated vault-hover-lift relative overflow-hidden rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
-          <ExploreMetricSparkline history={metricsQuery.data?.history30d} fallbackValue={marketCap} />
-          <div className="relative z-10">
-            <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">Market Cap</div>
-            <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-              {formatCompactUsd(marketCap)}
-            </div>
-            <div className="app-meta-value mt-0.5 hidden sm:block">
-              30-day trend overlay (hover for daily value)
-            </div>
+        <div className="vault-surface-elevated vault-hover-lift rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">Market Cap</div>
+          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
+            {formatCompactUsd(marketCap)}
+          </div>
+          <div className="app-meta-value mt-0.5 hidden sm:block">
+            Live market-cap snapshot
           </div>
         </div>
 
