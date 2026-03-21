@@ -1,4 +1,5 @@
 import { formatTelegramOutboundText } from '../markdown.js'
+import { isPrivateChatId } from '../env.js'
 import { asTrimmed, splitTelegramMessage } from '../utils.js'
 
 const TELEGRAM_DISMISS_CALLBACK = 'message:delete' as const
@@ -26,24 +27,30 @@ function buildDismissButton(): Record<string, string> {
   return { text: '🗑', callback_data: TELEGRAM_DISMISS_CALLBACK }
 }
 
-function withDismissButton(replyMarkup?: Record<string, unknown>): Record<string, unknown> {
+function withDismissButton(params: {
+  chatId?: string
+  replyMarkup?: Record<string, unknown>
+}): Record<string, unknown> | undefined {
+  if (!params.chatId || !isPrivateChatId(params.chatId)) {
+    return params.replyMarkup
+  }
   const dismissButton = buildDismissButton()
-  if (!replyMarkup || typeof replyMarkup !== 'object') {
+  if (!params.replyMarkup || typeof params.replyMarkup !== 'object') {
     return { inline_keyboard: [[dismissButton]] }
   }
 
-  const inlineKeyboard = Array.isArray((replyMarkup as any).inline_keyboard)
-    ? ([...(replyMarkup as any).inline_keyboard] as Array<Array<Record<string, unknown>>>)
+  const inlineKeyboard = Array.isArray((params.replyMarkup as any).inline_keyboard)
+    ? ([...(params.replyMarkup as any).inline_keyboard] as Array<Array<Record<string, unknown>>>)
     : null
-  if (!inlineKeyboard) return replyMarkup
+  if (!inlineKeyboard) return params.replyMarkup
 
   const hasDismissButton = inlineKeyboard.some((row) =>
     Array.isArray(row) && row.some((button) => button?.callback_data === TELEGRAM_DISMISS_CALLBACK),
   )
-  if (hasDismissButton) return replyMarkup
+  if (hasDismissButton) return params.replyMarkup
 
   return {
-    ...replyMarkup,
+    ...params.replyMarkup,
     inline_keyboard: [...inlineKeyboard, [dismissButton]],
   }
 }
@@ -75,7 +82,8 @@ export async function sendTelegramMessage(params: {
     if (typeof params.messageThreadId === 'number') {
       payload.message_thread_id = params.messageThreadId
     }
-    payload.reply_markup = withDismissButton(params.replyMarkup)
+    const replyMarkup = withDismissButton({ chatId: params.chatId, replyMarkup: params.replyMarkup })
+    if (replyMarkup) payload.reply_markup = replyMarkup
     return fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -150,7 +158,10 @@ export async function sendTelegramPhoto(params: {
   if (typeof params.messageThreadId === 'number') {
     form.append('message_thread_id', String(params.messageThreadId))
   }
-  form.append('reply_markup', JSON.stringify(withDismissButton(params.replyMarkup)))
+  const replyMarkup = withDismissButton({ chatId: params.chatId, replyMarkup: params.replyMarkup })
+  if (replyMarkup) {
+    form.append('reply_markup', JSON.stringify(replyMarkup))
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -171,7 +182,7 @@ export async function editTelegramMessage(params: {
   return editTelegramMessageInternal({
     botToken: params.botToken,
     text: params.text,
-    replyMarkup: withDismissButton(params.replyMarkup),
+    replyMarkup: withDismissButton({ chatId: params.chatId, replyMarkup: params.replyMarkup }),
     target: {
       chat_id: params.chatId,
       message_id: params.messageId,

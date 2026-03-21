@@ -35,7 +35,17 @@ const {
     projectId: 'proj_123',
     status: 'pending',
   })),
-  getImageGenerationProjectMock: vi.fn(async () => ({
+  getImageGenerationProjectMock: vi.fn<
+    () => Promise<{
+      id: string
+      ownerAddress: string
+      creatorAddress: string | null
+      status: string
+      assets: unknown[]
+      attempts: unknown[]
+      latestJob: unknown
+    }>
+  >(async () => ({
     id: 'proj_123',
     ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
     creatorAddress: null,
@@ -371,7 +381,7 @@ describe('POST /api/image/projects/associate-vault', () => {
     getImageGenerationProjectMock.mockResolvedValueOnce({
       id: 'proj_123',
       ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
-      creatorAddress: null,
+      creatorAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
       status: 'completed',
       assets: [],
       attempts: [],
@@ -398,11 +408,39 @@ describe('POST /api/image/projects/associate-vault', () => {
     )
   })
 
+  it('rejects associating projects that do not have a creator address', async () => {
+    getImageGenerationProjectMock.mockResolvedValueOnce({
+      id: 'proj_123',
+      ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      creatorAddress: null,
+      status: 'completed',
+      assets: [],
+      attempts: [],
+      latestJob: null,
+    })
+    const mod = await import('../_handlers/image/_associate-vault.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        projectId: 'proj_123',
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toMatch(/project creator/i)
+    expect(setImageProjectVaultAddressMock).not.toHaveBeenCalled()
+  })
+
   it('rejects associating a project owned by a different wallet', async () => {
     getImageGenerationProjectMock.mockResolvedValueOnce({
       id: 'proj_123',
       ownerAddress: '0x2222222222222222222222222222222222222222',
-      creatorAddress: null,
+      creatorAddress: '0x2222222222222222222222222222222222222222',
       status: 'completed',
       assets: [],
       attempts: [],
@@ -429,7 +467,7 @@ describe('POST /api/image/projects/associate-vault', () => {
     getImageGenerationProjectMock.mockResolvedValueOnce({
       id: 'proj_123',
       ownerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
-      creatorAddress: null,
+      creatorAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
       status: 'completed',
       assets: [],
       attempts: [],

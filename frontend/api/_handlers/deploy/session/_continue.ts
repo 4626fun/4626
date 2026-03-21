@@ -2,14 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { decodeFunctionData, getAddress, isAddress, type Address, type Hex, type SignableMessage } from 'viem'
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
 import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { logger } from '../../../../server/_lib/logger.js'
-import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
@@ -407,16 +406,17 @@ async function ensureOvaultPreflight(params: {
     : null
 
   const origin = getCanonicalOrigin(params.req)
-  const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
-  const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
-  const siwaReceipt = headerValue(params.req.headers['x-siwa-receipt'] as string | string[] | undefined)
-  const privyToken = headerValue(params.req.headers['x-privy-token'] as string | string[] | undefined)
   const internalRegistrationSecret = String(
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
       '',
   ).trim()
-  const routePath = '/api/deploy/setupSolanaOvaultMesh'
+  if (!internalRegistrationSecret) {
+    throw new Error(
+      'Solana preflight failed: DEPLOY_SOLANA_REGISTRATION_SECRET is required for internal registration checks.',
+    )
+  }
+  const routePath = '/api/deploy/registerSolanaBridgeToken'
   const failures: string[] = []
   try {
     const body: Record<string, unknown> = {
@@ -431,16 +431,13 @@ async function ensureOvaultPreflight(params: {
       body.creatorToken = bridgeToken
       body.expectedSolanaAmount = expectedSolanaAmount.toString()
     }
+    const trustedInternalHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-CV-Solana-Registration-Secret': internalRegistrationSecret,
+    }
     const response = await fetch(`${origin}${routePath}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(cookie ? { Cookie: cookie } : {}),
-        ...(authz ? { Authorization: authz } : {}),
-        ...(siwaReceipt ? { 'X-SIWA-Receipt': siwaReceipt } : {}),
-        ...(privyToken ? { 'X-Privy-Token': privyToken } : {}),
-        ...(internalRegistrationSecret ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret } : {}),
-      },
+      headers: trustedInternalHeaders,
       body: JSON.stringify(body),
     })
     const rawBody = await response.text().catch(() => '')
@@ -589,51 +586,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Server signs userops using the deploy-session owner.
-    // New sessions use a Privy-managed deploy signer wallet; compatibility sessions use an encrypted raw private key.
+    // Deploy sessions require a managed Privy signer wallet id.
     const payload = asPayloadObject(rec.payload)
     const erc7712Grant = parseGrant(payload?.erc7712Grant)
-    const deploySignerWalletId =
+    const deploySignerWalletIdFromPayload =
       typeof payload?.deploySignerWalletId === 'string'
         ? payload.deploySignerWalletId.trim()
         : ''
+    const deploySignerWalletIdFromRecord =
+      typeof (rec as any)?.sessionSignerWalletId === 'string'
+        ? String((rec as any).sessionSignerWalletId).trim()
+        : ''
+    const deploySignerWalletId = deploySignerWalletIdFromPayload || deploySignerWalletIdFromRecord
+    if (!deploySignerWalletId) throw new Error('deploy_signer_wallet_unavailable')
     const persistSessionOwner =
       payload?.persistSessionOwner === true ||
       (payload?.persistSessionOwner == null && Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner())
     const sessionSigner = getAddress(rec.sessionSigner)
-    const ownerAccount = deploySignerWalletId
-      ? toAccount({
-          address: sessionSigner,
-          sign: async ({ hash }: { hash: Hex }) => {
-            return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
-          },
-        signTransaction: async () => {
-          throw new Error('privy_sign_transaction_unsupported')
-        },
-          signMessage: async ({ message }: { message: SignableMessage }) => {
-            const msg =
-              typeof message === 'string'
-                ? message
-                : typeof message.raw === 'string'
-                  ? message.raw
-                  : `0x${Buffer.from(message.raw).toString('hex')}`
-            const out = await walletRpc<any>({
-              walletId: deploySignerWalletId,
-              method: 'personal_sign',
-              rpcParams: { message: msg, encoding: 'hex' },
-            })
-            const sig = String(out?.data?.signature ?? '').trim()
-            if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_personal_sign_invalid_signature')
-            return sig as Hex
-          },
-        signTypedData: async () => {
-          throw new Error('privy_sign_typed_data_unsupported')
-        },
+    const ownerAccount = toAccount({
+      address: sessionSigner,
+      sign: async ({ hash }: { hash: Hex }) => {
+        return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
+      },
+      signTransaction: async () => {
+        throw new Error('privy_sign_transaction_unsupported')
+      },
+      signMessage: async ({ message }: { message: SignableMessage }) => {
+        const msg =
+          typeof message === 'string'
+            ? message
+            : typeof message.raw === 'string'
+              ? message.raw
+              : `0x${Buffer.from(message.raw).toString('hex')}`
+        const out = await walletRpc<any>({
+          walletId: deploySignerWalletId,
+          method: 'personal_sign',
+          rpcParams: { message: msg, encoding: 'hex' },
         })
-      : (() => {
-          if (!rec.sessionSignerKeyEnc) throw new Error('session_signer_unavailable')
-          const pk = decryptWithSecret(rec.sessionSignerKeyEnc) as Hex
-          return privateKeyToAccount(pk)
-        })()
+        const sig = String(out?.data?.signature ?? '').trim()
+        if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_personal_sign_invalid_signature')
+        return sig as Hex
+      },
+      signTypedData: async () => {
+        throw new Error('privy_sign_typed_data_unsupported')
+      },
+    })
     const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
       publicClient: createPublicClient({ chain: base, transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()) }),
@@ -1089,6 +1086,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
     if (
+      msg === 'deploy_signer_wallet_unavailable' ||
       msg === 'session_signer_unavailable' ||
       msg === 'session_signer_key_missing' ||
       msg === 'session_owner_unavailable' ||

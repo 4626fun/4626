@@ -6730,17 +6730,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (callbackDataLower === 'livefeed:signals:refresh') {
-        await refreshSignalsLiveFeed({
-          db,
-          botToken,
-          inlineMessageId,
-          force: true,
-        }).catch(() => {})
-        await answerTelegramCallbackQuery({
-          botToken,
-          callbackQueryId,
-          text: 'Signals refreshed',
-        }).catch(() => {})
+        if (feed.ownerTelegramUserId !== userId) {
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: 'Only the owner can refresh this feed',
+            showAlert: true,
+          }).catch(() => {})
+        } else {
+          await refreshSignalsLiveFeed({
+            db,
+            botToken,
+            inlineMessageId,
+            force: true,
+          }).catch(() => {})
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: 'Signals refreshed',
+          }).catch(() => {})
+        }
       } else if (callbackDataLower === 'livefeed:signals:pause' || callbackDataLower === 'livefeed:signals:resume') {
         if (feed.ownerTelegramUserId !== userId) {
           await answerTelegramCallbackQuery({

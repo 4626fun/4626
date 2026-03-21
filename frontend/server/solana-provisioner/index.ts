@@ -79,6 +79,10 @@ type WrapRunner = {
   label: string
 }
 
+const PROVISIONER_MAX_BODY_BYTES = 64 * 1024
+const PROVISIONER_HEALTH_DEBUG_ENABLED = parseBooleanEnv(process.env.PROVISIONER_HEALTH_DEBUG, false)
+const PROVISIONER_EXTENDED_ENDPOINTS_ENABLED = parseBooleanEnv(process.env.PROVISIONER_EXTENDED_ENDPOINTS, false)
+
 type ProvisionerMintCompatibilityHints = {
   tokenProgram: 'spl-token' | 'token-2022' | null
   transferHookDetected: boolean | null
@@ -508,10 +512,27 @@ async function readBridgeTokenMetadata(params: {
   }
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, maxBytes = PROVISIONER_MAX_BODY_BYTES): Promise<string> {
   return new Promise((resolve, reject) => {
+    const lengthHeader = String(req.headers['content-length'] ?? '').trim()
+    const declaredLength = lengthHeader ? Number(lengthHeader) : NaN
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      reject(new Error('request_body_too_large'))
+      req.resume()
+      return
+    }
     const chunks: Buffer[] = []
-    req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+    let total = 0
+    req.on('data', (chunk) => {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      total += buf.length
+      if (total > maxBytes) {
+        reject(new Error('request_body_too_large'))
+        req.destroy()
+        return
+      }
+      chunks.push(buf)
+    })
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
     req.on('error', reject)
   })
@@ -540,7 +561,6 @@ function readProvisionerBearerSecret(): { value: string; source: string | null }
     'PROVISIONER_BEARER_TOKEN',
     'SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET',
     'METEORA_IX_PROVISIONER_SECRET',
-    'DEPLOY_SOLANA_REGISTRATION_SECRET',
   ])
 }
 
@@ -797,32 +817,42 @@ async function runWrapTokenWithRetry(
   throw new Error('wrap-token failed after retries')
 }
 
-async function handleHealth(res: ServerResponse): Promise<void> {
+async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliExists = !!cliDir && existsSync(cliDir)
   const provisionerSecret = readProvisionerBearerSecret()
   const secretSet = provisionerSecret.value.length > 0
+  if (secretSet && !authOk(req, provisionerSecret.value)) {
+    return json(res, 401, {
+      ok: false,
+      service: 'solana-route-provisioner',
+      error: 'Unauthorized',
+    })
+  }
   const payerHealth = await readProvisionerPayerHealth()
-  json(res, 200, {
+  const payload: Record<string, unknown> = {
     ok: cliExists && secretSet && payerHealth.payerHealthy,
     service: 'solana-route-provisioner',
-    cliDir,
     cliExists,
     secretSet,
-    secretSource: provisionerSecret.source,
     payerConfigured: payerHealth.payerConfigured,
-    payerSource: payerHealth.payerSource,
-    payerPubkey: payerHealth.payerPubkey,
-    payerBalanceLamports: payerHealth.payerBalanceLamports,
-    payerBalanceSol: payerHealth.payerBalanceSol,
-    payerMinSol: payerHealth.payerMinSol,
     payerHealthy: payerHealth.payerHealthy,
     payerError: payerHealth.payerError,
     baseRpcConfigured: String(process.env.BASE_RPC_URL ?? '').trim().length > 0,
     solanaRpcConfigured: String(process.env.SOLANA_RPC_URL ?? '').trim().length > 0,
     deployEnvDefault: String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet',
     now: new Date().toISOString(),
-  })
+  }
+  if (PROVISIONER_HEALTH_DEBUG_ENABLED) {
+    payload.cliDir = cliDir
+    payload.secretSource = provisionerSecret.source
+    payload.payerSource = payerHealth.payerSource
+    payload.payerPubkey = payerHealth.payerPubkey
+    payload.payerBalanceLamports = payerHealth.payerBalanceLamports
+    payload.payerBalanceSol = payerHealth.payerBalanceSol
+    payload.payerMinSol = payerHealth.payerMinSol
+  }
+  json(res, 200, payload)
 }
 
 async function handleProvision(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -846,7 +876,10 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   try {
     const raw = await readBody(req)
     body = (raw ? JSON.parse(raw) : {}) as ProvisionBody
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'request_body_too_large') {
+      return json(res, 413, { success: false, error: 'Request body too large.' })
+    }
     return json(res, 400, { success: false, error: 'Invalid JSON body.' })
   }
 
@@ -1133,7 +1166,10 @@ async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse):
   try {
     const raw = await readBody(req)
     body = (raw ? JSON.parse(raw) : {}) as MeteoraIxsBody
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'request_body_too_large') {
+      return json(res, 413, { success: false, error: 'Request body too large.' })
+    }
     return json(res, 400, { success: false, error: 'Invalid JSON body.' })
   }
 
@@ -1239,7 +1275,10 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
   try {
     const raw = await readBody(req)
     body = (raw ? JSON.parse(raw) : {}) as SetupCreatorBody
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'request_body_too_large') {
+      return json(res, 413, { success: false, error: 'Request body too large.' })
+    }
     return json(res, 400, { success: false, error: 'Invalid JSON body.' })
   }
 
@@ -1322,7 +1361,10 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
   try {
     const raw = await readBody(req)
     body = (raw ? JSON.parse(raw) : {}) as CreatePoolBody
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'request_body_too_large') {
+      return json(res, 413, { success: false, error: 'Request body too large.' })
+    }
     return json(res, 400, { success: false, error: 'Invalid JSON body.' })
   }
 
@@ -1364,16 +1406,20 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
 }
 
 async function main(): Promise<void> {
-  const host = String(process.env.PROVISIONER_HOST ?? '0.0.0.0').trim() || '0.0.0.0'
+  const host = String(process.env.PROVISIONER_HOST ?? '127.0.0.1').trim() || '127.0.0.1'
   const port = Number(process.env.PROVISIONER_PORT ?? 8788)
   const server = createServer(async (req, res) => {
     const method = String(req.method ?? 'GET').toUpperCase()
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-    if (method === 'GET' && url.pathname === '/healthz') return handleHealth(res)
+    if (method === 'GET' && url.pathname === '/healthz') return handleHealth(req, res)
     if (method === 'POST' && url.pathname === '/provision') return handleProvision(req, res)
     if (method === 'POST' && url.pathname === '/meteora-ixs') return handleBuildMeteoraIxs(req, res)
-    if (method === 'POST' && url.pathname === '/setup-creator') return handleSetupCreator(req, res)
-    if (method === 'POST' && url.pathname === '/create-pool') return handleCreatePool(req, res)
+    if (PROVISIONER_EXTENDED_ENDPOINTS_ENABLED && method === 'POST' && url.pathname === '/setup-creator') {
+      return handleSetupCreator(req, res)
+    }
+    if (PROVISIONER_EXTENDED_ENDPOINTS_ENABLED && method === 'POST' && url.pathname === '/create-pool') {
+      return handleCreatePool(req, res)
+    }
     return json(res, 404, { success: false, error: 'Not found' })
   })
 

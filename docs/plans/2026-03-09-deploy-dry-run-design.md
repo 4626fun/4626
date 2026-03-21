@@ -49,7 +49,7 @@ The dry-run must not:
 - build an ERC-7712 grant
 - call `sendUserOperation`
 - call `deploy/session/continue`
-- hit `/api/deploy/registerSolanaBridgeToken` or `/api/deploy/setupSolanaOvaultMesh`
+- hit `/api/deploy/registerSolanaBridgeToken`
 
 ## Error Reporting
 

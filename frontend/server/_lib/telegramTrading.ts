@@ -179,6 +179,17 @@ export type TelegramLinkStartTokenReadResult =
       reason: 'invalid' | 'expired'
     }
 
+export type TelegramLinkStartTokenClaimResult =
+  | {
+      ok: true
+      payload: TelegramLinkStartTokenPayload
+      state: 'claimed' | 'reused'
+    }
+  | {
+      ok: false
+      reason: 'invalid' | 'expired' | 'consumed' | 'claimed_by_other_user'
+    }
+
 export type TelegramFunnelMetrics = {
   windowHours: number
   since: string
@@ -392,6 +403,10 @@ function hashTelegramMiniAppSessionToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex')
 }
 
+function hashTelegramLinkStartToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex')
+}
+
 function signTelegramLinkPayload(payloadB64: string): string {
   const signature = createHmac('sha256', getTelegramLinkTokenSecret()).update(payloadB64).digest()
   return base64UrlEncode(signature)
@@ -501,6 +516,85 @@ export function readTelegramLinkStartTokenStatus(token: string): TelegramLinkSta
       expiresAt: new Date(parsed.expiresAtMs).toISOString(),
     },
   }
+}
+
+export async function claimTelegramLinkStartToken(params: {
+  db: Db
+  token: string
+  privyUserId: string
+}): Promise<TelegramLinkStartTokenClaimResult> {
+  const token = asTrimmed(params.token)
+  const privyUserId = asTrimmed(params.privyUserId)
+  if (!token || !privyUserId) return { ok: false, reason: 'invalid' }
+  const tokenStatus = readTelegramLinkStartTokenStatus(token)
+  if (!tokenStatus.ok) return tokenStatus
+  const payload = tokenStatus.payload
+  const tokenHash = hashTelegramLinkStartToken(token)
+
+  await params.db.sql`
+    DELETE FROM telegram_link_start_token_claims
+    WHERE expires_at <= NOW();
+  `
+  const claimed = await params.db.sql`
+    INSERT INTO telegram_link_start_token_claims (
+      token_hash,
+      telegram_user_id,
+      chat_id,
+      privy_user_id,
+      expires_at
+    )
+    VALUES (
+      ${tokenHash},
+      ${payload.telegramUserId},
+      ${payload.chatId},
+      ${privyUserId},
+      ${payload.expiresAt}
+    )
+    ON CONFLICT (token_hash) DO NOTHING
+    RETURNING token_hash;
+  `
+  if (claimed.rows?.[0]?.token_hash) {
+    return { ok: true, payload, state: 'claimed' }
+  }
+
+  const existing = await params.db.sql`
+    SELECT privy_user_id, expires_at, consumed_at
+    FROM telegram_link_start_token_claims
+    WHERE token_hash = ${tokenHash}
+    LIMIT 1;
+  `
+  const row = existing.rows?.[0]
+  if (!row) return { ok: false, reason: 'invalid' }
+  if (row.consumed_at) return { ok: false, reason: 'consumed' }
+  const expiresAtMs = Date.parse(String(row.expires_at ?? ''))
+  if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+    return { ok: false, reason: 'expired' }
+  }
+  if (asTrimmed(row.privy_user_id) !== privyUserId) {
+    return { ok: false, reason: 'claimed_by_other_user' }
+  }
+  return { ok: true, payload, state: 'reused' }
+}
+
+export async function consumeTelegramLinkStartToken(params: {
+  db: Db
+  token: string
+  privyUserId: string
+}): Promise<boolean> {
+  const token = asTrimmed(params.token)
+  const privyUserId = asTrimmed(params.privyUserId)
+  if (!token || !privyUserId) return false
+  const tokenHash = hashTelegramLinkStartToken(token)
+  const consumed = await params.db.sql`
+    UPDATE telegram_link_start_token_claims
+    SET consumed_at = NOW()
+    WHERE token_hash = ${tokenHash}
+      AND privy_user_id = ${privyUserId}
+      AND consumed_at IS NULL
+      AND expires_at > NOW()
+    RETURNING token_hash;
+  `
+  return Boolean(consumed.rows?.[0]?.token_hash)
 }
 
 function mapTelegramMiniAppSessionRow(row: any): TelegramMiniAppSession {
@@ -938,6 +1032,17 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       );
     `
     await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_link_start_token_claims (
+        token_hash TEXT PRIMARY KEY,
+        telegram_user_id BIGINT NOT NULL,
+        chat_id TEXT NOT NULL,
+        privy_user_id TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        consumed_at TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`
       CREATE TABLE IF NOT EXISTS telegram_chat_vault_scope (
         chat_id TEXT PRIMARY KEY,
         allowed_vault_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -1086,6 +1191,14 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_init_hash_idx
       ON telegram_miniapp_sessions (init_data_hash);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_link_start_token_claims_expires_idx
+      ON telegram_link_start_token_claims (expires_at);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_link_start_token_claims_privy_idx
+      ON telegram_link_start_token_claims (privy_user_id, expires_at DESC);
     `
     await db.sql`
       CREATE UNIQUE INDEX IF NOT EXISTS telegram_holder_room_policies_room_chat_uidx

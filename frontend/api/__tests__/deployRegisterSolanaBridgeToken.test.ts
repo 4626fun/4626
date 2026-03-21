@@ -1,9 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import handler from '../_handlers/deploy/_registerSolanaBridgeToken.ts'
+import { getApiHandler } from '../_handlers/_routes.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const SOL_MINT = 'So11111111111111111111111111111111111111112'
+const INTERNAL_REGISTRATION_SECRET = 'internal-secret'
+
+function createInternalReq(options: Parameters<typeof createMockReq>[0] = {}) {
+  return createMockReq({
+    ...options,
+    headers: {
+      'x-cv-solana-registration-secret': INTERNAL_REGISTRATION_SECRET,
+      ...(options.headers ?? {}),
+    },
+  })
+}
 
 const {
   readDeployAuthMock,
@@ -78,8 +90,14 @@ vi.mock('viem/accounts', async () => {
 })
 
 describe('deploy registerSolanaBridgeToken handler', () => {
+  it('is exposed only through the canonical API route', async () => {
+    await expect(getApiHandler('deploy/registerSolanaBridgeToken')).resolves.toBeTypeOf('function')
+    await expect(getApiHandler('deploy/setupSolanaOvaultMesh')).resolves.toBeNull()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = INTERNAL_REGISTRATION_SECRET
     readDeployAuthMock.mockReturnValue({ address: '0x1111111111111111111111111111111111111111' })
     isAdminAddressMock.mockReturnValue(true)
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
@@ -93,7 +111,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     readDeployAuthMock.mockReturnValueOnce(null)
     const req = createMockReq({
       method: 'POST',
-      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba', buildOnly: true },
     })
     const res = createMockRes()
 
@@ -105,7 +123,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
   it('returns 403 for authenticated non-admin callers', async () => {
     isAdminAddressMock.mockReturnValueOnce(false)
-    const req = createMockReq({
+    const req = createInternalReq({
       method: 'POST',
       body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
     })
@@ -121,7 +139,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 1_000 })
     const req = createMockReq({
       method: 'POST',
-      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba', buildOnly: true },
     })
     const res = createMockRes()
 
@@ -199,7 +217,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
     const req = createMockReq({
       method: 'POST',
-      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba', buildOnly: true },
     })
     const res = createMockRes()
     await handler(req, res)
@@ -209,6 +227,37 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     expect(res.body?.data?.registered).toBe(true)
     expect(res.body?.data?.txHash).toBe(null)
     expect(createWalletClientMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects mutating registration without the internal secret even for admins', async () => {
+    const mockPublicClient = {
+      readContract: vi.fn(async (args: any) => {
+        switch (args.functionName) {
+          case 'solanaBridgeAdapter':
+            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+          case 'solanaDestination':
+            return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+          case 'isRegistered':
+            return false
+          case 'owner':
+            return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+          default:
+            throw new Error(`Unexpected read ${String(args.functionName)}`)
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x1234'),
+    }
+    createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+    const req = createInternalReq({
+      method: 'POST',
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('Internal Solana registration secret is required')
   })
 
   it('fails compatibility when transfer-hook mint uses non-zero OFT fee', async () => {
@@ -235,6 +284,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       method: 'POST',
       body: {
         bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        buildOnly: true,
         assetMintOrigin: 'existing',
         enforceCompatibility: true,
         mintCompatibilityHints: {
@@ -278,6 +328,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       method: 'POST',
       body: {
         bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        buildOnly: true,
         assetMintOrigin: 'existing',
         enforceCompatibility: true,
         mintCompatibilityHints: {
@@ -321,6 +372,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       method: 'POST',
       body: {
         bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        buildOnly: true,
         assetMintOrigin: 'existing',
         enforceCompatibility: true,
         mintCompatibilityHints: {
@@ -541,7 +593,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
       })
 
-      const req = createMockReq({
+      const req = createInternalReq({
         method: 'POST',
         body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
@@ -630,7 +682,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
           }),
       })) as any
 
-      const req = createMockReq({
+      const req = createInternalReq({
         method: 'POST',
         body: {
           bridgeToken,
@@ -699,7 +751,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
       })
 
-      const req = createMockReq({
+      const req = createInternalReq({
         method: 'POST',
         body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
@@ -752,7 +804,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
       })
 
-      const req = createMockReq({
+      const req = createInternalReq({
         method: 'POST',
         body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
@@ -834,7 +886,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         } as any)
       ;(globalThis as any).fetch = fetchMock
 
-      const req = createMockReq({
+      const req = createInternalReq({
         method: 'POST',
         body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
@@ -918,7 +970,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
           }),
       })) as any
 
-      const req = createMockReq({
+      const req = createInternalReq({
         method: 'POST',
         body: {
           bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',

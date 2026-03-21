@@ -1,8 +1,17 @@
+import { timingSafeEqual } from 'node:crypto'
+
 import type { VercelRequest } from '@vercel/node'
 
 import { getTelegramWebhookConfig } from '../config.js'
 import { isPrivateChatId, parseAdminUserIds, parseAllowedChatIds } from '../env.js'
 import { asTrimmed, parseDelimitedSet } from '../utils.js'
+
+function safeCompareSecret(provided: string, configured: string): boolean {
+  const expected = Buffer.from(configured)
+  const actual = Buffer.from(provided)
+  if (expected.length === 0 || actual.length !== expected.length) return false
+  return timingSafeEqual(actual, expected)
+}
 
 export function isTelegramContextAllowed(params: {
   chatId: string
@@ -27,14 +36,14 @@ export function verifyBotConfigSecret(req: Pick<VercelRequest, 'headers'>): bool
   const configured = getTelegramWebhookConfig().botConfigSecret
   if (!configured) return false
   const provided = asTrimmed(req.headers['x-telegram-link-secret'])
-  return provided === configured
+  return safeCompareSecret(provided, configured)
 }
 
 export function verifyTelegramLinkApiSecret(req: Pick<VercelRequest, 'headers'>): boolean {
   const configured = getTelegramWebhookConfig().linkApiSecret
   if (!configured) return false
   const provided = asTrimmed(req.headers['x-telegram-link-secret'])
-  return provided === configured
+  return safeCompareSecret(provided, configured)
 }
 
 export function isTelegramMiniAppSessionEnabled(params: { chatId?: string | null; userId?: string | null }): boolean {

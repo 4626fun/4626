@@ -920,7 +920,7 @@ describe('telegram webhook handler', () => {
     expect(form.get('caption')).toBe('<b>AKITA | MARKET CHART</b>')
     expect(form.get('parse_mode')).toBe('HTML')
     expect(String(form.get('reply_to_message_id') ?? '')).toBe('91')
-    expect(String(form.get('reply_markup') ?? '')).toContain('message:delete')
+    expect(String(form.get('reply_markup') ?? '')).toBe('')
   })
 
   it('backticks only the command and not the help description', async () => {
@@ -975,7 +975,7 @@ describe('telegram webhook handler', () => {
     expect(text).toContain('<code>/cre status</code>')
     expect(text).toContain('<blockquote expandable>')
     const buttons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
+    expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(false)
   })
 
   it('handles /start in DM as onboarding welcome with a single Start inline CTA', async () => {
@@ -1559,6 +1559,44 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/editMessageText')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/answerCallbackQuery')
+  })
+
+  it('blocks live signals refresh for non-owners', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramInlineSignalFeedByInlineMessageIdMock.mockResolvedValueOnce({
+      inlineMessageId: 'inline-msg-live',
+      sourceChatId: '-100123',
+      ownerTelegramUserId: '777',
+      paused: false,
+      closedAt: null,
+      lastRenderHash: null,
+      lastPushedAt: null,
+      createdAt: '2026-03-21T18:00:00.000Z',
+      updatedAt: '2026-03-21T18:00:00.000Z',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_43,
+        callback_query: {
+          id: 'cbq-live-refresh-denied',
+          data: 'livefeed:signals:refresh',
+          from: { id: 999 },
+          inline_message_id: 'inline-msg-live',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls).toHaveLength(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Only the owner can refresh this feed')
   })
 
   it('returns inline shortcut launcher with prefill buttons', async () => {
@@ -3384,7 +3422,7 @@ describe('telegram webhook handler', () => {
     expect(primaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Decline')).toBe(true)
     expect(String(primaryButtons?.[0]?.callback_data ?? '')).toContain('trade:accept:trade-token-1')
     const allButtons = keyboard.flat()
-    expect(allButtons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'message:delete')).toBe(false)
   })
 
   it('renders bid preview with live auction context and drift safety note', async () => {

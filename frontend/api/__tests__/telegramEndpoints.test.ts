@@ -32,7 +32,9 @@ const {
   isTelegramFunnelMetricsEnabledForChatMock,
   logTelegramFunnelEventMock,
   createTelegramLinkStartTokenMock,
+  claimTelegramLinkStartTokenMock,
   claimTelegramMiniAppReplayNonceMock,
+  consumeTelegramLinkStartTokenMock,
   createTelegramMiniAppSessionMock,
   readTelegramMiniAppSessionMock,
   readTelegramLinkStartTokenStatusMock,
@@ -65,7 +67,9 @@ const {
   isTelegramFunnelMetricsEnabledForChatMock: vi.fn(),
   logTelegramFunnelEventMock: vi.fn(),
   createTelegramLinkStartTokenMock: vi.fn(),
+  claimTelegramLinkStartTokenMock: vi.fn(),
   claimTelegramMiniAppReplayNonceMock: vi.fn(),
+  consumeTelegramLinkStartTokenMock: vi.fn(),
   createTelegramMiniAppSessionMock: vi.fn(),
   readTelegramMiniAppSessionMock: vi.fn(),
   readTelegramLinkStartTokenStatusMock: vi.fn(),
@@ -105,7 +109,9 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   isTelegramFunnelMetricsEnabledForChat: isTelegramFunnelMetricsEnabledForChatMock,
   logTelegramFunnelEvent: logTelegramFunnelEventMock,
   createTelegramLinkStartToken: createTelegramLinkStartTokenMock,
+  claimTelegramLinkStartToken: claimTelegramLinkStartTokenMock,
   claimTelegramMiniAppReplayNonce: claimTelegramMiniAppReplayNonceMock,
+  consumeTelegramLinkStartToken: consumeTelegramLinkStartTokenMock,
   createTelegramMiniAppSession: createTelegramMiniAppSessionMock,
   readTelegramMiniAppSession: readTelegramMiniAppSessionMock,
   readTelegramLinkStartTokenStatus: readTelegramLinkStartTokenStatusMock,
@@ -230,7 +236,18 @@ describe('telegram endpoint handlers', () => {
       token: 'token-abc',
       expiresAt: '2026-03-13T00:10:00.000Z',
     })
+    claimTelegramLinkStartTokenMock.mockResolvedValue({
+      ok: true,
+      state: 'claimed',
+      payload: {
+        telegramUserId: '42',
+        chatId: '-100123',
+        issuedAt: '2026-03-13T00:00:00.000Z',
+        expiresAt: '2026-03-13T00:10:00.000Z',
+      },
+    })
     claimTelegramMiniAppReplayNonceMock.mockResolvedValue(true)
+    consumeTelegramLinkStartTokenMock.mockResolvedValue(true)
     createTelegramMiniAppSessionMock.mockResolvedValue({
       sessionToken: 'mini-session-token',
       expiresAt: '2026-03-13T00:10:00.000Z',
@@ -567,6 +584,16 @@ describe('telegram endpoint handlers', () => {
 
     expect(res.statusCode).toBe(200)
     expect(loadCanonicalDelegationStateMock).toHaveBeenCalledTimes(1)
+    expect(claimTelegramLinkStartTokenMock).toHaveBeenCalledWith({
+      db: expect.any(Object),
+      token: 'token-abc',
+      privyUserId: 'did:privy:11',
+    })
+    expect(consumeTelegramLinkStartTokenMock).toHaveBeenCalledWith({
+      db: expect.any(Object),
+      token: 'token-abc',
+      privyUserId: 'did:privy:11',
+    })
     expect(upsertAccountMock).toHaveBeenCalledWith({
       db: expect.any(Object),
       privyUserId: 'did:privy:11',
@@ -629,6 +656,26 @@ describe('telegram endpoint handlers', () => {
     expect(res.statusCode).toBe(409)
     expect(res.body?.success).toBe(false)
     expect(res.body?.code).toBe('EMAIL_VERIFICATION_REQUIRED')
+    expect(claimTelegramLinkStartTokenMock).toHaveBeenCalledTimes(1)
+    expect(consumeTelegramLinkStartTokenMock).not.toHaveBeenCalled()
+    expect(upsertTelegramUserLinkMock).not.toHaveBeenCalled()
+  })
+
+  it('POST /api/telegram/miniapp/link rejects tokens claimed by another 4626 session', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_miniapp-link.ts')
+    claimTelegramLinkStartTokenMock.mockResolvedValueOnce({ ok: false, reason: 'claimed_by_other_user' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy-token' },
+      body: { token: 'token-abc', telegramUsername: 'akita', miniAppSessionToken: 'mini-session-token' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(String(res.body?.error ?? '')).toContain('already in use by another 4626 session')
+    expect(consumeTelegramLinkStartTokenMock).not.toHaveBeenCalled()
     expect(upsertTelegramUserLinkMock).not.toHaveBeenCalled()
   })
 
@@ -672,22 +719,22 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.data?.linked).toBe(true)
   })
 
-  it('POST /api/telegram/miniapp/link requires x-telegram-link-secret when mini app sessions are disabled', async () => {
+  it('POST /api/telegram/miniapp/link rejects linking when mini app sessions are disabled', async () => {
     const restoreSessionGate = applyEnv({
       TELEGRAM_MINIAPP_SESSION_ENABLED: 'false',
     })
     const { default: handler } = await import('../_handlers/telegram/_miniapp-link.ts')
-    const req = createBaseMockReq({
+    const req = createMockReq({
       method: 'POST',
       headers: { 'x-privy-token': 'privy-token' },
-      body: { token: 'token-abc', telegramUsername: 'akita' },
+      body: { token: 'token-abc', telegramUsername: 'akita', miniAppSessionToken: 'mini-session-token' },
     })
     const res = createMockRes()
 
     try {
       await handler(req, res)
       expect(res.statusCode).toBe(401)
-      expect(String(res.body?.error ?? '')).toContain('Unauthorized')
+      expect(String(res.body?.error ?? '')).toContain('Telegram Mini App session is required')
     } finally {
       restoreSessionGate()
     }

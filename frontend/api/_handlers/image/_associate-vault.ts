@@ -48,13 +48,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Ownership check: the caller must be the address that created this project.
-  // Projects created before this check was introduced have creatorAddress = null;
-  // we allow those through to preserve backward compatibility with existing data.
   const creatorAddress = typeof project.creatorAddress === 'string' ? project.creatorAddress : null
-  if (creatorAddress && actor !== null) {
-    if (creatorAddress.toLowerCase() !== actor.toLowerCase()) {
-      return res.status(403).json({ success: false, error: 'Only the project creator may associate this project with a vault' })
-    }
+  if (!creatorAddress || actor === null || creatorAddress.toLowerCase() !== actor.toLowerCase()) {
+    return res.status(403).json({ success: false, error: 'Only the project creator may associate this project with a vault' })
   }
 
   // Integrity check: non-admin callers may only associate vaults controlled by their wallet context.

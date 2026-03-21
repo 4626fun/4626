@@ -6,7 +6,7 @@ This service is designed for VM/container runtimes where the bridge CLI is avail
 
 ## Why this exists
 
-`/api/deploy/setupSolanaOvaultMesh` in the app can auto-register Solana bridge tokens, but on serverless runtimes it cannot execute local bridge CLI paths.
+`/api/deploy/registerSolanaBridgeToken` in the app can auto-register Solana bridge tokens, but on serverless runtimes it cannot execute local bridge CLI paths.
 
 Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endpoint.
 For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`
@@ -17,7 +17,9 @@ Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
 ## Endpoints
 
 - `GET /healthz`
-  - Returns runtime readiness (`cliExists`, `secretSet`, etc.)
+  - Bearer-authenticated
+  - Returns coarse runtime readiness (`cliExists`, `secretSet`, payer readiness, RPC configuration)
+  - Detailed payer/source diagnostics are returned only when `PROVISIONER_HEALTH_DEBUG=1`
 - `POST /provision`
   - Bearer-authenticated
   - Runs `cli sol bridge wrap-token`
@@ -175,7 +177,7 @@ sudo bash ./install-systemd.sh --repo-root /opt/4626 --service-user <repo-access
 sudo editor /etc/4626/solana-provisioner.env
 sudo systemctl restart solana-route-provisioner
 sudo systemctl status solana-route-provisioner --no-pager
-curl -fsS http://127.0.0.1:8788/healthz
+curl -fsS -H "Authorization: Bearer $PROVISIONER_BEARER_TOKEN" http://127.0.0.1:8788/healthz
 ```
 
 Important:
@@ -194,6 +196,13 @@ Route only:
 - `POST /provision`
 - `POST /meteora-ixs`
 
+Extended mutation endpoints stay disabled by default:
+
+- `POST /setup-creator`
+- `POST /create-pool`
+
+Only enable those with `PROVISIONER_EXTENDED_ENDPOINTS=1` on a trusted private runtime.
+
 ## Wire app runtime
 
 In the app server env (Vercel or otherwise):
@@ -204,7 +213,7 @@ In the app server env (Vercel or otherwise):
 - `METEORA_IX_PROVISIONER_URL=https://<host>/meteora-ixs` (optional; defaults from dynamic route URL)
 - `METEORA_IX_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>` (optional)
 - `DEPLOY_SOLANA_REGISTRATION_ORIGINS=https://4626.fun,https://<host-origin>` (optional for mixed Vercel + VM)
-- `DEPLOY_SOLANA_REGISTRATION_SECRET=<shared-internal-secret>` (optional machine-to-machine auth)
+- `DEPLOY_SOLANA_REGISTRATION_SECRET=<shared-internal-secret>` (required machine-to-machine auth for app -> /api/deploy/registerSolanaBridgeToken)
 
 Optional but recommended:
 
@@ -216,6 +225,9 @@ Optional but recommended:
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
 - `SOLANA_BRIDGE_WRAP_SYMBOL_MODE=auto` (`auto` | `unicode` | `ascii`)
 - `PROVISIONER_MIN_PAYER_SOL=0.05` (health guardrail; `/healthz` reports payer readiness)
+- Provisioner requests are capped at 64 KB per request body
+- `PROVISIONER_HEALTH_DEBUG=0` (set to `1` only for temporary diagnostics)
+- `PROVISIONER_EXTENDED_ENDPOINTS=0` (leave disabled unless you intentionally need `/setup-creator` or `/create-pool`)
 
 When `SOLANA_STRICT_SOL_PAIR=1`, `SOLANA_POOL_QUOTE_MINT` overrides are ignored and the
 provisioner always uses wrapped SOL (`So11111111111111111111111111111111111111112`) as quote mint.
@@ -232,5 +244,7 @@ In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for 
   - provisioner `PROVISIONER_BEARER_TOKEN`
   - app `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET`
   - app `METEORA_IX_PROVISIONER_SECRET`
+- Keep `DEPLOY_SOLANA_REGISTRATION_SECRET` separate from the provisioner bearer token.
+- Keep the provisioner bound to loopback unless you are intentionally placing it behind a reverse proxy.
 - Restrict inbound access at network layer (allowlist app egress IPs / private network).
 - Do not expose shell access; this service only executes fixed CLI command paths with validated arguments.

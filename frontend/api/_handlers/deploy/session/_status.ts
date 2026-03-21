@@ -2,12 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { decodeEventLog, decodeFunctionData, getAddress, isAddress, type Address, type Hex, type SignableMessage } from 'viem'
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
-import { privateKeyToAccount, toAccount } from 'viem/accounts'
+import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
@@ -176,6 +176,7 @@ function buildSessionDiagnostics(rec: any): {
   } else if (lastErrorLower.includes('erc7712_expired')) {
     category = 'grant_expired'
   } else if (
+    lastErrorLower.includes('deploy_signer_wallet_unavailable') ||
     lastErrorLower.includes('session_signer_unavailable') ||
     lastErrorLower.includes('session_signer_key_missing') ||
     lastErrorLower.includes('session_owner_unavailable') ||
@@ -758,8 +759,8 @@ function readAdditionalSolanaRegistrationOrigins(): string[] {
   return out
 }
 
-type SolanaPreflightRoutePath = '/api/deploy/setupSolanaOvaultMesh'
-const SOLANA_PREFLIGHT_ROUTE_PATH: SolanaPreflightRoutePath = '/api/deploy/setupSolanaOvaultMesh'
+type SolanaPreflightRoutePath = '/api/deploy/registerSolanaBridgeToken'
+const SOLANA_PREFLIGHT_ROUTE_PATH: SolanaPreflightRoutePath = '/api/deploy/registerSolanaBridgeToken'
 
 function dedupeOrigins(origins: string[]): string[] {
   const out: string[] = []
@@ -1132,18 +1133,7 @@ async function readSolanaBridgeAddress(params: {
       functionName: 'bridgeAddress',
     })
     .catch(() => null)
-  const bridgeAddress = normalizeAddress(bridgeAddressRaw)
-  if (bridgeAddress) return bridgeAddress
-
-  // Backward-compatibility for older strategy variants that still exposed `bridgeAdapter()`.
-  const adapterRaw = await params.publicClient
-    .readContract({
-      address: params.strategy,
-      abi: SOLANA_STRATEGY_VIEW_ABI,
-      functionName: 'bridgeAdapter',
-    })
-    .catch(() => null)
-  return normalizeAddress(adapterRaw)
+  return normalizeAddress(bridgeAddressRaw)
 }
 
 async function verifyPhase3PostState(params: {
@@ -1605,15 +1595,16 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       'Solana preflight failed: missing finalize deposit amount for reserve checks.',
     )
   }
-  const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
-  const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
-  const siwaReceipt = headerValue(params.req.headers['x-siwa-receipt'] as string | string[] | undefined)
-  const privyToken = headerValue(params.req.headers['x-privy-token'] as string | string[] | undefined)
   const internalRegistrationSecret = String(
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
       '',
   ).trim()
+  if (!internalRegistrationSecret) {
+    throw new Error(
+      'Solana preflight failed: DEPLOY_SOLANA_REGISTRATION_SECRET is required for internal registration checks.',
+    )
+  }
   const routePath: SolanaPreflightRoutePath = SOLANA_PREFLIGHT_ROUTE_PATH
   const tryRegister = async (
     origin: string,
@@ -1633,7 +1624,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       const registerUrl = `${origin}${routePath}`
       const payload: Record<string, unknown> = {
         bridgeToken,
-        buildOnly: registered === true,
+        buildOnly: true,
         batcherAddress,
         assetMintOrigin,
         enforceCompatibility: true,
@@ -1644,18 +1635,13 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         payload.creatorToken = bridgeToken
         payload.expectedSolanaAmount = expectedSolanaAmount?.toString()
       }
+      const trustedInternalHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-CV-Solana-Registration-Secret': internalRegistrationSecret,
+      }
       const registerRes = await fetch(registerUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(cookie ? { Cookie: cookie } : {}),
-          ...(authz ? { Authorization: authz } : {}),
-          ...(siwaReceipt ? { 'X-SIWA-Receipt': siwaReceipt } : {}),
-          ...(privyToken ? { 'X-Privy-Token': privyToken } : {}),
-          ...(internalRegistrationSecret
-            ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret }
-            : {}),
-        },
+        headers: trustedInternalHeaders,
         body: JSON.stringify(payload),
       })
       const rawBody = await registerRes.text().catch(() => '')
@@ -1728,45 +1714,45 @@ async function ensureSolanaRouteReadyForPhase3(params: {
 
 async function getOwnerAccount(rec: any) {
   const payload = asPayloadObject(rec.payload)
-  const deploySignerWalletId =
+  const deploySignerWalletIdFromPayload =
     typeof payload?.deploySignerWalletId === 'string'
       ? payload.deploySignerWalletId.trim()
       : ''
+  const deploySignerWalletIdFromRecord =
+    typeof rec?.sessionSignerWalletId === 'string'
+      ? rec.sessionSignerWalletId.trim()
+      : ''
+  const deploySignerWalletId = deploySignerWalletIdFromPayload || deploySignerWalletIdFromRecord
+  if (!deploySignerWalletId) throw new Error('deploy_signer_wallet_unavailable')
   const sessionSigner = getAddress(rec.sessionSigner)
-  const ownerAccount = deploySignerWalletId
-    ? toAccount({
-        address: sessionSigner,
-        sign: async ({ hash }: { hash: Hex }) => {
-          return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
-        },
-        signTransaction: async () => {
-          throw new Error('privy_sign_transaction_unsupported')
-        },
-        signMessage: async ({ message }: { message: SignableMessage }) => {
-          const msg =
-            typeof message === 'string'
-              ? message
-              : typeof message.raw === 'string'
-                ? message.raw
-                : `0x${Buffer.from(message.raw).toString('hex')}`
-          const out = await walletRpc<any>({
-            walletId: deploySignerWalletId,
-            method: 'personal_sign',
-            rpcParams: { message: msg, encoding: 'hex' },
-          })
-          const sig = String(out?.data?.signature ?? '').trim()
-          if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_personal_sign_invalid_signature')
-          return sig as Hex
-        },
-        signTypedData: async () => {
-          throw new Error('privy_sign_typed_data_unsupported')
-        },
+  const ownerAccount = toAccount({
+    address: sessionSigner,
+    sign: async ({ hash }: { hash: Hex }) => {
+      return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
+    },
+    signTransaction: async () => {
+      throw new Error('privy_sign_transaction_unsupported')
+    },
+    signMessage: async ({ message }: { message: SignableMessage }) => {
+      const msg =
+        typeof message === 'string'
+          ? message
+          : typeof message.raw === 'string'
+            ? message.raw
+            : `0x${Buffer.from(message.raw).toString('hex')}`
+      const out = await walletRpc<any>({
+        walletId: deploySignerWalletId,
+        method: 'personal_sign',
+        rpcParams: { message: msg, encoding: 'hex' },
       })
-    : (() => {
-        if (!rec.sessionSignerKeyEnc) throw new Error('session_signer_unavailable')
-        const pk = decryptWithSecret(rec.sessionSignerKeyEnc) as Hex
-        return privateKeyToAccount(pk)
-      })()
+      const sig = String(out?.data?.signature ?? '').trim()
+      if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_personal_sign_invalid_signature')
+      return sig as Hex
+    },
+    signTypedData: async () => {
+      throw new Error('privy_sign_typed_data_unsupported')
+    },
+  })
   return { ownerAccount, sessionSigner }
 }
 
@@ -1811,10 +1797,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const sessionAddress = getAddress(rec.sessionAddress)
   const smartWalletAddress = getAddress(rec.smartWallet)
 
-  const deploySignerWalletId =
+  const deploySignerWalletIdFromPayload =
     typeof payload?.deploySignerWalletId === 'string'
       ? payload.deploySignerWalletId.trim()
       : ''
+  const deploySignerWalletIdFromRecord =
+    typeof rec?.sessionSignerWalletId === 'string'
+      ? rec.sessionSignerWalletId.trim()
+      : ''
+  const deploySignerWalletId = deploySignerWalletIdFromPayload || deploySignerWalletIdFromRecord
   const persistSessionOwner =
     payload?.persistSessionOwner === true ||
     (payload?.persistSessionOwner == null && Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner())
@@ -2601,7 +2592,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (
         err instanceof Error &&
-        (err.message === 'session_signer_unavailable' ||
+        (err.message === 'deploy_signer_wallet_unavailable' ||
+          err.message === 'session_signer_unavailable' ||
           err.message === 'session_signer_key_missing' ||
           err.message === 'session_owner_unavailable' ||
           err.message === 'session_owner_key_missing')

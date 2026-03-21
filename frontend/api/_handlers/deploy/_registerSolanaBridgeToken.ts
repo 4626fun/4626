@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 
 import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
@@ -80,6 +81,7 @@ type WrapRunner = {
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
+const REGISTER_SOLANA_BRIDGE_TOKEN_MAX_BODY_BYTES = 64 * 1024
 const execFileAsync = promisify(execFile)
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 const BASE58_MAP = new Map(BASE58_ALPHABET.split('').map((ch, idx) => [ch, idx]))
@@ -298,15 +300,22 @@ function readInternalSolanaRegistrationSecret(): string {
   ])
 }
 
+function safeCompareSecret(provided: string, configured: string): boolean {
+  const expected = Buffer.from(configured)
+  const actual = Buffer.from(provided)
+  if (expected.length === 0 || actual.length !== expected.length) return false
+  return timingSafeEqual(actual, expected)
+}
+
 function isInternalSolanaRegistrationAuthorized(req: VercelRequest): boolean {
   const secret = readInternalSolanaRegistrationSecret()
   if (!secret) return false
   const headerSecret = requestHeader(req, 'x-cv-solana-registration-secret')
-  if (headerSecret && headerSecret === secret) return true
+  if (headerSecret && safeCompareSecret(headerSecret, secret)) return true
   const authz = requestHeader(req, 'authorization')
   if (authz.toLowerCase().startsWith('bearer ')) {
     const token = authz.slice(7).trim()
-    if (token && token === secret) return true
+    if (token && safeCompareSecret(token, secret)) return true
   }
   return false
 }
@@ -1233,10 +1242,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<RegisterSolanaBridgeTokenRequest>(req)
+  const body = await readJsonBody<RegisterSolanaBridgeTokenRequest>(req, {
+    maxBytes: REGISTER_SOLANA_BRIDGE_TOKEN_MAX_BODY_BYTES,
+  })
+  if (!body) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid JSON body.',
+    } satisfies ApiEnvelope<never>)
+  }
   const requestedBridgeTokenRaw = typeof body?.bridgeToken === 'string' ? body.bridgeToken.trim() : ''
   const explicitBridgeToken = isAddress(requestedBridgeTokenRaw) ? getAddress(requestedBridgeTokenRaw) : null
   const buildOnly = body?.buildOnly === true
+  if (!buildOnly && !internalAuthorized) {
+    return res.status(403).json({
+      success: false,
+      error: 'Internal Solana registration secret is required for mutating registration.',
+    } satisfies ApiEnvelope<never>)
+  }
   const creatorTokenRaw = typeof body?.creatorToken === 'string' ? body.creatorToken.trim() : ''
   const creatorToken = isAddress(creatorTokenRaw) ? getAddress(creatorTokenRaw) : null
   const enforceCompatibility = body?.enforceCompatibility === true

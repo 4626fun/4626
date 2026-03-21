@@ -6,6 +6,8 @@ import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '..
 import { ensureAccountsIdentitySchema, upsertAccount, verifyPrivyForAccounts } from '../../../server/_lib/accountsIdentity.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import {
+  claimTelegramLinkStartToken,
+  consumeTelegramLinkStartToken,
   readTelegramMiniAppSession,
   ensureTelegramTradingSchema,
   isTelegramFunnelEventsEnabledForChat,
@@ -18,7 +20,7 @@ import { extractPrivyVerifiedEmail } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 import { readTelegramMiniAppSessionToken } from './webhook/miniAppAuth.js'
-import { isTelegramMiniAppSessionEnabled, verifyTelegramLinkApiSecret } from './webhook/services/access.js'
+import { isTelegramMiniAppSessionEnabled } from './webhook/services/access.js'
 import { asTrimmed, resolveTelegramLinkErrorStatusCode } from './webhook/utils.js'
 
 type MiniAppLinkBody = {
@@ -114,11 +116,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     chatId: parsed.chatId,
     userId: parsed.telegramUserId,
   })
-  const hasLinkApiSecret = verifyTelegramLinkApiSecret(req)
-  if (!miniAppSessionRequired && !hasLinkApiSecret) {
+  if (!miniAppSessionRequired) {
     return res.status(401).json({
       success: false,
-      error: 'Unauthorized',
+      error: 'Telegram Mini App session is required for this link. Re-open the Mini App from Telegram and retry.',
     } satisfies ApiEnvelope<never>)
   }
 
@@ -170,6 +171,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const context = await verifyPrivyForAccounts(req)
+    const privyUserId = asTrimmed(context.privyUserId ?? context.privyUser?.id ?? '')
+    const claimedToken = await claimTelegramLinkStartToken({
+      db: db as any,
+      token,
+      privyUserId,
+    })
+    if (!claimedToken.ok) {
+      const statusCode =
+        claimedToken.reason === 'expired' ? 410 : claimedToken.reason === 'claimed_by_other_user' ? 409 : 400
+      const error =
+        claimedToken.reason === 'expired'
+          ? 'Telegram link expired. Run /link in Telegram and open the new Mini App button.'
+          : claimedToken.reason === 'claimed_by_other_user'
+            ? 'This Telegram link is already in use by another 4626 session. Start /link again from Telegram.'
+            : claimedToken.reason === 'consumed'
+              ? 'This Telegram link has already been completed. Run /link in Telegram for a fresh session.'
+              : 'Invalid link token'
+      return res.status(statusCode).json({
+        success: false,
+        error,
+      } satisfies ApiEnvelope<never>)
+    }
     const verifiedEmail = extractPrivyVerifiedEmail(context.privyUser)
     if (!verifiedEmail) {
       return res.status(409).json({
@@ -221,6 +244,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!link) {
       return res.status(500).json({ success: false, error: 'Failed to persist telegram link' } satisfies ApiEnvelope<never>)
     }
+    await consumeTelegramLinkStartToken({
+      db: db as any,
+      token,
+      privyUserId,
+    })
 
     if (shouldEmitFunnelEvent) {
       await logTelegramFunnelEvent({

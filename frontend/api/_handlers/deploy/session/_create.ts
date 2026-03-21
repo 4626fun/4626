@@ -874,23 +874,7 @@ async function checkCanonicalWalletOwnership(params: {
       AND is_canonical_smart_wallet = true
     LIMIT 1;
   `
-  let profileId = canonicalRow.rows?.[0]?.profile_id ?? null
-  const legacyProfileFallbackEnabled = process.env.DEPLOY_LEGACY_PROFILE_FALLBACK !== 'false'
-  if (!profileId && legacyProfileFallbackEnabled) {
-    // Fallback for compatibility rows that have canonical wallet fields populated
-    // but have not yet been fully synced into `profile_wallets`.
-    // Gated by DEPLOY_LEGACY_PROFILE_FALLBACK (set to 'false' to disable after migration).
-    const compatibilityCanonicalRow = await db.sql`
-      SELECT id
-      FROM profiles
-      WHERE LOWER(primary_smart_wallet) = ${smartWalletLc}
-         OR LOWER(csw_address) = ${smartWalletLc}
-         OR LOWER(base_sub_account) = ${smartWalletLc}
-      ORDER BY updated_at DESC NULLS LAST, created_at DESC
-      LIMIT 1;
-    `
-    profileId = compatibilityCanonicalRow.rows?.[0]?.id ?? null
-  }
+  const profileId = canonicalRow.rows?.[0]?.profile_id ?? null
   if (!profileId) {
     const onchain = await onchainOwnerCheck()
     return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }

@@ -69,7 +69,6 @@
 - [api/\_handlers/deploy/\_config](api/_handlers/deploy/_config.md)
 - [api/\_handlers/deploy/\_provisionSolanaRoute](api/_handlers/deploy/_provisionSolanaRoute.md)
 - [api/\_handlers/deploy/\_registerSolanaBridgeToken](api/_handlers/deploy/_registerSolanaBridgeToken.md)
-- [api/\_handlers/deploy/\_setupSolanaOvaultMesh](api/_handlers/deploy/_setupSolanaOvaultMesh.md)
 - [api/\_handlers/deploy/\_smartWalletOwner](api/_handlers/deploy/_smartWalletOwner.md)
 - [api/\_handlers/deploy/\_smartWalletOwners](api/_handlers/deploy/_smartWalletOwners.md)
 - [api/\_handlers/deploy/\_solanaInfraStatus](api/_handlers/deploy/_solanaInfraStatus.md)

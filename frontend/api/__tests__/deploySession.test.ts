@@ -134,6 +134,7 @@ function makeDeploySession(step: string) {
     sessionAddress: '0xsession',
     smartWallet: '0xsmartwallet',
     sessionSigner: '0xowner',
+    sessionSignerWalletId: 'agent_123',
     deployToken: 'token',
     sessionSignerKeyEnc: 'encrypted',
     payload: {
@@ -158,6 +159,7 @@ describe('deploy session optimistic concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readSiwaAgentFromRequestMock.mockReturnValue(null)
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
     delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
     delete process.env.SOLANA_REGISTRATION_ORIGINS
   })
@@ -372,6 +374,7 @@ describe('deploy session optimistic concurrency', () => {
   it('returns actionable 409 when continue session owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('created'),
+      sessionSignerWalletId: null,
       sessionSignerKeyEnc: null,
       payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
@@ -414,6 +417,7 @@ describe('deploy session optimistic concurrency', () => {
   it('cancel marks session cancelled when owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('created'),
+      sessionSignerWalletId: null,
       sessionSignerKeyEnc: null,
       payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
@@ -602,6 +606,7 @@ describe('deploy session optimistic concurrency', () => {
   it('status remains readable when owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
+      sessionSignerWalletId: null,
       sessionSignerKeyEnc: null,
       payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
@@ -1175,9 +1180,10 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.statusCode).toBe(200)
       expect(fetchMock).toHaveBeenCalled()
       const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { body?: string }]
-      expect(String(url)).toContain('/api/deploy/setupSolanaOvaultMesh')
+      expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
       const payload = JSON.parse(String(init?.body ?? '{}'))
       expect(String(payload.bridgeToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
+      expect(payload.buildOnly).toBe(true)
       expect(String(payload.creatorToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
       expect(payload.expectedSolanaAmount).toBe('1500000000000000000000000')
       expect(payload.assetMintOrigin).toBe('existing')
@@ -1255,7 +1261,7 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.statusCode).toBe(200)
       expect(fetchMock).toHaveBeenCalled()
       const [url] = (fetchMock.mock.calls as any[])[0] as [string]
-      expect(String(url)).toContain('https://app.4626.fun/api/deploy/setupSolanaOvaultMesh')
+      expect(String(url)).toContain('https://app.4626.fun/api/deploy/registerSolanaBridgeToken')
       expect(String(url)).not.toContain('attacker.example')
     } finally {
       ;(globalThis as any).fetch = originalFetch
@@ -1321,7 +1327,7 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.statusCode).toBe(200)
       expect(fetchMock).toHaveBeenCalled()
       const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { body?: string }]
-      expect(String(url)).toContain('/api/deploy/setupSolanaOvaultMesh')
+      expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
       const payload = JSON.parse(String(init?.body ?? '{}'))
       expect(String(payload.bridgeToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
       expect(payload.buildOnly).toBe(true)
@@ -1383,7 +1389,7 @@ describe('deploy session optimistic concurrency', () => {
 
       expect(res.statusCode).toBe(200)
       expect(fetchMock).toHaveBeenCalledTimes(1)
-      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/setupSolanaOvaultMesh')
+      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
       expect(transitionDeploySessionMock).not.toHaveBeenCalled()
       expect(updateDeploySessionMock).toHaveBeenCalled()
     } finally {
@@ -1391,7 +1397,7 @@ describe('deploy session optimistic concurrency', () => {
     }
   })
 
-  it('status forwards internal Solana registration secret when preparing phase3', async () => {
+  it('status uses only the internal Solana registration secret when preparing phase3', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
@@ -1459,8 +1465,10 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.statusCode).toBe(200)
       const init = (fetchMock.mock.calls as any[])[0]?.[1] as { headers?: Record<string, string> } | undefined
       expect(init?.headers?.['X-CV-Solana-Registration-Secret']).toBe('internal-secret')
-      expect(init?.headers?.['X-SIWA-Receipt']).toBe('siwa-receipt-token')
-      expect(init?.headers?.['X-Privy-Token']).toBe('privy-auth-token')
+      expect(init?.headers?.['X-SIWA-Receipt']).toBeUndefined()
+      expect(init?.headers?.['X-Privy-Token']).toBeUndefined()
+      expect(init?.headers?.Authorization).toBeUndefined()
+      expect(init?.headers?.Cookie).toBeUndefined()
     } finally {
       if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
       else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
@@ -1517,11 +1525,65 @@ describe('deploy session optimistic concurrency', () => {
 
       expect(res.statusCode).toBe(200)
       expect(fetchMock.mock.calls.length).toBeGreaterThan(0)
-      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/setupSolanaOvaultMesh')
+      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
       expect(transitionDeploySessionMock).not.toHaveBeenCalled()
       expect(updateDeploySessionMock).toHaveBeenCalled()
     } finally {
       ;(globalThis as any).fetch = originalFetch
+    }
+  })
+
+  it('status fails closed when the internal Solana registration secret is missing', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
+        phase3Calls: [makeCall('0xphase3target')],
+      }),
+    }
+    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+    delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+
+    try {
+      const viem = await import('viem')
+      ;(viem.createPublicClient as any).mockReturnValue({
+        readContract: vi.fn(async ({ functionName }: any) => {
+          switch (functionName) {
+            case 'ownerCount':
+              return 1n
+            case 'nextOwnerIndex':
+              return 1n
+            case 'ownerAtIndex':
+              return '0xownerbytes'
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            default:
+              return '0xownerbytes'
+          }
+        }),
+      })
+      getDeploySessionByIdMock
+        .mockResolvedValueOnce(rec)
+        .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'Solana preflight failed' })
+
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await statusHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(updateDeploySessionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'sess_1',
+          lastError: expect.stringContaining('DEPLOY_SOLANA_REGISTRATION_SECRET is required'),
+        }),
+      )
+    } finally {
+      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
     }
   })
 
@@ -2098,7 +2160,7 @@ describe('deploy session optimistic concurrency', () => {
     const solanaStrategy = '0xa10000000000000000000000000000000000000a'
     const charmVault = '0xb10000000000000000000000000000000000000b'
     const ajnaPool = '0xc10000000000000000000000000000000000000c'
-    const bridgeAdapter = '0xd10000000000000000000000000000000000000d'
+    const bridgeAddress = '0xd10000000000000000000000000000000000000d'
     const v3Factory = '0xe10000000000000000000000000000000000000e'
     const usdc = '0xf10000000000000000000000000000000000000f'
     const v3Pool = '0x1110000000000000000000000000000000000011'
@@ -2183,8 +2245,8 @@ describe('deploy session optimistic concurrency', () => {
           case 'AUTH':
             if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
             throw new Error('not_ajna_inner_vault')
-          case 'bridgeAdapter':
-            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAdapter
+          case 'bridgeAddress':
+            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
             throw new Error('not_solana_strategy')
           case 'uniswapV3Factory':
             return v3Factory
@@ -2208,7 +2270,7 @@ describe('deploy session optimistic concurrency', () => {
           solanaStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),
-          bridgeAdapter.toLowerCase(),
+          bridgeAddress.toLowerCase(),
           v3Pool.toLowerCase(),
         ])
         return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
@@ -2251,7 +2313,7 @@ describe('deploy session optimistic concurrency', () => {
     const solanaStrategy = '0xa10000000000000000000000000000000000000a'
     const charmVault = '0xb10000000000000000000000000000000000000b'
     const ajnaPool = '0xc10000000000000000000000000000000000000c'
-    const bridgeAdapter = '0xd10000000000000000000000000000000000000d'
+    const bridgeAddress = '0xd10000000000000000000000000000000000000d'
     const v3Factory = '0xe10000000000000000000000000000000000000e'
     const usdc = '0xf10000000000000000000000000000000000000f'
     const v3Pool = '0x1110000000000000000000000000000000000011'
@@ -2330,8 +2392,8 @@ describe('deploy session optimistic concurrency', () => {
           case 'AUTH':
             if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
             throw new Error('not_ajna_inner_vault')
-          case 'bridgeAdapter':
-            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAdapter
+          case 'bridgeAddress':
+            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
             throw new Error('not_solana_strategy')
           case 'uniswapV3Factory':
             return v3Factory
@@ -2353,7 +2415,7 @@ describe('deploy session optimistic concurrency', () => {
           solanaStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),
-          bridgeAdapter.toLowerCase(),
+          bridgeAddress.toLowerCase(),
           v3Pool.toLowerCase(),
         ])
         return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
@@ -2979,7 +3041,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
-  it('continue forwards SIWA/Privy/internal registration headers during OVault mesh preflight', async () => {
+  it('continue uses only the internal registration secret during OVault mesh preflight', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
@@ -3026,14 +3088,44 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
       expect(fetchMock).toHaveBeenCalled()
       const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { headers?: Record<string, string> }]
-      expect(String(url)).toContain('/api/deploy/setupSolanaOvaultMesh')
+      expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
       expect(init?.headers?.['X-CV-Solana-Registration-Secret']).toBe('internal-secret')
-      expect(init?.headers?.['X-SIWA-Receipt']).toBe('siwa-receipt-token')
-      expect(init?.headers?.['X-Privy-Token']).toBe('privy-auth-token')
+      expect(init?.headers?.['X-SIWA-Receipt']).toBeUndefined()
+      expect(init?.headers?.['X-Privy-Token']).toBeUndefined()
+      expect(init?.headers?.Authorization).toBeUndefined()
+      expect(init?.headers?.Cookie).toBeUndefined()
     } finally {
       if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
       else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
       ;(globalThis as any).fetch = originalFetch
+    }
+  })
+
+  it('continue fails closed when internal Solana registration secret is missing', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [],
+        solanaOvault: { enabled: true },
+      },
+    }
+    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+    delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+
+    try {
+      getDeploySessionByIdMock.mockResolvedValue(rec)
+
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await continueHandler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('DEPLOY_SOLANA_REGISTRATION_SECRET is required')
+    } finally {
+      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
     }
   })
 
