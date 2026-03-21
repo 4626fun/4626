@@ -79,7 +79,7 @@ Unix timestamp (ms) when deployment completed
 
 Defined in: [hooks/useDeploymentTracker.ts:12](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useDeploymentTracker.ts#L12)
 
-The owner address (canonical Zora Coinbase Smart Wallet)
+The owner address (canonical Coinbase Smart Wallet)
 
 ##### txHashes?
 

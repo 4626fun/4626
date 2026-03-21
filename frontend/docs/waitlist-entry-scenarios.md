@@ -4,48 +4,40 @@ This document maps the main onboarding/waitlist entry paths and how email requir
 
 ## Why this exists
 
-We have multiple entry points (web, Base app, CSW-first) and multiple identity states (signed-in, wallet-linked, email-linked). This matrix is intended to prevent regressions where one path accidentally enforces the wrong email rule.
+We have multiple entry points (web, Base app, Zora, Telegram) and multiple identity states (unauthenticated, Privy-authenticated, email-verified, wallet-finalized). This matrix is intended to prevent regressions where one path accidentally bypasses the verified-email rule.
 
 ## Terms
 
 - **Real email**: any normal user email address.
-- **Synthetic email**: fallback identity email used for wallet-only flows.
-  - Current domain: `@wallet.4626.fun`
-  - Legacy domain: `@noemail.4626.fun`
-  - Legacy historical formats: `solinfer-*`, `wallet-*`, `anon-*`, `0x*@example.com`
+- **Verified email**: an email confirmed through Privy OTP. This is the canonical 4626 identity and recovery key.
+- **Wallet finalization**: the stage where the user's canonical CSW is resolved and the Privy embedded EOA is installed as an owner when needed.
 
 ## Entry-path matrix
 
 | Entry path | Typical identity state | Contact preference | Email requirement | Expected behavior |
 |---|---|---|---|---|
-| Marketing waitlist (`/#waitlist`) with typed email | no wallet required | `email` | Real email required | Signup succeeds with real email |
-| Marketing waitlist, wallet-only continuation | wallet/csw linked, no email typed | `wallet` | Real email **not** required | Client submits synthetic `@wallet.4626.fun` email |
-| Base app / CSW direct entry, no email | CSW present, email absent | `wallet` | Real email **not** required | Signup allowed with synthetic email and wallet signal |
-| Creator flow with verification signal | wallet/social/solana/verifications present | `wallet` or `email` | If `email`, real required; otherwise optional | Creator signup proceeds if verification exists |
-| Any flow with `contactPreference === email` | any | `email` | Real email required | Synthetic email must be rejected |
-| Synthetic email + no verification signal | none | not meaningful | Real email required | Request rejected to prevent anonymous synthetic-only rows |
+| Website waitlist / app entry | no auth yet | `email` | Verified email required | User signs in with Privy email OTP before the account is considered created |
+| Base app entry | Base context present, email absent | `email` | Verified email required | User can start in Base, but must finish email OTP before account creation completes |
+| Zora cross-app entry | Zora identity present, email absent | `email` | Verified email required | Zora can seed wallet/profile signals, but verified email still gates account creation |
+| Telegram Mini App entry | Telegram session present, email absent | `email` | Verified email required | Telegram can prove chat/user context, but account creation/linking still requires email OTP |
+| Existing account with verified email | signed in | `email` | Already satisfied | User may continue to wallet setup, CSW resolution, or linked identity management |
+| Any flow without verified email | any | `email` | Not satisfied | Account remains incomplete and wallet-dependent actions stay gated |
 
 ## API-side rules (authoritative)
 
-`POST /api/waitlist` enforces:
+`POST /api/waitlist` and the auth/bootstrap flows enforce:
 
 1. Basic email shape must be valid.
-2. Synthetic email is allowed only for non-email contact flows.
-3. Synthetic email requires at least one non-email verification/contact signal.
-4. Synthetic email is treated as lower quality than a real email during dedupe/adoption decisions.
-
-## Domain-constraint compatibility
-
-Some DB environments enforce a check constraint that disallows `@noemail.4626.fun`.
-To remain compatible, wallet-only synthetic generation must use `@wallet.4626.fun`.
+2. Only Privy-verified email can become the canonical account email.
+3. Base, Zora, Telegram, and wallet signals may enrich the account, but they do not replace verified email.
+4. Wallet-dependent actions stay gated until canonical CSW resolution and owner-install checks are complete when required.
 
 ## Future changes checklist
 
 When touching onboarding/waitlist logic, validate all of the following:
 
-1. **Client generation**: synthetic fallback domain.
-2. **API validation**: synthetic detection + contact preference checks.
-3. **Profile resolution ranking**: synthetic domains ordered consistently in `_waitlist`, `_me`, and `_update-email`.
-4. **Deploy/session coupling**: CSW-first users should not be blocked on email before deploy preflight.
-5. **Regression tests**: run waitlist and deploy-session auth tests.
-
+1. **Entry-point convergence**: website, Base, Zora, and Telegram must all end at the same verified-email account model.
+2. **API validation**: only Privy-verified email may populate canonical account email.
+3. **Wallet finalization**: canonical CSW resolution and embedded-EOA owner install must remain explicit post-auth steps.
+4. **Deploy/session coupling**: deploy/session flows must not regress to single-provider or wallet-first authentication prompts.
+5. **Regression tests**: run waitlist, account bootstrap, and deploy-session auth tests.

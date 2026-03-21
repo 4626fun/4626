@@ -1,6 +1,8 @@
 # UI/UX Improvement Plan — 4626 (4626.fun)
 
 > Prioritized backlog for the UI/UX pass. See `uiux-audit.md` for the full issue list.
+>
+> Historical note (2026-03-20): this plan predates the email-first account-model reset. Any wallet-first signup language or references to "Zora canonical wallet" copy should be treated as superseded by [account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
 
 ## Priority Framework
 
@@ -77,7 +79,7 @@
 
 **Scope**:
 - Replace "ERC-1271 signature confirmed on Base" → "Wallet ownership verified"
-- Replace "Base app smart wallet differs from Zora canonical wallet" → "The connected wallet doesn't match your creator profile. Try connecting the wallet you use on Zora."
+- Replace vague CSW mismatch copy with explicit recovery guidance tied to the creator profile and account-recovery flow.
 - Replace "payout recipient" → "creator wallet" throughout
 - Add "Learn more" expandable sections for technical detail (progressive disclosure)
 

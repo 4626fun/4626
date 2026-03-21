@@ -1,8 +1,10 @@
-# Canonical CSW Sync (Zora-Anchored) Implementation Plan
+# Canonical CSW Sync (Historical Zora-Anchored) Implementation Plan
+
+> Historical note (2026-03-20): this implementation plan predates the current email-first account model. The verified email is now the canonical 4626 identity. References below to canonical wallet selection are about the canonical execution wallet only. See [frontend/docs/account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make server-side wallet sync resolve and persist the canonical Coinbase Smart Wallet using Zora-linked wallet intersection, so Swap/Deploy/Account agree automatically.
+**Historical goal:** Make server-side wallet sync resolve and persist the canonical Coinbase Smart Wallet using Zora-linked wallet intersection, so Swap/Deploy/Account agree automatically.
 
 **Architecture:** Extend `syncUserWallets` to (1) read any persisted canonical CSW, (2) optionally fetch Zora profile and infer canonical via intersection, (3) apply "Zora wins when available" precedence, and (4) persist the resolved canonical into `profile_wallets` + legacy `profiles` columns.
 
@@ -102,4 +104,3 @@ Expected: PASS.
 Run: `pnpm -C frontend test`
 
 Expected: PASS.
-

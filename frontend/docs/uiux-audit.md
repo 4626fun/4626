@@ -1,6 +1,8 @@
 # UI/UX Audit — 4626 (4626.fun)
 
 > Generated 2026-02-25. Source of truth for theme tokens: `tailwind.config.js` + `src/index.css`.
+>
+> Historical note (2026-03-20): this audit predates the email-first account-model reset. Any references below to wallet-first signup copy or "Zora canonical wallet" phrasing are superseded by [account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
 
 ## Tech Stack
 
@@ -70,7 +72,7 @@ Current steps: `'persona' | 'verify' | 'email' | 'done'` — in practice only `v
 | Email field lacks `<label>` | S2 | Only decorative label text, no `htmlFor` / `id` association. |
 | No "back" or "reset" button | S2 | If wallet verify fails, user has no clear way to restart. |
 | Loading fallback for lazy component is plain text | S2 | "Loading waitlist…" text only — no skeleton or spinner. |
-| CSW mismatch message is jargon-heavy | S2 | "Base app smart wallet differs from Zora canonical wallet" — non-actionable for typical user. |
+| CSW mismatch message is jargon-heavy | S2 | "The connected wallet doesn't match your creator profile" is still too vague without clearer recovery guidance. |
 
 #### Good patterns to keep
 - One-tap "Sign up" CTA as primary action

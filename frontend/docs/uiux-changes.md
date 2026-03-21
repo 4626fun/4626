@@ -1,6 +1,8 @@
 # UI/UX Changes — 4626 (4626.fun)
 
 > Changelog for the UI/UX improvement pass. Ordered by priority.
+>
+> Historical note (2026-03-20): this changelog predates the email-first account-model reset. Any copy diffs below that mention wallet-first signup or "Zora canonical wallet" wording should be read as historical, not current product guidance. See [account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
 
 ---
 
@@ -61,7 +63,7 @@
 | No progress stepper | `<StepIndicator>` with Connect → Verify → Join | Users always know where they are in the flow. |
 | "Wallet sign-in is unavailable. Try another way." (pre-emptive red error) | "Wallet sign-in is loading. If this persists, try refreshing..." (amber warning) | Not scary on first load. Provides actionable recovery. |
 | "ERC-1271 signature confirmed on Base" | "Your smart wallet has been confirmed on Base." | Non-technical language. |
-| "Base app smart wallet differs from Zora canonical wallet" | "The connected wallet doesn't match your Zora creator profile. Try connecting the wallet you use on Zora." | Actionable, plain English. |
+| "The connected wallet doesn't match your creator profile" | "Use the wallet that controls your creator profile, or finish account recovery first." | Actionable, plain English. |
 | "Switch to a payout or owner wallet to continue." | "Connect the wallet linked to your creator profile to continue." | Avoids jargon ("payout recipient"). |
 | Email input: no `<label>` association | `<label htmlFor>` + `id` + `aria-invalid` + `aria-describedby` | Proper form accessibility. Screen readers announce label and errors. |
 | Error messages: inline `<div>` | `<Alert variant="error">` with `role="alert"` | Consistent styling. Screen readers announce errors. |

@@ -1,10 +1,12 @@
-# Canonical CSW Sync (Zora-Anchored) Design
+# Canonical CSW Sync (Historical Zora-Anchored) Design
+
+> Historical note (2026-03-20): this design predates the email-first account-model reset. The current canonical account identity is the user's verified email. References below to a "canonical account" should now be read as "canonical execution wallet (CSW)." See [frontend/docs/account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
 
 ## Problem
 
-Users can have multiple EVM smart wallets connected (for example: a Zora-created Coinbase Smart Wallet and a Privy-created cross-app smart wallet). The app has a canonical-wallet invariant:
+Users can have multiple EVM smart wallets connected (for example: a Zora-created Coinbase Smart Wallet and a Privy-created cross-app smart wallet). At the time this doc was written, the app enforced a canonical-wallet invariant:
 
-- The canonical account is the originally created Zora Coinbase Smart Wallet.
+- The canonical execution wallet was assumed to be the user's Zora-origin Coinbase Smart Wallet.
 - Privy smart wallets are signer/owner identities only, not the canonical asset-holding account.
 
 Today, we resolve the canonical CSW client-side (see `frontend/src/pages/AccountSettings.tsx`) by intersecting Zora-linked wallets with the locally-known smart wallets. Server-side wallet sync (`frontend/server/_lib/walletSync.ts`) does not perform that intersection, which can cause canonical drift and inconsistent behavior across Swap/Deploy/Account.
@@ -22,7 +24,7 @@ Today, we resolve the canonical CSW client-side (see `frontend/src/pages/Account
 - Adding new UI for choosing canonical CSW (canonical is derived, not user-configured).
 - Blocking authentication if Zora or DB is down (best-effort).
 
-## Decision: Zora Wins When Available
+## Historical Decision: Zora Wins When Available
 
 Policy for `syncUserWallets`:
 
@@ -48,4 +50,3 @@ This ensures that once Zora gives us a confident canonical, we converge to it an
 
 - Unit test: when Zora returns a linked wallet that intersects with multiple smart-wallet candidates, `syncUserWallets` selects that wallet as canonical.
 - Unit test: when Zora is unavailable (or returns no intersection), `syncUserWallets` keeps the persisted canonical even if Privy classification would pick a different candidate.
-

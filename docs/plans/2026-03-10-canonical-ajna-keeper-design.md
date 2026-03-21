@@ -4,11 +4,13 @@ Date: 2026-03-10
 Status: Approved
 Owner: Frontend Platform + CRE
 
+> Historical note (2026-03-20): this design predates the current email-first account model. The verified email is now the canonical 4626 identity. In this document, "canonical account" should be read as "canonical execution wallet (CSW)." See [frontend/docs/account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
+
 ## Context
 
 The repo already enforces a canonical wallet invariant:
 
-- the creator's originally created Zora Coinbase Smart Wallet (CSW) is the canonical account
+- the creator's canonical Coinbase Smart Wallet (CSW) is the canonical execution wallet for onchain actions
 - Privy EOAs and Privy smart wallets are signer/owner identities, not the canonical asset-holding account
 - ERC-4337 UserOps should use the canonical CSW as the sender/account of record
 
@@ -59,7 +61,7 @@ This means the keeper is "the creator's canonical wallet" in the onchain sense, 
 
 This is preferred over:
 
-1. A separate automation wallet, because that breaks the product goal that the canonical Zora CSW is the actor.
+1. A separate automation wallet, because that breaks the product goal that the canonical CSW is the actor.
 2. Protocol co-ownership of creator wallets, because that introduces unnecessary custody risk.
 
 ## Architecture
@@ -155,7 +157,7 @@ Even then, execution remains constrained to:
 When a creator launches a vault:
 
 1. Resolve and persist canonical wallet identity:
-   - canonical Zora CSW
+   - canonical CSW
    - Privy embedded EOA
 2. Ask for explicit consent to enable Ajna automation from that canonical wallet.
 3. Persist the vault automation signer context with the initial scope.
