@@ -1,5 +1,5 @@
 # ve4626BoostManager
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/governance/ve4626BoostManager.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/governance/ve4626BoostManager.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -7,26 +7,20 @@ Ownable, ReentrancyGuard
 
 ## State Variables
 ### BOOST_PRECISION
-Precision for boost calculations (10000 = 100%)
-
 
 ```solidity
-uint256 public constant BOOST_PRECISION = 10000
+uint256 public constant BOOST_PRECISION = 10_000
 ```
 
 
 ### MAX_VE_BOOST
-Maximum boost for ve4626 lockers (2.5x)
-
 
 ```solidity
-uint256 public constant MAX_VE_BOOST = 25000
+uint256 public constant MAX_VE_BOOST = 25_000
 ```
 
 
 ### MIN_HOLDING_BLOCKS
-Minimum holding blocks for flash loan protection
-
 
 ```solidity
 uint256 public constant MIN_HOLDING_BLOCKS = 10
@@ -34,65 +28,44 @@ uint256 public constant MIN_HOLDING_BLOCKS = 10
 
 
 ### ve4626
-ve4626 token
-
 
 ```solidity
 Ive4626 public immutable ve4626
 ```
 
 
-### gaugeController
-GaugeController (optional, for probability boost)
-
-
-```solidity
-ICreatorGaugeController public gaugeController
-```
-
-
 ### baseBoost
-Base boost (1.0x = 10000 bps)
-
 
 ```solidity
-uint256 public baseBoost = 10000
+uint256 public baseBoost = 10_000
 ```
 
 
 ### maxBoost
-Max boost (2.5x = 25000 bps)
-
 
 ```solidity
-uint256 public maxBoost = 25000
+uint256 public maxBoost = 25_000
 ```
 
 
 ### minVotingPower
-Minimum ve4626 to participate
-
 
 ```solidity
 uint256 public minVotingPower = 0.1 ether
 ```
 
 
-### lastBalanceUpdateBlock
-Flash loan protection: last balance update block
-
-
-```solidity
-mapping(address => uint256) public lastBalanceUpdateBlock
-```
-
-
 ### boostParametersLocked
-Boost parameters locked after first set
-
 
 ```solidity
 bool public boostParametersLocked
+```
+
+
+### lastBalanceUpdateBlock
+
+```solidity
+mapping(address => uint256) public lastBalanceUpdateBlock
 ```
 
 
@@ -108,7 +81,7 @@ constructor(address _ve4626, address _owner) Ownable(_owner);
 
 
 ```solidity
-function calculateBoost(address user) public view returns (uint256 boostMultiplier);
+function calculateBoost(address user) public view returns (uint256);
 ```
 
 ### calculateBoostWithProtection
@@ -118,13 +91,6 @@ function calculateBoost(address user) public view returns (uint256 boostMultipli
 function calculateBoostWithProtection(address user) public view returns (uint256 boostMultiplier);
 ```
 
-### getBoostWithEvent
-
-
-```solidity
-function getBoostWithEvent(address user) external returns (uint256 boostMultiplier);
-```
-
 ### getTotalProbabilityBoost
 
 
@@ -132,30 +98,26 @@ function getBoostWithEvent(address user) external returns (uint256 boostMultipli
 function getTotalProbabilityBoost(address user) external view returns (uint256 totalBoostBps);
 ```
 
-### previewBoost
+### getCoverageBps
+
+Coverage is now purely based on held creator shares in USD
+
+No ve lock matching, no per-creator lock required - one ve4626 lock only
 
 
 ```solidity
-function previewBoost(address user)
-    external
-    view
-    returns (uint256 multiplier, bool hasLock, uint256 lockTimeRemaining);
-```
-
-### getBoostInfo
-
-
-```solidity
-function getBoostInfo(address user)
-    external
-    view
-    returns (
-        uint256 boostMultiplier,
-        uint256 userVotingPower,
-        uint256 totalVotingPower,
-        uint256 userShareBps,
-        bool isProtected
-    );
+function getCoverageBps(
+    address,
+    /*user*/
+    address,
+    /*registry*/
+    address,
+    /*creatorCoin*/
+    address,
+    /*shareBalanceToken*/
+    uint256 creatorShareBalanceUSD,
+    uint256 swapAmountUSD
+) external pure returns (uint256 coverageBps);
 ```
 
 ### updateBalanceTracking
@@ -172,13 +134,6 @@ function updateBalanceTracking(address user) external;
 function setBoostParameters(uint256 _baseBoost, uint256 _maxBoost) external onlyOwner;
 ```
 
-### setGaugeController
-
-
-```solidity
-function setGaugeController(address _controller) external onlyOwner;
-```
-
 ### setMinVotingPower
 
 
@@ -191,20 +146,6 @@ function setMinVotingPower(uint256 _minPower) external onlyOwner;
 
 ```solidity
 function hasBoost(address user) external view returns (bool);
-```
-
-### getBoostPercentage
-
-
-```solidity
-function getBoostPercentage(address user) external view returns (uint256);
-```
-
-### getMaxBoost
-
-
-```solidity
-function getMaxBoost() external view returns (uint256);
 ```
 
 ## Events
@@ -220,16 +161,16 @@ event BoostCalculated(address indexed user, uint256 boostMultiplier);
 event BoostParametersUpdated(uint256 baseBoost, uint256 maxBoost);
 ```
 
-### GaugeControllerUpdated
-
-```solidity
-event GaugeControllerUpdated(address indexed controller);
-```
-
 ### MinVotingPowerUpdated
 
 ```solidity
 event MinVotingPowerUpdated(uint256 minPower);
+```
+
+### BalanceTrackingUpdated
+
+```solidity
+event BalanceTrackingUpdated(address indexed user, uint256 blockNumber);
 ```
 
 ## Errors

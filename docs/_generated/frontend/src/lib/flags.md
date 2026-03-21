@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../index.md)
+[**4626-app**](../../index.md)
 
 ***
 
-[4626-miniapp](../../index.md) / src/lib/flags
+[4626-app](../../index.md) / src/lib/flags
 
 # src/lib/flags
 
@@ -12,7 +12,7 @@
 
 > **getPrivyAppId**(): `string` \| `null`
 
-Defined in: [lib/flags.ts:17](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/flags.ts#L17)
+Defined in: [src/lib/flags.ts:54](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/flags.ts#L54)
 
 #### Returns
 
@@ -20,11 +20,23 @@ Defined in: [lib/flags.ts:17](https://github.com/wenakita/4626/blob/a4870e3896f6
 
 ***
 
+### isLensGroveEnabled()
+
+> **isLensGroveEnabled**(): `boolean`
+
+Defined in: [src/lib/flags.ts:68](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/flags.ts#L68)
+
+#### Returns
+
+`boolean`
+
+***
+
 ### isPrivyClientEnabled()
 
 > **isPrivyClientEnabled**(): `boolean`
 
-Defined in: [lib/flags.ts:23](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/flags.ts#L23)
+Defined in: [src/lib/flags.ts:60](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/flags.ts#L60)
 
 #### Returns
 
@@ -36,7 +48,7 @@ Defined in: [lib/flags.ts:23](https://github.com/wenakita/4626/blob/a4870e3896f6
 
 > **isPublicSiteMode**(): `boolean`
 
-Defined in: [lib/flags.ts:1](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/flags.ts#L1)
+Defined in: [src/lib/flags.ts:1](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/flags.ts#L1)
 
 #### Returns
 

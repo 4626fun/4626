@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../../index.md)
+[**4626-app**](../../../index.md)
 
 ***
 
-[4626-miniapp](../../../index.md) / src/lib/identity/creatorIdentity
+[4626-app](../../../index.md) / src/lib/identity/creatorIdentity
 
 # src/lib/identity/creatorIdentity
 
@@ -12,7 +12,7 @@
 
 > **CreatorIdentityResolution** = `object`
 
-Defined in: [lib/identity/creatorIdentity.ts:18](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L18)
+Defined in: [src/lib/identity/creatorIdentity.ts:14](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L14)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [lib/identity/creatorIdentity.ts:18](https://github.com/wenakita/462
 
 > **blockingReason**: `string` \| `null`
 
-Defined in: [lib/identity/creatorIdentity.ts:31](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L31)
+Defined in: [src/lib/identity/creatorIdentity.ts:27](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L27)
 
 Block irreversible actions when true; caller should present UI guidance.
 
@@ -28,7 +28,7 @@ Block irreversible actions when true; caller should present UI guidance.
 
 > **canonicalIdentity**: `object`
 
-Defined in: [lib/identity/creatorIdentity.ts:20](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L20)
+Defined in: [src/lib/identity/creatorIdentity.ts:16](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L16)
 
 Canonical creator identity wallet (the identity that must not fragment).
 
@@ -44,7 +44,7 @@ Canonical creator identity wallet (the identity that must not fragment).
 
 > **execution**: `object`
 
-Defined in: [lib/identity/creatorIdentity.ts:25](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L25)
+Defined in: [src/lib/identity/creatorIdentity.ts:21](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L21)
 
 Currently connected wallet/account (execution context for the current session).
 
@@ -56,7 +56,7 @@ Currently connected wallet/account (execution context for the current session).
 
 > **hasExistingCreatorCoinIdentity**: `boolean`
 
-Defined in: [lib/identity/creatorIdentity.ts:29](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L29)
+Defined in: [src/lib/identity/creatorIdentity.ts:25](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L25)
 
 Whether we have an existing creator coin identity we should enforce.
 
@@ -64,7 +64,7 @@ Whether we have an existing creator coin identity we should enforce.
 
 > **warnings**: [`CreatorIdentityWarningCode`](#creatoridentitywarningcode)[]
 
-Defined in: [lib/identity/creatorIdentity.ts:33](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L33)
+Defined in: [src/lib/identity/creatorIdentity.ts:29](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L29)
 
 Non-blocking warnings to show in UI.
 
@@ -72,17 +72,17 @@ Non-blocking warnings to show in UI.
 
 ### CreatorIdentitySource
 
-> **CreatorIdentitySource** = `"zoraCoinCreatorAddress"` \| `"privySmartWallet"` \| `"farcasterCustody"` \| `"zoraProfilePublicWallet"` \| `"connectedWallet"` \| `"unknown"`
+> **CreatorIdentitySource** = `"zoraCoinCreatorAddress"` \| `"privySmartWallet"` \| `"connectedWallet"` \| `"unknown"`
 
-Defined in: [lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L5)
+Defined in: [src/lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L5)
 
 ***
 
 ### CreatorIdentityWarningCode
 
-> **CreatorIdentityWarningCode** = `"CUSTODY_MISMATCH"` \| `"CONNECTED_WALLET_MISMATCH"` \| `"CUSTODY_UNAVAILABLE"`
+> **CreatorIdentityWarningCode** = `"CONNECTED_WALLET_MISMATCH"`
 
-Defined in: [lib/identity/creatorIdentity.ts:13](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L13)
+Defined in: [src/lib/identity/creatorIdentity.ts:11](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L11)
 
 ## Functions
 
@@ -90,15 +90,15 @@ Defined in: [lib/identity/creatorIdentity.ts:13](https://github.com/wenakita/462
 
 > **resolveCreatorIdentity**(`params`): [`CreatorIdentityResolution`](#creatoridentityresolution)
 
-Defined in: [lib/identity/creatorIdentity.ts:53](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/identity/creatorIdentity.ts#L53)
+Defined in: [src/lib/identity/creatorIdentity.ts:49](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/identity/creatorIdentity.ts#L49)
 
 Resolve canonical creator identity in a way that prevents fragmentation.
 
-Rules (Privy-first approach):
-- If Privy smart wallet is available and matches the creator coin's creator address, use it (no blocking).
-- If a creator coin exists and Privy smart wallet doesn't match, block (wrong account).
-- If no creator coin exists, use Privy smart wallet as the canonical identity for new deployments.
-- Fallback to connected wallet only if Privy is unavailable.
+Rules (creator-identity safety approach):
+- Existing creator coin creator address is the canonical identity.
+- Privy smart wallet can execute only when it matches creator/payout for an existing coin.
+- If no creator coin exists, never auto-promote Privy/EOA as canonical identity.
+- Require an explicit canonical Coinbase Smart Wallet before irreversible deploy actions.
 
 #### Parameters
 
@@ -107,14 +107,6 @@ Rules (Privy-first approach):
 ###### connectedWallet
 
 `` `0x${string}` `` \| `null`
-
-###### farcasterCustodyAddress?
-
-`` `0x${string}` `` \| `null`
-
-###### farcasterZoraProfile?
-
-[`ZoraProfile`](../zora/types.md#zoraprofile) \| `null`
 
 ###### privySmartWallet?
 

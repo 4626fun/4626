@@ -2,7 +2,7 @@
 
 > Changelog for the UI/UX improvement pass. Ordered by priority.
 >
-> Historical note (2026-03-20): this changelog predates the email-first account-model reset. Any copy diffs below that mention wallet-first signup or "Zora canonical wallet" wording should be read as historical, not current product guidance. See [account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this changelog predates the email-first account-model reset. Any copy diffs below that mention wallet-first signup or "Zora canonical wallet" wording should be read as historical, not current product guidance. See [account-auth-invariants.md](account-auth-invariants.md).
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 >
-> Historical note (2026-03-20): this plan predates the current email-first account model. The verified email is now the canonical 4626 identity; this document is about canonical CSW execution only. See [frontend/docs/account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this plan predates the current email-first account model. The verified email is now the canonical 4626 identity; this document is about canonical CSW execution only. See [frontend/docs/account-auth-invariants.md](../frontend/docs/account-auth-invariants.md).
 
 **Goal:** Let Ajna automation run from each creator's canonical Coinbase Smart Wallet using that creator's Privy embedded EOA signer context, with explicit opt-in, revocation, and no non-canonical sender fallback.
 

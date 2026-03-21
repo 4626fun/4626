@@ -1,5 +1,5 @@
 # CreatorLotteryManager
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/utilities/lottery/CreatorLotteryManager.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/utilities/lottery/CreatorLotteryManager.sol)
 
 **Inherits:**
 OApp, OAppOptionsType3, ReentrancyGuard, Pausable
@@ -134,31 +134,6 @@ uint32 internal constant DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH = 1
 ```
 
 
-### DEFAULT_AMOE_EPOCH_DURATION
-
-```solidity
-uint256 internal constant DEFAULT_AMOE_EPOCH_DURATION = 1 days
-```
-
-
-### AMOE_ENTRY_TYPEHASH
-
-```solidity
-bytes32 internal constant AMOE_ENTRY_TYPEHASH = keccak256(
-    "AmoeEntry(uint256 chainId,address lotteryManager,address buyer,address creatorCoin,bytes32 nonce,uint256 deadline)"
-)
-```
-
-
-### MAX_VE_BOOST
-Maximum boost for ve4626 lockers (2.5x = 25000 bps)
-
-
-```solidity
-uint256 public constant MAX_VE_BOOST = 25000
-```
-
-
 ### registry
 Registry for looking up per-creator contracts
 
@@ -229,15 +204,6 @@ VaultGaugeVoting for ve(3,3) vault probability direction
 
 ```solidity
 IVaultGaugeVoting public vaultGaugeVoting
-```
-
-
-### minVaultWeightBps
-Minimum vault weight in bps (vaults with 0 votes get this minimum)
-
-
-```solidity
-uint256 public minVaultWeightBps = 100
 ```
 
 
@@ -427,57 +393,6 @@ mapping(bytes32 => uint256) public callbackOriginEpochStart
 ```
 
 
-### amoeEnabled
-AMOE (no-purchase) entry controls.
-
-
-```solidity
-bool public amoeEnabled
-```
-
-
-### amoeSigner
-
-```solidity
-address public amoeSigner
-```
-
-
-### amoeMaxEntriesPerBuyerPerEpoch
-
-```solidity
-uint32 public amoeMaxEntriesPerBuyerPerEpoch = 1
-```
-
-
-### amoeEpochDuration
-
-```solidity
-uint256 public amoeEpochDuration = DEFAULT_AMOE_EPOCH_DURATION
-```
-
-
-### usedAmoeNonce
-
-```solidity
-mapping(bytes32 => bool) public usedAmoeNonce
-```
-
-
-### amoeEntriesByBuyer
-
-```solidity
-mapping(address => uint32) public amoeEntriesByBuyer
-```
-
-
-### amoeBuyerEpochStart
-
-```solidity
-mapping(address => uint256) public amoeBuyerEpochStart
-```
-
-
 ### authorizedRemoteOFTs
 Authorized remote OFT peers that can send lottery entries
 
@@ -513,20 +428,6 @@ Global statistics (vault share units)
 
 ```solidity
 uint256 public totalLotteryEntries
-```
-
-
-### totalTradeEntries
-
-```solidity
-uint256 public totalTradeEntries
-```
-
-
-### totalAmoeEntries
-
-```solidity
-uint256 public totalAmoeEntries
 ```
 
 
@@ -590,7 +491,7 @@ Process swap-based lottery entry for ANY Creator Coin
 
 
 ```solidity
-function processSwapLottery(address buyer, address tokenIn, uint256 amountIn)
+function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256 buyerCurrentShareBalance)
     external
     payable
     nonReentrant
@@ -605,6 +506,7 @@ function processSwapLottery(address buyer, address tokenIn, uint256 amountIn)
 |`buyer`|`address`|User's wallet address (recipient of the swap) Supports EOAs, smart contract wallets (Coinbase Smart Wallet, Safe), and ERC-4337 accounts. Passed by the calling swap contract.|
 |`tokenIn`|`address`|Token swapped (■TOKEN / ShareOFT)|
 |`amountIn`|`uint256`|Amount swapped|
+|`buyerCurrentShareBalance`|`uint256`||
 
 **Returns**
 
@@ -612,24 +514,6 @@ function processSwapLottery(address buyer, address tokenIn, uint256 amountIn)
 |----|----|-----------|
 |`entryId`|`uint256`|VRF request ID (0 if no entry)|
 
-
-### submitAmoeEntry
-
-Submit a no-purchase AMOE lottery entry using a backend attestation signature.
-
-The AMOE signer attests the tuple (chainId, contract, buyer, creatorCoin, nonce, deadline).
-Nonces are single-use and entries are capped per buyer/epoch.
-
-
-```solidity
-function submitAmoeEntry(
-    address buyer,
-    address creatorCoin,
-    bytes32 nonce,
-    uint256 deadline,
-    bytes calldata signature
-) external nonReentrant whenNotPaused returns (uint256 entryId);
-```
 
 ### _requestCrossChainVRF
 
@@ -642,8 +526,7 @@ function _requestCrossChainVRF(
     address buyer,
     uint256 swapValueUSD,
     uint256 winChancePPM,
-    uint256 callerFeeValue,
-    EntrySource entrySource
+    uint256 callerFeeValue
 ) internal returns (uint256);
 ```
 
@@ -653,13 +536,9 @@ Request local VRF (hub local call path, sourceChainEid = 0)
 
 
 ```solidity
-function _requestLocalVRF(
-    address creatorCoin,
-    address buyer,
-    uint256 swapValueUSD,
-    uint256 winChancePPM,
-    EntrySource entrySource
-) internal returns (uint256);
+function _requestLocalVRF(address creatorCoin, address buyer, uint256 swapValueUSD, uint256 winChancePPM)
+    internal
+    returns (uint256);
 ```
 
 ### receiveRandomWords
@@ -721,36 +600,21 @@ function calculateWinChance(uint256 swapAmountUSD) public view returns (uint256 
 
 Apply ve(3,3) boosts to base win probability
 
-ve(3,3) PROBABILITY MODEL (current implementation):
-FinalPPM = BasePPM × PersonalBoost + LockDurationBoostPPM + VaultGaugeBoostPPM
-Where:
-- BasePPM: derived from swap size
-- PersonalBoost: ve4626 (up to 2.5x)
-- LockDurationBoostPPM: additional additive boost from lock duration
-- VaultGaugeBoostPPM: additive boost allocated from a bounded weekly gauge budget
+Personal ve4626 boosts stay coverage-scaled (full 2.5x only up to covered value).
+Vault gauge boost is flat additive and applies full voted PPM to every trade.
 
 
 ```solidity
-function _applyBoost(address user, address vault, uint256 swapAmountUSD, uint256 baseWinChance)
-    internal
-    view
-    returns (uint256 boostedWinChance);
+function _applyBoost(
+    address user,
+    address creatorCoin,
+    address shareBalanceToken,
+    uint256 creatorShareBalanceAmount,
+    address vault,
+    uint256 swapAmountUSD,
+    uint256 baseWinChance
+) internal view returns (uint256 boostedWinChance);
 ```
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`user`|`address`|The user who made the swap|
-|`vault`|`address`|The vault where the swap occurred (for gauge allocation)|
-|`swapAmountUSD`|`uint256`|Swap size in USD (1e6)|
-|`baseWinChance`|`uint256`|Base win chance in PPM|
-
-**Returns**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`boostedWinChance`|`uint256`|Final win chance after all boosts|
-
 
 ### _scaleGaugeBoostBySwapSize
 
@@ -800,7 +664,8 @@ function _lzReceive(Origin calldata _origin, bytes32, bytes calldata _payload, a
 ### _handleLotteryEntry
 
 Handle a lottery entry from a remote chain OFT
-Payload: (msgType, buyer, tokenIn, amount, sourceChainId)
+Legacy payload: (msgType, buyer, tokenIn, amount, sourceChainId)
+V2 payload:     (msgType, buyer, tokenIn, amount, sourceChainId, buyerCurrentShareBalance)
 
 
 ```solidity
@@ -817,10 +682,8 @@ function _requestLocalVRFWithSource(
     address creatorCoin,
     address buyer,
     uint256 swapValueUSD,
-    uint256,
-    /* winChancePPM */
-    uint32 sourceChainEid,
-    EntrySource entrySource
+    uint256 winChancePPM,
+    uint32 sourceChainEid
 ) internal returns (uint256);
 ```
 
@@ -834,12 +697,10 @@ function _requestCrossChainVRFWithSource(
     address creatorCoin,
     address buyer,
     uint256 swapValueUSD,
-    uint256,
-    /* winChancePPM */
+    uint256 winChancePPM,
     uint32 sourceChainEid,
     bytes32 originSender,
-    uint256 callerFeeValue,
-    EntrySource entrySource
+    uint256 callerFeeValue
 ) internal returns (uint256);
 ```
 
@@ -859,13 +720,6 @@ function _sendWinnerCallback(uint32 dstEid, address winner, address creatorCoin,
 
 ```solidity
 function _sponsorshipContext(string memory label) internal pure returns (bytes32);
-```
-
-### _epochStart
-
-
-```solidity
-function _epochStart(uint256 ts, uint256 duration) internal pure returns (uint256);
 ```
 
 ### _payNative
@@ -1026,22 +880,6 @@ function setUseLocalVRF(bool _useLocal) external onlyOwner;
 function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyOwner;
 ```
 
-### setAmoeSigner
-
-
-```solidity
-function setAmoeSigner(address _signer) external onlyOwner;
-```
-
-### setAmoeConfig
-
-
-```solidity
-function setAmoeConfig(bool _enabled, uint32 _maxEntriesPerBuyerPerEpoch, uint256 _epochDuration)
-    external
-    onlyOwner;
-```
-
 ### setVrfSponsorshipPolicy
 
 
@@ -1102,21 +940,6 @@ function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyOwner;
 |Name|Type|Description|
 |----|----|-----------|
 |`_vaultGaugeVoting`|`address`|Address of the VaultGaugeVoting contract|
-
-
-### setMinVaultWeightBps
-
-Set minimum vault weight in bps
-
-
-```solidity
-function setMinVaultWeightBps(uint256 _minWeightBps) external onlyOwner;
-```
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`_minWeightBps`|`uint256`|Minimum weight (e.g., 100 = 1%)|
 
 
 ### setLotteryConfig
@@ -1242,23 +1065,6 @@ Get remote lottery entry statistics
 
 ```solidity
 function getRemoteLotteryStats() external view returns (uint256);
-```
-
-### getEntrySourceStats
-
-
-```solidity
-function getEntrySourceStats() external view returns (uint256 tradeEntries, uint256 amoeEntries);
-```
-
-### getAmoeMessageHash
-
-
-```solidity
-function getAmoeMessageHash(address buyer, address creatorCoin, bytes32 nonce, uint256 deadline)
-    public
-    view
-    returns (bytes32);
 ```
 
 ### emergencyWithdraw
@@ -1464,50 +1270,6 @@ event SponsorshipSkipped(
 );
 ```
 
-### BoostManagerUpdated
-
-```solidity
-event BoostManagerUpdated(address indexed manager);
-```
-
-### VaultGaugeVotingUpdated
-
-```solidity
-event VaultGaugeVotingUpdated(address indexed vaultGaugeVoting);
-```
-
-### MinVaultWeightUpdated
-
-```solidity
-event MinVaultWeightUpdated(uint256 minWeightBps);
-```
-
-### LotteryEntrySourceTagged
-
-```solidity
-event LotteryEntrySourceTagged(
-    address indexed creatorCoin,
-    address indexed user,
-    uint256 indexed requestId,
-    EntrySource source,
-    uint256 amountUSD
-);
-```
-
-### AmoeConfigUpdated
-
-```solidity
-event AmoeConfigUpdated(bool enabled, address signer, uint32 maxEntriesPerBuyerPerEpoch, uint256 epochDuration);
-```
-
-### AmoeEntrySubmitted
-
-```solidity
-event AmoeEntrySubmitted(
-    address indexed creatorCoin, address indexed user, bytes32 indexed nonce, uint256 requestId
-);
-```
-
 ## Errors
 ### ZeroAddress
 
@@ -1563,42 +1325,6 @@ error NoGaugeConfigured(address token);
 error NoPendingVrfResult(uint256 requestId);
 ```
 
-### AmoeDisabled
-
-```solidity
-error AmoeDisabled();
-```
-
-### AmoeExpired
-
-```solidity
-error AmoeExpired();
-```
-
-### AmoeNonceUsed
-
-```solidity
-error AmoeNonceUsed();
-```
-
-### AmoeInvalidSignature
-
-```solidity
-error AmoeInvalidSignature();
-```
-
-### AmoeRateLimited
-
-```solidity
-error AmoeRateLimited();
-```
-
-### AmoeUnavailable
-
-```solidity
-error AmoeUnavailable();
-```
-
 ## Structs
 ### LotteryConfig
 Lottery configuration (shared across all creators)
@@ -1635,9 +1361,9 @@ struct VRFRequest {
     address user;
     address creatorCoin; // Which creator coin this entry is for
     uint256 amountUSD;
+    uint256 effectiveWinChancePPM;
     VRFType vrfType;
     uint32 sourceChainEid; // 0 = local (hub), non-zero = remote chain lottery entry
-    EntrySource entrySource;
 }
 ```
 
@@ -1662,15 +1388,6 @@ VRF request tracking - includes creator coin and source chain
 enum VRFType {
     LOCAL,
     CROSS_CHAIN
-}
-```
-
-### EntrySource
-
-```solidity
-enum EntrySource {
-    TRADE,
-    AMOE
 }
 ```
 

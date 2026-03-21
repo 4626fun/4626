@@ -22,13 +22,27 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DOCS_DIR = path.resolve(__dirname, '../docs');
-const API_CONTRACTS_DIR = path.join(DOCS_DIR, 'api/contracts');
+const API_ROOTS = [
+  {
+    key: 'contracts',
+    dir: path.join(DOCS_DIR, 'api/contracts'),
+    title: 'Contract API',
+    generatedBasePath: '/api/contracts/contracts/',
+  },
+  {
+    key: 'frontend',
+    dir: path.join(DOCS_DIR, 'api/frontend'),
+    title: 'Frontend API',
+    generatedBasePath: '/api/frontend/',
+  },
+] as const;
 const STRICT_MODE = process.argv.includes('--strict');
 
 interface Stats {
   filesScanned: number;
   linksRewritten: number;
   indexesCreated: number;
+  duplicateIndexesRemoved: number;
   unresolvedLinks: string[];
 }
 
@@ -36,6 +50,7 @@ const stats: Stats = {
   filesScanned: 0,
   linksRewritten: 0,
   indexesCreated: 0,
+  duplicateIndexesRemoved: 0,
   unresolvedLinks: [],
 };
 
@@ -107,7 +122,7 @@ async function getAllMarkdownFiles(dir: string): Promise<string[]> {
 /**
  * Create index.md for a directory
  */
-async function createDirectoryIndex(dir: string): Promise<void> {
+async function createDirectoryIndex(dir: string, apiRootDir: string): Promise<void> {
   const indexPath = path.join(dir, 'index.md');
   const readmePath = path.join(dir, 'README.md');
   
@@ -118,7 +133,7 @@ async function createDirectoryIndex(dir: string): Promise<void> {
   
   const dirName = path.basename(dir);
   const title = toTitleCase(dirName);
-  const relPath = path.relative(API_CONTRACTS_DIR, dir);
+  const relPath = path.relative(apiRootDir, dir);
   
   // Get children
   const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -163,7 +178,40 @@ Auto-generated API documentation for \`${relPath || 'contracts'}\`.
 /**
  * Fix links in a markdown file
  */
-async function fixLinksInFile(filePath: string): Promise<void> {
+function normalizeLocalMarkdownLinks(content: string): { content: string; rewrites: number } {
+  let rewrites = 0;
+  const normalized = content.replace(/\]\(([^)]+)\)/g, (match, rawTarget) => {
+    if (
+      rawTarget.startsWith('http') ||
+      rawTarget.startsWith('mailto:') ||
+      rawTarget.startsWith('#')
+    ) {
+      return match;
+    }
+
+    const [pathPart, hashPart] = rawTarget.split('#', 2);
+    if (!pathPart.endsWith('.md')) {
+      return match;
+    }
+
+    rewrites++;
+    const withoutExtension = pathPart.slice(0, -3);
+    return `](${withoutExtension}${hashPart ? `#${hashPart}` : ''})`;
+  });
+
+  return { content: normalized, rewrites };
+}
+
+async function removeDuplicateIndexIfReadmeExists(dir: string): Promise<void> {
+  const indexPath = path.join(dir, 'index.md');
+  const readmePath = path.join(dir, 'README.md');
+  if (await pathExists(indexPath) && await pathExists(readmePath)) {
+    await fs.rm(indexPath, { force: true });
+    stats.duplicateIndexesRemoved++;
+  }
+}
+
+async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[number]): Promise<void> {
   let content = await fs.readFile(filePath, 'utf-8');
   const originalContent = content;
   
@@ -171,40 +219,25 @@ async function fixLinksInFile(filePath: string): Promise<void> {
   let fileRewrites = 0;
   
   // Pattern 1: Absolute links to /contracts/... that weren't caught by sync-docs
-  // These should point to /api/contracts/contracts/...
-  content = content.replace(
-    /\]\(\/contracts\/([^)]+)\)/g,
-    (match, linkPath) => {
-      // Skip if it's an external link or anchor
-      if (linkPath.startsWith('http') || linkPath.startsWith('#')) {
-        return match;
+  if (apiRoot.key === 'contracts') {
+    content = content.replace(
+      /\]\(\/contracts\/([^)]+)\)/g,
+      (match, linkPath) => {
+        if (linkPath.startsWith('http') || linkPath.startsWith('#')) {
+          return match;
+        }
+
+        const cleanPath = linkPath.replace(/\.md$/, '');
+        fileRewrites++;
+        return `](${apiRoot.generatedBasePath}${cleanPath})`;
       }
-      
-      // Remove .md extension if present
-      const cleanPath = linkPath.replace(/\.md$/, '');
-      fileRewrites++;
-      return `](/api/contracts/contracts/${cleanPath})`;
-    }
-  );
-  
-  // Pattern 2: Relative links with .md extension (Docusaurus prefers without)
-  content = content.replace(
-    /\]\(\.\.?\/[^)]+\.md\)/g,
-    (match) => {
-      fileRewrites++;
-      return match.replace(/\.md\)$/, ')');
-    }
-  );
-  
-  // Pattern 3: Fix malformed interface links (common forge doc issue)
-  // e.g., interface.IStrategy.md -> interface.IStrategy
-  content = content.replace(
-    /\]\(([^)]*interface\.[A-Z][^)]*?)\.md\)/g,
-    (match, linkPath) => {
-      fileRewrites++;
-      return `](${linkPath})`;
-    }
-  );
+    );
+  }
+
+  // Pattern 2: Local markdown links should omit the extension for Docusaurus
+  const normalized = normalizeLocalMarkdownLinks(content);
+  content = normalized.content;
+  fileRewrites += normalized.rewrites;
   
   if (content !== originalContent) {
     await fs.writeFile(filePath, content);
@@ -235,8 +268,10 @@ async function validateLinksInFile(filePath: string): Promise<void> {
       continue;
     }
     
+    const targetPathWithoutAnchor = linkTarget.split('#', 1)[0];
+
     // Check if relative link target exists
-    const targetPath = path.resolve(fileDir, linkTarget);
+    const targetPath = path.resolve(fileDir, targetPathWithoutAnchor);
     const targetWithMd = targetPath.endsWith('.md') ? targetPath : `${targetPath}.md`;
     const targetIndex = path.join(targetPath, 'index.md');
     
@@ -259,28 +294,37 @@ async function postprocess(): Promise<void> {
   console.log('🔧 Postprocessing API Docs');
   console.log('════════════════════════════════════════════════════════════\n');
   
-  // Check if API docs exist
-  if (!await pathExists(API_CONTRACTS_DIR)) {
-    console.log('⚠️  API contracts directory not found. Run sync-docs first.');
+  if (!(await Promise.all(API_ROOTS.map((root) => pathExists(root.dir)))).some(Boolean)) {
+    console.log('⚠️  API docs directories not found. Run sync-docs first.');
     return;
   }
   
   // Step 1: Create index.md for directories
   console.log('📁 Creating directory indexes...');
-  const directories = await getAllDirectories(API_CONTRACTS_DIR);
-  directories.unshift(API_CONTRACTS_DIR); // Include root
-  
-  for (const dir of directories) {
-    await createDirectoryIndex(dir);
+  for (const apiRoot of API_ROOTS) {
+    if (!await pathExists(apiRoot.dir)) continue;
+    const directories = await getAllDirectories(apiRoot.dir);
+    directories.unshift(apiRoot.dir);
+
+    for (const dir of directories) {
+      await removeDuplicateIndexIfReadmeExists(dir);
+      await createDirectoryIndex(dir, apiRoot.dir);
+    }
   }
   console.log(`   ✓ Created ${stats.indexesCreated} index files`);
+  console.log(`   ✓ Removed ${stats.duplicateIndexesRemoved} duplicate index files`);
   
   // Step 2: Fix links in all markdown files
   console.log('\n🔗 Fixing links...');
-  const files = await getAllMarkdownFiles(API_CONTRACTS_DIR);
-  
-  for (const file of files) {
-    await fixLinksInFile(file);
+  const files: string[] = [];
+  for (const apiRoot of API_ROOTS) {
+    if (!await pathExists(apiRoot.dir)) continue;
+    const rootFiles = await getAllMarkdownFiles(apiRoot.dir);
+    files.push(...rootFiles);
+
+    for (const file of rootFiles) {
+      await fixLinksInFile(file, apiRoot);
+    }
   }
   console.log(`   ✓ Scanned ${stats.filesScanned} files`);
   console.log(`   ✓ Rewrote ${stats.linksRewritten} links`);

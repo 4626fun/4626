@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../../index.md)
+[**4626-app**](../../../index.md)
 
 ***
 
-[4626-miniapp](../../../index.md) / src/lib/cca/marketFloor
+[4626-app](../../../index.md) / src/lib/cca/marketFloor
 
 # src/lib/cca/marketFloor
 
@@ -10,7 +10,7 @@
 
 ### ReadonlyPublicClient
 
-Defined in: [lib/cca/marketFloor.ts:130](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L130)
+Defined in: [src/lib/cca/marketFloor.ts:130](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L130)
 
 #### Methods
 
@@ -18,7 +18,7 @@ Defined in: [lib/cca/marketFloor.ts:130](https://github.com/wenakita/4626/blob/a
 
 > **getBlock**(`args`): `Promise`\<`any`\>
 
-Defined in: [lib/cca/marketFloor.ts:135](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L135)
+Defined in: [src/lib/cca/marketFloor.ts:135](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L135)
 
 ###### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [lib/cca/marketFloor.ts:135](https://github.com/wenakita/4626/blob/a
 
 > **getBlockNumber**(`args?`): `Promise`\<`bigint`\>
 
-Defined in: [lib/cca/marketFloor.ts:134](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L134)
+Defined in: [src/lib/cca/marketFloor.ts:134](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L134)
 
 ###### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [lib/cca/marketFloor.ts:134](https://github.com/wenakita/4626/blob/a
 
 > **getLogs**(`args`): `Promise`\<`any`[]\>
 
-Defined in: [lib/cca/marketFloor.ts:136](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L136)
+Defined in: [src/lib/cca/marketFloor.ts:136](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L136)
 
 ###### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [lib/cca/marketFloor.ts:136](https://github.com/wenakita/4626/blob/a
 
 > **multicall**(`args`): `Promise`\<`any`\>
 
-Defined in: [lib/cca/marketFloor.ts:133](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L133)
+Defined in: [src/lib/cca/marketFloor.ts:133](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L133)
 
 ###### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [lib/cca/marketFloor.ts:133](https://github.com/wenakita/4626/blob/a
 
 > **readContract**(`args`): `Promise`\<`any`\>
 
-Defined in: [lib/cca/marketFloor.ts:132](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L132)
+Defined in: [src/lib/cca/marketFloor.ts:132](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L132)
 
 ###### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [lib/cca/marketFloor.ts:132](https://github.com/wenakita/4626/blob/a
 
 > **MarketFloorQuote** = `object`
 
-Defined in: [lib/cca/marketFloor.ts:94](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L94)
+Defined in: [src/lib/cca/marketFloor.ts:94](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L94)
 
 #### Properties
 
@@ -108,7 +108,7 @@ Defined in: [lib/cca/marketFloor.ts:94](https://github.com/wenakita/4626/blob/a4
 
 > **creatorZora**: `object`
 
-Defined in: [lib/cca/marketFloor.ts:104](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L104)
+Defined in: [src/lib/cca/marketFloor.ts:104](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L104)
 
 ###### creatorPerZora
 
@@ -162,31 +162,31 @@ Spot tick at `toBlock` (latest state)
 
 > **floorPriceQ96**: `bigint`
 
-Defined in: [lib/cca/marketFloor.ts:100](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L100)
+Defined in: [src/lib/cca/marketFloor.ts:100](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L100)
 
 ##### floorPriceQ96Aligned
 
 > **floorPriceQ96Aligned**: `bigint`
 
-Defined in: [lib/cca/marketFloor.ts:96](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L96)
+Defined in: [src/lib/cca/marketFloor.ts:96](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L96)
 
 ##### tickSpacingQ96
 
 > **tickSpacingQ96**: `bigint`
 
-Defined in: [lib/cca/marketFloor.ts:99](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L99)
+Defined in: [src/lib/cca/marketFloor.ts:99](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L99)
 
 ##### weiPerToken
 
 > **weiPerToken**: `bigint`
 
-Defined in: [lib/cca/marketFloor.ts:101](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L101)
+Defined in: [src/lib/cca/marketFloor.ts:101](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L101)
 
 ##### zoraEth
 
 > **zoraEth**: `object`
 
-Defined in: [lib/cca/marketFloor.ts:119](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L119)
+Defined in: [src/lib/cca/marketFloor.ts:119](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L119)
 
 ###### discountBps
 
@@ -214,7 +214,7 @@ Defined in: [lib/cca/marketFloor.ts:119](https://github.com/wenakita/4626/blob/a
 
 > **computeMarketFloorQuote**(`params`): `Promise`\<[`MarketFloorQuote`](#marketfloorquote)\>
 
-Defined in: [lib/cca/marketFloor.ts:440](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/cca/marketFloor.ts#L440)
+Defined in: [src/lib/cca/marketFloor.ts:413](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L413)
 
 #### Parameters
 
@@ -247,3 +247,35 @@ TWAP window used for ZORA reference pricing from Uniswap v3 pools.
 #### Returns
 
 `Promise`\<[`MarketFloorQuote`](#marketfloorquote)\>
+
+***
+
+### getZoraReferenceV3Ticks()
+
+> **getZoraReferenceV3Ticks**(`params`): `Promise`\<\{ `durationSec`: `number`; `usdcTick`: `number`; `wethTick`: `number`; \}\>
+
+Defined in: [src/lib/cca/marketFloor.ts:211](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/cca/marketFloor.ts#L211)
+
+#### Parameters
+
+##### params
+
+###### desiredDurationSec
+
+`number`
+
+###### publicClient
+
+[`ReadonlyPublicClient`](#readonlypublicclient)
+
+###### zoraUsdcV3Pool
+
+`` `0x${string}` ``
+
+###### zoraWethV3Pool
+
+`` `0x${string}` ``
+
+#### Returns
+
+`Promise`\<\{ `durationSec`: `number`; `usdcTick`: `number`; `wethTick`: `number`; \}\>

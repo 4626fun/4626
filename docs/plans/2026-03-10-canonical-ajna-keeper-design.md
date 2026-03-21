@@ -4,7 +4,7 @@ Date: 2026-03-10
 Status: Approved
 Owner: Frontend Platform + CRE
 
-> Historical note (2026-03-20): this design predates the current email-first account model. The verified email is now the canonical 4626 identity. In this document, "canonical account" should be read as "canonical execution wallet (CSW)." See [frontend/docs/account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this design predates the current email-first account model. The verified email is now the canonical 4626 identity. In this document, "canonical account" should be read as "canonical execution wallet (CSW)." See [frontend/docs/account-auth-invariants.md](../frontend/docs/account-auth-invariants.md).
 
 ## Context
 

@@ -1,5 +1,5 @@
 # CreatorOVaultWrapper
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/vault/CreatorOVaultWrapper.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/vault/CreatorOVaultWrapper.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -160,6 +160,15 @@ mapping(address => bool) public isWhitelisted
 ```
 
 
+### isBeneficiaryOperator
+Trusted callers allowed to attribute fee/dust accounting to a third-party beneficiary.
+
+
+```solidity
+mapping(address => bool) public isBeneficiaryOperator
+```
+
+
 ### totalWrapFees
 Fee statistics
 
@@ -237,6 +246,13 @@ function setWhitelist(address user, bool status) external onlyOwner;
 function batchWhitelist(address[] calldata users, bool status) external onlyOwner;
 ```
 
+### setBeneficiaryOperator
+
+
+```solidity
+function setBeneficiaryOperator(address operator, bool status) external onlyOwner;
+```
+
 ### deposit
 
 Deposit Creator Coin and receive ShareOFT in ONE transaction
@@ -276,6 +292,21 @@ Deposit with zero slippage protection (convenience)
 function deposit(uint256 amount) external nonReentrant returns (uint256 shareOFTOut);
 ```
 
+### depositFor
+
+Deposit Creator Coin and attribute fee/dust accounting to `beneficiary`.
+
+Beneficiary attribution to third parties is restricted to trusted operators (e.g. hub composer).
+Minted ShareOFT is always credited to `msg.sender`.
+
+
+```solidity
+function depositFor(uint256 amount, uint256 minOut, address beneficiary)
+    external
+    nonReentrant
+    returns (uint256 shareOFTOut);
+```
+
 ### withdraw
 
 Withdraw ShareOFT and receive Creator Coin in ONE transaction
@@ -313,6 +344,21 @@ Withdraw with zero slippage protection (convenience)
 
 ```solidity
 function withdraw(uint256 amount) external nonReentrant returns (uint256 creatorCoinOut);
+```
+
+### withdrawFor
+
+Withdraw Creator Coin and attribute fee/dust accounting to `beneficiary`.
+
+Beneficiary attribution to third parties is restricted to trusted operators (e.g. hub composer).
+Creator Coin output is always redeemed to `msg.sender`.
+
+
+```solidity
+function withdrawFor(uint256 amount, uint256 minOut, address beneficiary)
+    external
+    nonReentrant
+    returns (uint256 creatorCoinOut);
 ```
 
 ### wrap
@@ -371,14 +417,17 @@ This makes: 1 AKITA ≈ 1 ■AKITA (clean UX!)
 
 
 ```solidity
-function _wrapInternal(uint256 vaultSharesIn, address user) internal returns (uint256 shareOFTOut);
+function _wrapInternal(uint256 vaultSharesIn, address accountingUser, address mintTo)
+    internal
+    returns (uint256 shareOFTOut);
 ```
 **Parameters**
 
 |Name|Type|Description|
 |----|----|-----------|
 |`vaultSharesIn`|`uint256`|Vault shares to lock (already in this contract)|
-|`user`|`address`|User to mint ShareOFT to and check whitelist|
+|`accountingUser`|`address`|User used for fee/dust accounting and whitelist checks|
+|`mintTo`|`address`|Recipient that receives newly minted ShareOFT|
 
 **Returns**
 
@@ -397,14 +446,17 @@ This makes: 1 ■AKITA ≈ 1 AKITA (clean UX!)
 
 
 ```solidity
-function _unwrapInternal(uint256 shareOFTIn, address user) internal returns (uint256 vaultSharesOut);
+function _unwrapInternal(uint256 shareOFTIn, address accountingUser, address burnFrom)
+    internal
+    returns (uint256 vaultSharesOut);
 ```
 **Parameters**
 
 |Name|Type|Description|
 |----|----|-----------|
 |`shareOFTIn`|`uint256`|Normalized share token amount (■AKITA) to burn|
-|`user`|`address`|User to burn from and check whitelist|
+|`accountingUser`|`address`|User used for fee/dust accounting and whitelist checks|
+|`burnFrom`|`address`|Account that provides ShareOFT for burn|
 
 **Returns**
 
@@ -604,6 +656,13 @@ function refreshApproval() external onlyOwner;
 function _requiredLockedBacking() internal view returns (uint256);
 ```
 
+### _requireBeneficiaryOperator
+
+
+```solidity
+function _requireBeneficiaryOperator(address beneficiary) internal view;
+```
+
 ## Events
 ### Deposited
 
@@ -651,6 +710,12 @@ event FeesUpdated(uint256 wrapFee, uint256 unwrapFee);
 
 ```solidity
 event FeeRecipientUpdated(address indexed recipient);
+```
+
+### BeneficiaryOperatorUpdated
+
+```solidity
+event BeneficiaryOperatorUpdated(address indexed operator, bool status);
 ```
 
 ## Errors
@@ -734,5 +799,11 @@ error SlippageExceeded();
 
 ```solidity
 error AmountTooSmallToNormalize();
+```
+
+### UnauthorizedBeneficiaryOperator
+
+```solidity
+error UnauthorizedBeneficiaryOperator(address operator, address beneficiary);
 ```
 

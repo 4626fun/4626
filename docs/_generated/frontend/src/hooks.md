@@ -1,8 +1,8 @@
-[**4626-miniapp**](../index.md)
+[**4626-app**](../index.md)
 
 ***
 
-[4626-miniapp](../index.md) / src/hooks
+[4626-app](../index.md) / src/hooks
 
 # src/hooks
 
@@ -65,18 +65,6 @@ Re-exports [useCreatorAllowlist](hooks/useCreatorAllowlist.md#usecreatorallowlis
 ### useDeploymentTracker
 
 Re-exports [useDeploymentTracker](hooks/useDeploymentTracker.md#usedeploymenttracker)
-
-***
-
-### useFarcasterAuth
-
-Re-exports [useFarcasterAuth](hooks/useFarcasterAuth.md#usefarcasterauth)
-
-***
-
-### useMiniAppContext
-
-Re-exports [useMiniAppContext](hooks/useMiniAppContext.md#useminiappcontext)
 
 ***
 

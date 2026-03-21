@@ -1,4 +1,10 @@
 {
+  "scripts": {
+    "docs:refresh": "node apps/docs-site/scripts/docs-refresh.mjs",
+    "docs:check": "node apps/docs-site/scripts/docs-refresh.mjs --check",
+    "docs:build:strict": "NODE_OPTIONS=--max-old-space-size=4096 pnpm -C apps/docs-site build:strict",
+    "docs:drift": "node apps/docs-site/scripts/check-docs-drift.mjs"
+  },
   "dependencies": {
     "@layerzerolabs/lz-evm-messagelib-v2": "^3.0.159",
     "@layerzerolabs/lz-evm-protocol-v2": "^3.0.159",

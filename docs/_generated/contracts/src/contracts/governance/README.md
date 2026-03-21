@@ -23,5 +23,6 @@
 - [IVault](ve4626.sol/interface.IVault.md)
 - [IBoostManager](ve4626.sol/interface.IBoostManager.md)
 - [Ive4626](ve4626BoostManager.sol/interface.Ive4626.md)
-- [ICreatorGaugeController](ve4626BoostManager.sol/interface.ICreatorGaugeController.md)
+- [ICreatorRegistryCoverage](ve4626BoostManager.sol/interface.ICreatorRegistryCoverage.md)
+- [ICreatorOracleCoverage](ve4626BoostManager.sol/interface.ICreatorOracleCoverage.md)
 - [ve4626BoostManager](ve4626BoostManager.sol/contract.ve4626BoostManager.md)

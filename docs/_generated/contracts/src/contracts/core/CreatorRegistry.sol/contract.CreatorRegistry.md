@@ -1,5 +1,5 @@
 # CreatorRegistry
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/core/CreatorRegistry.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/core/CreatorRegistry.sol)
 
 **Inherits:**
 [ICreatorRegistry](/contracts/governance/VaultGaugeVoting.sol/interface.ICreatorRegistry.md), Ownable

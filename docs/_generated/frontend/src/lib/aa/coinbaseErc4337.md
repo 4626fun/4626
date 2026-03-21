@@ -1,36 +1,80 @@
-[**4626-miniapp**](../../../index.md)
+[**4626-app**](../../../index.md)
 
 ***
 
-[4626-miniapp](../../../index.md) / src/lib/aa/coinbaseErc4337
+[4626-app](../../../index.md) / src/lib/aa/coinbaseErc4337
 
 # src/lib/aa/coinbaseErc4337
 
 ## Type Aliases
 
-### CrossAppSignMessage()
+### PollUserOperationStatusOptions
 
-> **CrossAppSignMessage** = (`message`, `options`) => `Promise`\<`string`\>
+> **PollUserOperationStatusOptions** = `object`
 
-Defined in: [lib/aa/coinbaseErc4337.ts:844](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L844)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:849](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L849)
 
-Cross-app signing function type from Privy's useCrossAppAccounts
+#### Properties
 
-#### Parameters
+##### maxDurationMs?
 
-##### message
+> `optional` **maxDurationMs**: `number`
 
-`string`
+Defined in: [src/lib/aa/coinbaseErc4337.ts:851](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L851)
 
-##### options
+##### onError()?
 
-###### address
+> `optional` **onError**: (`error`) => `void`
 
-`string`
+Defined in: [src/lib/aa/coinbaseErc4337.ts:854](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L854)
 
-#### Returns
+###### Parameters
 
-`Promise`\<`string`\>
+###### error
+
+`Error`
+
+###### Returns
+
+`void`
+
+##### onStatusChange()?
+
+> `optional` **onStatusChange**: (`status`, `txHash?`) => `void`
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:853](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L853)
+
+###### Parameters
+
+###### status
+
+[`UserOpStatus`](#useropstatus)
+
+###### txHash?
+
+`Hex`
+
+###### Returns
+
+`void`
+
+##### perCheckTimeoutMs?
+
+> `optional` **perCheckTimeoutMs**: `number`
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:852](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L852)
+
+##### pollIntervalMs?
+
+> `optional` **pollIntervalMs**: `number`
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:850](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L850)
+
+##### signal?
+
+> `optional` **signal**: `AbortSignal`
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:855](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L855)
 
 ***
 
@@ -38,7 +82,7 @@ Cross-app signing function type from Privy's useCrossAppAccounts
 
 > **PublicClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:88](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L88)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:266](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L266)
 
 #### Type Declaration
 
@@ -66,11 +110,19 @@ Defined in: [lib/aa/coinbaseErc4337.ts:88](https://github.com/wenakita/4626/blob
 
 ***
 
+### UserOpStatus
+
+> **UserOpStatus** = `"pending"` \| `"confirmed"` \| `"failed"` \| `"timeout"`
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:847](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L847)
+
+***
+
 ### WalletClientLike
 
 > **WalletClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:93](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L93)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:271](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L271)
 
 #### Type Declaration
 
@@ -136,18 +188,44 @@ Defined in: [lib/aa/coinbaseErc4337.ts:93](https://github.com/wenakita/4626/blob
 
 > `const` **ERC4337\_ENTRYPOINT\_V06**: `` `0x${string}` `` = `ENTRYPOINT_V06`
 
-Defined in: [lib/aa/coinbaseErc4337.ts:492](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L492)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1001](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L1001)
 
 The canonical EntryPoint v0.6 address used by this module.
 This is the ONLY EntryPoint version supported.
 
 ## Functions
 
+### applyBuilderDataSuffixToCalls()
+
+> **applyBuilderDataSuffixToCalls**(`calls`, `chainId`, `dataSuffix`): `object`[]
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:93](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L93)
+
+#### Parameters
+
+##### calls
+
+`object`[]
+
+##### chainId
+
+`number`
+
+##### dataSuffix
+
+`` `0x${string}` `` | `undefined`
+
+#### Returns
+
+`object`[]
+
+***
+
 ### assertEntryPointV06()
 
 > **assertEntryPointV06**(`address`): `void`
 
-Defined in: [lib/aa/coinbaseErc4337.ts:498](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L498)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1007](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L1007)
 
 Assert that a given address matches EntryPoint v0.6.
 Use this to verify configuration matches expectations.
@@ -168,7 +246,7 @@ Use this to verify configuration matches expectations.
 
 > **fetchCoinbaseSmartWalletOwners**(`params`): `Promise`\<`` `0x${string}` ``[]\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:551](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L551)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1101](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L1101)
 
 #### Parameters
 
@@ -196,7 +274,7 @@ Defined in: [lib/aa/coinbaseErc4337.ts:551](https://github.com/wenakita/4626/blo
 
 > **findCoinbaseSmartWalletOwnerIndex**(`params`): `Promise`\<\{ `ownerCount`: `number`; `ownerIndex`: `number` \| `null`; \}\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:508](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L508)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1017](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L1017)
 
 #### Parameters
 
@@ -218,9 +296,53 @@ Defined in: [lib/aa/coinbaseErc4337.ts:508](https://github.com/wenakita/4626/blo
 
 `` `0x${string}` ``
 
+###### useCache?
+
+`boolean`
+
 #### Returns
 
 `Promise`\<\{ `ownerCount`: `number`; `ownerIndex`: `number` \| `null`; \}\>
+
+***
+
+### pollUserOperationStatus()
+
+> **pollUserOperationStatus**(`params`): `Promise`\<\{ `status`: [`UserOpStatus`](#useropstatus); `txHash?`: `` `0x${string}` ``; \}\>
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:2423](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L2423)
+
+#### Parameters
+
+##### params
+
+###### bundlerClient
+
+`any`
+
+###### options?
+
+[`PollUserOperationStatusOptions`](#polluseroperationstatusoptions)
+
+###### userOpHash
+
+`` `0x${string}` ``
+
+#### Returns
+
+`Promise`\<\{ `status`: [`UserOpStatus`](#useropstatus); `txHash?`: `` `0x${string}` ``; \}\>
+
+***
+
+### resetOwnerIndexCacheForTests()
+
+> **resetOwnerIndexCacheForTests**(): `void`
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:988](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L988)
+
+#### Returns
+
+`void`
 
 ***
 
@@ -228,7 +350,7 @@ Defined in: [lib/aa/coinbaseErc4337.ts:508](https://github.com/wenakita/4626/blo
 
 > **runSignatureExtractionHarness**(): `object`[]
 
-Defined in: [lib/aa/coinbaseErc4337.ts:419](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L419)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:906](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L906)
 
 #### Returns
 
@@ -240,15 +362,27 @@ Defined in: [lib/aa/coinbaseErc4337.ts:419](https://github.com/wenakita/4626/blo
 
 > **sendCoinbaseSmartWalletUserOperation**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:1169](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L1169)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1661](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L1661)
 
 #### Parameters
 
 ##### params
 
+###### allowContractSignMessageFallback?
+
+`boolean`
+
+###### allowEoaSignMessageFallback?
+
+`boolean`
+
 ###### bundlerUrl
 
 `string`
+
+###### bypassOwnerIndexCache?
+
+`boolean`
 
 ###### calls
 
@@ -274,6 +408,18 @@ Defined in: [lib/aa/coinbaseErc4337.ts:1169](https://github.com/wenakita/4626/bl
 
 `boolean`
 
+###### retryOnPrefund?
+
+`boolean`
+
+###### retryWithLowGasContractSigner?
+
+`boolean`
+
+###### retryWithTypedDataSigning?
+
+`boolean`
+
 ###### skipPaymaster?
 
 `boolean`
@@ -290,6 +436,14 @@ Defined in: [lib/aa/coinbaseErc4337.ts:1169](https://github.com/wenakita/4626/bl
 
 `UserOpSignMode`
 
+###### useTypedDataSigning?
+
+`boolean`
+
+###### verificationGasLimits?
+
+`bigint`[]
+
 ###### version?
 
 `"1"` \| `"1.1"`
@@ -304,70 +458,11 @@ Defined in: [lib/aa/coinbaseErc4337.ts:1169](https://github.com/wenakita/4626/bl
 
 ***
 
-### sendCrossAppUserOperation()
-
-> **sendCrossAppUserOperation**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
-
-Defined in: [lib/aa/coinbaseErc4337.ts:903](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L903)
-
-Send a UserOperation via ERC-4337 using cross-app signing.
-
-This flow:
-1. Builds the UserOperation for the smart wallet
-2. Computes the UserOp hash
-3. Opens a popup to Zora for the user to sign (no gas needed!)
-4. Submits to bundler with paymaster (paymaster pays gas)
-5. Waits for on-chain confirmation
-
-#### Parameters
-
-##### params
-
-###### bundlerUrl
-
-`string`
-
-###### calls
-
-`object`[]
-
-###### crossAppSignMessage
-
-[`CrossAppSignMessage`](#crossappsignmessage)
-
-signMessage from useCrossAppAccounts
-
-###### publicClient
-
-[`PublicClientLike`](#publicclientlike)
-
-###### smartWallet
-
-`` `0x${string}` ``
-
-The Coinbase Smart Wallet address
-
-###### version?
-
-`"1"` \| `"1.1"`
-
-###### zoraEmbeddedWalletAddress
-
-`` `0x${string}` ``
-
-The Zora EOA that will sign
-
-#### Returns
-
-`Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
-
-***
-
 ### simulateSmartWalletCalls()
 
 > **simulateSmartWalletCalls**(`params`): `Promise`\<\{ `directCallResult?`: \{ `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}; `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:1044](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L1044)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1422](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L1422)
 
 Pre-flight simulation: test if the calls would succeed when executed from the smart wallet.
 This helps diagnose whether a UserOp failure is due to:
@@ -396,3 +491,34 @@ The direct simulation helps identify if the target contract would revert even wi
 #### Returns
 
 `Promise`\<\{ `directCallResult?`: \{ `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}; `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}\>
+
+***
+
+### verifyBundlerSupportsV06()
+
+> **verifyBundlerSupportsV06**(`bundlerUrl`, `options?`): `Promise`\<`void`\>
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:173](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/coinbaseErc4337.ts#L173)
+
+Verify the bundler supports EntryPoint v0.6.
+Throws if the bundler doesn't support v0.6.
+
+#### Parameters
+
+##### bundlerUrl
+
+`string`
+
+##### options?
+
+###### includeCredentials?
+
+`boolean`
+
+###### timeoutMs?
+
+`number`
+
+#### Returns
+
+`Promise`\<`void`\>

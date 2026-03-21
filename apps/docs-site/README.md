@@ -56,7 +56,13 @@ The postprocess script:
 Scripts:
 - `pnpm api:postprocess` - Run postprocessing
 - `pnpm api:postprocess:strict` - Fail on unresolved links
-- `pnpm build:strict` - Full strict build pipeline
+- `pnpm build:strict` - Full strict docs-site build pipeline (heavier, optional for local validation)
+
+Repo-level shortcuts:
+- `pnpm docs:refresh` - Regenerate frontend + contract docs, then sync and postprocess the docs site
+- `pnpm docs:check` - Regenerate docs, run strict sync/postprocess validation, and fail if generated output was not committed
+- `pnpm docs:build:strict` - Run the full strict docs-site build from the repo root
+- `pnpm docs:drift` - Detect whether the current change set should trigger docs refresh/build checks
 
 ## Development
 
@@ -88,6 +94,27 @@ pnpm sync-docs
 
 # Strict mode (exits non-zero on broken links or missing frontmatter)
 pnpm sync-docs:strict
+```
+
+### Repo-Root Workflow
+
+From the repo root, the normal contributor workflow is:
+
+```bash
+pnpm docs:refresh
+pnpm docs:check
+```
+
+For an additional full site bundle check, run:
+
+```bash
+pnpm docs:build:strict
+```
+
+To quickly see whether a change set is docs-sensitive:
+
+```bash
+pnpm docs:drift
 ```
 
 ### Build for Production

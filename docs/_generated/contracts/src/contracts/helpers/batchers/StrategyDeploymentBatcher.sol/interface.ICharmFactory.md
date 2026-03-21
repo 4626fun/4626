@@ -1,5 +1,5 @@
 # ICharmFactory
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
 
 Charm Finance Alpha Vault Factory
 
@@ -13,6 +13,13 @@ Vaults created via this factory appear on alpha.charm.fi UI
 
 ```solidity
 function createVault(VaultParams calldata params) external returns (address vault);
+```
+
+### governance
+
+
+```solidity
+function governance() external view returns (address);
 ```
 
 ## Structs

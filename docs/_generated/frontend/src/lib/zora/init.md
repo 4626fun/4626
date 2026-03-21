@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../../index.md)
+[**4626-app**](../../../index.md)
 
 ***
 
-[4626-miniapp](../../../index.md) / src/lib/zora/init
+[4626-app](../../../index.md) / src/lib/zora/init
 
 # src/lib/zora/init
 
@@ -12,7 +12,7 @@
 
 > **initZoraCoinsSdk**(): `Promise`\<`void`\>
 
-Defined in: [lib/zora/init.ts:10](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/zora/init.ts#L10)
+Defined in: [src/lib/zora/init.ts:10](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/zora/init.ts#L10)
 
 Initializes the Zora Coins SDK with a public (browser) API key.
 

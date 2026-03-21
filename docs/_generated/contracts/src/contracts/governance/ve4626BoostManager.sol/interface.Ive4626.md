@@ -1,5 +1,5 @@
 # Ive4626
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/governance/ve4626BoostManager.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/governance/ve4626BoostManager.sol)
 
 **Title:**
 ve4626BoostManager
@@ -7,9 +7,12 @@ ve4626BoostManager
 **Author:**
 0xakita.eth
 
-Calculates lottery boost based on ve4626 holdings.
+Calculates personal ve4626 lottery boost (global 2.5x max, coverage-scaled by held creator shares only)
 
-Users who lock ■4626 into ve4626 receive higher win probability.
+ONE LOCK ONLY: users lock into ve4626 once. No per-creator lock or "veAKITA" required.
+- Global multiplier from total ve4626 share
+- Coverage = only the creator shares the user actually holds (passed from swap)
+- Matches "full 2.5x only up to their value" requirement
 
 
 ## Functions
@@ -39,5 +42,25 @@ function hasActiveLock(address user) external view returns (bool);
 
 ```solidity
 function getRemainingLockTime(address user) external view returns (uint256);
+```
+
+### getLock
+
+
+```solidity
+function getLock(address user) external view returns (Lock memory);
+```
+
+## Structs
+### Lock
+
+```solidity
+struct Lock {
+    uint256 amount;
+    uint256 end;
+    uint256 start;
+    address lockedToken;
+    uint256 underlyingValue;
+}
 ```
 

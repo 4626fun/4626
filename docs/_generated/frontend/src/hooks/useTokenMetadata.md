@@ -1,18 +1,42 @@
-[**4626-miniapp**](../../index.md)
+[**4626-app**](../../index.md)
 
 ***
 
-[4626-miniapp](../../index.md) / src/hooks/useTokenMetadata
+[4626-app](../../index.md) / src/hooks/useTokenMetadata
 
 # src/hooks/useTokenMetadata
 
 ## Functions
 
+### selectMetadataSourceUri()
+
+> **selectMetadataSourceUri**(`params`): `string` \| `null`
+
+Defined in: [src/hooks/useTokenMetadata.ts:91](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/hooks/useTokenMetadata.ts#L91)
+
+#### Parameters
+
+##### params
+
+###### contractURI?
+
+`unknown`
+
+###### tokenURI?
+
+`unknown`
+
+#### Returns
+
+`string` \| `null`
+
+***
+
 ### useTokenImage()
 
 > **useTokenImage**(`tokenAddress`): `object`
 
-Defined in: [hooks/useTokenMetadata.ts:156](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useTokenMetadata.ts#L156)
+Defined in: [src/hooks/useTokenMetadata.ts:243](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/hooks/useTokenMetadata.ts#L243)
 
 #### Parameters
 
@@ -42,7 +66,7 @@ Defined in: [hooks/useTokenMetadata.ts:156](https://github.com/wenakita/4626/blo
 
 > **useTokenMetadata**(`tokenAddress`): `object`
 
-Defined in: [hooks/useTokenMetadata.ts:64](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useTokenMetadata.ts#L64)
+Defined in: [src/hooks/useTokenMetadata.ts:101](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/hooks/useTokenMetadata.ts#L101)
 
 #### Parameters
 
@@ -53,6 +77,10 @@ Defined in: [hooks/useTokenMetadata.ts:64](https://github.com/wenakita/4626/blob
 #### Returns
 
 `object`
+
+##### contractURI
+
+> **contractURI**: `string` \| `undefined`
 
 ##### error
 
@@ -72,17 +100,11 @@ Defined in: [hooks/useTokenMetadata.ts:64](https://github.com/wenakita/4626/blob
 
 ##### refetch()
 
-> **refetch**: (`options?`) => `Promise`\<`QueryObserverResult`\<`string`, `ReadContractErrorType`\>\>
-
-###### Parameters
-
-###### options?
-
-`RefetchOptions`
+> **refetch**: () => `Promise`\<`void`\> = `refetchMetadata`
 
 ###### Returns
 
-`Promise`\<`QueryObserverResult`\<`string`, `ReadContractErrorType`\>\>
+`Promise`\<`void`\>
 
 ##### tokenURI
 

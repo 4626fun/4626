@@ -1,6 +1,7 @@
 
 
 # Contents
+- [ajna4626](/contracts/vault/strategies/ajna4626)
 - [launchpad](/contracts/vault/strategies/launchpad)
 - [univ3](/contracts/vault/strategies/univ3)
 - [univ4](/contracts/vault/strategies/univ4)

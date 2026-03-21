@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../../index.md)
+[**4626-app**](../../../index.md)
 
 ***
 
-[4626-miniapp](../../../index.md) / src/lib/uniswap/client
+[4626-app](../../../index.md) / src/lib/uniswap/client
 
 # src/lib/uniswap/client
 
@@ -12,7 +12,7 @@
 
 > **getPoolDayData**(`poolId`, `days`): `Promise`\<[`UniswapPoolDayData`](types.md#uniswappooldaydata)[]\>
 
-Defined in: [lib/uniswap/client.ts:122](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/uniswap/client.ts#L122)
+Defined in: [src/lib/uniswap/client.ts:123](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/client.ts#L123)
 
 Get pool day data for historical volume/fees
 
@@ -36,7 +36,7 @@ Get pool day data for historical volume/fees
 
 > **getPoolHourData**(`poolId`, `hours`): `Promise`\<[`UniswapPoolHourData`](types.md#uniswappoolhourdata)[]\>
 
-Defined in: [lib/uniswap/client.ts:167](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/uniswap/client.ts#L167)
+Defined in: [src/lib/uniswap/client.ts:168](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/client.ts#L168)
 
 Get pool hour data for granular historical data
 
@@ -60,7 +60,7 @@ Get pool hour data for granular historical data
 
 > **getPoolsByToken**(`tokenAddress`): `Promise`\<[`UniswapPool`](types.md#uniswappool)[]\>
 
-Defined in: [lib/uniswap/client.ts:56](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/uniswap/client.ts#L56)
+Defined in: [src/lib/uniswap/client.ts:57](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/client.ts#L57)
 
 Get pool by token address
 Finds pools where the token is either token0 or token1
@@ -77,11 +77,35 @@ Finds pools where the token is either token0 or token1
 
 ***
 
+### getPoolSwaps()
+
+> **getPoolSwaps**(`poolId`, `first`): `Promise`\<[`UniswapSwap`](types.md#uniswapswap)[]\>
+
+Defined in: [src/lib/uniswap/client.ts:356](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/client.ts#L356)
+
+Get recent swaps for a pool
+
+#### Parameters
+
+##### poolId
+
+`string`
+
+##### first
+
+`number` = `20`
+
+#### Returns
+
+`Promise`\<[`UniswapSwap`](types.md#uniswapswap)[]\>
+
+***
+
 ### getTimeframeData()
 
 > **getTimeframeData**(`tokenAddress`, `timeframe`): `Promise`\<[`TimeframeData`](types.md#timeframedata) \| `null`\>
 
-Defined in: [lib/uniswap/client.ts:253](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/uniswap/client.ts#L253)
+Defined in: [src/lib/uniswap/client.ts:254](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/client.ts#L254)
 
 Get aggregated volume/fees data for a specific timeframe
 
@@ -105,7 +129,7 @@ Get aggregated volume/fees data for a specific timeframe
 
 > **getToken**(`tokenAddress`): `Promise`\<[`UniswapToken`](types.md#uniswaptoken) \| `null`\>
 
-Defined in: [lib/uniswap/client.ts:326](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/uniswap/client.ts#L326)
+Defined in: [src/lib/uniswap/client.ts:327](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/client.ts#L327)
 
 Get token info from the subgraph
 
@@ -125,7 +149,7 @@ Get token info from the subgraph
 
 > **getTokenDayData**(`tokenAddress`, `days`): `Promise`\<[`UniswapTokenDayData`](types.md#uniswaptokendaydata)[]\>
 
-Defined in: [lib/uniswap/client.ts:212](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/uniswap/client.ts#L212)
+Defined in: [src/lib/uniswap/client.ts:213](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/uniswap/client.ts#L213)
 
 Get token day data for historical price/volume
 

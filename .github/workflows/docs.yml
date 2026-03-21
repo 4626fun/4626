@@ -1,0 +1,102 @@
+name: Docs Drift
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'docs/**'
+      - 'frontend/docs/**'
+      - 'frontend/src/**'
+      - 'frontend/api/**'
+      - 'frontend/server/**'
+      - 'frontend/package.json'
+      - 'frontend/typedoc.json'
+      - 'frontend/tsconfig.docs.json'
+      - 'frontend/README.md'
+      - 'apps/docs-site/**'
+      - 'cre/**'
+      - 'src/**'
+      - 'contracts/**'
+      - 'foundry.toml'
+      - 'package.json'
+      - '.github/workflows/docs.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'docs/**'
+      - 'frontend/docs/**'
+      - 'frontend/src/**'
+      - 'frontend/api/**'
+      - 'frontend/server/**'
+      - 'frontend/package.json'
+      - 'frontend/typedoc.json'
+      - 'frontend/tsconfig.docs.json'
+      - 'frontend/README.md'
+      - 'apps/docs-site/**'
+      - 'cre/**'
+      - 'src/**'
+      - 'contracts/**'
+      - 'foundry.toml'
+      - 'package.json'
+      - '.github/workflows/docs.yml'
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Detect docs-sensitive changes
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            export BASE_SHA="${{ github.event.before }}"
+          fi
+          node apps/docs-site/scripts/check-docs-drift.mjs --github-output
+
+      - name: Install pnpm
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: |
+            frontend/pnpm-lock.yaml
+            apps/docs-site/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: Install docs-site dependencies
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: pnpm --dir apps/docs-site install --frozen-lockfile
+
+      - name: Install Foundry
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Regenerate docs
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: pnpm docs:check
+
+      - name: Summarize docs audit
+        if: always()
+        run: |
+          echo "## Docs Drift Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Docs-sensitive changes: ${{ steps.detect.outputs.docs_sensitive || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Manual docs touched: ${{ steps.detect.outputs.manual_docs_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Generated docs touched: ${{ steps.detect.outputs.generated_docs_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Docs tooling touched: ${{ steps.detect.outputs.docs_tooling_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"

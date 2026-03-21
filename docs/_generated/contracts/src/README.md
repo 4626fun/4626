@@ -1,7 +1,6 @@
 # 4626.fun
 
-4626.fun is a Base-native protocol + app stack for launching creator-centered vault economies.
-It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a fee-driven incentive layer for creator coins.
+4626.fun is a Base-native protocol and app stack for launching creator vault economies. The repository combines Solidity smart contracts for ERC-4626 vaults, gauge/lottery incentives, and LayerZero OFT share tokens under contracts/, a Vite/React frontend plus Vercel API handlers under frontend/, Chainlink CRE automation in cre/, and a Solana transfer-hook program in programs/creator-share-hook. Users deploy vaults, trade share tokens, and interact with fee-driven incentives and lottery mechanics; keepers and workflows orchestrate strategy tending and settlement.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)

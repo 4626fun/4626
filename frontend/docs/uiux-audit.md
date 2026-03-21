@@ -2,7 +2,7 @@
 
 > Generated 2026-02-25. Source of truth for theme tokens: `tailwind.config.js` + `src/index.css`.
 >
-> Historical note (2026-03-20): this audit predates the email-first account-model reset. Any references below to wallet-first signup copy or "Zora canonical wallet" phrasing are superseded by [account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this audit predates the email-first account-model reset. Any references below to wallet-first signup copy or "Zora canonical wallet" phrasing are superseded by [account-auth-invariants.md](account-auth-invariants.md).
 
 ## Tech Stack
 

@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../../index.md)
+[**4626-app**](../../../index.md)
 
 ***
 
-[4626-miniapp](../../../index.md) / src/lib/aa/cdp
+[4626-app](../../../index.md) / src/lib/aa/cdp
 
 # src/lib/aa/cdp
 
@@ -12,7 +12,7 @@
 
 > **resolveCdpPaymasterUrl**(`paymaster`): `string` \| `null`
 
-Defined in: [lib/aa/cdp.ts:1](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/cdp.ts#L1)
+Defined in: [src/lib/aa/cdp.ts:1](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/aa/cdp.ts#L1)
 
 #### Parameters
 

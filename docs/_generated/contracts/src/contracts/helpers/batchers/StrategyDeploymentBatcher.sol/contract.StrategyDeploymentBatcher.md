@@ -1,5 +1,5 @@
 # StrategyDeploymentBatcher
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
@@ -38,6 +38,22 @@ Vaults created via this factory appear on alpha.charm.fi UI
 
 ```solidity
 address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
+```
+
+
+### CHARM_FACTORY_GOVERNANCE
+Pinned Charm governance allowlist on Base. Strategy deploys fail closed outside this set.
+
+
+```solidity
+address public constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1
+```
+
+
+### CHARM_FACTORY_GOVERNANCE_LEGACY
+
+```solidity
+address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6
 ```
 
 
@@ -132,6 +148,27 @@ function encodeAddStrategyBatch(
 ) external pure returns (bytes[] memory calls);
 ```
 
+### _enforceCharmFactoryGovernance
+
+
+```solidity
+function _enforceCharmFactoryGovernance() internal view;
+```
+
+### _enforceCharmVaultManager
+
+
+```solidity
+function _enforceCharmVaultManager(address charmVault, address expectedManager) internal view;
+```
+
+### _isAllowedCharmFactoryGovernance
+
+
+```solidity
+function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool);
+```
+
 ## Events
 ### StrategiesDeployed
 
@@ -176,6 +213,18 @@ error ZeroQuote();
 error ZeroVault();
 ```
 
+### CharmFactoryGovernanceMismatch
+
+```solidity
+error CharmFactoryGovernanceMismatch(address expected, address actual);
+```
+
+### CharmVaultManagerMismatch
+
+```solidity
+error CharmVaultManagerMismatch(address expected, address actual);
+```
+
 ## Structs
 ### DeploymentResult
 
@@ -184,6 +233,8 @@ struct DeploymentResult {
     address charmVault;
     address charmStrategy;
     address creatorCharmStrategy;
+    address ajnaVaultAuth;
+    address ajnaVault;
     address ajnaStrategy;
     address v3Pool;
 }

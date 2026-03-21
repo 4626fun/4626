@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../../index.md)
+[**4626-app**](../../../index.md)
 
 ***
 
-[4626-miniapp](../../../index.md) / src/lib/onchain/protocolRewards
+[4626-app](../../../index.md) / src/lib/onchain/protocolRewards
 
 # src/lib/onchain/protocolRewards
 
@@ -12,7 +12,7 @@
 
 > **fetchProtocolRewardsBalance**(`account`): `Promise`\<`bigint`\>
 
-Defined in: [lib/onchain/protocolRewards.ts:45](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L45)
+Defined in: [src/lib/onchain/protocolRewards.ts:45](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/onchain/protocolRewards.ts#L45)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [lib/onchain/protocolRewards.ts:45](https://github.com/wenakita/4626
 
 > **fetchProtocolRewardsBalances**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [lib/onchain/protocolRewards.ts:55](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L55)
+Defined in: [src/lib/onchain/protocolRewards.ts:55](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/onchain/protocolRewards.ts#L55)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [lib/onchain/protocolRewards.ts:55](https://github.com/wenakita/4626
 
 > **fetchProtocolRewardsBalancesFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [lib/onchain/protocolRewards.ts:78](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L78)
+Defined in: [src/lib/onchain/protocolRewards.ts:78](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/onchain/protocolRewards.ts#L78)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [lib/onchain/protocolRewards.ts:78](https://github.com/wenakita/4626
 
 > **fetchProtocolRewardsWithdrawnFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [lib/onchain/protocolRewards.ts:113](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L113)
+Defined in: [src/lib/onchain/protocolRewards.ts:113](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/onchain/protocolRewards.ts#L113)
 
 #### Parameters
 

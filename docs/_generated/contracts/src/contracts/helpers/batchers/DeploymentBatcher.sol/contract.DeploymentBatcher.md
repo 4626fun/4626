@@ -1,5 +1,5 @@
 # DeploymentBatcher
-[Git Source](https://github.com/wenakita/4626/blob/a7a73da3f7c497451de25d8aa13ad38808135355/contracts/helpers/batchers/DeploymentBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/contracts/helpers/batchers/DeploymentBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
@@ -35,6 +35,22 @@ Vaults created via this factory appear on alpha.charm.fi UI
 
 ```solidity
 address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
+```
+
+
+### CHARM_FACTORY_GOVERNANCE
+Pinned Charm governance allowlist on Base. Deployments fail closed outside this set.
+
+
+```solidity
+address public constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1
+```
+
+
+### CHARM_FACTORY_GOVERNANCE_LEGACY
+
+```solidity
+address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6
 ```
 
 
@@ -310,22 +326,18 @@ function finalizePhase1WithSalt(
 
 
 ```solidity
-function _deployPhase1CoreInternal(
-    Phase1Params calldata params,
-    CodeIds calldata codeIds,
-    bytes32 shareOftSaltOverride
-) internal returns (Phase1Result memory out);
+function _deployPhase1CoreInternal(Phase1Params calldata params, CodeIds calldata codeIds)
+    internal
+    returns (Phase1Result memory out);
 ```
 
 ### _finalizePhase1InternalSplit
 
 
 ```solidity
-function _finalizePhase1InternalSplit(
-    Phase1Params calldata params,
-    CodeIds calldata codeIds,
-    bytes32 shareOftSaltOverride
-) internal returns (Phase1Result memory out);
+function _finalizePhase1InternalSplit(Phase1Params calldata params, CodeIds calldata codeIds)
+    internal
+    returns (Phase1Result memory out);
 ```
 
 ### deployPhase2AndLaunch
@@ -335,7 +347,7 @@ function _finalizePhase1InternalSplit(
 function deployPhase2AndLaunch(Phase2Params calldata params, CodeIds calldata codeIds)
     external
     nonReentrant
-    returns (Phase2Result memory out);
+    returns (Phase2Result memory);
 ```
 
 ### deployPhase2AndLaunchWithPermit
@@ -346,7 +358,7 @@ function deployPhase2AndLaunchWithPermit(
     Phase2Params calldata params,
     CodeIds calldata codeIds,
     PermitData calldata permit
-) external nonReentrant returns (Phase2Result memory out);
+) external nonReentrant returns (Phase2Result memory);
 ```
 
 ### deployPhase2AndLaunchWithPermit2
@@ -358,7 +370,7 @@ function deployPhase2AndLaunchWithPermit2(
     CodeIds calldata codeIds,
     ISignatureTransfer.PermitTransferFrom calldata permit,
     bytes calldata signature
-) external nonReentrant returns (Phase2Result memory out);
+) external nonReentrant returns (Phase2Result memory);
 ```
 
 ### deployPhase2Core
@@ -523,6 +535,13 @@ function _phase1ParamsHash(Phase1Params calldata params) internal pure returns (
 function _phase1CodeIdsHash(CodeIds calldata codeIds) internal pure returns (bytes32);
 ```
 
+### _deriveInitCodeHash
+
+
+```solidity
+function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32);
+```
+
 ### _deriveBaseSalt
 
 
@@ -569,6 +588,27 @@ function _toLower(string memory input) internal pure returns (string memory);
 
 ```solidity
 function _toUpper(string memory input) internal pure returns (string memory);
+```
+
+### _enforceCharmFactoryGovernance
+
+
+```solidity
+function _enforceCharmFactoryGovernance() internal view;
+```
+
+### _enforceCharmVaultManager
+
+
+```solidity
+function _enforceCharmVaultManager(address charmVault, address expectedManager) internal view;
+```
+
+### _isAllowedCharmFactoryGovernance
+
+
+```solidity
+function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool);
 ```
 
 ## Events
@@ -658,6 +698,8 @@ event Phase3StrategiesDeployed(
     address v3Pool,
     address charmVault,
     address charmStrategy,
+    address ajnaVaultAuth,
+    address ajnaVault,
     address ajnaStrategy,
     address solanaStrategy,
     uint256 charmWeightBps,
@@ -734,6 +776,12 @@ error Phase1CoreMissing();
 error Phase1StateMismatch();
 ```
 
+### SaltOverrideDisabled
+
+```solidity
+error SaltOverrideDisabled();
+```
+
 ### InvalidWeight
 
 ```solidity
@@ -804,6 +852,24 @@ error PermitTokenMismatch();
 
 ```solidity
 error PermitAmountTooLow();
+```
+
+### Phase1ShareOFTMissing
+
+```solidity
+error Phase1ShareOFTMissing();
+```
+
+### CharmFactoryGovernanceMismatch
+
+```solidity
+error CharmFactoryGovernanceMismatch(address expected, address actual);
+```
+
+### CharmVaultManagerMismatch
+
+```solidity
+error CharmVaultManagerMismatch(address expected, address actual);
 ```
 
 ## Structs
@@ -973,7 +1039,9 @@ struct DeferredAuctionParams {
 struct StrategyCodeIds {
     bytes32 charmAlphaVaultDeploy;
     bytes32 creatorCharmStrategy;
-    bytes32 ajnaStrategy;
+    bytes32 ajnaVaultAuth;
+    bytes32 ajnaVault;
+    bytes32 erc4626StrategyAdapter;
     bytes32 solanaStrategy;
 }
 ```
@@ -991,9 +1059,14 @@ struct Phase3Params {
     uint160 initialSqrtPriceX96;
     string charmVaultName;
     string charmVaultSymbol;
+    string ajnaVaultName;
+    string ajnaVaultSymbol;
     uint256 charmWeightBps;
     uint256 ajnaWeightBps;
     uint256 solanaWeightBps;
+    uint256 ajnaBufferRatioBps;
+    uint256 ajnaMinBucketIndex;
+    address ajnaKeeper;
     address solanaKeeper;
     uint64 solanaMaxNavAge;
     uint16 solanaMaxNavDeltaBpsPerUpdate;
@@ -1010,6 +1083,8 @@ struct Phase3Result {
     address v3Pool;
     address charmVault;
     address charmStrategy;
+    address ajnaVaultAuth;
+    address ajnaVault;
     address ajnaStrategy;
     address solanaStrategy;
 }

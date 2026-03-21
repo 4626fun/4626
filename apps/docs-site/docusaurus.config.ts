@@ -15,7 +15,6 @@ const config: Config = {
   projectName: 'docs',
 
   onBrokenLinks: 'warn',  // Relaxed for auto-generated docs
-  onBrokenMarkdownLinks: 'warn',  // Will migrate to markdown.hooks in Docusaurus v4
   
 
   i18n: {
@@ -26,6 +25,9 @@ const config: Config = {
   markdown: {
     mermaid: true,
     format: 'md',  // Use standard markdown, not MDX
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
 
   themes: ['@docusaurus/theme-mermaid'],

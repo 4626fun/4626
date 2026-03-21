@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../index.md)
+[**4626-app**](../../index.md)
 
 ***
 
-[4626-miniapp](../../index.md) / src/lib/basename-api
+[4626-app](../../index.md) / src/lib/basename-api
 
 # src/lib/basename-api
 
@@ -10,7 +10,7 @@
 
 ### BasenameInfo
 
-Defined in: [lib/basename-api.ts:9](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L9)
+Defined in: [src/lib/basename-api.ts:11](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L11)
 
 #### Properties
 
@@ -18,55 +18,55 @@ Defined in: [lib/basename-api.ts:9](https://github.com/wenakita/4626/blob/a4870e
 
 > `optional` **avatar**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:11](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L11)
+Defined in: [src/lib/basename-api.ts:13](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L13)
 
 ##### description?
 
 > `optional` **description**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:13](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L13)
+Defined in: [src/lib/basename-api.ts:15](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L15)
 
 ##### discord?
 
 > `optional` **discord**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:16](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L16)
+Defined in: [src/lib/basename-api.ts:18](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L18)
 
 ##### displayName?
 
 > `optional` **displayName**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:12](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L12)
+Defined in: [src/lib/basename-api.ts:14](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L14)
 
 ##### email?
 
 > `optional` **email**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:17](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L17)
+Defined in: [src/lib/basename-api.ts:19](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L19)
 
 ##### github?
 
 > `optional` **github**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:15](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L15)
+Defined in: [src/lib/basename-api.ts:17](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L17)
 
 ##### name
 
 > **name**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:10](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L10)
+Defined in: [src/lib/basename-api.ts:12](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L12)
 
 ##### twitter?
 
 > `optional` **twitter**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:14](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L14)
+Defined in: [src/lib/basename-api.ts:16](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L16)
 
 ##### url?
 
 > `optional` **url**: `string` \| `null`
 
-Defined in: [lib/basename-api.ts:18](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L18)
+Defined in: [src/lib/basename-api.ts:20](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L20)
 
 ## Functions
 
@@ -74,7 +74,7 @@ Defined in: [lib/basename-api.ts:18](https://github.com/wenakita/4626/blob/a4870
 
 > **formatBasename**(`name`): `string`
 
-Defined in: [lib/basename-api.ts:101](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L101)
+Defined in: [src/lib/basename-api.ts:567](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L567)
 
 Format Basename for display (remove .base.eth suffix for cleaner look)
 
@@ -94,7 +94,7 @@ Format Basename for display (remove .base.eth suffix for cleaner look)
 
 > **getBasename**(`address`, `chainId`): `Promise`\<`string` \| `null`\>
 
-Defined in: [lib/basename-api.ts:24](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L24)
+Defined in: [src/lib/basename-api.ts:296](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L296)
 
 Get Basename for an address
 
@@ -118,7 +118,7 @@ Get Basename for an address
 
 > **getBasenameProfile**(`address`, `chainId`): `Promise`\<[`BasenameInfo`](#basenameinfo)\>
 
-Defined in: [lib/basename-api.ts:51](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L51)
+Defined in: [src/lib/basename-api.ts:426](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L426)
 
 Get Basename with full profile info
 
@@ -138,11 +138,32 @@ Get Basename with full profile info
 
 ***
 
+### getBasenameProfileByName()
+
+> **getBasenameProfileByName**(`input`): `Promise`\<[`BasenameInfo`](#basenameinfo)\>
+
+Defined in: [src/lib/basename-api.ts:502](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L502)
+
+Get Basename profile info directly from a basename handle.
+Accepts "akita", "@akita", or "akita.base.eth".
+
+#### Parameters
+
+##### input
+
+`string`
+
+#### Returns
+
+`Promise`\<[`BasenameInfo`](#basenameinfo)\>
+
+***
+
 ### hasBasename()
 
 > **hasBasename**(`address`): `Promise`\<`boolean`\>
 
-Defined in: [lib/basename-api.ts:109](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/basename-api.ts#L109)
+Defined in: [src/lib/basename-api.ts:575](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L575)
 
 Check if address has a Basename
 
@@ -155,3 +176,50 @@ Check if address has a Basename
 #### Returns
 
 `Promise`\<`boolean`\>
+
+***
+
+### isExpectedBasenameLookupError()
+
+> **isExpectedBasenameLookupError**(`error`): `boolean`
+
+Defined in: [src/lib/basename-api.ts:246](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L246)
+
+#### Parameters
+
+##### error
+
+`unknown`
+
+#### Returns
+
+`boolean`
+
+***
+
+### resolveBasenameAddress()
+
+> **resolveBasenameAddress**(`input`, `chainId`): `Promise`\<`string` \| `null`\>
+
+Defined in: [src/lib/basename-api.ts:372](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/basename-api.ts#L372)
+
+Resolve a Basename handle (or full basename) to an EVM address.
+Accepts:
+- "akita"
+- "@akita"
+- "akita.base.eth"
+- "0x..." (passes through normalized checksum)
+
+#### Parameters
+
+##### input
+
+`string`
+
+##### chainId
+
+`number` = `base.id`
+
+#### Returns
+
+`Promise`\<`string` \| `null`\>

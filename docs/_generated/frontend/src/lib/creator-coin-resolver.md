@@ -1,8 +1,8 @@
-[**4626-miniapp**](../../index.md)
+[**4626-app**](../../index.md)
 
 ***
 
-[4626-miniapp](../../index.md) / src/lib/creator-coin-resolver
+[4626-app](../../index.md) / src/lib/creator-coin-resolver
 
 # src/lib/creator-coin-resolver
 
@@ -12,9 +12,9 @@
 
 > **getAllOwners**(`coinAddress`): `Promise`\<`` `0x${string}` ``[]\>
 
-Defined in: [lib/creator-coin-resolver.ts:86](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/creator-coin-resolver.ts#L86)
+Defined in: [src/lib/creator-coin-resolver.ts:104](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/creator-coin-resolver.ts#L104)
 
-Get all owners of a CreatorCoin
+Get all owners of a CreatorCoin (capped to prevent DoS from malicious contracts).
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Get all owners of a CreatorCoin
 
 > **getOwnerAt**(`coinAddress`, `index`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [lib/creator-coin-resolver.ts:66](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/creator-coin-resolver.ts#L66)
+Defined in: [src/lib/creator-coin-resolver.ts:82](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/creator-coin-resolver.ts#L82)
 
 Get the owner at a specific index
 Index 0: Coinbase Smart Account
@@ -59,7 +59,7 @@ Index 2: Main EOA (Externally Owned Account)
 
 > **getPayoutRecipient**(`coinAddress`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [lib/creator-coin-resolver.ts:44](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/creator-coin-resolver.ts#L44)
+Defined in: [src/lib/creator-coin-resolver.ts:60](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/creator-coin-resolver.ts#L60)
 
 Get the payout recipient (creator's main address) from a CreatorCoin contract
 
@@ -79,7 +79,7 @@ Get the payout recipient (creator's main address) from a CreatorCoin contract
 
 > **isCreatorCoin**(`address`): `Promise`\<`boolean`\>
 
-Defined in: [lib/creator-coin-resolver.ts:147](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/creator-coin-resolver.ts#L147)
+Defined in: [src/lib/creator-coin-resolver.ts:166](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/creator-coin-resolver.ts#L166)
 
 Check if an address is a CreatorCoin contract
 
@@ -99,7 +99,7 @@ Check if an address is a CreatorCoin contract
 
 > **resolveCreatorAddress**(`addressOrCoin`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [lib/creator-coin-resolver.ts:117](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/creator-coin-resolver.ts#L117)
+Defined in: [src/lib/creator-coin-resolver.ts:136](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/lib/creator-coin-resolver.ts#L136)
 
 Resolve a CreatorCoin address to the creator's main wallet
 Priority:

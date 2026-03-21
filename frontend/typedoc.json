@@ -1,19 +1,33 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": [
-    "src/lib/**/*.ts",
-    "src/hooks/**/*.ts",
-    "src/config/**/*.ts",
-    "src/**/*.tsx",
-    "api/**/*.ts"
-  ],
+  "entryPoints": ["src", "api"],
   "entryPointStrategy": "expand",
+  "tsconfig": "./tsconfig.docs.json",
   "out": "../docs/_generated/frontend",
   "plugin": ["typedoc-plugin-markdown"],
   "outputFileStrategy": "modules",
   "flattenOutputFiles": false,
   "entryFileName": "index",
   "readme": "none",
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/__tests__/**"
+  ],
+  "blockTags": [
+    "@defaultValue",
+    "@default",
+    "@deprecated",
+    "@description",
+    "@example",
+    "@param",
+    "@privateRemarks",
+    "@remarks",
+    "@returns",
+    "@see",
+    "@throws",
+    "@typeParam"
+  ],
   "excludePrivate": true,
   "excludeProtected": true,
   "excludeInternal": true,

@@ -2,7 +2,7 @@
 
 > Prioritized backlog for the UI/UX pass. See `uiux-audit.md` for the full issue list.
 >
-> Historical note (2026-03-20): this plan predates the email-first account-model reset. Any wallet-first signup language or references to "Zora canonical wallet" copy should be treated as superseded by [account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this plan predates the email-first account-model reset. Any wallet-first signup language or references to "Zora canonical wallet" copy should be treated as superseded by [account-auth-invariants.md](account-auth-invariants.md).
 
 ## Priority Framework
 

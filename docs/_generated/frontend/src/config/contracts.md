@@ -1,16 +1,10 @@
-[**4626-miniapp**](../../index.md)
+[**4626-app**](../../index.md)
 
 ***
 
-[4626-miniapp](../../index.md) / src/config/contracts
+[4626-app](../../index.md) / src/config/contracts
 
 # src/config/contracts
-
-## Type Aliases
-
-### ContractAddress
-
-> **ContractAddress** = `any`
 
 ## Variables
 
@@ -18,7 +12,7 @@
 
 > `const` **AKITA**: `object`
 
-Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/config/contracts.ts#L95)
+Defined in: [src/config/contracts.ts:100](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/config/contracts.ts#L100)
 
 #### Type Declaration
 
@@ -72,7 +66,7 @@ Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/a4870
 
 > `const` **CONTRACTS**: `object`
 
-Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/config/contracts.ts#L23)
+Defined in: [src/config/contracts.ts:23](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/config/contracts.ts#L23)
 
 #### Type Declaration
 
@@ -115,10 +109,6 @@ Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/a4870
 ##### creatorVaultBatcher
 
 > `readonly` **creatorVaultBatcher**: `` `0x${string}` `` \| `undefined`
-
-##### factory
-
-> `readonly` **factory**: `` `0x${string}` ``
 
 ##### lotteryManager
 
@@ -222,7 +212,7 @@ Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/a4870
 
 > `const` **ERC4626**: `object`
 
-Defined in: [config/contracts.ts:112](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/config/contracts.ts#L112)
+Defined in: [src/config/contracts.ts:117](https://github.com/wenakita/4626/blob/5dd4dafbe9e8135d468ff07a71f95a30fc683580/frontend/src/config/contracts.ts#L117)
 
 #### Type Declaration
 
@@ -253,3 +243,9 @@ Defined in: [config/contracts.ts:112](https://github.com/wenakita/4626/blob/a487
 ##### wrapper
 
 > `readonly` **wrapper**: `` `0x${string}` ``
+
+## References
+
+### ContractAddress
+
+Re-exports [ContractAddress](contracts.defaults.md#contractaddress)
