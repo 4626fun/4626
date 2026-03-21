@@ -475,6 +475,126 @@ describe('telegram webhook handler', () => {
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:deploy')).toBe(false)
   })
 
+  it('opens the native Telegram ID picker in private chat via /id', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_0,
+        message: { message_id: 19, text: '/id', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.text).toContain('<code>/id</code>')
+    expect(payload.reply_markup?.inline_keyboard).toBeUndefined()
+    expect(Array.isArray(payload.reply_markup?.keyboard)).toBe(true)
+    const buttons = payload.reply_markup.keyboard.flat()
+    expect(buttons.some((button: any) => button?.request_users?.request_id === 1001)).toBe(true)
+    expect(buttons.some((button: any) => button?.request_chat?.request_id === 2002)).toBe(true)
+    expect(buttons.some((button: any) => button?.request_chat?.request_id === 2103)).toBe(true)
+  })
+
+  it('opens the native Telegram ID picker via /start get id', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_1,
+        message: { message_id: 20, text: '/start Get ID', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(Array.isArray(payload.reply_markup?.keyboard)).toBe(true)
+    expect(payload.text).toContain('native Telegram target')
+  })
+
+  it('renders a selected Telegram user from the native ID picker and removes the keyboard', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_2,
+        message: {
+          message_id: 21,
+          chat: { id: 7726886643 },
+          from: { id: 42 },
+          users_shared: {
+            request_id: 1001,
+            users: [{ user_id: 123456789, first_name: 'Akita', username: 'akita_user' }],
+          },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.text).toContain('<b>User ID</b>')
+    expect(payload.text).toContain('<code>123456789</code>')
+    expect(payload.text).toContain('@akita_user')
+    expect(payload.reply_markup).toEqual({ remove_keyboard: true })
+  })
+
+  it('renders a selected Telegram chat from the native ID picker and removes the keyboard', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_3,
+        message: {
+          message_id: 22,
+          chat: { id: 7726886643 },
+          from: { id: 42 },
+          chat_shared: {
+            request_id: 2002,
+            chat_id: -1009876543210,
+            title: 'Akita Channel',
+            username: 'akita_channel',
+          },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.text).toContain('<b>Chat ID</b>')
+    expect(payload.text).toContain('<code>-1009876543210</code>')
+    expect(payload.text).toContain('Akita Channel')
+    expect(payload.text).toContain('@akita_channel')
+    expect(payload.reply_markup).toEqual({ remove_keyboard: true })
+  })
+
   it('sends a Telegram photo card when a command returns media metadata', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     handleKeeprCommandMock.mockResolvedValueOnce({

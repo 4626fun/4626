@@ -4,6 +4,9 @@ export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as cons
 
 export const TELEGRAM_NATIVE_COMMANDS = new Set([
   'start',
+  'id',
+  'getid',
+  'get_id',
   'link',
   'linked',
   'unlink',
@@ -27,6 +30,9 @@ export const TELEGRAM_NATIVE_COMMANDS = new Set([
 
 export const TELEGRAM_COMMAND_HEADS = [
   'start',
+  'id',
+  'getid',
+  'get_id',
   'help',
   'keepr',
   'link',
@@ -102,6 +108,7 @@ export type TelegramBotMenuCommand = {
 
 export const TELEGRAM_PRIVATE_BOT_COMMANDS: TelegramBotMenuCommand[] = [
   { command: 'help', description: 'Start here: connect, trade, wallet' },
+  { command: 'id', description: 'Pick a user, group, or channel ID' },
   { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
   { command: 'linked', description: 'Check wallet link status' },
   { command: 'vaults', description: 'Browse vaults' },
@@ -126,6 +133,7 @@ export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
 
 export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = [
   { command: 'help', description: 'Start here: admin quick actions' },
+  { command: 'id', description: 'Pick a user, group, or channel ID' },
   { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
   { command: 'vaults', description: 'Vaults in this chat' },
   { command: 'buy', description: 'Guided buy flow' },

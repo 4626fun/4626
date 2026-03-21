@@ -100,6 +100,14 @@ export function isPrivyEmailAlreadyLinkedError(error: unknown): boolean {
   )
 }
 
+export function normalizeTelegramLinkUiMessage(message: string | null): string | null {
+  if (!message) return null
+  if (isPrivyEmailAlreadyLinkedError(message)) {
+    return 'This email is already linked in Privy. Tap Retry link to continue Telegram linking.'
+  }
+  return message
+}
+
 export function formatTelegramSessionError(error: string, statusCode: number): string {
   const normalized = String(error ?? '').trim().toLowerCase()
   if (normalized.includes('invalid_hash')) {
@@ -178,6 +186,8 @@ export function getTelegramLinkViewState(params: {
   hasLinkContext: boolean
 }) {
   const { sessionState, linkState, sessionError, linkMessage, privyAuthenticated, hasLinkContext } = params
+  const normalizedLinkMessage = normalizeTelegramLinkUiMessage(linkMessage)
+  const isPrivyEmailLinkedIssue = Boolean(linkMessage) && normalizedLinkMessage !== linkMessage
   const statusVariant: TelegramLinkAlertVariant =
     sessionState === 'error' || linkState === 'error' ? 'warning' : linkState === 'linked' ? 'success' : 'info'
   const statusTitle =
@@ -195,7 +205,7 @@ export function getTelegramLinkViewState(params: {
 
   const statusMessage =
     sessionError ??
-    linkMessage ??
+    normalizedLinkMessage ??
     (sessionState === 'verifying'
       ? 'Checking your Telegram Mini App session...'
       : privyAuthenticated
@@ -207,7 +217,8 @@ export function getTelegramLinkViewState(params: {
     hasLinkContext &&
     linkState !== 'authenticating' &&
     linkState !== 'linking' &&
-    linkState !== 'linked'
+    linkState !== 'linked' &&
+    !isPrivyEmailLinkedIssue
   const canRetryLink = sessionState === 'ready' && hasLinkContext && linkState === 'error'
 
   return {

@@ -134,7 +134,7 @@ import {
   extractPrivyWalletIdCandidate as extractPrivyWalletIdCandidateShared,
 } from './webhook/services/privyWallet.js'
 import { normalizeCallbackQuery } from './webhook/updates/callbackQuery.js'
-import { extractUpdateMessage as extractUpdateMessageShared, normalizeMessageContext } from './webhook/updates/message.js'
+import { extractSharedSelection, extractUpdateMessage as extractUpdateMessageShared, normalizeMessageContext } from './webhook/updates/message.js'
 import { handleChosenInlineResultUpdate } from './webhook/updates/chosenInlineResult.js'
 import { handleInlineQueryUpdate } from './webhook/updates/inlineQuery.js'
 import { handlePreCheckoutUpdate } from './webhook/updates/preCheckout.js'
@@ -169,6 +169,18 @@ function menuLabel(key: keyof typeof TELEGRAM_MENU_LABELS): string {
   return sanitizeTelegramLabel(TELEGRAM_MENU_LABELS[key])
 }
 
+const TELEGRAM_ID_PICKER_REQUESTS = {
+  user: 1001,
+  premium: 1002,
+  bot: 1003,
+  group: 2001,
+  channel: 2002,
+  forum: 2003,
+  myGroup: 2101,
+  myChannel: 2102,
+  myForum: 2103,
+} as const
+
 type TelegramFrom = {
   id?: number | string
   is_bot?: boolean
@@ -179,6 +191,25 @@ type TelegramChat = {
   id?: number | string
 }
 
+type TelegramSharedUser = {
+  user_id?: number | string
+  first_name?: string
+  last_name?: string
+  username?: string
+}
+
+type TelegramUsersShared = {
+  request_id?: number
+  users?: TelegramSharedUser[]
+}
+
+type TelegramChatShared = {
+  request_id?: number
+  chat_id?: number | string
+  title?: string
+  username?: string
+}
+
 type TelegramMessage = {
   message_id?: number
   text?: string
@@ -187,6 +218,8 @@ type TelegramMessage = {
   chat?: TelegramChat
   reply_to_message?: TelegramMessage
   successful_payment?: TelegramSuccessfulPayment
+  users_shared?: TelegramUsersShared
+  chat_shared?: TelegramChatShared
 }
 
 type TelegramInlineQuery = {
@@ -1605,6 +1638,7 @@ function buildFocusedHelpText(): string {
     '',
     '<u>Core commands</u>',
     '<code>/start</code> — onboarding entry (private DM: tap Start, then follow prompts). Setup ≠ operator-approved app access.',
+    '<code>/id</code> — native Telegram picker for users, groups, channels, and forums',
     '<code>/link</code> — continue Mini App linking (after onboarding Start, or to refresh)',
     '<code>/linked</code> — check link status',
     '<code>/buy</code> — guided buy flow',
@@ -2077,6 +2111,215 @@ function buildTelegramCommandChrome(params: {
     )
   }
   return sections.join('\n')
+}
+
+function isTelegramIdPickerStartCommand(text: string): boolean {
+  const tokens = tokenizeTelegramCommand(text).map((token) => token.toLowerCase())
+  if ((tokens[0] ?? '') !== '/start' && (tokens[0] ?? '') !== 'start') return false
+  const tail = tokens
+    .slice(1)
+    .join(' ')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+  return tail === 'id' || tail === 'get id' || tail === 'getid'
+}
+
+function buildTelegramIdPickerReplyMarkup(): Record<string, unknown> {
+  return {
+    keyboard: [
+      [
+        {
+          text: '👤 User',
+          request_users: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.user,
+            user_is_bot: false,
+            max_quantity: 1,
+            request_name: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+        {
+          text: '⭐ Premium',
+          request_users: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.premium,
+            user_is_bot: false,
+            user_is_premium: true,
+            max_quantity: 1,
+            request_name: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+        {
+          text: '🤖 Bot',
+          request_users: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.bot,
+            user_is_bot: true,
+            max_quantity: 1,
+            request_name: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+      ],
+      [
+        {
+          text: '👥 Group',
+          request_chat: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.group,
+            chat_is_channel: false,
+            request_title: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+        {
+          text: '📣 Channel',
+          request_chat: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.channel,
+            chat_is_channel: true,
+            request_title: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+        {
+          text: '💬 Forum',
+          request_chat: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.forum,
+            chat_is_channel: false,
+            chat_is_forum: true,
+            request_title: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+      ],
+      [
+        {
+          text: '🛡 My Group',
+          request_chat: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.myGroup,
+            chat_is_channel: false,
+            chat_is_created: true,
+            request_title: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+        {
+          text: '📢 My Channel',
+          request_chat: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.myChannel,
+            chat_is_channel: true,
+            chat_is_created: true,
+            request_title: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+        {
+          text: '🧵 My Forum',
+          request_chat: {
+            request_id: TELEGRAM_ID_PICKER_REQUESTS.myForum,
+            chat_is_channel: false,
+            chat_is_forum: true,
+            chat_is_created: true,
+            request_title: true,
+            request_username: true,
+            request_photo: true,
+          },
+        },
+      ],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: true,
+    input_field_placeholder: 'Pick a user, group, channel, or forum',
+  }
+}
+
+function buildTelegramIdPickerText(): string {
+  return buildTelegramCommandChrome({
+    title: 'AKITA | TELEGRAM ID',
+    command: '/id',
+    summaryLines: [
+      'Pick a native Telegram target below.',
+      'Telegram will return the selected user or chat ID here.',
+    ],
+    detailLines: [
+      'User, Premium, and Bot use the people picker.',
+      'Group, Channel, and Forum use the chat picker.',
+      'My Group / My Channel / My Forum filter to chats you created.',
+    ],
+    expandableDetails: true,
+  })
+}
+
+function resolveTelegramIdPickerRequestLabel(requestId: number | null): string {
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.user) return 'User'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.premium) return 'Premium user'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.bot) return 'Bot'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.group) return 'Group'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.channel) return 'Channel'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.forum) return 'Forum'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.myGroup) return 'My Group'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.myChannel) return 'My Channel'
+  if (requestId === TELEGRAM_ID_PICKER_REQUESTS.myForum) return 'My Forum'
+  return 'Selection'
+}
+
+function formatTelegramSharedUserName(user: { firstName: string; lastName: string; username: string; userId: string }): string {
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+  if (fullName) return fullName
+  if (user.username) return `@${user.username}`
+  return user.userId
+}
+
+function buildTelegramIdSelectionText(selection: ReturnType<typeof extractSharedSelection>): string {
+  if (!selection) return ''
+  if (selection.kind === 'users') {
+    const user = selection.users[0]
+    if (!user) return ''
+    const lines = [
+      '<b>AKITA | TELEGRAM ID</b>',
+      '<code>/id</code>',
+      '',
+      `<blockquote>${escapeTelegramHtmlText(`${resolveTelegramIdPickerRequestLabel(selection.requestId)}\n${formatTelegramSharedUserName(user)}`)}</blockquote>`,
+      '',
+      '<b>User ID</b>',
+      `<code>${escapeTelegramHtmlText(user.userId)}</code>`,
+    ]
+    if (user.username) {
+      lines.push('', '<b>Username</b>', escapeTelegramHtmlText(`@${user.username}`))
+    }
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+    if (fullName) {
+      lines.push('', '<b>Name</b>', escapeTelegramHtmlText(fullName))
+    }
+    if (selection.users.length > 1) {
+      lines.push('', escapeTelegramHtmlText(`Picked ${selection.users.length} users. Showing the first selection.`))
+    }
+    return lines.join('\n')
+  }
+
+  const displayName = selection.title || (selection.username ? `@${selection.username}` : selection.chatId)
+  const lines = [
+    '<b>AKITA | TELEGRAM ID</b>',
+    '<code>/id</code>',
+    '',
+    `<blockquote>${escapeTelegramHtmlText(`${resolveTelegramIdPickerRequestLabel(selection.requestId)}\n${displayName}`)}</blockquote>`,
+    '',
+    '<b>Chat ID</b>',
+    `<code>${escapeTelegramHtmlText(selection.chatId)}</code>`,
+  ]
+  if (selection.username) {
+    lines.push('', '<b>Username</b>', escapeTelegramHtmlText(`@${selection.username}`))
+  }
+  if (selection.title) {
+    lines.push('', '<b>Title</b>', escapeTelegramHtmlText(selection.title))
+  }
+  return lines.join('\n')
 }
 
 async function isTelegramUserLinked(params: {
@@ -2844,6 +3087,23 @@ async function executeTelegramNativeCommand(params: {
   const tradeIntent = parseTelegramTradeIntent(params.text)
   const deployIntent = parseTelegramDeployIntent(params.text)
   const vaultDeployIntent = parseTelegramVaultDeployIntent(params.text)
+
+  if (head === 'id' || head === 'getid' || head === 'get_id' || (head === 'start' && isTelegramIdPickerStartCommand(params.text))) {
+    if (!isPrivateChatId(params.chatId)) {
+      return {
+        text: buildTelegramCommandChrome({
+          title: 'AKITA | TELEGRAM ID',
+          command: '/id',
+          summaryLines: ['The native ID picker only works in a private chat with this bot.'],
+          detailLines: ['Open the bot DM and send /id there.', 'If you came from a group, return after copying the user or chat ID you need.'],
+        }),
+      }
+    }
+    return {
+      text: buildTelegramIdPickerText(),
+      replyMarkup: buildTelegramIdPickerReplyMarkup(),
+    }
+  }
 
   if (head === 'start') {
     const isLinked = await isTelegramUserLinked({
@@ -6776,16 +7036,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
   const { chatId, userId, fromBot, text, messageId } = normalizedMessage
-  const normalizedText = normalizeTelegramCommand(text)
-  const commandText = shouldAutoRouteToAi({ chatId, text, message }) ? normalizeTelegramCommand(`/ai ${text}`) : normalizedText
-  if (!text) {
+  const sharedSelection = extractSharedSelection(message)
+
+  if (fromBot) {
     return res.status(200).json({
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 
-  if (fromBot) {
+  if (sharedSelection) {
+    await sendTelegramMessage({
+      botToken,
+      chatId,
+      text: buildTelegramIdSelectionText(sharedSelection),
+      replyToMessageId: messageId,
+      replyMarkup: { remove_keyboard: true },
+    })
+    return res.status(200).json({
+      success: true,
+      data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+    } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+
+  const normalizedText = normalizeTelegramCommand(text)
+  const commandText = shouldAutoRouteToAi({ chatId, text, message }) ? normalizeTelegramCommand(`/ai ${text}`) : normalizedText
+  if (!text) {
     return res.status(200).json({
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,

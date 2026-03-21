@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatTelegramSessionError,
   getPrivyEmailState,
+  normalizeTelegramLinkUiMessage,
   getTelegramLinkSuccessMessage,
   getTelegramLinkViewState,
   isPrivyEmailAlreadyLinkedError,
@@ -165,5 +166,28 @@ describe('TelegramLink helpers', () => {
   it('treats Privy email-already-linked errors as recoverable', () => {
     expect(isPrivyEmailAlreadyLinkedError(new Error('User already has an account of type email linked.'))).toBe(true)
     expect(isPrivyEmailAlreadyLinkedError(new Error('Completely different error'))).toBe(false)
+  })
+
+  it('normalizes Privy email-linked UI errors into retry-link guidance', () => {
+    expect(normalizeTelegramLinkUiMessage('User already has an account of type email linked.')).toContain(
+      'Tap Retry link',
+    )
+    expect(normalizeTelegramLinkUiMessage('Different failure')).toBe('Different failure')
+
+    expect(
+      getTelegramLinkViewState({
+        sessionState: 'ready',
+        linkState: 'error',
+        sessionError: null,
+        linkMessage: 'User already has an account of type email linked.',
+        privyAuthenticated: true,
+        hasLinkContext: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        canSignIn: false,
+        canRetryLink: true,
+      }),
+    )
   })
 })

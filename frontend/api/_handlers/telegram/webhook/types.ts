@@ -16,6 +16,25 @@ export type TelegramSuccessfulPayment = {
   provider_payment_charge_id?: string
 }
 
+export type TelegramSharedUser = {
+  user_id?: number | string
+  first_name?: string
+  last_name?: string
+  username?: string
+}
+
+export type TelegramUsersShared = {
+  request_id?: number
+  users?: TelegramSharedUser[]
+}
+
+export type TelegramChatShared = {
+  request_id?: number
+  chat_id?: number | string
+  title?: string
+  username?: string
+}
+
 export type TelegramMessage = {
   message_id?: number
   text?: string
@@ -24,6 +43,8 @@ export type TelegramMessage = {
   chat?: TelegramChat
   reply_to_message?: TelegramMessage
   successful_payment?: TelegramSuccessfulPayment
+  users_shared?: TelegramUsersShared
+  chat_shared?: TelegramChatShared
 }
 
 export type TelegramInlineQuery = {

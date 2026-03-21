@@ -204,6 +204,7 @@ function formatKeeprHelpFull(): string {
     '',
     ...formatHelpSection('start', [
       formatHelpCommandRow('/start', 'menu'),
+      formatHelpCommandRow('/id', 'pick a user, group, or channel ID'),
       formatHelpCommandRow('/help', 'command guide'),
       formatHelpCommandRow('/link', 'connect Telegram + Zora CSW'),
       formatHelpCommandRow('/linked', 'link status'),
