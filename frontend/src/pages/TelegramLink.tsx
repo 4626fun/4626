@@ -33,6 +33,22 @@ const OPEN_FROM_TELEGRAM_SESSION_ERROR = 'Open this link from Telegram so 4626 c
 
 export function formatTelegramSessionError(error: string, statusCode: number): string {
   const normalized = String(error ?? '').trim().toLowerCase()
+  if (normalized.includes('invalid_hash')) {
+    return 'Telegram could not verify this Mini App launch signature. Run /link in Telegram for a fresh Open Mini App button, then retry from that button.'
+  }
+  if (normalized.includes('missing_hash') || normalized.includes('invalid_hash_format')) {
+    return 'Mini App launch signature was missing or malformed. Re-open this flow from Telegram using the Open Mini App button.'
+  }
+  if (normalized.includes('missing_user') || normalized.includes('invalid_user')) {
+    return 'Telegram did not provide a valid Mini App user payload. Update Telegram, then re-open the Mini App from your /link message.'
+  }
+  if (
+    normalized.includes('missing_auth_date') ||
+    normalized.includes('invalid_auth_date') ||
+    normalized.includes('future_auth_date')
+  ) {
+    return 'Telegram Mini App launch timing data was invalid. Re-open the Mini App from Telegram and retry.'
+  }
   if (statusCode === 409 || normalized.includes('replay')) {
     return 'This Telegram Mini App session was already used. Re-open the Mini App from Telegram, then tap Link again.'
   }
@@ -44,6 +60,9 @@ export function formatTelegramSessionError(error: string, statusCode: number): s
   }
   if (normalized.includes('unavailable')) {
     return 'Telegram Mini App session unavailable. Open this flow from Telegram.'
+  }
+  if (statusCode >= 500) {
+    return 'Telegram session verification is temporarily unavailable. Re-open the Mini App from Telegram in a moment.'
   }
   return 'Could not verify your Telegram Mini App session. Re-open the Mini App from Telegram and retry.'
 }

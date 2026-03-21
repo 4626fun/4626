@@ -13,6 +13,10 @@ describe('TelegramLink helpers', () => {
     expect(formatTelegramSessionError('replay detected', 409)).toContain('already used')
   })
 
+  it('maps signature mismatch errors to /link relaunch guidance', () => {
+    expect(formatTelegramSessionError('telegram_miniapp_invalid_hash', 401)).toContain('Run /link in Telegram')
+  })
+
   it('returns wallet-setup guidance for non-active link success', () => {
     expect(getTelegramLinkSuccessMessage('active')).toContain('linked successfully')
     expect(getTelegramLinkSuccessMessage('pending_wallet_setup')).toContain('Finish Coinbase Smart Wallet setup')
