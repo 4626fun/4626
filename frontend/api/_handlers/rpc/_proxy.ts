@@ -60,13 +60,63 @@ const RPC_CHAIN_ID_TIMEOUT_MS = 1_500
 const RPC_FORWARD_TIMEOUT_MS = 5_000
 const RPC_RATE_LIMIT_WINDOW_MS = 60_000
 const RPC_RATE_LIMIT_MAX_REQUESTS = 120
+const RPC_TELEMETRY_ENABLED = !['0', 'false', 'no', 'off'].includes(
+  String(process.env.RPC_PROXY_TELEMETRY ?? '1').trim().toLowerCase(),
+)
+const RPC_TELEMETRY_WINDOW_MS = clampInteger(
+  process.env.RPC_PROXY_TELEMETRY_WINDOW_MS,
+  30_000,
+  1_000,
+  300_000,
+)
+const RPC_TELEMETRY_MAX_METHOD_KEYS = 24
 const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
 const rpcRateLimitState = new Map<string, { count: number; resetAt: number }>()
+let rpcInFlightRequests = 0
+let rpcTelemetryWindow = createRpcTelemetryWindow(Date.now())
 
 type RateLimitBucketResult = {
   allowed: boolean
   remaining: number
   resetAt: number
+}
+
+type RpcRequestOutcome =
+  | 'ok'
+  | 'method_not_allowed'
+  | 'unauthenticated'
+  | 'local_rate_limited'
+  | 'invalid_body'
+  | 'missing_method'
+  | 'blocked_method'
+  | 'forwarded_non_retryable_error'
+  | 'upstream_rate_limited'
+  | 'upstream_failed'
+
+type RpcTelemetryWindow = {
+  startedAt: number
+  totalRequests: number
+  okResponses: number
+  errorResponses: number
+  localRateLimited: number
+  upstreamRateLimited: number
+  totalDurationMs: number
+  maxDurationMs: number
+  maxInFlight: number
+  chainCounts: Record<RpcChain, number>
+  methodCounts: Map<string, number>
+  outcomeCounts: Map<string, number>
+}
+
+type RpcRequestTelemetry = {
+  chain: RpcChain
+  methods: string[]
+  status: number
+  outcome: RpcRequestOutcome
+  attempts: number
+  upstreamHost: string | null
+  durationMs: number
+  inFlightAtStart: number
 }
 
 const BLOCKED_RPC_METHOD_PREFIXES = ['eth_send', 'personal_', 'wallet_', 'admin_', 'debug_', 'trace_'] as const
@@ -107,6 +157,135 @@ function normalizeRpcUrl(raw: string): string | null {
   if (!t) return null
   if (!t.startsWith('http://') && !t.startsWith('https://')) return `https://${t}`
   return t
+}
+
+function readRpcHost(raw: string): string | null {
+  try {
+    const parsed = new URL(raw)
+    return parsed.host || null
+  } catch {
+    return null
+  }
+}
+
+function clampInteger(raw: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return fallback
+  const rounded = Math.floor(parsed)
+  if (rounded < min) return min
+  if (rounded > max) return max
+  return rounded
+}
+
+function createChainCountRecord(): Record<RpcChain, number> {
+  return {
+    base: 0,
+    mainnet: 0,
+    arbitrum: 0,
+    optimism: 0,
+    polygon: 0,
+  }
+}
+
+function createRpcTelemetryWindow(startedAt: number): RpcTelemetryWindow {
+  return {
+    startedAt,
+    totalRequests: 0,
+    okResponses: 0,
+    errorResponses: 0,
+    localRateLimited: 0,
+    upstreamRateLimited: 0,
+    totalDurationMs: 0,
+    maxDurationMs: 0,
+    maxInFlight: 0,
+    chainCounts: createChainCountRecord(),
+    methodCounts: new Map<string, number>(),
+    outcomeCounts: new Map<string, number>(),
+  }
+}
+
+function incrementMapCount(map: Map<string, number>, key: string): void {
+  map.set(key, (map.get(key) ?? 0) + 1)
+}
+
+function normalizeMethodForTelemetry(method: string): string {
+  const trimmed = method.trim()
+  if (!trimmed) return '(none)'
+  return trimmed.length <= 72 ? trimmed : `${trimmed.slice(0, 72)}...`
+}
+
+function topMapEntries(
+  map: Map<string, number>,
+  limit: number,
+): Array<{ key: string; count: number }> {
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([key, count]) => ({ key, count }))
+}
+
+function rotateRpcTelemetryWindow(now: number): void {
+  if (!RPC_TELEMETRY_ENABLED) return
+  const elapsedMs = now - rpcTelemetryWindow.startedAt
+  if (elapsedMs < RPC_TELEMETRY_WINDOW_MS) return
+
+  if (rpcTelemetryWindow.totalRequests > 0) {
+    const durationSeconds = Math.max(1, elapsedMs / 1000)
+    const avgDurationMs = Math.round(
+      rpcTelemetryWindow.totalDurationMs / rpcTelemetryWindow.totalRequests,
+    )
+    const payload = {
+      windowStartIso: new Date(rpcTelemetryWindow.startedAt).toISOString(),
+      windowDurationMs: elapsedMs,
+      requestsPerSecond: Number((rpcTelemetryWindow.totalRequests / durationSeconds).toFixed(2)),
+      totalRequests: rpcTelemetryWindow.totalRequests,
+      okResponses: rpcTelemetryWindow.okResponses,
+      errorResponses: rpcTelemetryWindow.errorResponses,
+      localRateLimited: rpcTelemetryWindow.localRateLimited,
+      upstreamRateLimited: rpcTelemetryWindow.upstreamRateLimited,
+      avgDurationMs,
+      maxDurationMs: rpcTelemetryWindow.maxDurationMs,
+      maxInFlight: rpcTelemetryWindow.maxInFlight,
+      byChain: rpcTelemetryWindow.chainCounts,
+      topMethods: topMapEntries(rpcTelemetryWindow.methodCounts, 8),
+      outcomes: topMapEntries(rpcTelemetryWindow.outcomeCounts, 8),
+    }
+    console.info('[rpc-telemetry-window]', JSON.stringify(payload))
+  }
+
+  rpcTelemetryWindow = createRpcTelemetryWindow(now)
+}
+
+function recordRpcTelemetry(entry: RpcRequestTelemetry): void {
+  if (!RPC_TELEMETRY_ENABLED) return
+  const now = Date.now()
+  rotateRpcTelemetryWindow(now)
+
+  const window = rpcTelemetryWindow
+  window.totalRequests += 1
+  window.chainCounts[entry.chain] += 1
+  window.totalDurationMs += entry.durationMs
+  if (entry.durationMs > window.maxDurationMs) window.maxDurationMs = entry.durationMs
+  if (entry.inFlightAtStart > window.maxInFlight) window.maxInFlight = entry.inFlightAtStart
+
+  if (entry.status >= 200 && entry.status < 400) window.okResponses += 1
+  else window.errorResponses += 1
+  if (entry.outcome === 'local_rate_limited') window.localRateLimited += 1
+  if (entry.outcome === 'upstream_rate_limited') window.upstreamRateLimited += 1
+
+  incrementMapCount(window.outcomeCounts, entry.outcome)
+  const methodKeys = entry.methods.length > 0 ? entry.methods : ['(none)']
+  for (const method of methodKeys) {
+    const normalized = normalizeMethodForTelemetry(method)
+    if (
+      window.methodCounts.has(normalized) ||
+      window.methodCounts.size < RPC_TELEMETRY_MAX_METHOD_KEYS
+    ) {
+      incrementMapCount(window.methodCounts, normalized)
+    } else {
+      incrementMapCount(window.methodCounts, '(other)')
+    }
+  }
 }
 
 function parseRpcEnv(raw: string): string[] {
@@ -278,116 +457,157 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' })
+  const telemetry: RpcRequestTelemetry = {
+    chain: 'base',
+    methods: [],
+    status: 502,
+    outcome: 'upstream_failed',
+    attempts: 0,
+    upstreamHost: null,
+    durationMs: 0,
+    inFlightAtStart: 0,
+  }
+  const requestStartedAt = Date.now()
+  rpcInFlightRequests += 1
+  telemetry.inFlightAtStart = rpcInFlightRequests
+
+  const finalizeTelemetry = (status: number, outcome: RpcRequestOutcome) => {
+    telemetry.status = status
+    telemetry.outcome = outcome
   }
 
-  const principalAddress = readRequestPrincipalAddress(req)
-  if (!principalAddress) {
-    return res.status(401).json({ success: false, error: 'Authentication required' })
-  }
-  const rateLimit = consumeRateLimitBucket(principalAddress.toLowerCase())
-  setRateLimitHeaders(res, { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt })
-  if (!rateLimit.allowed) {
-    res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimit.resetAt)))
-    return res.status(429).json({
-      success: false,
-      error: 'Rate limit exceeded',
-      code: 'rpc_local_rate_limited',
-    })
-  }
-
-  const body = await readJsonBody<unknown>(req, { maxBytes: 512_000 })
-  if (!isValidRpcBody(body)) {
-    return res.status(400).json({ success: false, error: 'Invalid JSON-RPC body' })
-  }
-
-  const payload = body
-  const requestedMethods = extractRpcMethods(payload)
-  if (requestedMethods.length === 0) {
-    return res.status(400).json({ success: false, error: 'Missing JSON-RPC method' })
-  }
-  if (requestedMethods.some(isBlockedRpcMethod)) {
-    return res.status(400).json({ success: false, error: 'Unsupported JSON-RPC method' })
-  }
-  const chain = resolveRpcChain(req)
-  const rpcUrls = getRpcUrls(chain)
-  const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
-  const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
-  let lastStatus = 502
-  let lastError: string | null = null
-  let lastRetryAfterSeconds: number | null = null
-
-  for (const rpc of rpcUrls) {
-    if (envRpcUrls.has(rpc) && expectedChainId) {
-      const actualChainId = await readRpcChainIdCached(rpc)
-      if (actualChainId && actualChainId !== expectedChainId) {
-        lastStatus = 502
-        lastError = 'RPC chain mismatch'
-        continue
-      }
+  try {
+    if (req.method !== 'POST') {
+      finalizeTelemetry(405, 'method_not_allowed')
+      return res.status(405).json({ success: false, error: 'Method not allowed' })
     }
 
-    for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_RPC; attempt++) {
-      if (attempt > 0) {
-        const delay = RETRY_BACKOFF_MS[attempt] ?? 250
-        if (delay > 0) await sleep(delay)
-      }
-      try {
-        const response = await fetchWithTimeout(
-          rpc,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          },
-          RPC_FORWARD_TIMEOUT_MS,
-        )
+    const principalAddress = readRequestPrincipalAddress(req)
+    if (!principalAddress) {
+      finalizeTelemetry(401, 'unauthenticated')
+      return res.status(401).json({ success: false, error: 'Authentication required' })
+    }
+    const rateLimit = consumeRateLimitBucket(principalAddress.toLowerCase())
+    setRateLimitHeaders(res, { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt })
+    if (!rateLimit.allowed) {
+      res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimit.resetAt)))
+      finalizeTelemetry(429, 'local_rate_limited')
+      return res.status(429).json({
+        success: false,
+        error: 'Rate limit exceeded',
+        code: 'rpc_local_rate_limited',
+      })
+    }
 
-        if (response.ok) {
-          const text = await response.text()
+    const body = await readJsonBody<unknown>(req, { maxBytes: 512_000 })
+    if (!isValidRpcBody(body)) {
+      finalizeTelemetry(400, 'invalid_body')
+      return res.status(400).json({ success: false, error: 'Invalid JSON-RPC body' })
+    }
+
+    const payload = body
+    const requestedMethods = extractRpcMethods(payload)
+    telemetry.methods = requestedMethods
+    if (requestedMethods.length === 0) {
+      finalizeTelemetry(400, 'missing_method')
+      return res.status(400).json({ success: false, error: 'Missing JSON-RPC method' })
+    }
+    if (requestedMethods.some(isBlockedRpcMethod)) {
+      finalizeTelemetry(400, 'blocked_method')
+      return res.status(400).json({ success: false, error: 'Unsupported JSON-RPC method' })
+    }
+    const chain = resolveRpcChain(req)
+    telemetry.chain = chain
+    const rpcUrls = getRpcUrls(chain)
+    const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
+    const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
+    let lastStatus = 502
+    let lastError: string | null = null
+    let lastRetryAfterSeconds: number | null = null
+
+    for (const rpc of rpcUrls) {
+      if (envRpcUrls.has(rpc) && expectedChainId) {
+        const actualChainId = await readRpcChainIdCached(rpc)
+        if (actualChainId && actualChainId !== expectedChainId) {
+          lastStatus = 502
+          lastError = 'RPC chain mismatch'
+          continue
+        }
+      }
+
+      for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_RPC; attempt++) {
+        if (attempt > 0) {
+          const delay = RETRY_BACKOFF_MS[attempt] ?? 250
+          if (delay > 0) await sleep(delay)
+        }
+        try {
+          telemetry.attempts += 1
+          telemetry.upstreamHost = readRpcHost(rpc)
+          const response = await fetchWithTimeout(
+            rpc,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            },
+            RPC_FORWARD_TIMEOUT_MS,
+          )
+
+          if (response.ok) {
+            const text = await response.text()
+            const contentType = response.headers.get('content-type') || 'application/json'
+            res.setHeader('Content-Type', contentType)
+            finalizeTelemetry(response.status, 'ok')
+            return res.status(response.status).send(text)
+          }
+
+          const status = response.status
+          const text = await response.text().catch(() => '')
+          const retryable = RETRYABLE_STATUS.has(status) || status >= 500
+          if (retryable) {
+            if (status === 429) {
+              lastRetryAfterSeconds = parseRetryAfterSeconds(response.headers.get('retry-after'))
+            }
+            lastStatus = status
+            lastError = text || `Upstream RPC error (${status})`
+            if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
+            break
+          }
+
+          // Forward non-retryable response
           const contentType = response.headers.get('content-type') || 'application/json'
           res.setHeader('Content-Type', contentType)
-          return res.status(response.status).send(text)
-        }
-
-        const status = response.status
-        const text = await response.text().catch(() => '')
-        const retryable = RETRYABLE_STATUS.has(status) || status >= 500
-        if (retryable) {
-          if (status === 429) {
-            lastRetryAfterSeconds = parseRetryAfterSeconds(response.headers.get('retry-after'))
+          finalizeTelemetry(status, 'forwarded_non_retryable_error')
+          return res.status(status).send(text)
+        } catch (e) {
+          if (isAbortError(e)) {
+            lastError = 'RPC request timeout'
+          } else {
+            lastError = 'RPC proxy error'
           }
-          lastStatus = status
-          lastError = text || `Upstream RPC error (${status})`
+          lastStatus = 502
           if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
           break
         }
-
-        // Forward non-retryable response
-        const contentType = response.headers.get('content-type') || 'application/json'
-        res.setHeader('Content-Type', contentType)
-        return res.status(status).send(text)
-      } catch (e) {
-        if (isAbortError(e)) {
-          lastError = 'RPC request timeout'
-        } else {
-          lastError = 'RPC proxy error'
-        }
-        lastStatus = 502
-        if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
-        break
       }
     }
-  }
 
-  if (lastStatus === 429 && lastRetryAfterSeconds && lastRetryAfterSeconds > 0) {
-    res.setHeader('Retry-After', String(lastRetryAfterSeconds))
-  }
+    if (lastStatus === 429 && lastRetryAfterSeconds && lastRetryAfterSeconds > 0) {
+      res.setHeader('Retry-After', String(lastRetryAfterSeconds))
+    }
+    finalizeTelemetry(
+      lastStatus,
+      lastStatus === 429 ? 'upstream_rate_limited' : 'upstream_failed',
+    )
 
-  return res.status(lastStatus).json({
-    success: false,
-    error: lastError || `RPC proxy failed (${chain})`,
-    code: lastStatus === 429 ? 'rpc_upstream_rate_limited' : 'rpc_proxy_failed',
-  })
+    return res.status(lastStatus).json({
+      success: false,
+      error: lastError || `RPC proxy failed (${chain})`,
+      code: lastStatus === 429 ? 'rpc_upstream_rate_limited' : 'rpc_proxy_failed',
+    })
+  } finally {
+    rpcInFlightRequests = Math.max(0, rpcInFlightRequests - 1)
+    telemetry.durationMs = Date.now() - requestStartedAt
+    recordRpcTelemetry(telemetry)
+  }
 }

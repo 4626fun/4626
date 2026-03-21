@@ -29,7 +29,7 @@ function getBaseRpcUrl(): string {
   // Avoid CORS-restricted RPCs in the browser. Prefer the same-origin proxy when needed.
   if (IS_BROWSER) {
     if (BASE_RPC_RAW && !isCorsRestrictedRpc(BASE_RPC_RAW)) return BASE_RPC_RAW
-    return '/api/rpc'
+    return '/api/rpc?chain=base'
   }
   if (BASE_RPC_RAW) return BASE_RPC_RAW
   return 'https://base-mainnet.public.blastapi.io'

@@ -4,10 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchMigratedCoins, hasCoinMigratedSync, preloadMigratedCoins } from '@/lib/zora/migrations'
-
-// Start preloading on module load
-preloadMigratedCoins()
+import { fetchMigratedCoins, hasCoinMigratedSync } from '@/lib/zora/migrations'
 
 /**
  * Hook to get the set of migrated coins

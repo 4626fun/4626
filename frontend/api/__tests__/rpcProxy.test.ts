@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createMockReq, createMockRes } from './helpers'
+import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const readRequestPrincipalAddressMock = vi.hoisted(
   () => vi.fn(() => '0x00000000000000000000000000000000000000aa'),
@@ -106,5 +106,53 @@ describe('/api/rpc proxy rate-limit contract', () => {
     expect(res.getHeader('retry-after')).toBe('7')
     expect(res.getHeader('x-ratelimit-limit')).toBe('120')
     expect(res.getHeader('x-ratelimit-remaining')).toBe('119')
+  })
+
+  it('emits windowed rpc telemetry with in-flight peak', async () => {
+    vi.useFakeTimers()
+    const restoreEnv = applyEnv({
+      RPC_PROXY_TELEMETRY: '1',
+      RPC_PROXY_TELEMETRY_WINDOW_MS: '1000',
+    })
+    const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      return okRpcResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    try {
+      const handler = await loadHandler()
+
+      const first = handler(createRpcReq(), createMockRes())
+      const second = handler(createRpcReq(), createMockRes())
+      await vi.advanceTimersByTimeAsync(25)
+      await Promise.all([first, second])
+
+      const third = handler(createRpcReq(), createMockRes())
+      await vi.advanceTimersByTimeAsync(25)
+      await third
+      await vi.advanceTimersByTimeAsync(1200)
+
+      const fourth = handler(createRpcReq(), createMockRes())
+      await vi.advanceTimersByTimeAsync(25)
+      await fourth
+
+      const summaryCall = consoleInfoSpy.mock.calls.find(
+        ([label]) => label === '[rpc-telemetry-window]',
+      )
+      expect(summaryCall).toBeDefined()
+
+      const payload = JSON.parse(String(summaryCall?.[1] ?? '{}')) as {
+        totalRequests: number
+        maxInFlight: number
+      }
+      expect(payload.totalRequests).toBe(3)
+      expect(payload.maxInFlight).toBeGreaterThanOrEqual(2)
+    } finally {
+      restoreEnv()
+      consoleInfoSpy.mockRestore()
+      vi.useRealTimers()
+    }
   })
 })

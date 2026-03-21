@@ -30,10 +30,19 @@ const V4_LAUNCH_BLOCK = 31250000n
 const CACHE_KEY = 'zora_migrated_coins'
 const CACHE_TIMESTAMP_KEY = 'zora_migrated_coins_ts'
 const CACHE_TTL = 1000 * 60 * 60 // 1 hour
+const TRUST_CHECK_CONCURRENCY = (() => {
+  const raw = Number(import.meta.env.VITE_ZORA_MIGRATION_TRUST_CONCURRENCY ?? 8)
+  if (!Number.isFinite(raw)) return 8
+  const rounded = Math.floor(raw)
+  if (rounded < 1) return 1
+  if (rounded > 32) return 32
+  return rounded
+})()
 
 // In-memory cache for faster lookups
 let migratedCoinsSet: Set<string> | null = null
 let lastFetchTime = 0
+let inFlightFetchMigratedCoins: Promise<Set<string>> | null = null
 
 function parseAddressAllowlist(raw: string | undefined, fallback: readonly string[]): Set<string> {
   const parsed = new Set<string>()
@@ -78,7 +87,7 @@ function getBaseRpcUrl(): string {
   const normalized = normalizeRpcUrl(BASE_RPC_RAW)
   if (IS_BROWSER) {
     if (normalized && !isCorsRestrictedRpc(normalized)) return normalized
-    return '/api/rpc'
+    return '/api/rpc?chain=base'
   }
   if (normalized) return normalized
   return 'https://base-mainnet.public.blastapi.io'
@@ -197,6 +206,29 @@ async function isTrustedMigratedCoin(client: ReturnType<typeof getPublicClient>,
   }
 }
 
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const limit = Math.max(1, Math.floor(concurrency))
+  const results = new Array<R>(items.length)
+  let cursor = 0
+
+  const runWorker = async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      results[index] = await mapper(items[index])
+    }
+  }
+
+  const workerCount = Math.min(limit, items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()))
+  return results
+}
+
 function extractSuggestedRangeDelta(error: unknown): bigint | null {
   const msg = String((error as any)?.message ?? error ?? '')
   const rangeMatch = msg.match(/\[(0x[0-9a-fA-F]+),\s*(0x[0-9a-fA-F]+)\]/)
@@ -238,100 +270,112 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
     return cached
   }
 
-  try {
-    const client = getPublicClient()
-    const latestBlock = await client.getBlockNumber()
-    
-    // Query logs in chunks to avoid RPC limits
-    let chunkDelta = getInitialLogRangeDelta()
-    let warnedRangeLimit = false
-    const migratedAddresses = new Set<string>()
-    const trustedAddressCache = new Map<string, boolean>()
-    let rejectedUntrustedCandidates = 0
-    
-    let fromBlock = V4_LAUNCH_BLOCK
-    
-    while (fromBlock < latestBlock) {
-      const toBlock = fromBlock + chunkDelta > latestBlock ? latestBlock : fromBlock + chunkDelta
+  if (inFlightFetchMigratedCoins) return inFlightFetchMigratedCoins
+
+  inFlightFetchMigratedCoins = (async () => {
+    try {
+      const client = getPublicClient()
+      const latestBlock = await client.getBlockNumber()
       
-      try {
-        // Use raw RPC request for topic-based filtering
-        const logs = await client.request({
-          method: 'eth_getLogs',
-          params: [{
-            fromBlock: `0x${fromBlock.toString(16)}`,
-            toBlock: `0x${toBlock.toString(16)}`,
-            topics: [LIQUIDITY_MIGRATED_TOPIC as `0x${string}`],
-          }],
-        }) as Array<{ address: string; data: `0x${string}` }>
+      // Query logs in chunks to avoid RPC limits
+      let chunkDelta = getInitialLogRangeDelta()
+      let warnedRangeLimit = false
+      const migratedAddresses = new Set<string>()
+      const trustedAddressCache = new Map<string, boolean>()
+      let rejectedUntrustedCandidates = 0
+      
+      let fromBlock = V4_LAUNCH_BLOCK
+      
+      while (fromBlock < latestBlock) {
+        const toBlock = fromBlock + chunkDelta > latestBlock ? latestBlock : fromBlock + chunkDelta
+        
+        try {
+          // Use raw RPC request for topic-based filtering
+          const logs = await client.request({
+            method: 'eth_getLogs',
+            params: [{
+              fromBlock: `0x${fromBlock.toString(16)}`,
+              toBlock: `0x${toBlock.toString(16)}`,
+              topics: [LIQUIDITY_MIGRATED_TOPIC as `0x${string}`],
+            }],
+          }) as Array<{ address: string; data: `0x${string}` }>
 
-        const chunkCandidates = new Set<string>()
-        for (const log of logs) {
-          const candidate = extractMigratedCoinAddressFromLog(log)
-          if (!candidate) continue
-          chunkCandidates.add(candidate)
-        }
-
-        const uncachedCandidates = Array.from(chunkCandidates).filter((candidate) => !trustedAddressCache.has(candidate))
-        if (uncachedCandidates.length > 0) {
-          const trustResults = await Promise.all(
-            uncachedCandidates.map(async (candidate) => {
-              const trusted = await isTrustedMigratedCoin(client, candidate)
-              return [candidate, trusted] as const
-            }),
-          )
-          for (const [candidate, trusted] of trustResults) {
-            trustedAddressCache.set(candidate, trusted)
+          const chunkCandidates = new Set<string>()
+          for (const log of logs) {
+            const candidate = extractMigratedCoinAddressFromLog(log)
+            if (!candidate) continue
+            chunkCandidates.add(candidate)
           }
-        }
 
-        for (const candidate of chunkCandidates) {
-          if (trustedAddressCache.get(candidate)) {
-            migratedAddresses.add(candidate)
-          } else {
-            rejectedUntrustedCandidates += 1
-          }
-        }
-      } catch (e) {
-        const suggestedDelta = extractSuggestedRangeDelta(e)
-        if (suggestedDelta !== null && suggestedDelta < chunkDelta) {
-          chunkDelta = suggestedDelta
-          if (!warnedRangeLimit) {
-            warnedRangeLimit = true
-            console.warn(
-              `[migrations] RPC log range limit detected. Reducing block delta to ${chunkDelta} and retrying.`,
+          const uncachedCandidates = Array.from(chunkCandidates).filter((candidate) => !trustedAddressCache.has(candidate))
+          if (uncachedCandidates.length > 0) {
+            const trustResults = await mapWithConcurrency(
+              uncachedCandidates,
+              TRUST_CHECK_CONCURRENCY,
+              async (candidate) => {
+                const trusted = await isTrustedMigratedCoin(client, candidate)
+                return [candidate, trusted] as const
+              },
             )
+            for (const [candidate, trusted] of trustResults) {
+              trustedAddressCache.set(candidate, trusted)
+            }
           }
+
+          for (const candidate of chunkCandidates) {
+            if (trustedAddressCache.get(candidate)) {
+              migratedAddresses.add(candidate)
+            } else {
+              rejectedUntrustedCandidates += 1
+            }
+          }
+        } catch (e) {
+          const suggestedDelta = extractSuggestedRangeDelta(e)
+          if (suggestedDelta !== null && suggestedDelta < chunkDelta) {
+            chunkDelta = suggestedDelta
+            if (!warnedRangeLimit) {
+              warnedRangeLimit = true
+              console.warn(
+                `[migrations] RPC log range limit detected. Reducing block delta to ${chunkDelta} and retrying.`,
+              )
+            }
+            continue
+          }
+          if (chunkDelta > 0n) {
+            const reduced = chunkDelta / 10n
+            chunkDelta = reduced < 1n ? 0n : reduced
+            continue
+          }
+          // If we can't reduce further, skip this block to avoid stalling.
+          console.warn(`[migrations] Failed to fetch logs for blocks ${fromBlock}-${toBlock}:`, e)
+          fromBlock = toBlock + 1n
           continue
         }
-        if (chunkDelta > 0n) {
-          const reduced = chunkDelta / 10n
-          chunkDelta = reduced < 1n ? 0n : reduced
-          continue
-        }
-        // If we can't reduce further, skip this block to avoid stalling.
-        console.warn(`[migrations] Failed to fetch logs for blocks ${fromBlock}-${toBlock}:`, e)
+        
         fromBlock = toBlock + 1n
-        continue
       }
       
-      fromBlock = toBlock + 1n
+      // Cache results
+      const addressArray = Array.from(migratedAddresses)
+      setCachedMigratedCoins(addressArray)
+      migratedCoinsSet = migratedAddresses
+      lastFetchTime = Date.now()
+      
+      console.log(
+        `[migrations] Cached ${addressArray.length} migrated coins (rejected ${rejectedUntrustedCandidates} untrusted candidates)`,
+      )
+      return migratedAddresses
+    } catch (e) {
+      console.error('[migrations] Failed to fetch migrated coins:', e)
+      // Return empty set on error, don't block the UI
+      return new Set()
     }
-    
-    // Cache results
-    const addressArray = Array.from(migratedAddresses)
-    setCachedMigratedCoins(addressArray)
-    migratedCoinsSet = migratedAddresses
-    lastFetchTime = Date.now()
-    
-    console.log(
-      `[migrations] Cached ${addressArray.length} migrated coins (rejected ${rejectedUntrustedCandidates} untrusted candidates)`,
-    )
-    return migratedAddresses
-  } catch (e) {
-    console.error('[migrations] Failed to fetch migrated coins:', e)
-    // Return empty set on error, don't block the UI
-    return new Set()
+  })()
+
+  try {
+    return await inFlightFetchMigratedCoins
+  } finally {
+    inFlightFetchMigratedCoins = null
   }
 }
 
