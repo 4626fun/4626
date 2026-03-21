@@ -444,6 +444,17 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
   }, [busy, privy, privyAuthed, runBootstrap])
 
+  const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
+    const response = await apiFetch('/api/zora/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Privy-Token': token },
+      body: JSON.stringify({}),
+    })
+    const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
+    if (!response.ok || !payload?.success || !payload.data) return null
+    return payload.data
+  }, [])
+
   const onContinueWithZora = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
     authAttemptInFlightRef.current = true
@@ -598,17 +609,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setBusy(false)
     }
   }, [busy, login])
-
-  const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
-    const response = await apiFetch('/api/zora/resolve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Privy-Token': token },
-      body: JSON.stringify({}),
-    })
-    const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
-    if (!response.ok || !payload?.success || !payload.data) return null
-    return payload.data
-  }, [])
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
     setEnterAppBusy(true)
