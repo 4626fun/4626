@@ -8,6 +8,7 @@ describe('deriveWaitlistEntryCtaState', () => {
       deriveWaitlistEntryCtaState({
         authenticated: false,
         account: null,
+        ownerDelegationReady: false,
       }),
     ).toBe('join')
   })
@@ -20,6 +21,7 @@ describe('deriveWaitlistEntryCtaState', () => {
           emailVerified: false,
           accountSignals: { canonicalCswAddress: null },
         },
+        ownerDelegationReady: false,
       }),
     ).toBe('join')
   })
@@ -32,11 +34,12 @@ describe('deriveWaitlistEntryCtaState', () => {
           emailVerified: true,
           accountSignals: { canonicalCswAddress: null },
         },
+        ownerDelegationReady: false,
       }),
     ).toBe('continue_setup')
   })
 
-  it('shows open app once a canonical csw exists', () => {
+  it('keeps continue setup until owner delegation is ready', () => {
     expect(
       deriveWaitlistEntryCtaState({
         authenticated: true,
@@ -44,6 +47,20 @@ describe('deriveWaitlistEntryCtaState', () => {
           emailVerified: true,
           accountSignals: { canonicalCswAddress: '0x123' },
         },
+        ownerDelegationReady: false,
+      }),
+    ).toBe('continue_setup')
+  })
+
+  it('shows open app once a canonical csw exists and owner delegation is ready', () => {
+    expect(
+      deriveWaitlistEntryCtaState({
+        authenticated: true,
+        account: {
+          emailVerified: true,
+          accountSignals: { canonicalCswAddress: '0x123' },
+        },
+        ownerDelegationReady: true,
       }),
     ).toBe('open_app')
   })

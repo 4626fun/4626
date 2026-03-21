@@ -1,25 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
-import { base } from 'viem/chains'
 
 import { apiFetch } from '@/lib/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
+import {
+  type ApiEnvelope,
+  type ConfirmOwnerResponse,
+  type OwnerDelegationFlags,
+  type PrepareOwnerResponse,
+  buildOwnerDelegationError,
+  deriveOwnerDelegationFlags,
+  readApiError,
+  sendPreparedOwnerTx as submitPreparedOwnerTx,
+  shouldRefreshOwnerDelegationOnForeground,
+} from '@/lib/wallet/onboardingWallet'
 import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 import { selectCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { PageMeta } from '@/components/seo/PageMeta'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-
-type OwnerDelegationFlags = {
-  needsEmbeddedWallet?: boolean
-  needsBaseAppSetup?: boolean
-  baseAppUrl?: string
-}
 
 type AccountLinkProvider = 'google' | 'apple' | 'twitter' | 'telegram' | 'tiktok' | 'external_eoa' | 'email' | 'zora_cross_app'
 
@@ -52,24 +54,6 @@ type ZoraResolveResponse = {
   zoraHandle: string | null
 }
 
-type PrepareOwnerResponse =
-  | { alreadyOwner: true }
-  | {
-      alreadyOwner: false
-      txRequest: {
-        chainId: 8453
-        to: `0x${string}`
-        data: `0x${string}`
-        value: '0x0'
-      }
-    }
-
-type ConfirmOwnerResponse = {
-  isOwner: boolean
-  canonicalCswAddress: string
-  ownerAddress: string
-  txHash: string | null
-}
 
 type ProviderRow = {
   provider: AccountLinkProvider
@@ -99,46 +83,16 @@ function shortValue(value: string | null | undefined): string {
   return `${value.slice(0, 8)}...${value.slice(-6)}`
 }
 
-function readApiError(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object') {
-    const maybeError = (payload as { error?: unknown }).error
-    if (typeof maybeError === 'string' && maybeError.trim()) return maybeError
-  }
-  return fallback
-}
-
-function readOwnerDelegationFlags(payload: unknown): OwnerDelegationFlags {
-  if (!payload || typeof payload !== 'object') return {}
-  const record = payload as Record<string, unknown>
-  return {
-    ...(record.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
-    ...(record.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
-    ...(typeof record.baseAppUrl === 'string' && record.baseAppUrl.trim() ? { baseAppUrl: record.baseAppUrl.trim() } : null),
-  }
-}
-
-function buildOwnerDelegationError(payload: unknown, fallback: string): Error & OwnerDelegationFlags {
-  const flags = readOwnerDelegationFlags(payload)
-  const hint = flags.needsBaseAppSetup
-    ? 'Open Base app, create or connect your Coinbase Smart Wallet, then return here to resume.'
-    : flags.needsEmbeddedWallet
-      ? 'Your Privy embedded wallet is still provisioning. Retry in a moment.'
-      : ''
-  const message = hint ? `${readApiError(payload, fallback)} ${hint}` : readApiError(payload, fallback)
-  const error = new Error(message) as Error & OwnerDelegationFlags
-  if (flags.needsEmbeddedWallet) error.needsEmbeddedWallet = true
-  if (flags.needsBaseAppSetup) error.needsBaseAppSetup = true
-  if (flags.baseAppUrl) error.baseAppUrl = flags.baseAppUrl
-  return error
-}
-
 export function shouldRefreshAccountsOnForeground(input: {
   privyAuthed: boolean
   ownerDelegationFlags: OwnerDelegationFlags | null
   advancedBusy: boolean
 }): boolean {
-  if (!input.privyAuthed || input.advancedBusy) return false
-  return Boolean(input.ownerDelegationFlags?.needsBaseAppSetup || input.ownerDelegationFlags?.needsEmbeddedWallet)
+  return shouldRefreshOwnerDelegationOnForeground({
+    privyAuthed: input.privyAuthed,
+    ownerDelegationFlags: input.ownerDelegationFlags,
+    busy: input.advancedBusy,
+  })
 }
 
 export function readOptionalZoraStatus(params: {
@@ -263,14 +217,7 @@ export function AccountsPage(props: {
       const canonicalization = await runCanonicalizationPipeline({
         privyToken: token,
       })
-      const actionableDelegationFlags =
-        canonicalization.flags.needsBaseAppSetup || canonicalization.flags.needsEmbeddedWallet
-          ? {
-              ...(canonicalization.flags.needsBaseAppSetup ? { needsBaseAppSetup: true } : null),
-              ...(canonicalization.flags.needsEmbeddedWallet ? { needsEmbeddedWallet: true } : null),
-              ...(canonicalization.flags.baseAppUrl ? { baseAppUrl: canonicalization.flags.baseAppUrl } : null),
-            }
-          : null
+      const actionableDelegationFlags = deriveOwnerDelegationFlags(canonicalization.flags)
       setOwnerDelegationFlags(actionableDelegationFlags)
       const headers = {
         'Content-Type': 'application/json',
@@ -529,32 +476,14 @@ export function AccountsPage(props: {
 
   const sendPreparedOwnerTx = useCallback(
     async (txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }, ownerAddress?: string | null) => {
-      if (!walletClient || !walletClient.account) throw new Error('Connect an owner wallet to send this transaction.')
-      if (chainId !== base.id && typeof switchChainAsync === 'function') {
-        await switchChainAsync({ chainId: base.id })
-      }
-
-      const txHash = await walletClient.sendTransaction({
-        account: walletClient.account,
-        chain: base,
-        to: txRequest.to,
-        data: txRequest.data,
-        value: 0n,
+      await submitPreparedOwnerTx({
+        txRequest,
+        walletClient,
+        chainId,
+        switchChainAsync,
+        authHeaders,
+        ownerAddress,
       })
-
-      const headers = await authHeaders()
-      const confirmRes = await apiFetch('/api/wallet/confirm-owner', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          txHash,
-          ownerAddress: ownerAddress ?? null,
-        }),
-      })
-      const confirmPayload = (await confirmRes.json().catch(() => null)) as ApiEnvelope<ConfirmOwnerResponse> | null
-      if (!confirmRes.ok || !confirmPayload?.success || !confirmPayload.data?.isOwner) {
-        throw new Error(readApiError(confirmPayload, 'Owner status is not confirmed yet.'))
-      }
     },
     [authHeaders, chainId, switchChainAsync, walletClient],
   )

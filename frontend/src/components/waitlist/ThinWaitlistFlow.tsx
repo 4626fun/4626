@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
+import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
@@ -11,6 +12,15 @@ import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
+import {
+  type ApiEnvelope,
+  type OnboardingBootstrapResponse,
+  type OwnerDelegationFlags,
+  type PrepareOwnerResponse,
+  buildOwnerDelegationError,
+  deriveOwnerDelegationFlags,
+  sendPreparedOwnerTx as submitPreparedOwnerTx,
+} from '@/lib/wallet/onboardingWallet'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 
@@ -25,8 +35,6 @@ import {
   deriveWaitlistAuthUi,
   deriveWaitlistDoneUi,
 } from './waitlistFlowUi'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type AccountsSummary = {
   privyUserId: string
@@ -143,9 +151,14 @@ function shortAddress(value: string | null | undefined): string {
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
-export function resolveWaitlistStep(account: Pick<AccountsSummary, 'emailVerified' | 'accountSignals'>): WaitlistStep {
+export function resolveWaitlistStep(params: {
+  account: Pick<AccountsSummary, 'emailVerified' | 'accountSignals'>
+  ownerDelegationVerified: boolean | null
+}): WaitlistStep {
+  const { account, ownerDelegationVerified } = params
   if (!account.emailVerified) return 'auth'
-  return account.accountSignals.canonicalCswAddress ? 'done' : 'wallet'
+  if (account.accountSignals.canonicalCswAddress && ownerDelegationVerified === true) return 'done'
+  return 'wallet'
 }
 
 function CoinbaseLogo({ className }: { className?: string }) {
@@ -179,6 +192,9 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const privy = useSafePrivy()
   const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
+  const { data: walletClient } = useWalletClient()
+  const { chainId } = useAccount()
+  const { switchChainAsync } = useSwitchChain()
 
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
@@ -194,7 +210,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const [busy, setBusy] = useState(false)
   const [enterAppBusy, setEnterAppBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [recoveryRequired, setRecoveryRequired] = useState(false)
+  const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
+  const [ownerDelegationVerified, setOwnerDelegationVerified] = useState<boolean | null>(null)
+  const [embeddedEoaAddress, setEmbeddedEoaAddress] = useState<string | null>(null)
 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const authAttemptInFlightRef = useRef(false)
@@ -223,11 +243,23 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
     const token = await getAccessToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    let nextOwnerDelegationVerified: boolean | null = null
     if (token) {
       headers['X-Privy-Token'] = token
-      await runCanonicalizationPipeline({
+      const canonicalization = await runCanonicalizationPipeline({
         privyToken: token,
       })
+      if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
+        setOwnerDelegationFlags(null)
+        setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
+        setEmbeddedEoaAddress(canonicalization.onboarding.privyEmbeddedEoaAddress)
+        nextOwnerDelegationVerified = canonicalization.onboarding.privyIsOwner
+      } else {
+        const flags = deriveOwnerDelegationFlags(canonicalization.flags)
+        setOwnerDelegationFlags(flags)
+        setOwnerDelegationVerified(null)
+        setEmbeddedEoaAddress(null)
+      }
     }
     const response = await apiFetch('/api/waitlist/bootstrap', {
       method: 'POST',
@@ -265,7 +297,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setError('Verify your email with 4626 to finish creating this account.')
       return nextAccount
     }
-    setStep(resolveWaitlistStep(nextAccount))
+    setStep(resolveWaitlistStep({ account: nextAccount, ownerDelegationVerified: nextOwnerDelegationVerified }))
     return nextAccount
   }, [getAccessToken])
 
@@ -274,6 +306,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
+    setNotice(null)
     setRecoveryRequired(false)
     try {
       if (privyAuthed) {
@@ -309,6 +342,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
+    setNotice(null)
     setRecoveryRequired(false)
     try {
       if (!privyAuthed) throw new Error('Verify your email first, then continue with wallet setup.')
@@ -334,6 +368,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
+    setNotice(null)
     setRecoveryRequired(false)
     try {
       if (!privyAuthed) throw new Error('Verify your email first, then continue with wallet setup.')
@@ -375,14 +410,101 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     } catch {
       // ignore
     }
-    window.location.assign(resolveBaseAppInviteUrl())
-  }, [])
+    window.location.assign(ownerDelegationFlags?.baseAppUrl ?? resolveBaseAppInviteUrl())
+  }, [ownerDelegationFlags?.baseAppUrl])
+
+  const sendPreparedOwnerTx = useCallback(
+    async (txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }) => {
+      const token = await getAccessToken()
+      if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
+      await submitPreparedOwnerTx({
+        txRequest,
+        walletClient,
+        chainId,
+        switchChainAsync,
+        authHeaders: async () => ({
+          'Content-Type': 'application/json',
+          'X-Privy-Token': token,
+        }),
+      })
+    },
+    [chainId, getAccessToken, switchChainAsync, walletClient],
+  )
+
+  const onEnable4626Signing = useCallback(async () => {
+    if (!account?.accountSignals?.canonicalCswAddress) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    setOwnerDelegationFlags(null)
+    try {
+      const token = await getAccessToken()
+      if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
+
+      const preflightRes = await apiFetch('/api/onboarding/bootstrap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Privy-Token': token,
+        },
+        body: JSON.stringify({}),
+      })
+      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+      if (!preflightRes.ok || !preflightPayload?.success) {
+        throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
+      }
+      setEmbeddedEoaAddress(preflightPayload.data?.privyEmbeddedEoaAddress ?? null)
+      if (preflightPayload.data?.privyIsOwner) {
+        setOwnerDelegationVerified(true)
+        setNotice('4626 signing is already enabled on your canonical CSW.')
+        await runBootstrap()
+        return
+      }
+
+      const prepareRes = await apiFetch('/api/wallet/prepare-add-privy-owner', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Privy-Token': token,
+        },
+        body: JSON.stringify({}),
+      })
+      const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
+      if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
+        throw buildOwnerDelegationError(preparePayload, 'Failed to prepare owner install.')
+      }
+      if (preparePayload.data.alreadyOwner) {
+        setOwnerDelegationVerified(true)
+        setNotice('4626 signing is already enabled on your canonical CSW.')
+        await runBootstrap()
+        return
+      }
+
+      await sendPreparedOwnerTx(preparePayload.data.txRequest)
+      setOwnerDelegationVerified(true)
+      setNotice('4626 signing is enabled on your canonical CSW.')
+      await runBootstrap()
+    } catch (ownerError: any) {
+      const flags = {
+        ...(ownerError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
+        ...(ownerError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
+        ...(typeof ownerError?.baseAppUrl === 'string' && ownerError.baseAppUrl.trim()
+          ? { baseAppUrl: ownerError.baseAppUrl.trim() }
+          : null),
+      }
+      setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
+      setError(typeof ownerError?.message === 'string' ? ownerError.message : 'Failed to enable 4626 signing.')
+    } finally {
+      setBusy(false)
+    }
+  }, [account?.accountSignals?.canonicalCswAddress, getAccessToken, runBootstrap, sendPreparedOwnerTx])
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
+    setNotice(null)
     setRecoveryRequired(false)
     try {
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
@@ -522,7 +644,26 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
   }, [step])
 
+  useEffect(() => {
+    if (step !== 'wallet' || !privyAuthed || typeof window === 'undefined' || typeof document === 'undefined') return
+    const refresh = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return
+      void runBootstrap()
+    }
+    const onFocus = () => refresh()
+    const onVisibilityChange = () => refresh()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [privyAuthed, runBootstrap, step])
+
   const authUi = deriveWaitlistAuthUi()
+  const canonicalCswAddress = account?.accountSignals?.canonicalCswAddress ?? null
+  const walletSelectionNeeded = !canonicalCswAddress
+  const ownerInstallNeeded = Boolean(canonicalCswAddress && ownerDelegationVerified === false)
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
     tier: account?.score?.tier ?? 0,
@@ -612,68 +753,183 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
             <div className="space-y-1">
               <h2 className="text-2xl font-semibold tracking-tight text-white">Set up your smart wallet</h2>
               <p className="text-sm text-zinc-400">
-                Your verified email created the account and your Privy embedded wallet. Next, choose how you want to connect your canonical Coinbase Smart Wallet.
+                {walletSelectionNeeded
+                  ? 'Your verified email created the account and your Privy embedded wallet. Next, choose how you want to connect your canonical Coinbase Smart Wallet.'
+                  : 'Your canonical Coinbase Smart Wallet is connected. Finish 4626 signing by installing the Privy embedded EOA as an owner on that wallet.'}
               </p>
             </div>
 
-            <div className="grid gap-3">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onContinueWithBase()}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                    Linking Base wallet…
-                  </>
-                ) : (
-                  'Link Base Smart Wallet'
-                )}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onContinueWithZora()}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                    Linking Zora wallet…
-                  </>
-                ) : (
-                  'Link Zora Smart Wallet'
-                )}
-              </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={onCreateInBaseApp}
-                  className="w-full rounded-xl border border-brand-primary/30 bg-brand-primary/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-primary/15 disabled:opacity-50"
-                >
-                  Create new wallet in Base app
-                </button>
-            </div>
+            {notice ? (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                {notice}
+              </div>
+            ) : null}
 
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Choose one path</p>
-              <div className="space-y-2 text-xs text-zinc-400">
-                <div className="flex items-start gap-2">
-                  <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>Use <span className="text-zinc-200">Link Base Smart Wallet</span> if you already have a Coinbase Smart Wallet in Base app.</span>
+            {walletSelectionNeeded ? (
+              <>
+                <div className="grid gap-3">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onContinueWithBase()}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+                  >
+                    {busy ? (
+                      <>
+                        <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                        Linking Base wallet…
+                      </>
+                    ) : (
+                      'Link Base Smart Wallet'
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onContinueWithZora()}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:opacity-50"
+                  >
+                    {busy ? (
+                      <>
+                        <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                        Linking Zora wallet…
+                      </>
+                    ) : (
+                      'Link Zora Smart Wallet'
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onCreateInBaseApp}
+                    className="w-full rounded-xl border border-brand-primary/30 bg-brand-primary/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-primary/15 disabled:opacity-50"
+                  >
+                    Create new wallet in Base app
+                  </button>
                 </div>
-                <div className="flex items-start gap-2">
-                  <ZoraLogo className="mt-0.5 h-4 w-4 shrink-0 rounded-full" />
-                  <span>Use <span className="text-zinc-200">Link Zora Smart Wallet</span> if your canonical CSW already lives on Zora.</span>
+
+                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Choose one path</p>
+                  <div className="space-y-2 text-xs text-zinc-400">
+                    <div className="flex items-start gap-2">
+                      <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Use <span className="text-zinc-200">Link Base Smart Wallet</span> if you already have a Coinbase Smart Wallet in Base app.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <ZoraLogo className="mt-0.5 h-4 w-4 shrink-0 rounded-full" />
+                      <span>Use <span className="text-zinc-200">Link Zora Smart Wallet</span> if your canonical CSW already lives on Zora.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Use <span className="text-zinc-200">Create new wallet in Base app</span> if you need a new CSW with the 4626 referral flow.</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <CoinbaseLogo className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>Use <span className="text-zinc-200">Create new wallet in Base app</span> if you need a new CSW with the 4626 referral flow.</span>
+
+                {ownerDelegationFlags ? (
+                  <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
+                    {ownerDelegationFlags.needsBaseAppSetup ? (
+                      <div>
+                        Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
+                        {ownerDelegationFlags.baseAppUrl ? (
+                          <>
+                            {' '}
+                            <a
+                              href={ownerDelegationFlags.baseAppUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline underline-offset-2"
+                            >
+                              Open Base app
+                            </a>
+                            .
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {ownerDelegationFlags.needsEmbeddedWallet ? (
+                      <div>Privy embedded wallet provisioning is still settling. Retry in a moment.</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+
+            {!walletSelectionNeeded ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <CoinbaseLogo className="h-4 w-4 shrink-0" />
+                    <span className="text-zinc-500">Canonical CSW</span>
+                    <span className="font-mono text-zinc-200">{shortAddress(canonicalCswAddress)}</span>
+                  </div>
+                  {embeddedEoaAddress ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-500">Privy embedded EOA</span>
+                      <span className="font-mono text-zinc-200">{shortAddress(embeddedEoaAddress)}</span>
+                    </div>
+                  ) : null}
+                  <div className={`text-xs ${ownerDelegationVerified ? 'text-emerald-300' : 'text-amber-200'}`}>
+                    {ownerDelegationVerified
+                      ? '4626 signing is enabled on this wallet.'
+                      : '4626 signing is not enabled yet. One owner-install transaction is still required.'}
+                  </div>
+                </div>
+
+                {ownerDelegationFlags ? (
+                  <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
+                    {ownerDelegationFlags.needsBaseAppSetup ? (
+                      <div>
+                        Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
+                        {ownerDelegationFlags.baseAppUrl ? (
+                          <>
+                            {' '}
+                            <a
+                              href={ownerDelegationFlags.baseAppUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline underline-offset-2"
+                            >
+                              Open Base app
+                            </a>
+                            .
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {ownerDelegationFlags.needsEmbeddedWallet ? (
+                      <div>Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.</div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
+                  <div className="text-sm font-medium">Enable 4626 signing</div>
+                  <p className="text-xs text-zinc-500">
+                    This adds your Privy embedded EOA as an owner on the canonical CSW. You will sign one transaction with the wallet that currently owns the CSW.
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    If the owner wallet is not connected in this browser yet, reconnect it first and then retry.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy || !ownerInstallNeeded}
+                    onClick={() => void onEnable4626Signing()}
+                    className="btn-secondary btn-no-icon inline-flex"
+                  >
+                    {busy ? 'Preparing…' : ownerDelegationVerified ? '4626 signing enabled' : 'Enable 4626 signing'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void runBootstrap()}
+                    className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
+                  >
+                    Refresh wallet status
+                  </button>
                 </div>
               </div>
-            </div>
+            ) : null}
 
             {error ? (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

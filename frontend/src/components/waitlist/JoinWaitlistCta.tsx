@@ -43,9 +43,10 @@ export type WaitlistEntryCtaState = 'join' | 'continue_setup' | 'open_app'
 export function deriveWaitlistEntryCtaState(params: {
   authenticated: boolean
   account: WaitlistCtaAccountSummary | null
+  ownerDelegationReady: boolean
 }): WaitlistEntryCtaState {
   if (!params.authenticated || !params.account?.emailVerified) return 'join'
-  if (params.account.accountSignals.canonicalCswAddress) return 'open_app'
+  if (params.account.accountSignals.canonicalCswAddress && params.ownerDelegationReady) return 'open_app'
   return 'continue_setup'
 }
 
@@ -78,6 +79,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
   const [busy, setBusy] = useState(false)
   const [loadingState, setLoadingState] = useState(false)
   const [account, setAccount] = useState<WaitlistCtaAccountSummary | null>(null)
+  const [ownerDelegationReady, setOwnerDelegationReady] = useState(false)
 
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
@@ -91,6 +93,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
   const loadAccount = useCallback(async () => {
     if (!privyAuthed) {
       setAccount(null)
+      setOwnerDelegationReady(false)
       setLoadingState(false)
       return
     }
@@ -99,9 +102,11 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
       const token = await getAccessToken()
       if (!token) {
         setAccount(null)
+        setOwnerDelegationReady(false)
         return
       }
-      await runCanonicalizationPipeline({ privyToken: token }).catch(() => null)
+      const canonicalization = await runCanonicalizationPipeline({ privyToken: token }).catch(() => null)
+      setOwnerDelegationReady(Boolean(canonicalization?.onboardingBootstrapped && canonicalization.onboarding?.privyIsOwner))
       const response = await apiFetch('/api/waitlist/bootstrap', {
         method: 'POST',
         headers: {
@@ -118,6 +123,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
       setAccount(payload.data)
     } catch {
       setAccount(null)
+      setOwnerDelegationReady(false)
     } finally {
       setLoadingState(false)
     }
@@ -146,6 +152,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
   const ctaState = deriveWaitlistEntryCtaState({
     authenticated: privyAuthed,
     account,
+    ownerDelegationReady,
   })
 
   const onClick = useCallback(async () => {
