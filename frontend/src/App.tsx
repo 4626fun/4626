@@ -485,6 +485,11 @@ const TelegramLink = lazy(async () => {
   return { default: m.TelegramLink }
 })
 
+const TelegramMenu = lazy(async () => {
+  const m = await import('./pages/TelegramMenu')
+  return { default: m.TelegramMenu }
+})
+
 function NotFoundPage() {
   const location = useLocation()
   const access = useAccessContext()
@@ -541,6 +546,14 @@ function App() {
               </>
             }
           >
+            <Route
+              path="/telegram/menu"
+              element={
+                <RequireTelegramMiniAppEntry>
+                  <TelegramMenu />
+                </RequireTelegramMiniAppEntry>
+              }
+            />
             <Route
               path="/telegram/link"
               element={

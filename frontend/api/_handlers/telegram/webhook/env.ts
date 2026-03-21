@@ -63,7 +63,7 @@ export function resolveSignalsDestination(sourceChatId: string): { chatId: strin
     byChat[destinationChatId] ??
     byChat[String(sourceChatId)] ??
     byChat[String(destinationChatId)]
-  const threadId = parseOptionalPositiveInteger(String(mapped ?? '')) ?? config.signalsThreadId ?? config.signalsTopicId
+  const threadId = parseOptionalPositiveInteger(String(mapped ?? '')) ?? config.signalsThreadId
 
   return {
     chatId: destinationChatId,

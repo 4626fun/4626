@@ -79,12 +79,7 @@ function isPrivilegedKeeprCommand(text: string): boolean {
       t.includes(' report') ||
       t.includes(' settle') ||
       t.includes(' settle-fees') ||
-      t.includes(' settle_fees') ||
-      t.includes(' flush-fees') ||
-      t.includes(' flush') ||
       t.includes(' relay-entries') ||
-      t.includes(' relay_entries') ||
-      t.includes(' relay') ||
       t.includes(' relay-winners') ||
       t.includes(' queue') ||
       t.includes(' graduate')

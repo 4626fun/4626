@@ -12,7 +12,6 @@ const RawTelegramWebhookEnvSchema = z
     TELEGRAM_ALLOWED_CHAT_IDS: z.string().optional(),
     TELEGRAM_ADMIN_USER_IDS: z.string().optional(),
     TELEGRAM_ALLOW_PRIVATE_DMS: z.string().optional(),
-    TELEGRAM_ALLOW_PRIVATE_DM: z.string().optional(),
     TELEGRAM_ALLOW_ALL_PRIVATE_DMS: z.string().optional(),
     TELEGRAM_ALLOW_ADMIN_DM: z.string().optional(),
     TELEGRAM_AI_FOLLOWUP_ENABLED: z.string().optional(),
@@ -22,7 +21,6 @@ const RawTelegramWebhookEnvSchema = z
     TELEGRAM_SIGNALS_CHAT_ID: z.string().optional(),
     TELEGRAM_SIGNALS_THREAD_BY_CHAT_JSON: z.string().optional(),
     TELEGRAM_SIGNALS_THREAD_ID: z.string().optional(),
-    TELEGRAM_SIGNALS_TOPIC_ID: z.string().optional(),
     TELEGRAM_USER_WALLET_MAP_JSON: z.string().optional(),
     TELEGRAM_DEFAULT_SENDER_WALLET: z.string().optional(),
     TELEGRAM_GROUP_ID_MAP_JSON: z.string().optional(),
@@ -75,7 +73,6 @@ export type TelegramWebhookConfig = {
   signalsChatId: string
   signalsThreadByChatJsonRaw: string
   signalsThreadId: number | null
-  signalsTopicId: number | null
   userWalletMapJsonRaw: string
   defaultSenderWallet: string
   groupIdMapJsonRaw: string
@@ -112,12 +109,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   const botToken = asTrimmed(raw.TELEGRAM_BOT_TOKEN ?? '')
   const targetChatId = asTrimmed(raw.TELEGRAM_TARGET_CHAT_ID ?? '')
   const allowedChatIdsRaw = asTrimmed(raw.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
-  const allowPrivateDmsExplicit =
-    raw.TELEGRAM_ALLOW_PRIVATE_DMS !== undefined
-      ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DMS, false)
-      : raw.TELEGRAM_ALLOW_PRIVATE_DM !== undefined
-        ? parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DM, false)
-        : false
+  const allowPrivateDmsExplicit = parseBoolean(raw.TELEGRAM_ALLOW_PRIVATE_DMS, false)
   const allowPrivateDms = allowPrivateDmsExplicit || parseBoolean(raw.TELEGRAM_ALLOW_ALL_PRIVATE_DMS, false)
 
   const inlineCapRaw = Number(asTrimmed(raw.TELEGRAM_INLINE_MAX_RESULTS ?? ''))
@@ -165,7 +157,6 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     signalsChatId: asTrimmed(raw.TELEGRAM_SIGNALS_CHAT_ID ?? ''),
     signalsThreadByChatJsonRaw: asTrimmed(raw.TELEGRAM_SIGNALS_THREAD_BY_CHAT_JSON ?? ''),
     signalsThreadId: parseOptionalPositiveInteger(raw.TELEGRAM_SIGNALS_THREAD_ID ?? ''),
-    signalsTopicId: parseOptionalPositiveInteger(raw.TELEGRAM_SIGNALS_TOPIC_ID ?? ''),
     userWalletMapJsonRaw: asTrimmed(raw.TELEGRAM_USER_WALLET_MAP_JSON ?? ''),
     defaultSenderWallet: asTrimmed(raw.TELEGRAM_DEFAULT_SENDER_WALLET ?? ''),
     groupIdMapJsonRaw: asTrimmed(raw.TELEGRAM_GROUP_ID_MAP_JSON ?? ''),

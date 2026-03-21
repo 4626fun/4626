@@ -56,12 +56,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/agents/telegram/join': () => import('./v1/agents/telegram/_join.js'),
   'v1/agents/wallet-intelligence': () => import('./v1/agents/_wallet-intelligence.js'),
   'v1/agents/publish': () => import('./v1/agents/_publish.js'),
-  // Optional singular aliases for external compatibility.
-  'v1/agent/capabilities': () => import('./v1/agents/_capabilities.js'),
-  'v1/agent/access-proof/request': () => import('./v1/agents/access-proof/_request.js'),
-  'v1/agent/access-proof/verify': () => import('./v1/agents/access-proof/_verify.js'),
-  'v1/agent/xmtp/join': () => import('./v1/agents/xmtp/_join.js'),
-  'v1/agent/telegram/join': () => import('./v1/agents/telegram/_join.js'),
   // v1 build endpoints (return unsigned tx calldata)
   // Phase 1 + Ajna + Charm endpoints enabled.
   'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),

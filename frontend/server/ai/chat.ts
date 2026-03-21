@@ -292,23 +292,23 @@ async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
         maxMessagesPerConversation: 40,
       },
     })
-    const contextProviders = [
+    const contextProviders: ChatRuntimeContext['contextProviders'] = [
       ...(keeprPlugin.providers ?? []),
       ...(knowledgePlugin.providers ?? []),
-    ]
+    ] as ChatRuntimeContext['contextProviders']
     return {
       bridge,
       contextProviders,
       characterConfig: {
         systemPrompt: characterRuntimeConfig.systemPrompt,
-        preferredModel: characterRuntimeConfig.preferredModel,
+        preferredModel: characterRuntimeConfig.preferredModel ?? '',
       },
     }
   })().catch((error) => {
     runtimeContextPromise = null
     throw error
   })
-  return runtimeContextPromise
+  return runtimeContextPromise as Promise<ChatRuntimeContext>
 }
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@
  *   SOLANA_PROGRAM_ID       - Transfer Hook program ID (default: from config)
  *   KEEPER_PUBKEY           - Keeper authority (default: payer pubkey)
  *   TRANSFER_FEE_BPS        - Fee BPS for config (default: 690)
- *   FLUSH_THRESHOLD         - Minimum fee before flush (default: 0)
+ *   SETTLEMENT_THRESHOLD    - Minimum fee before settlement (default: 0)
  *   LOTTERY_ENABLED         - Enable lottery entries (default: true)
  *   KNOWN_AMM_PROGRAMS      - Comma-separated AMM program IDs for buy detection
  */
@@ -43,7 +43,7 @@ const keeperPubkey = process.env.KEEPER_PUBKEY
   ? new PublicKey(process.env.KEEPER_PUBKEY)
   : payer.publicKey;
 const feeBps = Number(process.env.TRANSFER_FEE_BPS ?? '690');
-const flushThreshold = new BN(process.env.FLUSH_THRESHOLD ?? '0');
+const settlementThreshold = new BN(process.env.SETTLEMENT_THRESHOLD ?? '0');
 const lotteryEnabled = (process.env.LOTTERY_ENABLED ?? 'true').toLowerCase() !== 'false';
 const knownAmmPrograms = (process.env.KNOWN_AMM_PROGRAMS ?? '')
   .split(',')
@@ -79,7 +79,7 @@ const sig = await program.methods
     hubCreatorCoin: hexToBytes32(hubCreatorCoin),
     hubShareOft: hexToBytes32(hubShareOft),
     feeBps,
-    flushThreshold,
+    settlementThreshold,
     lotteryEnabled,
     knownAmmPrograms,
   })

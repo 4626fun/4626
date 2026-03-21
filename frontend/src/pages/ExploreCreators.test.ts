@@ -158,7 +158,7 @@ describe('ExploreCreators', () => {
     expect(html).not.toContain('No creators available')
   })
 
-  it('uses partial-sync copy instead of claiming no creators exist', () => {
+  it('prefers live metric cards when canonical totals are partial', () => {
     configureQueries({
       metrics: {
         exact: false,
@@ -174,9 +174,10 @@ describe('ExploreCreators', () => {
 
     const html = renderToStaticMarkup(React.createElement(ExploreCreators))
 
-    expect(html).toContain('2,000')
-    expect(html).toContain('$100.00')
-    expect(html).toContain('$2.00')
-    expect(html).not.toContain('$5.73K')
+    expect(html).toContain('Live estimate updates every 10s')
+    expect(html).toContain('Indexed 1 creators')
+    expect(html).toContain('$5.73K')
+    expect(html).toContain('$57.30')
+    expect(html).not.toContain('$100.00')
   })
 })

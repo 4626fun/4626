@@ -45,7 +45,7 @@ export function parseTelegramDeployIntent(rawText: string): ParsedTelegramDeploy
   if (prefix !== 'deploy') return null
   const sub = asTrimmed(tokenized[1] ?? '').toLowerCase()
   if (!sub) return { kind: 'menu' }
-  if (sub === 'zora' || sub === 'signup' || sub === 'sign-up' || sub === 'sign_up') {
+  if (sub === 'zora') {
     return { kind: 'zora' }
   }
   if (sub === 'trend') {
@@ -118,13 +118,13 @@ export function parseDeployCallbackData(rawData: string):
       }
     }
   }
-  const actionMatch = data.match(/^deploy:(confirm|accept|decline|cancel):([a-zA-Z0-9._-]+)$/)
+  const actionMatch = data.match(/^deploy:(confirm|decline):([a-zA-Z0-9._-]+)$/)
   if (actionMatch) {
     const action = asTrimmed(actionMatch[1]).toLowerCase()
     const token = asTrimmed(actionMatch[2])
     if (!token) return null
     return {
-      kind: action === 'confirm' || action === 'accept' ? 'confirm' : 'decline',
+      kind: action === 'confirm' ? 'confirm' : 'decline',
       token,
     }
   }

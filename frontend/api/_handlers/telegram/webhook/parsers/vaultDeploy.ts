@@ -68,13 +68,13 @@ export function parseVaultDeployCallbackData(rawData: string):
       token,
     }
   }
-  const actionMatch = data.match(/^vaultdeploy:(confirm|accept|decline|cancel):([a-zA-Z0-9._-]+)$/)
+  const actionMatch = data.match(/^vaultdeploy:(confirm|decline):([a-zA-Z0-9._-]+)$/)
   if (!actionMatch) return null
   const action = asTrimmed(actionMatch[1]).toLowerCase()
   const token = asTrimmed(actionMatch[2])
   if (!token) return null
   return {
-    kind: action === 'confirm' || action === 'accept' ? 'confirm' : 'decline',
+    kind: action === 'confirm' ? 'confirm' : 'decline',
     token,
   }
 }

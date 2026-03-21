@@ -80,11 +80,7 @@ function currentCheckpoint(now: Date, intervalSeconds: number): string {
 }
 
 function normalizeActionName(action: string): string {
-  const raw = action.trim().toLowerCase()
-  if (!raw) return raw
-  if (raw === 'fee-flush' || raw === 'flush-fees' || raw === 'settle-fees') return 'settle-fees'
-  if (raw === 'entry-relay' || raw === 'relay-entries') return 'relay-entries'
-  return raw
+  return action.trim().toLowerCase()
 }
 
 function normalizeActionList(config: Config, manual?: ManualPayload): string[] {

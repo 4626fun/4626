@@ -33,6 +33,10 @@ type TelegramLinkAlertVariant = 'info' | 'warning' | 'error' | 'success'
 const OPEN_FROM_TELEGRAM_SESSION_ERROR = 'Open this link from Telegram so 4626 can verify your Mini App session.'
 const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 15_000
 const TELEGRAM_LINK_REQUEST_TIMEOUT_MS = 25_000
+type PrivyEmailState = {
+  hasAnyEmailAccount: boolean
+  hasVerifiedEmail: boolean
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -44,6 +48,56 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
         clearTimeout(timeoutId)
       })
   })
+}
+
+function normalizeLowerString(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function accountHasVerifiedFlag(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const account = value as Record<string, unknown>
+  if (account.verified === true || account.isVerified === true || account.is_verified === true) return true
+  const verifiedAt = normalizeLowerString(account.verifiedAt)
+  const verifiedAtSnake = normalizeLowerString(account.verified_at)
+  return verifiedAt.length > 0 || verifiedAtSnake.length > 0
+}
+
+export function getPrivyEmailState(user: unknown): PrivyEmailState {
+  const u = (user ?? {}) as Record<string, unknown>
+  let hasAnyEmailAccount = false
+  let hasVerifiedEmail = false
+
+  const directEmail = u.email
+  if (directEmail && typeof directEmail === 'object') {
+    hasAnyEmailAccount = true
+    if (accountHasVerifiedFlag(directEmail)) hasVerifiedEmail = true
+  }
+
+  const linked = [
+    ...(Array.isArray(u.linkedAccounts) ? (u.linkedAccounts as unknown[]) : []),
+    ...(Array.isArray(u.linked_accounts) ? (u.linked_accounts as unknown[]) : []),
+  ]
+  for (const account of linked) {
+    const record = (account ?? {}) as Record<string, unknown>
+    const type = normalizeLowerString(record.type)
+    if (!type.includes('email')) continue
+    hasAnyEmailAccount = true
+    if (accountHasVerifiedFlag(record)) hasVerifiedEmail = true
+  }
+
+  return { hasAnyEmailAccount, hasVerifiedEmail }
+}
+
+export function isPrivyEmailAlreadyLinkedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const normalized = message.trim().toLowerCase()
+  return (
+    normalized.includes('already has an account of type email linked') ||
+    normalized.includes('already has an account of type "email" linked') ||
+    normalized.includes('account of type email linked') ||
+    normalized.includes('email already linked')
+  )
 }
 
 export function formatTelegramSessionError(error: string, statusCode: number): string {
@@ -350,14 +404,38 @@ export function TelegramLink() {
     setLinkMessage('Verify your email to continue.')
     try {
       if (privyAuthenticated) {
-        const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
-        if (typeof linkEmail !== 'function') {
-          throw new Error('Email verification is unavailable in this client. Retry from a normal 4626 session.')
+        const emailState = getPrivyEmailState((privy as any)?.user)
+        if (emailState.hasVerifiedEmail) {
+          linkAttemptRef.current = ''
+          setLinkState('idle')
+          setLinkMessage(null)
+          return
         }
-        await linkEmail()
+        const launchEmailLogin = async () => {
+          await login({ loginMethods: ['email'] } as any)
+        }
+        if (emailState.hasAnyEmailAccount) {
+          await launchEmailLogin()
+        } else {
+          const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
+          if (typeof linkEmail === 'function') {
+            try {
+              await linkEmail()
+            } catch (error) {
+              if (isPrivyEmailAlreadyLinkedError(error)) {
+                await launchEmailLogin()
+              } else {
+                throw error
+              }
+            }
+          } else {
+            await launchEmailLogin()
+          }
+        }
       } else {
         await login({ loginMethods: ['email'] } as any)
       }
+      linkAttemptRef.current = ''
       setLinkState('idle')
       setLinkMessage(null)
     } catch (error: unknown) {

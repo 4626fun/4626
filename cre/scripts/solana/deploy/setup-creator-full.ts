@@ -55,7 +55,7 @@ function parseArgs(): {
   feeBps: number;
   decimals: number;
   ammPrograms: string[];
-  flushThreshold: string;
+  settlementThreshold: string;
   lotteryEnabled: boolean;
 } {
   const args = process.argv.slice(2);
@@ -65,7 +65,7 @@ function parseArgs(): {
   let feeBps = 0;
   let decimals = 9;
   let ammPrograms: string[] = [];
-  let flushThreshold = '0';
+  let settlementThreshold = '0';
   let lotteryEnabled = true;
 
   for (let i = 0; i < args.length; i += 1) {
@@ -88,8 +88,8 @@ function parseArgs(): {
       case '--amm-programs':
         ammPrograms = (args[++i] ?? '').split(',').map(s => s.trim()).filter(Boolean);
         break;
-      case '--flush-threshold':
-        flushThreshold = args[++i] ?? '0';
+      case '--settlement-threshold':
+        settlementThreshold = args[++i] ?? '0';
         break;
       case '--lottery-disabled':
         lotteryEnabled = false;
@@ -109,7 +109,7 @@ function parseArgs(): {
     feeBps,
     decimals,
     ammPrograms,
-    flushThreshold,
+    settlementThreshold,
     lotteryEnabled,
   };
 }
@@ -233,7 +233,7 @@ const initSig = await program.methods
     hubCreatorCoin: hexToBytes32(config.hubCreatorCoin),
     hubShareOft: hexToBytes32(config.hubShareToken),
     feeBps: config.feeBps,
-    flushThreshold: new BN(config.flushThreshold),
+    settlementThreshold: new BN(config.settlementThreshold),
     lotteryEnabled: config.lotteryEnabled,
     knownAmmPrograms: ammProgramPubkeys,
   })

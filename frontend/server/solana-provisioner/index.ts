@@ -1212,7 +1212,7 @@ type SetupCreatorBody = {
   feeBps?: number
   decimals?: number
   ammPrograms?: string[]
-  flushThreshold?: string
+  settlementThreshold?: string
   lotteryEnabled?: boolean
 }
 
@@ -1258,7 +1258,7 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
   if (body?.feeBps !== undefined) args.push('--fee-bps', String(body.feeBps))
   if (body?.decimals !== undefined) args.push('--decimals', String(body.decimals))
   if (body?.ammPrograms?.length) args.push('--amm-programs', body.ammPrograms.join(','))
-  if (body?.flushThreshold) args.push('--flush-threshold', body.flushThreshold)
+  if (body?.settlementThreshold) args.push('--settlement-threshold', body.settlementThreshold)
   if (body?.lotteryEnabled === false) args.push('--lottery-disabled')
 
   try {

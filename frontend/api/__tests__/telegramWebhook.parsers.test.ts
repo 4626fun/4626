@@ -57,13 +57,15 @@ describe('telegram webhook parsers', () => {
     expect(parseTradeFlowCallbackData('tradeflow:p:buy:0x1111111111111111111111111111111111111111:99999')).toBeNull()
   })
 
-  it('parses trade callback aliases for accept/decline', () => {
-    expect(parseTradeCallbackData('trade:confirm:abc123')).toEqual({ kind: 'accept', token: 'abc123' })
-    expect(parseTradeCallbackData('trade:cancel:abc123')).toEqual({ kind: 'decline', token: 'abc123' })
+  it('parses canonical trade callbacks for accept/decline', () => {
+    expect(parseTradeCallbackData('trade:accept:abc123')).toEqual({ kind: 'accept', token: 'abc123' })
+    expect(parseTradeCallbackData('trade:decline:abc123')).toEqual({ kind: 'decline', token: 'abc123' })
+    expect(parseTradeCallbackData('trade:confirm:abc123')).toBeNull()
+    expect(parseTradeCallbackData('trade:cancel:abc123')).toBeNull()
     expect(parseTradeCallbackData('trade:edit:buy')).toEqual({ kind: 'edit', actionType: 'buy' })
   })
 
-  it('parses deploy command intents and callback aliases', () => {
+  it('parses deploy command intents and canonical callbacks', () => {
     expect(parseTelegramDeployIntent('/deploy')).toEqual({ kind: 'menu' })
     expect(parseTelegramDeployIntent('/deploy trend BASEAI')).toEqual({ kind: 'trend', ticker: 'BASEAI' })
 
@@ -71,8 +73,10 @@ describe('telegram webhook parsers', () => {
     expect(coinIntent?.kind).toBe('coin')
     expect(coinIntent && coinIntent.kind === 'coin' ? coinIntent.commandCurrency : null).toBe('CREATOR_COIN')
 
-    expect(parseDeployCallbackData('deploy:accept:tok_123')).toEqual({ kind: 'confirm', token: 'tok_123' })
-    expect(parseDeployCallbackData('deploy:cancel:tok_123')).toEqual({ kind: 'decline', token: 'tok_123' })
+    expect(parseDeployCallbackData('deploy:confirm:tok_123')).toEqual({ kind: 'confirm', token: 'tok_123' })
+    expect(parseDeployCallbackData('deploy:decline:tok_123')).toEqual({ kind: 'decline', token: 'tok_123' })
+    expect(parseDeployCallbackData('deploy:accept:tok_123')).toBeNull()
+    expect(parseDeployCallbackData('deploy:cancel:tok_123')).toBeNull()
   })
 
   it('parses holder-room identifiers from join and eligibility commands', () => {
@@ -154,6 +158,21 @@ describe('telegram webhook parsers', () => {
     )
     expect(resolveNavigationCallbackToast('help:arena_find', '/arena find')).toBe('Arena find match')
     expect(resolveNavigationCallbackToast('help:arena_watch_status', '/arena watch status')).toBe('Arena watch status')
+  })
+
+  it('maps CRE and Solana operator callbacks to concrete commands', () => {
+    expect(resolveHelpCallbackCommand('cre:status')).toBe('/cre status')
+    expect(resolveHelpCallbackCommand('cre:auction')).toBe('/cre auction')
+    expect(resolveHelpCallbackCommand('cre:solana')).toBe('/cre solana')
+    expect(resolveHelpCallbackCommand('cre:health')).toBe('/cre health')
+    expect(resolveHelpCallbackCommand('cre:tend')).toBe('/cre tend')
+    expect(resolveHelpCallbackCommand('cre:report')).toBe('/cre report')
+    expect(resolveHelpCallbackCommand('cre:settle-fees')).toBe('/cre settle-fees')
+    expect(resolveHelpCallbackCommand('cre:relay-entries')).toBe('/cre relay-entries')
+    expect(resolveNavigationCallbackToast('menu:cre', null)).toBe('CRE ops')
+    expect(resolveNavigationCallbackToast('menu:solana', null)).toBe('Solana ops')
+    expect(resolveNavigationCallbackToast('cre:settle-fees', '/cre settle-fees')).toBe('Settling fees')
+    expect(resolveNavigationCallbackToast('cre:relay-entries', '/cre relay-entries')).toBe('Relaying entries')
   })
 
   it('builds paginated inline answers with deterministic next_offset', () => {

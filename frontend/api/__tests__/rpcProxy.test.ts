@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const readRequestPrincipalAddressMock = vi.hoisted(
-  () => vi.fn(() => '0x00000000000000000000000000000000000000aa'),
+  () => vi.fn((..._args: unknown[]) => '0x00000000000000000000000000000000000000aa'),
 )
 
 vi.mock('../../server/_lib/requestPrincipal.js', () => ({
-  readRequestPrincipalAddress: (...args: unknown[]) => readRequestPrincipalAddressMock(...args),
+  readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 
 async function loadHandler() {

@@ -178,7 +178,7 @@ async function checkLimits(
   token: string,
   amount: number,
   vaultAddress: string,
-): { allowed: true } | { allowed: false; reason: string } {
+): Promise<{ allowed: true } | { allowed: false; reason: string }> {
   const maxTx = PER_TX_MAX[token]
   if (maxTx !== undefined && amount > maxTx) {
     return { allowed: false, reason: `Max per transaction: ${maxTx} ${token.toUpperCase()}` }

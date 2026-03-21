@@ -1,9 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ensureTelegramMiniAppSession, hasTelegramMiniAppEntrypointContext, readPrivyTelegramLaunchParams } from './telegramWebApp'
+import {
+  ensureTelegramMiniAppSession,
+  hasTelegramMiniAppEntrypointContext,
+  readPrivyTelegramLaunchParams,
+  switchTelegramMiniAppInlineQuery,
+} from './telegramWebApp'
 
 type MockWindowState = {
-  Telegram?: { WebApp?: { initData?: string } }
+  Telegram?: {
+    WebApp?: {
+      initData?: string
+      switchInlineQuery?: (query: string, chooseChatTypes?: string[]) => void
+    }
+  }
   sessionStorage: {
     getItem: (key: string) => string | null
     setItem: (key: string, value: string) => void
@@ -11,10 +21,14 @@ type MockWindowState = {
   }
 }
 
-function installMockWindow(initData: string, initialStorage?: Record<string, string>): () => void {
+function installMockWindow(
+  initData: string,
+  initialStorage?: Record<string, string>,
+  webAppOverrides?: Partial<NonNullable<MockWindowState['Telegram']>['WebApp']>,
+): () => void {
   const storage = new Map<string, string>(Object.entries(initialStorage ?? {}))
   const mockWindow: MockWindowState = {
-    Telegram: { WebApp: { initData } },
+    Telegram: { WebApp: { initData, ...webAppOverrides } },
     sessionStorage: {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => {
@@ -168,5 +182,23 @@ describe('telegramWebApp mini app session bootstrap', () => {
   it('rejects non-Telegram entry context when initData and fresh session are absent', () => {
     restoreWindow = installMockWindow('')
     expect(hasTelegramMiniAppEntrypointContext()).toBe(false)
+  })
+
+  it('switches the current chat into inline mode when Telegram exposes switchInlineQuery', () => {
+    const switchInlineQuery = vi.fn()
+    restoreWindow = installMockWindow('', undefined, { switchInlineQuery })
+
+    expect(
+      switchTelegramMiniAppInlineQuery({
+        query: 'ai What should I do next?',
+        chatTypes: [],
+      }),
+    ).toBe(true)
+    expect(switchInlineQuery).toHaveBeenCalledWith('ai What should I do next?', [])
+  })
+
+  it('returns false when inline switching is unavailable', () => {
+    restoreWindow = installMockWindow('')
+    expect(switchTelegramMiniAppInlineQuery({ query: '' })).toBe(false)
   })
 })

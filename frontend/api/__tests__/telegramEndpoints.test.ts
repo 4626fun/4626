@@ -835,6 +835,15 @@ describe('telegram endpoint handlers', () => {
     expect(setTelegramMyCommandsMock).toHaveBeenCalledTimes(3)
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledTimes(1)
     expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.miniAppUrl).toBe('https://app.4626.fun/telegram/menu')
+    expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        menuButton: expect.objectContaining({
+          type: 'web_app',
+          web_app: { url: 'https://app.4626.fun/telegram/menu' },
+        }),
+      }),
+    )
   })
 
   it('route map registers telegram bot config endpoint', async () => {

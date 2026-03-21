@@ -267,7 +267,7 @@ describe('auth privy wallet sync', () => {
       embeddedEoa: null,
       connectedWallets: [],
       primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
-    })
+    } as any)
 
     const req = createMockReq({
       method: 'POST',
@@ -323,7 +323,7 @@ describe('auth privy wallet sync', () => {
       embeddedEoa: null,
       connectedWallets: [],
       primaryWalletAddress: null,
-    })
+    } as any)
 
     const req = createMockReq({
       method: 'POST',

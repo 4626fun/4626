@@ -103,15 +103,15 @@ type PriceMonitorResult = {
 }
 
 type EntryRelayResult = {
-  entriesDrained: number
+  entriesQueued: number
   entriesRelayed: number
   overflowCount: number
-  emergencyDrain: boolean
+  emergencyRelay: boolean
 }
 
-type FeeFlushResult = {
-  feesFlushed: boolean
-  amountFlushed: string
+type FeeSettlementResult = {
+  feesSettled: boolean
+  amountSettled: string
   bridged: boolean
   forwardedToGauge: boolean
 }
@@ -147,13 +147,8 @@ export const CRE_WRITE_SUBCOMMAND_PREFIXES = [
   'report',
   'settle',
   'settle-fees',
-  'settle_fees',
-  'flush-fees',
-  'flush',
   'relay-entries',
-  'relay_entries',
   'relay-winners',
-  'relay',
   'graduate',
   'queue',
 ] as const
@@ -482,8 +477,8 @@ const creTriggerAction: Action = {
   name: 'CRE_TRIGGER',
   similes: [
     'cre tend', 'cre report', 'cre settle',
-    'cre settle fees', 'cre settle-fees', 'cre settle_fees', 'cre flush',
-    'cre relay entries', 'cre relay-entries', 'cre relay_entries', 'cre relay',
+    'cre settle fees', 'cre settle-fees',
+    'cre relay entries', 'cre relay-entries',
     'cre graduate', 'cre queue',
   ],
   description: 'Trigger CRE keeper operations on demand — tend, report, settle, settle-fees, relay-entries, relay-winners, graduate, queue.',
@@ -557,16 +552,11 @@ const creTriggerAction: Action = {
         await handleTriggerTend(callback, address)
       } else if (sub.startsWith('report')) {
         await handleTriggerReport(callback, address)
-      } else if (
-        sub.startsWith('settle-fees') ||
-        sub.startsWith('settle_fees') ||
-        sub.startsWith('flush-fees') ||
-        sub.startsWith('flush')
-      ) {
+      } else if (sub.startsWith('settle-fees')) {
         await handleTriggerSettleFees(callback)
       } else if (sub.startsWith('settle')) {
         await handleTriggerSettle(callback, address)
-      } else if (sub.startsWith('relay-entries') || sub.startsWith('relay_entries') || sub === 'relay') {
+      } else if (sub.startsWith('relay-entries')) {
         await handleTriggerRelayEntries(callback)
       } else if (sub.startsWith('relay-winners')) {
         await handleTriggerRelayWinners(callback)
@@ -682,12 +672,12 @@ async function handleTriggerSettleFees(callback: HandlerCallback | undefined): P
   await callback?.({ text: 'Running Solana fee settlement...' } as Content)
 
   const ff = await importFeeSettlement()
-  const result: FeeFlushResult = await ff.executeSolanaFeeSettlement()
+  const result: FeeSettlementResult = await ff.executeSolanaFeeSettlement()
 
   const lines = [
     `**Fee Settlement Result**`,
-    `  Fees settled: ${result.feesFlushed ? 'yes' : 'no'}`,
-    `  Amount: ${result.amountFlushed}`,
+    `  Fees settled: ${result.feesSettled ? 'yes' : 'no'}`,
+    `  Amount: ${result.amountSettled}`,
     `  Bridged: ${result.bridged ? 'yes' : 'no'}`,
     `  Forwarded to gauge: ${result.forwardedToGauge ? 'yes' : 'no'}`,
   ]
@@ -707,10 +697,10 @@ async function handleTriggerRelayEntries(callback: HandlerCallback | undefined):
 
   const lines = [
     `**Entry Relay Result**`,
-    `  Entries drained: ${result.entriesDrained}`,
+    `  Entries queued: ${result.entriesQueued}`,
     `  Entries relayed: ${result.entriesRelayed}`,
     `  Overflow: ${result.overflowCount}`,
-    `  Emergency drain: ${result.emergencyDrain ? 'YES' : 'no'}`,
+    `  Emergency relay: ${result.emergencyRelay ? 'YES' : 'no'}`,
   ]
   await callback?.({ text: lines.join('\n') } as Content)
 }
@@ -821,8 +811,8 @@ const creHelpAction: Action = {
       '  `/cre tend [vault]` — Deploy idle funds',
       '  `/cre report [vault]` — Harvest yields',
       '  `/cre settle [strategy]` — Settle CCA auction',
-      '  `/cre settle-fees | /cre flush-fees` — Settle Solana fees to Base',
-      '  `/cre relay-entries | /cre relay` — Relay lottery entries from Solana',
+      '  `/cre settle-fees` — Settle Solana fees to Base',
+      '  `/cre relay-entries` — Relay lottery entries from Solana',
       '  `/cre relay-winners` — Relay winners to Solana',
       '  `/cre graduate` — Check graduation status',
       '  `/cre queue` — Process pending queue actions\n',

@@ -48,10 +48,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function normalizeSolanaAction(raw: string): string {
-  const action = raw.trim().toLowerCase()
-  if (action === 'fee-flush' || action === 'flush-fees' || action === 'settle-fees') return 'settle-fees'
-  if (action === 'entry-relay' || action === 'relay-entries') return 'relay-entries'
-  return action
+  return raw.trim().toLowerCase()
 }
 
 async function ensureSolanaCheckpointTable(db: Awaited<ReturnType<typeof getDb>>) {

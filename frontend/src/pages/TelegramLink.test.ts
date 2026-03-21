@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatTelegramSessionError,
+  getPrivyEmailState,
   getTelegramLinkSuccessMessage,
   getTelegramLinkViewState,
+  isPrivyEmailAlreadyLinkedError,
   shouldAutoStartTelegramLink,
   shouldShowRetryTelegramSession,
 } from './TelegramLink'
@@ -126,5 +128,42 @@ describe('TelegramLink helpers', () => {
         alreadyAttemptedForToken: true,
       }),
     ).toBe(false)
+  })
+
+  it('detects linked and verified Privy email accounts', () => {
+    expect(
+      getPrivyEmailState({
+        linkedAccounts: [
+          {
+            type: 'email',
+            address: 'akira@example.com',
+            verified: true,
+          },
+        ],
+      }),
+    ).toEqual({
+      hasAnyEmailAccount: true,
+      hasVerifiedEmail: true,
+    })
+
+    expect(
+      getPrivyEmailState({
+        linkedAccounts: [
+          {
+            type: 'email',
+            address: 'akira@example.com',
+            verified: false,
+          },
+        ],
+      }),
+    ).toEqual({
+      hasAnyEmailAccount: true,
+      hasVerifiedEmail: false,
+    })
+  })
+
+  it('treats Privy email-already-linked errors as recoverable', () => {
+    expect(isPrivyEmailAlreadyLinkedError(new Error('User already has an account of type email linked.'))).toBe(true)
+    expect(isPrivyEmailAlreadyLinkedError(new Error('Completely different error'))).toBe(false)
   })
 })

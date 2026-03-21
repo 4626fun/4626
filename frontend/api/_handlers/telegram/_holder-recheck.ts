@@ -195,12 +195,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     checked += 1
     const nowMs = Date.now()
     const nowIso = new Date(nowMs).toISOString()
-    const wallet = asTrimmed(row.canonicalCswAddress).toLowerCase()
+    const walletRaw = asTrimmed(row.canonicalCswAddress).toLowerCase()
     const shareToken = asTrimmed(row.shareTokenAddress).toLowerCase()
-    if (!isAddressLike(wallet) || !isAddressLike(shareToken)) {
+    if (!isAddressLike(walletRaw) || !isAddressLike(shareToken)) {
       skipped += 1
       continue
     }
+    const wallet: Address = walletRaw
 
     const minShares = toPositiveBigIntOrDefault(row.minSharesRaw, 1n)
     const eligibility = await checkSharesEligibility({
@@ -214,7 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         db: db as any,
         roomChatId: row.roomChatId,
         telegramUserId: row.telegramUserId,
-        canonicalCswAddress: row.canonicalCswAddress,
+        canonicalCswAddress: wallet,
         status: row.status,
         lastEligibleAt: row.lastEligibleAt,
         graceUntil: row.graceUntil,
@@ -230,7 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         db: db as any,
         roomChatId: row.roomChatId,
         telegramUserId: row.telegramUserId,
-        canonicalCswAddress: row.canonicalCswAddress,
+        canonicalCswAddress: wallet,
         status: 'active',
         lastEligibleAt: nowIso,
         graceUntil: null,
@@ -254,7 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           db: db as any,
           roomChatId: row.roomChatId,
           telegramUserId: row.telegramUserId,
-          canonicalCswAddress: row.canonicalCswAddress,
+          canonicalCswAddress: wallet,
           status: 'grace',
           lastEligibleAt: row.lastEligibleAt,
           graceUntil: row.graceUntil,
@@ -269,7 +270,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         db: db as any,
         roomChatId: row.roomChatId,
         telegramUserId: row.telegramUserId,
-        canonicalCswAddress: row.canonicalCswAddress,
+        canonicalCswAddress: wallet,
         status: 'removed',
         lastEligibleAt: row.lastEligibleAt,
         graceUntil: row.graceUntil,
@@ -300,7 +301,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db: db as any,
       roomChatId: row.roomChatId,
       telegramUserId: row.telegramUserId,
-      canonicalCswAddress: row.canonicalCswAddress,
+      canonicalCswAddress: wallet,
       status: 'grace',
       lastEligibleAt: row.lastEligibleAt,
       graceUntil: nextGraceUntilIso,

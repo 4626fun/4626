@@ -35,7 +35,7 @@ const {
     vaultAddress: '0x3000000000000000000000000000000000000003',
     shareOFT: '0x7000000000000000000000000000000000000007',
   })),
-  validateSponsoredSmartWalletCallsMock: vi.fn(async () => ({ expectedCreatorToken: null, mode: 'deploy' })),
+  validateSponsoredSmartWalletCallsMock: vi.fn(async (..._args: unknown[]) => ({ expectedCreatorToken: null, mode: 'deploy' })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -78,7 +78,7 @@ vi.mock('../../server/_lib/deployLaunchImage.js', () => ({
 }))
 
 vi.mock('../_handlers/_paymaster.js', () => ({
-  validateSponsoredSmartWalletCalls: (...args: unknown[]) => validateSponsoredSmartWalletCallsMock(...args),
+  validateSponsoredSmartWalletCalls: validateSponsoredSmartWalletCallsMock,
 }))
 
 vi.mock('viem', () => ({
@@ -556,7 +556,7 @@ describe('deploy session optimistic concurrency', () => {
       lastUserOpHash: `0x${'1'.repeat(64)}`,
     }
     getDeploySessionByIdMock.mockResolvedValueOnce(rec).mockResolvedValueOnce(rec)
-    getUserOperationReceiptMock.mockResolvedValueOnce(null)
+    getUserOperationReceiptMock.mockResolvedValueOnce(null as any)
 
     const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
     const res = createMockRes()

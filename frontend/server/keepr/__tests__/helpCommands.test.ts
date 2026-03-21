@@ -59,8 +59,8 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — ops</b>')
-    expect(result.response).toContain('<code>/cre settle-fees | /cre flush-fees</code>')
-    expect(result.response).toContain('<code>/cre relay-entries | /cre relay</code>')
+    expect(result.response).toContain('<code>/cre settle-fees</code>')
+    expect(result.response).toContain('<code>/cre relay-entries</code>')
   })
 
   it('returns full help with /help all', async () => {
@@ -73,6 +73,7 @@ describe('keepr help commands', () => {
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — Help</b>')
     expect(result.response).toContain('<blockquote>Use <code>/help</code> for quick mode')
+    expect(result.response).toContain('<blockquote expandable>')
     expect(result.response).toContain('<u>start</u>')
     expect(result.response).toContain('<u>advanced</u>')
     expect(result.response).toContain('<code>/wallet</code> — wallet + positions')

@@ -7,8 +7,8 @@ const {
   guardAgentApiRequestMock,
   listCreatorXmtpAgentsMock,
 } = vi.hoisted(() => ({
-  guardAgentApiRequestMock: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
-  listCreatorXmtpAgentsMock: vi.fn(async () => ({ rows: [], nextCursor: null })),
+  guardAgentApiRequestMock: vi.fn(async (..._args: unknown[]) => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  listCreatorXmtpAgentsMock: vi.fn(async (..._args: unknown[]) => ({ rows: [], nextCursor: null })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -16,11 +16,11 @@ vi.mock('../../server/auth/_shared.js', () => ({
 }))
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
-  guardAgentApiRequest: (...args: unknown[]) => guardAgentApiRequestMock(...args),
+  guardAgentApiRequest: guardAgentApiRequestMock,
 }))
 
 vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
-  listCreatorXmtpAgents: (...args: unknown[]) => listCreatorXmtpAgentsMock(...args),
+  listCreatorXmtpAgents: listCreatorXmtpAgentsMock,
 }))
 
 describe('v1/agents/creators list privacy', () => {
@@ -48,7 +48,7 @@ describe('v1/agents/creators list privacy', () => {
     guardAgentApiRequestMock.mockResolvedValue({
       ok: true,
       ip: '127.0.0.1',
-      auth: { type: 'session', address: '0x0000000000000000000000000000000000000001' },
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000001' } as any,
     })
     const req = createMockReq({
       method: 'GET',

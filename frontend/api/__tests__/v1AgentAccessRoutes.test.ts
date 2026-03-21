@@ -18,7 +18,7 @@ describe('v1 agent access route registration', () => {
     }
   })
 
-  it('resolves optional singular compatibility aliases', async () => {
+  it('does not resolve removed singular compatibility aliases', async () => {
     const routes = [
       'v1/agent/capabilities',
       'v1/agent/access-proof/request',
@@ -29,7 +29,7 @@ describe('v1 agent access route registration', () => {
 
     for (const route of routes) {
       const handler = await getApiHandler(route)
-      expect(typeof handler).toBe('function')
+      expect(handler).toBeNull()
     }
   })
 })

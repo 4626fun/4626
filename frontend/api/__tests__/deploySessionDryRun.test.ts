@@ -219,7 +219,7 @@ describe('deploy session dry run', () => {
   it('requires authenticated deploy auth even when legacy dev-bypass header is present', async () => {
     const previousBypass = process.env.DEPLOY_DRY_RUN_DEV_BYPASS
     process.env.DEPLOY_DRY_RUN_DEV_BYPASS = '1'
-    readDeployAuthFromRequestMock.mockReturnValueOnce(null)
+    readDeployAuthFromRequestMock.mockReturnValueOnce(null as any)
     const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
     const req = createMockReq({
       method: 'POST',

@@ -42,7 +42,7 @@ const {
   const composeStateMock = vi.fn(async () => ({
     recentMessages: [],
   }))
-  const rankActionsMock = vi.fn(async () => [])
+  const rankActionsMock = vi.fn(async (..._args: any[]): Promise<any[]> => [])
   const createRuntimeBridgeMock = vi.fn(() => ({
     runtime: {
       createMemory: runtimeCreateMemoryMock,

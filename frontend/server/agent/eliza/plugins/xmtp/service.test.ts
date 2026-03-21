@@ -211,8 +211,10 @@ describe('xmtp service lifecycle', () => {
       client: {},
     }
 
-    textHandler?.(ctx as any)
-    textHandler?.(ctx as any)
+    if (!textHandler) throw new Error('text_handler_missing')
+    const invokeTextHandler = textHandler as unknown as (ctx: any) => Promise<void>
+    await invokeTextHandler(ctx as any)
+    await invokeTextHandler(ctx as any)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(messageHandler).toHaveBeenCalledTimes(1)
@@ -282,12 +284,14 @@ describe('xmtp service lifecycle', () => {
       client: {},
     }
 
-    textHandler?.(ctx as any)
+    if (!textHandler) throw new Error('text_handler_missing')
+    const invokeTextHandler = textHandler as unknown as (ctx: any) => Promise<void>
+    await invokeTextHandler(ctx as any)
     await vi.waitFor(() => {
       expect(messageHandler).toHaveBeenCalledTimes(1)
     })
     await new Promise((resolve) => setTimeout(resolve, 25))
-    textHandler?.(ctx as any)
+    await invokeTextHandler(ctx as any)
     await vi.waitFor(() => {
       expect(messageHandler).toHaveBeenCalledTimes(2)
     })

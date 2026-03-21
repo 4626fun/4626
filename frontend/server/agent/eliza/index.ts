@@ -86,6 +86,7 @@ import {
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
+import { createHash } from 'node:crypto'
 import { listXmtpDb3FilesUnderRoot, resolveXmtpDbDirectory } from '../../_lib/xmtpDbDirectory.js'
 
 declare const process: {

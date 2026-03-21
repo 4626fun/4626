@@ -54,7 +54,7 @@ describe('eliza embedding service', () => {
     expect(result.provider).toBe('OpenAI')
     expect(result.embedding).toEqual([0.1, 0.2, 0.3])
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(String(fetchMock.mock.calls[0]?.[0] ?? '')).toContain('/v1/embeddings')
+    expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/v1/embeddings')
   })
 
   it('returns null embedding when upstream fails', async () => {

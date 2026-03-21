@@ -44,7 +44,9 @@ const {
     attempts: [],
     latestJob: null,
   })),
-  getCompletedImageProjectForVaultOwnerMock: vi.fn(async () => null),
+  getCompletedImageProjectForVaultOwnerMock: vi.fn<
+    () => Promise<{ projectId: string; outputBlobUrl: string } | null>
+  >(async () => null),
   setImageProjectVaultAddressMock: vi.fn(async () => {}),
   processImageGenerationJobMock: vi.fn(async () => ({ id: 'job_123', status: 'pending' })),
   getSessionAddressMock: vi.fn<() => string | null>(() => '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'),

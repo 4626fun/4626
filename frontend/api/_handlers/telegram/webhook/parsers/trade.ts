@@ -115,10 +115,10 @@ export function parseTradeCallbackData(rawData: string):
   if (!data.startsWith('trade:')) return null
   const parts = data.split(':')
   const kind = asTrimmed(parts[1]).toLowerCase()
-  if (kind === 'accept' || kind === 'confirm' || kind === 'decline' || kind === 'cancel') {
+  if (kind === 'accept' || kind === 'decline') {
     const token = asTrimmed(parts[2])
     if (!token) return null
-    return { kind: kind === 'accept' || kind === 'confirm' ? 'accept' : 'decline', token }
+    return { kind: kind === 'accept' ? 'accept' : 'decline', token }
   }
   if (kind === 'edit') {
     const actionType = asTrimmed(parts[2]).toLowerCase()

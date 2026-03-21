@@ -1,5 +1,7 @@
 import { formatTelegramOutboundText } from '../markdown.js'
-import { splitTelegramMessage } from '../utils.js'
+import { asTrimmed, splitTelegramMessage } from '../utils.js'
+
+const TELEGRAM_DISMISS_CALLBACK = 'message:delete' as const
 
 function shouldRetryWithoutParseMode(status: number, detailsLower: string): boolean {
   if (status !== 400) return false
@@ -18,6 +20,32 @@ function stripTelegramFormatting(value: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&')
+}
+
+function buildDismissButton(): Record<string, string> {
+  return { text: '🗑', callback_data: TELEGRAM_DISMISS_CALLBACK }
+}
+
+function withDismissButton(replyMarkup?: Record<string, unknown>): Record<string, unknown> {
+  const dismissButton = buildDismissButton()
+  if (!replyMarkup || typeof replyMarkup !== 'object') {
+    return { inline_keyboard: [[dismissButton]] }
+  }
+
+  const inlineKeyboard = Array.isArray((replyMarkup as any).inline_keyboard)
+    ? ([...(replyMarkup as any).inline_keyboard] as Array<Array<Record<string, unknown>>>)
+    : null
+  if (!inlineKeyboard) return replyMarkup
+
+  const hasDismissButton = inlineKeyboard.some((row) =>
+    Array.isArray(row) && row.some((button) => button?.callback_data === TELEGRAM_DISMISS_CALLBACK),
+  )
+  if (hasDismissButton) return replyMarkup
+
+  return {
+    ...replyMarkup,
+    inline_keyboard: [...inlineKeyboard, [dismissButton]],
+  }
 }
 
 export async function sendTelegramMessage(params: {
@@ -47,9 +75,7 @@ export async function sendTelegramMessage(params: {
     if (typeof params.messageThreadId === 'number') {
       payload.message_thread_id = params.messageThreadId
     }
-    if (params.replyMarkup && typeof params.replyMarkup === 'object') {
-      payload.reply_markup = params.replyMarkup
-    }
+    payload.reply_markup = withDismissButton(params.replyMarkup)
     return fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -97,6 +123,44 @@ export async function sendTelegramMessage(params: {
   throw new Error(`telegram_send_failed_${response.status}:${details.slice(0, 180)}`)
 }
 
+export async function sendTelegramPhoto(params: {
+  botToken: string
+  chatId: string
+  photo: Uint8Array
+  filename?: string
+  contentType?: string
+  caption?: string
+  replyToMessageId?: number
+  messageThreadId?: number
+  replyMarkup?: Record<string, unknown>
+}): Promise<void> {
+  const endpoint = `https://api.telegram.org/bot${params.botToken}/sendPhoto`
+  const formattedCaption = formatTelegramOutboundText(asTrimmed(params.caption ?? ''))
+  const form = new FormData()
+  const photoBuffer = Buffer.from(params.photo)
+  form.append('chat_id', params.chatId)
+  form.append('photo', new Blob([photoBuffer], { type: params.contentType ?? 'image/png' }), params.filename ?? 'card.png')
+  if (formattedCaption.text) {
+    form.append('caption', formattedCaption.text)
+    if (formattedCaption.parseMode) form.append('parse_mode', formattedCaption.parseMode)
+  }
+  if (typeof params.replyToMessageId === 'number') {
+    form.append('reply_to_message_id', String(params.replyToMessageId))
+  }
+  if (typeof params.messageThreadId === 'number') {
+    form.append('message_thread_id', String(params.messageThreadId))
+  }
+  form.append('reply_markup', JSON.stringify(withDismissButton(params.replyMarkup)))
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    body: form,
+  })
+  if (response.ok) return
+  const details = await response.text().catch(() => '')
+  throw new Error(`telegram_photo_failed_${response.status}:${details.slice(0, 180)}`)
+}
+
 export async function editTelegramMessage(params: {
   botToken: string
   chatId: string
@@ -113,9 +177,7 @@ export async function editTelegramMessage(params: {
     disable_web_page_preview: true,
     ...(formatted.parseMode ? { parse_mode: formatted.parseMode } : {}),
   }
-  if (params.replyMarkup && typeof params.replyMarkup === 'object') {
-    payload.reply_markup = params.replyMarkup
-  }
+  payload.reply_markup = withDismissButton(params.replyMarkup)
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

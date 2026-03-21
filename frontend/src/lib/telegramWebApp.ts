@@ -9,6 +9,8 @@ type TelegramSafeAreaInset = {
   right?: number
 }
 
+export type TelegramInlineQueryChatType = 'users' | 'bots' | 'groups' | 'channels'
+
 type TelegramWebAppLike = {
   initData?: string
   colorScheme?: 'light' | 'dark' | string
@@ -19,6 +21,7 @@ type TelegramWebAppLike = {
   contentSafeAreaInset?: TelegramSafeAreaInset
   ready?: () => void
   expand?: () => void
+  switchInlineQuery?: (query: string, chooseChatTypes?: TelegramInlineQueryChatType[]) => void
   onEvent?: (eventType: string, eventHandler: () => void) => void
   offEvent?: (eventType: string, eventHandler: () => void) => void
 }
@@ -165,6 +168,20 @@ function applyTelegramWebAppCssVars(webApp: TelegramWebAppLike | null): void {
 
 export function readTelegramWebApp(): TelegramWebAppLike | null {
   return readTelegramWebAppUnsafe()
+}
+
+export function switchTelegramMiniAppInlineQuery(params?: {
+  query?: string
+  chatTypes?: TelegramInlineQueryChatType[]
+}): boolean {
+  const webApp = readTelegramWebAppUnsafe()
+  if (!webApp?.switchInlineQuery) return false
+  try {
+    webApp.switchInlineQuery(asTrimmed(params?.query ?? ''), params?.chatTypes ?? [])
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function readTelegramMiniAppInitData(): string {

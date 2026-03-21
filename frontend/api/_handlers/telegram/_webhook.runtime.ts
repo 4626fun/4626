@@ -107,7 +107,7 @@ import type { TradeFlowState } from './webhook/trade/types.js'
 import { createTelegramHolderRoomInviteLink as createTelegramHolderRoomInviteLinkShared, readTelegramChatMemberStatus as readTelegramChatMemberStatusShared } from './webhook/telegramApi/chats.js'
 import { answerTelegramCallbackQuery as answerTelegramCallbackQueryShared, answerTelegramPreCheckoutQuery as answerTelegramPreCheckoutQueryShared } from './webhook/telegramApi/interactions.js'
 import { answerTelegramInlineQuery as answerTelegramInlineQueryShared } from './webhook/telegramApi/inline.js'
-import { deleteTelegramMessage as deleteTelegramMessageShared, editTelegramMessage as editTelegramMessageShared, replaceTelegramMenuMessage as replaceTelegramMenuMessageShared, sendTelegramMessage as sendTelegramMessageShared } from './webhook/telegramApi/messaging.js'
+import { deleteTelegramMessage as deleteTelegramMessageShared, editTelegramMessage as editTelegramMessageShared, replaceTelegramMenuMessage as replaceTelegramMenuMessageShared, sendTelegramMessage as sendTelegramMessageShared, sendTelegramPhoto as sendTelegramPhotoShared } from './webhook/telegramApi/messaging.js'
 import { sendTelegramStarsInvoice as sendTelegramStarsInvoiceShared } from './webhook/telegramApi/payments.js'
 import { isTelegramContextAllowed } from './webhook/services/access.js'
 import { emitTelegramFunnelEvent as emitTelegramFunnelEventShared } from './webhook/services/funnel.js'
@@ -142,6 +142,8 @@ const TELEGRAM_MENU_LABELS = {
   wallet: '■ Wallet',
   trade: 'Trade',
   explore: 'Explore',
+  cre: 'CRE Ops',
+  solana: 'Solana',
   help: 'Help',
   vaults: 'Vaults',
   auctions: 'Auctions',
@@ -478,6 +480,15 @@ type TelegramCommandResponse = {
   signalText?: string
   signalReplyMarkup?: Record<string, unknown>
   callbackToast?: string
+  media?: {
+    kind: 'photo'
+    bytes: Uint8Array
+    contentType?: string
+    filename?: string
+    caption?: string
+    replyMarkup?: Record<string, unknown>
+    suppressText?: boolean
+  }
 }
 
 function wrapCommandListingsWithBackticks(text: string): string {
@@ -1220,12 +1231,24 @@ async function buildInlineQueryResults(params: {
     growthMode: isTelegramInlineGrowthModeEnabled(),
     enablePmHandoff: isTelegramInlinePmHandoffEnabled(),
     mediaByKey: readInlineMediaAssetMap(),
+    menuButtonUrl: buildTelegramMiniAppUrl({
+      baseUrl: resolveTelegramMiniAppUrl(),
+      pathname: '/telegram/menu',
+    }),
+    linkButtonUrl: buildTelegramMiniAppUrl({
+      baseUrl: resolveTelegramMiniAppUrl(),
+      pathname: TELEGRAM_MINI_APP_LINK_PATH,
+    }),
   })
 }
 
 function buildInlineLauncherReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
+      [
+        { text: 'Share', switch_inline_query: '' },
+        { text: 'Search', switch_inline_query_current_chat: '' },
+      ],
       [{ text: 'Draft X post', switch_inline_query_current_chat: 'x post your update here' }],
       [
         { text: 'Ask AI', switch_inline_query_current_chat: 'ai What should I do next?' },
@@ -1588,10 +1611,17 @@ function buildFocusedHelpText(): string {
     '<u>Need more?</u>',
     '<code>/help coin|market|social|ops|bankr|wallet|arena</code> — focused guides',
     '<code>/help all</code> — complete command catalog',
+    'Tap <b>CRE Ops</b> or <b>Solana</b> below for one-tap keeper actions.',
   ].join('\n')
 }
 
 function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
+  const operatorRow = shouldShowOperatorMenus(params)
+    ? [[
+        { text: menuLabel('cre'), callback_data: 'menu:cre' },
+        { text: menuLabel('solana'), callback_data: 'menu:solana' },
+      ]]
+    : []
   const keyboard: Array<Array<Record<string, unknown>>> = params.isLinked
     ? [
         [{ text: menuLabel('wallet'), callback_data: 'menu:wallet' }],
@@ -1601,6 +1631,8 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
+        [{ text: 'Share', switch_inline_query: 'ai ' }],
+        ...operatorRow,
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
       ]
     : [
@@ -1609,6 +1641,8 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
+        [{ text: 'Share', switch_inline_query: 'ai ' }],
+        ...operatorRow,
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
       ]
 
@@ -1666,9 +1700,72 @@ function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
         { text: 'Draft X Post', switch_inline_query_current_chat: 'x post your update here' },
         { text: 'Help Topics', callback_data: 'menu:topics' },
       ],
+      [{ text: 'Share', switch_inline_query: '' }],
+      [
+        { text: menuLabel('cre'), callback_data: 'menu:cre' },
+        { text: menuLabel('solana'), callback_data: 'menu:solana' },
+      ],
       [{ text: 'Back to Main', callback_data: 'menu:start' }],
     ],
   }
+}
+
+function shouldShowOperatorMenus(params: { chatId: string; isLinked: boolean }): boolean {
+  return params.isLinked || !isPrivateChatId(params.chatId)
+}
+
+function buildCreReplyMarkup(): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Status', callback_data: 'cre:status' },
+        { text: 'Auctions', callback_data: 'cre:auction' },
+      ],
+      [
+        { text: 'Health', callback_data: 'cre:health' },
+        { text: menuLabel('solana'), callback_data: 'menu:solana' },
+      ],
+      [
+        { text: 'Tend All', callback_data: 'cre:tend' },
+        { text: 'Report All', callback_data: 'cre:report' },
+      ],
+      [{ text: 'Ask AI About CRE', switch_inline_query_current_chat: 'ai summarize current CRE status, auctions, health, and next operator actions' }],
+      [{ text: menuLabel('back'), callback_data: 'menu:start' }],
+    ],
+  }
+}
+
+function buildSolanaReplyMarkup(): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Status', callback_data: 'cre:solana' },
+        { text: 'Health', callback_data: 'cre:health' },
+      ],
+      [
+        { text: 'Settle Fees', callback_data: 'cre:settle-fees' },
+        { text: 'Relay Entries', callback_data: 'cre:relay-entries' },
+      ],
+      [{ text: 'Ask AI About Solana', switch_inline_query_current_chat: 'ai summarize current Solana health, pending entries, and fee settlement status' }],
+      [
+        { text: menuLabel('cre'), callback_data: 'menu:cre' },
+        { text: menuLabel('back'), callback_data: 'menu:start' },
+      ],
+    ],
+  }
+}
+
+function resolveOperatorReplyMarkup(commandText: string): Record<string, unknown> | undefined {
+  const normalized = asTrimmed(commandText).toLowerCase()
+  if (!normalized.startsWith('/cre')) return undefined
+  if (
+    normalized === '/cre solana' ||
+    normalized === '/cre settle-fees' ||
+    normalized === '/cre relay-entries'
+  ) {
+    return buildSolanaReplyMarkup()
+  }
+  return buildCreReplyMarkup()
 }
 
 function resolveHelpCallbackCommand(rawData: string): string | null {
@@ -1727,6 +1824,30 @@ function resolveStaticMenuCallbackResponse(params: {
       replyMarkup: buildMoreToolsReplyMarkup(params.chatId),
     }
   }
+  if (token === 'menu:cre') {
+    if (!shouldShowOperatorMenus(params)) {
+      return {
+        text: [`${menuLabel('cre')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
+        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+      }
+    }
+    return {
+      text: [menuLabel('cre'), '', 'Tap an operator action to inspect or run keeper flows.'].join('\n'),
+      replyMarkup: buildCreReplyMarkup(),
+    }
+  }
+  if (token === 'menu:solana') {
+    if (!shouldShowOperatorMenus(params)) {
+      return {
+        text: [`${menuLabel('solana')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
+        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+      }
+    }
+    return {
+      text: [menuLabel('solana'), '', 'Tap a Solana action to inspect bridge health or run the relay path.'].join('\n'),
+      replyMarkup: buildSolanaReplyMarkup(),
+    }
+  }
   if (token === 'menu:topics') {
     return {
       text: [`${menuLabel('help')} Topics`, '', 'Pick a focused command guide.'].join('\n'),
@@ -1761,6 +1882,20 @@ async function sendTelegramMessage(params: {
   replyMarkup?: Record<string, unknown>
 }): Promise<void> {
   return sendTelegramMessageShared(params)
+}
+
+async function sendTelegramPhoto(params: {
+  botToken: string
+  chatId: string
+  photo: Uint8Array
+  filename?: string
+  contentType?: string
+  caption?: string
+  replyToMessageId?: number
+  messageThreadId?: number
+  replyMarkup?: Record<string, unknown>
+}): Promise<void> {
+  return sendTelegramPhotoShared(params)
 }
 
 async function editTelegramMessage(params: {
@@ -1892,6 +2027,41 @@ function truncateAddress(value: string | null | undefined): string {
   return `${v.slice(0, 6)}…${v.slice(-4)}`
 }
 
+function escapeTelegramHtmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function buildTelegramCommandChrome(params: {
+  title: string
+  command: string
+  summaryLines: string[]
+  detailLines?: string[]
+  expandableDetails?: boolean
+}): string {
+  const sections = [
+    `<b>${escapeTelegramHtmlText(params.title)}</b>`,
+    `<code>${escapeTelegramHtmlText(params.command)}</code>`,
+  ]
+  if (params.summaryLines.length > 0) {
+    sections.push(
+      '',
+      `<blockquote>${escapeTelegramHtmlText(params.summaryLines.join('\n'))}</blockquote>`,
+    )
+  }
+  if (params.detailLines && params.detailLines.length > 0) {
+    sections.push(
+      '',
+      `<blockquote${params.expandableDetails ? ' expandable' : ''}>${escapeTelegramHtmlText(params.detailLines.join('\n'))}</blockquote>`,
+    )
+  }
+  return sections.join('\n')
+}
+
 async function isTelegramUserLinked(params: {
   telegramUserId: string
   db?: Awaited<ReturnType<typeof getDb>> | null
@@ -1957,8 +2127,8 @@ async function handleTelegramOnboardingCallback(params: {
     }
   }
 
-  const isLinkExisting = token === 'onboard:csw:link' || token === 'onboard:zora:yes'
-  const isCreateNew = token === 'onboard:csw:create' || token === 'onboard:zora:no'
+  const isLinkExisting = token === 'onboard:csw:link'
+  const isCreateNew = token === 'onboard:csw:create'
   if (isLinkExisting || isCreateNew) {
     const session = await readTelegramOnboardingSession({ db: db as any, telegramUserId: params.userId })
     if (!session || session.step !== 'csw_fork') {
@@ -1992,40 +2162,75 @@ async function handleTelegramOnboardingCallback(params: {
   return null
 }
 
-function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByUserId>>): string {
+function formatLinkStatusDetails(link: Awaited<ReturnType<typeof getTelegramLinkByUserId>>): string[] {
   if (!link) {
     return [
-      'Link Status',
-      '',
       '- linked: no',
       '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram to your 4626 account and finishes the wallet checks required for bot actions. Full 4626 web app access may still require team approval.',
-    ].join('\n')
+    ]
   }
   return [
-    'Link Status',
-    '',
     `- linked: ${link.linkStatus === 'active' ? 'yes' : 'no'}`,
     `- status: ${link.linkStatus}`,
     `- ownerVerified: ${String(link.ownerVerified)}`,
     `- profileId: ${String(link.profileId)}`,
     `- canonicalCSW: ${link.canonicalCswAddress}`,
     `- linkedAt: ${link.linkedAt ?? 'n/a'}`,
-  ].join('\n')
+  ]
+}
+
+function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByUserId>>): string {
+  if (!link) {
+    return buildTelegramCommandChrome({
+      title: 'AKITA | LINK STATUS',
+      command: '/linked',
+      summaryLines: [
+        'Not connected yet.',
+        'Open the Mini App to link Telegram and finish wallet checks.',
+      ],
+      detailLines: formatLinkStatusDetails(link),
+      expandableDetails: true,
+    })
+  }
+
+  const summaryLines =
+    link.linkStatus === 'active' && link.ownerVerified
+      ? [
+          'Connected and ready for bot actions.',
+          `Canonical CSW: ${truncateAddress(link.canonicalCswAddress)}`,
+        ]
+      : [
+          'Link found, but setup is not complete yet.',
+          `Owner verified: ${String(link.ownerVerified)}`,
+        ]
+
+  return buildTelegramCommandChrome({
+    title: 'AKITA | LINK STATUS',
+    command: '/linked',
+    summaryLines,
+    detailLines: formatLinkStatusDetails(link),
+    expandableDetails: true,
+  })
 }
 
 function formatWalletText(summary: Awaited<ReturnType<typeof getTelegramPortfolioSummary>>): string {
   if (!summary) {
-    return [
-      'Wallet',
-      '',
-      '- linked: no',
-      '- next: finish onboarding (/start → Start in DM), then /wallet again',
-    ].join('\n')
+    return buildTelegramCommandChrome({
+      title: 'AKITA | WALLET',
+      command: '/wallet',
+      summaryLines: [
+        'Wallet is not linked yet.',
+        'Finish onboarding, then open /wallet again.',
+      ],
+      detailLines: [
+        '- linked: no',
+        '- next: finish onboarding (/start → Start in DM), then /wallet again',
+      ],
+      expandableDetails: true,
+    })
   }
 
-  const lines = [
-    'Wallet',
-    '',
+  const details = [
     `- linked: yes (${summary.link.linkStatus})`,
     `- canonicalCSW: ${truncateAddress(summary.link.canonicalCswAddress)}`,
     `- buys: ${summary.buyCount}`,
@@ -2034,14 +2239,23 @@ function formatWalletText(summary: Awaited<ReturnType<typeof getTelegramPortfoli
     `- successfulActions: ${summary.successfulActions}`,
   ]
   if (summary.recentActions.length > 0) {
-    lines.push('', 'Recent:')
+    details.push('', 'Recent:')
     for (const row of summary.recentActions) {
-      lines.push(`- ${row.actionType} ${row.status}${row.txHash ? ` (${truncateAddress(row.txHash)})` : ''}`)
+      details.push(`- ${row.actionType} ${row.status}${row.txHash ? ` (${truncateAddress(row.txHash)})` : ''}`)
     }
   } else {
-    lines.push('', 'Recent: none yet')
+    details.push('', 'Recent: none yet')
   }
-  return lines.join('\n')
+  return buildTelegramCommandChrome({
+    title: 'AKITA | WALLET',
+    command: '/wallet',
+    summaryLines: [
+      `CSW ${truncateAddress(summary.link.canonicalCswAddress)}`,
+      `Buys ${summary.buyCount} • Sells ${summary.sellCount} • Bids ${summary.bidCount}`,
+    ],
+    detailLines: details,
+    expandableDetails: true,
+  })
 }
 
 function formatVaultsText(vaults: Awaited<ReturnType<typeof listTelegramScopedVaults>>): string {
@@ -4814,6 +5028,74 @@ async function handleTelegramDeployCallback(params: {
   }
 }
 
+function buildPremiumObservedCommandText(commandText: string, responseText: string): string | null {
+  const normalized = asTrimmed(commandText).toLowerCase()
+  const detailLines = responseText.split('\n').map((line) => line.trimEnd())
+  if (normalized === '/cre status') {
+    return buildTelegramCommandChrome({
+      title: 'AKITA | CRE STATUS',
+      command: '/cre status',
+      summaryLines: [
+        'Vault keeper snapshot.',
+        'Idle funds, tend cadence, and latest report state.',
+      ],
+      detailLines,
+      expandableDetails: true,
+    })
+  }
+  if (normalized === '/cre auction') {
+    return buildTelegramCommandChrome({
+      title: 'AKITA | CRE AUCTIONS',
+      command: '/cre auction',
+      summaryLines: [
+        'CCA auction snapshot.',
+        'Settlement and graduation state across scoped vaults.',
+      ],
+      detailLines,
+      expandableDetails: true,
+    })
+  }
+  if (normalized === '/cre solana') {
+    return buildTelegramCommandChrome({
+      title: 'AKITA | SOLANA',
+      command: '/cre solana',
+      summaryLines: [
+        'Solana bridge and relay snapshot.',
+        'Price deviation, entries, and fee path health.',
+      ],
+      detailLines,
+      expandableDetails: true,
+    })
+  }
+  if (normalized === '/cre health') {
+    return buildTelegramCommandChrome({
+      title: 'AKITA | CRE HEALTH',
+      command: '/cre health',
+      summaryLines: [
+        'Combined keeper health check.',
+        'Cross-chain readiness and operator attention points.',
+      ],
+      detailLines,
+      expandableDetails: true,
+    })
+  }
+  return null
+}
+
+function resolveTelegramMediaFromAction(action: any): TelegramCommandResponse['media'] | undefined {
+  const media = action?.telegramMedia
+  if (!media || media.kind !== 'photo' || !(media.bytes instanceof Uint8Array)) return undefined
+  return {
+    kind: 'photo',
+    bytes: media.bytes,
+    ...(typeof media.contentType === 'string' ? { contentType: media.contentType } : {}),
+    ...(typeof media.filename === 'string' ? { filename: media.filename } : {}),
+    ...(typeof media.caption === 'string' ? { caption: media.caption } : {}),
+    ...(media.replyMarkup && typeof media.replyMarkup === 'object' ? { replyMarkup: media.replyMarkup } : {}),
+    ...(media.suppressText === true ? { suppressText: true } : {}),
+  }
+}
+
 async function executeTelegramCommand(params: {
   text: string
   chatId: string
@@ -4862,7 +5144,15 @@ async function executeTelegramCommand(params: {
     chatId: params.chatId,
     userId: params.userId,
   })
-  return { text: asTrimmed(keeprResult?.response ?? '') || 'Command received.' }
+  const rawResponse = asTrimmed(keeprResult?.response ?? '') || 'Command received.'
+  const actionPayload =
+    keeprResult && typeof keeprResult === 'object' && 'action' in keeprResult
+      ? (keeprResult as { action?: unknown }).action
+      : undefined
+  return {
+    text: buildPremiumObservedCommandText(params.text, rawResponse) ?? rawResponse,
+    media: resolveTelegramMediaFromAction(actionPayload),
+  }
 }
 
 const SENSITIVE_DM_COMMAND_PREFIXES = ['/send', 'send ', '/lock', '/unlock', '/coin create', '/coin deploy'] as const
@@ -5751,6 +6041,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const callbackDataLower = asTrimmed(callbackData).toLowerCase()
+    if (callbackDataLower === 'message:delete') {
+      try {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'Deleted',
+        })
+      } catch (error) {
+        console.error('[telegram/webhook] delete callback acknowledgement failed', {
+          updateId: update.update_id ?? null,
+          callbackQueryId,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      }
+      if (typeof callbackMessageId === 'number') {
+        await deleteTelegramMessage({
+          botToken,
+          chatId,
+          messageId: callbackMessageId,
+        }).catch(() => {})
+      }
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
     if (isOnboardingCallback) {
       const cbFrom = callbackQuery.from && typeof callbackQuery.from === 'object' ? callbackQuery.from : null
       const cbUsername = cbFrom && typeof cbFrom.username === 'string' ? cbFrom.username : undefined
@@ -6081,6 +6397,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const helpMarkup = response.replyMarkup
+      ?? resolveOperatorReplyMarkup(mappedCommand)
       ?? (isArenaHelpCommand(mappedCommand)
         ? buildArenaHelpShortcutReplyMarkup()
         : isHelpCategoryCommand(mappedCommand)
@@ -6088,6 +6405,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : isHelpCommand(mappedCommand)
             ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
             : undefined)
+    if (response.media) {
+      const mediaCaption = asTrimmed(response.media.caption ?? response.text)
+      await sendTelegramPhoto({
+        botToken,
+        chatId,
+        photo: response.media.bytes,
+        ...(response.media.filename ? { filename: response.media.filename } : {}),
+        ...(response.media.contentType ? { contentType: response.media.contentType } : {}),
+        ...(mediaCaption ? { caption: mediaCaption } : {}),
+        ...(canReplaceMenuMessage ? {} : { replyToMessageId: callbackMessageId }),
+        replyMarkup: response.media.replyMarkup ?? helpMarkup,
+      })
+      if (canReplaceMenuMessage) {
+        await deleteTelegramMessage({
+          botToken,
+          chatId,
+          messageId: callbackMessageId as number,
+        }).catch(() => {})
+      }
+      if (!response.media.suppressText) {
+        const textChunks = splitTelegramMessage(response.text)
+        for (const chunk of textChunks) {
+          if (!chunk || chunk === mediaCaption) continue
+          await sendTelegramMessage({
+            botToken,
+            chatId,
+            text: chunk,
+          })
+        }
+      }
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
     if (canReplaceMenuMessage) {
       await replaceTelegramMenuMessage({
         botToken,
@@ -6258,6 +6610,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const chunks = splitTelegramMessage(response.text)
   const helpMarkup = response.replyMarkup
+    ?? resolveOperatorReplyMarkup(normalizedText)
     ?? (isArenaHelpCommand(normalizedText)
       ? buildArenaHelpShortcutReplyMarkup()
       : isHelpCategoryCommand(normalizedText)
@@ -6265,6 +6618,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : isHelpCommand(normalizedText)
           ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
           : undefined)
+  if (response.media) {
+    const mediaCaption = asTrimmed(response.media.caption ?? response.text)
+    await sendTelegramPhoto({
+      botToken,
+      chatId,
+      photo: response.media.bytes,
+      ...(response.media.filename ? { filename: response.media.filename } : {}),
+      ...(response.media.contentType ? { contentType: response.media.contentType } : {}),
+      ...(mediaCaption ? { caption: mediaCaption } : {}),
+      replyToMessageId: message.message_id,
+      replyMarkup: response.media.replyMarkup ?? helpMarkup,
+    })
+    if (!response.media.suppressText) {
+      const textChunks = splitTelegramMessage(response.text)
+      for (const chunk of textChunks) {
+        if (!chunk || chunk === mediaCaption) continue
+        await sendTelegramMessage({
+          botToken,
+          chatId,
+          text: chunk,
+        })
+      }
+    }
+    return res.status(200).json({
+      success: true,
+      data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+    } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
   for (let idx = 0; idx < chunks.length; idx += 1) {
     const chunk = chunks[idx]
     if (!chunk) continue

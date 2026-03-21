@@ -22,7 +22,7 @@ One lottery. One jackpot. One gauge controller. Two chains of traders feeding in
 
 **The relay layer (Keepr):** Five workflows run on our existing XMTP agent infrastructure:
 - **Entry relay:** Drains the PendingEntries buffer every 30s, batches entries, and calls `processSwapLottery()` on Base via the SolanaBridgeAdapter
-- **Fee flush:** Harvests withheld TransferFeeConfig fees and bridges them to the GaugeController on Base
+- **Fee settlement:** Harvests withheld TransferFeeConfig fees and bridges them to the GaugeController on Base
 - **Winner relay:** When Base picks a lottery winner, Keepr writes the result to a WinnerRecord PDA on Solana so the frontend can show it
 - **Graduation sync:** When the Base CCA graduates on Day 7, Keepr closes the Solana Alpha Vault and opens the DLMM pool for trading
 - **Price monitor:** Compares Solana DLMM price to Base post-graduation pool price, alerts or auto-recenters bins if deviation exceeds thresholds (15% alert, 20% recenter, 50% halt)

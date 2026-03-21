@@ -14,7 +14,7 @@ const {
   readRequestPrincipalAddressMock: vi.fn(() => ''),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   getDbMock: vi.fn(),
-  getDbInitErrorMock: vi.fn(() => null),
+  getDbInitErrorMock: vi.fn<() => string | null>(() => null),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   ensureWaitlistPointsSchemaMock: vi.fn(async () => {}),
   awardWaitlistPointsMock: vi.fn(async () => {}),

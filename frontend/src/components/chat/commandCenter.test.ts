@@ -37,10 +37,8 @@ describe('chat command center helpers', () => {
     expect(command?.command).toContain('/ai ')
   })
 
-  it('keeps legacy Solana CRE aliases resolving to the canonical commands', () => {
+  it('resolves the canonical Solana CRE commands', () => {
     expect(getChatCommandByCommandText('/cre settle-fees')?.id).toBe('cre-settle-fees')
-    expect(getChatCommandByCommandText('/cre flush-fees')?.id).toBe('cre-settle-fees')
     expect(getChatCommandByCommandText('/cre relay-entries')?.id).toBe('cre-relay-entries')
-    expect(getChatCommandByCommandText('/cre relay')?.id).toBe('cre-relay-entries')
   })
 })

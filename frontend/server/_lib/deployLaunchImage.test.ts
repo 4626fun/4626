@@ -81,7 +81,7 @@ const ADDR = {
   owner: '0x2000000000000000000000000000000000000002',
   vault: '0x3000000000000000000000000000000000000003',
   shareOft: '0x7000000000000000000000000000000000000007',
-}
+} as const
 
 function makePhase2FinalizeCall() {
   const data = encodeFunctionData({
@@ -155,7 +155,7 @@ describe('deploy launch image gate', () => {
       text: async () => '',
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     }))
-    ;(globalThis as { fetch?: typeof fetch }).fetch = fetchMock as typeof fetch
+    ;(globalThis as { fetch?: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
 
     mocks.getCompletedImageProjectForVaultMock.mockResolvedValueOnce({
       projectId: 'imgproj_ready',
@@ -210,7 +210,7 @@ describe('deploy launch image gate', () => {
         text: async () => '',
         arrayBuffer: async () => new Uint8Array([9, 8, 7, 6]).buffer,
       }) // endpoint verify
-    ;(globalThis as { fetch?: typeof fetch }).fetch = fetchMock as typeof fetch
+    ;(globalThis as { fetch?: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
 
     mocks.getCompletedImageProjectForVaultMock
       .mockResolvedValueOnce(null)

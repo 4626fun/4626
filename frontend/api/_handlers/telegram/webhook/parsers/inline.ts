@@ -54,6 +54,8 @@ export type BuildInlineQueryAnswerParams = {
   growthMode: boolean
   enablePmHandoff: boolean
   mediaByKey?: Record<string, InlineMediaAsset>
+  menuButtonUrl?: string
+  linkButtonUrl?: string
 }
 
 function normalizeInlineDraft(rawQuery: string): string {
@@ -214,35 +216,35 @@ function buildCommonCopy(growthMode: boolean): {
 } {
   if (growthMode) {
     return {
-      linkTitle: 'Unlock trading -> link wallet',
-      linkDescription: 'One-time setup -> buy, sell, bid',
-      walletTitle: 'Wallet pulse',
-      walletDescription: 'Positions + recent activity',
-      helpTitle: 'Quick start (30 sec)',
-      helpDescription: 'Beginner-first commands',
+      linkTitle: 'Connect wallet',
+      linkDescription: 'One-time setup • buy, sell, bid',
+      walletTitle: 'Wallet',
+      walletDescription: 'Positions, status, recent activity',
+      helpTitle: 'Guide',
+      helpDescription: 'Shortcuts and starter flows',
       statusTitle: 'Vault health',
-      statusDescription: 'Live config + permissions',
+      statusDescription: 'Live config and permissions',
       xPostTitle: 'Draft X post',
       xPostDescription: 'Template ready to send',
-      aiTitle: 'Ask Keepr AI',
+      aiTitle: 'Ask AI',
       aiDescription: 'Get one clear next action',
       marketTitle: 'Market quote',
-      marketDescription: 'Fast BTC/ETH check',
+      marketDescription: 'Fast BTC, ETH, SOL',
     }
   }
 
   return {
-    linkTitle: 'Link wallet to unlock trading',
-    linkDescription: 'One-time setup, then buy/sell/bid instantly',
-    walletTitle: 'My wallet snapshot',
-    walletDescription: 'Positions, recent actions, and status',
-    helpTitle: 'Quick start guide',
-    helpDescription: 'Beginner-friendly commands and shortcuts',
+    linkTitle: 'Connect wallet',
+    linkDescription: 'One-time setup • unlock trading',
+    walletTitle: 'Wallet',
+    walletDescription: 'Positions, recent actions, status',
+    helpTitle: 'Guide',
+    helpDescription: 'Starter commands and shortcuts',
     statusTitle: 'Vault health check',
-    statusDescription: 'Config, permissions, and live status',
+    statusDescription: 'Config, permissions, live status',
     xPostTitle: 'Draft X post',
     xPostDescription: 'Pre-filled and confirm-ready',
-    aiTitle: 'Ask Keepr AI',
+    aiTitle: 'Ask AI',
     aiDescription: 'Get next actions in plain English',
     marketTitle: 'Market quote',
     marketDescription: 'Fast quote for BTC/ETH and more',
@@ -260,7 +262,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const growthMode = params.growthMode
   const mediaByKey = params.mediaByKey ?? {}
   const tradeIntent = parseTelegramTradeIntent(normalizedQuery.startsWith('/') ? normalizedQuery : `/${normalizedQuery}`)
-  const tradeFlowHint = growthMode ? '3 taps -> vault, size, Accept' : '3 taps: vault -> size -> Accept'
+  const tradeFlowHint = '3 taps • vault • size • accept'
   const xPostCommand = `/x post ${normalizeInlineDraft(normalizedQuery)} --confirm`
   const aiPrompt = normalizedQuery ? `/ai ${normalizedQuery}` : '/ai What should I do next?'
   const marketQuote = `/mkt quote ${inferMarketSymbol(normalizedQuery)}`
@@ -287,7 +289,12 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
     const tradeCommand = tradeIntent.actionType === 'buy' ? '/buy' : tradeIntent.actionType === 'sell' ? '/sell' : '/bid'
     pushTemplate({
       key: 'trade-intent',
-      title: growthMode ? `${tradeIntent.actionType.toUpperCase()} now -> guided` : `Start ${tradeIntent.actionType.toUpperCase()} now`,
+      title:
+        tradeIntent.actionType === 'buy'
+          ? 'Buy now'
+          : tradeIntent.actionType === 'sell'
+            ? 'Sell now'
+            : 'Bid now',
       description: tradeFlowHint,
       command: tradeCommand,
       baseScore: 120,
@@ -402,7 +409,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   } else {
     pushTemplate({
       key: 'trade-quickstart',
-      title: growthMode ? 'Buy now -> 3 taps' : 'Buy in 3 taps',
+      title: 'Buy now',
       description: tradeFlowHint,
       command: '/buy',
       baseScore: 100,
@@ -440,7 +447,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       pushTemplate({
         key: `vault-bid-${idx}`,
         title: `Bid ${truncateAddress(vaultAddress)}`,
-        description: growthMode ? 'Auction flow -> ETH % sizing' : 'Auction mode with ETH % sizing',
+        description: 'Auction flow • ETH % sizing',
         command: '/bid',
         baseScore: 90 - idx,
         intentTags: ['trade', 'discovery'],
@@ -451,7 +458,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
 
   pushTemplate({
     key: 'vaults',
-    title: 'Browse vaults',
+    title: 'Vaults',
     description: 'See active vaults in this chat',
     command: '/vaults',
     baseScore: 80,
@@ -460,7 +467,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   })
   pushTemplate({
     key: 'auctions',
-    title: 'Live auctions',
+    title: 'Auctions',
     description: 'Open active CCA auctions',
     command: '/auctions',
     baseScore: 79,
@@ -469,7 +476,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   })
   pushTemplate({
     key: 'signals',
-    title: 'Trade signals',
+    title: 'Signals',
     description: 'Latest buy/sell events',
     command: '/signals',
     baseScore: 78,
@@ -478,8 +485,8 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   })
   pushTemplate({
     key: 'link-status',
-    title: 'Link status',
-    description: 'Check Telegram <-> wallet state',
+    title: 'Wallet status',
+    description: 'Telegram ↔ wallet connection',
     command: '/linked',
     baseScore: 74,
     intentTags: ['link', 'general'],
@@ -543,7 +550,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   if (wantsDeploy) {
     pushTemplate({
       key: 'deploy',
-      title: 'Deploy your vault',
+      title: 'Deploy vault',
       description: 'Launch directly from Telegram',
       command: '/deploy',
       baseScore: 76,
@@ -583,20 +590,38 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
 
   const shouldShowPmHandoff = params.enablePmHandoff && !params.isLinked
   const pmParameter = sanitizeStartParameter(`inline_link_${queryClass}`)
+  const button =
+    params.isLinked && params.menuButtonUrl
+      ? {
+          text: 'Open 4626',
+          web_app: { url: params.menuButtonUrl },
+        }
+      : shouldShowPmHandoff
+        ? params.linkButtonUrl
+          ? {
+              text: growthMode ? 'Connect wallet' : 'Link wallet',
+              web_app: { url: params.linkButtonUrl },
+            }
+          : {
+              text: growthMode ? 'Connect wallet' : 'Link wallet',
+              start_parameter: pmParameter,
+            }
+        : undefined
   return {
     results,
     offset,
     nextOffset,
     queryClass,
     totalResults,
-    ...(shouldShowPmHandoff
+    ...(button
       ? {
-          button: {
-            text: growthMode ? 'Link wallet to trade' : 'Link wallet',
-            start_parameter: pmParameter,
-          },
-          switchPmText: growthMode ? 'Link wallet to trade' : 'Link wallet',
-          switchPmParameter: pmParameter,
+          button,
+          ...(shouldShowPmHandoff
+            ? {
+                switchPmText: growthMode ? 'Connect wallet' : 'Link wallet',
+                switchPmParameter: pmParameter,
+              }
+            : {}),
         }
       : {}),
   }

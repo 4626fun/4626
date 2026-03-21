@@ -54,7 +54,7 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}, bases?: st
   // Attach SIWA receipt for agent API calls when available.
   if (
     typeof window !== 'undefined' &&
-    (path.startsWith('/api/v1/agents/') || path.startsWith('/api/v1/agent/')) &&
+    path.startsWith('/api/v1/agents/') &&
     !headers.has('X-SIWA-Receipt')
   ) {
     const receipt = getStoredSiwaReceipt()

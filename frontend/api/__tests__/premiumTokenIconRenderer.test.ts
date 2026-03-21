@@ -339,17 +339,19 @@ describe('premium token icon renderer', () => {
 
   it('suppresses source-alpha breakout when caller flags prepared hero cutout load failure', () => {
     expect(
-      __testables.resolveSourceAlphaBreakoutAllowed({
-        allowBreakout: true,
-        suppressBreakout: true,
+      __testables.resolveBreakoutSourceKind({
+        sourceAlphaBreakoutAllowed: false,
+        preparedHeroCutoutAvailable: false,
+        preparedHeroCutoutBreakoutAllowed: false,
       }),
-    ).toBe(false)
+    ).toBe('none')
     expect(
-      __testables.resolveSourceAlphaBreakoutAllowed({
-        allowBreakout: true,
-        suppressBreakout: false,
+      __testables.resolveBreakoutSourceKind({
+        sourceAlphaBreakoutAllowed: true,
+        preparedHeroCutoutAvailable: false,
+        preparedHeroCutoutBreakoutAllowed: false,
       }),
-    ).toBe(true)
+    ).toBe('sourceAlpha')
   })
 })
 

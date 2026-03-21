@@ -150,8 +150,8 @@ The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the
 Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && npm ci`.
 
 **Solana-specific workflows:**
-- `keepr-solana-entry-relay` — relays lottery entries from Solana → Base (every 30s)
-- `keepr-solana-fee-flush` — settles Solana fees → Base gauge (every 5min)
+- `keepr-solana-relay-entries` — relays lottery entries from Solana → Base (every 30s)
+- `keepr-solana-settle-fees` — settles Solana fees → Base gauge (every 5min)
 - `keepr-solana-winner-relay` — relays Base lottery wins → records on Solana
 - `keepr-solana-price-monitor` — monitors Solana vs Base price deviation
 

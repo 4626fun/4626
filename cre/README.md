@@ -149,8 +149,8 @@ The Solana integration runs as separate workflows (cron-driven, independent from
 
 | Workflow | What | Schedule |
 |----------|------|----------|
-| **keepr-solana-entry-relay** | Relay PendingEntries PDAs to Base | 30s |
-| **keepr-solana-fee-flush** | Settle TransferFeeConfig fees to Base gauge | 5m |
+| **keepr-solana-relay-entries** | Relay PendingEntries PDAs to Base | 30s |
+| **keepr-solana-settle-fees** | Settle TransferFeeConfig fees to Base gauge | 5m |
 | **keepr-solana-winner-relay** | Relay Base winners to Solana WinnerRecord PDA | 1m |
 | **keepr-solana-graduation** | Close Alpha Vault when Base CCA graduates | 1m |
 | **keepr-solana-price-monitor** | Monitor DLMM price + recenter on deviation | 1m |

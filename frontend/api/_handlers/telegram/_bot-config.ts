@@ -12,6 +12,7 @@ import {
   TELEGRAM_GROUP_BOT_COMMANDS,
   TELEGRAM_PRIVATE_BOT_COMMANDS,
 } from './webhook/constants.js'
+import { buildTelegramMiniAppUrl } from './webhook/miniApp.js'
 import { verifyBotConfigSecret } from './webhook/services/access.js'
 import { asTrimmed } from './webhook/utils.js'
 
@@ -25,9 +26,15 @@ type BotConfigBody = {
 
 function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {
   const bodyUrl = asTrimmed(body.miniAppUrl)
-  if (bodyUrl && /^https?:\/\//i.test(bodyUrl)) return bodyUrl
-  if (configured && /^https?:\/\//i.test(configured)) return configured
-  return 'https://app.4626.fun'
+  const baseUrl = bodyUrl && /^https?:\/\//i.test(bodyUrl)
+    ? bodyUrl
+    : configured && /^https?:\/\//i.test(configured)
+      ? configured
+      : 'https://app.4626.fun'
+  return buildTelegramMiniAppUrl({
+    baseUrl,
+    pathname: '/telegram/menu',
+  })
 }
 
 function readChatId(body: BotConfigBody): string {
