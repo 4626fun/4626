@@ -256,4 +256,69 @@ describe('telegram webhook parsers', () => {
     expect(resultTypes).toContain('video')
     expect(resultTypes).toContain('article')
   })
+
+  it('uses Mini App button CTAs when inline launcher URLs are provided', () => {
+    const unlinked = buildInlineQueryAnswer({
+      rawQuery: 'start trading',
+      queryOffset: '',
+      userId: '42',
+      chatId: '-100123',
+      isLinked: false,
+      scopedVaults: [],
+      inlineResultCap: 8,
+      growthMode: true,
+      enablePmHandoff: true,
+      linkButtonUrl: 'https://app.4626.fun/telegram/link',
+    })
+    expect(unlinked.button).toEqual({
+      text: 'Connect wallet',
+      web_app: { url: 'https://app.4626.fun/telegram/link' },
+    })
+    expect(unlinked.switchPmParameter).toMatch(/^inline_link_/)
+
+    const linked = buildInlineQueryAnswer({
+      rawQuery: 'vault picks',
+      queryOffset: '',
+      userId: '42',
+      chatId: '-100123',
+      isLinked: true,
+      scopedVaults: [],
+      inlineResultCap: 8,
+      growthMode: false,
+      enablePmHandoff: true,
+      menuButtonUrl: 'https://app.4626.fun/telegram/menu',
+    })
+    expect(linked.button).toEqual({
+      text: 'Open 4626',
+      web_app: { url: 'https://app.4626.fun/telegram/menu' },
+    })
+    expect(linked.switchPmParameter).toBeUndefined()
+  })
+
+  it('includes a live signals inline card with inline controls', () => {
+    const answer = buildInlineQueryAnswer({
+      rawQuery: 'signals live',
+      queryOffset: '',
+      userId: '42',
+      chatId: '-100123',
+      isLinked: true,
+      scopedVaults: [],
+      inlineResultCap: 8,
+      growthMode: false,
+      enablePmHandoff: true,
+    })
+
+    const liveCard = answer.results.find((entry: any) => String(entry?.id ?? '').includes('signals-live')) as any
+    expect(liveCard).toBeTruthy()
+    expect(String(liveCard?.title ?? '')).toBe('Signals Live')
+    expect(String(liveCard?.input_message_content?.message_text ?? '')).toContain('Loading live signals')
+    const buttons = Array.isArray(liveCard?.reply_markup?.inline_keyboard)
+      ? liveCard.reply_markup.inline_keyboard.flat()
+      : []
+    expect(buttons.map((button: any) => String(button?.callback_data ?? ''))).toEqual([
+      'livefeed:signals:refresh',
+      'livefeed:signals:pause',
+      'livefeed:signals:close',
+    ])
+  })
 })

@@ -168,16 +168,52 @@ export async function editTelegramMessage(params: {
   text: string
   replyMarkup?: Record<string, unknown>
 }): Promise<boolean> {
+  return editTelegramMessageInternal({
+    botToken: params.botToken,
+    text: params.text,
+    replyMarkup: withDismissButton(params.replyMarkup),
+    target: {
+      chat_id: params.chatId,
+      message_id: params.messageId,
+    },
+  })
+}
+
+export async function editTelegramInlineMessage(params: {
+  botToken: string
+  inlineMessageId: string
+  text: string
+  replyMarkup?: Record<string, unknown>
+}): Promise<boolean> {
+  const inlineMessageId = asTrimmed(params.inlineMessageId)
+  if (!inlineMessageId) return false
+  return editTelegramMessageInternal({
+    botToken: params.botToken,
+    text: params.text,
+    replyMarkup: params.replyMarkup,
+    target: {
+      inline_message_id: inlineMessageId,
+    },
+  })
+}
+
+async function editTelegramMessageInternal(params: {
+  botToken: string
+  text: string
+  replyMarkup?: Record<string, unknown>
+  target:
+    | { chat_id: string; message_id: number }
+    | { inline_message_id: string }
+}): Promise<boolean> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/editMessageText`
   const formatted = formatTelegramOutboundText(params.text)
   const payload: Record<string, unknown> = {
-    chat_id: params.chatId,
-    message_id: params.messageId,
     text: formatted.text,
     disable_web_page_preview: true,
     ...(formatted.parseMode ? { parse_mode: formatted.parseMode } : {}),
+    ...params.target,
   }
-  payload.reply_markup = withDismissButton(params.replyMarkup)
+  if (params.replyMarkup) payload.reply_markup = params.replyMarkup
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

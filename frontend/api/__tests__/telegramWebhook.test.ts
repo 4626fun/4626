@@ -18,7 +18,9 @@ const {
   ensureTelegramTradingSchemaMock,
   getTelegramLinkByUserIdMock,
   getTelegramPortfolioSummaryMock,
+  getTelegramInlineSignalFeedByInlineMessageIdMock,
   listTelegramAuctionsMock,
+  listTelegramInlineSignalFeedsBySourceChatMock,
   listTelegramScopedVaultsMock,
   listTelegramSignalsMock,
   listTelegramUserBidsMock,
@@ -27,9 +29,13 @@ const {
   listHolderRoomPoliciesMock,
   isTelegramFunnelEventsEnabledForChatMock,
   logTelegramFunnelEventMock,
+  closeTelegramInlineSignalFeedMock,
   upsertHolderRoomMemberMock,
   revokeTelegramLinkMock,
   logTelegramActionAuditMock,
+  setTelegramInlineSignalFeedPausedMock,
+  touchTelegramInlineSignalFeedPushMock,
+  upsertTelegramInlineSignalFeedMock,
   checkSharesEligibilityMock,
   privyGetUserByIdMock,
   createPublicClientMock,
@@ -56,7 +62,9 @@ const {
   ensureTelegramTradingSchemaMock: vi.fn(),
   getTelegramLinkByUserIdMock: vi.fn(),
   getTelegramPortfolioSummaryMock: vi.fn(),
+  getTelegramInlineSignalFeedByInlineMessageIdMock: vi.fn(),
   listTelegramAuctionsMock: vi.fn(),
+  listTelegramInlineSignalFeedsBySourceChatMock: vi.fn(),
   listTelegramScopedVaultsMock: vi.fn(),
   listTelegramSignalsMock: vi.fn(),
   listTelegramUserBidsMock: vi.fn(),
@@ -65,9 +73,13 @@ const {
   listHolderRoomPoliciesMock: vi.fn(),
   isTelegramFunnelEventsEnabledForChatMock: vi.fn(),
   logTelegramFunnelEventMock: vi.fn(),
+  closeTelegramInlineSignalFeedMock: vi.fn(),
   upsertHolderRoomMemberMock: vi.fn(),
   revokeTelegramLinkMock: vi.fn(),
   logTelegramActionAuditMock: vi.fn(),
+  setTelegramInlineSignalFeedPausedMock: vi.fn(),
+  touchTelegramInlineSignalFeedPushMock: vi.fn(),
+  upsertTelegramInlineSignalFeedMock: vi.fn(),
   checkSharesEligibilityMock: vi.fn(),
   privyGetUserByIdMock: vi.fn(),
   createPublicClientMock: vi.fn(),
@@ -137,7 +149,9 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
   getTelegramLinkByUserId: getTelegramLinkByUserIdMock,
   getTelegramPortfolioSummary: getTelegramPortfolioSummaryMock,
+  getTelegramInlineSignalFeedByInlineMessageId: getTelegramInlineSignalFeedByInlineMessageIdMock,
   listTelegramAuctions: listTelegramAuctionsMock,
+  listTelegramInlineSignalFeedsBySourceChat: listTelegramInlineSignalFeedsBySourceChatMock,
   listTelegramScopedVaults: listTelegramScopedVaultsMock,
   listTelegramSignals: listTelegramSignalsMock,
   listTelegramUserBids: listTelegramUserBidsMock,
@@ -146,9 +160,13 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   listHolderRoomPolicies: listHolderRoomPoliciesMock,
   isTelegramFunnelEventsEnabledForChat: isTelegramFunnelEventsEnabledForChatMock,
   logTelegramFunnelEvent: logTelegramFunnelEventMock,
+  closeTelegramInlineSignalFeed: closeTelegramInlineSignalFeedMock,
   upsertHolderRoomMember: upsertHolderRoomMemberMock,
   revokeTelegramLink: revokeTelegramLinkMock,
   logTelegramActionAudit: logTelegramActionAuditMock,
+  setTelegramInlineSignalFeedPaused: setTelegramInlineSignalFeedPausedMock,
+  touchTelegramInlineSignalFeedPush: touchTelegramInlineSignalFeedPushMock,
+  upsertTelegramInlineSignalFeed: upsertTelegramInlineSignalFeedMock,
   readTelegramOnboardingSession: readTelegramOnboardingSessionMock,
   tryInsertTelegramPrivateDmWelcomeSent: tryInsertTelegramPrivateDmWelcomeSentMock,
   upsertTelegramOnboardingSession: upsertTelegramOnboardingSessionMock,
@@ -218,7 +236,9 @@ describe('telegram webhook handler', () => {
     clearTelegramTradePercentPromptMock.mockResolvedValue(undefined)
     getTelegramLinkByUserIdMock.mockResolvedValue(null)
     getTelegramPortfolioSummaryMock.mockResolvedValue(null)
+    getTelegramInlineSignalFeedByInlineMessageIdMock.mockResolvedValue(null)
     listTelegramAuctionsMock.mockResolvedValue([])
+    listTelegramInlineSignalFeedsBySourceChatMock.mockResolvedValue([])
     listTelegramScopedVaultsMock.mockResolvedValue([
       {
         vaultAddress: '0x1111111111111111111111111111111111111111',
@@ -239,9 +259,13 @@ describe('telegram webhook handler', () => {
     listHolderRoomPoliciesMock.mockResolvedValue([])
     isTelegramFunnelEventsEnabledForChatMock.mockReturnValue(true)
     logTelegramFunnelEventMock.mockResolvedValue(undefined)
+    closeTelegramInlineSignalFeedMock.mockResolvedValue(null)
     upsertHolderRoomMemberMock.mockResolvedValue(null)
     revokeTelegramLinkMock.mockResolvedValue({ revoked: false, link: null })
     logTelegramActionAuditMock.mockResolvedValue(undefined)
+    setTelegramInlineSignalFeedPausedMock.mockResolvedValue(null)
+    touchTelegramInlineSignalFeedPushMock.mockResolvedValue(undefined)
+    upsertTelegramInlineSignalFeedMock.mockResolvedValue(null)
     readTelegramOnboardingSessionMock.mockResolvedValue(null)
     tryInsertTelegramPrivateDmWelcomeSentMock.mockResolvedValue(true)
     upsertTelegramOnboardingSessionMock.mockResolvedValue(undefined)
@@ -1006,6 +1030,128 @@ describe('telegram webhook handler', () => {
         }),
       }),
     )
+  })
+
+  it('activates and renders a live signals inline card when chosen', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    listTelegramSignalsMock.mockResolvedValueOnce([
+      {
+        telegramUserId: '777',
+        actionType: 'buy',
+        status: 'confirmed',
+        txHash: '0x1234567890123456789012345678901234567890',
+        createdAt: '2026-03-21T18:00:00.000Z',
+      },
+    ])
+    upsertTelegramInlineSignalFeedMock.mockResolvedValueOnce({
+      inlineMessageId: 'inline-msg-live',
+      sourceChatId: '-100123',
+      ownerTelegramUserId: '777',
+      paused: false,
+      closedAt: null,
+      lastRenderHash: null,
+      lastPushedAt: null,
+      createdAt: '2026-03-21T18:00:00.000Z',
+      updatedAt: '2026-03-21T18:00:00.000Z',
+    })
+    getTelegramInlineSignalFeedByInlineMessageIdMock.mockResolvedValueOnce({
+      inlineMessageId: 'inline-msg-live',
+      sourceChatId: '-100123',
+      ownerTelegramUserId: '777',
+      paused: false,
+      closedAt: null,
+      lastRenderHash: null,
+      lastPushedAt: null,
+      createdAt: '2026-03-21T18:00:00.000Z',
+      updatedAt: '2026-03-21T18:00:00.000Z',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_41,
+        chosen_inline_result: {
+          result_id: 'r0:article:signals-live',
+          from: { id: 777 },
+          query: 'signals live',
+          inline_message_id: 'inline-msg-live',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(upsertTelegramInlineSignalFeedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inlineMessageId: 'inline-msg-live',
+        sourceChatId: '-100123',
+        ownerTelegramUserId: '777',
+      }),
+    )
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/editMessageText')
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.inline_message_id).toBe('inline-msg-live')
+    expect(String(payload.text ?? '')).toContain('AKITA | SIGNALS LIVE')
+  })
+
+  it('refreshes a live signals inline card from an inline callback', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramInlineSignalFeedByInlineMessageIdMock
+      .mockResolvedValueOnce({
+        inlineMessageId: 'inline-msg-live',
+        sourceChatId: '-100123',
+        ownerTelegramUserId: '777',
+        paused: false,
+        closedAt: null,
+        lastRenderHash: null,
+        lastPushedAt: null,
+        createdAt: '2026-03-21T18:00:00.000Z',
+        updatedAt: '2026-03-21T18:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+      inlineMessageId: 'inline-msg-live',
+      sourceChatId: '-100123',
+      ownerTelegramUserId: '777',
+      paused: false,
+      closedAt: null,
+      lastRenderHash: null,
+      lastPushedAt: null,
+      createdAt: '2026-03-21T18:00:00.000Z',
+      updatedAt: '2026-03-21T18:00:00.000Z',
+      })
+    listTelegramSignalsMock.mockResolvedValueOnce([
+      {
+        telegramUserId: '777',
+        actionType: 'sell',
+        status: 'submitted',
+        txHash: '0x1234567890123456789012345678901234567890',
+        createdAt: '2026-03-21T18:01:00.000Z',
+      },
+    ])
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_42,
+        callback_query: {
+          id: 'cbq-live-refresh',
+          data: 'livefeed:signals:refresh',
+          from: { id: 777 },
+          inline_message_id: 'inline-msg-live',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/editMessageText')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/answerCallbackQuery')
   })
 
   it('returns inline shortcut launcher with prefill buttons', async () => {

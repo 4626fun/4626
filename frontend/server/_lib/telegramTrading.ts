@@ -129,6 +129,18 @@ export type TelegramArenaWatch = {
   updatedAt: string | null
 }
 
+export type TelegramInlineSignalFeed = {
+  inlineMessageId: string
+  sourceChatId: string
+  ownerTelegramUserId: string
+  paused: boolean
+  closedAt: string | null
+  lastRenderHash: string | null
+  lastPushedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export type TelegramSignalRow = {
   telegramUserId: string
   actionType: string
@@ -994,6 +1006,19 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       );
     `
     await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_inline_signal_feeds (
+        inline_message_id TEXT PRIMARY KEY,
+        source_chat_id TEXT NOT NULL,
+        owner_telegram_user_id BIGINT NOT NULL,
+        paused BOOLEAN NOT NULL DEFAULT false,
+        closed_at TIMESTAMPTZ NULL,
+        last_render_hash TEXT NULL,
+        last_pushed_at TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`
       ALTER TABLE telegram_arena_watchers
       ADD COLUMN IF NOT EXISTS watch_match_id TEXT NULL;
     `
@@ -1021,6 +1046,10 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_action_audit_user_created_idx
       ON telegram_action_audit (telegram_user_id, created_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_inline_signal_feeds_source_idx
+      ON telegram_inline_signal_feeds (source_chat_id, updated_at DESC);
     `
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_funnel_events_created_idx
@@ -1686,6 +1715,20 @@ function mapTelegramArenaWatchRow(row: any): TelegramArenaWatch {
   }
 }
 
+function mapTelegramInlineSignalFeedRow(row: any): TelegramInlineSignalFeed {
+  return {
+    inlineMessageId: asTrimmed(row.inline_message_id),
+    sourceChatId: asTrimmed(row.source_chat_id),
+    ownerTelegramUserId: String(row.owner_telegram_user_id ?? '').trim(),
+    paused: row.paused === true,
+    closedAt: toIso(row.closed_at),
+    lastRenderHash: asTrimmed(row.last_render_hash) || null,
+    lastPushedAt: toIso(row.last_pushed_at),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  }
+}
+
 export async function getHolderRoomPolicyByVault(params: {
   db: Db
   chatId: string
@@ -2226,6 +2269,189 @@ export async function updateTelegramArenaWatchPoll(params: {
   `
   const row = result.rows?.[0]
   return row ? mapTelegramArenaWatchRow(row) : null
+}
+
+export async function upsertTelegramInlineSignalFeed(params: {
+  db: Db
+  inlineMessageId: string
+  sourceChatId: string
+  ownerTelegramUserId: string | number | bigint
+}): Promise<TelegramInlineSignalFeed | null> {
+  const inlineMessageId = asTrimmed(params.inlineMessageId)
+  const sourceChatId = asTrimmed(params.sourceChatId)
+  const ownerTelegramUserId = normalizeTelegramUserId(params.ownerTelegramUserId)
+  if (!inlineMessageId || !sourceChatId || !ownerTelegramUserId) return null
+
+  const result = await params.db.sql`
+    INSERT INTO telegram_inline_signal_feeds (
+      inline_message_id,
+      source_chat_id,
+      owner_telegram_user_id,
+      paused,
+      closed_at,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${inlineMessageId},
+      ${sourceChatId},
+      ${ownerTelegramUserId.toString()},
+      false,
+      ${null},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (inline_message_id) DO UPDATE
+    SET
+      source_chat_id = EXCLUDED.source_chat_id,
+      owner_telegram_user_id = EXCLUDED.owner_telegram_user_id,
+      paused = false,
+      closed_at = NULL,
+      updated_at = NOW()
+    RETURNING
+      inline_message_id,
+      source_chat_id,
+      owner_telegram_user_id,
+      paused,
+      closed_at,
+      last_render_hash,
+      last_pushed_at,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramInlineSignalFeedRow(row) : null
+}
+
+export async function getTelegramInlineSignalFeedByInlineMessageId(params: {
+  db: Db
+  inlineMessageId: string
+}): Promise<TelegramInlineSignalFeed | null> {
+  const inlineMessageId = asTrimmed(params.inlineMessageId)
+  if (!inlineMessageId) return null
+  const result = await params.db.sql`
+    SELECT
+      inline_message_id,
+      source_chat_id,
+      owner_telegram_user_id,
+      paused,
+      closed_at,
+      last_render_hash,
+      last_pushed_at,
+      created_at,
+      updated_at
+    FROM telegram_inline_signal_feeds
+    WHERE inline_message_id = ${inlineMessageId}
+    LIMIT 1;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramInlineSignalFeedRow(row) : null
+}
+
+export async function listTelegramInlineSignalFeedsBySourceChat(params: {
+  db: Db
+  sourceChatId: string
+  includePaused?: boolean
+  limit?: number
+}): Promise<TelegramInlineSignalFeed[]> {
+  const sourceChatId = asTrimmed(params.sourceChatId)
+  if (!sourceChatId) return []
+  const includePaused = params.includePaused === true
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(params.limit ?? 25))))
+  const result = await params.db.sql`
+    SELECT
+      inline_message_id,
+      source_chat_id,
+      owner_telegram_user_id,
+      paused,
+      closed_at,
+      last_render_hash,
+      last_pushed_at,
+      created_at,
+      updated_at
+    FROM telegram_inline_signal_feeds
+    WHERE source_chat_id = ${sourceChatId}
+      AND closed_at IS NULL
+      AND (${includePaused} = true OR paused = false)
+    ORDER BY updated_at DESC
+    LIMIT ${limit};
+  `
+  return (result.rows ?? []).map(mapTelegramInlineSignalFeedRow)
+}
+
+export async function setTelegramInlineSignalFeedPaused(params: {
+  db: Db
+  inlineMessageId: string
+  paused: boolean
+}): Promise<TelegramInlineSignalFeed | null> {
+  const inlineMessageId = asTrimmed(params.inlineMessageId)
+  if (!inlineMessageId) return null
+  const result = await params.db.sql`
+    UPDATE telegram_inline_signal_feeds
+    SET
+      paused = ${Boolean(params.paused)},
+      updated_at = NOW()
+    WHERE inline_message_id = ${inlineMessageId}
+      AND closed_at IS NULL
+    RETURNING
+      inline_message_id,
+      source_chat_id,
+      owner_telegram_user_id,
+      paused,
+      closed_at,
+      last_render_hash,
+      last_pushed_at,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramInlineSignalFeedRow(row) : null
+}
+
+export async function closeTelegramInlineSignalFeed(params: {
+  db: Db
+  inlineMessageId: string
+}): Promise<TelegramInlineSignalFeed | null> {
+  const inlineMessageId = asTrimmed(params.inlineMessageId)
+  if (!inlineMessageId) return null
+  const result = await params.db.sql`
+    UPDATE telegram_inline_signal_feeds
+    SET
+      closed_at = NOW(),
+      updated_at = NOW()
+    WHERE inline_message_id = ${inlineMessageId}
+      AND closed_at IS NULL
+    RETURNING
+      inline_message_id,
+      source_chat_id,
+      owner_telegram_user_id,
+      paused,
+      closed_at,
+      last_render_hash,
+      last_pushed_at,
+      created_at,
+      updated_at;
+  `
+  const row = result.rows?.[0]
+  return row ? mapTelegramInlineSignalFeedRow(row) : null
+}
+
+export async function touchTelegramInlineSignalFeedPush(params: {
+  db: Db
+  inlineMessageId: string
+  renderHash: string
+}): Promise<void> {
+  const inlineMessageId = asTrimmed(params.inlineMessageId)
+  const renderHash = asTrimmed(params.renderHash)
+  if (!inlineMessageId) return
+  await params.db.sql`
+    UPDATE telegram_inline_signal_feeds
+    SET
+      last_render_hash = ${renderHash || null},
+      last_pushed_at = NOW(),
+      updated_at = NOW()
+    WHERE inline_message_id = ${inlineMessageId};
+  `
 }
 
 export async function listHolderRoomMembersNeedingRecheck(params: {

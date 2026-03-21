@@ -59,6 +59,7 @@ export type TelegramCallbackQuery = {
   data?: string
   from?: TelegramFrom
   message?: TelegramMessage
+  inline_message_id?: string
 }
 
 export type TelegramPreCheckoutQuery = {

@@ -1,5 +1,6 @@
 // Compatibility runtime while webhook modules are fully extracted.
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { createHash } from 'node:crypto'
 import { PrivyClient } from '@privy-io/server-auth'
 import { createPublicClient, encodeFunctionData, erc20Abi, formatUnits, getAddress, http, parseEther, type Address } from 'viem'
 import { base } from 'viem/chains'
@@ -21,13 +22,16 @@ import {
   consumeTelegramTradePercentPrompt,
   getTelegramTradePercentPrompt,
   clearTelegramTradePercentPrompt,
+  closeTelegramInlineSignalFeed,
   ensureTelegramTradingSchema,
+  getTelegramInlineSignalFeedByInlineMessageId,
   getTelegramChatTradePolicy,
   getHolderRoomPolicyByVault,
   getTelegramLinkByUserId,
   getTelegramPortfolioSummary,
   listHolderRoomPolicies,
-  logTelegramActionAudit,
+  listTelegramInlineSignalFeedsBySourceChat,
+  logTelegramActionAudit as logTelegramActionAuditShared,
   logTelegramFunnelEvent,
   isTelegramFunnelEventsEnabledForChat,
   listTelegramAuctions,
@@ -36,7 +40,10 @@ import {
   listTelegramUserBids,
   readTelegramOnboardingSession,
   revokeTelegramLink,
+  setTelegramInlineSignalFeedPaused,
+  touchTelegramInlineSignalFeedPush,
   tryInsertTelegramPrivateDmWelcomeSent,
+  upsertTelegramInlineSignalFeed,
   upsertTelegramOnboardingSession,
   upsertTelegramTradePercentPrompt,
   upsertHolderRoomMember,
@@ -107,7 +114,7 @@ import type { TradeFlowState } from './webhook/trade/types.js'
 import { createTelegramHolderRoomInviteLink as createTelegramHolderRoomInviteLinkShared, readTelegramChatMemberStatus as readTelegramChatMemberStatusShared } from './webhook/telegramApi/chats.js'
 import { answerTelegramCallbackQuery as answerTelegramCallbackQueryShared, answerTelegramPreCheckoutQuery as answerTelegramPreCheckoutQueryShared } from './webhook/telegramApi/interactions.js'
 import { answerTelegramInlineQuery as answerTelegramInlineQueryShared } from './webhook/telegramApi/inline.js'
-import { deleteTelegramMessage as deleteTelegramMessageShared, editTelegramMessage as editTelegramMessageShared, replaceTelegramMenuMessage as replaceTelegramMenuMessageShared, sendTelegramMessage as sendTelegramMessageShared, sendTelegramPhoto as sendTelegramPhotoShared } from './webhook/telegramApi/messaging.js'
+import { deleteTelegramMessage as deleteTelegramMessageShared, editTelegramInlineMessage as editTelegramInlineMessageShared, editTelegramMessage as editTelegramMessageShared, replaceTelegramMenuMessage as replaceTelegramMenuMessageShared, sendTelegramMessage as sendTelegramMessageShared, sendTelegramPhoto as sendTelegramPhotoShared } from './webhook/telegramApi/messaging.js'
 import { sendTelegramStarsInvoice as sendTelegramStarsInvoiceShared } from './webhook/telegramApi/payments.js'
 import { isTelegramContextAllowed } from './webhook/services/access.js'
 import { emitTelegramFunnelEvent as emitTelegramFunnelEventShared } from './webhook/services/funnel.js'
@@ -202,6 +209,7 @@ type TelegramCallbackQuery = {
   data?: string
   from?: TelegramFrom
   message?: TelegramMessage
+  inline_message_id?: string
 }
 
 type TelegramSuccessfulPayment = {
@@ -1908,6 +1916,15 @@ async function editTelegramMessage(params: {
   return editTelegramMessageShared(params)
 }
 
+async function editTelegramInlineMessage(params: {
+  botToken: string
+  inlineMessageId: string
+  text: string
+  replyMarkup?: Record<string, unknown>
+}): Promise<boolean> {
+  return editTelegramInlineMessageShared(params)
+}
+
 async function deleteTelegramMessage(params: {
   botToken: string
   chatId: string
@@ -2303,6 +2320,164 @@ function formatSignalsText(title: string, rows: Awaited<ReturnType<typeof listTe
     lines.push(`- ${row.actionType} ${row.status}${row.txHash ? ` (${truncateAddress(row.txHash)})` : ''}`)
   }
   return lines.join('\n')
+}
+
+function formatSignalsLiveTimestamp(iso: string | null | undefined): string {
+  const raw = asTrimmed(iso ?? '')
+  if (!raw) return 'recent'
+  const date = new Date(raw)
+  if (!Number.isFinite(date.getTime())) return 'recent'
+  const hh = String(date.getUTCHours()).padStart(2, '0')
+  const mm = String(date.getUTCMinutes()).padStart(2, '0')
+  return `${hh}:${mm} UTC`
+}
+
+function buildSignalsLiveReplyMarkup(params?: { paused?: boolean; closed?: boolean }): Record<string, unknown> | undefined {
+  if (params?.closed) return undefined
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Refresh', callback_data: 'livefeed:signals:refresh' },
+        { text: params?.paused ? 'Resume' : 'Pause', callback_data: params?.paused ? 'livefeed:signals:resume' : 'livefeed:signals:pause' },
+        { text: 'Close', callback_data: 'livefeed:signals:close' },
+      ],
+    ],
+  }
+}
+
+function renderSignalsLiveText(params: {
+  rows: Awaited<ReturnType<typeof listTelegramSignals>>
+  paused?: boolean
+  closed?: boolean
+}): string {
+  const summaryLines = [
+    params.closed ? 'Feed closed.' : params.paused ? 'Live feed paused.' : 'Auto-updating trade feed.',
+    params.closed ? 'Send a new inline result to start again.' : 'Tap Refresh anytime.',
+  ]
+  const detailLines =
+    params.rows.length === 0
+      ? ['No recent signals yet.']
+      : params.rows.slice(0, 8).map((row) => {
+          const parts = [`${row.actionType.toUpperCase()} ${row.status}`]
+          if (row.txHash) parts.push(truncateAddress(row.txHash))
+          parts.push(formatSignalsLiveTimestamp(row.createdAt))
+          return parts.join(' • ')
+        })
+  return buildTelegramCommandChrome({
+    title: 'AKITA | SIGNALS LIVE',
+    command: '/signals',
+    summaryLines,
+    detailLines,
+    expandableDetails: true,
+  })
+}
+
+function hashSignalsLiveText(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex')
+}
+
+function resolveSignalsFeedSourceChatId(params: {
+  signalsChatId?: string | null
+  targetChatId?: string | null
+}): string {
+  return asTrimmed(params.signalsChatId ?? '') || asTrimmed(params.targetChatId ?? '')
+}
+
+async function refreshSignalsLiveFeed(params: {
+  db: Awaited<ReturnType<typeof getDb>>
+  botToken: string
+  inlineMessageId: string
+  force?: boolean
+}) {
+  const feed = await getTelegramInlineSignalFeedByInlineMessageId({
+    db: params.db as any,
+    inlineMessageId: params.inlineMessageId,
+  })
+  if (!feed || feed.closedAt) return false
+  const rows = await listTelegramSignals({
+    db: params.db as any,
+    chatId: feed.sourceChatId,
+    limit: 8,
+  })
+  const text = renderSignalsLiveText({
+    rows,
+    paused: feed.paused,
+  })
+  const renderHash = hashSignalsLiveText(text)
+  if (!params.force && feed.lastRenderHash === renderHash) return false
+  const edited = await editTelegramInlineMessage({
+    botToken: params.botToken,
+    inlineMessageId: feed.inlineMessageId,
+    text,
+    replyMarkup: buildSignalsLiveReplyMarkup({ paused: feed.paused }),
+  }).catch(() => false)
+  if (!edited) return false
+  await touchTelegramInlineSignalFeedPush({
+    db: params.db as any,
+    inlineMessageId: feed.inlineMessageId,
+    renderHash,
+  }).catch(() => {})
+  return true
+}
+
+async function closeSignalsLiveFeed(params: {
+  db: Awaited<ReturnType<typeof getDb>>
+  botToken: string
+  inlineMessageId: string
+}) {
+  const closed = await closeTelegramInlineSignalFeed({
+    db: params.db as any,
+    inlineMessageId: params.inlineMessageId,
+  })
+  if (!closed) return false
+  const rows = await listTelegramSignals({
+    db: params.db as any,
+    chatId: closed.sourceChatId,
+    limit: 8,
+  })
+  const text = renderSignalsLiveText({
+    rows,
+    closed: true,
+  })
+  return editTelegramInlineMessage({
+    botToken: params.botToken,
+    inlineMessageId: params.inlineMessageId,
+    text,
+  }).catch(() => false)
+}
+
+async function refreshSignalsLiveFeedsForChat(params: {
+  db: Awaited<ReturnType<typeof getDb>>
+  botToken: string
+  sourceChatId: string
+}) {
+  const sourceChatId = asTrimmed(params.sourceChatId)
+  if (!sourceChatId) return
+  const feeds = await listTelegramInlineSignalFeedsBySourceChat({
+    db: params.db as any,
+    sourceChatId,
+    includePaused: false,
+    limit: 25,
+  }).catch(() => [])
+  for (const feed of feeds) {
+    await refreshSignalsLiveFeed({
+      db: params.db,
+      botToken: params.botToken,
+      inlineMessageId: feed.inlineMessageId,
+      force: false,
+    }).catch(() => {})
+  }
+}
+
+async function logTelegramActionAudit(params: Parameters<typeof logTelegramActionAuditShared>[0] & { botToken?: string }) {
+  await logTelegramActionAuditShared(params)
+  const botToken = asTrimmed(params.botToken ?? '') || getTelegramWebhookConfig().botToken
+  if (!botToken) return
+  await refreshSignalsLiveFeedsForChat({
+    db: params.db as any,
+    botToken,
+    sourceChatId: params.chatId,
+  }).catch(() => {})
 }
 
 function areHolderRoomsEnabled(): boolean {
@@ -5896,6 +6071,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           inlineMessageId: inlineMessageId || null,
         },
       })
+      if (resultKey === 'signals-live' && inlineMessageId) {
+        const sourceChatId = resolveSignalsFeedSourceChatId({
+          signalsChatId: webhookConfig.signalsChatId,
+          targetChatId: webhookConfig.targetChatId,
+        })
+        if (sourceChatId) {
+          await upsertTelegramInlineSignalFeed({
+            db: db as any,
+            inlineMessageId,
+            sourceChatId,
+            ownerTelegramUserId: userId,
+          }).catch(() => null)
+          await refreshSignalsLiveFeed({
+            db,
+            botToken,
+            inlineMessageId,
+            force: true,
+          }).catch(() => {})
+        }
+      }
     },
     onError: (error, meta) => {
       console.error('[telegram/webhook] chosen inline result handling failed', {
@@ -5969,7 +6164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
-    const { callbackQueryId, callbackData, chatId, callbackMessageId, userId } = normalizedCallback
+    const { callbackQueryId, callbackData, chatId = '', callbackMessageId, inlineMessageId, userId } = normalizedCallback
     const parsedTradeFlowCallback = parseTradeFlowCallbackData(callbackData)
     const parsedTradeCallback = parseTradeCallbackData(callbackData)
     const parsedDeployCallback = parseDeployCallbackData(callbackData)
@@ -5982,6 +6177,104 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (isMenuNavigationCallback || isOnboardingCallback) && typeof callbackMessageId === 'number'
     const adminUserIds = parseAdminUserIds()
     const isAdmin = userId ? adminUserIds.has(userId) : false
+    const callbackDataLower = asTrimmed(callbackData).toLowerCase()
+
+    if (inlineMessageId && callbackDataLower.startsWith('livefeed:signals:')) {
+      const db = await getDb().catch(() => null)
+      if (!db) {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'Feed unavailable',
+        }).catch(() => {})
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
+      await ensureTelegramTradingSchema(db as any).catch(() => {})
+      const feed = await getTelegramInlineSignalFeedByInlineMessageId({
+        db: db as any,
+        inlineMessageId,
+      })
+      if (!feed) {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'Feed unavailable',
+        }).catch(() => {})
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
+
+      if (callbackDataLower === 'livefeed:signals:refresh') {
+        await refreshSignalsLiveFeed({
+          db,
+          botToken,
+          inlineMessageId,
+          force: true,
+        }).catch(() => {})
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'Signals refreshed',
+        }).catch(() => {})
+      } else if (callbackDataLower === 'livefeed:signals:pause' || callbackDataLower === 'livefeed:signals:resume') {
+        if (feed.ownerTelegramUserId !== userId) {
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: 'Only the owner can control this feed',
+            showAlert: true,
+          }).catch(() => {})
+        } else {
+          const paused = callbackDataLower === 'livefeed:signals:pause'
+          await setTelegramInlineSignalFeedPaused({
+            db: db as any,
+            inlineMessageId,
+            paused,
+          }).catch(() => null)
+          await refreshSignalsLiveFeed({
+            db,
+            botToken,
+            inlineMessageId,
+            force: true,
+          }).catch(() => {})
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: paused ? 'Feed paused' : 'Feed resumed',
+          }).catch(() => {})
+        }
+      } else if (callbackDataLower === 'livefeed:signals:close') {
+        if (feed.ownerTelegramUserId !== userId) {
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: 'Only the owner can close this feed',
+            showAlert: true,
+          }).catch(() => {})
+        } else {
+          await closeSignalsLiveFeed({
+            db,
+            botToken,
+            inlineMessageId,
+          }).catch(() => {})
+          await answerTelegramCallbackQuery({
+            botToken,
+            callbackQueryId,
+            text: 'Feed closed',
+          }).catch(() => {})
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
 
     const isAllowedContext = isTelegramContextAllowed({
       chatId,
@@ -6040,7 +6333,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    const callbackDataLower = asTrimmed(callbackData).toLowerCase()
     if (callbackDataLower === 'message:delete') {
       try {
         await answerTelegramCallbackQuery({

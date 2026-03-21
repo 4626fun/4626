@@ -27,6 +27,8 @@ type InlineResultTemplate = {
   title: string
   description: string
   command: string
+  inputMessageText?: string
+  replyMarkup?: Record<string, unknown>
   baseScore: number
   intentTags: InlineQueryClass[]
   mediaKey?: string
@@ -126,7 +128,8 @@ function materializeInlineResult(params: {
         thumbnail_url: isHttpUrl(media.thumbnailUrl) ? media.thumbnailUrl : media.photoUrl,
         title: template.title,
         description: template.description,
-        input_message_content: { message_text: template.command },
+        input_message_content: { message_text: template.inputMessageText ?? template.command },
+        ...(template.replyMarkup ? { reply_markup: template.replyMarkup } : {}),
       }
     }
     if (isHttpUrl(media.videoUrl)) {
@@ -138,7 +141,8 @@ function materializeInlineResult(params: {
         thumbnail_url: isHttpUrl(media.thumbnailUrl) ? media.thumbnailUrl : media.videoUrl,
         title: template.title,
         description: template.description,
-        input_message_content: { message_text: template.command },
+        input_message_content: { message_text: template.inputMessageText ?? template.command },
+        ...(template.replyMarkup ? { reply_markup: template.replyMarkup } : {}),
       }
     }
     if (isHttpUrl(media.mpeg4GifUrl)) {
@@ -148,7 +152,8 @@ function materializeInlineResult(params: {
         mpeg4_url: media.mpeg4GifUrl,
         thumbnail_url: isHttpUrl(media.thumbnailUrl) ? media.thumbnailUrl : media.mpeg4GifUrl,
         title: template.title,
-        input_message_content: { message_text: template.command },
+        input_message_content: { message_text: template.inputMessageText ?? template.command },
+        ...(template.replyMarkup ? { reply_markup: template.replyMarkup } : {}),
       }
     }
     if (isHttpUrl(media.documentUrl)) {
@@ -159,7 +164,8 @@ function materializeInlineResult(params: {
         document_url: media.documentUrl,
         mime_type: asTrimmed(media.documentMimeType) || 'application/pdf',
         description: template.description,
-        input_message_content: { message_text: template.command },
+        input_message_content: { message_text: template.inputMessageText ?? template.command },
+        ...(template.replyMarkup ? { reply_markup: template.replyMarkup } : {}),
       }
     }
   }
@@ -169,7 +175,8 @@ function materializeInlineResult(params: {
     id,
     title: template.title,
     description: template.description,
-    input_message_content: { message_text: template.command },
+    input_message_content: { message_text: template.inputMessageText ?? template.command },
+    ...(template.replyMarkup ? { reply_markup: template.replyMarkup } : {}),
   }
 }
 
@@ -278,6 +285,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const wantsSocial = /\b(x|tweet|post)\b/.test(lowerQuery)
   const wantsAi = queryClass === 'ai'
   const wantsMarket = queryClass === 'market'
+  const wantsSignals = /\b(signal|signals|feed|live)\b/.test(lowerQuery) || queryClass === 'discovery'
   const wantsArena = queryClass === 'arena' || /\b(arena|clash|pregame|commander|tune|tuning|rules|zones|overdrive|match)\b/.test(lowerQuery)
 
   const templates: InlineResultTemplate[] = []
@@ -424,6 +432,26 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       baseScore: 86,
       intentTags: ['discovery', 'general'],
       mediaKey: 'card:portfolio',
+    })
+  }
+
+  if (wantsSignals) {
+    pushTemplate({
+      key: 'signals-live',
+      title: 'Signals Live',
+      description: 'Auto-updating trade feed',
+      command: '/signals',
+      inputMessageText: 'Loading live signals…',
+      replyMarkup: {
+        inline_keyboard: [[
+          { text: 'Refresh', callback_data: 'livefeed:signals:refresh' },
+          { text: 'Pause', callback_data: 'livefeed:signals:pause' },
+          { text: 'Close', callback_data: 'livefeed:signals:close' },
+        ]],
+      },
+      baseScore: 96,
+      intentTags: ['discovery', 'trade', 'general'],
+      mediaKey: 'card:signals',
     })
   }
 
@@ -599,11 +627,11 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       : shouldShowPmHandoff
         ? params.linkButtonUrl
           ? {
-              text: growthMode ? 'Connect wallet' : 'Link wallet',
+              text: 'Connect wallet',
               web_app: { url: params.linkButtonUrl },
             }
           : {
-              text: growthMode ? 'Connect wallet' : 'Link wallet',
+              text: 'Connect wallet',
               start_parameter: pmParameter,
             }
         : undefined
@@ -618,7 +646,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
           button,
           ...(shouldShowPmHandoff
             ? {
-                switchPmText: growthMode ? 'Connect wallet' : 'Link wallet',
+                switchPmText: 'Connect wallet',
                 switchPmParameter: pmParameter,
               }
             : {}),

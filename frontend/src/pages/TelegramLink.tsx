@@ -439,6 +439,14 @@ export function TelegramLink() {
       setLinkState('idle')
       setLinkMessage(null)
     } catch (error: unknown) {
+      if (isPrivyEmailAlreadyLinkedError(error)) {
+        // Privy can throw this when the email method already exists on the
+        // current user. Treat as recoverable and continue the link flow.
+        linkAttemptRef.current = ''
+        setLinkState('idle')
+        setLinkMessage(null)
+        return
+      }
       const message =
         error instanceof Error && error.message.trim().length > 0
           ? error.message

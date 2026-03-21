@@ -37,7 +37,7 @@ export async function handleChosenInlineResultUpdate(params: {
   try {
     await params.onChosenInlineResult({
       resultId,
-      userId: asTrimmed(chosenInlineResult.from?.id ?? ''),
+      userId: String(chosenInlineResult.from?.id ?? '').trim(),
       query: asTrimmed(chosenInlineResult.query ?? ''),
       inlineMessageId: asTrimmed(chosenInlineResult.inline_message_id ?? ''),
     })
