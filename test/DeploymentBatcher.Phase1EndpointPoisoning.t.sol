@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
 
@@ -261,7 +260,8 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
         (DeploymentBatcher deployer,,) = _deployFixture(address(bootstrap));
 
-        DeploymentBatcher.Phase1Result memory out = deployer.deployPhase1Core(_phase1Params(), _codeIds());
+        DeploymentBatcher.Phase1Result memory out =
+            deployer.deployPhase1CoreWithSalt(_phase1Params(), _codeIds(), bytes32(0));
 
         // Bootstrap registry is intentionally write-free; it always returns the canonical LZ endpoint.
         assertEq(out.oftBootstrapRegistry, address(bootstrap));
@@ -276,14 +276,15 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
         (DeploymentBatcher deployer, MockCreatorRegistry registry,) = _deployFixture(address(bootstrap));
 
-        deployer.deployPhase1Core(_phase1Params(), _codeIds());
+        deployer.deployPhase1CoreWithSalt(_phase1Params(), _codeIds(), bytes32(0));
 
         // Even if the main registry endpoint is changed (\"poisoned\"), the ShareOFT constructor binds
         // the chain-global bootstrap registry endpoint, not the mutable registry endpoint.
         vm.prank(ATTACKER);
         registry.setEndpoint(ATTACKER_ENDPOINT);
 
-        DeploymentBatcher.Phase1Result memory out = deployer.finalizePhase1(_phase1Params(), _codeIds());
+        DeploymentBatcher.Phase1Result memory out =
+            deployer.finalizePhase1WithSalt(_phase1Params(), _codeIds(), bytes32(0));
 
         assertEq(
             MockShareOFT(out.shareOFT).constructorEndpoint(),
@@ -296,11 +297,12 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
         (DeploymentBatcher deployer, MockCreatorRegistry registry,) = _deployFixture(address(bootstrap));
 
-        deployer.deployPhase1Core(_phase1Params(), _codeIds());
+        deployer.deployPhase1CoreWithSalt(_phase1Params(), _codeIds(), bytes32(0));
 
         registry.setEndpoint(ATTACKER_ENDPOINT);
 
-        DeploymentBatcher.Phase1Result memory out = deployer.finalizePhase1(_phase1Params(), _codeIds());
+        DeploymentBatcher.Phase1Result memory out =
+            deployer.finalizePhase1WithSalt(_phase1Params(), _codeIds(), bytes32(0));
         assertEq(MockShareOFT(out.shareOFT).constructorEndpoint(), bootstrap.LZ_COMMON_ENDPOINT());
     }
 
@@ -310,7 +312,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
 
         DeploymentBatcher.Phase1Params memory params = _phase1Params();
         DeploymentBatcher.CodeIds memory codeIds = _codeIds();
-        deployer.deployPhase1Core(params, codeIds);
+        deployer.deployPhase1CoreWithSalt(params, codeIds, bytes32(0));
 
         bytes32 baseSalt =
             keccak256(abi.encodePacked(params.creatorToken, params.owner, block.chainid, "4626:deploy:", params.version));
@@ -338,7 +340,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         create2.setComputedAddress(shareOftSalt, shareOftInitCodeHash, address(squattedShareOFT));
         create2.setDeployRevert(shareOftSalt, SHARE_OFT_CODE_ID, true);
 
-        DeploymentBatcher.Phase1Result memory out = deployer.finalizePhase1(params, codeIds);
+        DeploymentBatcher.Phase1Result memory out = deployer.finalizePhase1WithSalt(params, codeIds, bytes32(0));
 
         assertEq(out.shareOFT, address(squattedShareOFT), "should reuse existing deterministic ShareOFT");
         assertEq(MockWrapper(wrapperAddr).shareOFT(), address(squattedShareOFT), "wrapper should wire existing ShareOFT");
@@ -400,59 +402,4 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
         assertTrue(cfg.enabled);
     }
 
-    function _phase2Params() internal pure returns (DeploymentBatcher.Phase2Params memory params) {
-        params = DeploymentBatcher.Phase2Params({
-            creatorToken: address(0),
-            owner: address(0),
-            creatorTreasury: address(0),
-            payoutRecipient: address(0),
-            vault: address(0),
-            wrapper: address(0),
-            shareOFT: address(0),
-            shareSymbol: "",
-            version: "",
-            depositAmount: 0,
-            requiredRaise: 0,
-            floorPriceQ96: 0,
-            auctionSteps: ""
-        });
-    }
-
-    function _codeIds() internal pure returns (DeploymentBatcher.CodeIds memory codeIds) {
-        codeIds = DeploymentBatcher.CodeIds({
-            vault: bytes32(0),
-            wrapper: bytes32(0),
-            shareOFT: bytes32(0),
-            gauge: bytes32(0),
-            cca: bytes32(0),
-            oracle: bytes32(0),
-            oftBootstrap: bytes32(0)
-        });
-    }
-
-    function test_LegacyOneShotPhase2_Disabled_NoPermit() public {
-        vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
-        batcher.deployPhase2AndLaunch(_phase2Params(), _codeIds());
-    }
-
-    function test_LegacyOneShotPhase2_Disabled_Permit() public {
-        DeploymentBatcher.PermitData memory permit = DeploymentBatcher.PermitData({
-            deadline: 0,
-            v: 0,
-            r: bytes32(0),
-            s: bytes32(0)
-        });
-        vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
-        batcher.deployPhase2AndLaunchWithPermit(_phase2Params(), _codeIds(), permit);
-    }
-
-    function test_LegacyOneShotPhase2_Disabled_Permit2() public {
-        ISignatureTransfer.PermitTransferFrom memory permit2 = ISignatureTransfer.PermitTransferFrom({
-            permitted: ISignatureTransfer.TokenPermissions({token: address(0), amount: 0}),
-            nonce: 0,
-            deadline: 0
-        });
-        vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
-        batcher.deployPhase2AndLaunchWithPermit2(_phase2Params(), _codeIds(), permit2, "");
-    }
 }

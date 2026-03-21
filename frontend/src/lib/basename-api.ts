@@ -276,6 +276,16 @@ function logBasenameLookupError(message: string, error: unknown): void {
 }
 
 function createMainnetReadClient() {
+  const buildReadTransport = (url: string) => {
+    if (url.startsWith('/api/rpc')) {
+      // Same-origin RPC proxy already retries upstream; avoid multiplying retries in the client.
+      return http(url, {
+        retryCount: 0,
+        retryDelay: 150,
+      })
+    }
+    return http(url)
+  }
   // Avoid viem's default public endpoint selection in browsers (can pick
   // providers without permissive CORS, e.g. eth.merkle.io).
   return createPublicClient({
@@ -284,7 +294,7 @@ function createMainnetReadClient() {
       (IS_BROWSER
         ? ['/api/rpc?chain=mainnet']
         : ['https://ethereum-rpc.publicnode.com', 'https://rpc.ankr.com/eth', 'https://eth.llamarpc.com']).map((url) =>
-        http(url),
+        buildReadTransport(url),
       ),
     ),
   })

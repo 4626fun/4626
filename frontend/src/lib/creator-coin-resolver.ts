@@ -26,7 +26,17 @@ function getBaseRpcUrl(): string {
 
 const publicClient = createPublicClient({
   chain: base,
-  transport: http(getBaseRpcUrl()),
+  transport: (() => {
+    const rpcUrl = getBaseRpcUrl()
+    if (rpcUrl.startsWith('/api/rpc')) {
+      // Same-origin RPC proxy already retries upstream; avoid multiplying retries in the client.
+      return http(rpcUrl, {
+        retryCount: 0,
+        retryDelay: 150,
+      })
+    }
+    return http(rpcUrl)
+  })(),
 })
 
 // CreatorCoin ABI - we only need the functions we're calling

@@ -69,6 +69,13 @@ const BASE_RPC_RAW =
   ''
 
 const IS_BROWSER = typeof window !== 'undefined'
+const VERIFY_MIGRATION_IMPLEMENTATION = (() => {
+  // Browser-side contract bytecode verification can trigger large eth_getCode bursts.
+  // Keep it opt-in for frontend usage; server contexts stay strict by default.
+  if (!IS_BROWSER) return true
+  const raw = String(import.meta.env.VITE_ZORA_MIGRATION_VERIFY_IMPLEMENTATION ?? '').trim().toLowerCase()
+  return ['1', 'true', 'yes', 'on'].includes(raw)
+})()
 
 function isCorsRestrictedRpc(url: string): boolean {
   // Alchemy browser CORS is opt-in; avoid hard failures by default.
@@ -97,9 +104,16 @@ function getBaseRpcUrl(): string {
  * Get the public client for Base
  */
 function getPublicClient() {
+  const rpcUrl = getBaseRpcUrl()
+  const transport = rpcUrl.startsWith('/api/rpc')
+    ? http(rpcUrl, {
+        retryCount: 0,
+        retryDelay: 150,
+      })
+    : http(rpcUrl)
   return createPublicClient({
     chain: base,
-    transport: http(getBaseRpcUrl()),
+    transport,
   })
 }
 
@@ -309,16 +323,22 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
 
           const uncachedCandidates = Array.from(chunkCandidates).filter((candidate) => !trustedAddressCache.has(candidate))
           if (uncachedCandidates.length > 0) {
-            const trustResults = await mapWithConcurrency(
-              uncachedCandidates,
-              TRUST_CHECK_CONCURRENCY,
-              async (candidate) => {
-                const trusted = await isTrustedMigratedCoin(client, candidate)
-                return [candidate, trusted] as const
-              },
-            )
-            for (const [candidate, trusted] of trustResults) {
-              trustedAddressCache.set(candidate, trusted)
+            if (VERIFY_MIGRATION_IMPLEMENTATION) {
+              const trustResults = await mapWithConcurrency(
+                uncachedCandidates,
+                TRUST_CHECK_CONCURRENCY,
+                async (candidate) => {
+                  const trusted = await isTrustedMigratedCoin(client, candidate)
+                  return [candidate, trusted] as const
+                },
+              )
+              for (const [candidate, trusted] of trustResults) {
+                trustedAddressCache.set(candidate, trusted)
+              }
+            } else {
+              for (const candidate of uncachedCandidates) {
+                trustedAddressCache.set(candidate, true)
+              }
             }
           }
 

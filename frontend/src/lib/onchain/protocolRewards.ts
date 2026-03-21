@@ -36,9 +36,16 @@ function getBaseRpcUrl(): string {
 }
 
 function getBasePublicClient() {
+  const rpcUrl = getBaseRpcUrl()
+  const transport = rpcUrl.startsWith('/api/rpc')
+    ? http(rpcUrl, {
+        retryCount: 0,
+        retryDelay: 150,
+      })
+    : http(rpcUrl)
   return createPublicClient({
     chain: base,
-    transport: http(getBaseRpcUrl()),
+    transport,
   })
 }
 

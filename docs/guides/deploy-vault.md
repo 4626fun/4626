@@ -53,9 +53,9 @@ Production override safety:
 ### Split Phase-1 rollout (Base mainnet + Vercel)
 
 Current canonical Base defaults:
-- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0xB87CBb646dD14F520078F11196f79BF815F18c84`
-- `UniversalBytecodeStoreV2`: `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13`
-- `UniversalCreate2DeployerFromStoreV2`: `0x74183076C7D33346880A5bf0e263B761FB4d38BA`
+- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0x19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e`
+- `UniversalBytecodeStoreV2`: `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A`
+- `UniversalCreate2DeployerFromStoreV2`: `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0`
 
 Mainnet deploy order:
 
@@ -77,7 +77,7 @@ forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
 ```bash
 export PRIVATE_KEY=...
 export BASE_RPC_URL=https://mainnet.base.org
-export UNIVERSAL_BYTECODE_STORE=0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13
+export UNIVERSAL_BYTECODE_STORE=0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A
 
 forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
   --rpc-url "$BASE_RPC_URL" \
@@ -90,17 +90,17 @@ If you use `./script/deploy.sh infra-v2` or `./script/deploy-infra-v2.sh`, this 
 
 ```bash
 export BASE_RPC_URL=https://mainnet.base.org
-export NEW_BATCHER=0xB87CBb646dD14F520078F11196f79BF815F18c84
+export NEW_BATCHER=0x19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e
 
 # infra wiring
 cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
 cast call "$NEW_BATCHER" "create2Deployer()(address)" --rpc-url "$BASE_RPC_URL"
 
 # split Phase-1 selectors in runtime bytecode
-cast code "$NEW_BATCHER" --rpc-url "$BASE_RPC_URL" | tr 'A-F' 'a-f' | rg "1331378b|a98ec9d8|4154f24e|3bc09a8b"
+cast code "$NEW_BATCHER" --rpc-url "$BASE_RPC_URL" | tr 'A-F' 'a-f' | rg "4154f24e|3bc09a8b"
 
 # v2 store surface
-cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
+cast call 0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A \
   "chunkCount(bytes32)(uint256)" \
   0x0000000000000000000000000000000000000000000000000000000000000000 \
   --rpc-url "$BASE_RPC_URL"
@@ -111,7 +111,7 @@ cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export DEPLOYMENT_BATCHER=0xB87CBb646dD14F520078F11196f79BF815F18c84
+export DEPLOYMENT_BATCHER=0x19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e
 export SOLANA_BRIDGE_ADAPTER=0x2414b595c4f18532A5836B6e2E6d536832c572e8
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1

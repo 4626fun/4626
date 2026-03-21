@@ -8,7 +8,14 @@ import {
   verifyTelegramMiniAppInitData,
 } from '../_handlers/telegram/webhook/miniAppAuth'
 
-function buildInitData(params: { botToken: string; authDate: number; userId: string; username?: string }): string {
+function buildInitData(params: {
+  botToken: string
+  authDate: number
+  userId: string
+  username?: string
+  signature?: string
+  includeSignatureInHash?: boolean
+}): string {
   const payload = new URLSearchParams()
   payload.set('auth_date', String(params.authDate))
   payload.set(
@@ -19,7 +26,11 @@ function buildInitData(params: { botToken: string; authDate: number; userId: str
       username: params.username ?? 'akita',
     }),
   )
+  if (typeof params.signature === 'string' && params.signature.trim().length > 0) {
+    payload.set('signature', params.signature.trim())
+  }
   const pairs = Array.from(payload.entries())
+    .filter(([key]) => params.includeSignatureInHash === true || key !== 'signature')
     .map(([key, value]) => `${key}=${value}`)
     .sort()
   const dataCheckString = pairs.join('\n')
@@ -49,6 +60,42 @@ describe('telegram mini app initData verification', () => {
       expect(result.identity.telegramUsername).toBe('akita')
       expect(result.identity.initDataHash).toMatch(/^[a-f0-9]{64}$/)
     }
+  })
+
+  it('accepts valid initData when signature is present and included in hash canonicalization', () => {
+    const botToken = 'test-bot-token'
+    const initData = buildInitData({
+      botToken,
+      authDate: Math.floor(Date.now() / 1000),
+      userId: '42',
+      signature: 'test-signature-blob',
+      includeSignatureInHash: true,
+    })
+
+    const result = verifyTelegramMiniAppInitData({
+      initData,
+      botToken,
+      maxAgeSeconds: 900,
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepts valid initData when signature is present but excluded from hash canonicalization', () => {
+    const botToken = 'test-bot-token'
+    const initData = buildInitData({
+      botToken,
+      authDate: Math.floor(Date.now() / 1000),
+      userId: '42',
+      signature: 'test-signature-blob',
+      includeSignatureInHash: false,
+    })
+
+    const result = verifyTelegramMiniAppInitData({
+      initData,
+      botToken,
+      maxAgeSeconds: 900,
+    })
+    expect(result.ok).toBe(true)
   })
 
   it('derives the same replay nonce hash for reordered initData params', () => {

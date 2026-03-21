@@ -38,6 +38,8 @@ const {
   readTelegramOnboardingSessionMock,
   tryInsertTelegramPrivateDmWelcomeSentMock,
   upsertTelegramOnboardingSessionMock,
+  startAkitaVaultDeployFromTelegramMock,
+  fetchVaultDeployStatusFromTelegramMock,
 } = vi.hoisted(() => ({
   handleKeeprCommandMock: vi.fn(),
   handleTwitterCommandMock: vi.fn(),
@@ -74,6 +76,8 @@ const {
   readTelegramOnboardingSessionMock: vi.fn(),
   tryInsertTelegramPrivateDmWelcomeSentMock: vi.fn(),
   upsertTelegramOnboardingSessionMock: vi.fn(),
+  startAkitaVaultDeployFromTelegramMock: vi.fn(),
+  fetchVaultDeployStatusFromTelegramMock: vi.fn(),
 }))
 
 vi.mock('@privy-io/server-auth', () => ({
@@ -150,6 +154,36 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   upsertTelegramOnboardingSession: upsertTelegramOnboardingSessionMock,
 }))
 
+vi.mock('../_handlers/telegram/webhook/services/vaultDeploy.js', () => ({
+  startAkitaVaultDeployFromTelegram: startAkitaVaultDeployFromTelegramMock,
+  fetchVaultDeployStatusFromTelegram: fetchVaultDeployStatusFromTelegramMock,
+  formatVaultDeployPreviewText: (...args: any[]) => {
+    const [{ version, creatorToken, smartWallet, expiresAt } = {}] = args
+    return [
+      'Vault Deploy Preview • AKITA',
+      '',
+      `- creatorToken: ${creatorToken ?? ''}`,
+      `- smartWallet: ${smartWallet ?? ''}`,
+      `- version: ${version ?? ''}`,
+      '- flow: deploy-session start -> auto-continue when owner is installed',
+      '',
+      `Token expires: ${expiresAt ?? ''}`,
+    ].join('\n')
+  },
+  buildVaultDeployPreviewReplyMarkup: (token: string) => ({
+    inline_keyboard: [[
+      { text: 'Confirm', callback_data: `vaultdeploy:confirm:${token}` },
+      { text: 'Decline', callback_data: `vaultdeploy:decline:${token}` },
+    ]],
+  }),
+  formatVaultDeployTokenFailure: (reason: string) => {
+    if (reason === 'expired') return 'Vault deploy confirmation expired. Start a new `/vaultdeploy` preview.'
+    if (reason === 'consumed') return 'This vault deploy preview was already confirmed or cancelled.'
+    if (reason === 'scope_mismatch') return 'Vault deploy confirmation scope mismatch. Use a fresh preview from this chat.'
+    return 'Vault deploy confirmation token not found. Start a new `/vaultdeploy` preview.'
+  },
+}))
+
 describe('telegram webhook handler', () => {
   let restoreEnv: (() => void) | null = null
 
@@ -211,6 +245,16 @@ describe('telegram webhook handler', () => {
     readTelegramOnboardingSessionMock.mockResolvedValue(null)
     tryInsertTelegramPrivateDmWelcomeSentMock.mockResolvedValue(true)
     upsertTelegramOnboardingSessionMock.mockResolvedValue(undefined)
+    startAkitaVaultDeployFromTelegramMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      error: 'vault_deploy_start_failed',
+    })
+    fetchVaultDeployStatusFromTelegramMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      error: 'vault_deploy_status_failed',
+    })
     checkSharesEligibilityMock.mockResolvedValue({
       eligible: false,
       reason: 'share_balance<threshold',
@@ -4084,6 +4128,186 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '').toLowerCase()).toContain('canonical wallet')
     expect(String(payload.text ?? '').toLowerCase()).toContain('not available')
+  })
+
+  it('renders vault deploy preview with confirm/decline callbacks', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    createTelegramActionTokenMock.mockResolvedValueOnce({
+      token: 'vault-preview-token',
+      expiresAt: '2026-03-13T00:05:00.000Z',
+    })
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_8_2,
+        message: {
+          message_id: 39,
+          text: '/vaultdeploy akita v1.6.1',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Vault Deploy Preview • AKITA')
+    const buttons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
+    expect(
+      buttons.some((button: any) => String(button?.callback_data ?? '') === 'vaultdeploy:confirm:vault-preview-token'),
+    ).toBe(true)
+    expect(
+      buttons.some((button: any) => String(button?.callback_data ?? '') === 'vaultdeploy:decline:vault-preview-token'),
+    ).toBe(true)
+  })
+
+  it('confirms vault deploy callback and renders a single status card with refresh', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    consumeTelegramActionTokenMock.mockResolvedValueOnce({
+      ok: true,
+      actionType: 'vault_deploy',
+      intentPayload: {
+        deployType: 'vault',
+        token: 'akita',
+        version: 'v1.6.1',
+        creatorToken: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
+        smartWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+      expiresAt: '2026-03-13T00:05:00.000Z',
+      consumedAt: '2026-03-13T00:00:30.000Z',
+    })
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    startAkitaVaultDeployFromTelegramMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      data: {
+        sessionId: 'session-vault-1',
+        nextAction: 'phase2_core_sent',
+        predictedContracts: {
+          creatorToken: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
+          vault: '0x1111111111111111111111111111111111111111',
+          wrapper: '0x2222222222222222222222222222222222222222',
+          shareOFT: '0x3333333333333333333333333333333333333333',
+          gaugeController: '0x4444444444444444444444444444444444444444',
+          ccaStrategy: '0x5555555555555555555555555555555555555555',
+          oracle: '0x6666666666666666666666666666666666666666',
+        },
+      },
+    })
+    fetchVaultDeployStatusFromTelegramMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      data: {
+        id: 'session-vault-1',
+        step: 'phase2_confirmed',
+        lastError: null,
+        lastUserOpHash: '0x8888888888888888888888888888888888888888888888888888888888888888',
+        lastTxHash: '0x7777777777777777777777777777777777777777777777777777777777777777',
+        launchImage: null,
+        diagnostics: null,
+      },
+    })
+    createTelegramActionTokenMock.mockResolvedValueOnce({
+      token: 'vault-status-token',
+      expiresAt: '2026-03-13T00:15:00.000Z',
+    })
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_8_3,
+        callback_query: {
+          id: 'cbq-vault-confirm',
+          data: 'vaultdeploy:confirm:vault-preview-token',
+          from: { id: 99 },
+          message: { message_id: 40, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(startAkitaVaultDeployFromTelegramMock).toHaveBeenCalledWith({
+      canonicalSmartWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      version: 'v1.6.1',
+    })
+    expect(fetchVaultDeployStatusFromTelegramMock).toHaveBeenCalledWith({
+      canonicalSmartWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sessionId: 'session-vault-1',
+    })
+    expect((fetch as any).mock.calls.length).toBe(2)
+    const callbackAck = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(callbackAck.text ?? '')).toContain('Starting deployment')
+    const editedPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(editedPayload.text ?? '')).toContain('<b>AKITA Vault Deploy</b>')
+    expect(String(editedPayload.text ?? '')).toContain('✅ Phase 2 finalize')
+    expect(String(editedPayload.text ?? '')).toContain('⬜ Deferred auction launch')
+    expect(String(editedPayload.text ?? '')).toContain('https://basescan.org/address/0x1111111111111111111111111111111111111111')
+    const buttons = editedPayload.reply_markup?.inline_keyboard?.flat?.() ?? []
+    expect(
+      buttons.some((button: any) => String(button?.callback_data ?? '') === 'vaultdeploy:status:vault-status-token'),
+    ).toBe(true)
+    expect(
+      buttons.some((button: any) => String(button?.url ?? '').includes('https://basescan.org/tx/')),
+    ).toBe(true)
   })
 
   it('handles /zora as a telegram-native command with web-first guidance', async () => {

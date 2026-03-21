@@ -59,7 +59,12 @@ const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
 const RPC_CHAIN_ID_TIMEOUT_MS = 1_500
 const RPC_FORWARD_TIMEOUT_MS = 5_000
 const RPC_RATE_LIMIT_WINDOW_MS = 60_000
-const RPC_RATE_LIMIT_MAX_REQUESTS = 120
+const RPC_RATE_LIMIT_MAX_REQUESTS = clampInteger(
+  process.env.RPC_PROXY_RATE_LIMIT_MAX_REQUESTS,
+  process.env.NODE_ENV === 'development' ? 240 : 120,
+  60,
+  2_000,
+)
 const RPC_TELEMETRY_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.RPC_PROXY_TELEMETRY ?? '1').trim().toLowerCase(),
 )
@@ -452,6 +457,10 @@ function consumeRateLimitBucket(key: string): RateLimitBucketResult {
   }
 }
 
+function buildRateLimitKey(principalAddress: string, chain: RpcChain): string {
+  return `${principalAddress.trim().toLowerCase()}:${chain}`
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -482,12 +491,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ success: false, error: 'Method not allowed' })
     }
 
+    const chain = resolveRpcChain(req)
+    telemetry.chain = chain
+
     const principalAddress = readRequestPrincipalAddress(req)
     if (!principalAddress) {
       finalizeTelemetry(401, 'unauthenticated')
       return res.status(401).json({ success: false, error: 'Authentication required' })
     }
-    const rateLimit = consumeRateLimitBucket(principalAddress.toLowerCase())
+    const rateLimit = consumeRateLimitBucket(buildRateLimitKey(principalAddress, chain))
     setRateLimitHeaders(res, { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt })
     if (!rateLimit.allowed) {
       res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimit.resetAt)))
@@ -516,8 +528,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       finalizeTelemetry(400, 'blocked_method')
       return res.status(400).json({ success: false, error: 'Unsupported JSON-RPC method' })
     }
-    const chain = resolveRpcChain(req)
-    telemetry.chain = chain
     const rpcUrls = getRpcUrls(chain)
     const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
     const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]

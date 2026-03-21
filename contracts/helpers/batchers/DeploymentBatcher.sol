@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
@@ -135,14 +134,14 @@ interface IERC4626StrategyAdapterAdmin {
 contract DeploymentBatcher is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint24 public constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
+    uint24 internal constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
 
     /// @notice Charm Finance Alpha Vault Factory on Base
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
     /// @notice Pinned Charm governance allowlist on Base. Deployments fail closed outside this set.
-    address public constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
-    address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
+    address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
+    address internal constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
 
     // ── Fixed Two-Way Split Constants ────────────────────────────────
     /// @notice Minimum deposit amount (50M tokens, 18 decimals)
@@ -219,13 +218,6 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes auctionSteps;
         bytes32 meteoraAlphaVault;
         IBaseSolanaBridge.Ix[] solanaIxs;
-    }
-
-    struct PermitData {
-        uint256 deadline;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
     }
 
     struct Phase1Result {
@@ -516,14 +508,6 @@ contract DeploymentBatcher is ReentrancyGuard {
     // PHASE 1
     // ================================
 
-    function deployPhase1Core(Phase1Params calldata params, CodeIds calldata codeIds)
-        external
-        nonReentrant
-        returns (Phase1Result memory out)
-    {
-        return _deployPhase1CoreInternal(params, codeIds);
-    }
-
     function deployPhase1CoreWithSalt(
         Phase1Params calldata params,
         CodeIds calldata codeIds,
@@ -531,14 +515,6 @@ contract DeploymentBatcher is ReentrancyGuard {
     ) external nonReentrant returns (Phase1Result memory out) {
         if (shareOftSaltOverride != bytes32(0)) revert SaltOverrideDisabled();
         return _deployPhase1CoreInternal(params, codeIds);
-    }
-
-    function finalizePhase1(Phase1Params calldata params, CodeIds calldata codeIds)
-        external
-        nonReentrant
-        returns (Phase1Result memory out)
-    {
-        return _finalizePhase1InternalSplit(params, codeIds);
     }
 
     function finalizePhase1WithSalt(
@@ -688,40 +664,6 @@ contract DeploymentBatcher is ReentrancyGuard {
     // ================================
     // PHASE 2
     // ================================
-
-    function deployPhase2AndLaunch(Phase2Params calldata params, CodeIds calldata codeIds)
-        external
-        nonReentrant
-        returns (Phase2Result memory)
-    {
-        params;
-        codeIds;
-        revert InvalidCodeId();
-    }
-
-    function deployPhase2AndLaunchWithPermit(
-        Phase2Params calldata params,
-        CodeIds calldata codeIds,
-        PermitData calldata permit
-    ) external nonReentrant returns (Phase2Result memory) {
-        params;
-        codeIds;
-        permit;
-        revert InvalidCodeId();
-    }
-
-    function deployPhase2AndLaunchWithPermit2(
-        Phase2Params calldata params,
-        CodeIds calldata codeIds,
-        ISignatureTransfer.PermitTransferFrom calldata permit,
-        bytes calldata signature
-    ) external nonReentrant returns (Phase2Result memory) {
-        params;
-        codeIds;
-        permit;
-        signature;
-        revert InvalidCodeId();
-    }
 
     function deployPhase2Core(Phase2CoreParams calldata params, CodeIds calldata codeIds)
         external
@@ -1140,13 +1082,6 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     function _pullCreatorTokens(address creatorToken, address owner, uint256 amount) internal {
         if (owner != msg.sender) revert NotOwner();
-        IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
-    }
-
-    function _permitAndPull(address creatorToken, address owner, uint256 amount, PermitData calldata permit) internal {
-        if (owner != msg.sender) revert NotOwner();
-        IERC20Permit(creatorToken)
-            .permit(msg.sender, address(this), amount, permit.deadline, permit.v, permit.r, permit.s);
         IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
     }
 

@@ -233,7 +233,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         vm.mockCall(
             CHARM_FACTORY,
             abi.encodeWithSelector(GOVERNANCE_SELECTOR),
-            abi.encode(batcher.CHARM_FACTORY_GOVERNANCE())
+            abi.encode(address(0x424cdd9021AF88A86C76b245e24583f9a71e32a1))
         );
         vm.mockCall(
             CHARM_FACTORY,

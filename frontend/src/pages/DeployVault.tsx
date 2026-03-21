@@ -3546,7 +3546,8 @@ function DeployVaultBatcher({
             )
           }
           const coreDone = vaultDeployed && wrapperDeployed
-          const saltEnabled = expectedShareOftSaltOverride ? supportsSplitPhase1WithSalt : true
+          const saltEnabled = supportsSplitPhase1WithSalt
+          const shareOftSaltOverride = expectedShareOftSaltOverride ?? ZERO_BYTES32
           if (expectedShareOftSaltOverride && !saltEnabled) {
             logger.warn('[DeployVault] Batcher lacks split phase1 vanity salt support; continuing without override', {
               batcher: batcherAddress,
@@ -3555,22 +3556,22 @@ function DeployVaultBatcher({
           if (phase1All) {
             phase1CallsPrepared = []
           } else if (!coreDone) {
-            const coreCallData = saltEnabled && expectedShareOftSaltOverride
+            const coreCallData = saltEnabled
               ? encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
                   functionName: 'deployPhase1CoreWithSalt',
-                  args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+                  args: [phase1Params, codeIds, shareOftSaltOverride],
                 })
               : encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
                   functionName: 'deployPhase1Core',
                   args: [phase1Params, codeIds],
                 })
-            const finalizeCallData = saltEnabled && expectedShareOftSaltOverride
+            const finalizeCallData = saltEnabled
               ? encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
                   functionName: 'finalizePhase1WithSalt',
-                  args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+                  args: [phase1Params, codeIds, shareOftSaltOverride],
                 })
               : encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
@@ -3579,11 +3580,11 @@ function DeployVaultBatcher({
                 })
             phase1CallsPrepared = [asBatcherCall(coreCallData), asBatcherCall(finalizeCallData)]
           } else {
-            const finalizeCallData = saltEnabled && expectedShareOftSaltOverride
+            const finalizeCallData = saltEnabled
               ? encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
                   functionName: 'finalizePhase1WithSalt',
-                  args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+                  args: [phase1Params, codeIds, shareOftSaltOverride],
                 })
               : encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,

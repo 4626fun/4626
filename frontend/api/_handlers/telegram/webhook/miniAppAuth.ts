@@ -53,18 +53,26 @@ function readHeaderAsTrimmed(value: unknown): string {
   return asTrimmed(value)
 }
 
-function buildDataCheckString(searchParams: URLSearchParams): string {
-  const pairs: string[] = []
+function compareTelegramKeys(left: string, right: string): number {
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+
+function buildDataCheckString(
+  searchParams: URLSearchParams,
+  options?: {
+    excludeSignature?: boolean
+  },
+): string {
+  const excludeSignature = options?.excludeSignature === true
+  const pairs: Array<{ key: string; value: string }> = []
   for (const [key, value] of searchParams.entries()) {
-    if (key === 'hash' || key === 'signature') continue
-    pairs.push(`${key}=${value}`)
+    if (key === 'hash') continue
+    if (excludeSignature && key === 'signature') continue
+    pairs.push({ key, value })
   }
-  pairs.sort((a, b) => {
-    const [left] = a.split('=', 1)
-    const [right] = b.split('=', 1)
-    return left.localeCompare(right)
-  })
-  return pairs.join('\n')
+  pairs.sort((a, b) => compareTelegramKeys(a.key, b.key))
+  return pairs.map(({ key, value }) => `${key}=${value}`).join('\n')
 }
 
 function parseTelegramMiniAppUser(rawUser: string): ParsedTelegramMiniAppUser | null {
@@ -109,14 +117,22 @@ function buildTelegramMiniAppSecretKey(botToken: string): Buffer {
 
 function verifyTelegramMiniAppHash(params: { initData: string; hash: string; botToken: string }): boolean {
   const parsed = new URLSearchParams(params.initData)
-  const dataCheckString = buildDataCheckString(parsed)
   const secretKey = buildTelegramMiniAppSecretKey(params.botToken)
-  const calculatedHash = createHmac('sha256', secretKey).update(dataCheckString, 'utf8').digest('hex')
   try {
     const left = Buffer.from(params.hash, 'hex')
-    const right = Buffer.from(calculatedHash, 'hex')
-    if (left.length !== right.length) return false
-    return timingSafeEqual(left, right)
+    const dataCheckCandidates = [
+      buildDataCheckString(parsed, { excludeSignature: false }),
+      // Some Telegram clients/libraries include a `signature` field but still derive
+      // `hash` without it. Accept both canonicalizations for compatibility.
+      ...(parsed.has('signature') ? [buildDataCheckString(parsed, { excludeSignature: true })] : []),
+    ]
+    for (const dataCheckString of dataCheckCandidates) {
+      const calculatedHash = createHmac('sha256', secretKey).update(dataCheckString, 'utf8').digest('hex')
+      const right = Buffer.from(calculatedHash, 'hex')
+      if (left.length !== right.length) continue
+      if (timingSafeEqual(left, right)) return true
+    }
+    return false
   } catch {
     return false
   }
@@ -188,7 +204,7 @@ export function verifyTelegramMiniAppInitData(params: {
   const chatInstance = asTrimmed(searchParams.get('chat_instance') ?? '') || null
   // Replay protection must be keyed off canonicalized initData fields so
   // query-parameter reordering cannot create a distinct nonce key.
-  const canonicalInitData = buildDataCheckString(searchParams)
+  const canonicalInitData = buildDataCheckString(searchParams, { excludeSignature: true })
 
   return {
     ok: true,
