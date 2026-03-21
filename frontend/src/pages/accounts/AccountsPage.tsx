@@ -9,7 +9,6 @@ import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import {
   type ApiEnvelope,
-  type ConfirmOwnerResponse,
   type OwnerDelegationFlags,
   type PrepareOwnerResponse,
   buildOwnerDelegationError,

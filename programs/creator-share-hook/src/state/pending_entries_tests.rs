@@ -35,7 +35,7 @@ mod tests {
         &pe.entries[idx]
     }
 
-    fn drain(pe: &mut PendingEntries) -> Vec<LotteryEntry> {
+    fn relay(pe: &mut PendingEntries) -> Vec<LotteryEntry> {
         let count = pe.count as usize;
         if count == 0 {
             return Vec::new();
@@ -114,48 +114,48 @@ mod tests {
     }
 
     #[test]
-    fn test_drain_empty() {
+    fn test_relay_empty() {
         let mut pe = new_pending_entries();
-        let drained = drain(&mut pe);
-        assert!(drained.is_empty());
+        let relayed = relay(&mut pe);
+        assert!(relayed.is_empty());
     }
 
     #[test]
-    fn test_drain_partial() {
+    fn test_relay_partial() {
         let mut pe = new_pending_entries();
 
         pe.push(make_entry(1, 100, 1));
         pe.push(make_entry(2, 200, 2));
         pe.push(make_entry(3, 300, 3));
 
-        let drained = drain(&mut pe);
-        assert_eq!(drained.len(), 3);
-        assert_eq!(drained[0].amount, 100);
-        assert_eq!(drained[1].amount, 200);
-        assert_eq!(drained[2].amount, 300);
+        let relayed = relay(&mut pe);
+        assert_eq!(relayed.len(), 3);
+        assert_eq!(relayed[0].amount, 100);
+        assert_eq!(relayed[1].amount, 200);
+        assert_eq!(relayed[2].amount, 300);
 
         assert_eq!(pe.count, 0);
         assert_eq!(pe.head, 0);
     }
 
     #[test]
-    fn test_drain_full_preserves_order() {
+    fn test_relay_full_preserves_order() {
         let mut pe = new_pending_entries();
 
         for i in 0..MAX_PENDING_ENTRIES {
             pe.push(make_entry(i as u8, (i + 1) as u64 * 100, i as u64));
         }
 
-        let drained = drain(&mut pe);
-        assert_eq!(drained.len(), MAX_PENDING_ENTRIES);
+        let relayed = relay(&mut pe);
+        assert_eq!(relayed.len(), MAX_PENDING_ENTRIES);
 
-        for (i, entry) in drained.iter().enumerate() {
+        for (i, entry) in relayed.iter().enumerate() {
             assert_eq!(entry.amount, (i + 1) as u64 * 100);
         }
     }
 
     #[test]
-    fn test_drain_after_overflow_gives_correct_order() {
+    fn test_relay_after_overflow_gives_correct_order() {
         let mut pe = new_pending_entries();
 
         for i in 0..MAX_PENDING_ENTRIES {
@@ -168,19 +168,19 @@ mod tests {
 
         assert_eq!(pe.overflow_count, 3);
 
-        let drained = drain(&mut pe);
-        assert_eq!(drained.len(), MAX_PENDING_ENTRIES);
+        let relayed = relay(&mut pe);
+        assert_eq!(relayed.len(), MAX_PENDING_ENTRIES);
 
-        assert_eq!(drained[0].amount, 4);
+        assert_eq!(relayed[0].amount, 4);
 
-        let last = drained.len();
-        assert_eq!(drained[last - 3].amount, 1001);
-        assert_eq!(drained[last - 2].amount, 1002);
-        assert_eq!(drained[last - 1].amount, 1003);
+        let last = relayed.len();
+        assert_eq!(relayed[last - 3].amount, 1001);
+        assert_eq!(relayed[last - 2].amount, 1002);
+        assert_eq!(relayed[last - 1].amount, 1003);
     }
 
     #[test]
-    fn test_drain_preserves_overflow_count() {
+    fn test_relay_preserves_overflow_count() {
         let mut pe = new_pending_entries();
 
         for i in 0..MAX_PENDING_ENTRIES {
@@ -189,7 +189,7 @@ mod tests {
         pe.push(make_entry(0, 200, 999));
         assert_eq!(pe.overflow_count, 1);
 
-        drain(&mut pe);
+        relay(&mut pe);
 
         assert_eq!(pe.overflow_count, 1);
         assert_eq!(pe.count, 0);
@@ -197,27 +197,27 @@ mod tests {
     }
 
     #[test]
-    fn test_needs_emergency_drain() {
+    fn test_needs_emergency_relay() {
         let mut pe = new_pending_entries();
 
-        for i in 0..(EMERGENCY_DRAIN_THRESHOLD - 1) {
+        for i in 0..(EMERGENCY_RELAY_THRESHOLD - 1) {
             pe.push(make_entry(i as u8, 100, i as u64));
         }
-        assert!(!pe.needs_emergency_drain());
+        assert!(!pe.needs_emergency_relay());
 
         pe.push(make_entry(0, 100, 999));
-        assert!(pe.needs_emergency_drain());
+        assert!(pe.needs_emergency_relay());
     }
 
     #[test]
-    fn test_push_then_drain_then_push_again() {
+    fn test_push_then_relay_then_push_again() {
         let mut pe = new_pending_entries();
 
         pe.push(make_entry(1, 100, 1));
         pe.push(make_entry(2, 200, 2));
 
-        let drained = drain(&mut pe);
-        assert_eq!(drained.len(), 2);
+        let relayed = relay(&mut pe);
+        assert_eq!(relayed.len(), 2);
 
         pe.push(make_entry(3, 300, 3));
         assert_eq!(pe.count, 1);

@@ -82,11 +82,11 @@ describe('telegramWebApp mini app session bootstrap', () => {
 
   it('dedupes concurrent mini app session bootstrap requests', async () => {
     restoreWindow = installMockWindow('auth_date=1710001111&user=%7B%22id%22%3A42%7D&hash=dedupe')
-    let resolveFetch: ((value: any) => void) | null = null
+    let resolveFetch!: (value: any) => void
     const fetcher = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveFetch = resolve
+          resolveFetch = resolve as (value: any) => void
         }),
     )
 
@@ -96,7 +96,7 @@ describe('telegramWebApp mini app session bootstrap', () => {
 
     expect(fetcher).toHaveBeenCalledTimes(1)
 
-    resolveFetch?.({
+    resolveFetch({
       ok: true,
       status: 200,
       json: async () => ({

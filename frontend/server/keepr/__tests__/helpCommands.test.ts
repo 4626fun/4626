@@ -50,6 +50,19 @@ describe('keepr help commands', () => {
     expect(result.response).toContain('CLASH_OF_CLAW_API_KEY')
   })
 
+  it('returns ops topic help with canonical Solana action names', async () => {
+    const result = await handleKeeprCommand({
+      groupId: 'group-help-2c',
+      senderWallet: TEST_WALLET,
+      text: '/help ops',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('<b>Keepr — ops</b>')
+    expect(result.response).toContain('<code>/cre settle-fees | /cre flush-fees</code>')
+    expect(result.response).toContain('<code>/cre relay-entries | /cre relay</code>')
+  })
+
   it('returns full help with /help all', async () => {
     const result = await handleKeeprCommand({
       groupId: 'group-help-3',
@@ -67,7 +80,7 @@ describe('keepr help commands', () => {
     expect(result.response).toContain('<code>/coin trend funnel &lt;ticker&gt; &lt;eth-amount&gt;</code>')
     expect(result.response).toContain('<code>/mkt news &lt;symbol&gt; [limit]</code>')
     expect(result.response).toContain('<code>/help arena</code> — Clash of Claw controls')
-    expect(result.response).toContain('<code>/cre auction | /cre solana | /cre tend | /cre report | /cre flush-fees</code>')
+    expect(result.response).toContain('<code>/cre auction | /cre solana | /cre tend | /cre report | /cre settle-fees | /cre relay-entries</code>')
     expect(result.response).toContain('<code>/bankr status | /bankr me | /bankr balances</code>')
     expect(result.response).toContain('/reputation')
     expect(result.response).toContain('/coin trend funnel')

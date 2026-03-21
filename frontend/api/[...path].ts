@@ -30,14 +30,14 @@ function getApiSubpath(req: VercelRequest): string {
 
 function isSafeSubpath(p: string): boolean {
   // We only allow expected filesystem-style paths:
-  // - a-z A-Z 0-9 _ - /
-  // - no backslashes, dots, percent-escapes, or traversal
+  // - a-z A-Z 0-9 _ - / .
+  // - no backslashes, percent-escapes, or traversal
   if (!p) return false
   if (p.includes('\\')) return false
   if (p.includes('..')) return false
   if (p.includes('%')) return false
   if (p.includes('\0')) return false
-  return /^[a-zA-Z0-9/_-]+$/.test(p)
+  return /^[a-zA-Z0-9/_\.-]+$/.test(p)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

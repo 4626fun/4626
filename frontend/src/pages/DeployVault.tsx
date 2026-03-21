@@ -3547,7 +3547,7 @@ function DeployVaultBatcher({
           }
           const coreDone = vaultDeployed && wrapperDeployed
           const saltEnabled = supportsSplitPhase1WithSalt
-          const shareOftSaltOverride = expectedShareOftSaltOverride ?? ZERO_BYTES32
+          const shareOftSaltOverride: Hex = (expectedShareOftSaltOverride ?? ZERO_BYTES32) as Hex
           if (expectedShareOftSaltOverride && !saltEnabled) {
             logger.warn('[DeployVault] Batcher lacks split phase1 vanity salt support; continuing without override', {
               batcher: batcherAddress,

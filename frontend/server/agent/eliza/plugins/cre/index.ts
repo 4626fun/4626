@@ -14,8 +14,8 @@
  *     /cre tend [vault]       — Force-tend a vault (deploy idle funds)
  *     /cre report [vault]     — Force-report a vault (harvest yields)
  *     /cre settle [strategy]  — Force-settle a CCA auction
- *     /cre flush-fees         — Force Solana fee flush
- *     /cre relay-entries      — Force drain + relay Solana lottery entries
+ *     /cre settle-fees        — Force Solana fee settlement to Base
+ *     /cre relay-entries      — Force relay of Solana lottery entries to Base
  *     /cre relay-winners      — Force relay winners to Solana
  *     /cre graduate           — Force graduation check
  *     /cre queue              — Force process pending queue actions
@@ -146,9 +146,12 @@ export const CRE_WRITE_SUBCOMMAND_PREFIXES = [
   'tend',
   'report',
   'settle',
+  'settle-fees',
+  'settle_fees',
   'flush-fees',
   'flush',
   'relay-entries',
+  'relay_entries',
   'relay-winners',
   'relay',
   'graduate',
@@ -223,12 +226,12 @@ async function importQueueExecutor() {
   return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-queue-executor.action.js`)
 }
 
-async function importEntryRelay() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-entry-relay.action.js`)
+async function importRelayEntries() {
+  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-relay-entries.action.js`)
 }
 
-async function importFeeFlush() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-fee-flush.action.js`)
+async function importFeeSettlement() {
+  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-settle-fees.action.js`)
 }
 
 async function importWinnerRelay() {
@@ -478,10 +481,12 @@ async function handleObserveSolana(callback: HandlerCallback | undefined): Promi
 const creTriggerAction: Action = {
   name: 'CRE_TRIGGER',
   similes: [
-    'cre tend', 'cre report', 'cre settle', 'cre flush',
-    'cre relay', 'cre graduate', 'cre queue',
+    'cre tend', 'cre report', 'cre settle',
+    'cre settle fees', 'cre settle-fees', 'cre settle_fees', 'cre flush',
+    'cre relay entries', 'cre relay-entries', 'cre relay_entries', 'cre relay',
+    'cre graduate', 'cre queue',
   ],
-  description: 'Trigger CRE keeper operations on demand — tend, report, settle, flush-fees, relay-entries, relay-winners, graduate, queue.',
+  description: 'Trigger CRE keeper operations on demand — tend, report, settle, settle-fees, relay-entries, relay-winners, graduate, queue.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
@@ -552,11 +557,16 @@ const creTriggerAction: Action = {
         await handleTriggerTend(callback, address)
       } else if (sub.startsWith('report')) {
         await handleTriggerReport(callback, address)
+      } else if (
+        sub.startsWith('settle-fees') ||
+        sub.startsWith('settle_fees') ||
+        sub.startsWith('flush-fees') ||
+        sub.startsWith('flush')
+      ) {
+        await handleTriggerSettleFees(callback)
       } else if (sub.startsWith('settle')) {
         await handleTriggerSettle(callback, address)
-      } else if (sub.startsWith('flush-fees') || sub.startsWith('flush')) {
-        await handleTriggerFlushFees(callback)
-      } else if (sub.startsWith('relay-entries') || sub === 'relay') {
+      } else if (sub.startsWith('relay-entries') || sub.startsWith('relay_entries') || sub === 'relay') {
         await handleTriggerRelayEntries(callback)
       } else if (sub.startsWith('relay-winners')) {
         await handleTriggerRelayWinners(callback)
@@ -578,8 +588,8 @@ const creTriggerAction: Action = {
       { name: 'agent', content: { text: 'Running vault tend...\nTended 2/3 vaults, reported 1.' } },
     ],
     [
-      { name: 'user', content: { text: '/cre flush-fees' } },
-      { name: 'agent', content: { text: 'Running Solana fee flush...\nFees flushed: 1,234 tokens, bridged to Base.' } },
+      { name: 'user', content: { text: '/cre settle-fees' } },
+      { name: 'agent', content: { text: 'Running Solana fee settlement...\nFees settled: 1,234 tokens, bridged to Base.' } },
     ],
   ],
 }
@@ -663,20 +673,20 @@ async function handleTriggerSettle(callback: HandlerCallback | undefined, strate
   }
 }
 
-async function handleTriggerFlushFees(callback: HandlerCallback | undefined): Promise<void> {
+async function handleTriggerSettleFees(callback: HandlerCallback | undefined): Promise<void> {
   if (!hasSolana()) {
     await callback?.({ text: 'Solana not configured. Set `SOLANA_RPC_URL` to enable.' } as Content)
     return
   }
 
-  await callback?.({ text: 'Running Solana fee flush...' } as Content)
+  await callback?.({ text: 'Running Solana fee settlement...' } as Content)
 
-  const ff = await importFeeFlush()
-  const result: FeeFlushResult = await ff.executeSolanaFeeFlush()
+  const ff = await importFeeSettlement()
+  const result: FeeFlushResult = await ff.executeSolanaFeeSettlement()
 
   const lines = [
-    `**Fee Flush Result**`,
-    `  Fees flushed: ${result.feesFlushed ? 'yes' : 'no'}`,
+    `**Fee Settlement Result**`,
+    `  Fees settled: ${result.feesFlushed ? 'yes' : 'no'}`,
     `  Amount: ${result.amountFlushed}`,
     `  Bridged: ${result.bridged ? 'yes' : 'no'}`,
     `  Forwarded to gauge: ${result.forwardedToGauge ? 'yes' : 'no'}`,
@@ -690,10 +700,10 @@ async function handleTriggerRelayEntries(callback: HandlerCallback | undefined):
     return
   }
 
-  await callback?.({ text: 'Running Solana entry relay...' } as Content)
+  await callback?.({ text: 'Relaying Solana entries...' } as Content)
 
-  const er = await importEntryRelay()
-  const result: EntryRelayResult = await er.executeSolanaEntryRelay()
+  const er = await importRelayEntries()
+  const result: EntryRelayResult = await er.executeSolanaRelayEntries()
 
   const lines = [
     `**Entry Relay Result**`,
@@ -811,8 +821,8 @@ const creHelpAction: Action = {
       '  `/cre tend [vault]` — Deploy idle funds',
       '  `/cre report [vault]` — Harvest yields',
       '  `/cre settle [strategy]` — Settle CCA auction',
-      '  `/cre flush-fees` — Flush Solana fees to Base',
-      '  `/cre relay-entries` — Relay lottery entries from Solana',
+      '  `/cre settle-fees | /cre flush-fees` — Settle Solana fees to Base',
+      '  `/cre relay-entries | /cre relay` — Relay lottery entries from Solana',
       '  `/cre relay-winners` — Relay winners to Solana',
       '  `/cre graduate` — Check graduation status',
       '  `/cre queue` — Process pending queue actions\n',

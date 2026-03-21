@@ -117,7 +117,7 @@ function formatKeeprHelpFull(): string {
     ...formatHelpSection('advanced', [
       formatHelpCommandRow('/coin create <name> <symbol> <uri>', 'create content coin', 'ADMIN/OWNER'),
       formatHelpCommandRow('/coin buy | /coin sell | /coin balance | /coin info', 'coin ops'),
-      formatHelpCommandRow('/cre auction | /cre solana | /cre tend | /cre report | /cre flush-fees', 'keeper ops'),
+      formatHelpCommandRow('/cre auction | /cre solana | /cre tend | /cre report | /cre settle-fees | /cre relay-entries', 'keeper ops'),
       formatHelpCommandRow('/bankr status | /bankr me | /bankr balances', 'Bankr status + balances'),
       formatHelpCommandRow('/bankr ask <question>', 'ask Bankr'),
       formatHelpCommandRow('/bankr exec <instruction> --confirm', 'execute instruction', 'ADMIN/OWNER'),
@@ -293,7 +293,8 @@ function formatKeeprHelp(rawTopic: string | null = null): string {
       formatHelpCommandRow('/cre health', 'combined health check'),
       formatHelpCommandRow('/cre tend [vault]', 'deploy idle funds', 'ADMIN/OWNER'),
       formatHelpCommandRow('/cre report [vault]', 'harvest yields', 'ADMIN/OWNER'),
-      formatHelpCommandRow('/cre flush-fees', 'flush Solana fees', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/cre settle-fees | /cre flush-fees', 'settle Solana fees to Base', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/cre relay-entries | /cre relay', 'relay Solana lottery entries', 'ADMIN/OWNER'),
       '',
       '<blockquote>Need everything? <code>/help all</code></blockquote>',
     ].join('\n')

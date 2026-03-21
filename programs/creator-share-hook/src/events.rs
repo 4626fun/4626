@@ -10,17 +10,17 @@ pub struct LotteryEntryRecorded {
     pub buffer_count: u32,
 }
 
-/// Emitted when entries are drained by the keeper for relay to Base.
+/// Emitted when entries are relayed by the keeper for delivery to Base.
 #[event]
-pub struct EntriesDrained {
+pub struct EntriesRelayed {
     pub creator_mint: Pubkey,
     pub count: u32,
     pub overflow_count: u64,
 }
 
-/// Emitted when fees are flushed by the keeper.
+/// Emitted when fees are settled by the keeper.
 #[event]
-pub struct FeesFlushed {
+pub struct FeesSettled {
     pub creator_mint: Pubkey,
     pub amount: u64,
 }

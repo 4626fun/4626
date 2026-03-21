@@ -40,14 +40,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return
 
   if (req.method !== 'POST' && req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use GET or POST /api/lens/reputation-graph.',
+    } satisfies ApiEnvelope<never>)
   }
 
   const body = req.method === 'POST' ? (await readJsonBody<ReputationGraphRequest>(req)) ?? {} : {}
   const agentIdRaw = String(body.agentId ?? req.query.agentId ?? '').trim()
 
   if (!agentIdRaw || !/^\d+$/.test(agentIdRaw)) {
-    return res.status(400).json({ success: false, error: 'agentId is required (non-negative integer)' } satisfies ApiEnvelope<never>)
+    return res.status(400).json({
+      success: false,
+      error: 'agentId is required (non-negative integer). Example: GET /api/lens/reputation-graph?agentId=1&store=false.',
+    } satisfies ApiEnvelope<never>)
   }
 
   const agentId = Number(agentIdRaw)

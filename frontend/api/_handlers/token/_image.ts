@@ -2289,6 +2289,7 @@ async function getOrCreatePng(params: {
   heroCutoutUpstreamUrl?: string | null
   size: number
   symbol: string
+  renderPreset?: 'standard' | 'hero' | 'pixel'
   sourceBytesOverride?: Uint8Array | null
   sourceFingerprintOverride?: string | null
 }): Promise<Uint8Array> {
@@ -2307,7 +2308,7 @@ async function getOrCreatePng(params: {
   const heroCutoutFingerprint = params.heroCutoutUpstreamUrl
     ? sha256Hex(params.heroCutoutUpstreamUrl)
     : 'no-hero-cutout'
-  const recipeSeed = `${creatorCoinLc ?? 'no-coin'}:${sourceFingerprint}:${heroCutoutFingerprint}:${FRAME_STYLE_V}:${params.size}`
+  const recipeSeed = `${creatorCoinLc ?? 'no-coin'}:${sourceFingerprint}:${heroCutoutFingerprint}:${params.renderPreset ?? 'standard'}:${FRAME_STYLE_V}:${params.size}`
 
   const tokenKey = `token-images/v1/base/${params.chainId}/${shareOftLc}/size-${params.size}/frame-${FRAME_STYLE_V}/${sha256Hex(
     recipeSeed,

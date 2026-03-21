@@ -6,6 +6,7 @@ import {
   http,
   isAddress,
   type Address,
+  type PublicClient,
 } from 'viem'
 import { base } from 'viem/chains'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -73,6 +74,8 @@ const OWNER_ABI = [
     outputs: [{ type: 'bytes' }],
   },
 ] as const
+
+type ReadContractClient = Pick<PublicClient, 'readContract'>
 
 function usage(): void {
   process.stdout.write(`Usage:
@@ -432,7 +435,7 @@ async function fetchSmartWalletCandidatesForSource(source: ReadSource, profileId
 type OwnerCheckCache = Map<string, boolean>
 
 async function isOwner(params: {
-  publicClient: ReturnType<typeof createPublicClient>
+  publicClient: ReadContractClient
   smartWallet: Address
   ownerAddress: Address
   cache: OwnerCheckCache

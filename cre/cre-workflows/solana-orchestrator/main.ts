@@ -79,13 +79,21 @@ function currentCheckpoint(now: Date, intervalSeconds: number): string {
   return `slot:${slot}`
 }
 
+function normalizeActionName(action: string): string {
+  const raw = action.trim().toLowerCase()
+  if (!raw) return raw
+  if (raw === 'fee-flush' || raw === 'flush-fees' || raw === 'settle-fees') return 'settle-fees'
+  if (raw === 'entry-relay' || raw === 'relay-entries') return 'relay-entries'
+  return raw
+}
+
 function normalizeActionList(config: Config, manual?: ManualPayload): string[] {
   const fromArray =
     manual?.actions?.filter((value): value is string => typeof value === "string" && value.trim().length > 0) ??
     []
-  if (fromArray.length > 0) return fromArray
-  if (manual?.action && manual.action.trim().length > 0) return [manual.action.trim()]
-  return config.actions
+  if (fromArray.length > 0) return fromArray.map(normalizeActionName)
+  if (manual?.action && manual.action.trim().length > 0) return [normalizeActionName(manual.action)]
+  return config.actions.map(normalizeActionName)
 }
 
 function runReconciliation(runtime: Runtime<Config>, manual?: ManualPayload): SolanaOrchestratorResult {

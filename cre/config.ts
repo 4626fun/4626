@@ -240,7 +240,7 @@ export const CCA_STRATEGY_ABI = [
 /** Seconds between Solana entry relay polls */
 export const SOLANA_ENTRY_RELAY_INTERVAL = 30;
 
-/** Seconds between Solana fee flush polls */
+/** Seconds between Solana fee settlement polls */
 export const SOLANA_FEE_FLUSH_INTERVAL = 300; // 5 min
 
 /** Price deviation threshold for alerting (bps) */

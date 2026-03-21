@@ -39,7 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use POST /api/lens/feedback-payload with JSON body { agentId, value, valueDecimals }.',
+    } satisfies ApiEnvelope<never>)
   }
 
   const body = (await readJsonBody<FeedbackPayloadRequest>(req)) ?? {}
@@ -47,7 +50,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Validate required fields
   const agentId = Number(body.agentId ?? -1)
   if (!Number.isFinite(agentId) || agentId < 0) {
-    return res.status(400).json({ success: false, error: 'agentId is required (non-negative integer)' } satisfies ApiEnvelope<never>)
+    return res.status(400).json({
+      success: false,
+      error: 'agentId is required (non-negative integer). Example: POST /api/lens/feedback-payload with {"agentId":1,"value":"5","valueDecimals":0}.',
+    } satisfies ApiEnvelope<never>)
   }
 
   const value = String(body.value ?? '0')

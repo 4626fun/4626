@@ -8,7 +8,13 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: false,
-          accountSignals: { canonicalCswAddress: null },
+          accountSignals: {
+            linked: false,
+            canonicalCswAddress: null,
+            creatorCoin: null,
+            zoraHandle: null,
+            lastResolvedAt: null,
+          },
         },
         ownerDelegationVerified: null,
       }),
@@ -20,7 +26,13 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: true,
-          accountSignals: { canonicalCswAddress: null },
+          accountSignals: {
+            linked: false,
+            canonicalCswAddress: null,
+            creatorCoin: null,
+            zoraHandle: null,
+            lastResolvedAt: null,
+          },
         },
         ownerDelegationVerified: null,
       }),
@@ -32,7 +44,13 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: true,
-          accountSignals: { canonicalCswAddress: '0x123' },
+          accountSignals: {
+            linked: true,
+            canonicalCswAddress: '0x123',
+            creatorCoin: null,
+            zoraHandle: null,
+            lastResolvedAt: null,
+          },
         },
         ownerDelegationVerified: false,
       }),
@@ -44,7 +62,13 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: true,
-          accountSignals: { canonicalCswAddress: '0x123' },
+          accountSignals: {
+            linked: true,
+            canonicalCswAddress: '0x123',
+            creatorCoin: null,
+            zoraHandle: null,
+            lastResolvedAt: null,
+          },
         },
         ownerDelegationVerified: true,
       }),

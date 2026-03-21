@@ -31,7 +31,7 @@ impl LotteryEntry {
 /// 12KB buffer on the SBF stack. The runtime memory-maps the account data
 /// directly, keeping stack usage minimal.
 ///
-/// The keeper drains this buffer periodically and relays entries to Base.
+/// The keeper relays this buffer periodically and forwards entries to Base.
 /// Overflow policy: drop-oldest (head advances, oldest overwritten).
 #[account(zero_copy)]
 #[derive(Debug)]
@@ -85,8 +85,8 @@ impl PendingEntries {
         was_full
     }
 
-    /// Returns true if the buffer has exceeded the emergency drain threshold.
-    pub fn needs_emergency_drain(&self) -> bool {
-        self.count as usize >= EMERGENCY_DRAIN_THRESHOLD
+    /// Returns true if the buffer has exceeded the emergency relay threshold.
+    pub fn needs_emergency_relay(&self) -> bool {
+        self.count as usize >= EMERGENCY_RELAY_THRESHOLD
     }
 }

@@ -282,7 +282,7 @@ export function AppContinue() {
       })
 
       if (decision === 'skip' || decision === 'wait_for_privy') return
-      let nextDecision = decision
+      let nextDecision: AppContinueAutologinDecision = decision
       if (decision === 'redeem_handoff') {
         const redeemed = await redeemOneTimeHandoff()
         if (redeemed) return

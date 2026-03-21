@@ -72,7 +72,7 @@ export type TelegramHolderRoomMemberStatus = 'active' | 'grace' | 'removed'
 export type TelegramHolderRoomMember = {
   roomChatId: string
   telegramUserId: string
-  canonicalCswAddress: string
+  canonicalCswAddress: string | null
   status: TelegramHolderRoomMemberStatus
   lastEligibleAt: string | null
   graceUntil: string | null
@@ -91,7 +91,7 @@ export type TelegramHolderRoomRecheckRow = {
   graceHours: number
   enabled: boolean
   telegramUserId: string
-  canonicalCswAddress: string
+  canonicalCswAddress: string | null
   status: TelegramHolderRoomMemberStatus
   lastEligibleAt: string | null
   graceUntil: string | null
@@ -749,7 +749,7 @@ export async function logTelegramActionAudit(params: {
   chatId: string
   messageId?: number | null
   profileId: number
-  canonicalCswAddress: string
+  canonicalCswAddress: string | null
   actionType: string
   intent: Record<string, any>
   quote?: Record<string, any> | null

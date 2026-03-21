@@ -47,6 +47,13 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function normalizeSolanaAction(raw: string): string {
+  const action = raw.trim().toLowerCase()
+  if (action === 'fee-flush' || action === 'flush-fees' || action === 'settle-fees') return 'settle-fees'
+  if (action === 'entry-relay' || action === 'relay-entries') return 'relay-entries'
+  return action
+}
+
 async function ensureSolanaCheckpointTable(db: Awaited<ReturnType<typeof getDb>>) {
   if (!db) return
   await db.sql`
@@ -113,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (req.body ?? {}) as ReconcileBody
   const workflow = isNonEmptyString(body.workflow) ? body.workflow.trim() : ''
-  const action = isNonEmptyString(body.action) ? body.action.trim() : ''
+  const action = isNonEmptyString(body.action) ? normalizeSolanaAction(body.action) : ''
   const checkpointKey = isNonEmptyString(body.checkpointKey) ? body.checkpointKey.trim() : ''
   const payload =
     body.payload && typeof body.payload === 'object' && !Array.isArray(body.payload)

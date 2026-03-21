@@ -85,7 +85,7 @@ describe('sessionClient', () => {
 
     const completed = await resumeAndPollDeploySession({
       sessionId: 'sess_1',
-      postJson,
+      postJson: postJson as any,
       ensurePaymasterSession,
       ensureDeploySessionSignerInstalled,
       clearDeploySession,

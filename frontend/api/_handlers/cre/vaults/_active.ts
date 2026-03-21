@@ -36,6 +36,13 @@ export interface VaultConfig {
   automation: VaultAutomationConfig
 }
 
+function toHexAddressOrNull(value: unknown): `0x${string}` | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null
+  return normalized as `0x${string}`
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -187,6 +194,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const contracts = ((configJson as any).contracts ?? {}) as Record<string, unknown>
       const vaultAddress = String(row.vault_address).toLowerCase() as `0x${string}`
       const automation = automationByVault.get(vaultAddress)
+      const ccaStrategyAddress = toHexAddressOrNull(contracts.ccaStrategy)
+      const oracleAddress = toHexAddressOrNull(contracts.oracle)
+      const vrfHubAddress = toHexAddressOrNull(contracts.vrfHub)
+      const gaugeControllerAddress = toHexAddressOrNull(contracts.gaugeController)
+      const burnStreamAddress = toHexAddressOrNull(contracts.burnStream)
 
       return {
         vaultAddress,
@@ -207,11 +219,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : {
               automationEnabled: false,
             },
-        ...(contracts.ccaStrategy ? { ccaStrategyAddress: contracts.ccaStrategy } : {}),
-        ...(contracts.oracle ? { oracleAddress: contracts.oracle } : {}),
-        ...(contracts.vrfHub ? { vrfHubAddress: contracts.vrfHub } : {}),
-        ...(contracts.gaugeController ? { gaugeControllerAddress: contracts.gaugeController } : {}),
-        ...(contracts.burnStream ? { burnStreamAddress: contracts.burnStream } : {}),
+        ...(ccaStrategyAddress ? { ccaStrategyAddress } : {}),
+        ...(oracleAddress ? { oracleAddress } : {}),
+        ...(vrfHubAddress ? { vrfHubAddress } : {}),
+        ...(gaugeControllerAddress ? { gaugeControllerAddress } : {}),
+        ...(burnStreamAddress ? { burnStreamAddress } : {}),
       }
     })
 

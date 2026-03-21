@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeAbiParameters, parseAbiParameters } from 'viem'
 
 const mockGetBlockNumber = vi.hoisted(() => vi.fn(async () => 31_250_001n))
+type MockRpcResult = '0x' | '0x2105' | Array<{ address: string; data: `0x${string}` }>
 const mockRequest = vi.hoisted(() =>
-  vi.fn(async (args: { method?: string }) => {
-    if (args?.method === 'eth_getLogs') return []
+  vi.fn(async (args: { method?: string }): Promise<MockRpcResult> => {
+    if (args?.method === 'eth_getLogs') return [] as Array<{ address: string; data: `0x${string}` }>
     if (args?.method === 'eth_chainId') return '0x2105'
     return '0x'
   }),

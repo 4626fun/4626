@@ -149,8 +149,8 @@ The Solana integration runs as separate workflows (cron-driven, independent from
 
 | Workflow | What | Schedule |
 |----------|------|----------|
-| **keepr-solana-entry-relay** | Drain PendingEntries PDAs + relay entries to Base | 30s |
-| **keepr-solana-fee-flush** | Harvest TransferFeeConfig fees + forward to Base gauge | 5m |
+| **keepr-solana-entry-relay** | Relay PendingEntries PDAs to Base | 30s |
+| **keepr-solana-fee-flush** | Settle TransferFeeConfig fees to Base gauge | 5m |
 | **keepr-solana-winner-relay** | Relay Base winners to Solana WinnerRecord PDA | 1m |
 | **keepr-solana-graduation** | Close Alpha Vault when Base CCA graduates | 1m |
 | **keepr-solana-price-monitor** | Monitor DLMM price + recenter on deviation | 1m |
@@ -163,6 +163,11 @@ Required env vars for Solana workflows (see `secrets.example.env`):
 - `SOLANA_SHARE_OFT_MAPPING`
 - `SOLANA_BRIDGE_ADAPTER`
 - `LOTTERY_MANAGER`
+
+Optional operational hardening for the winner relay:
+- `SOLANA_WINNER_RELAY_STATE_FILE` to persist Base event checkpoints across process restarts
+- `SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE` for file-backed creatorCoin → Solana mint mappings
+- `SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE` for file-backed Twin → Solana pubkey mappings
 
 ## Solana Launch Scripts
 

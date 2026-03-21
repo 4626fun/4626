@@ -92,9 +92,9 @@ export function shouldRefreshOwnerDelegationOnForeground(input: {
 
 export async function sendPreparedOwnerTx(params: {
   txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }
-  walletClient: { account?: unknown; sendTransaction: (args: { account: unknown; chain: typeof base; to: `0x${string}`; data: `0x${string}`; value: bigint }) => Promise<`0x${string}`> } | null | undefined
+  walletClient: { account?: unknown; sendTransaction: (...args: any[]) => Promise<`0x${string}`> } | null | undefined
   chainId: number | undefined
-  switchChainAsync?: ((args: { chainId: number }) => Promise<unknown>) | null
+  switchChainAsync?: ((args: { chainId: typeof base.id }) => Promise<unknown>) | null
   authHeaders: () => Promise<Record<string, string>>
   ownerAddress?: string | null
 }): Promise<ConfirmOwnerResponse> {

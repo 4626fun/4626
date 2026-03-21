@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import type { Address } from 'viem'
+import type { Address, PublicClient } from 'viem'
 import { createPublicClient, getAddress, http, isAddress } from 'viem'
 
 import { setPublicCors, setCache, DEFAULT_CHAIN_ID, getNumberQuery, getStringQuery, handleOptions, requireServerKey } from '../../../server/zora/_shared.js'
@@ -89,11 +89,13 @@ const ERC20_META_ABI = [
   { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
 ] as const
 
+type ReadContractClient = Pick<PublicClient, 'readContract'>
+
 async function buildTokenEntry(params: {
   chainId: number
   apiBaseUrl: string
   shareOft: Address
-  publicClient: ReturnType<typeof createPublicClient>
+  publicClient: ReadContractClient
 }): Promise<any> {
   const { chainId, apiBaseUrl, shareOft, publicClient } = params
 

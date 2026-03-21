@@ -48,7 +48,7 @@ Audit target: `cre/cre-workflows` as the CRE SDK layer that should become the pr
    - Ajna bucket manager.
    - Charm rebalance manager.
    - Strategy WebSocket listener.
-   - Solana relays/monitors (entry, fee flush, winner relay, graduation, price monitor).
+   - Solana relays/monitors (entry relay, fee settlement, winner relay, graduation, price monitor).
 
 3. **Trigger model underused**
    - Production CRE workflows are cron-only today.

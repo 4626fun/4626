@@ -1,4 +1,11 @@
-import { Keypair, PublicKey } from '@solana/web3.js';
+import {
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+  type Commitment,
+  type Connection,
+  type Transaction,
+} from '@solana/web3.js';
 import bs58 from 'bs58';
 
 /**
@@ -54,4 +61,15 @@ export function loadKeypairsFromEnv(envVar: string): Keypair[] {
 export function solanaPubkeyToBytes32(pubkey: string): `0x${string}` {
   const pk = new PublicKey(pubkey);
   return ('0x' + Buffer.from(pk.toBytes()).toString('hex')) as `0x${string}`;
+}
+
+export async function sendConfirmedSolanaTransaction(params: {
+  connection: Connection;
+  transaction: Transaction;
+  signers: Keypair[];
+  commitment?: Commitment;
+}): Promise<string> {
+  return sendAndConfirmTransaction(params.connection, params.transaction, params.signers, {
+    commitment: params.commitment ?? 'confirmed',
+  });
 }

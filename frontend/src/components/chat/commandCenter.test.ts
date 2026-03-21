@@ -22,16 +22,25 @@ describe('chat command center helpers', () => {
 
   it('infers follow-up command context from agent output', () => {
     expect(inferCommandIdFromAgentText('Bankr status looks healthy.')).toBe('bankr-status')
+    expect(inferCommandIdFromAgentText('Fees settled on Solana.')).toBe('cre-settle-fees')
+    expect(inferCommandIdFromAgentText('Relay entries from Solana now.')).toBe('cre-relay-entries')
     expect(inferCommandIdFromAgentText('Unknown output without hints')).toBeNull()
   })
 
   it('resolves configured follow-up chips', () => {
-    const followUps = listChatFollowUps('vault-status')
-    expect(followUps.map((entry) => entry.id)).toEqual(['vault-rules', 'cre-health'])
+    const followUps = listChatFollowUps('cre-solana')
+    expect(followUps.map((entry) => entry.id)).toEqual(['cre-health', 'cre-settle-fees', 'cre-relay-entries'])
   })
 
   it('registers AI assistant seed command for mini-app deep links', () => {
     const command = getChatCommandById('ai-assistant')
     expect(command?.command).toContain('/ai ')
+  })
+
+  it('keeps legacy Solana CRE aliases resolving to the canonical commands', () => {
+    expect(getChatCommandByCommandText('/cre settle-fees')?.id).toBe('cre-settle-fees')
+    expect(getChatCommandByCommandText('/cre flush-fees')?.id).toBe('cre-settle-fees')
+    expect(getChatCommandByCommandText('/cre relay-entries')?.id).toBe('cre-relay-entries')
+    expect(getChatCommandByCommandText('/cre relay')?.id).toBe('cre-relay-entries')
   })
 })

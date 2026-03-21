@@ -6,15 +6,15 @@ use crate::errors::CreatorShareHookError;
 use crate::events::*;
 use crate::state::*;
 
-/// Keeper-only: read and clear all pending lottery entries.
+/// Keeper-only: emit and clear all pending lottery entries for relay.
 ///
-/// The keeper calls this to drain the PendingEntries ring buffer, then
+/// The keeper calls this to relay the PendingEntries ring buffer, then
 /// relays the entries to Base via `SolanaBridgeAdapter.processLotteryEntryFromSolana()`.
 ///
 /// Entries are emitted as an Anchor event for the keeper to read from
-/// the transaction logs. The buffer is reset after draining.
+/// the transaction logs. The buffer is reset after relay.
 #[derive(Accounts)]
-pub struct DrainEntries<'info> {
+pub struct RelayEntries<'info> {
     /// The keeper authority (must match `creator_config.keeper_authority`).
     pub keeper: Signer<'info>,
 
@@ -31,7 +31,7 @@ pub struct DrainEntries<'info> {
     #[account(owner = token_2022::ID)]
     pub creator_mint: UncheckedAccount<'info>,
 
-    /// PendingEntries PDA — zero-copy, mutable to drain entries.
+    /// PendingEntries PDA — zero-copy, mutable to emit + clear entries.
     #[account(
         mut,
         seeds = [PENDING_ENTRIES_SEED, creator_mint.key().as_ref()],
@@ -41,12 +41,12 @@ pub struct DrainEntries<'info> {
     pub pending_entries: AccountLoader<'info, PendingEntries>,
 }
 
-pub fn handler(ctx: Context<DrainEntries>) -> Result<()> {
+pub fn handler(ctx: Context<RelayEntries>) -> Result<()> {
     let creator_mint = ctx.accounts.creator_config.creator_mint;
     let mut pending = ctx.accounts.pending_entries.load_mut()?;
 
     if pending.count == 0 {
-        return err!(CreatorShareHookError::NoPendingEntries);
+        return err!(CreatorShareHookError::NoEntriesToRelay);
     }
 
     let count = pending.count;
@@ -72,7 +72,7 @@ pub fn handler(ctx: Context<DrainEntries>) -> Result<()> {
     pending.head = 0;
     pending.count = 0;
 
-    emit!(EntriesDrained {
+    emit!(EntriesRelayed {
         creator_mint,
         count,
         overflow_count,

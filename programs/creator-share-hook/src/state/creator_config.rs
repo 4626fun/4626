@@ -18,7 +18,7 @@ pub struct CreatorConfig {
     pub authority: Pubkey,
 
     /// Authorized keeper pubkey — the only signer allowed to call
-    /// `flush_fees`, `drain_entries`, and `record_winner`.
+    /// `settle_fees`, `relay_entries`, and `record_winner`.
     pub keeper_authority: Pubkey,
 
     /// Hub Creator Coin address (Base) encoded as bytes32.
@@ -31,9 +31,9 @@ pub struct CreatorConfig {
     /// TransferFeeConfig on the mint, not by this program).
     pub fee_bps: u16,
 
-    /// Minimum fee amount (in token smallest units) before `flush_fees`
-    /// will execute. Set to 0 to flush on every call.
-    pub flush_threshold: u64,
+    /// Minimum fee amount (in token smallest units) before fee settlement
+    /// will execute. Set to 0 to settle on every call.
+    pub settlement_threshold: u64,
 
     /// Whether lottery entry recording is enabled.
     /// When false, the hook still executes but does not write entries.

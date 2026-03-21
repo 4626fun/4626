@@ -77,7 +77,7 @@ All code is built and tested:
 - **Anchor program** (`creator_share_hook`): 7 instructions, 3 PDA account types, ring buffer with 256-entry capacity and drop-oldest overflow. 30 integration tests passing.
 - **SolanaBridgeAdapter extensions**: `receiveFeeFromSolana()`, `processLotteryEntryFromSolana()` with per-token decimal scaling, keeper allowlists with Twin auth
 - **Deployment batcher**: Hardcoded 40/20/40 split with min 5M / max 50M deposit enforcement. 23 Foundry tests including 4 fuzz suites passing.
-- **5 Keepr CRE workflows**: Entry relay, fee flush, winner relay, graduation sync, price monitoring — all running on the existing XMTP agent stack
+- **5 Keepr CRE workflows**: Entry relay, fee settlement, winner relay, graduation sync, price monitoring — all running on the existing XMTP agent stack
 - **Deployment scripts**: Token-2022 mint creation, PDA initialization, Meteora DLMM pool + Alpha Vault setup via SDK, phased authority revocation
 - **ClaimPrizeToSolana UI**: Full guided claim flow with approve-and-bridge two-step, Twin resolution, balance checks, and calldata fallback for disconnected users
 

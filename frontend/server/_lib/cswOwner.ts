@@ -3,7 +3,7 @@
  * Used for owner-based auth: signing in with a different wallet that owns the profile's CSW.
  */
 
-import { createPublicClient, encodeAbiParameters, getAddress, http, isAddress, type Address } from 'viem'
+import { createPublicClient, encodeAbiParameters, getAddress, http, isAddress, type Address, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 
 const COINBASE_SMART_WALLET_OWNER_ABI = [
@@ -55,8 +55,10 @@ function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
 }
 
+type ReadContractClient = Pick<PublicClient, 'readContract'>
+
 async function readCswOwnerScanLimit(
-  client: ReturnType<typeof createPublicClient>,
+  client: ReadContractClient,
   cswAddress: `0x${string}`,
 ): Promise<number> {
   const countRaw = (await client.readContract({
@@ -81,7 +83,7 @@ async function readCswOwnerScanLimit(
 }
 
 async function ownerAppearsInCswOwnerList(params: {
-  client: ReturnType<typeof createPublicClient>
+  client: ReadContractClient
   cswAddress: `0x${string}`
   ownerAddress: `0x${string}`
   scanLimit: number

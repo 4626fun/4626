@@ -53,14 +53,22 @@ function getClient(): any {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setPublicCors(res)
   if (handleOptions(req, res)) return
-  if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' })
+  if (req.method !== 'GET') {
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use GET /api/v1/agents/feedback?agentId=<id>.',
+    })
+  }
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/feedback', kind: 'read' })
   if (!g.ok) return
 
   const agentIdRaw = String(req.query.agentId ?? '').trim()
   if (!agentIdRaw || !/^\d+$/.test(agentIdRaw)) {
-    return res.status(400).json({ success: false, error: 'agentId is required (non-negative integer)' })
+    return res.status(400).json({
+      success: false,
+      error: 'agentId is required (non-negative integer). Example: /api/v1/agents/feedback?agentId=1&mode=summary.',
+    })
   }
   const agentId = BigInt(agentIdRaw)
 

@@ -31,7 +31,7 @@ Target length: **4 minutes**
 ## 1:50 - 2:20 — Explain Fee Route (Solana -> Base)
 
 Narration points:
-1. “Creator transfer fees are harvested on Solana via the hook program `flush_fees`.”
+1. “Creator transfer fees are settled on Solana via the hook program `settle_fees`.”
 2. “Those fees bridge to Base to the keeper Twin, then the Twin calls `SolanaBridgeAdapter.receiveFeeFromSolana()`.”
 3. “The adapter resolves the creator gauge and forwards fees into `CreatorGaugeController.receiveFees()` for distribution.”
 4. “So Solana is the high-velocity surface, but fee accounting and distribution land back on Base.”

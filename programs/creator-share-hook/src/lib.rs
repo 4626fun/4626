@@ -37,18 +37,18 @@ pub mod creator_share_hook {
         instructions::execute_hook::handler(ctx, amount)
     }
 
-    /// Keeper-only: harvest withheld fees via Token-2022 CPI.
+    /// Keeper-only: settle withheld fees via Token-2022 CPI.
     /// Fees are collected to a designated account for bridging to Base.
-    pub fn flush_fees<'info>(
-        ctx: Context<'_, '_, 'info, 'info, FlushFees<'info>>,
+    pub fn settle_fees<'info>(
+        ctx: Context<'_, '_, 'info, 'info, SettleFees<'info>>,
     ) -> Result<()> {
-        instructions::flush_fees::handler(ctx)
+        instructions::settle_fees::handler(ctx)
     }
 
-    /// Keeper-only: read and clear PendingEntries for relay to Base.
+    /// Keeper-only: emit and clear PendingEntries for relay to Base.
     /// Returns entries to the keeper for batch relay via SolanaBridgeAdapter.
-    pub fn drain_entries(ctx: Context<DrainEntries>) -> Result<()> {
-        instructions::drain_entries::handler(ctx)
+    pub fn relay_entries(ctx: Context<RelayEntries>) -> Result<()> {
+        instructions::relay_entries::handler(ctx)
     }
 
     /// Keeper-only: record a lottery winner on Solana.
@@ -63,7 +63,7 @@ pub mod creator_share_hook {
 
     // ── Admin ────────────────────────────────────────────────────────
 
-    /// Update CreatorConfig parameters (fee_bps, flush_threshold, etc.).
+    /// Update CreatorConfig parameters (fee_bps, fee settlement threshold, etc.).
     pub fn update_config(ctx: Context<UpdateConfig>, params: UpdateConfigParams) -> Result<()> {
         instructions::admin::update_config_handler(ctx, params)
     }

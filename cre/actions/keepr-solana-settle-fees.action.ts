@@ -1,5 +1,5 @@
 /**
- * Keepr Solana Fee Flush Action — Solana read/write + bridge + Base write.
+ * Keepr Solana Fee Settlement Action — Solana read/write + bridge + Base write.
  *
  * Harvests withheld TransferFeeConfig fees from the Token-2022 mint,
  * bridges them to Base, and forwards to the gauge controller.
@@ -9,12 +9,6 @@
  *   2. If above threshold, harvest fees to the mint authority account
  *   3. Bridge fees to Base (Keepr Twin receives them)
  *   4. Call SolanaBridgeAdapter.receiveFeeFromSolana() on Base
- *
- * Token-2022 TransferFeeConfig fee flow:
- *   - Fees are withheld in each token account on every transfer (6.9%)
- *   - `harvestWithheldTokensToMint` aggregates them to the mint account
- *   - `withdrawWithheldTokensFromMint` moves them to a recipient ATA
- *   - We then bridge the withdrawn tokens to Base
  */
 
 import {
@@ -26,30 +20,28 @@ import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
 
-const WORKFLOW_NAME = 'keepr-solana-fee-flush';
+const WORKFLOW_NAME = 'keepr-solana-settle-fees';
 
-// Minimum fee amount (in Solana token units) before flushing
+// Minimum fee amount (in Solana token units) before settlement.
 const MIN_FEE_THRESHOLD = BigInt(1_000_000); // 0.001 tokens at 9 decimals
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+const SETTLE_FEES_DISCRIMINATOR = require('crypto')
+  .createHash('sha256')
+  .update('global:settle_fees')
+  .digest()
+  .subarray(0, 8);
 
-export interface FeeFlushResult {
-  feesFlushed: boolean;
-  amountFlushed: string;
+export interface FeeSettlementResult {
+  feesSettled: boolean;
+  amountSettled: string;
   bridged: boolean;
   forwardedToGauge: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Main execution
-// ---------------------------------------------------------------------------
-
-export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
-  const result: FeeFlushResult = {
-    feesFlushed: false,
-    amountFlushed: '0',
+export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult> {
+  const result: FeeSettlementResult = {
+    feesSettled: false,
+    amountSettled: '0',
     bridged: false,
     forwardedToGauge: false,
   };
@@ -72,12 +64,6 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
     const connection = new Connection(solanaRpcUrl, 'confirmed');
     const keeperKeypair = loadKeeperKeypair();
     const programPubkey = new PublicKey(CHAINS.solana.programId);
-    const flushDiscriminator = require('crypto')
-      .createHash('sha256')
-      .update('global:flush_fees')
-      .digest()
-      .subarray(0, 8);
-
     const creatorMints = (process.env.SOLANA_CREATOR_MINTS ?? '').split(',').filter(Boolean);
     const shareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
 
@@ -86,7 +72,7 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
       return result;
     }
 
-    let totalFeesFlushed = BigInt(0);
+    let totalFeesSettled = BigInt(0);
 
     for (const mintStr of creatorMints) {
       const mint = new PublicKey(mintStr);
@@ -97,7 +83,6 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         continue;
       }
 
-      // Step 1: Read the mint to get TransferFeeConfig data
       const mintAccount = await getMint(connection, mint, 'confirmed', TOKEN_2022_PROGRAM_ID);
       const feeConfig = getTransferFeeConfig(mintAccount);
 
@@ -106,10 +91,8 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         continue;
       }
 
-      // Step 2: Gather token accounts to harvest from
       const accountsWithFees: PublicKey[] = [];
 
-      // Get ALL token accounts for this mint (not just keeper's)
       let allAccounts: Array<{ pubkey: PublicKey }> = [];
       try {
         allAccounts = await connection.getProgramAccounts(TOKEN_2022_PROGRAM_ID, {
@@ -125,7 +108,6 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         });
       }
 
-      // Fallback: use explicitly provided token accounts if RPC indexing is unavailable.
       if (allAccounts.length === 0 && process.env.SOLANA_FEE_ACCOUNTS) {
         const manualAccounts = process.env.SOLANA_FEE_ACCOUNTS
           .split(',')
@@ -151,13 +133,11 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         accountsWithFees.push(acct.pubkey);
       }
 
-      // Step 3: Derive creator_config PDA (required by flush_fees)
       const [creatorConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('creator_config'), mint.toBuffer()],
         programPubkey,
       );
 
-      // Step 4: Create/ensure keeper's ATA exists
       const keeperAta = getAssociatedTokenAddressSync(
         mint,
         keeperKeypair.publicKey,
@@ -166,9 +146,9 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
       );
       const ensureAtaTx = new Transaction().add(
         createAssociatedTokenAccountIdempotentInstruction(
-          keeperKeypair.publicKey, // payer
+          keeperKeypair.publicKey,
           keeperAta,
-          keeperKeypair.publicKey, // owner
+          keeperKeypair.publicKey,
           mint,
           TOKEN_2022_PROGRAM_ID,
         ),
@@ -183,7 +163,6 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         await alertWarning(WORKFLOW_NAME, `Failed to ensure ATA for ${mintStr}: ${msg}`);
       }
 
-      // Step 5: Call flush_fees on the hook program (harvest + withdraw)
       const batchSize = 20;
       const batches = accountsWithFees.length > 0
         ? Array.from({ length: Math.ceil(accountsWithFees.length / batchSize) }, (_, i) =>
@@ -192,7 +171,7 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         : [[]];
 
       for (const batch of batches) {
-        const flushIx = {
+        const settleIx = {
           programId: programPubkey,
           keys: [
             { pubkey: keeperKeypair.publicKey, isSigner: true, isWritable: false },
@@ -202,22 +181,21 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
             { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
             ...batch.map((acct) => ({ pubkey: acct, isSigner: false, isWritable: true })),
           ],
-          data: flushDiscriminator,
+          data: SETTLE_FEES_DISCRIMINATOR,
         };
 
-        const tx = new Transaction().add(flushIx);
         try {
+          const tx = new Transaction().add(settleIx);
           const sig = await sendAndConfirmTransaction(connection, tx, [keeperKeypair], {
             commitment: 'confirmed',
           });
-          await alertInfo(WORKFLOW_NAME, `flush_fees executed for ${mintStr}`, { sig });
-        } catch (flushErr: unknown) {
-          const msg = flushErr instanceof Error ? flushErr.message : String(flushErr);
-          await alertWarning(WORKFLOW_NAME, `flush_fees failed for ${mintStr}: ${msg}`);
+          await alertInfo(WORKFLOW_NAME, `settle_fees executed for ${mintStr}`, { sig });
+        } catch (settleErr: unknown) {
+          const msg = settleErr instanceof Error ? settleErr.message : String(settleErr);
+          await alertWarning(WORKFLOW_NAME, `settle_fees failed for ${mintStr}: ${msg}`);
         }
       }
 
-      // Step 6: Read fee_vault balance after flush
       const feeVaultAccount = await getAccount(connection, keeperAta, 'confirmed', TOKEN_2022_PROGRAM_ID);
       const feeVaultAmount = BigInt(feeVaultAccount.amount.toString());
 
@@ -229,18 +207,8 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         continue;
       }
 
-      totalFeesFlushed += feeVaultAmount;
-      result.feesFlushed = true;
-
-      // Step 4: Bridge fees to Base and forward to gauge
-      // The bridge step happens via the Base-Solana native bridge.
-      // After bridging, tokens land at the keeper's Twin on Base.
-      // Then we call receiveFeeFromSolana on the adapter.
-      //
-      // NOTE: The actual bridge TX is chain-specific and depends on the
-      // Base-Solana bridge SDK. For now, we call the Base-side forwarding
-      // assuming the bridge has already been initiated (separate process
-      // or the bridge SDK handles it atomically).
+      totalFeesSettled += feeVaultAmount;
+      result.feesSettled = true;
 
       const keeperBytes32 = solanaPubkeyToBytes32(keeperPubkey);
 
@@ -254,7 +222,7 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
       if (txResult.success) {
         result.forwardedToGauge = true;
         result.bridged = true;
-        result.amountFlushed = totalFeesFlushed.toString();
+        result.amountSettled = totalFeesSettled.toString();
         await alertInfo(WORKFLOW_NAME, 'Fees forwarded to gauge', {
           txHash: txResult.txHash,
           amount: feeVaultAmount.toString(),
@@ -268,7 +236,7 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await alertCritical(WORKFLOW_NAME, 'Fee flush failed', { error: message });
+    await alertCritical(WORKFLOW_NAME, 'Fee settlement failed', { error: message });
     throw err;
   }
 

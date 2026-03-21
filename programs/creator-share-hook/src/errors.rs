@@ -20,8 +20,8 @@ pub enum CreatorShareHookError {
     #[msg("Lottery is not enabled for this creator")]
     LotteryDisabled,
 
-    #[msg("No pending entries to drain")]
-    NoPendingEntries,
+    #[msg("No pending entries to relay")]
+    NoEntriesToRelay,
 
     #[msg("Invalid mint — does not match config")]
     InvalidMint,

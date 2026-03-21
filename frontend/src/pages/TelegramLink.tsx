@@ -29,6 +29,7 @@ type TelegramLinkCompleteResponse = {
 
 export type TelegramLinkSessionState = 'verifying' | 'ready' | 'error'
 export type TelegramLinkFlowState = 'idle' | 'authenticating' | 'linking' | 'linked' | 'error'
+type TelegramLinkAlertVariant = 'info' | 'warning' | 'error' | 'success'
 const OPEN_FROM_TELEGRAM_SESSION_ERROR = 'Open this link from Telegram so 4626 can verify your Mini App session.'
 const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 15_000
 const TELEGRAM_LINK_REQUEST_TIMEOUT_MS = 25_000
@@ -123,7 +124,8 @@ export function getTelegramLinkViewState(params: {
   hasLinkContext: boolean
 }) {
   const { sessionState, linkState, sessionError, linkMessage, privyAuthenticated, hasLinkContext } = params
-  const statusVariant = sessionState === 'error' || linkState === 'error' ? 'warning' : linkState === 'linked' ? 'success' : 'info'
+  const statusVariant: TelegramLinkAlertVariant =
+    sessionState === 'error' || linkState === 'error' ? 'warning' : linkState === 'linked' ? 'success' : 'info'
   const statusTitle =
     sessionState === 'verifying'
       ? 'Verifying Telegram session'

@@ -56,6 +56,34 @@ describe('api catch-all hardening', () => {
     expect(res.body).toEqual({ success: false, error: 'Not found' })
   })
 
+  it('allows dotted API subpaths like v1/spec.json', async () => {
+    const routeHandler = vi.fn(async (_req, res) => {
+      res.status(200).json({ ok: true })
+    })
+    const getApiHandler = vi.fn(async (subpath: string) => (subpath === 'v1/spec.json' ? routeHandler : null))
+
+    vi.doMock('../_handlers/_routes.js', () => ({
+      getApiHandler,
+    }))
+
+    const mod = await import('../[...path].ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { path: 'v1/spec.json' },
+      url: '/api/v1/spec.json',
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(getApiHandler).toHaveBeenCalledWith('v1/spec.json')
+    expect(routeHandler).toHaveBeenCalledOnce()
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({ ok: true })
+  })
+
   it('loads paymaster route and preserves JSON-RPC envelope', async () => {
     const mod = await import('../[...path].ts')
     const handler = mod.default

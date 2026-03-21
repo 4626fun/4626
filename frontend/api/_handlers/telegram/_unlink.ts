@@ -74,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     telegramUserId: string
     revoked: boolean
     status: string
-    canonicalCswAddress: string
+    canonicalCswAddress: string | null
   }>)
 }
 

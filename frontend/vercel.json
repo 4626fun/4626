@@ -178,6 +178,7 @@
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
     { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
+    { "src": "/api/agent/process", "dest": "/api/agent/process" },
     { "src": "/api/(.*)", "dest": "/api/[...path]" },
     { "handle": "filesystem" },
     { "src": "/((?!assets/).*)", "dest": "/index.html" }

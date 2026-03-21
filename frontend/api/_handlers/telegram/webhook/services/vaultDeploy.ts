@@ -9,6 +9,7 @@ import {
   keccak256,
   type Address,
   type Hex,
+  type PublicClient,
 } from 'viem'
 import { base } from 'viem/chains'
 
@@ -22,6 +23,8 @@ const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as const
 const OFT_BOOTSTRAP_LABEL = '4626:OFTBootstrapRegistry:v1'
 const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const DEFAULT_MIN_FIRST_DEPOSIT_WEI = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
+
+type ReadContractClient = Pick<PublicClient, 'readContract'>
 
 const BATCHER_PHASE1_CORE_WITH_SALT_ABI = [
   {
@@ -374,7 +377,7 @@ function getCanonicalOrigin(): string {
 }
 
 async function computeCreate2Address(params: {
-  publicClient: ReturnType<typeof createPublicClient>
+  publicClient: ReadContractClient
   create2Deployer: Address
   salt: Hex
   initCodeHash: Hex
@@ -389,7 +392,7 @@ async function computeCreate2Address(params: {
 }
 
 async function getBytecode(params: {
-  publicClient: ReturnType<typeof createPublicClient>
+  publicClient: ReadContractClient
   store: Address
   codeId: Hex
 }): Promise<Hex> {

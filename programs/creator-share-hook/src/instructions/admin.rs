@@ -13,8 +13,8 @@ pub struct UpdateConfigParams {
     pub hub_share_oft: Option<[u8; 32]>,
     /// New fee_bps (None = keep current).
     pub fee_bps: Option<u16>,
-    /// New flush_threshold (None = keep current).
-    pub flush_threshold: Option<u64>,
+    /// New fee settlement threshold (None = keep current).
+    pub settlement_threshold: Option<u64>,
     /// New lottery_enabled (None = keep current).
     pub lottery_enabled: Option<bool>,
 }
@@ -60,8 +60,8 @@ pub fn update_config_handler(
         config.fee_bps = fee_bps;
     }
 
-    if let Some(flush_threshold) = params.flush_threshold {
-        config.flush_threshold = flush_threshold;
+    if let Some(settlement_threshold) = params.settlement_threshold {
+        config.settlement_threshold = settlement_threshold;
     }
 
     if let Some(lottery_enabled) = params.lottery_enabled {

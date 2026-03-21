@@ -1885,8 +1885,9 @@ async function sendTelegramStarsInvoice(params: {
   return sendTelegramStarsInvoiceShared(params)
 }
 
-function truncateAddress(value: string): string {
+function truncateAddress(value: string | null | undefined): string {
   const v = asTrimmed(value)
+  if (!v) return 'n/a'
   if (!/^0x[a-fA-F0-9]{40}$/.test(v)) return v
   return `${v.slice(0, 6)}…${v.slice(-4)}`
 }
@@ -3124,11 +3125,23 @@ async function executeTelegramNativeCommand(params: {
       }
     }
 
+    const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+    if (!canonicalSenderWallet) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- canonical wallet is unavailable for this link',
+          '- run /linked to verify wallet setup, then retry',
+        ].join('\n'),
+      }
+    }
+
     const shareToken = isAddressLike(target.creatorCoinAddress)
       ? target.creatorCoinAddress.toLowerCase()
       : target.vaultAddress.toLowerCase()
     const eligibility = await checkSharesEligibility({
-      wallet: link.canonicalCswAddress.toLowerCase() as Address,
+      wallet: canonicalSenderWallet as Address,
       shareToken: shareToken as Address,
       minShares,
     })
@@ -3187,7 +3200,7 @@ async function executeTelegramNativeCommand(params: {
       db: db as any,
       roomChatId: policy.roomChatId,
       telegramUserId: params.userId,
-      canonicalCswAddress: link.canonicalCswAddress,
+      canonicalCswAddress: canonicalSenderWallet,
       status: 'active',
       lastEligibleAt: nowIso,
       graceUntil: null,
@@ -3759,10 +3772,23 @@ async function handleTelegramTradeFlowCallback(params: {
     }
   }
 
+  const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+  if (!canonicalSenderWallet) {
+    return {
+      text: [
+        'Trade blocked',
+        '',
+        '- canonical wallet is unavailable for this link',
+        '- run /linked and confirm wallet setup, then retry',
+      ].join('\n'),
+      callbackToast: 'Canonical wallet missing',
+    }
+  }
+
   const intentResult = await buildTradeIntentFromPercent({
     actionType: tradeFlowState.actionType,
     vault: target,
-    canonicalCswAddress: link.canonicalCswAddress.toLowerCase() as `0x${string}`,
+    canonicalCswAddress: canonicalSenderWallet,
     percentBps: tradeFlowState.percentBps,
   })
   if (!intentResult.ok) {
@@ -3896,10 +3922,26 @@ async function maybeHandlePendingTradePercentInput(params: {
     }
   }
 
+  const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
+  if (!canonicalSenderWallet) {
+    return {
+      text: [
+        'Trade blocked',
+        '',
+        '- canonical wallet is unavailable for this link',
+        '- run /linked and confirm wallet setup, then retry',
+      ].join('\n'),
+      replyMarkup: buildTradeCustomPercentReplyMarkup({
+        actionType: tradeFlowState.actionType,
+        vaultAddress: prompt.vaultAddress as `0x${string}`,
+      }),
+    }
+  }
+
   const intentResult = await buildTradeIntentFromPercent({
     actionType: tradeFlowState.actionType,
     vault: target,
-    canonicalCswAddress: link.canonicalCswAddress.toLowerCase() as `0x${string}`,
+    canonicalCswAddress: canonicalSenderWallet,
     percentBps: tradeFlowState.percentBps,
   })
   if (!intentResult.ok) {
@@ -5313,7 +5355,7 @@ async function handleTelegramTradeCallback(params: {
 
       const privyWalletContext = await resolvePrivyWalletOwnerContextByPrivyUserId({
         privyUserId: link.privyUserId,
-        canonicalCswAddress: link.canonicalCswAddress,
+        canonicalCswAddress: canonicalSenderWallet,
       })
 
       const publicClient = createPublicClient({
@@ -5324,7 +5366,7 @@ async function handleTelegramTradeCallback(params: {
       const ownerContext = await resolvePrivyCoinbaseSmartWalletOwnerContext({
         publicClient,
         walletId: privyWalletContext.walletId,
-        smartWallet: getAddress(link.canonicalCswAddress as Address),
+        smartWallet: getAddress(canonicalSenderWallet as Address),
         expectedOwnerAddress: getAddress(privyWalletContext.ownerAddress as Address),
         maxScan: 512,
       })
@@ -5335,7 +5377,7 @@ async function handleTelegramTradeCallback(params: {
         args: [
           freshQuote.maxPriceQ96,
           freshQuote.amountWei,
-          getAddress(link.canonicalCswAddress as Address),
+          getAddress(canonicalSenderWallet as Address),
           '0x',
         ],
       })
@@ -5344,7 +5386,7 @@ async function handleTelegramTradeCallback(params: {
         publicClient,
         bundlerUrl: getBundlerAndPaymasterUrl(),
         walletId: privyWalletContext.walletId,
-        smartWallet: getAddress(link.canonicalCswAddress as Address),
+        smartWallet: getAddress(canonicalSenderWallet as Address),
         ownerAddress: getAddress(ownerContext.ownerAddress as Address),
         ownerIndex: ownerContext.ownerIndex,
         calls: [

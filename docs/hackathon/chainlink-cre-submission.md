@@ -107,8 +107,8 @@ Primary operator-facing flow for demo:
 - Solana monitor workflow definition in `cre/workflows/keepr-solana-price-monitor.workflow.ts`
 
 Fee return path (Solana -> Base):
-- Solana harvest/withdraw instruction: `programs/creator-share-hook/src/instructions/flush_fees.rs`
-- Keeper fee flush action: `cre/actions/keepr-solana-fee-flush.action.ts`
+- Solana fee-settlement instruction: `settle_fees` in `programs/creator-share-hook/src/lib.rs` (legacy alias: `flush_fees`)
+- Keeper fee settlement action: `cre/actions/keepr-solana-settle-fees.action.ts` (legacy implementation file: `cre/actions/keepr-solana-fee-flush.action.ts`)
 - Base adapter entrypoint: `contracts/utilities/bridge/SolanaBridgeAdapter.sol` (`receiveFeeFromSolana`)
 - Gauge intake and distribution: `contracts/governance/CreatorGaugeController.sol` (`receiveFees`)
 

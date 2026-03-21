@@ -18,8 +18,8 @@ pub struct InitializeCreatorParams {
     pub hub_share_oft: [u8; 32],
     /// Fee in basis points (informational, enforced by TransferFeeConfig).
     pub fee_bps: u16,
-    /// Minimum withheld fee amount before flush_fees will execute.
-    pub flush_threshold: u64,
+    /// Minimum withheld fee amount before fee settlement will execute.
+    pub settlement_threshold: u64,
     /// Whether lottery entry recording is enabled.
     pub lottery_enabled: bool,
     /// Initial known AMM programs for buy detection.
@@ -97,7 +97,7 @@ pub fn handler(ctx: Context<InitializeCreator>, params: InitializeCreatorParams)
     config.hub_creator_coin = params.hub_creator_coin;
     config.hub_share_oft = params.hub_share_oft;
     config.fee_bps = params.fee_bps;
-    config.flush_threshold = params.flush_threshold;
+    config.settlement_threshold = params.settlement_threshold;
     config.lottery_enabled = params.lottery_enabled;
     config.amm_program_count = params.known_amm_programs.len() as u8;
     config.bump = ctx.bumps.creator_config;

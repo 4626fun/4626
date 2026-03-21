@@ -49,7 +49,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return
 
   if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use GET or POST /api/v1/agents/wallet-intelligence.',
+    } satisfies ApiEnvelope<never>)
   }
 
   // Rate limit
@@ -104,7 +107,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!address || !isAddressLike(address)) {
-    return res.status(400).json({ success: false, error: 'address is required (0x...)' } satisfies ApiEnvelope<never>)
+    return res.status(400).json({
+      success: false,
+      error: 'address is required (0x...). Example: /api/v1/agents/wallet-intelligence?address=0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18.',
+    } satisfies ApiEnvelope<never>)
   }
 
   const normalizedChainIds = normalizeRequestedChainIds(chainIds)

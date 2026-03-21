@@ -11,13 +11,13 @@ use crate::errors::CreatorShareHookError;
 use crate::events::*;
 use crate::state::*;
 
-/// Keeper-only: harvest withheld TransferFeeConfig fees from the mint
+/// Keeper-only: settle withheld TransferFeeConfig fees from the mint
 /// into a designated fee vault token account.
 ///
 /// After this instruction, the keeper bridges the collected fees to Base
 /// via `SolanaBridgeAdapter.receiveFeeFromSolana()`.
 #[derive(Accounts)]
-pub struct FlushFees<'info> {
+pub struct SettleFees<'info> {
     /// The keeper authority (must match `creator_config.keeper_authority`).
     pub keeper: Signer<'info>,
 
@@ -43,7 +43,7 @@ pub struct FlushFees<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
-pub fn handler<'info>(ctx: Context<'_, '_, 'info, 'info, FlushFees<'info>>) -> Result<()> {
+pub fn handler<'info>(ctx: Context<'_, '_, 'info, 'info, SettleFees<'info>>) -> Result<()> {
     let mint_key = ctx.accounts.mint.key();
 
     // Validate fee_vault is a Token-2022 account for this mint.
@@ -102,7 +102,7 @@ pub fn handler<'info>(ctx: Context<'_, '_, 'info, 'info, FlushFees<'info>>) -> R
     let amount_after = fee_vault_state_after.base.amount;
     let delta = amount_after.saturating_sub(amount_before);
 
-    emit!(FeesFlushed {
+    emit!(FeesSettled {
         creator_mint: ctx.accounts.creator_config.creator_mint,
         amount: delta,
     });

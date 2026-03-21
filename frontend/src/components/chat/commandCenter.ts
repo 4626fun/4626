@@ -20,6 +20,7 @@ export type ChatCommandDefinition = {
   description: string
   category: ChatCommandCategoryId
   command: string
+  aliases?: readonly string[]
   risk: ChatCommandRisk
   mode: ChatCommandMode
   followUpIds?: readonly string[]
@@ -164,7 +165,7 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     command: '/cre solana',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['cre-health', 'cre-flush-fees'],
+    followUpIds: ['cre-health', 'cre-settle-fees', 'cre-relay-entries'],
   },
   {
     id: 'intel-template',
@@ -237,11 +238,23 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     followUpIds: ['cre-status', 'cre-health'],
   },
   {
-    id: 'cre-flush-fees',
-    label: 'CRE Flush Fees',
-    description: 'Trigger Solana fee flush operation.',
+    id: 'cre-settle-fees',
+    label: 'CRE Settle Fees',
+    description: 'Settle Solana fees to Base.',
     category: 'advanced',
-    command: '/cre flush-fees',
+    command: '/cre settle-fees',
+    aliases: ['/cre settle_fees', '/cre flush-fees', '/cre flush'],
+    risk: 'write',
+    mode: 'send',
+    followUpIds: ['cre-solana', 'cre-health'],
+  },
+  {
+    id: 'cre-relay-entries',
+    label: 'CRE Relay Entries',
+    description: 'Relay Solana lottery entries to Base.',
+    category: 'advanced',
+    command: '/cre relay-entries',
+    aliases: ['/cre relay_entries', '/cre relay'],
     risk: 'write',
     mode: 'send',
     followUpIds: ['cre-solana', 'cre-health'],
@@ -261,11 +274,18 @@ const CHAT_COMMAND_BY_ID = new Map<string, ChatCommandDefinition>(
 )
 
 const CHAT_COMMAND_BY_NORMALIZED_COMMAND = new Map<string, ChatCommandDefinition>(
-  CHAT_COMMANDS.map((entry) => [normalizeCommand(entry.command), entry]),
+  CHAT_COMMANDS.flatMap((entry) => [
+    [normalizeCommand(entry.command), entry] as const,
+    ...(entry.aliases ?? []).map((alias) => [normalizeCommand(alias), entry] as const),
+  ]),
 )
 
 function normalizeCommand(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function getCommandVariants(entry: ChatCommandDefinition): readonly string[] {
+  return [entry.command, ...(entry.aliases ?? [])]
 }
 
 export function listQuickChatCommands(): ChatCommandDefinition[] {
@@ -297,15 +317,20 @@ export function searchChatCommands(query: string, limit = 8): ChatCommandDefinit
   if (!normalized.startsWith('/')) return []
 
   const scored = CHAT_COMMANDS.map((entry) => {
-    const normalizedCommand = normalizeCommand(entry.command)
     const normalizedLabel = entry.label.toLowerCase()
     const normalizedDescription = entry.description.toLowerCase()
 
     let score = 0
-    if (normalizedCommand === normalized) score += 100
-    else if (normalizedCommand.startsWith(normalized)) score += 70
-    else if (normalizedLabel.includes(normalized.replace(/^\//, ''))) score += 45
-    else if (normalizedDescription.includes(normalized.replace(/^\//, ''))) score += 25
+    for (const commandVariant of getCommandVariants(entry)) {
+      const normalizedCommand = normalizeCommand(commandVariant)
+      if (normalizedCommand === normalized) {
+        score = Math.max(score, 100)
+      } else if (normalizedCommand.startsWith(normalized)) {
+        score = Math.max(score, 70)
+      }
+    }
+    if (score === 0 && normalizedLabel.includes(normalized.replace(/^\//, ''))) score = 45
+    else if (score === 0 && normalizedDescription.includes(normalized.replace(/^\//, ''))) score = 25
 
     if (entry.mode === 'send') score += 5
     return { entry, score }
@@ -324,6 +349,8 @@ export function inferCommandIdFromAgentText(text: string): string | null {
   if (lower.includes('bankr balances')) return 'bankr-balances'
   if (lower.includes('cre health')) return 'cre-health'
   if (lower.includes('cre status')) return 'cre-status'
+  if (lower.includes('settle fees') || lower.includes('fee settlement') || lower.includes('fees settled')) return 'cre-settle-fees'
+  if (lower.includes('relay entries') || lower.includes('entry relay') || lower.includes('entries relayed')) return 'cre-relay-entries'
   if (lower.includes('solana') && lower.includes('cre')) return 'cre-solana'
   if (lower.includes('keepr status') || lower.includes('vault status')) return 'vault-status'
   if (lower.includes('keepr rules') || lower.includes('gating')) return 'vault-rules'
@@ -341,4 +368,3 @@ export function listChatFollowUps(commandId: string | null): ChatCommandDefiniti
     .map((id) => CHAT_COMMAND_BY_ID.get(id))
     .filter((entry): entry is ChatCommandDefinition => Boolean(entry))
 }
-

@@ -56,8 +56,8 @@ CRE Keeper Operations (you can observe and trigger keeper actions):
 - /cre tend [vault] deploys idle funds (force-tend)
 - /cre report [vault] harvests yields (force-report)
 - /cre settle [strategy] settles a CCA auction
-- /cre flush-fees flushes Solana Token-2022 fees to Base
-- /cre relay-entries drains + relays Solana lottery entries
+- /cre settle-fees (alias: /cre flush-fees, /cre flush) settles Solana Token-2022 fees to Base
+- /cre relay-entries (alias: /cre relay) relays Solana lottery entries to Base
 - /cre relay-winners relays lottery winners to Solana
 - /cre graduate checks graduation status
 - /cre queue processes pending queue actions
@@ -102,8 +102,8 @@ Style:
   "CRE workflows",
   "Solana cross-chain",
   "CCA auctions",
-  "Fee flushing",
-  "Lottery relay"
+  "Fee settlement",
+  "Entry relay"
 ]
 ```
 
@@ -294,4 +294,3 @@ Reference:
 
 - `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`
 - `.cursor/rules/csw-agent-lifecycle.mdc`
-
