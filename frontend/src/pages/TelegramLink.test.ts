@@ -10,6 +10,7 @@ import {
   getTelegramLinkViewState,
   isPrivyEmailAlreadyLinkedError,
   pollTelegramLinkEmailVerification,
+  shouldAutoRefreshTelegramLinkEmail,
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldAutoStartTelegramLink,
   shouldShowRetryTelegramSession,
@@ -182,6 +183,28 @@ describe('TelegramLink helpers', () => {
         emailState: 'verified',
         linkState: 'error',
         alreadyAttemptedForToken: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('auto-refreshes account email state only from the initial unknown state', () => {
+    expect(
+      shouldAutoRefreshTelegramLinkEmail({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        linkState: 'idle',
+        emailState: 'unknown',
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldAutoRefreshTelegramLinkEmail({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        linkState: 'idle',
+        emailState: 'needs_verification',
       }),
     ).toBe(false)
   })

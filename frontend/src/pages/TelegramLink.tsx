@@ -308,6 +308,20 @@ export function shouldAutoStartTelegramLink(params: {
   return true
 }
 
+export function shouldAutoRefreshTelegramLinkEmail(params: {
+  hasLinkContext: boolean
+  sessionState: TelegramLinkSessionState
+  privyReady: boolean
+  linkState: TelegramLinkFlowState
+  emailState: TelegramLinkEmailState
+}): boolean {
+  if (!params.hasLinkContext) return false
+  if (params.sessionState !== 'ready') return false
+  if (!params.privyReady) return false
+  if (params.linkState === 'linked') return false
+  return params.emailState === 'unknown'
+}
+
 export function getTelegramLinkViewState(params: {
   sessionState: TelegramLinkSessionState
   emailState: TelegramLinkEmailState
@@ -558,9 +572,14 @@ export function TelegramLink() {
   )
 
   useEffect(() => {
-    if (!telegramLinkContext || sessionState !== 'ready' || !privyReady) return
-    if (linkState === 'linked') return
-    if (emailState === 'checking' || emailState === 'verifying' || emailState === 'pending' || emailState === 'error') return
+    const shouldAutoRefresh = shouldAutoRefreshTelegramLinkEmail({
+      hasLinkContext: Boolean(telegramLinkContext),
+      sessionState,
+      privyReady,
+      linkState,
+      emailState,
+    })
+    if (!shouldAutoRefresh) return
     void refreshEmailVerificationState()
   }, [emailState, linkState, privyReady, refreshEmailVerificationState, sessionState, telegramLinkContext])
 

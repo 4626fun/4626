@@ -1,10 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import sharp from 'sharp'
+import { generateSegmentationMask, type SegmentationModel } from './_segmentation.js'
 
 type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
 type ArtworkFitMode = 'cover' | 'contain'
@@ -71,6 +70,20 @@ type BreakoutPlan = {
     | 'rembg-not-candidate'
 }
 
+type SegmentationExtraction = {
+  model: SegmentationModel
+  executable: string
+  maskPngRgba: Buffer
+  cutoutPng: Buffer
+}
+
+type SegmentationAlignmentResult = {
+  topBiasPx: number
+  deltaPx: number
+  targetTopY: number
+  maskTopY: number | null
+}
+
 type StackLayerConfig = {
   offsetXRatio: number
   offsetYRatio: number
@@ -100,8 +113,53 @@ const BREAKOUT_RUNTIME_LOG_ENABLED =
   process.env.TOKEN_PREMIUM_BREAKOUT_LOG === '1'
 const ALLOW_PREMIUM_FALLBACK_BAND =
   process.env.TOKEN_PREMIUM_BREAKOUT_FALLBACK_BAND === '1'
+const PREMIUM_SEGMENTATION_ENABLED = process.env.TOKEN_PREMIUM_SEGMENTATION !== '0'
 const BREAKOUT_DEBUG_DIR = process.env.TOKEN_BREAKOUT_DEBUG_DIR
 const execFileP = promisify(execFile)
+
+const SEGMENTATION_MODELS: readonly SegmentationModel[] = [
+  'bria-rmbg',
+  'birefnet-general',
+  'birefnet-portrait',
+  'isnet-general-use',
+  'isnet-anime',
+  'u2net',
+  'u2netp',
+  'u2net_human_seg',
+  'sam',
+] as const
+
+const PREMIUM_ALIGN_TARGET_TOP_RATIO =
+  clamp(Number(process.env.TOKEN_PREMIUM_ALIGN_TARGET_TOP_RATIO ?? 0.04), 0, 0.4)
+const PREMIUM_ALIGN_MAX_BIAS_RATIO =
+  clamp(Number(process.env.TOKEN_PREMIUM_ALIGN_MAX_BIAS_RATIO ?? 0.09), 0, 0.32)
+const PREMIUM_BREAKOUT_MASK_MIN_COVERAGE =
+  clamp(Number(process.env.TOKEN_PREMIUM_BREAKOUT_MASK_MIN_COVERAGE ?? 0.004), 0, 0.35)
+
+function resolveSegmentationModel(
+  rawValue: string | undefined,
+  fallback: SegmentationModel,
+): SegmentationModel {
+  const value = rawValue?.trim()
+  if (!value) return fallback
+  if (SEGMENTATION_MODELS.includes(value as SegmentationModel)) {
+    return value as SegmentationModel
+  }
+  return fallback
+}
+
+const PREMIUM_SEGMENTATION_MODEL_PHOTO = resolveSegmentationModel(
+  process.env.TOKEN_PREMIUM_SEGMENTATION_MODEL_PHOTO,
+  'bria-rmbg',
+)
+const PREMIUM_SEGMENTATION_MODEL_ILLUSTRATION = resolveSegmentationModel(
+  process.env.TOKEN_PREMIUM_SEGMENTATION_MODEL_ILLUSTRATION,
+  'isnet-general-use',
+)
+const PREMIUM_SEGMENTATION_MODEL_PIXEL = resolveSegmentationModel(
+  process.env.TOKEN_PREMIUM_SEGMENTATION_MODEL_PIXEL,
+  'u2netp',
+)
 
 async function writeBreakoutDebugAsset(filename: string, layer: Buffer): Promise<void> {
   if (!BREAKOUT_DEBUG_DIR) return
@@ -175,47 +233,47 @@ async function hasVisibleAlpha(layer: Buffer): Promise<boolean> {
   return getAlphaBounds(data, info.width, info.height, info.channels) !== null
 }
 
-async function extractForegroundRembg(pngBytes: Buffer): Promise<Buffer | null> {
+function resolveSegmentationModelForSourceClass(sourceClass: SourceClass): SegmentationModel {
+  switch (sourceClass) {
+    case 'portraitPhoto':
+      return PREMIUM_SEGMENTATION_MODEL_PHOTO
+    case 'pixelArt':
+      return PREMIUM_SEGMENTATION_MODEL_PIXEL
+    case 'illustration':
+    case 'generic':
+    case 'brightBadge':
+    default:
+      return PREMIUM_SEGMENTATION_MODEL_ILLUSTRATION
+  }
+}
+
+async function extractForegroundRembg(params: {
+  pngBytes: Buffer
+  sourceClass: SourceClass
+}): Promise<SegmentationExtraction | null> {
   if (!PREMIUM_BREAKOUT_REMBG.enabled) return null
   if (PREMIUM_BREAKOUT_REMBG.binCandidates.length === 0) return null
-  const id = randomUUID()
-  const inPath = path.join(tmpdir(), `premium-rembg-in-${id}.png`)
-  const outPath = path.join(tmpdir(), `premium-rembg-out-${id}.png`)
-  let lastError: unknown = null
-  try {
-    await fs.writeFile(inPath, pngBytes)
-    for (const bin of PREMIUM_BREAKOUT_REMBG.binCandidates) {
-      try {
-        await execFileP(bin, ['i', inPath, outPath], {
-          timeout: PREMIUM_BREAKOUT_REMBG.timeoutMs,
-        })
-        return await fs.readFile(outPath)
-      } catch (error) {
-        lastError = error
-        const enoent =
-          typeof error === 'object' &&
-          error !== null &&
-          'code' in error &&
-          (error as { code?: unknown }).code === 'ENOENT'
-        if (enoent) continue
-      }
+
+  const model = resolveSegmentationModelForSourceClass(params.sourceClass)
+  const segmentation = await generateSegmentationMask(params.pngBytes, {
+    model,
+    alphaMatting: params.sourceClass === 'portraitPhoto',
+    maskOnly: false,
+    timeoutMs: PREMIUM_BREAKOUT_REMBG.timeoutMs,
+    binCandidates: PREMIUM_BREAKOUT_REMBG.binCandidates,
+  })
+  if (!segmentation?.cutoutPng || segmentation.cutoutPng.length === 0) {
+    if (BREAKOUT_DEBUG_LOG_ENABLED) {
+      console.warn('[token/image] premium rembg extraction failed: missing cutout output')
     }
-  } catch (error) {
-    lastError = error
-  } finally {
-    await Promise.all([
-      fs.unlink(inPath).catch(() => {}),
-      fs.unlink(outPath).catch(() => {}),
-    ])
+    return null
   }
-  if (lastError && (BREAKOUT_DEBUG_LOG_ENABLED || (BREAKOUT_RUNTIME_LOG_ENABLED && !rembgFailureWarned))) {
-    rembgFailureWarned = true
-    console.warn('[token/image] premium rembg extraction failed:', lastError)
+  return {
+    model: segmentation.model,
+    executable: segmentation.executable,
+    maskPngRgba: segmentation.maskPngRgba,
+    cutoutPng: segmentation.cutoutPng,
   }
-  if (!lastError && BREAKOUT_DEBUG_LOG_ENABLED) {
-    console.warn('[token/image] premium rembg extraction failed: no runnable binary found')
-  }
-  return null
 }
 
 const BACKGROUND_COLORS = {
@@ -320,6 +378,15 @@ async function logBreakoutRuntimeBannerOnce(): Promise<void> {
       rembgExecutable: rembg.executable,
       rembgReason: rembg.reason ?? null,
       rembgCandidates: rembg.checkedCandidates,
+      segmentationEnabled: PREMIUM_SEGMENTATION_ENABLED,
+      segmentationModels: {
+        photo: PREMIUM_SEGMENTATION_MODEL_PHOTO,
+        illustration: PREMIUM_SEGMENTATION_MODEL_ILLUSTRATION,
+        pixel: PREMIUM_SEGMENTATION_MODEL_PIXEL,
+      },
+      breakoutCoverageThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+      alignTargetTopRatio: PREMIUM_ALIGN_TARGET_TOP_RATIO,
+      alignMaxBiasRatio: PREMIUM_ALIGN_MAX_BIAS_RATIO,
       fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
       runtimeLogEnabled: BREAKOUT_RUNTIME_LOG_ENABLED,
       debugAssetDumpEnabled: Boolean(BREAKOUT_DEBUG_DIR),
@@ -1431,6 +1498,95 @@ async function renderPlacedSourceCanvas(params: {
     .composite([{ input: placed, left: artX, top: artY }])
     .png()
     .toBuffer()
+}
+
+async function computeAlignedTopBiasPx(params: {
+  layout: PremiumLayout
+  baseTopBiasPx: number
+  scale: number
+  fit: ArtworkFitMode
+  sourceClass: SourceClass
+  maskRgbaPng: Buffer
+}): Promise<SegmentationAlignmentResult> {
+  const targetTopY = Math.round(params.layout.chamberY + params.layout.chamberSize * PREMIUM_ALIGN_TARGET_TOP_RATIO)
+  if (params.fit !== 'cover') {
+    return {
+      topBiasPx: params.baseTopBiasPx,
+      deltaPx: 0,
+      targetTopY,
+      maskTopY: null,
+    }
+  }
+
+  const maskCanvas = await renderPlacedSourceCanvas({
+    sourceImage: params.maskRgbaPng,
+    layout: params.layout,
+    scale: params.scale,
+    fit: 'cover',
+    topBiasPx: params.baseTopBiasPx,
+    sourceClass: params.sourceClass,
+    maxTopBiasRatio: PREMIUM_ALIGN_MAX_BIAS_RATIO,
+  })
+  const { data, info } = await sharp(maskCanvas)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const bounds = getAlphaBounds(data, info.width, info.height, info.channels)
+  if (!bounds) {
+    return {
+      topBiasPx: params.baseTopBiasPx,
+      deltaPx: 0,
+      targetTopY,
+      maskTopY: null,
+    }
+  }
+
+  const maxBiasPx = Math.round(params.layout.chamberSize * PREMIUM_ALIGN_MAX_BIAS_RATIO)
+  const nextTopBiasPx = Math.round(clamp(params.baseTopBiasPx + (bounds.minY - targetTopY), 0, maxBiasPx))
+  return {
+    topBiasPx: nextTopBiasPx,
+    deltaPx: bounds.minY - targetTopY,
+    targetTopY,
+    maskTopY: bounds.minY,
+  }
+}
+
+async function measureBreakoutMaskCoverage(params: {
+  layout: PremiumLayout
+  scale: number
+  topBiasPx: number
+  sourceClass: SourceClass
+  maskRgbaPng: Buffer
+}): Promise<number> {
+  const maskCanvas = await renderPlacedSourceCanvas({
+    sourceImage: params.maskRgbaPng,
+    layout: params.layout,
+    scale: params.scale,
+    fit: 'cover',
+    topBiasPx: params.topBiasPx,
+    sourceClass: params.sourceClass,
+    maxTopBiasRatio: PREMIUM_ALIGN_MAX_BIAS_RATIO,
+  })
+  const { data, info } = await sharp(maskCanvas)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const x0 = Math.max(0, params.layout.breakoutX)
+  const x1 = Math.min(info.width, params.layout.breakoutX + params.layout.breakoutWidth)
+  const y0 = Math.max(0, params.layout.breakoutY)
+  const y1 = Math.min(info.height, params.layout.breakoutY + params.layout.breakoutHeight)
+  let on = 0
+  let total = 0
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      total += 1
+      const idx = (y * info.width + x) * info.channels
+      const alpha = data[idx + 3] ?? 0
+      if (alpha > 32) on += 1
+    }
+  }
+  if (total === 0) return 0
+  return on / total
 }
 
 async function renderPlacedSourceCanvasWithOffset(params: {
@@ -2852,6 +3008,14 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   let sourceAlphaBreakoutAllowedForLog = false
   let breakoutDesiredForLog = false
   let rembgCandidateForLog = false
+  let segmentationModelForLog: SegmentationModel | null = null
+  let segmentationExecutableForLog: string | null = null
+  let segmentationCoverageForLog: number | null = null
+  let segmentationAlignmentDeltaForLog: number | null = null
+  let segmentationMaskTopYForLog: number | null = null
+  let segmentationTargetTopYForLog: number | null = null
+  let segmentationFailureReasonForLog: string | null = null
+  let segmentationAppliedForLog = false
   if (params.sourceImage && params.sourceImage.length > 0) {
     try {
       normalizedSource = await normalizeSourceImage(params.sourceImage)
@@ -2902,7 +3066,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       analysis,
       suppressBreakout: params.suppressBreakout,
       breakoutSourceKind,
-      rembgAvailable: rembgProbe.available,
+      rembgAvailable: rembgProbe.available && PREMIUM_SEGMENTATION_ENABLED,
     })
     rembgCandidateForLog = breakoutPlan.rembgCandidate
     breakoutDesiredForLog = breakoutPlan.breakoutRequested
@@ -2915,12 +3079,42 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       : resolvedPreset === 'pixel' ? 0.994
       : 1
     const renderScale = clamp(analysis.preferredScale * presetScaleBoost, 0.79, 1.12)
-    const topBiasPx =
+    let topBiasPx =
       analysis.fitMode === 'cover' && analysis.sourceClass === 'portraitPhoto'
         ? Math.max(1, Math.round(layout.chamberSize * (allowBreakoutForLayout ? 0.024 : 0.018)))
         : analysis.fitMode === 'cover' && allowBreakoutForLayout && analysis.sourceClass === 'illustration'
           ? Math.max(1, Math.round(layout.chamberSize * (resolvedPreset === 'hero' ? 0.016 : 0.009)))
           : 0
+    let rembgSegmentation: SegmentationExtraction | null = null
+    let rembgCoverage = 0
+    let rembgCoveragePass = false
+    if (breakoutPlan.mode === 'rembgCutout') {
+      rembgSegmentation = await extractForegroundRembg({
+        pngBytes: normalizedSource,
+        sourceClass: analysis.sourceClass,
+      })
+      if (rembgSegmentation) {
+        const alignment = await computeAlignedTopBiasPx({
+          layout,
+          baseTopBiasPx: topBiasPx,
+          scale: renderScale,
+          fit: analysis.fitMode,
+          sourceClass: analysis.sourceClass,
+          maskRgbaPng: rembgSegmentation.maskPngRgba,
+        })
+        topBiasPx = alignment.topBiasPx
+        segmentationModelForLog = rembgSegmentation.model
+        segmentationExecutableForLog = rembgSegmentation.executable
+        segmentationAlignmentDeltaForLog = alignment.deltaPx
+        segmentationMaskTopYForLog = alignment.maskTopY
+        segmentationTargetTopYForLog = alignment.targetTopY
+        segmentationAppliedForLog = alignment.maskTopY !== null
+        await writeBreakoutDebugAsset('0-rembg-mask-rgba.png', rembgSegmentation.maskPngRgba)
+        await writeBreakoutDebugAsset('0-rembg-cutout.png', rembgSegmentation.cutoutPng)
+      } else {
+        segmentationFailureReasonForLog = 'segmentation-unavailable'
+      }
+    }
     stackedUnderlay = await renderStackedArtworkUnderlay({
       size,
       layout,
@@ -2959,6 +3153,20 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         0.84,
         1.16,
       )
+      if (breakoutPlan.mode === 'rembgCutout' && rembgSegmentation?.maskPngRgba) {
+        rembgCoverage = await measureBreakoutMaskCoverage({
+          layout,
+          scale: breakoutScale,
+          topBiasPx: breakoutTopBiasPx,
+          sourceClass: analysis.sourceClass,
+          maskRgbaPng: rembgSegmentation.maskPngRgba,
+        })
+        rembgCoveragePass = rembgCoverage >= PREMIUM_BREAKOUT_MASK_MIN_COVERAGE
+        segmentationCoverageForLog = rembgCoverage
+        if (!rembgCoveragePass) {
+          segmentationFailureReasonForLog = `segmentation-coverage-below-threshold:${rembgCoverage.toFixed(4)}`
+        }
+      }
       let subjectMaskSourceImage: Uint8Array | undefined
       let breakoutPlanSource: 'heroCutout' | 'sourceAlpha' | 'rembgCutout' | 'fallbackBand' | 'none' =
         breakoutPlan.mode === 'none' ? 'none' : breakoutPlan.mode
@@ -2972,16 +3180,16 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         breakoutPlanSource = 'sourceAlpha'
         shouldRenderBreakout = true
       } else if (breakoutPlan.mode === 'rembgCutout') {
-        const rembgCutout = await extractForegroundRembg(normalizedSource)
-        if (rembgCutout && rembgCutout.length > 0) {
-          subjectMaskSourceImage = new Uint8Array(rembgCutout)
+        if (rembgSegmentation?.cutoutPng && rembgCoveragePass) {
+          subjectMaskSourceImage = new Uint8Array(rembgSegmentation.cutoutPng)
           breakoutPlanSource = 'rembgCutout'
           shouldRenderBreakout = true
-          await writeBreakoutDebugAsset('0-rembg-cutout.png', rembgCutout)
         } else if (ALLOW_PREMIUM_FALLBACK_BAND) {
           allowFallbackBand = true
           breakoutPlanSource = 'fallbackBand'
           shouldRenderBreakout = true
+        } else if (!segmentationFailureReasonForLog) {
+          segmentationFailureReasonForLog = 'segmentation-unavailable'
         }
       } else if (ALLOW_PREMIUM_FALLBACK_BAND && breakoutPlan.breakoutRequested) {
         allowFallbackBand = true
@@ -2991,7 +3199,11 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       breakoutModeForLog = shouldRenderBreakout ? breakoutPlanSource : 'none'
       breakoutDecisionReason = shouldRenderBreakout
         ? `mode:${breakoutPlanSource}`
-        : `plan:${breakoutPlan.reason}`
+        : (
+            breakoutPlan.mode === 'rembgCutout' && segmentationFailureReasonForLog
+              ? segmentationFailureReasonForLog
+              : `plan:${breakoutPlan.reason}`
+          )
       if (shouldRenderBreakout) {
         try {
           breakoutLayer = await renderBreakoutLayer({
@@ -3032,6 +3244,15 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           breakoutPlanMode: breakoutPlan.mode,
           rembgCandidate: breakoutPlan.rembgCandidate,
           rembgAvailable: rembgProbe.available,
+          segmentationEnabled: PREMIUM_SEGMENTATION_ENABLED,
+          segmentationModel: rembgSegmentation?.model ?? null,
+          segmentationCoverage: rembgCoverage,
+          segmentationCoverageThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+          segmentationCoveragePass: rembgCoveragePass,
+          segmentationAlignmentDeltaPx: segmentationAlignmentDeltaForLog,
+          segmentationMaskTopY: segmentationMaskTopYForLog,
+          segmentationTargetTopY: segmentationTargetTopYForLog,
+          segmentationFailureReason: segmentationFailureReasonForLog,
           allowFallbackBand,
           shouldRenderBreakout,
           sourceAlphaBreakoutAllowed,
@@ -3132,6 +3353,16 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       topOccupancy: analysis?.topOccupancy ?? null,
       breakoutDesired: breakoutDesiredForLog,
       hasHeroCutoutSource: Boolean(params.heroCutoutSourceImage && params.heroCutoutSourceImage.length > 0),
+      segmentationEnabled: PREMIUM_SEGMENTATION_ENABLED,
+      segmentationApplied: segmentationAppliedForLog,
+      segmentationModel: segmentationModelForLog,
+      segmentationExecutable: segmentationExecutableForLog,
+      segmentationCoverage: segmentationCoverageForLog,
+      segmentationCoverageThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+      segmentationAlignmentDeltaPx: segmentationAlignmentDeltaForLog,
+      segmentationMaskTopY: segmentationMaskTopYForLog,
+      segmentationTargetTopY: segmentationTargetTopYForLog,
+      segmentationFailureReason: segmentationFailureReasonForLog,
       rembgAvailable: rembg.available,
       rembgExecutable: rembg.executable,
       preset: resolvedPreset,
@@ -3142,8 +3373,11 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 }
 
 export const __testables = {
+  getTokenIconLayout,
   resolveBreakoutSourceKind,
   resolveSourceAlphaBreakoutAllowed,
   decideBreakoutPlan,
+  computeAlignedTopBiasPx,
+  measureBreakoutMaskCoverage,
 }
 

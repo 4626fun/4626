@@ -152,6 +152,47 @@ async function createTransparentSource(params: {
   return new Uint8Array(source)
 }
 
+async function createMaskRectangleSource(params: {
+  width: number
+  height: number
+  leftRatio: number
+  topRatio: number
+  widthRatio: number
+  heightRatio: number
+}): Promise<Buffer> {
+  const { width, height } = params
+  const rectWidth = Math.max(1, Math.round(width * params.widthRatio))
+  const rectHeight = Math.max(1, Math.round(height * params.heightRatio))
+  const left = Math.max(0, Math.round(width * params.leftRatio))
+  const top = Math.max(0, Math.round(height * params.topRatio))
+  return sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: {
+            width: rectWidth,
+            height: rectHeight,
+            channels: 4,
+            background: { r: 255, g: 255, b: 255, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
+        left,
+        top,
+      },
+    ])
+    .png()
+    .toBuffer()
+}
+
 async function readRgbPixel(buffer: Buffer, x: number, y: number): Promise<{ r: number; g: number; b: number }> {
   const { data, info } = await sharp(buffer)
     .ensureAlpha()
@@ -356,6 +397,68 @@ describe('premium token icon renderer', () => {
     })
     expect(rembgUnavailablePlan.mode).toBe('none')
     expect(rembgUnavailablePlan.reason).toBe('rembg-unavailable')
+  })
+
+  it('applies mask-driven top alignment bias for segmentation masks', async () => {
+    const layout = __testables.getTokenIconLayout(512, 'hero')
+    const lowMask = await createMaskRectangleSource({
+      width: 900,
+      height: 1200,
+      leftRatio: 0.28,
+      topRatio: 0.48,
+      widthRatio: 0.44,
+      heightRatio: 0.34,
+    })
+    const alignment = await __testables.computeAlignedTopBiasPx({
+      layout,
+      baseTopBiasPx: 0,
+      scale: 1,
+      fit: 'cover',
+      sourceClass: 'illustration',
+      maskRgbaPng: lowMask,
+    })
+    expect(alignment.maskTopY).not.toBeNull()
+    expect(alignment.deltaPx).toBeGreaterThan(0)
+    expect(alignment.topBiasPx).toBeGreaterThan(0)
+  })
+
+  it('measures breakout-band coverage from segmentation masks', async () => {
+    const layout = __testables.getTokenIconLayout(512, 'hero')
+    const fullMask = await createMaskRectangleSource({
+      width: 900,
+      height: 1200,
+      leftRatio: 0.1,
+      topRatio: 0.04,
+      widthRatio: 0.8,
+      heightRatio: 0.84,
+    })
+    const lowTopMask = await createMaskRectangleSource({
+      width: 900,
+      height: 1200,
+      leftRatio: 0.3,
+      topRatio: 0.72,
+      widthRatio: 0.4,
+      heightRatio: 0.24,
+    })
+
+    const highCoverage = await __testables.measureBreakoutMaskCoverage({
+      layout,
+      scale: 1.03,
+      topBiasPx: 0,
+      sourceClass: 'illustration',
+      maskRgbaPng: fullMask,
+    })
+    const lowCoverage = await __testables.measureBreakoutMaskCoverage({
+      layout,
+      scale: 1.03,
+      topBiasPx: 0,
+      sourceClass: 'illustration',
+      maskRgbaPng: lowTopMask,
+    })
+
+    expect(highCoverage).toBeGreaterThan(0.004)
+    expect(lowCoverage).toBeLessThan(0.004)
+    expect(highCoverage).toBeGreaterThan(lowCoverage)
   })
 
   it('keeps chamber rendering sourced from artwork when hero cutout is provided', async () => {
