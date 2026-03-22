@@ -175,7 +175,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/onchain/coinMarketRewardsCurrency': () => import('./api/_handlers/onchain/_coinMarketRewardsCurrency'),
         '/api/onchain/coinTradeRewardsBatch': () => import('./api/_handlers/onchain/_coinTradeRewardsBatch'),
         '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
-        '/api/token/image': () => import('./api/_handlers/token/_image'),
+        '/api/token/image': () => import('./api/token/image'),
         '/api/zora/coin': () => import('./api/_handlers/zora/_coin'),
         '/api/zora/explore': () => import('./api/_handlers/zora/_explore'),
         '/api/zora/link/status': () => import('./api/_handlers/zora/link/_status'),
@@ -276,6 +276,30 @@ function localApiRoutesPlugin(): Plugin {
         '/api/v1/chat/command-preflight': () => import('./api/_handlers/v1/chat/_commandPreflight'),
         '/api/v1/chat/telemetry': () => import('./api/_handlers/v1/chat/_telemetry'),
       }
+      const patternRoutes: Array<{
+        pattern: RegExp
+        load: () => Promise<{ default: (req: any, res: any) => any }>
+        applyQuery: (match: RegExpMatchArray, req: any) => void
+      }> = [
+        {
+          pattern: /^\/api\/v1\/token\/([a-fA-F0-9x]+)\/image$/,
+          load: () => import('./api/token/image'),
+          applyQuery: (match, req) => {
+            req.query = req.query ?? Object.create(null)
+            if (!req.query.address) req.query.address = match[1]
+          },
+        },
+        {
+          pattern: /^\/api\/v1\/token\/([a-fA-F0-9x]+)\/logo\.(png|svg)$/,
+          load: () => import('./api/token/image'),
+          applyQuery: (match, req) => {
+            req.query = req.query ?? Object.create(null)
+            if (!req.query.address) req.query.address = match[1]
+            if (!req.query.format) req.query.format = match[2]
+            if (!req.query.size) req.query.size = '64'
+          },
+        },
+      ]
       const catchAllApiRoute = () => import('./api/[...path]')
 
       server.middlewares.use(async (req, res, next) => {
@@ -286,6 +310,18 @@ function localApiRoutesPlugin(): Plugin {
           const pathname = url.pathname.startsWith('/__api/') ? `/api/${url.pathname.slice('/__api/'.length)}` : url.pathname
           const isApiPath = pathname === '/api' || pathname.startsWith('/api/')
           let loader = routes[pathname]
+          let patternMatch: RegExpMatchArray | null = null
+          let patternRoute = null as (typeof patternRoutes)[number] | null
+          if (!loader) {
+            for (const candidate of patternRoutes) {
+              const match = pathname.match(candidate.pattern)
+              if (!match) continue
+              loader = candidate.load
+              patternMatch = match
+              patternRoute = candidate
+              break
+            }
+          }
           const useCatchAll = !loader && isApiPath
           if (useCatchAll) loader = catchAllApiRoute
           if (!loader) return next()
@@ -296,6 +332,9 @@ function localApiRoutesPlugin(): Plugin {
           if (typeof handler !== 'function') return next()
 
           const compatReq = makeVercelCompatReq(req as any, body)
+          if (patternRoute && patternMatch) {
+            patternRoute.applyQuery(patternMatch, compatReq)
+          }
           if (useCatchAll) {
             const subpath = pathname === '/api' ? '' : pathname.slice('/api/'.length)
             compatReq.query = compatReq.query ?? Object.create(null)

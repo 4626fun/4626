@@ -217,7 +217,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
 
   // Token metadata (ERC-7572) - supports both query param and path-based addresses
   'token/metadata': () => import('./token/_metadata.js'),
-  'token/image': () => import('./token/_image.js'),
   'token/tokenlist': () => import('./token/_tokenlist.js'),
 
   // Stable TokenLists-compatible managed multi-token document for ShareOFT tokens.
@@ -270,9 +269,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
 }
 
 // Match v1/token/{address}/metadata|image|tokenlist patterns
-const V1_TOKEN_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/(metadata|image|tokenlist)$/
-// Match canonical extension-based logo aliases.
-const V1_TOKEN_LOGO_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/logo\.(png|svg)$/
+const V1_TOKEN_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/(metadata|tokenlist)$/
 
 // Match v1 REST patterns that embed an address in the path.
 const V1_VAULT_PATTERN = /^v1\/vault\/([a-fA-F0-9x]+)\/(report|strategies)$/
@@ -306,27 +303,6 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
           if (!req.query.address) {
             req.query.address = address
           }
-          return baseHandler(req, res)
-        }
-        return wrappedHandler
-      }
-    }
-  }
-
-  // Handle dynamic token logo aliases: v1/token/{address}/logo.png|logo.svg
-  const v1LogoMatch = subpath.match(V1_TOKEN_LOGO_PATTERN)
-  if (v1LogoMatch) {
-    const [, address, ext] = v1LogoMatch
-    const dynamicLoader = apiRouteLoaders['token/image']
-    if (dynamicLoader) {
-      const mod = await dynamicLoader()
-      const baseHandler = mod?.default
-      if (typeof baseHandler === 'function') {
-        const wrappedHandler: ApiHandler = (req, res) => {
-          if (!req.query.address) req.query.address = address
-          if (!req.query.format) req.query.format = ext
-          // Uniswap token logo recommendations optimize around 64x64 token assets.
-          if (!req.query.size) req.query.size = '64'
           return baseHandler(req, res)
         }
         return wrappedHandler

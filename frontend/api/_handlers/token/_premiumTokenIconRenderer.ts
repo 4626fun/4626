@@ -79,6 +79,9 @@ type StackedArtworkUnderlay = {
 const BREAKOUT_DEBUG_LOG_ENABLED =
   process.env.TOKEN_BREAKOUT_DEBUG === '1' ||
   Boolean(process.env.TOKEN_BREAKOUT_DEBUG_DIR)
+const BREAKOUT_RUNTIME_LOG_ENABLED =
+  BREAKOUT_DEBUG_LOG_ENABLED ||
+  process.env.TOKEN_PREMIUM_BREAKOUT_LOG === '1'
 const BREAKOUT_DEBUG_DIR = process.env.TOKEN_BREAKOUT_DEBUG_DIR
 const execFileP = promisify(execFile)
 
@@ -146,28 +149,55 @@ async function debugLogLayerBounds(label: string, layer: Buffer): Promise<void> 
   }))
 }
 
+async function hasVisibleAlpha(layer: Buffer): Promise<boolean> {
+  const { data, info } = await sharp(layer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return getAlphaBounds(data, info.width, info.height, info.channels) !== null
+}
+
 async function extractForegroundRembg(pngBytes: Buffer): Promise<Buffer | null> {
   if (!PREMIUM_BREAKOUT_REMBG.enabled) return null
+  if (PREMIUM_BREAKOUT_REMBG.binCandidates.length === 0) return null
   const id = randomUUID()
   const inPath = path.join(tmpdir(), `premium-rembg-in-${id}.png`)
   const outPath = path.join(tmpdir(), `premium-rembg-out-${id}.png`)
+  let lastError: unknown = null
   try {
     await fs.writeFile(inPath, pngBytes)
-    await execFileP(PREMIUM_BREAKOUT_REMBG.bin, ['i', inPath, outPath], {
-      timeout: PREMIUM_BREAKOUT_REMBG.timeoutMs,
-    })
-    return await fs.readFile(outPath)
-  } catch (error) {
-    if (BREAKOUT_DEBUG_LOG_ENABLED) {
-      console.warn('[token/image] premium rembg extraction failed:', error)
+    for (const bin of PREMIUM_BREAKOUT_REMBG.binCandidates) {
+      try {
+        await execFileP(bin, ['i', inPath, outPath], {
+          timeout: PREMIUM_BREAKOUT_REMBG.timeoutMs,
+        })
+        return await fs.readFile(outPath)
+      } catch (error) {
+        lastError = error
+        const enoent =
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          (error as { code?: unknown }).code === 'ENOENT'
+        if (enoent) continue
+      }
     }
-    return null
+  } catch (error) {
+    lastError = error
   } finally {
     await Promise.all([
       fs.unlink(inPath).catch(() => {}),
       fs.unlink(outPath).catch(() => {}),
     ])
   }
+  if (lastError && (BREAKOUT_DEBUG_LOG_ENABLED || (BREAKOUT_RUNTIME_LOG_ENABLED && !rembgFailureWarned))) {
+    rembgFailureWarned = true
+    console.warn('[token/image] premium rembg extraction failed:', lastError)
+  }
+  if (!lastError && BREAKOUT_DEBUG_LOG_ENABLED) {
+    console.warn('[token/image] premium rembg extraction failed: no runnable binary found')
+  }
+  return null
 }
 
 const BACKGROUND_COLORS = {
@@ -191,8 +221,93 @@ const FRAME_ACCENT = {
 const PREMIUM_BREAKOUT_REMBG = {
   enabled: process.env.TOKEN_PREMIUM_REMBG !== '0',
   timeoutMs: Number(process.env.TOKEN_PREMIUM_REMBG_TIMEOUT_MS ?? 30_000),
-  bin: process.env.REMBG_BIN || '/tmp/rembg-env/bin/rembg',
+  binCandidates: [
+    process.env.REMBG_BIN,
+    '/tmp/rembg-env/bin/rembg',
+    '/usr/local/bin/rembg',
+    '/usr/bin/rembg',
+    'rembg',
+  ].filter((bin): bin is string => typeof bin === 'string' && bin.trim().length > 0),
 } as const
+
+type RembgProbeResult = {
+  enabled: boolean
+  available: boolean
+  executable: string | null
+  checkedCandidates: string[]
+  reason?: string
+}
+
+let rembgProbePromise: Promise<RembgProbeResult> | null = null
+let breakoutRuntimeBannerPromise: Promise<void> | null = null
+let rembgFailureWarned = false
+
+async function probeRembgRuntime(): Promise<RembgProbeResult> {
+  if (rembgProbePromise) return rembgProbePromise
+  rembgProbePromise = (async () => {
+    if (!PREMIUM_BREAKOUT_REMBG.enabled) {
+      return {
+        enabled: false,
+        available: false,
+        executable: null,
+        checkedCandidates: [],
+        reason: 'disabled',
+      }
+    }
+    for (const bin of PREMIUM_BREAKOUT_REMBG.binCandidates) {
+      try {
+        await execFileP(bin, ['--help'], { timeout: 2_000 })
+        return {
+          enabled: true,
+          available: true,
+          executable: bin,
+          checkedCandidates: PREMIUM_BREAKOUT_REMBG.binCandidates,
+        }
+      } catch (error) {
+        const code =
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error
+            ? String((error as { code?: unknown }).code ?? '')
+            : ''
+        if (code === 'ENOENT') continue
+        return {
+          enabled: true,
+          available: true,
+          executable: bin,
+          checkedCandidates: PREMIUM_BREAKOUT_REMBG.binCandidates,
+          reason: code ? `probe_error:${code}` : 'probe_error',
+        }
+      }
+    }
+    return {
+      enabled: true,
+      available: false,
+      executable: null,
+      checkedCandidates: PREMIUM_BREAKOUT_REMBG.binCandidates,
+      reason: 'not_found',
+    }
+  })()
+  return rembgProbePromise
+}
+
+async function logBreakoutRuntimeBannerOnce(): Promise<void> {
+  if (!BREAKOUT_RUNTIME_LOG_ENABLED) return
+  if (breakoutRuntimeBannerPromise) return breakoutRuntimeBannerPromise
+  breakoutRuntimeBannerPromise = (async () => {
+    const rembg = await probeRembgRuntime()
+    console.info('[token/image] premium breakout runtime', JSON.stringify({
+      rembgEnabled: rembg.enabled,
+      rembgAvailable: rembg.available,
+      rembgExecutable: rembg.executable,
+      rembgReason: rembg.reason ?? null,
+      rembgCandidates: rembg.checkedCandidates,
+      runtimeLogEnabled: BREAKOUT_RUNTIME_LOG_ENABLED,
+      debugAssetDumpEnabled: Boolean(BREAKOUT_DEBUG_DIR),
+    }))
+  })()
+  return breakoutRuntimeBannerPromise
+}
 
 const CHAMBER_GRADIENT = {
   top: '#08101F',
@@ -2164,6 +2279,94 @@ async function createTopBreakoutSubjectMask(params: {
     .toBuffer()
 }
 
+async function createFallbackBreakoutDetailMask(params: {
+  sourceCanvas: Buffer
+  layout: PremiumLayout
+  sourceClass?: SourceClass
+}): Promise<Buffer | null> {
+  const { sourceCanvas, layout, sourceClass } = params
+  const { data, info } = await sharp(sourceCanvas)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const width = info.width
+  const height = info.height
+  const channels = info.channels
+
+  const padX = Math.max(1, Math.round(layout.breakoutWidth * 0.14))
+  const x0 = Math.max(1, layout.breakoutX - padX)
+  const x1 = Math.min(width - 1, layout.breakoutX + layout.breakoutWidth + padX)
+  const y0 = Math.max(1, layout.breakoutY - Math.round(layout.breakoutHeight * 0.08))
+  const y1 = Math.min(height - 1, layout.breakoutY + Math.round(layout.breakoutHeight * 1.06))
+  if (x1 <= x0 || y1 <= y0) return null
+
+  const detailThreshold =
+    sourceClass === 'pixelArt' ? 28
+    : sourceClass === 'illustration' ? 34
+    : 38
+  const mask = Buffer.alloc(width * height, 0)
+  let activeCount = 0
+  const spanY = Math.max(1, y1 - y0)
+
+  for (let y = y0; y < y1; y += 1) {
+    const yWeight = 1 - ((y - y0) / spanY) * 0.42
+    for (let x = x0; x < x1; x += 1) {
+      const idx = (y * width + x) * channels
+      const alpha = data[idx + 3] ?? 255
+      if (alpha < 22) continue
+
+      const luma = 0.2126 * (data[idx] ?? 0) + 0.7152 * (data[idx + 1] ?? 0) + 0.0722 * (data[idx + 2] ?? 0)
+
+      const leftIdx = (y * width + (x - 1)) * channels
+      const rightIdx = (y * width + (x + 1)) * channels
+      const upIdx = ((y - 1) * width + x) * channels
+      const downIdx = ((y + 1) * width + x) * channels
+
+      const leftLuma = 0.2126 * (data[leftIdx] ?? 0) + 0.7152 * (data[leftIdx + 1] ?? 0) + 0.0722 * (data[leftIdx + 2] ?? 0)
+      const rightLuma = 0.2126 * (data[rightIdx] ?? 0) + 0.7152 * (data[rightIdx + 1] ?? 0) + 0.0722 * (data[rightIdx + 2] ?? 0)
+      const upLuma = 0.2126 * (data[upIdx] ?? 0) + 0.7152 * (data[upIdx + 1] ?? 0) + 0.0722 * (data[upIdx + 2] ?? 0)
+      const downLuma = 0.2126 * (data[downIdx] ?? 0) + 0.7152 * (data[downIdx + 1] ?? 0) + 0.0722 * (data[downIdx + 2] ?? 0)
+
+      const detailScore =
+        (
+          Math.abs(luma - leftLuma) +
+          Math.abs(luma - rightLuma) +
+          Math.abs(luma - upLuma) +
+          Math.abs(luma - downLuma)
+        ) * yWeight
+      if (detailScore >= detailThreshold) {
+        mask[y * width + x] = 255
+        activeCount += 1
+      }
+    }
+  }
+
+  const regionArea = Math.max(1, (x1 - x0) * (y1 - y0))
+  if (activeCount < Math.max(22, Math.round(regionArea * 0.005))) return null
+
+  const blurSigma = sourceClass === 'pixelArt' ? 0.42 : 0.62
+  const { data: processed, info: maskInfo } = await sharp(mask, { raw: { width, height, channels: 1 } })
+    .blur(blurSigma)
+    .threshold(14)
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  let processedCount = 0
+  for (let i = 0; i < processed.length; i += 1) {
+    if ((processed[i] ?? 0) > 12) processedCount += 1
+  }
+  if (processedCount < Math.max(16, Math.round(regionArea * 0.003))) return null
+
+  const pxCount = maskInfo.width * maskInfo.height
+  const rgba = Buffer.alloc(pxCount * 4, 255)
+  for (let i = 0; i < pxCount; i += 1) {
+    rgba[i * 4 + 3] = processed[i] ?? 0
+  }
+  return sharp(rgba, { raw: { width: maskInfo.width, height: maskInfo.height, channels: 4 } })
+    .png()
+    .toBuffer()
+}
+
 export async function renderBreakoutLayer(params: {
   size: number
   layout: PremiumLayout
@@ -2274,14 +2477,22 @@ export async function renderBreakoutLayer(params: {
     .toBuffer()
   let breakoutOpacity = params.opacity ?? 0.26
   let fallbackBandUsed = false
+  let fallbackDetailMaskUsed = false
   if (!subjectMask) {
     fallbackBandUsed = true
+    const breakoutSeed = masked
     const fallbackRadius = Math.max(1, Math.round(layout.breakoutWidth * 0.24))
     const fallbackBandMaskSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="fallbackBandY" x1="0" y1="${layout.breakoutY}" x2="0" y2="${layout.breakoutY + layout.breakoutHeight}" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="white" stop-opacity="1"/>
-      <stop offset="74%" stop-color="white" stop-opacity="1"/>
+      <stop offset="70%" stop-color="white" stop-opacity="1"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="fallbackBandX" x1="${layout.breakoutX}" y1="0" x2="${layout.breakoutX + layout.breakoutWidth}" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="white" stop-opacity="0"/>
+      <stop offset="14%" stop-color="white" stop-opacity="1"/>
+      <stop offset="86%" stop-color="white" stop-opacity="1"/>
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
   </defs>
@@ -2293,22 +2504,62 @@ export async function renderBreakoutLayer(params: {
     rx="${fallbackRadius}"
     fill="url(#fallbackBandY)"
   />
+  <rect
+    x="${layout.breakoutX}"
+    y="${layout.breakoutY}"
+    width="${layout.breakoutWidth}"
+    height="${layout.breakoutHeight}"
+    rx="${fallbackRadius}"
+    fill="url(#fallbackBandX)"
+  />
 </svg>`
     const fallbackBandMask = await sharp(Buffer.from(fallbackBandMaskSvg)).png().toBuffer()
-    masked = await sharp(masked)
+    const fallbackDetailMask = await createFallbackBreakoutDetailMask({
+      sourceCanvas,
+      layout,
+      sourceClass: params.sourceClass,
+    })
+    const fallbackDetailMaskDebug = fallbackDetailMask ?? await createTransparentCanvas(size).png().toBuffer()
+    await writeBreakoutDebugAsset('3a-breakout-mask-fallback-detail.png', fallbackDetailMaskDebug)
+    const bandOnlyComposites: sharp.OverlayOptions[] = [
+      { input: fallbackBandMask, blend: 'dest-in' },
+      { input: aboveFrameMask, blend: 'dest-in' },
+    ]
+    const bandOnlyMasked = await sharp(breakoutSeed)
       .ensureAlpha()
-      .composite([
-        { input: fallbackBandMask, blend: 'dest-in' },
-        { input: aboveFrameMask, blend: 'dest-in' },
-      ])
+      .composite(bandOnlyComposites)
       .png()
       .toBuffer()
+    masked = bandOnlyMasked
+
+    if (fallbackDetailMask) {
+      const detailMasked = await sharp(breakoutSeed)
+        .ensureAlpha()
+        .composite([
+          { input: fallbackBandMask, blend: 'dest-in' },
+          { input: fallbackDetailMask, blend: 'dest-in' },
+          { input: aboveFrameMask, blend: 'dest-in' },
+        ])
+        .png()
+        .toBuffer()
+      if (await hasVisibleAlpha(detailMasked)) {
+        fallbackDetailMaskUsed = true
+        masked = detailMasked
+      }
+    }
+
+    const fallbackSoftBlurPx = fallbackDetailMaskUsed ? 0.62 : 0.9
     masked = await sharp(masked)
-      .modulate({ brightness: 0.94, saturation: 0.90 })
-      .blur(0.9)
+      .modulate({
+        brightness: fallbackDetailMaskUsed ? 0.96 : 0.94,
+        saturation: fallbackDetailMaskUsed ? 0.94 : 0.90,
+      })
+      .blur(fallbackSoftBlurPx)
       .png()
       .toBuffer()
-    breakoutOpacity = Math.min(0.18, params.opacity ?? 0.22)
+    breakoutOpacity = fallbackDetailMaskUsed
+      ? Math.min(0.21, params.opacity ?? 0.24)
+      : Math.min(0.17, params.opacity ?? 0.22)
   }
   await writeBreakoutDebugAsset('5-breakout-isolated-sprite.png', masked)
   await debugLogLayerBounds('breakoutSprite', masked)
@@ -2320,6 +2571,7 @@ export async function renderBreakoutLayer(params: {
       breakoutDrawCount: 1,
       softBlurApplied: !isIllustrationBreakout,
       fallbackBandUsed,
+      fallbackDetailMaskUsed,
       forceAlphaMask: !!subjectRefCanvas,
     }))
   }
@@ -2383,9 +2635,16 @@ function buildCompositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptio
 
 export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
   const size = sanitizeSize(params.size)
+  if (BREAKOUT_RUNTIME_LOG_ENABLED) {
+    await logBreakoutRuntimeBannerOnce()
+  }
 
   let normalizedSource: Buffer | null = null
   let analysis: SourceAnalysis | null = null
+  let breakoutModeForLog: 'none' | 'heroCutout' | 'sourceAlpha' | 'rembgCutout' | 'fallbackBand' = 'none'
+  let breakoutDecisionReason = 'no-source'
+  let sourceAlphaBreakoutAllowedForLog = false
+  let breakoutDesiredForLog = false
   if (params.sourceImage && params.sourceImage.length > 0) {
     try {
       normalizedSource = await normalizeSourceImage(params.sourceImage)
@@ -2425,6 +2684,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       allowBreakout: analysis.allowBreakout,
       suppressBreakout: params.suppressBreakout,
     })
+    sourceAlphaBreakoutAllowedForLog = sourceAlphaBreakoutAllowed
     const breakoutSourceKind = resolveBreakoutSourceKind({
       sourceAlphaBreakoutAllowed,
       preparedHeroCutoutAvailable: hasHeroCutoutSource,
@@ -2434,6 +2694,12 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       analysis.fitMode === 'cover' &&
       !analysis.brightBadgeLike &&
       !params.suppressBreakout
+    breakoutDesiredForLog = breakoutDesired
+    breakoutDecisionReason =
+      params.suppressBreakout ? 'suppressed-by-policy'
+      : analysis.fitMode !== 'cover' ? `fit-mode:${analysis.fitMode}`
+      : analysis.brightBadgeLike ? 'bright-badge-contained'
+      : 'breakout-eligible'
     const allowBreakoutForLayout = breakoutDesired
     const presetScaleBoost =
       resolvedPreset === 'hero' ? (analysis.sourceClass === 'illustration' ? 1.038 : 1.024)
@@ -2499,6 +2765,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           await writeBreakoutDebugAsset('0-rembg-cutout.png', rembgCutout)
         }
       }
+      breakoutModeForLog = breakoutPlanSource
+      breakoutDecisionReason = `mode:${breakoutPlanSource}`
       try {
         breakoutLayer = await renderBreakoutLayer({
           size,
@@ -2512,6 +2780,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         })
       } catch (breakoutError) {
         breakoutLayer = null
+        breakoutModeForLog = 'none'
+        breakoutDecisionReason = 'breakout-layer-render-error'
         console.warn('[token/image] premium breakout render failed; rendering contained icon:', {
           sourceKind: breakoutSourceKind,
           message: breakoutError instanceof Error ? breakoutError.message : String(breakoutError ?? ''),
@@ -2534,6 +2804,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       }
     }
   } else {
+    breakoutDecisionReason = 'symbol-fallback'
     artworkLayer = await renderArtworkLayer({
       size,
       layout,
@@ -2607,6 +2878,24 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     .png()
     .toBuffer()
   await writeBreakoutDebugAsset('6-final-composited-output.png', finalOutput)
+  if (BREAKOUT_RUNTIME_LOG_ENABLED) {
+    const rembg = await probeRembgRuntime()
+    console.info('[token/image] premium breakout mode', JSON.stringify({
+      mode: breakoutModeForLog,
+      reason: breakoutDecisionReason,
+      breakoutDrawn: Boolean(breakoutLayer),
+      suppressBreakout: Boolean(params.suppressBreakout),
+      sourceClass: analysis?.sourceClass ?? null,
+      fitMode: analysis?.fitMode ?? null,
+      sourceAlphaBreakoutAllowed: sourceAlphaBreakoutAllowedForLog,
+      breakoutDesired: breakoutDesiredForLog,
+      hasHeroCutoutSource: Boolean(params.heroCutoutSourceImage && params.heroCutoutSourceImage.length > 0),
+      rembgAvailable: rembg.available,
+      rembgExecutable: rembg.executable,
+      preset: resolvedPreset,
+      size,
+    }))
+  }
   return finalOutput
 }
 
