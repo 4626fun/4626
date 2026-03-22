@@ -232,6 +232,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/wallet/solana/setCanonical': () => import('./api/wallet/solana/setCanonical'),
         '/api/wallet/solana/sweep/enqueue': () => import('./api/wallet/solana/sweep/enqueue'),
         '/api/wallet/solana/sweep/process': () => import('./api/wallet/solana/sweep/process'),
+        '/api/telegram/webhook': () => import('./api/telegram/webhook'),
         '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
 
         // Keepr (local dev)

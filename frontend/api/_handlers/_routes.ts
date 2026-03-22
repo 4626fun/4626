@@ -175,8 +175,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'telegram/holder-recheck': () => import('./telegram/_holder-recheck.js'),
   'telegram/arena/watch-tick': () => import('./telegram/_arena-watch-tick.js'),
   'telegram/unlink': () => import('./telegram/_unlink.js'),
-  'telegram/webhook': () => import('./telegram/_webhook.js'),
-
   'status/protocolReport': () => import('./status/_protocolReport.js'),
   'status/vaultReport': () => import('./status/_vaultReport.js'),
 

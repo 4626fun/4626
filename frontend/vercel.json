@@ -22,6 +22,9 @@
     "api/token/image.ts": {
       "maxDuration": 60
     },
+    "api/telegram/webhook.ts": {
+      "maxDuration": 60
+    },
     "api/deploy/solanaInfraStatus.ts": {
       "maxDuration": 60
     },
@@ -200,6 +203,7 @@
     { "src": "/api/token/image", "dest": "/api/token/image" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
+    { "src": "/api/telegram/webhook", "dest": "/api/telegram/webhook" },
     { "src": "/api/image/projects/(.*)", "dest": "/api/image/projects/$1" },
     { "src": "/api/image/jobs/status", "dest": "/api/image/jobs/status" },
     { "src": "/api/image/external", "dest": "/api/image/external" },
