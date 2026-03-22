@@ -117,7 +117,7 @@ describe('token image renderer', () => {
     })
   })
 
-  it('computes hero cutout load policy for breakout suppression', () => {
+  it('computes hero cutout load policy without global breakout suppression', () => {
     const missingHeroCutout = __testables.resolveHeroCutoutLoadPolicy({
       heroCutoutArtworkUrl: 'https://cdn.example/hero-cutout.png',
       heroCutoutSourceBytes: null,
@@ -125,7 +125,7 @@ describe('token image renderer', () => {
     expect(missingHeroCutout).toEqual({
       hasHeroCutoutUrl: true,
       heroCutoutLoadFailed: true,
-      suppressBreakout: true,
+      suppressBreakout: false,
     })
 
     const loadedHeroCutout = __testables.resolveHeroCutoutLoadPolicy({

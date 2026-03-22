@@ -128,7 +128,9 @@ function resolveHeroCutoutLoadPolicy(params: {
   return {
     hasHeroCutoutUrl,
     heroCutoutLoadFailed,
-    suppressBreakout: heroCutoutLoadFailed,
+    // Missing hero-cutout should not suppress all breakout paths.
+    // We still avoid caching this render result so a temporary outage does not poison cache.
+    suppressBreakout: false,
   }
 }
 
@@ -417,7 +419,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 105
+const FRAME_STYLE_V = 106
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184

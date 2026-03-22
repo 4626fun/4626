@@ -4,7 +4,9 @@ import {
   fetchTelegramLinkEmailVerificationState,
   formatTelegramSessionError,
   getPrivyEmailState,
+  isPrivyTelegramAlreadyLinkedError,
   isTelegramLinkEmailVerificationRequiredError,
+  linkPrivyTelegramInMiniApp,
   normalizeTelegramLinkUiMessage,
   getTelegramLinkSuccessMessage,
   getTelegramLinkViewState,
@@ -276,6 +278,48 @@ describe('TelegramLink helpers', () => {
   it('treats Privy email-already-linked errors as recoverable', () => {
     expect(isPrivyEmailAlreadyLinkedError(new Error('User already has an account of type email linked.'))).toBe(true)
     expect(isPrivyEmailAlreadyLinkedError(new Error('Completely different error'))).toBe(false)
+  })
+
+  it('treats Privy telegram-already-linked errors as recoverable', () => {
+    expect(isPrivyTelegramAlreadyLinkedError(new Error('User already has an account of type telegram linked.'))).toBe(true)
+    expect(isPrivyTelegramAlreadyLinkedError(new Error('Telegram already linked to this account.'))).toBe(true)
+    expect(isPrivyTelegramAlreadyLinkedError(new Error('Completely different error'))).toBe(false)
+  })
+
+  it('links Privy Telegram account in Mini App when launch params are available', async () => {
+    const linkTelegram = vi.fn(async () => {})
+    await expect(
+      linkPrivyTelegramInMiniApp({
+        linkTelegram,
+        launchParams: { initDataRaw: 'telegram-init-data' },
+      }),
+    ).resolves.toBe('linked')
+    expect(linkTelegram).toHaveBeenCalledWith({
+      launchParams: { initDataRaw: 'telegram-init-data' },
+    })
+  })
+
+  it('does not block flow when Privy Telegram account is already linked', async () => {
+    const linkTelegram = vi.fn(async () => {
+      throw new Error('User already has an account of type telegram linked.')
+    })
+    await expect(
+      linkPrivyTelegramInMiniApp({
+        linkTelegram,
+        launchParams: { initDataRaw: 'telegram-init-data' },
+      }),
+    ).resolves.toBe('already_linked')
+  })
+
+  it('skips Privy Telegram linking when launch params are missing', async () => {
+    const linkTelegram = vi.fn(async () => {})
+    await expect(
+      linkPrivyTelegramInMiniApp({
+        linkTelegram,
+        launchParams: null,
+      }),
+    ).resolves.toBe('skipped')
+    expect(linkTelegram).not.toHaveBeenCalled()
   })
 
   it('normalizes Privy email-linked UI errors into retry-link guidance', () => {

@@ -16,6 +16,7 @@ import {
   ensureTelegramMiniAppSession,
   isTelegramMiniAppContext,
   loadTelegramWebApp,
+  readPrivyTelegramLaunchParams,
   setupTelegramMiniAppUi,
 } from '@/lib/telegramWebApp'
 
@@ -113,6 +114,35 @@ export function isPrivyEmailAlreadyLinkedError(error: unknown): boolean {
     normalized.includes('account of type email linked') ||
     normalized.includes('email already linked')
   )
+}
+
+export function isPrivyTelegramAlreadyLinkedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const normalized = message.trim().toLowerCase()
+  const referencesTelegram = normalized.includes('telegram')
+  return (
+    (referencesTelegram && normalized.includes('already has an account of type telegram linked')) ||
+    (referencesTelegram && normalized.includes('already has an account of type "telegram" linked')) ||
+    (referencesTelegram && normalized.includes('account of type telegram linked')) ||
+    normalized.includes('telegram already linked')
+  )
+}
+
+export async function linkPrivyTelegramInMiniApp(params: {
+  linkTelegram: ((params: { launchParams: { initDataRaw: string } }) => Promise<unknown>) | null | undefined
+  launchParams: { initDataRaw?: string } | null | undefined
+}): Promise<'linked' | 'already_linked' | 'skipped' | 'failed'> {
+  const initDataRaw = typeof params.launchParams?.initDataRaw === 'string' ? params.launchParams.initDataRaw.trim() : ''
+  if (!initDataRaw || typeof params.linkTelegram !== 'function') return 'skipped'
+  try {
+    await params.linkTelegram({
+      launchParams: { initDataRaw },
+    })
+    return 'linked'
+  } catch (error) {
+    if (isPrivyTelegramAlreadyLinkedError(error)) return 'already_linked'
+    return 'failed'
+  }
 }
 
 export function normalizeTelegramLinkUiMessage(message: string | null): string | null {
@@ -455,6 +485,13 @@ export function TelegramLink() {
         : async () => null,
     [privy.getAccessToken],
   )
+  const linkTelegram = useMemo(
+    () =>
+      typeof (privy as any)?.linkTelegram === 'function'
+        ? ((privy as any).linkTelegram as (params: { launchParams: { initDataRaw: string } }) => Promise<unknown>)
+        : null,
+    [privy],
+  )
 
   const telegramLinkContext = useMemo(() => resolveTelegramMiniAppLinkContext(searchParams), [searchParams])
 
@@ -632,6 +669,14 @@ export function TelegramLink() {
       setLinkState('linking')
       setLinkMessage('Linking your Telegram identity to your 4626 account...')
 
+      const privyTelegramLinkResult = await linkPrivyTelegramInMiniApp({
+        linkTelegram,
+        launchParams: readPrivyTelegramLaunchParams(),
+      })
+      if (privyTelegramLinkResult === 'failed') {
+        console.warn('[telegram/link] Privy linkTelegram failed; continuing with backend link flow')
+      }
+
       const accessToken = (
         await withTimeout(
           getAccessToken().catch(() => null),
@@ -718,6 +763,7 @@ export function TelegramLink() {
     })
   }, [
     getAccessToken,
+    linkTelegram,
     linkState,
     navigate,
     emailState,
