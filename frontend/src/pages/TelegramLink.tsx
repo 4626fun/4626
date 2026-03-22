@@ -41,6 +41,7 @@ const TELEGRAM_LINK_REQUEST_TIMEOUT_MS = 25_000
 const TELEGRAM_EMAIL_CHECK_TIMEOUT_MS = 15_000
 const TELEGRAM_EMAIL_POLL_ATTEMPTS = 5
 const TELEGRAM_EMAIL_POLL_INTERVAL_MS = 1200
+const TELEGRAM_EMAIL_PENDING_RETRY_MS = 3_000
 type PrivyEmailState = {
   hasAnyEmailAccount: boolean
   hasVerifiedEmail: boolean
@@ -193,6 +194,27 @@ export async function pollTelegramLinkEmailVerification(params: {
   }
 
   return { status: 'needs_verification' }
+}
+
+export async function waitForTelegramLinkPrivyAuth(params: {
+  readSnapshot: () => { ready: boolean; authenticated: boolean }
+  timeoutMs?: number
+  intervalMs?: number
+  sleepImpl?: (ms: number) => Promise<void>
+}): Promise<boolean> {
+  const timeoutMs = Math.max(0, Math.floor(params.timeoutMs ?? PRIVY_ACCESS_TOKEN_TIMEOUT_MS))
+  const intervalMs = Math.max(1, Math.floor(params.intervalMs ?? 150))
+  const sleepImpl = params.sleepImpl ?? sleep
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const snapshot = params.readSnapshot()
+    if (snapshot.ready && snapshot.authenticated) return true
+    await sleepImpl(intervalMs)
+  }
+
+  const snapshot = params.readSnapshot()
+  return snapshot.ready && snapshot.authenticated
 }
 
 export function formatTelegramSessionError(error: string, statusCode: number): string {
@@ -389,6 +411,11 @@ export function TelegramLink() {
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
   const linkAttemptRef = useRef('')
   const emailCheckRunRef = useRef(0)
+  const privyStatusRef = useRef({ ready: privyReady, authenticated: privyAuthenticated })
+
+  useEffect(() => {
+    privyStatusRef.current = { ready: privyReady, authenticated: privyAuthenticated }
+  }, [privyAuthenticated, privyReady])
 
   const verifySession = useCallback(async () => {
     setSessionState('verifying')
@@ -509,6 +536,15 @@ export function TelegramLink() {
     if (emailState === 'checking' || emailState === 'verifying' || emailState === 'pending' || emailState === 'error') return
     void refreshEmailVerificationState()
   }, [emailState, linkState, privyReady, refreshEmailVerificationState, sessionState, telegramLinkContext])
+
+  useEffect(() => {
+    if (!telegramLinkContext || sessionState !== 'ready' || !privyReady || !privyAuthenticated) return
+    if (linkState === 'linked' || emailState !== 'pending') return
+    const retryId = window.setTimeout(() => {
+      void refreshEmailVerificationState()
+    }, TELEGRAM_EMAIL_PENDING_RETRY_MS)
+    return () => window.clearTimeout(retryId)
+  }, [emailState, linkState, privyAuthenticated, privyReady, refreshEmailVerificationState, sessionState, telegramLinkContext])
 
   useEffect(() => {
     const shouldAutoStart = shouldAutoStartTelegramLink({
@@ -634,12 +670,13 @@ export function TelegramLink() {
   }, [privyAuthenticated, refreshEmailVerificationState])
 
   const onSignIn = useCallback(async () => {
+    const startedAuthenticated = privyAuthenticated
     setLinkState('authenticating')
     setLinkMessage(null)
-    setEmailState(privyAuthenticated ? 'verifying' : 'checking')
+    setEmailState(startedAuthenticated ? 'verifying' : 'checking')
     setEmailMessage('Verify your email to continue.')
     try {
-      if (privyAuthenticated) {
+      if (startedAuthenticated) {
         const emailState = getPrivyEmailState((privy as any)?.user)
         if (emailState.hasVerifiedEmail) {
           linkAttemptRef.current = ''
@@ -670,6 +707,19 @@ export function TelegramLink() {
         }
       } else {
         await login({ loginMethods: ['email'] } as any)
+      }
+      if (!startedAuthenticated) {
+        const authSettled = await waitForTelegramLinkPrivyAuth({
+          readSnapshot: () => privyStatusRef.current,
+        })
+        if (!authSettled) {
+          linkAttemptRef.current = ''
+          setLinkState('idle')
+          setLinkMessage(null)
+          setEmailState('unknown')
+          setEmailMessage('Finishing 4626 sign-in. Telegram linking will resume automatically once your session is ready.')
+          return
+        }
       }
       const verification = await refreshEmailVerificationState({ poll: true })
       setLinkState('idle')

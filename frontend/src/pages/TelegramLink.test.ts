@@ -12,6 +12,7 @@ import {
   pollTelegramLinkEmailVerification,
   shouldAutoStartTelegramLink,
   shouldShowRetryTelegramSession,
+  waitForTelegramLinkPrivyAuth,
 } from './TelegramLink'
 
 describe('TelegramLink helpers', () => {
@@ -366,5 +367,42 @@ describe('TelegramLink helpers', () => {
       }),
     ).resolves.toEqual({ status: 'needs_verification' })
     expect(readState).toHaveBeenCalledTimes(3)
+  })
+
+  it('waits for Privy auth to settle before resuming Telegram linking', async () => {
+    const snapshots = [
+      { ready: false, authenticated: false },
+      { ready: true, authenticated: false },
+      { ready: true, authenticated: true },
+    ]
+    let index = 0
+
+    await expect(
+      waitForTelegramLinkPrivyAuth({
+        readSnapshot: () => snapshots[Math.min(index, snapshots.length - 1)],
+        intervalMs: 1,
+        timeoutMs: 10,
+        sleepImpl: async () => {
+          index += 1
+        },
+      }),
+    ).resolves.toBe(true)
+  })
+
+  it('times out when Privy auth never becomes ready', async () => {
+    let iterations = 0
+
+    await expect(
+      waitForTelegramLinkPrivyAuth({
+        readSnapshot: () => ({ ready: false, authenticated: false }),
+        intervalMs: 1,
+        timeoutMs: 2,
+        sleepImpl: async () => {
+          iterations += 1
+        },
+      }),
+    ).resolves.toBe(false)
+
+    expect(iterations).toBeGreaterThan(0)
   })
 })
