@@ -108,6 +108,30 @@ function normalizeSourceArtworkUrl(value: string | null | undefined): string | n
   return normalizeHttpUrl(raw)
 }
 
+type HeroCutoutLoadPolicy = {
+  hasHeroCutoutUrl: boolean
+  heroCutoutLoadFailed: boolean
+  suppressBreakout: boolean
+}
+
+function resolveHeroCutoutLoadPolicy(params: {
+  heroCutoutArtworkUrl?: string | null
+  heroCutoutSourceBytes?: Uint8Array | null
+}): HeroCutoutLoadPolicy {
+  const hasHeroCutoutUrl =
+    typeof params.heroCutoutArtworkUrl === 'string' &&
+    params.heroCutoutArtworkUrl.trim().length > 0
+  const heroCutoutLoaded =
+    !!params.heroCutoutSourceBytes &&
+    params.heroCutoutSourceBytes.length > 0
+  const heroCutoutLoadFailed = hasHeroCutoutUrl && !heroCutoutLoaded
+  return {
+    hasHeroCutoutUrl,
+    heroCutoutLoadFailed,
+    suppressBreakout: heroCutoutLoadFailed,
+  }
+}
+
 // ABI fragments
 const SHARE_OFT_ABI = [
   { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
@@ -278,10 +302,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (format === 'svg') {
       const sourceBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: artworkUrl }))
       const heroCutoutSourceBytes = await fetchSourceArtworkBytes({ upstreamUrl: heroCutoutArtworkUrl })
+      const heroCutoutLoadPolicy = resolveHeroCutoutLoadPolicy({
+        heroCutoutArtworkUrl,
+        heroCutoutSourceBytes,
+      })
       const iconPng = await renderDeterministicTokenIcon({
         size,
         sourceBytes,
         heroCutoutSourceBytes,
+        suppressBreakout: heroCutoutLoadPolicy.suppressBreakout,
         symbol: renderedSymbol,
         renderPreset,
       })
@@ -2134,6 +2163,7 @@ async function renderDeterministicTokenIcon(params: {
   size: number
   sourceBytes: Uint8Array | null
   heroCutoutSourceBytes?: Uint8Array | null
+  suppressBreakout?: boolean
   symbol: string
   renderPreset?: 'standard' | 'hero' | 'pixel'
 }): Promise<Uint8Array> {
@@ -2142,6 +2172,7 @@ async function renderDeterministicTokenIcon(params: {
       size: params.size,
       sourceImage: params.sourceBytes ?? undefined,
       heroCutoutSourceImage: params.heroCutoutSourceBytes ?? undefined,
+      suppressBreakout: params.suppressBreakout,
       symbol: params.symbol,
       renderPreset: params.renderPreset,
     })
@@ -2321,18 +2352,27 @@ async function getOrCreatePng(params: {
 
   const sourceBytes = params.sourceBytesOverride ?? (await fetchSourceArtworkBytes({ upstreamUrl: params.upstreamUrl }))
   const heroCutoutSourceBytes = await fetchSourceArtworkBytes({ upstreamUrl: params.heroCutoutUpstreamUrl ?? null })
+  const heroCutoutLoadPolicy = resolveHeroCutoutLoadPolicy({
+    heroCutoutArtworkUrl: params.heroCutoutUpstreamUrl ?? null,
+    heroCutoutSourceBytes,
+  })
   const pngBytes = await renderDeterministicTokenIcon({
     size: params.size,
     sourceBytes,
     heroCutoutSourceBytes,
+    suppressBreakout: heroCutoutLoadPolicy.suppressBreakout,
     symbol: params.symbol,
     renderPreset: params.renderPreset,
   })
 
-  try {
-    await blobPutBytes({ pathname: tokenKey, bytes: pngBytes, contentType: 'image/png', cacheControlMaxAgeSeconds: 31_536_000 })
-  } catch {
-    // ignore
+  // Avoid caching contained fallback output when a hero cutout URL exists
+  // but is temporarily unavailable; this prevents stale cache poisoning.
+  if (!heroCutoutLoadPolicy.heroCutoutLoadFailed) {
+    try {
+      await blobPutBytes({ pathname: tokenKey, bytes: pngBytes, contentType: 'image/png', cacheControlMaxAgeSeconds: 31_536_000 })
+    } catch {
+      // ignore
+    }
   }
 
   return pngBytes
@@ -2458,6 +2498,7 @@ function generateFramedSvg({
 
 export const __testables = {
   normalizeSourceArtworkUrl,
+  resolveHeroCutoutLoadPolicy,
   resolveCreatorTokenArtwork,
   getTokenIconLayout,
   createTopBreakoutMask,

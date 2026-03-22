@@ -11,6 +11,7 @@ export type PremiumTokenIconParams = {
   size: number
   sourceImage?: Uint8Array
   heroCutoutSourceImage?: Uint8Array
+  suppressBreakout?: boolean
   symbol?: string
   renderPreset?: RenderPreset
 }
@@ -713,6 +714,13 @@ function resolveBreakoutSourceKind(params: {
     return 'sourceAlpha'
   }
   return 'none'
+}
+
+function resolveSourceAlphaBreakoutAllowed(params: {
+  allowBreakout: boolean
+  suppressBreakout?: boolean
+}): boolean {
+  return !params.suppressBreakout && params.allowBreakout
 }
 
 export async function renderBackgroundCard(params: {
@@ -2287,7 +2295,10 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       analysis.fitMode === 'cover' &&
       !analysis.brightBadgeLike
     const breakoutSourceKind = resolveBreakoutSourceKind({
-      sourceAlphaBreakoutAllowed: analysis.allowBreakout,
+      sourceAlphaBreakoutAllowed: resolveSourceAlphaBreakoutAllowed({
+        allowBreakout: analysis.allowBreakout,
+        suppressBreakout: params.suppressBreakout,
+      }),
       preparedHeroCutoutAvailable: hasHeroCutoutSource,
       preparedHeroCutoutBreakoutAllowed: breakoutAllowedByPreparedHeroCutout,
     })
@@ -2454,5 +2465,6 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 
 export const __testables = {
   resolveBreakoutSourceKind,
+  resolveSourceAlphaBreakoutAllowed,
 }
 

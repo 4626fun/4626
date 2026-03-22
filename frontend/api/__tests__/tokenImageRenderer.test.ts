@@ -117,6 +117,28 @@ describe('token image renderer', () => {
     })
   })
 
+  it('computes hero cutout load policy for breakout suppression', () => {
+    const missingHeroCutout = __testables.resolveHeroCutoutLoadPolicy({
+      heroCutoutArtworkUrl: 'https://cdn.example/hero-cutout.png',
+      heroCutoutSourceBytes: null,
+    })
+    expect(missingHeroCutout).toEqual({
+      hasHeroCutoutUrl: true,
+      heroCutoutLoadFailed: true,
+      suppressBreakout: true,
+    })
+
+    const loadedHeroCutout = __testables.resolveHeroCutoutLoadPolicy({
+      heroCutoutArtworkUrl: 'https://cdn.example/hero-cutout.png',
+      heroCutoutSourceBytes: new Uint8Array([255]),
+    })
+    expect(loadedHeroCutout).toEqual({
+      hasHeroCutoutUrl: true,
+      heroCutoutLoadFailed: false,
+      suppressBreakout: false,
+    })
+  })
+
   it('keeps deterministic panel geometry', () => {
     const layout = __testables.getTokenIconLayout(512)
     expect(layout.panelSize).toBeGreaterThan(320)
@@ -175,6 +197,20 @@ describe('token image renderer', () => {
       symbol: 'AKITA',
     })
     const meta = await sharp(Buffer.from(withCutout)).metadata()
+    expect(meta.width).toBe(512)
+    expect(meta.height).toBe(512)
+  }, 15_000)
+
+  it('renders deterministic icon safely when suppressBreakout is set', async () => {
+    const source = await createSourcePng({ width: 900, height: 1200 })
+    const rendered = await __testables.renderDeterministicTokenIcon({
+      size: 512,
+      sourceBytes: source,
+      heroCutoutSourceBytes: null,
+      suppressBreakout: true,
+      symbol: 'AKITA',
+    })
+    const meta = await sharp(Buffer.from(rendered)).metadata()
     expect(meta.width).toBe(512)
     expect(meta.height).toBe(512)
   }, 15_000)

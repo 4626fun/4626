@@ -1,0 +1,63 @@
+{
+  "flagshipDemo": {
+    "title": "4626 is an ERC-8004-registered Base agent that discovers a task, plans a solution, executes onchain actions, verifies outcomes, and publishes receipts.",
+    "narrative": "Use one canonical deploy-centric demo, then reuse the same identity for Uniswap, Bankr, and ENS/Basename proofs.",
+    "videoUrl": ""
+  },
+  "links": {
+    "repoUrl": ""
+  },
+  "liveProofs": {
+    "erc8004": {
+      "scanUrl": "",
+      "registrationTxHash": "",
+      "reviewTxHash": "",
+      "feedbackTxHash": "",
+      "proofUrls": [],
+      "description": ""
+    },
+    "uniswap": {
+      "txHash": "",
+      "explorerUrl": "",
+      "quoteRequestId": "",
+      "description": ""
+    },
+    "bankr": {
+      "jobId": "",
+      "proofUrl": "",
+      "walletMatch": true,
+      "description": ""
+    },
+    "ens": {
+      "primaryName": "",
+      "proofUrls": [],
+      "description": ""
+    },
+    "x402": {
+      "paymentTxHash": "",
+      "proofUrl": "",
+      "description": ""
+    },
+    "autonomousTrading": {
+      "profitProofUrl": "",
+      "txHashes": [],
+      "description": ""
+    }
+  },
+  "judgeNotes": {
+    "openTrack": "",
+    "letTheAgentCook": "",
+    "agentsWithReceipts": "",
+    "uniswap": "",
+    "bankr": "",
+    "ensIdentity": "",
+    "ensOpenIntegration": "",
+    "ensCommunication": "",
+    "baseAgentServices": "",
+    "baseAutonomousTrading": ""
+  },
+  "trackOverrides": {
+    "includeBaseAgentServices": false,
+    "includeBaseAutonomousTrading": false
+  }
+}
