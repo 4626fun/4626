@@ -128,6 +128,12 @@ function clearStoredSession(): void {
   }
 }
 
+export function clearTelegramMiniAppSession(): void {
+  inFlightMiniAppSessionInitData = ''
+  inFlightMiniAppSessionPromise = null
+  clearStoredSession()
+}
+
 function resolveCachedMiniAppSession(initData: string): TelegramMiniAppSession | null {
   const cached = memoizedMiniAppSession ?? readStoredSession()
   if (!cached) return null
@@ -306,7 +312,7 @@ export async function ensureTelegramMiniAppSession(params?: {
   const webApp = await loadTelegramWebApp()
   const initData = asTrimmed(webApp?.initData ?? '')
   if (!initData) {
-    clearStoredSession()
+    clearTelegramMiniAppSession()
     return {
       ok: false,
       error: 'Telegram Mini App session unavailable. Open this flow from Telegram.',
@@ -342,7 +348,7 @@ export async function ensureTelegramMiniAppSession(params?: {
         ...(abortController ? { signal: abortController.signal } : null),
       })
     } catch (error) {
-      clearStoredSession()
+      clearTelegramMiniAppSession()
       return {
         ok: false,
         error: isAbortError(error) ? 'telegram_miniapp_session_timeout' : 'telegram_miniapp_session_unreachable',
@@ -355,6 +361,7 @@ export async function ensureTelegramMiniAppSession(params?: {
     }
     const json = (await response.json().catch(() => null)) as MiniAppSessionEnvelope | null
     if (!response.ok || !json?.success || !json.data) {
+      clearTelegramMiniAppSession()
       return {
         ok: false,
         error: asTrimmed(json?.error ?? '') || 'telegram_miniapp_session_failed',
@@ -373,7 +380,7 @@ export async function ensureTelegramMiniAppSession(params?: {
       chatInstance: asTrimmed(json.data.chatInstance ?? '') || null,
     }
     if (!session.sessionToken || !session.telegramUserId || !isTimestampFresh(session.expiresAt)) {
-      clearStoredSession()
+      clearTelegramMiniAppSession()
       return {
         ok: false,
         error: 'telegram_miniapp_session_invalid_response',

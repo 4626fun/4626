@@ -714,6 +714,39 @@ export async function createTelegramMiniAppSession(params: {
   }
 }
 
+export async function findReusableTelegramMiniAppSession(params: {
+  db: Db
+  telegramUserId: string | number | bigint
+  chatId?: string | null
+  initDataHash: string
+  authDate: number
+}): Promise<TelegramMiniAppSession | null> {
+  const userId = normalizeTelegramUserId(params.telegramUserId)
+  const chatId = asTrimmed(params.chatId ?? '') || null
+  const initDataHash = normalizeMiniAppInitDataHash(params.initDataHash)
+  const authDate = Math.trunc(Number(params.authDate))
+  if (!userId || !initDataHash || !Number.isInteger(authDate) || authDate <= 0) {
+    return null
+  }
+  const lookup = await params.db.sql`
+    SELECT telegram_user_id, telegram_username, chat_id, chat_type, chat_instance, init_data_hash, auth_date, expires_at, created_at, last_used_at, revoked_at
+    FROM telegram_miniapp_sessions
+    WHERE telegram_user_id = ${userId}
+      AND init_data_hash = ${initDataHash}
+      AND auth_date = ${authDate}
+      AND revoked_at IS NULL
+      AND expires_at > NOW()
+      AND (
+        (${chatId} IS NULL AND chat_id IS NULL)
+        OR chat_id = ${chatId}
+      )
+    ORDER BY expires_at DESC
+    LIMIT 1;
+  `
+  const row = lookup.rows?.[0]
+  return row ? mapTelegramMiniAppSessionRow(row) : null
+}
+
 export async function readTelegramMiniAppSession(params: {
   db: Db
   sessionToken: string

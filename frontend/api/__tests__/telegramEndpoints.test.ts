@@ -36,6 +36,7 @@ const {
   claimTelegramMiniAppReplayNonceMock,
   consumeTelegramLinkStartTokenMock,
   createTelegramMiniAppSessionMock,
+  findReusableTelegramMiniAppSessionMock,
   readTelegramMiniAppSessionMock,
   readTelegramLinkStartTokenStatusMock,
   readTelegramLinkStartTokenMock,
@@ -71,6 +72,7 @@ const {
   claimTelegramMiniAppReplayNonceMock: vi.fn(),
   consumeTelegramLinkStartTokenMock: vi.fn(),
   createTelegramMiniAppSessionMock: vi.fn(),
+  findReusableTelegramMiniAppSessionMock: vi.fn(),
   readTelegramMiniAppSessionMock: vi.fn(),
   readTelegramLinkStartTokenStatusMock: vi.fn(),
   readTelegramLinkStartTokenMock: vi.fn(),
@@ -113,6 +115,7 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   claimTelegramMiniAppReplayNonce: claimTelegramMiniAppReplayNonceMock,
   consumeTelegramLinkStartToken: consumeTelegramLinkStartTokenMock,
   createTelegramMiniAppSession: createTelegramMiniAppSessionMock,
+  findReusableTelegramMiniAppSession: findReusableTelegramMiniAppSessionMock,
   readTelegramMiniAppSession: readTelegramMiniAppSessionMock,
   readTelegramLinkStartTokenStatus: readTelegramLinkStartTokenStatusMock,
   readTelegramLinkStartToken: readTelegramLinkStartTokenMock,
@@ -264,6 +267,19 @@ describe('telegram endpoint handlers', () => {
         lastUsedAt: null,
         revokedAt: null,
       },
+    })
+    findReusableTelegramMiniAppSessionMock.mockResolvedValue({
+      telegramUserId: '42',
+      telegramUsername: 'akita',
+      chatId: null,
+      chatType: null,
+      chatInstance: null,
+      initDataHash: 'a'.repeat(64),
+      authDate: 1_710_000_000,
+      expiresAt: '2026-03-13T00:10:00.000Z',
+      createdAt: '2026-03-13T00:00:00.000Z',
+      lastUsedAt: null,
+      revokedAt: null,
     })
     readTelegramMiniAppSessionMock.mockResolvedValue({
       ok: true,
@@ -471,6 +487,7 @@ describe('telegram endpoint handlers', () => {
   it('POST /api/telegram/miniapp/session rejects replayed initData', async () => {
     const { default: handler } = await import('../_handlers/telegram/_miniapp-session.ts')
     claimTelegramMiniAppReplayNonceMock.mockResolvedValueOnce(false)
+    findReusableTelegramMiniAppSessionMock.mockResolvedValueOnce(null)
     const req = createMockReq({
       method: 'POST',
       body: {
@@ -488,6 +505,43 @@ describe('telegram endpoint handlers', () => {
     expect(res.statusCode).toBe(409)
     expect(res.body?.success).toBe(false)
     expect(String(res.body?.error ?? '')).toContain('replay')
+  })
+
+  it('POST /api/telegram/miniapp/session recovers replayed initData when a matching session already exists', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_miniapp-session.ts')
+    claimTelegramMiniAppReplayNonceMock.mockResolvedValueOnce(false)
+    findReusableTelegramMiniAppSessionMock.mockResolvedValueOnce({
+      telegramUserId: '42',
+      telegramUsername: 'akita',
+      chatId: null,
+      chatType: null,
+      chatInstance: null,
+      initDataHash: 'a'.repeat(64),
+      authDate: 1_710_000_000,
+      expiresAt: '2026-03-13T00:10:00.000Z',
+      createdAt: '2026-03-13T00:00:00.000Z',
+      lastUsedAt: null,
+      revokedAt: null,
+    })
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        initData: buildTelegramMiniAppInitData({
+          botToken: 'test-bot-token',
+          authDate: Math.floor(Date.now() / 1000),
+          userId: '42',
+        }),
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(findReusableTelegramMiniAppSessionMock).toHaveBeenCalledTimes(1)
+    expect(createTelegramMiniAppSessionMock).toHaveBeenCalledTimes(1)
+    expect(res.body?.data?.sessionToken).toBe('mini-session-token')
   })
 
   it('POST /api/telegram/miniapp/link rejects invalid or expired token', async () => {

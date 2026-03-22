@@ -6,6 +6,7 @@ import {
   claimTelegramMiniAppReplayNonce,
   createTelegramMiniAppSession,
   ensureTelegramTradingSchema,
+  findReusableTelegramMiniAppSession,
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
@@ -82,7 +83,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ttlSeconds: config.miniAppReplayTtlSeconds,
   })
   if (!replayAccepted) {
-    return res.status(409).json({ success: false, error: 'telegram_miniapp_replay_detected' } satisfies ApiEnvelope<never>)
+    const reusable = await findReusableTelegramMiniAppSession({
+      db: db as any,
+      telegramUserId: identity.telegramUserId,
+      chatId: identity.chatId,
+      initDataHash: identity.initDataHash,
+      authDate: identity.authDate,
+    })
+    if (!reusable) {
+      return res.status(409).json({ success: false, error: 'telegram_miniapp_replay_detected' } satisfies ApiEnvelope<never>)
+    }
   }
 
   const created = await createTelegramMiniAppSession({

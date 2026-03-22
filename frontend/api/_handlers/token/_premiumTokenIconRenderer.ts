@@ -919,7 +919,7 @@ function decideBreakoutPlan(params: {
     : 0.06
   const maxTopOccupancy =
     analysis.sourceClass === 'portraitPhoto' ? 0.36
-    : analysis.sourceClass === 'illustration' ? 0.34
+    : analysis.sourceClass === 'illustration' ? 0.84
     : 0.24
   const rembgCandidate =
     breakoutRequested &&
@@ -3124,6 +3124,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       suppressBreakout: Boolean(params.suppressBreakout),
       sourceClass: analysis?.sourceClass ?? null,
       fitMode: analysis?.fitMode ?? null,
+      lowResolution: analysis?.lowResolution ?? null,
+      hasTransparency: analysis?.hasTransparency ?? null,
       sourceAlphaBreakoutAllowed: sourceAlphaBreakoutAllowedForLog,
       rembgCandidate: rembgCandidateForLog,
       topCenterStdDev: analysis?.topCenterStdDev ?? null,

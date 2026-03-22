@@ -12,6 +12,7 @@ import {
   stripTelegramMiniAppLinkParams,
 } from '@/lib/telegramMiniAppLink'
 import {
+  clearTelegramMiniAppSession,
   ensureTelegramMiniAppSession,
   isTelegramMiniAppContext,
   loadTelegramWebApp,
@@ -126,6 +127,19 @@ export function isTelegramLinkEmailVerificationRequiredError(error: unknown): bo
   const message = error instanceof Error ? error.message : String(error ?? '')
   const normalized = message.trim().toLowerCase()
   return normalized.includes('verify your email with 4626 before linking telegram')
+}
+
+export function shouldResetTelegramMiniAppSessionForLinkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const normalized = message.trim().toLowerCase()
+  return (
+    normalized.includes('telegram mini app session expired') ||
+    normalized.includes('invalid telegram mini app session') ||
+    normalized.includes('telegram mini app session user mismatch') ||
+    normalized.includes('telegram mini app session chat mismatch') ||
+    normalized.includes('telegram mini app session token is required') ||
+    normalized.includes('telegram mini app session is required')
+  )
 }
 
 function sleep(ms: number): Promise<void> {
@@ -626,6 +640,16 @@ export function TelegramLink() {
           setLinkMessage(null)
           setEmailState('needs_verification')
           setEmailMessage('Verify your email with 4626 before linking Telegram.')
+          return
+        }
+        if (shouldResetTelegramMiniAppSessionForLinkError(message)) {
+          clearTelegramMiniAppSession()
+          linkAttemptRef.current = ''
+          setSessionToken('')
+          setSessionState('error')
+          setSessionError(formatTelegramSessionError(message, res.status || 500))
+          setLinkState('idle')
+          setLinkMessage(null)
           return
         }
         throw new Error(message)

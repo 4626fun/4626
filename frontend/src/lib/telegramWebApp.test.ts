@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  clearTelegramMiniAppSession,
   ensureTelegramMiniAppSession,
   hasTelegramMiniAppEntrypointContext,
   readPrivyTelegramLaunchParams,
@@ -92,6 +93,25 @@ describe('telegramWebApp mini app session bootstrap', () => {
     expect(first.ok).toBe(true)
     expect(second.ok).toBe(true)
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears an explicitly invalidated stored mini app session', async () => {
+    restoreWindow = installMockWindow('', {
+      cv_tg_miniapp_session_v1: JSON.stringify({
+        initData: 'auth_date=1710000000&user=%7B%22id%22%3A42%7D&hash=abc',
+        sessionToken: 'mini-session-token',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        telegramUserId: '42',
+        telegramUsername: 'akita',
+        chatId: null,
+        chatType: null,
+        chatInstance: null,
+      }),
+    })
+
+    expect(hasTelegramMiniAppEntrypointContext()).toBe(true)
+    clearTelegramMiniAppSession()
+    expect(hasTelegramMiniAppEntrypointContext()).toBe(false)
   })
 
   it('dedupes concurrent mini app session bootstrap requests', async () => {

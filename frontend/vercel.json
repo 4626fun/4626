@@ -255,7 +255,7 @@
     { "src": "/api/deploy/provisionSolanaRoute", "dest": "/api/deploy/provisionSolanaRoute" },
     { "src": "/api/deploy/registerSolanaBridgeToken", "dest": "/api/deploy/registerSolanaBridgeToken" },
     { "src": "/api/wallet/solana/(.*)", "dest": "/api/wallet/solana/$1" },
-    { "src": "/api/(.*)", "dest": "/api/[...path]" },
+    { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
     { "handle": "filesystem" },
     { "src": "/((?!assets/).*)", "dest": "/index.html" }
   ]

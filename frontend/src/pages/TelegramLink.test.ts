@@ -10,6 +10,7 @@ import {
   getTelegramLinkViewState,
   isPrivyEmailAlreadyLinkedError,
   pollTelegramLinkEmailVerification,
+  shouldResetTelegramMiniAppSessionForLinkError,
   shouldAutoStartTelegramLink,
   shouldShowRetryTelegramSession,
   waitForTelegramLinkPrivyAuth,
@@ -297,6 +298,16 @@ describe('TelegramLink helpers', () => {
   it('detects email-verification-required link errors explicitly', () => {
     expect(isTelegramLinkEmailVerificationRequiredError(new Error('Verify your email with 4626 before linking Telegram.'))).toBe(true)
     expect(isTelegramLinkEmailVerificationRequiredError(new Error('Telegram linking failed.'))).toBe(false)
+  })
+
+  it('forces mini app session reset only for stale-session link failures', () => {
+    expect(
+      shouldResetTelegramMiniAppSessionForLinkError('Telegram Mini App session expired. Re-open the Mini App from Telegram and retry.'),
+    ).toBe(true)
+    expect(
+      shouldResetTelegramMiniAppSessionForLinkError('Telegram Mini App session user mismatch. Start /link again from Telegram.'),
+    ).toBe(true)
+    expect(shouldResetTelegramMiniAppSessionForLinkError('Telegram linking timed out. Tap Retry link to try again.')).toBe(false)
   })
 
   it('reads fresh email verification state from /api/accounts/me', async () => {
