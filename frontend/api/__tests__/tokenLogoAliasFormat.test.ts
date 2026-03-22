@@ -54,17 +54,16 @@ describe('token logo alias formatting', () => {
   })
 
   it('serves v1 logo.png alias as a 64x64 PNG by default', async () => {
-    const { getApiHandler } = await import('../_handlers/_routes.ts')
-    const handler = await getApiHandler(`v1/token/${SHARE_OFT}/logo.png`)
+    const handler = (await import('../token/image.ts')).default
     expect(handler).toBeTypeOf('function')
 
     const req = createMockReq({
       method: 'GET',
-      query: { chain: '8453' },
+      query: { address: SHARE_OFT, format: 'png', size: '64', chain: '8453' },
       headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
-    await handler!(req, res)
+    await handler(req, res)
 
     expect(res.statusCode).toBe(200)
     expect(String(res.getHeader('content-type') ?? '')).toBe('image/png')
@@ -74,17 +73,16 @@ describe('token logo alias formatting', () => {
   })
 
   it('serves v1 logo.svg alias as an SVG payload by default', async () => {
-    const { getApiHandler } = await import('../_handlers/_routes.ts')
-    const handler = await getApiHandler(`v1/token/${SHARE_OFT}/logo.svg`)
+    const handler = (await import('../token/image.ts')).default
     expect(handler).toBeTypeOf('function')
 
     const req = createMockReq({
       method: 'GET',
-      query: { chain: '8453' },
+      query: { address: SHARE_OFT, format: 'svg', size: '64', chain: '8453' },
       headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
-    await handler!(req, res)
+    await handler(req, res)
 
     expect(res.statusCode).toBe(200)
     expect(String(res.getHeader('content-type') ?? '')).toBe('image/svg+xml')

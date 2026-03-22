@@ -22,6 +22,36 @@
     "api/token/image.ts": {
       "maxDuration": 60
     },
+    "api/v1/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/auth/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/waitlist.ts": {
+      "maxDuration": 60
+    },
+    "api/waitlist/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/telegram/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/uniswap/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/zora/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/lens/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/keepr/[...path].ts": {
+      "maxDuration": 60
+    },
+    "api/cre/[...path].ts": {
+      "maxDuration": 60
+    },
     "api/telegram/webhook.ts": {
       "maxDuration": 60
     },
@@ -200,10 +230,20 @@
     { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/agent/process", "dest": "/api/agent/process" },
+    { "src": "/api/auth/(.*)", "dest": "/api/auth/$1" },
+    { "src": "/api/waitlist", "dest": "/api/waitlist" },
+    { "src": "/api/waitlist/(.*)", "dest": "/api/waitlist/$1" },
     { "src": "/api/token/image", "dest": "/api/token/image" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
+    { "src": "/api/v1/(.*)", "dest": "/api/v1/$1" },
     { "src": "/api/telegram/webhook", "dest": "/api/telegram/webhook" },
+    { "src": "/api/telegram/(.*)", "dest": "/api/telegram/$1" },
+    { "src": "/api/uniswap/(.*)", "dest": "/api/uniswap/$1" },
+    { "src": "/api/zora/(.*)", "dest": "/api/zora/$1" },
+    { "src": "/api/lens/(.*)", "dest": "/api/lens/$1" },
+    { "src": "/api/keepr/(.*)", "dest": "/api/keepr/$1" },
+    { "src": "/api/cre/(.*)", "dest": "/api/cre/$1" },
     { "src": "/api/image/projects/(.*)", "dest": "/api/image/projects/$1" },
     { "src": "/api/image/jobs/status", "dest": "/api/image/jobs/status" },
     { "src": "/api/image/external", "dest": "/api/image/external" },

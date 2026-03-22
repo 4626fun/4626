@@ -79,10 +79,10 @@ describe('v1 auction activity handler', () => {
   })
 
   it('registers static and dynamic activity routes', async () => {
-    const { getApiHandler } = await import('../_handlers/_routes.ts')
+    const { getV1ApiHandler } = await import('../_handlers/_routes.v1.ts')
 
-    await expect(getApiHandler('v1/auction/activity')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler(`v1/auction/${CCA_STRATEGY}/activity`)).resolves.toBeTypeOf('function')
+    await expect(getV1ApiHandler('auction/activity')).resolves.toBeTypeOf('function')
+    await expect(getV1ApiHandler(`auction/${CCA_STRATEGY}/activity`)).resolves.toBeTypeOf('function')
   })
 
   it('returns normalized live auction activity for a strategy', async () => {

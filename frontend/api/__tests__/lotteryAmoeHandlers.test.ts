@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
-import { getApiHandler } from '../_handlers/_routes.js'
+import { getV1ApiHandler } from '../_handlers/_routes.v1.js'
 
 const guardMock = vi.fn()
 const issueAmoeNonceMock = vi.fn()
@@ -42,10 +42,10 @@ vi.mock('../../server/_lib/lotteryAmoe.js', () => ({
 
 describe('AMOE lottery routes', () => {
   it('registers AMOE nonce, credits, submit, and checkin routes', async () => {
-    const nonceHandler = await getApiHandler('v1/lottery/amoe/nonce')
-    const creditsHandler = await getApiHandler('v1/lottery/amoe/credits')
-    const submitHandler = await getApiHandler('v1/lottery/amoe/submit')
-    const checkinHandler = await getApiHandler('v1/lottery/amoe/twitter-checkin')
+    const nonceHandler = await getV1ApiHandler('lottery/amoe/nonce')
+    const creditsHandler = await getV1ApiHandler('lottery/amoe/credits')
+    const submitHandler = await getV1ApiHandler('lottery/amoe/submit')
+    const checkinHandler = await getV1ApiHandler('lottery/amoe/twitter-checkin')
     expect(typeof nonceHandler).toBe('function')
     expect(typeof creditsHandler).toBe('function')
     expect(typeof submitHandler).toBe('function')

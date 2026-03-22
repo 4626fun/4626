@@ -1,81 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-
-function getApiSubpath(req: VercelRequest): string {
-  // Prefer Vercel's catch-all param mapping.
-  // For `api/[...path].ts`, Vercel populates `req.query.path`.
-  const qp = (req as any)?.query?.path as unknown
-  if (typeof qp === 'string' && qp.trim()) return qp.trim()
-  if (Array.isArray(qp) && qp.length > 0) {
-    return qp
-      .map((s) => (typeof s === 'string' ? s : String(s)))
-      .filter(Boolean)
-      .join('/')
-  }
-
-  const rawUrl = typeof req.url === 'string' ? req.url : ''
-  const pathname = (rawUrl.split('?')[0] ?? '').trim()
-  if (!pathname) return ''
-  if (pathname === '/api' || pathname === '/api/') return ''
-  if (pathname.startsWith('/api/')) return pathname.slice('/api/'.length)
-  // Support our stable alias used to avoid adblock rules.
-  // In some Vercel routing configurations, the request URL can remain `/__api/*`
-  // even when the request is routed to this catch-all handler.
-  if (pathname === '/__api' || pathname === '/__api/') return ''
-  if (pathname.startsWith('/__api/')) return pathname.slice('/__api/'.length)
-  if (pathname.startsWith('/')) return pathname.slice(1)
-  return pathname
-}
-
-function isSafeSubpath(p: string): boolean {
-  // We only allow expected filesystem-style paths:
-  // - a-z A-Z 0-9 _ - / .
-  // - no backslashes, percent-escapes, or traversal
-  if (!p) return false
-  if (p.includes('\\')) return false
-  if (p.includes('..')) return false
-  if (p.includes('%')) return false
-  if (p.includes('\0')) return false
-  return /^[a-zA-Z0-9/_\.-]+$/.test(p)
-}
+import { dispatchCatchAllRequest } from './_lib/dispatchCatchAll.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  let subpath = ''
-  try {
-    subpath = getApiSubpath(req)
-    if (!isSafeSubpath(subpath)) {
-      return res.status(404).json({ success: false, error: 'Not found' })
-    }
-
-    const { getApiHandler } = await import('./_handlers/_routes.js')
-    const h = (await getApiHandler(subpath)) as ApiHandler | null
-    if (!h) {
-      return res.status(404).json({ success: false, error: 'Not found' })
-    }
-
-    return await h(req, res)
-  } catch (e: unknown) {
-    const errorMessage = e instanceof Error ? e.message : String(e)
-    console.error('[api] Unhandled route error', {
-      route: subpath || '(unknown)',
-      error: errorMessage || 'unknown_error',
-    })
-    if (subpath === 'paymaster') {
-      return res.status(200).json({
-        jsonrpc: '2.0',
-        id: null,
-        error: {
-          code: -32000,
-          message: 'request denied - paymaster proxy internal error',
-        },
-      })
-    }
-    try {
-      if (!res.headersSent) res.setHeader('Cache-Control', 'no-store')
-    } catch {
-      // ignore
-    }
-    return res.status(500).json({ success: false, error: 'Internal server error' })
-  }
+  const { getApiHandler } = await import('./_handlers/_routes.js')
+  return dispatchCatchAllRequest({
+    req,
+    res,
+    prefixes: ['/api/', '/__api/'],
+    resolveHandler: getApiHandler,
+    routeLabel: 'api',
+    jsonRpcCompatSubpath: 'paymaster',
+  })
 }

@@ -1,0 +1,23 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
+type ApiHandlerModule = { default?: ApiHandler }
+
+const telegramRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+  'bot-config': () => import('./telegram/_bot-config.js'),
+  'miniapp/link': () => import('./telegram/_miniapp-link.js'),
+  'merge-preflight': () => import('./telegram/_merge-preflight.js'),
+  'miniapp/session': () => import('./telegram/_miniapp-session.js'),
+  'metrics': () => import('./telegram/_metrics.js'),
+  'portfolio': () => import('./telegram/_portfolio.js'),
+  'holder-recheck': () => import('./telegram/_holder-recheck.js'),
+  'arena/watch-tick': () => import('./telegram/_arena-watch-tick.js'),
+  'unlink': () => import('./telegram/_unlink.js'),
+}
+
+export async function getTelegramApiHandler(subpath: string): Promise<ApiHandler | null> {
+  const loader = telegramRouteLoaders[subpath]
+  if (!loader) return null
+  const mod = await loader()
+  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+}

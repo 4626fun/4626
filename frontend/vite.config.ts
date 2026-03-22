@@ -159,7 +159,7 @@ function localApiRoutesPlugin(): Plugin {
       // Vite's config TS project to type-check every function signature.
       const routes: Record<string, () => Promise<{ default: (req: any, res: any) => any }>> = {
         '/api/creator-allowlist': () => import('./api/_handlers/_creator-allowlist'),
-        '/api/waitlist': () => import('./api/_handlers/_waitlist'),
+        '/api/waitlist': () => import('./api/waitlist'),
         '/api/waitlist/join': () => import('./api/_handlers/waitlist/_join'),
         '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),
         '/api/waitlist/csw-link': () => import('./api/_handlers/waitlist/_csw-link'),
@@ -301,6 +301,20 @@ function localApiRoutesPlugin(): Plugin {
           },
         },
       ]
+      const familyCatchAllRoutes: Array<{
+        prefix: string
+        load: () => Promise<{ default: (req: any, res: any) => any }>
+      }> = [
+        { prefix: '/api/v1/', load: () => import('./api/v1/[...path]') },
+        { prefix: '/api/auth/', load: () => import('./api/auth/[...path]') },
+        { prefix: '/api/waitlist/', load: () => import('./api/waitlist/[...path]') },
+        { prefix: '/api/telegram/', load: () => import('./api/telegram/[...path]') },
+        { prefix: '/api/uniswap/', load: () => import('./api/uniswap/[...path]') },
+        { prefix: '/api/zora/', load: () => import('./api/zora/[...path]') },
+        { prefix: '/api/lens/', load: () => import('./api/lens/[...path]') },
+        { prefix: '/api/keepr/', load: () => import('./api/keepr/[...path]') },
+        { prefix: '/api/cre/', load: () => import('./api/cre/[...path]') },
+      ]
       const catchAllApiRoute = () => import('./api/[...path]')
 
       server.middlewares.use(async (req, res, next) => {
@@ -313,6 +327,7 @@ function localApiRoutesPlugin(): Plugin {
           let loader = routes[pathname]
           let patternMatch: RegExpMatchArray | null = null
           let patternRoute = null as (typeof patternRoutes)[number] | null
+          let familyCatchAllRoute = null as (typeof familyCatchAllRoutes)[number] | null
           if (!loader) {
             for (const candidate of patternRoutes) {
               const match = pathname.match(candidate.pattern)
@@ -320,6 +335,14 @@ function localApiRoutesPlugin(): Plugin {
               loader = candidate.load
               patternMatch = match
               patternRoute = candidate
+              break
+            }
+          }
+          if (!loader && isApiPath) {
+            for (const candidate of familyCatchAllRoutes) {
+              if (!pathname.startsWith(candidate.prefix)) continue
+              familyCatchAllRoute = candidate
+              loader = candidate.load
               break
             }
           }
@@ -336,7 +359,11 @@ function localApiRoutesPlugin(): Plugin {
           if (patternRoute && patternMatch) {
             patternRoute.applyQuery(patternMatch, compatReq)
           }
-          if (useCatchAll) {
+          if (familyCatchAllRoute) {
+            const subpath = pathname.slice(familyCatchAllRoute.prefix.length)
+            compatReq.query = compatReq.query ?? Object.create(null)
+            compatReq.query.path = subpath ? subpath.split('/').filter(Boolean) : []
+          } else if (useCatchAll) {
             const subpath = pathname === '/api' ? '' : pathname.slice('/api/'.length)
             compatReq.query = compatReq.query ?? Object.create(null)
             compatReq.query.path = subpath ? subpath.split('/').filter(Boolean) : []

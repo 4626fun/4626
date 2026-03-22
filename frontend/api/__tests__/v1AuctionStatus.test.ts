@@ -70,10 +70,10 @@ describe('v1 auction status handler', () => {
   })
 
   it('registers static and dynamic status routes', async () => {
-    const { getApiHandler } = await import('../_handlers/_routes.ts')
+    const { getV1ApiHandler } = await import('../_handlers/_routes.v1.ts')
 
-    await expect(getApiHandler('v1/auction/status')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler(`v1/auction/${CCA_STRATEGY}/status`)).resolves.toBeTypeOf('function')
+    await expect(getV1ApiHandler('auction/status')).resolves.toBeTypeOf('function')
+    await expect(getV1ApiHandler(`auction/${CCA_STRATEGY}/status`)).resolves.toBeTypeOf('function')
   })
 
   it('returns canonical token image URL and same-origin fallback path', async () => {

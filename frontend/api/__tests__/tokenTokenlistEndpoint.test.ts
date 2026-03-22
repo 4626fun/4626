@@ -23,8 +23,8 @@ describe('token tokenlist endpoint', () => {
   })
 
   it('returns a token-list-compatible payload with absolute logoURI aliases', async () => {
-    const { getApiHandler } = await import('../_handlers/_routes.ts')
-    const handler = await getApiHandler(`v1/token/${TOKEN}/tokenlist`)
+    const { getV1ApiHandler } = await import('../_handlers/_routes.v1.ts')
+    const handler = await getV1ApiHandler(`token/${TOKEN}/tokenlist`)
     expect(handler).toBeTypeOf('function')
 
     const req = createMockReq({

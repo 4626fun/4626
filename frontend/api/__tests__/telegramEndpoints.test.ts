@@ -857,15 +857,20 @@ describe('telegram endpoint handlers', () => {
 
   it('route map registers telegram link endpoints', async () => {
     const { getApiHandler } = await import('../_handlers/_routes.ts')
-    expect(await getApiHandler('telegram/miniapp/link')).toBeTypeOf('function')
+    const { getTelegramApiHandler } = await import('../_handlers/_routes.telegram.ts')
+    expect(await getApiHandler('telegram/miniapp/link')).toBeNull()
     expect(await getApiHandler('telegram/link/complete')).toBeNull()
     expect(await getApiHandler('telegram/link/start')).toBeNull()
     expect(await getApiHandler('telegram/link/status')).toBeNull()
-    expect(await getApiHandler('telegram/merge-preflight')).toBeTypeOf('function')
-    expect(await getApiHandler('telegram/miniapp/session')).toBeTypeOf('function')
+    expect(await getApiHandler('telegram/merge-preflight')).toBeNull()
+    expect(await getApiHandler('telegram/miniapp/session')).toBeNull()
     expect(await getApiHandler('telegram/discovery')).toBeNull()
     expect(await getApiHandler('telegram/inline/prepared')).toBeNull()
-    expect(await getApiHandler('telegram/metrics')).toBeTypeOf('function')
+    expect(await getApiHandler('telegram/metrics')).toBeNull()
+    expect(await getTelegramApiHandler('miniapp/link')).toBeTypeOf('function')
+    expect(await getTelegramApiHandler('merge-preflight')).toBeTypeOf('function')
+    expect(await getTelegramApiHandler('miniapp/session')).toBeTypeOf('function')
+    expect(await getTelegramApiHandler('metrics')).toBeTypeOf('function')
   })
 
   it('POST /api/telegram/bot-config syncs commands and menu button', async () => {
@@ -895,6 +900,8 @@ describe('telegram endpoint handlers', () => {
 
   it('route map registers telegram bot config endpoint', async () => {
     const { getApiHandler } = await import('../_handlers/_routes.ts')
-    expect(await getApiHandler('telegram/bot-config')).toBeTypeOf('function')
+    const { getTelegramApiHandler } = await import('../_handlers/_routes.telegram.ts')
+    expect(await getApiHandler('telegram/bot-config')).toBeNull()
+    expect(await getTelegramApiHandler('bot-config')).toBeTypeOf('function')
   })
 })

@@ -268,8 +268,8 @@ afterEach(() => {
 
 describe('keepr/vault/automation', () => {
   it('registers keepr/vault/automation in the static route map', async () => {
-    const { getApiHandler } = await loadAutomationHandlerWithMockedResolver()
-    const handler = await getApiHandler('keepr/vault/automation')
+    const { getKeeprApiHandler } = await import('../_handlers/_routes.keepr.js')
+    const handler = await getKeeprApiHandler('vault/automation')
     expect(typeof handler).toBe('function')
   })
 
