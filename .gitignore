@@ -221,3 +221,8 @@ docs/codex-security-findings-2026-03-19T07-59-43.276Z.csv
 docs/codex-security-second-pass.csv
 docs/codex-security-findings-2026-03-20T08-50-52.178Z.csv
 docs/security-scan-overview.md
+docs/Building-at-the-synthesis.md
+docs/synthesis_llm_Bounties-AgentsOptimized.txt
+docs/synthesis-hackathon.md
+docs/operations/deployment/launch/ship-checklist.md
+frontend/server/solana-provisioner/deploy/solana-provisioner.env.example

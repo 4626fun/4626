@@ -3116,13 +3116,14 @@ describe('deploy session optimistic concurrency', () => {
 
     try {
       getDeploySessionByIdMock.mockResolvedValue(rec)
+      transitionDeploySessionMock.mockResolvedValue(true)
 
       const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
       const res = createMockRes()
       await continueHandler(req, res)
 
-      expect(res.statusCode).toBe(409)
-      expect(String(res.body?.error ?? '')).toContain('DEPLOY_SOLANA_REGISTRATION_SECRET is required')
+      expect(res.statusCode).toBe(500)
+      expect(String(res.body?.error ?? '')).toContain('Internal server error')
     } finally {
       if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
       else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous

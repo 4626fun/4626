@@ -58,6 +58,44 @@ function inferProtocol(host: string): 'http' | 'https' {
   return 'https'
 }
 
+export function resolveShareTokenMetadataUrls(params: {
+  address: Address
+  chainId: number
+  apiHost?: string
+  appHost?: string
+}): {
+  apiBaseUrl: string
+  appBaseUrl: string
+  metadataUrl: string
+  lensMetadataPreviewUrl: string
+  lensMetadataStoreUrl: string
+  imagePngUrl: string
+  imageSvgUrl: string
+} {
+  const appHostValue = normalizeHost(params.appHost) || 'app.4626.fun'
+  // Prefer explicit API host when configured; otherwise keep metadata links on the app host.
+  // This avoids emitting broken api.4626.fun links when API_HOST is unset or unavailable.
+  const apiHostValue = normalizeHost(params.apiHost) || appHostValue
+  const apiBaseUrl = `${inferProtocol(apiHostValue)}://${apiHostValue}`
+  const appBaseUrl = `${inferProtocol(appHostValue)}://${appHostValue}`
+  const metadataUrl = `${apiBaseUrl}/v1/token/${params.address}/metadata?chain=${params.chainId}`
+  const lensMetadataPreviewUrl =
+    `${apiBaseUrl}/lens/share-token-metadata?address=${params.address}&chain=${params.chainId}&store=false`
+  const lensMetadataStoreUrl =
+    `${apiBaseUrl}/lens/share-token-metadata?address=${params.address}&chain=${params.chainId}&store=true`
+  const imagePngUrl = `${apiBaseUrl}/v1/token/${params.address}/image?chain=${params.chainId}&format=png`
+  const imageSvgUrl = `${apiBaseUrl}/v1/token/${params.address}/image?chain=${params.chainId}&format=svg`
+  return {
+    apiBaseUrl,
+    appBaseUrl,
+    metadataUrl,
+    lensMetadataPreviewUrl,
+    lensMetadataStoreUrl,
+    imagePngUrl,
+    imageSvgUrl,
+  }
+}
+
 export async function buildShareTokenMetadata({
   address,
   chainId,
@@ -139,21 +177,23 @@ export async function buildShareTokenMetadata({
     }
   }
 
-  const appHostValue = normalizeHost(appHost) || 'app.4626.fun'
-  // Prefer explicit API host when configured; otherwise keep metadata links on the app host.
-  // This avoids emitting broken api.4626.fun links when API_HOST is unset or unavailable.
-  const apiHostValue = normalizeHost(apiHost) || appHostValue
-  const apiBaseUrl = `${inferProtocol(apiHostValue)}://${apiHostValue}`
-  const appBaseUrl = `${inferProtocol(appHostValue)}://${appHostValue}`
-  const metadataUrl = `${apiBaseUrl}/v1/token/${address}/metadata?chain=${chainId}`
-  const lensMetadataPreviewUrl = `${apiBaseUrl}/lens/share-token-metadata?address=${address}&chain=${chainId}&store=false`
-  const lensMetadataStoreUrl = `${apiBaseUrl}/lens/share-token-metadata?address=${address}&chain=${chainId}&store=true`
+  const {
+    appBaseUrl,
+    metadataUrl,
+    lensMetadataPreviewUrl,
+    lensMetadataStoreUrl,
+    imagePngUrl,
+    imageSvgUrl,
+  } = resolveShareTokenMetadataUrls({
+    address,
+    chainId,
+    apiHost,
+    appHost,
+  })
   const lensProfileUrl = lensProfile?.handle ? `https://hey.xyz/u/${lensProfile.handle}` : null
 
   // Always expose both raster and vector image endpoints.
   // The image handler gracefully falls back when upstream creator coin media is unavailable.
-  const imagePngUrl = `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}&format=png`
-  const imageSvgUrl = `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}&format=svg`
   const rawDescription = typeof description === 'string' ? description.trim() : ''
   const isLegacyDescription =
     rawDescription.length > 0 &&

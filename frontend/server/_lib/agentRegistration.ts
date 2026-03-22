@@ -46,11 +46,20 @@ const fallbackRegistration: RegistrationFile = {
     },
     { name: 'api', endpoint: 'https://4626.fun/api/v1/spec.json', version: '1.0.0' },
     { name: 'feedback', endpoint: 'https://4626.fun/api/v1/agents/feedback', version: '2.0' },
+    {
+      name: 'erc8004-review',
+      endpoint: 'https://4626.fun/api/v1/agents/feedback/review',
+      version: '1.0.0',
+      description: 'x402-gated ERC-8004 technical review service that returns a scored review, Lens feedback payload, and unsigned giveFeedback calldata.',
+      paymentProtocol: 'x402',
+      paymentNetwork: 'base',
+      priceUsd: '1.00',
+    },
     { name: 'reputation-graph', endpoint: 'https://4626.fun/api/lens/reputation-graph', version: '1.0' },
     { name: 'feedback-payload', endpoint: 'https://4626.fun/api/lens/feedback-payload', version: '2.0' },
     { name: 'wallet-intelligence', endpoint: 'https://4626.fun/api/v1/agents/wallet-intelligence', version: '1.0' },
   ],
-  x402Support: false,
+  x402Support: true,
   active: true,
   registrations: [
     {

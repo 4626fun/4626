@@ -53,6 +53,7 @@ type ProvisionBody = {
   tokenName?: string
   tokenSymbol?: string
   tokenSymbolFallback?: string
+  tokenMetadataUri?: string
   scalerExponent?: number | string
   payerKp?: string
   payForRelay?: boolean
@@ -94,6 +95,7 @@ type ProvisionerMintCompatibilityHints = {
 
 const WRAP_TOKEN_NAME_MAX_LENGTH = 32
 const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+const WRAP_TOKEN_METADATA_URI_MAX_LENGTH = 512
 type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
 
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -403,6 +405,31 @@ function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
   return 'auto'
 }
 
+function readWrapTokenMetadataUriEnabled(): boolean {
+  const raw = String(process.env.SOLANA_BRIDGE_WRAP_METADATA_URI_ENABLED ?? '')
+    .trim()
+    .toLowerCase()
+  if (!raw) return false
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function normalizeWrapTokenMetadataUri(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const value = raw.trim()
+  if (!value) return null
+  if (value.length > WRAP_TOKEN_METADATA_URI_MAX_LENGTH) return null
+  try {
+    const parsed = new URL(value)
+    const protocol = parsed.protocol.toLowerCase()
+    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'ipfs:' && protocol !== 'ar:') {
+      return null
+    }
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
 function sanitizeWrapTokenSymbolUnicode(raw: string, bridgeToken: Address): string {
   const fallback = `■${bridgeToken.slice(2, 6).toUpperCase()}`
   const normalized = String(raw ?? '')
@@ -483,6 +510,24 @@ function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
     lower.includes('symbol is invalid') ||
     lower.includes('invalid metadata') ||
     lower.includes('invalid character')
+  )
+}
+
+function isLikelyUnsupportedMetadataUriFlagError(message: string): boolean {
+  const lower = message.toLowerCase()
+  const mentionsMetadataUri =
+    lower.includes('--metadata-uri') ||
+    lower.includes('metadata-uri') ||
+    lower.includes('--metadatauri') ||
+    lower.includes('metadatauri')
+  if (!mentionsMetadataUri) return false
+  return (
+    lower.includes('unknown option') ||
+    lower.includes('unknown argument') ||
+    lower.includes('unexpected argument') ||
+    lower.includes('unrecognized option') ||
+    lower.includes('wasn\'t expected') ||
+    lower.includes('unexpected value')
   )
 }
 
@@ -919,7 +964,19 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     requestedFallbackSymbol:
       typeof body?.tokenSymbolFallback === 'string' ? body.tokenSymbolFallback.trim() : null,
   })
-  const buildWrapArgs = (tokenSymbol: string): string[] => {
+  const tokenMetadataUriRaw =
+    typeof body?.tokenMetadataUri === 'string' ? body.tokenMetadataUri.trim() : ''
+  const tokenMetadataUri = tokenMetadataUriRaw
+    ? normalizeWrapTokenMetadataUri(tokenMetadataUriRaw)
+    : null
+  if (tokenMetadataUriRaw && !tokenMetadataUri) {
+    return json(res, 400, {
+      success: false,
+      error: 'Invalid tokenMetadataUri. Expected http(s)://, ipfs://, or ar:// URL.',
+    })
+  }
+  const includeMetadataUriByDefault = readWrapTokenMetadataUriEnabled() && Boolean(tokenMetadataUri)
+  const buildWrapArgs = (tokenSymbol: string, includeMetadataUri: boolean): string[] => {
     const args = [
       'sol',
       'bridge',
@@ -939,6 +996,9 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       '--payer-kp',
       payerKp,
     ]
+    if (includeMetadataUri && tokenMetadataUri) {
+      args.push('--metadata-uri', tokenMetadataUri)
+    }
     if (payForRelay) args.push('--pay-for-relay')
     return args
   }
@@ -951,7 +1011,28 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
       const candidate = tokenSymbolCandidates[i]
       try {
-        const result = await runWrapTokenWithRetry(cliDir, cliBin, buildWrapArgs(candidate))
+        const metadataAttempts = includeMetadataUriByDefault ? [true, false] : [false]
+        let result: { output: string; runner: string } | null = null
+        for (let metadataIdx = 0; metadataIdx < metadataAttempts.length; metadataIdx += 1) {
+          const includeMetadataUri = metadataAttempts[metadataIdx]
+          try {
+            result = await runWrapTokenWithRetry(cliDir, cliBin, buildWrapArgs(candidate, includeMetadataUri))
+            break
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            const canRetryWithoutMetadata =
+              includeMetadataUriByDefault &&
+              includeMetadataUri &&
+              isLikelyUnsupportedMetadataUriFlagError(message)
+            if (!canRetryWithoutMetadata) throw error
+            process.stderr.write(
+              `[solana-provisioner] wrap-token metadata-uri flag unsupported; retrying without metadata-uri symbol=${candidate}: ${message}\n`,
+            )
+          }
+        }
+        if (!result) {
+          throw new Error('wrap-token did not return output')
+        }
         combined = result.output
         runner = result.runner
         tokenSymbolUsed = candidate

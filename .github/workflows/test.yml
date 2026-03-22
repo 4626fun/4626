@@ -72,7 +72,6 @@ jobs:
         run: pnpm --dir frontend test -- --reporter=verbose --reporter=json --outputFile=test-results.json 2>&1 | tee test-output.txt
         env:
           AUTH_SESSION_SECRET: test-auth-session-secret-123456
-          DEPLOY_SESSION_SECRET: test-deploy-session-secret-123456
           DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
           APP_ORIGIN: ${{ env.APP_ORIGIN }}
           MARKETING_ORIGIN: ${{ env.MARKETING_ORIGIN }}

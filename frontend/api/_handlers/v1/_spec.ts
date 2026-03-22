@@ -70,6 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/agents/capabilities': { get: { summary: 'Resolve wallet room capabilities + qualification state', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/creators': { get: { summary: 'List creator XMTP agents', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/creators/enable': { post: { summary: 'Enable/provision creator XMTP agent (auth required)', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/feedback/review': { post: { summary: 'x402-gated ERC-8004 technical review with Lens payload + unsigned giveFeedback calldata', responses: { '200': { description: 'Review generated' }, '402': { description: 'Payment required' } } } },
       '/v1/agents/access-proof/request': { post: { summary: 'Issue signable room access proof payload', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/access-proof/verify': { post: { summary: 'Verify signed proof and issue short-lived room token', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/xmtp/join': { post: { summary: 'Validate room token and return XMTP join instructions', responses: { '200': { description: 'OK' } } } },
@@ -112,4 +113,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCache(res, 600)
   return res.status(200).json(spec)
 }
-

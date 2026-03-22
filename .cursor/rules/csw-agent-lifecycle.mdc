@@ -67,7 +67,7 @@ The CSW never "becomes" a separate agent — the agent identity is layered onto 
 - Server signs UserOps via Privy wallet API; CSW executes as ERC-4337 sender.
 - After deployment completes, temporary owner is removed via `removeOwnerAtIndex()`.
 - File: `frontend/api/_handlers/deploy/session/_create.ts`, `frontend/api/_handlers/deploy/session/_continue.ts`
-- Env: `DEPLOY_SESSION_SECRET`, `DEPLOY_SESSION_TOKEN_HMAC_SECRET`
+- Env: `DEPLOY_SESSION_TOKEN_HMAC_SECRET`
 
 ## Key Environment Variables
 

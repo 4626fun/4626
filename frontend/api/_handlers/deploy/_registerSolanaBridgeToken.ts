@@ -30,12 +30,14 @@ import {
   normalizeSolanaAssetMintOrigin,
   parseSolanaOvaultMintCompatibilityHints,
 } from '../../../server/_lib/solanaOvaultCompatibility.js'
+import { resolveShareTokenMetadataUrls } from '../../../server/_lib/shareTokenMetadata.js'
 
 type RegisterSolanaBridgeTokenRequest = {
   bridgeToken?: string
   batcherAddress?: string
   solanaMint?: string
   solanaDecimals?: number | string
+  tokenMetadataUri?: string
   creatorToken?: string
   expectedSolanaAmount?: string | number
   shareDecimals?: number | string
@@ -463,6 +465,7 @@ async function readBridgeTokenMetadata(params: {
 
 const WRAP_TOKEN_NAME_MAX_LENGTH = 32
 const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+const WRAP_TOKEN_METADATA_URI_MAX_LENGTH = 512
 type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
 
 function sanitizeWrapTokenName(raw: string, bridgeToken: Address): string {
@@ -482,6 +485,31 @@ function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
     .toLowerCase()
   if (raw === 'unicode' || raw === 'ascii' || raw === 'auto') return raw
   return 'auto'
+}
+
+function readWrapTokenMetadataUriEnabled(): boolean {
+  const raw = String(process.env.SOLANA_BRIDGE_WRAP_METADATA_URI_ENABLED ?? '')
+    .trim()
+    .toLowerCase()
+  if (!raw) return false
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function normalizeWrapTokenMetadataUri(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const value = raw.trim()
+  if (!value) return null
+  if (value.length > WRAP_TOKEN_METADATA_URI_MAX_LENGTH) return null
+  try {
+    const parsed = new URL(value)
+    const protocol = parsed.protocol.toLowerCase()
+    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'ipfs:' && protocol !== 'ar:') {
+      return null
+    }
+    return parsed.toString()
+  } catch {
+    return null
+  }
 }
 
 function sanitizeWrapTokenSymbolUnicode(raw: string, bridgeToken: Address): string {
@@ -546,6 +574,24 @@ function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
     lower.includes('a seeds constraint') ||
     lower.includes('error code: constraintseeds') ||
     lower.includes('error number: 2006')
+  )
+}
+
+function isLikelyUnsupportedMetadataUriFlagError(message: string): boolean {
+  const lower = message.toLowerCase()
+  const mentionsMetadataUri =
+    lower.includes('--metadata-uri') ||
+    lower.includes('metadata-uri') ||
+    lower.includes('--metadatauri') ||
+    lower.includes('metadatauri')
+  if (!mentionsMetadataUri) return false
+  return (
+    lower.includes('unknown option') ||
+    lower.includes('unknown argument') ||
+    lower.includes('unexpected argument') ||
+    lower.includes('unrecognized option') ||
+    lower.includes('wasn\'t expected') ||
+    lower.includes('unexpected value')
   )
 }
 
@@ -787,10 +833,12 @@ async function tryProvisionDynamicRoute(params: {
   bridgeToken: Address
   solanaDecimals: number
   publicClient: any
+  tokenMetadataUri?: string | null
 }): Promise<{ mintBytes32: Hex; mintCompatibilityHints: MintCompatibilityHints | null } | null> {
   if (!readDynamicSolanaRouteEnabled()) return null
 
   const bridgeToken = params.bridgeToken
+  const tokenMetadataUri = normalizeWrapTokenMetadataUri(params.tokenMetadataUri ?? null)
 
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
@@ -852,6 +900,7 @@ async function tryProvisionDynamicRoute(params: {
           tokenSymbolFallback: fallbackTokenSymbol,
           tokenNameSource,
           tokenSymbolSource,
+          tokenMetadataUri,
           payForRelay,
         })
         try {
@@ -870,6 +919,7 @@ async function tryProvisionDynamicRoute(params: {
                 tokenName,
                 tokenSymbol,
                 tokenSymbolFallback: fallbackTokenSymbol,
+                tokenMetadataUri,
                 scalerExponent,
                 payerKp,
                 payForRelay,
@@ -991,8 +1041,9 @@ async function tryProvisionDynamicRoute(params: {
   let mintCompatibilityHints: MintCompatibilityHints | null = null
   let mintedPubkey: string | null = null
   let provisionRunner: string | null = null
+  const includeMetadataUriByDefault = readWrapTokenMetadataUriEnabled() && Boolean(tokenMetadataUri)
   if (cliDir && existsSync(cliDir)) {
-    const buildWrapArgs = (tokenSymbol: string): string[] => {
+    const buildWrapArgs = (tokenSymbol: string, includeMetadataUri: boolean): string[] => {
       const args = [
         'sol',
         'bridge',
@@ -1012,6 +1063,9 @@ async function tryProvisionDynamicRoute(params: {
         '--payer-kp',
         payerKp,
       ]
+      if (includeMetadataUri && tokenMetadataUri) {
+        args.push('--metadata-uri', tokenMetadataUri)
+      }
       if (payForRelay) args.push('--pay-for-relay')
       return args
     }
@@ -1030,10 +1084,38 @@ async function tryProvisionDynamicRoute(params: {
           tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
           tokenNameSource,
           tokenSymbolSource,
+          tokenMetadataUri: includeMetadataUriByDefault ? tokenMetadataUri : null,
           payForRelay,
         })
         try {
-          const { output: combined, runner } = await runWrapToken(cliDir, cliBin, buildWrapArgs(tokenSymbol))
+          const metadataAttempts = includeMetadataUriByDefault ? [true, false] : [false]
+          let combined: string | null = null
+          let runner: string | null = null
+          for (let metadataIdx = 0; metadataIdx < metadataAttempts.length; metadataIdx += 1) {
+            const includeMetadataUri = metadataAttempts[metadataIdx]
+            try {
+              const result = await runWrapToken(cliDir, cliBin, buildWrapArgs(tokenSymbol, includeMetadataUri))
+              combined = result.output
+              runner = result.runner
+              break
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error)
+              const canRetryWithoutMetadata =
+                includeMetadataUriByDefault &&
+                includeMetadataUri &&
+                isLikelyUnsupportedMetadataUriFlagError(message)
+              if (!canRetryWithoutMetadata) throw error
+              logger.warn('[deploy/registerSolanaBridgeToken] Local CLI metadata-uri flag unsupported; retrying without metadata-uri', {
+                bridgeToken,
+                tokenSymbol,
+                metadataUriFlag: '--metadata-uri',
+                error: message,
+              })
+            }
+          }
+          if (!combined || !runner) {
+            throw new Error('Dynamic route provisioning did not return wrap-token output.')
+          }
           provisionRunner = runner
           const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
           if (!mintPubkey) {
@@ -1283,6 +1365,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // "AKITA" vs "■AKITA"), avoids ConstraintSeeds issues, and is the primary
   // tradeable brand token that Solana users actually want to hold.
   const resolvedBridgeToken: Address = bridgeToken
+  const explicitTokenMetadataUriRaw =
+    typeof body?.tokenMetadataUri === 'string' ? body.tokenMetadataUri.trim() : ''
+  const explicitTokenMetadataUri = explicitTokenMetadataUriRaw
+    ? normalizeWrapTokenMetadataUri(explicitTokenMetadataUriRaw)
+    : null
+  if (explicitTokenMetadataUriRaw && !explicitTokenMetadataUri) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid tokenMetadataUri. Expected http(s)://, ipfs://, or ar:// URL.',
+    } satisfies ApiEnvelope<never>)
+  }
+  const derivedTokenMetadataUri = resolveShareTokenMetadataUrls({
+    address: resolvedBridgeToken,
+    chainId: base.id,
+    apiHost: process.env.API_HOST?.trim().replace(/\/+$/, '') || 'api.4626.fun',
+    appHost: process.env.APP_HOST?.trim().replace(/\/+$/, ''),
+  }).metadataUrl
+  const tokenMetadataUri = explicitTokenMetadataUri ?? derivedTokenMetadataUri
   const expectedSolanaAmountBase = parseBigIntLike(body?.expectedSolanaAmount)
   const requestedShareDecimals = parseDecimals(body?.shareDecimals)
 
@@ -1592,6 +1692,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           bridgeToken,
           solanaDecimals,
           publicClient,
+          tokenMetadataUri,
         })
         if (!dynamicMint) return false
         solanaMint = dynamicMint.mintBytes32

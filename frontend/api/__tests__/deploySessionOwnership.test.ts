@@ -12,8 +12,6 @@ const {
   ensureDeploySessionsSchemaMock,
   insertDeploySessionMock,
   getOrCreateCreatorAgentWalletMock,
-  generatePrivateKeyMock,
-  privateKeyToAccountMock,
   resolveCoinPartiesMock,
   resolveCoinPartiesAndOwnerMock,
   extractCharmCreateVaultPoolMock,
@@ -30,11 +28,6 @@ const {
   getOrCreateCreatorAgentWalletMock: vi.fn(async () => ({
     walletId: 'agent_1',
     address: '0x00000000000000000000000000000000000000f1',
-  })),
-  generatePrivateKeyMock: vi.fn(() => ('0x' + '11'.repeat(32)) as `0x${string}`),
-  privateKeyToAccountMock: vi.fn(() => ({
-    address: '0x00000000000000000000000000000000000000aa',
-    privateKey: ('0x' + '11'.repeat(32)) as `0x${string}`,
   })),
   resolveCoinPartiesMock: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
   resolveCoinPartiesAndOwnerMock: vi.fn(async () => ({
@@ -100,11 +93,6 @@ vi.mock('../../server/_lib/charmVaults.js', () => ({
   isCharmPoolIndexed: isCharmPoolIndexedMock,
   charmPoolNotIndexedError: (pool: string) =>
     `Charm pool ${pool} is not currently indexed by Charm's public vault data source. Deploying a vault against this pool can succeed on-chain but remain invisible on alpha.charm.fi.`,
-}))
-
-vi.mock('viem/accounts', () => ({
-  generatePrivateKey: generatePrivateKeyMock,
-  privateKeyToAccount: privateKeyToAccountMock,
 }))
 
 vi.mock('viem', async (importOriginal) => {
@@ -608,7 +596,7 @@ describe('deploy session ownership guardrails', () => {
     expect(String(res.body?.error ?? '')).toContain('Checked addresses:')
   })
 
-  it('falls back to local session owner key when agent wallet id is missing', async () => {
+  it('returns 503 when agent wallet id is missing', async () => {
     getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
       walletId: '',
       address: '0x00000000000000000000000000000000000000f1',
@@ -619,15 +607,11 @@ describe('deploy session ownership guardrails', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(200)
-    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
-    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
-    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
-    expect(insertArgs.sessionSignerPrivateKey).toBe('0x' + '11'.repeat(32))
-    expect(insertArgs.payload?.deploySignerWalletId).toBeUndefined()
-    expect(insertArgs.payload?.persistSessionOwner).toBe(false)
+    expect(res.statusCode).toBe(503)
+    expect(String(res.body?.error ?? '')).toContain('Managed deploy signer wallet is unavailable')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
-  it('falls back to local session owner key when agent wallet provisioning fails', async () => {
+  it('returns 503 when agent wallet provisioning fails', async () => {
     getOrCreateCreatorAgentWalletMock.mockRejectedValueOnce(new Error('PRIVY_APP_ID missing'))
     getDbMock.mockResolvedValue(makeCanonicalDb())
 
@@ -635,14 +619,9 @@ describe('deploy session ownership guardrails', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(200)
-    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
-    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
-    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
-    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
-    expect(insertArgs.sessionSignerPrivateKey).toBe('0x' + '11'.repeat(32))
-    expect(insertArgs.payload?.deploySignerWalletId).toBeUndefined()
-    expect(insertArgs.payload?.persistSessionOwner).toBe(false)
+    expect(res.statusCode).toBe(503)
+    expect(String(res.body?.error ?? '')).toContain('Managed deploy signer wallet is unavailable')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
 
   it('returns 503 on Vercel when direct CDP endpoint env is missing', async () => {
@@ -667,15 +646,13 @@ describe('deploy session ownership guardrails', () => {
     else process.env.CDP_PAYMASTER_URL = prevCdp
   })
 
-  it('returns 503 on Vercel when deploy session signing secrets are missing', async () => {
+  it('returns 503 on Vercel when deploy session token signing secret is missing', async () => {
     const prevVercel = process.env.VERCEL
     const prevCdp = process.env.CDP_PAYMASTER_URL
-    const prevDeploySecret = process.env.DEPLOY_SESSION_SECRET
     const prevHmacSecret = process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET
     try {
       process.env.VERCEL = '1'
       process.env.CDP_PAYMASTER_URL = 'https://cdp.example.test'
-      delete process.env.DEPLOY_SESSION_SECRET
       delete process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET
 
       vi.stubGlobal(
@@ -694,7 +671,6 @@ describe('deploy session ownership guardrails', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(503)
-      expect(String(res.body?.error || '')).toContain('DEPLOY_SESSION_SECRET')
       expect(String(res.body?.error || '')).toContain('DEPLOY_SESSION_TOKEN_HMAC_SECRET')
       expect(insertDeploySessionMock).not.toHaveBeenCalled()
     } finally {
@@ -703,8 +679,6 @@ describe('deploy session ownership guardrails', () => {
       else process.env.VERCEL = prevVercel
       if (prevCdp == null) delete process.env.CDP_PAYMASTER_URL
       else process.env.CDP_PAYMASTER_URL = prevCdp
-      if (prevDeploySecret == null) delete process.env.DEPLOY_SESSION_SECRET
-      else process.env.DEPLOY_SESSION_SECRET = prevDeploySecret
       if (prevHmacSecret == null) delete process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET
       else process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET = prevHmacSecret
     }

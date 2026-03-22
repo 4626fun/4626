@@ -28,7 +28,7 @@ describe('v1 spec endpoint', () => {
     mocks.getCanonicalOrigin.mockReturnValue('https://api.4626.fun')
   })
 
-  it('includes token metadata, image, logo aliases, and token list routes', async () => {
+  it('includes token metadata, image, logo aliases, token list routes, and the paid ERC-8004 review route', async () => {
     const mod = await import('../_handlers/v1/_spec.ts')
     const handler = mod.default
 
@@ -43,5 +43,6 @@ describe('v1 spec endpoint', () => {
     expect(res.body?.paths?.['/v1/token/{address}/logo.png']).toBeTruthy()
     expect(res.body?.paths?.['/v1/token/{address}/logo.svg']).toBeTruthy()
     expect(res.body?.paths?.['/v1/token/{address}/tokenlist']).toBeTruthy()
+    expect(res.body?.paths?.['/v1/agents/feedback/review']).toBeTruthy()
   })
 })

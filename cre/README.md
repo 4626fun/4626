@@ -208,6 +208,17 @@ BADGE_TARGET=meteora npm run solana:prepare-token-badge
 BADGE_TARGET=orca npm run solana:prepare-token-badge
 ```
 
+The command prints two artifacts:
+- token metadata JSON payload (mint/name/symbol/uri/image/extensions)
+- a ready-to-submit token-list entry payload (`chainId`, `address`, `symbol`, `name`, `decimals`, `logoURI`, `extensions.metadata`)
+
+For reliable wallet/aggregator icon display (Phantom/Backpack/Jupiter/Meteora),
+complete all of the following:
+1. host a stable metadata URI (`TOKEN_METADATA_URI` or `TOKEN_URI`)
+2. host a stable HTTPS image URL (`TOKEN_IMAGE` or `TOKEN_IMAGE_URL`)
+3. submit the generated token-list entry to the target ecosystem indexers
+4. avoid changing metadata/image URLs after launch
+
 ## Solana Deployment Scripts
 
 Program + mint setup, PDA initialization, and supply bridging:

@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 
 import { getDb, isDbConfigured } from './postgres.js'
 
@@ -32,7 +32,6 @@ export type DeploySessionRecord = {
   smartWallet: `0x${string}`
   sessionSigner: `0x${string}`
   deployToken: string
-  sessionSignerKeyEnc: string | null
   payload: any
   step: DeploySessionStep
   expiresAt: string
@@ -84,9 +83,8 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
       // ignore (already dropped or insufficient permissions)
     }
 
-    // Schema evolution (non-breaking):
-    // - New Privy agent-wallet sessions do not store raw private keys.
-    // - Older deploy sessions may still have `session_owner_key_enc` set.
+    // Session-signer key columns are retained for schema compatibility,
+    // but managed-signer sessions no longer write encrypted private keys.
     try {
       await db.sql`ALTER TABLE deploys ALTER COLUMN session_owner_key_enc DROP NOT NULL;`
     } catch {
@@ -105,13 +103,8 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
     try {
       await db.sql`
         UPDATE deploys
-        SET
-          session_signer = COALESCE(NULLIF(session_signer, ''), session_owner),
-          session_signer_key_enc = COALESCE(session_signer_key_enc, session_owner_key_enc)
-        WHERE
-          session_signer IS NULL
-          OR session_signer = ''
-          OR session_signer_key_enc IS NULL;
+        SET session_signer = COALESCE(NULLIF(session_signer, ''), session_owner)
+        WHERE session_signer IS NULL OR session_signer = '';
       `
     } catch {
       // ignore when migration columns are unavailable
@@ -121,40 +114,6 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
     deploySessionsSchemaEnsured = false
     throw err
   }
-}
-
-let _deploySecretKey: Buffer | null = null
-function requireDeploySecret(): Buffer {
-  if (_deploySecretKey) return _deploySecretKey
-  const raw = (process.env.DEPLOY_SESSION_SECRET ?? '').trim()
-  if (!raw) throw new Error('DEPLOY_SESSION_SECRET missing')
-  // Derive a fixed 32-byte key from the secret.
-  _deploySecretKey = createHash('sha256').update(raw, 'utf8').digest()
-  return _deploySecretKey
-}
-
-function encryptWithSecret(plaintext: string): string {
-  const key = requireDeploySecret()
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
-  const ct = Buffer.concat([cipher.update(Buffer.from(plaintext, 'utf8')), cipher.final()])
-  const tag = cipher.getAuthTag()
-  // v1:<iv>:<tag>:<ct> (base64url)
-  const b64u = (b: Buffer) => b.toString('base64url')
-  return `v1:${b64u(iv)}:${b64u(tag)}:${b64u(ct)}`
-}
-
-export function decryptWithSecret(enc: string): string {
-  const key = requireDeploySecret()
-  const parts = String(enc).split(':')
-  if (parts.length !== 4 || parts[0] !== 'v1') throw new Error('invalid_encryption_format')
-  const iv = Buffer.from(parts[1], 'base64url')
-  const tag = Buffer.from(parts[2], 'base64url')
-  const ct = Buffer.from(parts[3], 'base64url')
-  const decipher = createDecipheriv('aes-256-gcm', key, iv)
-  decipher.setAuthTag(tag)
-  const pt = Buffer.concat([decipher.update(ct), decipher.final()])
-  return pt.toString('utf8')
 }
 
 export function randomId(prefix = 'ds_'): string {
@@ -182,7 +141,6 @@ export async function insertDeploySession(params: {
   smartWallet: string
   sessionSigner: string
   deployToken: string
-  sessionSignerPrivateKey?: string | null
   payload: any
   expiresAt: Date
 }): Promise<DeploySessionRecord> {
@@ -190,10 +148,6 @@ export async function insertDeploySession(params: {
   if (!db) throw new Error('db_not_configured')
   await ensureDeploySessionsSchema()
 
-  const sessionSignerKeyEnc =
-    typeof params.sessionSignerPrivateKey === 'string' && params.sessionSignerPrivateKey.trim().length > 0
-      ? encryptWithSecret(params.sessionSignerPrivateKey)
-      : null
   const payloadJson = params.payload ?? {}
 
   await db.sql`
@@ -215,7 +169,7 @@ export async function insertDeploySession(params: {
       ${String(params.smartWallet).toLowerCase()},
       ${String(params.sessionSigner).toLowerCase()},
       ${params.deployToken},
-      ${sessionSignerKeyEnc},
+      ${null},
       ${payloadJson},
       ${'created'},
       ${params.expiresAt.toISOString()}
@@ -227,7 +181,7 @@ export async function insertDeploySession(params: {
       UPDATE deploys
       SET
         session_signer = ${String(params.sessionSigner).toLowerCase()},
-        session_signer_key_enc = ${sessionSignerKeyEnc}
+        session_signer_key_enc = ${null}
       WHERE id = ${params.id};
     `
   } catch {
@@ -419,10 +373,6 @@ function mapRow(r: any): DeploySessionRecord {
   const sessionSigner =
     (typeof r.session_signer === 'string' && r.session_signer.trim() ? r.session_signer : r.session_owner) ??
     r.session_owner
-  const sessionSignerKeyEnc =
-    (typeof r.session_signer_key_enc === 'string' && r.session_signer_key_enc.trim()
-      ? r.session_signer_key_enc
-      : r.session_owner_key_enc) ?? null
   return {
     id: String(r.id),
     tokenHash: String(r.token_hash),
@@ -430,7 +380,6 @@ function mapRow(r: any): DeploySessionRecord {
     smartWallet: String(r.smart_wallet).toLowerCase() as `0x${string}`,
     sessionSigner: String(sessionSigner).toLowerCase() as `0x${string}`,
     deployToken: String(r.deploy_token),
-    sessionSignerKeyEnc: sessionSignerKeyEnc ? String(sessionSignerKeyEnc) : null,
     payload: r.payload,
     step: String(r.step) as DeploySessionStep,
     expiresAt: new Date(r.expires_at).toISOString(),

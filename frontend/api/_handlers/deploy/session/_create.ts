@@ -13,7 +13,6 @@ import {
   type Address,
   type Hex,
 } from 'viem'
-import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { base } from 'viem/chains'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
@@ -462,9 +461,6 @@ function checkDeploySessionSecretsReady(origin: string): { ok: boolean; error?: 
   if (!isVercelEnv || !isVercelDeploymentOrigin(origin)) return { ok: true }
 
   const missing: string[] = []
-  if (!(process.env.DEPLOY_SESSION_SECRET ?? '').trim()) {
-    missing.push('DEPLOY_SESSION_SECRET')
-  }
   if (!(process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET ?? '').trim()) {
     missing.push('DEPLOY_SESSION_TOKEN_HMAC_SECRET')
   }
@@ -1168,31 +1164,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenHash = hashDeployToken(deployToken)
     const id = randomId()
 
-    // Preferred: per-creator Privy-managed deploy signer wallet (Keepr can reuse it for ops).
-    // Fallback: ephemeral local session signer key when Privy wallet provisioning is unavailable.
-    let sessionSignerPrivateKey: Hex | null = null
-    let deploySignerWalletId: string | null = null
-    let deploySignerAddress: Address | null = null
-    let sessionSigner: Address
-    try {
-      const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
-      const walletId = String(agentWallet.walletId || '').trim()
-      if (!walletId) throw new Error('agent_wallet_id_missing')
-      sessionSigner = getAddress(agentWallet.address)
-      deploySignerWalletId = walletId
-      deploySignerAddress = getAddress(agentWallet.address)
-    } catch (e: any) {
-      const fallback = privateKeyToAccount(generatePrivateKey())
-      sessionSignerPrivateKey = (fallback as any).privateKey as Hex
-      sessionSigner = getAddress(fallback.address)
-      console.warn('deploy/session/create: falling back to ephemeral session signer key', {
-        reason: e?.message ? String(e.message) : 'agent_wallet_create_failed',
-      })
+    // Deploy sessions require the per-creator managed signer wallet.
+    const agentWallet = await getOrCreateCreatorAgentWallet({
+      creatorToken: creatorToken.toLowerCase() as `0x${string}`,
+    }).catch((e: any) => {
+      const reason = e?.message ? String(e.message) : 'agent_wallet_create_failed'
+      throw new DeploySessionRequestError(
+        503,
+        `Managed deploy signer wallet is unavailable (${reason}). Please retry shortly.`,
+      )
+    })
+    const deploySignerWalletId = String(agentWallet.walletId || '').trim()
+    if (!deploySignerWalletId) {
+      throw new DeploySessionRequestError(
+        503,
+        'Managed deploy signer wallet is unavailable (agent_wallet_id_missing). Please retry shortly.',
+      )
     }
+    const sessionSigner = getAddress(agentWallet.address)
+    const deploySignerAddress = getAddress(agentWallet.address)
 
     const now = Date.now()
     const expiresAt = new Date(now + readDeploySessionTtlMs())
-    const persistSessionOwner = Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner()
+    const persistSessionOwner = shouldPersistManagedSessionOwner()
 
     const cleanupGrantCall = {
       to: smartWallet,
@@ -1273,7 +1267,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       smartWallet,
       sessionSigner,
       deployToken,
-      sessionSignerPrivateKey,
       payload: {
         creatorToken,
         ownerAddress,
@@ -1287,8 +1280,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               authAgentChainId: auth.chainId,
             }
           : null),
-        ...(deploySignerWalletId ? { deploySignerWalletId } : null),
-        ...(deploySignerAddress ? { deploySignerAddress } : null),
+        deploySignerWalletId,
+        deploySignerAddress,
         persistSessionOwner,
         expectedStages: {
           hasPhase1Core: phase1Calls.length > 0,
@@ -1314,7 +1307,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const out: CreateDeploySessionResponse = {
       sessionId: id,
       sessionSignerAddress: sessionSigner,
-      ...(deploySignerWalletId ? { sessionSignerWalletId: deploySignerWalletId } : null),
+      sessionSignerWalletId: deploySignerWalletId,
       expiresAt: expiresAt.toISOString(),
     }
     return res.status(200).json({ success: true, data: out } satisfies ApiEnvelope<CreateDeploySessionResponse>)

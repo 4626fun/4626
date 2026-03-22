@@ -48,7 +48,6 @@ jobs:
       VITE_BASE_BUILDER_CODES: bc_ci_guardrail
       BUILDER_CODES_ENFORCE_PROD: '1'
       AUTH_SESSION_SECRET: test-auth-session-secret-123456
-      DEPLOY_SESSION_SECRET: test-deploy-session-secret-123456
       DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
       MARKETING_ORIGIN: https://4626.fun
       APP_ORIGIN: https://app.4626.fun

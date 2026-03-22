@@ -12,6 +12,9 @@ Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endp
 For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`
 (or rely on automatic `/meteora-ixs` derivation from the dynamic-route URL).
 
+This service provisions bridge routes and Meteora ix payloads; it does **not**
+by itself guarantee wallet/aggregator icon display for the resulting mint.
+
 Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
 
 ## Endpoints
@@ -40,6 +43,7 @@ Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
   "tokenName": "CreatorShare-1234",
   "tokenSymbol": "CS1234",
   "tokenSymbolFallback": "CS1234",
+  "tokenMetadataUri": "https://api.4626.fun/v1/token/0x.../metadata?chain=8453",
   "scalerExponent": 9,
   "payerKp": "config",
   "payForRelay": true
@@ -60,6 +64,12 @@ Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
   }
 }
 ```
+
+`/provision` may also return additional fields in `data`, including:
+- `runner` (which CLI runner executed)
+- `tokenSymbol` (resolved symbol used for wrap-token)
+- `mintCompatibilityHints` (mint-compatibility diagnostics)
+- `pool` / `alphaVault` (when `SOLANA_AUTO_POOL=1`)
 
 ## Request contract (`POST /meteora-ixs`)
 
@@ -209,8 +219,10 @@ In the app server env (Vercel or otherwise):
 
 - `SOLANA_DYNAMIC_ROUTE_ENABLED=1`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL=https://<host>/provision`
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS=https://<host-a>/provision,https://<host-b>/provision` (optional failover list; tried in order)
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>`
 - `METEORA_IX_PROVISIONER_URL=https://<host>/meteora-ixs` (optional; defaults from dynamic route URL)
+- `METEORA_IX_PROVISIONER_URLS=https://<host-a>/meteora-ixs,https://<host-b>/meteora-ixs` (optional failover list; tried in order)
 - `METEORA_IX_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>` (optional)
 - `DEPLOY_SOLANA_REGISTRATION_ORIGINS=https://4626.fun,https://<host-origin>` (optional for mixed Vercel + VM)
 - `DEPLOY_SOLANA_REGISTRATION_SECRET=<shared-internal-secret>` (required machine-to-machine auth for app -> /api/deploy/registerSolanaBridgeToken)
@@ -218,12 +230,14 @@ In the app server env (Vercel or otherwise):
 Optional but recommended:
 
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL=https://<host>/healthz` (for your external monitoring)
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URLS=https://<host-a>/healthz,https://<host-b>/healthz` (optional health URL list matching failover order)
 - `SOLANA_DEFAULT_BRIDGE_TOKEN=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
 - `SOLANA_STRICT_SOL_PAIR=1` (enforce SOL-only quote mint; blocks helper-token pool paths)
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
 - `SOLANA_BRIDGE_WRAP_SYMBOL_MODE=auto` (`auto` | `unicode` | `ascii`)
+- `SOLANA_BRIDGE_WRAP_METADATA_URI_ENABLED=0` (set to `1` only if your bridge CLI supports `--metadata-uri`)
 - `PROVISIONER_MIN_PAYER_SOL=0.05` (health guardrail; `/healthz` reports payer readiness)
 - Provisioner requests are capped at 64 KB per request body
 - `PROVISIONER_HEALTH_DEBUG=0` (set to `1` only for temporary diagnostics)
@@ -236,6 +250,20 @@ In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for 
 
 - `PROVISIONER_WRAP_RETRY_ATTEMPTS=3`
 - `PROVISIONER_WRAP_RETRY_DELAY_MS=1200`
+
+When metadata URI mode is enabled and your CLI rejects `--metadata-uri`, the
+provisioner automatically retries `wrap-token` without that flag for backward
+compatibility.
+
+## Wallet image/display caveat
+
+Creating the route (`wrap-token` + scalar > 0) ensures bridge functionality, but
+wallet/aggregator icon visibility (Phantom/Backpack/Jupiter/Meteora) typically
+also depends on metadata indexing and/or token-list ingestion.
+
+For reliable display, run a token badge/metadata workflow after provisioning
+(for example `cre`'s `solana:prepare-token-badge`) and submit to the relevant
+ecosystem list/indexer as part of launch ops.
 
 ## Security notes
 

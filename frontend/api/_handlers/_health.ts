@@ -19,7 +19,6 @@ type HealthResponse = {
     error: string | null
   }
   deploySessions: {
-    secretConfigured: boolean
     tokenHmacConfigured: boolean
     ok: boolean
     error: string | null
@@ -183,9 +182,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? await checkDb(db)
     : { ok: false, latencyMs: null, error: getDbInitError() || 'Database not configured' }
 
-  const deploySessionSecretOk = hasMinSecret(process.env.DEPLOY_SESSION_SECRET, 1)
   const deploySessionTokenHmacOk = hasMinSecret(process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET, 1)
-  const deploySessionsOk = Boolean(db) && dbStatus.ok && deploySessionSecretOk && deploySessionTokenHmacOk
+  const deploySessionsOk = Boolean(db) && dbStatus.ok && deploySessionTokenHmacOk
   const deploySessionsError = deploySessionsOk
     ? null
     : !dbConfigured
@@ -194,9 +192,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? (getDbInitError() || 'Database unavailable')
         : !dbStatus.ok
           ? (dbStatus.error || 'Database check failed')
-          : !deploySessionSecretOk
-            ? 'DEPLOY_SESSION_SECRET is not configured'
-            : !deploySessionTokenHmacOk
+          : !deploySessionTokenHmacOk
               ? 'DEPLOY_SESSION_TOKEN_HMAC_SECRET is not configured'
               : 'Deploy sessions unavailable'
 
@@ -236,7 +232,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: dbStatus.error,
     },
     deploySessions: {
-      secretConfigured: deploySessionSecretOk,
       tokenHmacConfigured: deploySessionTokenHmacOk,
       ok: deploySessionsOk,
       error: deploySessionsError,
