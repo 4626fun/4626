@@ -5,6 +5,8 @@ import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { Alert } from '@/components/ui/Alert'
+import { runWaitlistPrivyLogout } from '@/components/waitlist/waitlistAuthState'
+import { buildWaitlistEmailLoginOptions } from '@/components/waitlist/waitlistLoginOptions'
 import { apiFetch } from '@/lib/apiBase'
 import {
   clearStoredTelegramMiniAppLinkContext,
@@ -47,6 +49,14 @@ const TELEGRAM_EMAIL_PENDING_RETRY_MS = 3_000
 type PrivyEmailState = {
   hasAnyEmailAccount: boolean
   hasVerifiedEmail: boolean
+}
+
+type TelegramLinkPrivyAuthSnapshot = {
+  ready: boolean
+  authenticated: boolean
+  accessToken: string | null
+  hasVerifiedEmail: boolean
+  serverEmailVerified: boolean
 }
 
 type TelegramLinkEmailVerificationResult =
@@ -241,7 +251,8 @@ export async function pollTelegramLinkEmailVerification(params: {
 }
 
 export async function waitForTelegramLinkPrivyAuth(params: {
-  readSnapshot: () => { ready: boolean; authenticated: boolean }
+  readSnapshot: () => TelegramLinkPrivyAuthSnapshot | Promise<TelegramLinkPrivyAuthSnapshot>
+  requireFreshAccessToken?: string | null
   timeoutMs?: number
   intervalMs?: number
   sleepImpl?: (ms: number) => Promise<void>
@@ -250,15 +261,27 @@ export async function waitForTelegramLinkPrivyAuth(params: {
   const intervalMs = Math.max(1, Math.floor(params.intervalMs ?? 150))
   const sleepImpl = params.sleepImpl ?? sleep
   const startedAt = Date.now()
+  const requiredFreshAccessToken = typeof params.requireFreshAccessToken === 'string' ? params.requireFreshAccessToken.trim() : ''
+
+  const isSettled = (snapshot: TelegramLinkPrivyAuthSnapshot): boolean => {
+    const accessToken = typeof snapshot.accessToken === 'string' ? snapshot.accessToken.trim() : ''
+    const hasFreshAccessToken = accessToken.length > 0 && (!requiredFreshAccessToken || accessToken !== requiredFreshAccessToken)
+    return (
+      snapshot.ready &&
+      snapshot.authenticated &&
+      hasFreshAccessToken &&
+      (snapshot.hasVerifiedEmail || snapshot.serverEmailVerified)
+    )
+  }
 
   while (Date.now() - startedAt <= timeoutMs) {
-    const snapshot = params.readSnapshot()
-    if (snapshot.ready && snapshot.authenticated) return true
+    const snapshot = await params.readSnapshot()
+    if (isSettled(snapshot)) return true
     await sleepImpl(intervalMs)
   }
 
-  const snapshot = params.readSnapshot()
-  return snapshot.ready && snapshot.authenticated
+  const snapshot = await params.readSnapshot()
+  return isSettled(snapshot)
 }
 
 export function formatTelegramSessionError(error: string, statusCode: number): string {
@@ -799,18 +822,15 @@ export function TelegramLink() {
     setLinkMessage(null)
     setEmailState('unknown')
     setEmailMessage(null)
-    if (typeof logout === 'function') {
-      try {
-        await logout()
-      } catch {
-        // ignore
-      }
-    }
+    await runWaitlistPrivyLogout({ logout })
   }, [logout])
 
   const onSignIn = useCallback(async () => {
     const startedAuthenticated = privyAuthenticated
     let forcedLogoutForEmailRetry = false
+    const priorAccessToken = startedAuthenticated
+      ? ((await getAccessToken().catch(() => null))?.trim() ?? '')
+      : ''
     setLinkState('authenticating')
     setLinkMessage(null)
     setEmailState(startedAuthenticated ? 'verifying' : 'checking')
@@ -826,14 +846,10 @@ export function TelegramLink() {
         }
         const launchEmailLogin = async (params?: { forceFreshSession?: boolean }) => {
           if (params?.forceFreshSession && typeof logout === 'function') {
-            try {
-              await logout()
-              forcedLogoutForEmailRetry = true
-            } catch {
-              // ignore
-            }
+            await runWaitlistPrivyLogout({ logout })
+            forcedLogoutForEmailRetry = true
           }
-          await login({ loginMethods: ['email'] } as any)
+          await login(buildWaitlistEmailLoginOptions() as any)
         }
         if (emailState.hasAnyEmailAccount || typeof logout === 'function') {
           await launchEmailLogin({ forceFreshSession: true })
@@ -854,18 +870,40 @@ export function TelegramLink() {
           }
         }
       } else {
-        await login({ loginMethods: ['email'] } as any)
+        await login(buildWaitlistEmailLoginOptions() as any)
       }
       if (!startedAuthenticated || forcedLogoutForEmailRetry) {
         const authSettled = await waitForTelegramLinkPrivyAuth({
-          readSnapshot: () => privyStatusRef.current,
+          requireFreshAccessToken: forcedLogoutForEmailRetry ? priorAccessToken : null,
+          readSnapshot: async () => {
+            const accessToken = ((await getAccessToken().catch(() => null))?.trim() ?? '') || null
+            const nextEmailState = getPrivyEmailState((privy as any)?.user)
+            let serverEmailVerified = false
+            if (accessToken) {
+              const serverState = await fetchTelegramLinkEmailVerificationState({
+                getAccessToken: async () => accessToken,
+              }).catch<TelegramLinkEmailVerificationResult>(() => ({
+                status: 'needs_verification',
+              }))
+              serverEmailVerified = serverState.status === 'verified'
+            }
+            return {
+              ready: privyStatusRef.current.ready,
+              authenticated: privyStatusRef.current.authenticated,
+              accessToken,
+              hasVerifiedEmail: nextEmailState.hasVerifiedEmail,
+              serverEmailVerified,
+            }
+          },
         })
         if (!authSettled) {
           linkAttemptRef.current = ''
           setLinkState('idle')
           setLinkMessage(null)
-          setEmailState('unknown')
-          setEmailMessage('Finishing 4626 sign-in. Telegram linking will resume automatically once your session is ready.')
+          const verification = await refreshEmailVerificationState({ poll: true })
+          if (verification.status === 'verified') {
+            linkAttemptRef.current = ''
+          }
           return
         }
       }

@@ -135,6 +135,13 @@ const PREMIUM_ALIGN_MAX_BIAS_RATIO =
   clamp(Number(process.env.TOKEN_PREMIUM_ALIGN_MAX_BIAS_RATIO ?? 0.09), 0, 0.32)
 const PREMIUM_BREAKOUT_MASK_MIN_COVERAGE =
   clamp(Number(process.env.TOKEN_PREMIUM_BREAKOUT_MASK_MIN_COVERAGE ?? 0.004), 0, 0.35)
+const PREMIUM_BREAKOUT_MASK_MAX_COVERAGE =
+  clamp(Number(process.env.TOKEN_PREMIUM_BREAKOUT_MASK_MAX_COVERAGE ?? 0.58), PREMIUM_BREAKOUT_MASK_MIN_COVERAGE, 1)
+
+function isSegmentationBreakoutCoverageAcceptable(coverage: number): boolean {
+  if (!Number.isFinite(coverage)) return false
+  return coverage >= PREMIUM_BREAKOUT_MASK_MIN_COVERAGE && coverage <= PREMIUM_BREAKOUT_MASK_MAX_COVERAGE
+}
 
 function resolveSegmentationModel(
   rawValue: string | undefined,
@@ -384,7 +391,8 @@ async function logBreakoutRuntimeBannerOnce(): Promise<void> {
         illustration: PREMIUM_SEGMENTATION_MODEL_ILLUSTRATION,
         pixel: PREMIUM_SEGMENTATION_MODEL_PIXEL,
       },
-      breakoutCoverageThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+      breakoutCoverageMinThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+      breakoutCoverageMaxThreshold: PREMIUM_BREAKOUT_MASK_MAX_COVERAGE,
       alignTargetTopRatio: PREMIUM_ALIGN_TARGET_TOP_RATIO,
       alignMaxBiasRatio: PREMIUM_ALIGN_MAX_BIAS_RATIO,
       fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
@@ -2439,10 +2447,12 @@ async function createTopBreakoutSubjectMask(params: {
   layout: PremiumLayout
   sourceClass?: SourceClass
   forceAlphaMask?: boolean
+  strictContourGates?: boolean
 }): Promise<Buffer | null> {
   const { sourceCanvas, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
   const forceAlphaMask = Boolean(params.forceAlphaMask)
+  const strictContourGates = Boolean(params.strictContourGates)
   const { data, info } = await sharp(sourceCanvas)
     .ensureAlpha()
     .raw()
@@ -2554,7 +2564,19 @@ async function createTopBreakoutSubjectMask(params: {
     }
   } else {
     // Explicit cutouts (prepared hero/rembg) should bypass conservative contour gates.
-    if (presentRatio < 0.002 || presentRatio > 0.92 || heightRatio < 0.06) {
+    if (
+      presentRatio < 0.002 ||
+      presentRatio > 0.92 ||
+      heightRatio < 0.06 ||
+      (strictContourGates && (
+        widthRatio > 0.95 ||
+        flatnessRatio > 4.8 ||
+        topWeightedRatio < 0.12 ||
+        centroidNorm < 0.12 ||
+        centroidNorm > 0.88 ||
+        centroidYNorm > 0.74
+      ))
+    ) {
       return null
     }
   }
@@ -2694,6 +2716,7 @@ export async function renderBreakoutLayer(params: {
   layout: PremiumLayout
   sourceImage?: Uint8Array
   subjectMaskSourceImage?: Uint8Array
+  subjectMaskKind?: 'heroCutout' | 'sourceAlpha' | 'rembgCutout'
   allowFallbackBand?: boolean
   opacity?: number
   scale?: number
@@ -2771,6 +2794,7 @@ export async function renderBreakoutLayer(params: {
     layout,
     sourceClass: params.sourceClass,
     forceAlphaMask: !!subjectRefCanvas,
+    strictContourGates: params.subjectMaskKind === 'rembgCutout',
   })
   const aboveFrameMask = await createBreakoutAboveFrameMask({
     size,
@@ -3161,10 +3185,12 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           sourceClass: analysis.sourceClass,
           maskRgbaPng: rembgSegmentation.maskPngRgba,
         })
-        rembgCoveragePass = rembgCoverage >= PREMIUM_BREAKOUT_MASK_MIN_COVERAGE
+        rembgCoveragePass = isSegmentationBreakoutCoverageAcceptable(rembgCoverage)
         segmentationCoverageForLog = rembgCoverage
-        if (!rembgCoveragePass) {
+        if (!rembgCoveragePass && rembgCoverage < PREMIUM_BREAKOUT_MASK_MIN_COVERAGE) {
           segmentationFailureReasonForLog = `segmentation-coverage-below-threshold:${rembgCoverage.toFixed(4)}`
+        } else if (!rembgCoveragePass && rembgCoverage > PREMIUM_BREAKOUT_MASK_MAX_COVERAGE) {
+          segmentationFailureReasonForLog = `segmentation-coverage-above-threshold:${rembgCoverage.toFixed(4)}`
         }
       }
       let subjectMaskSourceImage: Uint8Array | undefined
@@ -3211,6 +3237,9 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
             layout,
             sourceImage: new Uint8Array(normalizedSource),
             subjectMaskSourceImage,
+            subjectMaskKind: breakoutPlanSource === 'heroCutout' || breakoutPlanSource === 'sourceAlpha' || breakoutPlanSource === 'rembgCutout'
+              ? breakoutPlanSource
+              : undefined,
             allowFallbackBand,
             opacity: breakoutOpacity,
             scale: breakoutScale,
@@ -3247,7 +3276,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           segmentationEnabled: PREMIUM_SEGMENTATION_ENABLED,
           segmentationModel: rembgSegmentation?.model ?? null,
           segmentationCoverage: rembgCoverage,
-          segmentationCoverageThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+          segmentationCoverageMinThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+          segmentationCoverageMaxThreshold: PREMIUM_BREAKOUT_MASK_MAX_COVERAGE,
           segmentationCoveragePass: rembgCoveragePass,
           segmentationAlignmentDeltaPx: segmentationAlignmentDeltaForLog,
           segmentationMaskTopY: segmentationMaskTopYForLog,
@@ -3358,7 +3388,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       segmentationModel: segmentationModelForLog,
       segmentationExecutable: segmentationExecutableForLog,
       segmentationCoverage: segmentationCoverageForLog,
-      segmentationCoverageThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+      segmentationCoverageMinThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+      segmentationCoverageMaxThreshold: PREMIUM_BREAKOUT_MASK_MAX_COVERAGE,
       segmentationAlignmentDeltaPx: segmentationAlignmentDeltaForLog,
       segmentationMaskTopY: segmentationMaskTopYForLog,
       segmentationTargetTopY: segmentationTargetTopYForLog,
@@ -3377,6 +3408,7 @@ export const __testables = {
   resolveBreakoutSourceKind,
   resolveSourceAlphaBreakoutAllowed,
   decideBreakoutPlan,
+  isSegmentationBreakoutCoverageAcceptable,
   computeAlignedTopBiasPx,
   measureBreakoutMaskCoverage,
 }

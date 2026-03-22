@@ -399,6 +399,12 @@ describe('premium token icon renderer', () => {
     expect(rembgUnavailablePlan.reason).toBe('rembg-unavailable')
   })
 
+  it('bounds segmentation breakout coverage to prevent full-width strip artifacts', () => {
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0)).toBe(false)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.02)).toBe(true)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.99)).toBe(false)
+  })
+
   it('applies mask-driven top alignment bias for segmentation masks', async () => {
     const layout = __testables.getTokenIconLayout(512, 'hero')
     const lowMask = await createMaskRectangleSource({

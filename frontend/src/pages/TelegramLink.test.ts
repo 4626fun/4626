@@ -486,15 +486,33 @@ describe('TelegramLink helpers', () => {
 
   it('waits for Privy auth to settle before resuming Telegram linking', async () => {
     const snapshots = [
-      { ready: false, authenticated: false },
-      { ready: true, authenticated: false },
-      { ready: true, authenticated: true },
+      {
+        ready: false,
+        authenticated: false,
+        accessToken: null,
+        hasVerifiedEmail: false,
+        serverEmailVerified: false,
+      },
+      {
+        ready: true,
+        authenticated: false,
+        accessToken: null,
+        hasVerifiedEmail: false,
+        serverEmailVerified: false,
+      },
+      {
+        ready: true,
+        authenticated: true,
+        accessToken: 'fresh-token',
+        hasVerifiedEmail: false,
+        serverEmailVerified: true,
+      },
     ]
     let index = 0
 
     await expect(
       waitForTelegramLinkPrivyAuth({
-        readSnapshot: () => snapshots[Math.min(index, snapshots.length - 1)],
+        readSnapshot: () => Promise.resolve(snapshots[Math.min(index, snapshots.length - 1)]),
         intervalMs: 1,
         timeoutMs: 10,
         sleepImpl: async () => {
@@ -509,7 +527,14 @@ describe('TelegramLink helpers', () => {
 
     await expect(
       waitForTelegramLinkPrivyAuth({
-        readSnapshot: () => ({ ready: false, authenticated: false }),
+        readSnapshot: () =>
+          Promise.resolve({
+            ready: false,
+            authenticated: false,
+            accessToken: null,
+            hasVerifiedEmail: false,
+            serverEmailVerified: false,
+          }),
         intervalMs: 1,
         timeoutMs: 2,
         sleepImpl: async () => {
@@ -519,5 +544,37 @@ describe('TelegramLink helpers', () => {
     ).resolves.toBe(false)
 
     expect(iterations).toBeGreaterThan(0)
+  })
+
+  it('requires a fresh access token after forced logout flows', async () => {
+    const snapshots = [
+      {
+        ready: true,
+        authenticated: true,
+        accessToken: 'old-token',
+        hasVerifiedEmail: true,
+        serverEmailVerified: true,
+      },
+      {
+        ready: true,
+        authenticated: true,
+        accessToken: 'fresh-token',
+        hasVerifiedEmail: true,
+        serverEmailVerified: true,
+      },
+    ]
+    let index = 0
+
+    await expect(
+      waitForTelegramLinkPrivyAuth({
+        readSnapshot: () => Promise.resolve(snapshots[Math.min(index, snapshots.length - 1)]),
+        requireFreshAccessToken: 'old-token',
+        intervalMs: 1,
+        timeoutMs: 10,
+        sleepImpl: async () => {
+          index += 1
+        },
+      }),
+    ).resolves.toBe(true)
   })
 })
