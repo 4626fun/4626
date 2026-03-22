@@ -417,7 +417,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 102
+const FRAME_STYLE_V = 103
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -429,13 +429,13 @@ const TOKEN_ICON_STYLE = {
   panelFillTop: '#030608',
   panelFillBottom: '#020405',
   panelScrim: 'rgba(0, 0, 0, 0.08)',
-  glowColor: '#3b82f6',
+  glowColor: '#2F7DFF',
   outerRadiusRatio: 0.22,
   panelInsetRatio: FRAME_INSET_RATIO,
   panelRadiusRatio: FRAME_RADIUS_RATIO,
   frameThicknessRatio: FRAME_STROKE_RATIO,
   vignetteOpacity: 0.0,
-  glowOpacity: 0.78,
+  glowOpacity: 0.82,
 } as const
 
 const DEFAULT_TOKEN_FRAME_OVERLAY_PATH =

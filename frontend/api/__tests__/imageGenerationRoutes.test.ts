@@ -118,16 +118,14 @@ describe('image generation route registration', () => {
     resolveAuthorizedRequestPrincipalMock.mockResolvedValue(null)
   })
 
-  it('registers all image generation routes in the API loader map', async () => {
-    const { getApiHandler } = await import('../_handlers/_routes.ts')
-
-    await expect(getApiHandler('image/projects/create')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler('image/projects/assets/upload')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler('image/projects/generate')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler('image/projects/refine')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler('image/jobs/status')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler('image/projects/get')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler('image/projects/associate-vault')).resolves.toBeTypeOf('function')
+  it('exposes standalone entrypoints for image generation routes', async () => {
+    await expect(import('../image/projects/create.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+    await expect(import('../image/projects/assets/upload.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+    await expect(import('../image/projects/generate.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+    await expect(import('../image/projects/refine.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+    await expect(import('../image/jobs/status.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+    await expect(import('../image/projects/get.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+    await expect(import('../image/projects/associate-vault.ts')).resolves.toMatchObject({ default: expect.any(Function) })
   })
 })
 

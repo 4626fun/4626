@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import standaloneHandler from '../deploy/registerSolanaBridgeToken.ts'
 import handler from '../_handlers/deploy/_registerSolanaBridgeToken.ts'
 import { getApiHandler } from '../_handlers/_routes.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
@@ -90,8 +91,9 @@ vi.mock('viem/accounts', async () => {
 })
 
 describe('deploy registerSolanaBridgeToken handler', () => {
-  it('is exposed only through the canonical API route', async () => {
-    await expect(getApiHandler('deploy/registerSolanaBridgeToken')).resolves.toBeTypeOf('function')
+  it('is exposed through a standalone API route instead of the catch-all bundle', async () => {
+    expect(standaloneHandler).toBeTypeOf('function')
+    await expect(getApiHandler('deploy/registerSolanaBridgeToken')).resolves.toBeNull()
     await expect(getApiHandler('deploy/setupSolanaOvaultMesh')).resolves.toBeNull()
   })
 

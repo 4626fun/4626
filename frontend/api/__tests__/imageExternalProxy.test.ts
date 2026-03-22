@@ -17,9 +17,8 @@ describe('image external proxy route registration', () => {
     lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
   })
 
-  it('registers the image external proxy route', async () => {
-    const { getApiHandler } = await import('../_handlers/_routes.ts')
-    await expect(getApiHandler('image/external')).resolves.toBeTypeOf('function')
+  it('registers the standalone image external proxy route', async () => {
+    await expect(import('../image/external.ts')).resolves.toMatchObject({ default: expect.any(Function) })
   })
 })
 

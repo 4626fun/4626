@@ -223,9 +223,15 @@ function localApiRoutesPlugin(): Plugin {
         '/api/deploy/session/dry-run': () => import('./api/_handlers/deploy/session/_dryRun'),
         '/api/deploy/session/start': () => import('./api/_handlers/deploy/session/_start'),
         '/api/deploy/session/status': () => import('./api/_handlers/deploy/session/_status'),
+        '/api/deploy/solanaInfraStatus': () => import('./api/deploy/solanaInfraStatus'),
+        '/api/deploy/provisionSolanaRoute': () => import('./api/deploy/provisionSolanaRoute'),
+        '/api/deploy/registerSolanaBridgeToken': () => import('./api/deploy/registerSolanaBridgeToken'),
         '/api/wallet/prepare-add-privy-owner': () => import('./api/_handlers/wallet/_prepare-add-privy-owner'),
         '/api/wallet/confirm-owner': () => import('./api/_handlers/wallet/_confirm-owner'),
         '/api/wallet/prepare-add-rabby-owner': () => import('./api/_handlers/wallet/_prepare-add-rabby-owner'),
+        '/api/wallet/solana/setCanonical': () => import('./api/wallet/solana/setCanonical'),
+        '/api/wallet/solana/sweep/enqueue': () => import('./api/wallet/solana/sweep/enqueue'),
+        '/api/wallet/solana/sweep/process': () => import('./api/wallet/solana/sweep/process'),
         '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
 
         // Keepr (local dev)

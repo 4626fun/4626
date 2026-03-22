@@ -289,7 +289,7 @@ describe('premium token icon renderer', () => {
     expect(centerDelta).toBeLessThan(30)
   })
 
-  it('falls back to source-alpha breakout when hero cutout is absent', async () => {
+  it('renders an opaque-source breakout fallback when hero cutout is absent', async () => {
     const transparentSource = await createTransparentSource({ width: 900, height: 1200 })
     const opaqueSource = new Uint8Array(
       await sharp(Buffer.from(transparentSource))
@@ -298,20 +298,21 @@ describe('premium token icon renderer', () => {
         .toBuffer(),
     )
 
-    const transparentRender = await renderPremiumTokenIcon({
+    const opaqueContained = await renderPremiumTokenIcon({
       size: 512,
-      sourceImage: transparentSource,
+      sourceImage: opaqueSource,
+      suppressBreakout: true,
       symbol: 'AKITA',
     })
-    const opaqueRender = await renderPremiumTokenIcon({
+    const opaqueWithFallbackBreakout = await renderPremiumTokenIcon({
       size: 512,
       sourceImage: opaqueSource,
       symbol: 'AKITA',
     })
 
     const topDiff = await countRegionRgbDifference({
-      a: opaqueRender,
-      b: transparentRender,
+      a: opaqueContained,
+      b: opaqueWithFallbackBreakout,
       x0: 198,
       y0: 56,
       x1: 314,

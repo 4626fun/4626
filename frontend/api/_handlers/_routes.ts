@@ -125,9 +125,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'wallet/prepare-add-privy-owner': () => import('./wallet/_prepare-add-privy-owner.js'),
   'wallet/confirm-owner': () => import('./wallet/_confirm-owner.js'),
   'wallet/prepare-add-rabby-owner': () => import('./wallet/_prepare-add-rabby-owner.js'),
-  'wallet/solana/setCanonical': () => import('./wallet/solana/_setCanonical.js'),
-  'wallet/solana/sweep/enqueue': () => import('./wallet/solana/sweep/_enqueue.js'),
-  'wallet/solana/sweep/process': () => import('./wallet/solana/sweep/_process.js'),
   'portfolio/me': () => import('./portfolio/_me.js'),
   'vaults/active': () => import('./vaults/_active.js'),
 
@@ -149,9 +146,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/session/start': () => import('./deploy/session/_start.js'),
   'deploy/session/status': () => import('./deploy/session/_status.js'),
   'deploy/config': () => import('./deploy/_config.js'),
-  'deploy/solanaInfraStatus': () => import('./deploy/_solanaInfraStatus.js'),
-  'deploy/provisionSolanaRoute': () => import('./deploy/_provisionSolanaRoute.js'),
-  'deploy/registerSolanaBridgeToken': () => import('./deploy/_registerSolanaBridgeToken.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 
@@ -159,18 +153,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'bankr/profile': () => import('./bankr/_profile.js'),
 
   'health': () => import('./_health.js'),
-
-  'image/projects/create': () => import('./image/_projects-create.js'),
-  'image/projects/assets/upload': () => import('./image/_assets-upload.js'),
-  'image/projects/generate': () => import('./image/_generate.js'),
-  'image/projects/refine': () => import('./image/_refine.js'),
-  'image/jobs/status': () => import('./image/_jobs-status.js'),
-  'image/projects/get': () => import('./image/_projects-get.js'),
-  'image/projects/associate-vault': () => import('./image/_associate-vault.js'),
-  'image/projects/auto-assets': () => import('./image/_auto-assets.js'),
-  'image/projects/direct-compose': () => import('./image/_direct-compose.js'),
-  'image/projects/vault-image': () => import('./image/_vault-image-get.js'),
-  'image/external': () => import('./image/_external-proxy.js'),
 
   'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),
   'onchain/coinMarketRewardsCurrency': () => import('./onchain/_coinMarketRewardsCurrency.js'),

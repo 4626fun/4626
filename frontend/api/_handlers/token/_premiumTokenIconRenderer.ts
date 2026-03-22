@@ -1,5 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { promisify } from 'node:util'
 import sharp from 'sharp'
 
 type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
@@ -76,6 +80,7 @@ const BREAKOUT_DEBUG_LOG_ENABLED =
   process.env.TOKEN_BREAKOUT_DEBUG === '1' ||
   Boolean(process.env.TOKEN_BREAKOUT_DEBUG_DIR)
 const BREAKOUT_DEBUG_DIR = process.env.TOKEN_BREAKOUT_DEBUG_DIR
+const execFileP = promisify(execFile)
 
 async function writeBreakoutDebugAsset(filename: string, layer: Buffer): Promise<void> {
   if (!BREAKOUT_DEBUG_DIR) return
@@ -141,17 +146,52 @@ async function debugLogLayerBounds(label: string, layer: Buffer): Promise<void> 
   }))
 }
 
+async function extractForegroundRembg(pngBytes: Buffer): Promise<Buffer | null> {
+  if (!PREMIUM_BREAKOUT_REMBG.enabled) return null
+  const id = randomUUID()
+  const inPath = path.join(tmpdir(), `premium-rembg-in-${id}.png`)
+  const outPath = path.join(tmpdir(), `premium-rembg-out-${id}.png`)
+  try {
+    await fs.writeFile(inPath, pngBytes)
+    await execFileP(PREMIUM_BREAKOUT_REMBG.bin, ['i', inPath, outPath], {
+      timeout: PREMIUM_BREAKOUT_REMBG.timeoutMs,
+    })
+    return await fs.readFile(outPath)
+  } catch (error) {
+    if (BREAKOUT_DEBUG_LOG_ENABLED) {
+      console.warn('[token/image] premium rembg extraction failed:', error)
+    }
+    return null
+  } finally {
+    await Promise.all([
+      fs.unlink(inPath).catch(() => {}),
+      fs.unlink(outPath).catch(() => {}),
+    ])
+  }
+}
+
 const BACKGROUND_COLORS = {
   center: '#000000',
   mid: '#000001',
   edge: '#000000',
 } as const
 
-const OUTER_GLOW_COLOR = '#3B82FF'
+const OUTER_GLOW_COLOR = '#2F7DFF'
 const FRAME_GRADIENT = {
-  topLeft: '#F7FAFF',
-  middle: '#DCE6FA',
-  bottomRight: '#3A7BFF',
+  topLeft: '#F8FBFF',
+  middle: '#D8E5FF',
+  bottomRight: '#2F7DFF',
+} as const
+
+const FRAME_ACCENT = {
+  midAccent: '#93B6FF',
+  deepAccent: '#5C91FF',
+} as const
+
+const PREMIUM_BREAKOUT_REMBG = {
+  enabled: process.env.TOKEN_PREMIUM_REMBG !== '0',
+  timeoutMs: Number(process.env.TOKEN_PREMIUM_REMBG_TIMEOUT_MS ?? 30_000),
+  bin: process.env.REMBG_BIN || '/tmp/rembg-env/bin/rembg',
 } as const
 
 const CHAMBER_GRADIENT = {
@@ -233,10 +273,10 @@ function getTokenIconLayout(size: number, preset: RenderPreset = 'standard'): Pr
   const chamberSize = Math.max(1, frameSize - chamberInset * 2)
   const chamberX = frameInset + chamberInset
   const chamberY = chamberX
-  const breakoutWidth = Math.max(1, Math.round(chamberSize * (preset === 'hero' ? 0.24 : preset === 'pixel' ? 0.18 : 0.20)))
-  const breakoutHeight = Math.max(1, Math.round(chamberSize * (preset === 'hero' ? 0.15 : preset === 'pixel' ? 0.09 : 0.10)))
+  const breakoutWidth = Math.max(1, Math.round(chamberSize * (preset === 'hero' ? 0.30 : preset === 'pixel' ? 0.22 : 0.28)))
+  const breakoutHeight = Math.max(1, Math.round(chamberSize * (preset === 'hero' ? 0.20 : preset === 'pixel' ? 0.12 : 0.14)))
   const breakoutX = chamberX + Math.round((chamberSize - breakoutWidth) / 2)
-  const breakoutY = Math.max(0, chamberY - Math.round(chamberSize * (preset === 'hero' ? 0.09 : preset === 'pixel' ? 0.058 : 0.068)))
+  const breakoutY = Math.max(0, chamberY - Math.round(chamberSize * (preset === 'hero' ? 0.115 : preset === 'pixel' ? 0.082 : 0.095)))
 
   return {
     size,
@@ -692,9 +732,10 @@ function createFrameGradientSvg(size: number, layout: PremiumLayout): string {
   <defs>
     <linearGradient id="frameStroke" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="14%" stop-color="${FRAME_GRADIENT.topLeft}"/>
-      <stop offset="44%" stop-color="${FRAME_GRADIENT.middle}"/>
-      <stop offset="72%" stop-color="#AFC4FF"/>
+      <stop offset="12%" stop-color="${FRAME_GRADIENT.topLeft}"/>
+      <stop offset="42%" stop-color="${FRAME_GRADIENT.middle}"/>
+      <stop offset="68%" stop-color="${FRAME_ACCENT.midAccent}"/>
+      <stop offset="86%" stop-color="${FRAME_ACCENT.deepAccent}"/>
       <stop offset="100%" stop-color="${FRAME_GRADIENT.bottomRight}"/>
     </linearGradient>
   </defs>
@@ -736,12 +777,12 @@ export async function renderBackgroundCard(params: {
       <stop offset="100%" stop-color="#000000"/>
     </radialGradient>
     <radialGradient id="cardAuraTl" cx="28%" cy="23%" r="56%">
-      <stop offset="0%" stop-color="rgba(110,150,255,0.09)"/>
+      <stop offset="0%" stop-color="rgba(110,150,255,0.11)"/>
       <stop offset="34%" stop-color="rgba(39,83,190,0.032)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
     <radialGradient id="cardAuraBr" cx="77%" cy="78%" r="60%">
-      <stop offset="0%" stop-color="rgba(58,123,255,0.13)"/>
+      <stop offset="0%" stop-color="rgba(47,125,255,0.18)"/>
       <stop offset="40%" stop-color="rgba(36,76,172,0.042)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
@@ -754,14 +795,14 @@ export async function renderBackgroundCard(params: {
       <stop offset="100%" stop-color="${CHAMBER_GRADIENT.bottom}"/>
     </linearGradient>
     <radialGradient id="chamberAmbient" cx="50%" cy="32%" r="72%">
-      <stop offset="0%" stop-color="rgba(170,205,255,0.085)"/>
+      <stop offset="0%" stop-color="rgba(170,205,255,0.11)"/>
       <stop offset="28%" stop-color="rgba(77,132,255,0.048)"/>
       <stop offset="68%" stop-color="rgba(18,34,78,0.018)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
     <radialGradient id="chamberFloorGlow" cx="50%" cy="100%" r="70%">
-      <stop offset="0%" stop-color="rgba(47,111,255,0.095)"/>
-      <stop offset="40%" stop-color="rgba(47,111,255,0.03)"/>
+      <stop offset="0%" stop-color="rgba(47,125,255,0.12)"/>
+      <stop offset="40%" stop-color="rgba(47,125,255,0.03)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
   </defs>
@@ -879,21 +920,25 @@ export async function renderOuterGlow(params: {
 </svg>`
 
   const glowBase = await sharp(Buffer.from(glowSvg)).png().toBuffer()
-  const core = await applyOpacity(glowBase, 0.058)
+  const core = await applyOpacity(glowBase, 0.066)
+  const rim = await sharp(glowBase)
+    .blur(Math.max(6, size * 0.017))
+    .png()
+    .toBuffer()
   const blurNear = await sharp(glowBase)
-    .blur(Math.max(18, size * 0.056))
+    .blur(Math.max(14, size * 0.048))
     .png()
     .toBuffer()
   const blurMid = await sharp(glowBase)
-    .blur(Math.max(46, size * 0.16))
+    .blur(Math.max(36, size * 0.13))
     .png()
     .toBuffer()
   const blurFar = await sharp(glowBase)
-    .blur(Math.max(118, size * 0.33))
+    .blur(Math.max(96, size * 0.26))
     .png()
     .toBuffer()
   const blurAmbient = await sharp(glowBase)
-    .blur(Math.min(720, Math.max(220, size * 0.6)))
+    .blur(Math.min(620, Math.max(200, size * 0.52)))
     .png()
     .toBuffer()
   const directionalAuraSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
@@ -905,9 +950,9 @@ export async function renderOuterGlow(params: {
       <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
     </radialGradient>
     <radialGradient id="auraBr" cx="80%" cy="82%" r="82%">
-      <stop offset="0%" stop-color="rgba(58,123,255,0.36)"/>
-      <stop offset="40%" stop-color="rgba(58,123,255,0.16)"/>
-      <stop offset="78%" stop-color="rgba(58,123,255,0.05)"/>
+      <stop offset="0%" stop-color="rgba(47,125,255,0.48)"/>
+      <stop offset="40%" stop-color="rgba(47,125,255,0.22)"/>
+      <stop offset="78%" stop-color="rgba(47,125,255,0.07)"/>
       <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
     </radialGradient>
   </defs>
@@ -917,12 +962,13 @@ export async function renderOuterGlow(params: {
   const directionalAura = await sharp(Buffer.from(directionalAuraSvg)).png().toBuffer()
   const merged = await createTransparentCanvas(size)
     .composite([
-      { input: await applyOpacity(blurAmbient, 0.48), blend: 'screen' },
-      { input: await applyOpacity(blurFar, 0.82), blend: 'screen' },
-      { input: await applyOpacity(blurMid, 0.78), blend: 'screen' },
-      { input: await applyOpacity(blurNear, 0.92), blend: 'screen' },
-      { input: await applyOpacity(core, 0.26), blend: 'screen' },
-      { input: await applyOpacity(directionalAura, 0.82), blend: 'screen' },
+      { input: await applyOpacity(blurAmbient, 0.34), blend: 'screen' },
+      { input: await applyOpacity(blurFar, 0.62), blend: 'screen' },
+      { input: await applyOpacity(blurMid, 0.86), blend: 'screen' },
+      { input: await applyOpacity(blurNear, 1.0), blend: 'screen' },
+      { input: await applyOpacity(rim, 0.74), blend: 'screen' },
+      { input: await applyOpacity(core, 0.32), blend: 'screen' },
+      { input: await applyOpacity(directionalAura, 0.98), blend: 'screen' },
     ])
     .png()
     .toBuffer()
@@ -962,14 +1008,14 @@ export async function renderFrameBloom(params: {
     .png()
     .toBuffer()
   const bloomFar = await sharp(strokeLayer)
-    .blur(Math.max(18, size * 0.036))
+    .blur(Math.max(22, size * 0.044))
     .png()
     .toBuffer()
   const merged = await sharp(bloomFar)
-    .composite([{ input: await applyOpacity(bloomNear, 0.68), blend: 'screen' }])
+    .composite([{ input: await applyOpacity(bloomNear, 0.76), blend: 'screen' }])
     .png()
     .toBuffer()
-  return applyOpacity(merged, 0.94)
+  return applyOpacity(merged, 0.98)
 }
 
 export async function renderPremiumFrame(params: {
@@ -987,10 +1033,10 @@ export async function renderPremiumFrame(params: {
   const faceRolloverSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="faceRoll" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="rgba(255,255,255,0.28)"/>
-      <stop offset="34%" stop-color="rgba(255,255,255,0.12)"/>
-      <stop offset="74%" stop-color="rgba(120,166,255,0.15)"/>
-      <stop offset="100%" stop-color="rgba(47,111,255,0.11)"/>
+      <stop offset="0%" stop-color="rgba(255,255,255,0.32)"/>
+      <stop offset="34%" stop-color="rgba(255,255,255,0.10)"/>
+      <stop offset="74%" stop-color="rgba(120,166,255,0.22)"/>
+      <stop offset="100%" stop-color="rgba(47,111,255,0.18)"/>
     </linearGradient>
     <radialGradient id="specularTl" cx="28%" cy="24%" r="40%">
       <stop offset="0%" stop-color="rgba(255,255,255,0.33)"/>
@@ -1055,7 +1101,7 @@ export async function renderPremiumFrame(params: {
     <linearGradient id="innerHairline" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="rgba(255,255,255,0.34)"/>
       <stop offset="55%" stop-color="rgba(220,232,255,0.1)"/>
-      <stop offset="100%" stop-color="rgba(58,123,255,0.24)"/>
+      <stop offset="100%" stop-color="rgba(47,125,255,0.32)"/>
     </linearGradient>
   </defs>
   <rect
@@ -1955,9 +2001,11 @@ async function createTopBreakoutSubjectMask(params: {
   sourceCanvas: Buffer
   layout: PremiumLayout
   sourceClass?: SourceClass
-}): Promise<Buffer> {
+  forceAlphaMask?: boolean
+}): Promise<Buffer | null> {
   const { sourceCanvas, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
+  const forceAlphaMask = Boolean(params.forceAlphaMask)
   const { data, info } = await sharp(sourceCanvas)
     .ensureAlpha()
     .raw()
@@ -1989,14 +2037,14 @@ async function createTopBreakoutSubjectMask(params: {
   }
   const alphaPartialRatio = alphaCount > 0 ? alphaPartialCount / alphaCount : 0
   const alphaMostlyTransparentRatio = alphaCount > 0 ? alphaMostlyTransparentCount / alphaCount : 0
-  // Breakout is intentionally alpha-only: non-transparent art stays fully contained.
+  // Default path is conservative alpha breakout; explicit cutout mode can bypass this gate.
   const hasMeaningfulTransparency =
     alphaCount > 0 &&
     alphaPartialRatio > 0.03 &&
     alphaPartialRatio < 0.92 &&
     alphaMostlyTransparentRatio > 0.015
-  if (!hasMeaningfulTransparency) {
-    return createTransparentCanvas(layout.size).png().toBuffer()
+  if (!hasMeaningfulTransparency && !forceAlphaMask) {
+    return null
   }
 
   const mask = Buffer.alloc(width * height, 0)
@@ -2010,11 +2058,12 @@ async function createTopBreakoutSubjectMask(params: {
   let sumPresentY = 0
   const regionArea = Math.max(1, (x1 - x0) * (y1 - y0))
   const subjectTopBandY = y0 + Math.floor((y1 - y0) * 0.58)
+  const alphaThreshold = forceAlphaMask ? 20 : 28
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
       const idx = (y * width + x) * info.channels
       const a = data[idx + 3] ?? 255
-      if (a > 28) {
+      if (a > alphaThreshold) {
         mask[y * width + x] = 255
         presentCount += 1
         sumPresentX += x
@@ -2029,7 +2078,7 @@ async function createTopBreakoutSubjectMask(params: {
   }
 
   if (presentCount <= 0) {
-    return createTransparentCanvas(layout.size).png().toBuffer()
+    return null
   }
 
   const presentRatio = presentCount / regionArea
@@ -2044,49 +2093,62 @@ async function createTopBreakoutSubjectMask(params: {
   const centroidYNorm = (centroidY - y0) / Math.max(1, y1 - y0)
   const flatnessRatio = widthRatio / Math.max(0.001, heightRatio)
 
-  const maxPresentRatio = isIllustration ? 0.86 : 0.38
-  const minPresentRatio = isIllustration ? 0.008 : 0.018
-  const maxWidthRatio = isIllustration ? 1.01 : 0.62
-  const maxHeightRatio = isIllustration ? 1.01 : 0.82
-  const maxFlatnessRatio = isIllustration ? 4.0 : 2.8
-  const maxCentroidYNorm = isIllustration ? 0.72 : 0.58
-  const minTopWeightedRatio = isIllustration ? 0.20 : 0.36
-  if (
-    presentRatio < minPresentRatio ||
-    presentRatio > maxPresentRatio ||
-    widthRatio > maxWidthRatio ||
-    heightRatio > maxHeightRatio ||
-    heightRatio < 0.11 ||
-    topWeightedRatio < minTopWeightedRatio ||
-    centroidNorm < 0.2 ||
-    centroidNorm > 0.8 ||
-    centroidYNorm > maxCentroidYNorm ||
-    flatnessRatio > maxFlatnessRatio
-  ) {
-    return createTransparentCanvas(layout.size).png().toBuffer()
-  }
-
-  let edgePixelCount = 0
-  for (let y = y0; y < y1; y += 1) {
-    for (let x = x0; x < x1; x += 1) {
-      if (mask[y * width + x] === 0) continue
-      const hasEmptyNeighbor =
-        (x > 0 && mask[y * width + (x - 1)] === 0) ||
-        (x < width - 1 && mask[y * width + (x + 1)] === 0) ||
-        (y > 0 && mask[(y - 1) * width + x] === 0) ||
-        (y < height - 1 && mask[(y + 1) * width + x] === 0)
-      if (hasEmptyNeighbor) edgePixelCount += 1
+  if (!forceAlphaMask) {
+    const maxPresentRatio = isIllustration ? 0.86 : 0.38
+    const minPresentRatio = isIllustration ? 0.008 : 0.018
+    const maxWidthRatio = isIllustration ? 1.01 : 0.62
+    const maxHeightRatio = isIllustration ? 1.01 : 0.82
+    const maxFlatnessRatio = isIllustration ? 4.0 : 2.8
+    const maxCentroidYNorm = isIllustration ? 0.72 : 0.58
+    const minTopWeightedRatio = isIllustration ? 0.20 : 0.36
+    if (
+      presentRatio < minPresentRatio ||
+      presentRatio > maxPresentRatio ||
+      widthRatio > maxWidthRatio ||
+      heightRatio > maxHeightRatio ||
+      heightRatio < 0.11 ||
+      topWeightedRatio < minTopWeightedRatio ||
+      centroidNorm < 0.2 ||
+      centroidNorm > 0.8 ||
+      centroidYNorm > maxCentroidYNorm ||
+      flatnessRatio > maxFlatnessRatio
+    ) {
+      return null
+    }
+  } else {
+    // Explicit cutouts (prepared hero/rembg) should bypass conservative contour gates.
+    if (presentRatio < 0.002 || presentRatio > 0.92 || heightRatio < 0.06) {
+      return null
     }
   }
-  const edgeRatio = presentCount > 0 ? edgePixelCount / presentCount : 0
-  const minEdgeRatio = isIllustration ? 0.04 : 0.07
-  if (edgeRatio < minEdgeRatio) {
-    return createTransparentCanvas(layout.size).png().toBuffer()
+
+  if (!forceAlphaMask) {
+    let edgePixelCount = 0
+    for (let y = y0; y < y1; y += 1) {
+      for (let x = x0; x < x1; x += 1) {
+        if (mask[y * width + x] === 0) continue
+        const hasEmptyNeighbor =
+          (x > 0 && mask[y * width + (x - 1)] === 0) ||
+          (x < width - 1 && mask[y * width + (x + 1)] === 0) ||
+          (y > 0 && mask[(y - 1) * width + x] === 0) ||
+          (y < height - 1 && mask[(y + 1) * width + x] === 0)
+        if (hasEmptyNeighbor) edgePixelCount += 1
+      }
+    }
+    const edgeRatio = presentCount > 0 ? edgePixelCount / presentCount : 0
+    const minEdgeRatio = isIllustration ? 0.04 : 0.07
+    if (edgeRatio < minEdgeRatio) {
+      return null
+    }
   }
 
   let processedSharp = sharp(mask, { raw: { width, height, channels: 1 } })
-    .threshold(18)
-  processedSharp = processedSharp.blur(isIllustration ? 0.32 : 0.7)
+    .threshold(forceAlphaMask ? 8 : 18)
+  processedSharp = processedSharp.blur(
+    forceAlphaMask
+      ? (isIllustration ? 0.34 : 0.44)
+      : (isIllustration ? 0.32 : 0.7),
+  )
   const { data: processed, info: maskInfo } = await processedSharp
     .toColourspace('b-w')
     .raw()
@@ -2106,6 +2168,7 @@ export async function renderBreakoutLayer(params: {
   size: number
   layout: PremiumLayout
   sourceImage?: Uint8Array
+  subjectMaskSourceImage?: Uint8Array
   opacity?: number
   scale?: number
   topBiasPx?: number
@@ -2125,7 +2188,7 @@ export async function renderBreakoutLayer(params: {
     const sourceMeta = await sharp(normalized).metadata()
     console.info('[breakout-debug]', JSON.stringify({
       step: 'renderBreakoutLayer:start',
-      extractionSource: 'normalized-original-source',
+      extractionSource: params.subjectMaskSourceImage ? 'provided-subject-mask-source' : 'normalized-original-source',
       sourceWidth: sourceMeta.width,
       sourceHeight: sourceMeta.height,
       sourceClass: params.sourceClass ?? 'unknown',
@@ -2153,48 +2216,111 @@ export async function renderBreakoutLayer(params: {
     sourceClass: params.sourceClass,
     maxTopBiasRatio: isIllustrationBreakout ? 0.046 : undefined,
   })
+  let subjectRefCanvas: Buffer | null = null
+  if (params.subjectMaskSourceImage && params.subjectMaskSourceImage.length > 0) {
+    try {
+      const normalizedSubjectRef = await normalizeSourceImage(params.subjectMaskSourceImage)
+      await writeBreakoutDebugAsset('1a-breakout-subject-ref-normalized.png', normalizedSubjectRef)
+      subjectRefCanvas = await renderPlacedSourceCanvas({
+        sourceImage: normalizedSubjectRef,
+        layout,
+        scale: breakoutScale,
+        fit: 'cover',
+        topBiasPx: params.topBiasPx,
+        sourceClass: params.sourceClass,
+        maxTopBiasRatio: isIllustrationBreakout ? 0.046 : undefined,
+      })
+      await writeBreakoutDebugAsset('1b-breakout-subject-ref-canvas.png', subjectRefCanvas)
+    } catch (error) {
+      subjectRefCanvas = null
+      if (BREAKOUT_DEBUG_LOG_ENABLED) {
+        console.warn('[token/image] subject mask source decode failed; using fallback breakout:', error)
+      }
+    }
+  }
   await writeBreakoutDebugAsset('1-breakout-source-canvas.png', sourceCanvas)
   const breakoutMask = await createTopBreakoutMask({ size, layout, sourceClass: params.sourceClass })
   const subjectMask = await createTopBreakoutSubjectMask({
-    sourceCanvas,
+    sourceCanvas: subjectRefCanvas ?? sourceCanvas,
     layout,
     sourceClass: params.sourceClass,
+    forceAlphaMask: !!subjectRefCanvas,
   })
   const aboveFrameMask = await createBreakoutAboveFrameMask({
     size,
     layout,
     sourceClass: params.sourceClass,
   })
+  const subjectMaskDebug = subjectMask ?? await createTransparentCanvas(size).png().toBuffer()
   await writeBreakoutDebugAsset('2-breakout-mask-window.png', breakoutMask)
-  await writeBreakoutDebugAsset('3-breakout-mask-subject.png', subjectMask)
+  await writeBreakoutDebugAsset('3-breakout-mask-subject.png', subjectMaskDebug)
   await writeBreakoutDebugAsset('4-breakout-mask-above-frame.png', aboveFrameMask)
   await debugLogLayerBounds('breakoutMask', breakoutMask)
-  await debugLogLayerBounds('subjectMask', subjectMask)
+  await debugLogLayerBounds('subjectMask', subjectMaskDebug)
   await debugLogLayerBounds('aboveFrameMask', aboveFrameMask)
 
   let maskedSharp = sharp(sourceCanvas)
     .ensureAlpha()
-    .composite([
-      { input: breakoutMask, blend: 'dest-in' },
-      { input: subjectMask, blend: 'dest-in' },
-      { input: aboveFrameMask, blend: 'dest-in' },
-    ])
+    .composite([{ input: breakoutMask, blend: 'dest-in' }])
+  if (subjectMask) {
+    maskedSharp = maskedSharp.composite([{ input: subjectMask, blend: 'dest-in' }])
+  }
+  maskedSharp = maskedSharp.composite([{ input: aboveFrameMask, blend: 'dest-in' }])
   if (!isIllustrationBreakout) {
     maskedSharp = maskedSharp.blur(0.5)
   }
-  const masked = await maskedSharp
+  let masked = await maskedSharp
     .png()
     .toBuffer()
+  let breakoutOpacity = params.opacity ?? 0.26
+  let fallbackBandUsed = false
+  if (!subjectMask) {
+    fallbackBandUsed = true
+    const fallbackRadius = Math.max(1, Math.round(layout.breakoutWidth * 0.24))
+    const fallbackBandMaskSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fallbackBandY" x1="0" y1="${layout.breakoutY}" x2="0" y2="${layout.breakoutY + layout.breakoutHeight}" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="white" stop-opacity="1"/>
+      <stop offset="74%" stop-color="white" stop-opacity="1"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect
+    x="${layout.breakoutX}"
+    y="${layout.breakoutY}"
+    width="${layout.breakoutWidth}"
+    height="${layout.breakoutHeight}"
+    rx="${fallbackRadius}"
+    fill="url(#fallbackBandY)"
+  />
+</svg>`
+    const fallbackBandMask = await sharp(Buffer.from(fallbackBandMaskSvg)).png().toBuffer()
+    masked = await sharp(masked)
+      .ensureAlpha()
+      .composite([
+        { input: fallbackBandMask, blend: 'dest-in' },
+        { input: aboveFrameMask, blend: 'dest-in' },
+      ])
+      .png()
+      .toBuffer()
+    masked = await sharp(masked)
+      .modulate({ brightness: 0.94, saturation: 0.90 })
+      .blur(0.9)
+      .png()
+      .toBuffer()
+    breakoutOpacity = Math.min(0.18, params.opacity ?? 0.22)
+  }
   await writeBreakoutDebugAsset('5-breakout-isolated-sprite.png', masked)
   await debugLogLayerBounds('breakoutSprite', masked)
 
-  const breakoutOpacity = params.opacity ?? 0.22
   if (BREAKOUT_DEBUG_LOG_ENABLED) {
     console.info('[breakout-debug]', JSON.stringify({
       step: 'renderBreakoutLayer:end',
       breakoutOpacity,
       breakoutDrawCount: 1,
       softBlurApplied: !isIllustrationBreakout,
+      fallbackBandUsed,
+      forceAlphaMask: !!subjectRefCanvas,
     }))
   }
   return applyOpacity(masked, breakoutOpacity)
@@ -2209,7 +2335,7 @@ async function renderCreatorSignature(params: {
   const MAX_CHARS = 12
   const displayName = symbol.slice(0, MAX_CHARS).toUpperCase()
 
-  const baseFont = Math.round(size * 0.011)
+  const baseFont = Math.round(size * 0.010)
   const fontSize = Math.max(
     7,
     displayName.length > 9
@@ -2224,27 +2350,28 @@ async function renderCreatorSignature(params: {
   const textWidth = Math.ceil(displayName.length * fontSize * 0.70 + displayName.length * fontSize * letterSpacingEm)
   const lockupWidth = squareSize + gap + textWidth
 
-  const hInset = Math.round(layout.frameStroke * 0.55 + layout.chamberSize * 0.012)
-  const lockupRightEdge = layout.chamberX + layout.chamberSize - hInset
+  const lockupRightEdge =
+    layout.frameX + layout.frameSize - Math.round(layout.frameStroke * 0.62)
   const squareX = lockupRightEdge - lockupWidth
 
   const textX = squareX + squareSize + gap
 
-  const bottomBandCenterY = layout.chamberY + layout.chamberSize + Math.round(layout.frameStroke * 0.5)
+  const bottomBandCenterY =
+    layout.frameY + layout.frameSize - Math.round(layout.frameStroke * 0.62)
   const squareY = Math.round(bottomBandCenterY - squareSize / 2)
 
   const squareRx = Math.max(1, Math.round(squareSize * 0.15))
   const letterSpacingPx = Math.round(fontSize * letterSpacingEm)
 
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect x="${squareX}" y="${squareY}" width="${squareSize}" height="${squareSize}" rx="${squareRx}" fill="#0052FF"/>
+  <rect x="${squareX}" y="${squareY}" width="${squareSize}" height="${squareSize}" rx="${squareRx}" fill="#2F7DFF"/>
   <text x="${textX}" y="${bottomBandCenterY}"
     dominant-baseline="central"
     text-anchor="start"
     font-family="Inter, 'Helvetica Neue', Arial, sans-serif"
     font-weight="600"
     font-size="${fontSize}"
-    fill="#000000"
+    fill="rgba(0,0,0,0.82)"
     letter-spacing="${letterSpacingPx}">${displayName}</text>
 </svg>`
   return sharp(Buffer.from(svg)).png().toBuffer()
@@ -2294,15 +2421,20 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       hasHeroCutoutSource &&
       analysis.fitMode === 'cover' &&
       !analysis.brightBadgeLike
+    const sourceAlphaBreakoutAllowed = resolveSourceAlphaBreakoutAllowed({
+      allowBreakout: analysis.allowBreakout,
+      suppressBreakout: params.suppressBreakout,
+    })
     const breakoutSourceKind = resolveBreakoutSourceKind({
-      sourceAlphaBreakoutAllowed: resolveSourceAlphaBreakoutAllowed({
-        allowBreakout: analysis.allowBreakout,
-        suppressBreakout: params.suppressBreakout,
-      }),
+      sourceAlphaBreakoutAllowed,
       preparedHeroCutoutAvailable: hasHeroCutoutSource,
       preparedHeroCutoutBreakoutAllowed: breakoutAllowedByPreparedHeroCutout,
     })
-    const allowBreakoutForLayout = breakoutSourceKind !== 'none'
+    const breakoutDesired =
+      analysis.fitMode === 'cover' &&
+      !analysis.brightBadgeLike &&
+      !params.suppressBreakout
+    const allowBreakoutForLayout = breakoutDesired
     const presetScaleBoost =
       resolvedPreset === 'hero' ? (analysis.sourceClass === 'illustration' ? 1.038 : 1.024)
       : resolvedPreset === 'pixel' ? 0.994
@@ -2337,7 +2469,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     })
     await writeBreakoutDebugAsset('1-clipped-in-frame-art.png', artworkLayer)
 
-    if (allowBreakoutForLayout) {
+    if (breakoutDesired) {
       const breakoutOpacity =
         analysis.sourceClass === 'illustration'
           ? (resolvedPreset === 'hero' ? 0.98 : 0.92)
@@ -2352,14 +2484,27 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         0.84,
         1.16,
       )
-      const breakoutSource = breakoutSourceKind === 'heroCutout'
-        ? new Uint8Array(params.heroCutoutSourceImage!)
-        : new Uint8Array(normalizedSource)
+      let subjectMaskSourceImage: Uint8Array | undefined
+      let breakoutPlanSource: 'heroCutout' | 'sourceAlpha' | 'rembgCutout' | 'fallbackBand' = 'fallbackBand'
+      if (breakoutSourceKind === 'heroCutout') {
+        subjectMaskSourceImage = new Uint8Array(params.heroCutoutSourceImage!)
+        breakoutPlanSource = 'heroCutout'
+      } else if (breakoutSourceKind === 'sourceAlpha') {
+        breakoutPlanSource = 'sourceAlpha'
+      } else {
+        const rembgCutout = await extractForegroundRembg(normalizedSource)
+        if (rembgCutout && rembgCutout.length > 0) {
+          subjectMaskSourceImage = new Uint8Array(rembgCutout)
+          breakoutPlanSource = 'rembgCutout'
+          await writeBreakoutDebugAsset('0-rembg-cutout.png', rembgCutout)
+        }
+      }
       try {
         breakoutLayer = await renderBreakoutLayer({
           size,
           layout,
-          sourceImage: breakoutSource,
+          sourceImage: new Uint8Array(normalizedSource),
+          subjectMaskSourceImage,
           opacity: breakoutOpacity,
           scale: breakoutScale,
           topBiasPx: breakoutTopBiasPx,
@@ -2382,6 +2527,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           breakoutScale,
           breakoutAllowed: allowBreakoutForLayout,
           breakoutSource: breakoutSourceKind,
+          breakoutPlanSource,
+          sourceAlphaBreakoutAllowed,
           breakoutAllowedByPreparedHeroCutout,
         }))
       }
