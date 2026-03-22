@@ -235,6 +235,30 @@ describe('TelegramLink helpers', () => {
       }),
     ).toEqual(
       expect.objectContaining({
+        statusTitle: 'Telegram linking needs attention',
+        statusMessage: 'This email is already linked in Privy. Tap Retry link to continue Telegram linking.',
+        canSignIn: false,
+        canRetryLink: true,
+      }),
+    )
+  })
+
+  it('normalizes Privy email-linked errors when they surface via emailMessage', () => {
+    expect(
+      getTelegramLinkViewState({
+        sessionState: 'ready',
+        emailState: 'error',
+        linkState: 'idle',
+        sessionError: null,
+        emailMessage: 'User already has an account of type email linked.',
+        linkMessage: null,
+        privyAuthenticated: true,
+        hasLinkContext: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        statusTitle: 'Telegram linking needs attention',
+        statusMessage: 'This email is already linked in Privy. Tap Retry link to continue Telegram linking.',
         canSignIn: false,
         canRetryLink: true,
       }),

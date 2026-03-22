@@ -277,16 +277,24 @@ export function getTelegramLinkViewState(params: {
   hasLinkContext: boolean
 }) {
   const { sessionState, emailState, linkState, sessionError, emailMessage, linkMessage, privyAuthenticated, hasLinkContext } = params
+  const normalizedEmailMessage = normalizeTelegramLinkUiMessage(emailMessage)
   const normalizedLinkMessage = normalizeTelegramLinkUiMessage(linkMessage)
-  const isPrivyEmailLinkedIssue = Boolean(linkMessage) && normalizedLinkMessage !== linkMessage
+  const hasPrivyEmailLinkedIssue = isPrivyEmailAlreadyLinkedError(emailMessage) || isPrivyEmailAlreadyLinkedError(linkMessage)
   const statusVariant: TelegramLinkAlertVariant =
-    sessionState === 'error' || linkState === 'error' || emailState === 'error' || emailState === 'needs_verification' || emailState === 'pending'
+    hasPrivyEmailLinkedIssue ||
+    sessionState === 'error' ||
+    linkState === 'error' ||
+    emailState === 'error' ||
+    emailState === 'needs_verification' ||
+    emailState === 'pending'
       ? 'warning'
       : linkState === 'linked'
         ? 'success'
         : 'info'
   const statusTitle =
-    sessionState === 'verifying'
+    hasPrivyEmailLinkedIssue
+      ? 'Telegram linking needs attention'
+      : sessionState === 'verifying'
       ? 'Verifying Telegram session'
       : sessionState === 'error'
         ? 'Telegram linking needs attention'
@@ -314,7 +322,7 @@ export function getTelegramLinkViewState(params: {
 
   const statusMessage =
     sessionError ??
-    emailMessage ??
+    normalizedEmailMessage ??
     normalizedLinkMessage ??
     (sessionState === 'verifying'
       ? 'Checking your Telegram Mini App session...'
@@ -339,8 +347,11 @@ export function getTelegramLinkViewState(params: {
     emailState !== 'checking' &&
     emailState !== 'verifying' &&
     emailState !== 'verified' &&
-    !isPrivyEmailLinkedIssue
-  const canRetryLink = sessionState === 'ready' && hasLinkContext && emailState === 'verified' && linkState === 'error'
+    !hasPrivyEmailLinkedIssue
+  const canRetryLink =
+    sessionState === 'ready' &&
+    hasLinkContext &&
+    ((emailState === 'verified' && linkState === 'error') || hasPrivyEmailLinkedIssue)
 
   return {
     statusVariant,
