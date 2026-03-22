@@ -241,6 +241,12 @@ export function formatTelegramSessionError(error: string, statusCode: number): s
   if (statusCode === 410 || normalized.includes('expired')) {
     return 'This Telegram Mini App session expired. Re-open the Mini App from Telegram and retry.'
   }
+  if (statusCode === 504 || normalized.includes('timeout')) {
+    return 'Telegram session verification timed out. Keep this flow open in Telegram and retry.'
+  }
+  if (statusCode === 503 || normalized.includes('unreachable') || normalized.includes('failed to fetch') || normalized.includes('network')) {
+    return 'Could not reach Telegram session verification. Keep this flow open in Telegram and retry.'
+  }
   if (normalized.includes('disabled')) {
     return 'Telegram Mini App linking is not enabled for this chat yet.'
   }
@@ -422,7 +428,14 @@ export function TelegramLink() {
     setSessionError(null)
     setSessionToken('')
 
-    const session = await ensureTelegramMiniAppSession()
+    let session
+    try {
+      session = await ensureTelegramMiniAppSession()
+    } catch {
+      setSessionState('error')
+      setSessionError('Could not reach Telegram session verification. Keep this flow open in Telegram and retry.')
+      return null
+    }
     if (!session.ok) {
       setSessionState('error')
       setSessionError(formatTelegramSessionError(session.error, session.statusCode))

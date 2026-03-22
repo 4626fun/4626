@@ -21,6 +21,11 @@ describe('TelegramLink helpers', () => {
     expect(formatTelegramSessionError('replay detected', 409)).toContain('already used')
   })
 
+  it('maps timed-out or unreachable Telegram session checks to retry guidance', () => {
+    expect(formatTelegramSessionError('telegram_miniapp_session_timeout', 504)).toContain('timed out')
+    expect(formatTelegramSessionError('telegram_miniapp_session_unreachable', 503)).toContain('Could not reach')
+  })
+
   it('maps signature mismatch errors to /link relaunch guidance', () => {
     expect(formatTelegramSessionError('telegram_miniapp_invalid_hash', 401)).toContain('Run /link in Telegram')
   })

@@ -145,6 +145,66 @@ describe('telegramWebApp mini app session bootstrap', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
 
+  it('returns a typed timeout when mini app session bootstrap hangs', async () => {
+    restoreWindow = installMockWindow('auth_date=1710001111&user=%7B%22id%22%3A42%7D&hash=timeout')
+    const fetcher = vi.fn().mockImplementation(
+      (_path: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'))
+          })
+        }),
+    )
+
+    const result = await ensureTelegramMiniAppSession({ fetcher: fetcher as any, timeoutMs: 1_000 })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'telegram_miniapp_session_timeout',
+      statusCode: 504,
+    })
+  })
+
+  it('clears timed-out bootstrap state so a retry can succeed', async () => {
+    restoreWindow = installMockWindow('auth_date=1710002222&user=%7B%22id%22%3A42%7D&hash=retry')
+    const timeoutFetcher = vi.fn().mockImplementation(
+      (_path: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'))
+          })
+        }),
+    )
+
+    const timedOut = await ensureTelegramMiniAppSession({ fetcher: timeoutFetcher as any, timeoutMs: 1_000 })
+    expect(timedOut).toEqual({
+      ok: false,
+      error: 'telegram_miniapp_session_timeout',
+      statusCode: 504,
+    })
+
+    const successFetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          sessionToken: 'mini-session-token',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          telegramUserId: '42',
+          telegramUsername: 'akita',
+          chatId: null,
+          chatType: null,
+          chatInstance: null,
+        },
+      }),
+    })
+
+    const retried = await ensureTelegramMiniAppSession({ fetcher: successFetcher })
+    expect(retried.ok).toBe(true)
+    expect(successFetcher).toHaveBeenCalledTimes(1)
+  })
+
   it('builds Privy launch params from Telegram initData', () => {
     restoreWindow = installMockWindow('auth_date=1710000000&user=%7B%22id%22%3A42%7D&hash=abc')
     expect(readPrivyTelegramLaunchParams()).toEqual({

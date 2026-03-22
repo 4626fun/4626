@@ -39,6 +39,7 @@ type WaitlistBootstrapResponse =
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 export type WaitlistEntryCtaState = 'join' | 'continue_setup' | 'open_app'
+export type WaitlistEntryPrivyClientStatus = 'disabled' | 'loading' | 'ready'
 
 export function deriveWaitlistEntryCtaState(params: {
   authenticated: boolean
@@ -48,6 +49,13 @@ export function deriveWaitlistEntryCtaState(params: {
   if (!params.authenticated || !params.account?.emailVerified) return 'join'
   if (params.account.accountSignals.canonicalCswAddress && params.ownerDelegationReady) return 'open_app'
   return 'continue_setup'
+}
+
+export function shouldFallbackJoinWaitlistEntry(params: {
+  ctaState: WaitlistEntryCtaState
+  privyClientStatus: WaitlistEntryPrivyClientStatus
+}): boolean {
+  return params.ctaState === 'join' && params.privyClientStatus !== 'ready'
 }
 
 function useSafePrivy() {
@@ -158,13 +166,20 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
   const onClick = useCallback(async () => {
     if (busy || loadingState) return
     if (ctaState === 'join') {
-      if (privyClientStatus === 'disabled') {
+      if (
+        shouldFallbackJoinWaitlistEntry({
+          ctaState,
+          privyClientStatus,
+        })
+      ) {
         onPrivyDisabled?.()
         return
       }
       setBusy(true)
       try {
         await login(buildWaitlistEmailLoginOptions() as any)
+      } catch {
+        onPrivyDisabled?.()
       } finally {
         setBusy(false)
       }

@@ -54,6 +54,22 @@ type SourceAnalysis = {
 }
 
 type BreakoutSourceKind = 'heroCutout' | 'sourceAlpha' | 'none'
+type BreakoutPlanMode = 'heroCutout' | 'sourceAlpha' | 'rembgCutout' | 'none'
+
+type BreakoutPlan = {
+  mode: BreakoutPlanMode
+  breakoutRequested: boolean
+  rembgCandidate: boolean
+  reason:
+    | 'suppressed'
+    | 'fit-not-cover'
+    | 'bright-badge-like'
+    | 'hero-cutout'
+    | 'source-alpha'
+    | 'rembg-candidate'
+    | 'rembg-unavailable'
+    | 'rembg-not-candidate'
+}
 
 type StackLayerConfig = {
   offsetXRatio: number
@@ -82,6 +98,8 @@ const BREAKOUT_DEBUG_LOG_ENABLED =
 const BREAKOUT_RUNTIME_LOG_ENABLED =
   BREAKOUT_DEBUG_LOG_ENABLED ||
   process.env.TOKEN_PREMIUM_BREAKOUT_LOG === '1'
+const ALLOW_PREMIUM_FALLBACK_BAND =
+  process.env.TOKEN_PREMIUM_BREAKOUT_FALLBACK_BAND === '1'
 const BREAKOUT_DEBUG_DIR = process.env.TOKEN_BREAKOUT_DEBUG_DIR
 const execFileP = promisify(execFile)
 
@@ -302,6 +320,7 @@ async function logBreakoutRuntimeBannerOnce(): Promise<void> {
       rembgExecutable: rembg.executable,
       rembgReason: rembg.reason ?? null,
       rembgCandidates: rembg.checkedCandidates,
+      fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
       runtimeLogEnabled: BREAKOUT_RUNTIME_LOG_ENABLED,
       debugAssetDumpEnabled: Boolean(BREAKOUT_DEBUG_DIR),
     }))
@@ -879,6 +898,50 @@ function resolveSourceAlphaBreakoutAllowed(params: {
   return !params.suppressBreakout && params.allowBreakout
 }
 
+function decideBreakoutPlan(params: {
+  analysis: SourceAnalysis
+  suppressBreakout?: boolean
+  breakoutSourceKind: BreakoutSourceKind
+  rembgAvailable: boolean
+}): BreakoutPlan {
+  const { analysis } = params
+  const breakoutRequested =
+    analysis.fitMode === 'cover' &&
+    !analysis.brightBadgeLike &&
+    !params.suppressBreakout
+  const rembgCandidate =
+    breakoutRequested &&
+    !analysis.hasTransparency &&
+    !analysis.lowResolution &&
+    (analysis.sourceClass === 'portraitPhoto' || analysis.sourceClass === 'illustration') &&
+    analysis.topCenterStdDev > 20 &&
+    analysis.topOccupancy > 0.06 &&
+    analysis.topOccupancy < 0.24
+
+  if (params.suppressBreakout) {
+    return { mode: 'none', breakoutRequested, rembgCandidate, reason: 'suppressed' }
+  }
+  if (analysis.fitMode !== 'cover') {
+    return { mode: 'none', breakoutRequested, rembgCandidate, reason: 'fit-not-cover' }
+  }
+  if (analysis.brightBadgeLike) {
+    return { mode: 'none', breakoutRequested, rembgCandidate, reason: 'bright-badge-like' }
+  }
+  if (params.breakoutSourceKind === 'heroCutout') {
+    return { mode: 'heroCutout', breakoutRequested, rembgCandidate, reason: 'hero-cutout' }
+  }
+  if (params.breakoutSourceKind === 'sourceAlpha') {
+    return { mode: 'sourceAlpha', breakoutRequested, rembgCandidate, reason: 'source-alpha' }
+  }
+  if (!rembgCandidate) {
+    return { mode: 'none', breakoutRequested, rembgCandidate, reason: 'rembg-not-candidate' }
+  }
+  if (!params.rembgAvailable) {
+    return { mode: 'none', breakoutRequested, rembgCandidate, reason: 'rembg-unavailable' }
+  }
+  return { mode: 'rembgCutout', breakoutRequested, rembgCandidate, reason: 'rembg-candidate' }
+}
+
 export async function renderBackgroundCard(params: {
   size: number
   layout: PremiumLayout
@@ -1019,7 +1082,7 @@ export async function renderOuterGlow(params: {
   layout: PremiumLayout
 }): Promise<Buffer> {
   const { size, layout } = params
-  const glowStroke = Math.max(18, Math.round(layout.frameStroke * 1.1))
+  const glowStroke = Math.max(22, Math.round(layout.frameStroke * 1.28))
   const inset = glowStroke / 2
   const glowSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <rect
@@ -1036,6 +1099,10 @@ export async function renderOuterGlow(params: {
 
   const glowBase = await sharp(Buffer.from(glowSvg)).png().toBuffer()
   const core = await applyOpacity(glowBase, 0.066)
+  const tightEdge = await sharp(glowBase)
+    .blur(Math.max(2.4, size * 0.0068))
+    .png()
+    .toBuffer()
   const rim = await sharp(glowBase)
     .blur(Math.max(6, size * 0.017))
     .png()
@@ -1065,9 +1132,9 @@ export async function renderOuterGlow(params: {
       <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
     </radialGradient>
     <radialGradient id="auraBr" cx="80%" cy="82%" r="82%">
-      <stop offset="0%" stop-color="rgba(47,125,255,0.48)"/>
-      <stop offset="40%" stop-color="rgba(47,125,255,0.22)"/>
-      <stop offset="78%" stop-color="rgba(47,125,255,0.07)"/>
+      <stop offset="0%" stop-color="rgba(47,125,255,0.62)"/>
+      <stop offset="40%" stop-color="rgba(47,125,255,0.28)"/>
+      <stop offset="78%" stop-color="rgba(47,125,255,0.09)"/>
       <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
     </radialGradient>
   </defs>
@@ -1077,13 +1144,14 @@ export async function renderOuterGlow(params: {
   const directionalAura = await sharp(Buffer.from(directionalAuraSvg)).png().toBuffer()
   const merged = await createTransparentCanvas(size)
     .composite([
-      { input: await applyOpacity(blurAmbient, 0.34), blend: 'screen' },
-      { input: await applyOpacity(blurFar, 0.62), blend: 'screen' },
-      { input: await applyOpacity(blurMid, 0.86), blend: 'screen' },
+      { input: await applyOpacity(blurAmbient, 0.42), blend: 'screen' },
+      { input: await applyOpacity(blurFar, 0.70), blend: 'screen' },
+      { input: await applyOpacity(blurMid, 0.92), blend: 'screen' },
       { input: await applyOpacity(blurNear, 1.0), blend: 'screen' },
-      { input: await applyOpacity(rim, 0.74), blend: 'screen' },
-      { input: await applyOpacity(core, 0.32), blend: 'screen' },
-      { input: await applyOpacity(directionalAura, 0.98), blend: 'screen' },
+      { input: await applyOpacity(rim, 0.84), blend: 'screen' },
+      { input: await applyOpacity(core, 0.44), blend: 'screen' },
+      { input: await applyOpacity(tightEdge, 0.56), blend: 'screen' },
+      { input: await applyOpacity(directionalAura, 1.0), blend: 'screen' },
     ])
     .png()
     .toBuffer()
@@ -1100,7 +1168,7 @@ export async function renderOuterGlow(params: {
   />
 </svg>`
   const hole = await sharp(Buffer.from(holeSvg))
-    .blur(Math.max(9, size * 0.019))
+    .blur(Math.max(12, size * 0.024))
     .png()
     .toBuffer()
   const outsideOnly = await sharp(merged)
@@ -1232,13 +1300,52 @@ export async function renderPremiumFrame(params: {
 </svg>`
   const innerHairline = await sharp(Buffer.from(innerHairlineSvg)).png().toBuffer()
 
+  const hairlineW = Math.max(1, Math.round(size * 0.0014))
+  const outerHairlineSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+  <rect
+    x="${layout.frameX + hairlineW / 2}"
+    y="${layout.frameY + hairlineW / 2}"
+    width="${Math.max(1, layout.frameSize - hairlineW)}"
+    height="${Math.max(1, layout.frameSize - hairlineW)}"
+    rx="${Math.max(1, layout.frameRadius - hairlineW / 2)}"
+    fill="none"
+    stroke="rgba(255,255,255,0.18)"
+    stroke-width="${hairlineW}"
+  />
+</svg>`
+  const outerHairline = await sharp(Buffer.from(outerHairlineSvg))
+    .ensureAlpha()
+    .composite([{ input: ringMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+
+  const innerGlowW = Math.max(1, Math.round(layout.frameStroke * 0.24))
+  const chamberInnerGlowSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+  <rect
+    x="${layout.chamberX + innerGlowW / 2}"
+    y="${layout.chamberY + innerGlowW / 2}"
+    width="${Math.max(1, layout.chamberSize - innerGlowW)}"
+    height="${Math.max(1, layout.chamberSize - innerGlowW)}"
+    rx="${Math.max(1, layout.chamberRadius - innerGlowW / 2)}"
+    fill="none"
+    stroke="rgba(140,180,255,0.22)"
+    stroke-width="${innerGlowW}"
+  />
+</svg>`
+  const chamberInnerGlow = await sharp(Buffer.from(chamberInnerGlowSvg))
+    .blur(Math.max(0.9, size * 0.0016))
+    .png()
+    .toBuffer()
+
   return sharp(strokeLayer)
     .composite([
       { input: await applyOpacity(faceSoft, 0.16), blend: 'screen' },
-      { input: await applyOpacity(faceEmission, 0.22), blend: 'screen' },
+      { input: await applyOpacity(faceEmission, 0.20), blend: 'screen' },
       { input: await applyOpacity(faceRollover, 0.52), blend: 'screen' },
       { input: contactShadowInside, blend: 'multiply' },
-      { input: await applyOpacity(innerHairline, 0.8), blend: 'screen' },
+      { input: await applyOpacity(chamberInnerGlow, 0.72), blend: 'screen' },
+      { input: await applyOpacity(innerHairline, 0.86), blend: 'screen' },
+      { input: await applyOpacity(outerHairline, 0.90), blend: 'screen' },
     ])
     .png()
     .toBuffer()
@@ -2372,6 +2479,7 @@ export async function renderBreakoutLayer(params: {
   layout: PremiumLayout
   sourceImage?: Uint8Array
   subjectMaskSourceImage?: Uint8Array
+  allowFallbackBand?: boolean
   opacity?: number
   scale?: number
   topBiasPx?: number
@@ -2478,7 +2586,32 @@ export async function renderBreakoutLayer(params: {
   let breakoutOpacity = params.opacity ?? 0.26
   let fallbackBandUsed = false
   let fallbackDetailMaskUsed = false
-  if (!subjectMask) {
+  if (subjectMask) {
+    // Add subtle frame-contact shadow so real subject breakouts read as depth, not paste.
+    const shadowOpacity =
+      params.sourceClass === 'illustration' ? 0.16
+      : params.sourceClass === 'portraitPhoto' ? 0.22
+      : 0.18
+    const shadowBlur = Math.max(1.4, size * 0.0032)
+    const shadowOffsetY = Math.max(1, Math.round(layout.frameStroke * 0.10))
+    const shadowSilhouette = await sharp(masked)
+      .ensureAlpha()
+      .modulate({ brightness: 0, saturation: 0 })
+      .png()
+      .toBuffer()
+    const shadowSoft = await sharp(shadowSilhouette)
+      .blur(shadowBlur)
+      .png()
+      .toBuffer()
+    const shadowShifted = await createTransparentCanvas(size)
+      .composite([{ input: await applyOpacity(shadowSoft, shadowOpacity), left: 0, top: shadowOffsetY }])
+      .png()
+      .toBuffer()
+    masked = await sharp(shadowShifted)
+      .composite([{ input: masked, blend: 'over' }])
+      .png()
+      .toBuffer()
+  } else if (params.allowFallbackBand) {
     fallbackBandUsed = true
     const breakoutSeed = masked
     const fallbackRadius = Math.max(1, Math.round(layout.breakoutWidth * 0.24))
@@ -2560,6 +2693,20 @@ export async function renderBreakoutLayer(params: {
     breakoutOpacity = fallbackDetailMaskUsed
       ? Math.min(0.21, params.opacity ?? 0.24)
       : Math.min(0.17, params.opacity ?? 0.22)
+  } else {
+    if (BREAKOUT_DEBUG_LOG_ENABLED) {
+      console.info('[breakout-debug]', JSON.stringify({
+        step: 'renderBreakoutLayer:end',
+        breakoutOpacity: 0,
+        breakoutDrawCount: 0,
+        softBlurApplied: false,
+        fallbackBandUsed: false,
+        fallbackDetailMaskUsed: false,
+        forceAlphaMask: !!subjectRefCanvas,
+        suppressedReason: 'no-subject-mask-and-fallback-disabled',
+      }))
+    }
+    return createTransparentCanvas(size).png().toBuffer()
   }
   await writeBreakoutDebugAsset('5-breakout-isolated-sprite.png', masked)
   await debugLogLayerBounds('breakoutSprite', masked)
@@ -2690,17 +2837,18 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       preparedHeroCutoutAvailable: hasHeroCutoutSource,
       preparedHeroCutoutBreakoutAllowed: breakoutAllowedByPreparedHeroCutout,
     })
-    const breakoutDesired =
-      analysis.fitMode === 'cover' &&
-      !analysis.brightBadgeLike &&
-      !params.suppressBreakout
-    breakoutDesiredForLog = breakoutDesired
-    breakoutDecisionReason =
-      params.suppressBreakout ? 'suppressed-by-policy'
-      : analysis.fitMode !== 'cover' ? `fit-mode:${analysis.fitMode}`
-      : analysis.brightBadgeLike ? 'bright-badge-contained'
-      : 'breakout-eligible'
-    const allowBreakoutForLayout = breakoutDesired
+    const rembgProbe = await probeRembgRuntime()
+    const breakoutPlan = decideBreakoutPlan({
+      analysis,
+      suppressBreakout: params.suppressBreakout,
+      breakoutSourceKind,
+      rembgAvailable: rembgProbe.available,
+    })
+    breakoutDesiredForLog = breakoutPlan.breakoutRequested
+    breakoutDecisionReason = `plan:${breakoutPlan.reason}`
+    const allowBreakoutForLayout =
+      breakoutPlan.mode !== 'none' ||
+      (ALLOW_PREMIUM_FALLBACK_BAND && breakoutPlan.breakoutRequested)
     const presetScaleBoost =
       resolvedPreset === 'hero' ? (analysis.sourceClass === 'illustration' ? 1.038 : 1.024)
       : resolvedPreset === 'pixel' ? 0.994
@@ -2735,7 +2883,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     })
     await writeBreakoutDebugAsset('1-clipped-in-frame-art.png', artworkLayer)
 
-    if (breakoutDesired) {
+    if (allowBreakoutForLayout) {
       const breakoutOpacity =
         analysis.sourceClass === 'illustration'
           ? (resolvedPreset === 'hero' ? 0.98 : 0.92)
@@ -2751,41 +2899,62 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         1.16,
       )
       let subjectMaskSourceImage: Uint8Array | undefined
-      let breakoutPlanSource: 'heroCutout' | 'sourceAlpha' | 'rembgCutout' | 'fallbackBand' = 'fallbackBand'
-      if (breakoutSourceKind === 'heroCutout') {
+      let breakoutPlanSource: 'heroCutout' | 'sourceAlpha' | 'rembgCutout' | 'fallbackBand' | 'none' =
+        breakoutPlan.mode === 'none' ? 'none' : breakoutPlan.mode
+      let allowFallbackBand = false
+      let shouldRenderBreakout = false
+      if (breakoutPlan.mode === 'heroCutout') {
         subjectMaskSourceImage = new Uint8Array(params.heroCutoutSourceImage!)
         breakoutPlanSource = 'heroCutout'
-      } else if (breakoutSourceKind === 'sourceAlpha') {
+        shouldRenderBreakout = true
+      } else if (breakoutPlan.mode === 'sourceAlpha') {
         breakoutPlanSource = 'sourceAlpha'
-      } else {
+        shouldRenderBreakout = true
+      } else if (breakoutPlan.mode === 'rembgCutout') {
         const rembgCutout = await extractForegroundRembg(normalizedSource)
         if (rembgCutout && rembgCutout.length > 0) {
           subjectMaskSourceImage = new Uint8Array(rembgCutout)
           breakoutPlanSource = 'rembgCutout'
+          shouldRenderBreakout = true
           await writeBreakoutDebugAsset('0-rembg-cutout.png', rembgCutout)
+        } else if (ALLOW_PREMIUM_FALLBACK_BAND) {
+          allowFallbackBand = true
+          breakoutPlanSource = 'fallbackBand'
+          shouldRenderBreakout = true
         }
+      } else if (ALLOW_PREMIUM_FALLBACK_BAND && breakoutPlan.breakoutRequested) {
+        allowFallbackBand = true
+        breakoutPlanSource = 'fallbackBand'
+        shouldRenderBreakout = true
       }
-      breakoutModeForLog = breakoutPlanSource
-      breakoutDecisionReason = `mode:${breakoutPlanSource}`
-      try {
-        breakoutLayer = await renderBreakoutLayer({
-          size,
-          layout,
-          sourceImage: new Uint8Array(normalizedSource),
-          subjectMaskSourceImage,
-          opacity: breakoutOpacity,
-          scale: breakoutScale,
-          topBiasPx: breakoutTopBiasPx,
-          sourceClass: analysis.sourceClass,
-        })
-      } catch (breakoutError) {
+      breakoutModeForLog = shouldRenderBreakout ? breakoutPlanSource : 'none'
+      breakoutDecisionReason = shouldRenderBreakout
+        ? `mode:${breakoutPlanSource}`
+        : `plan:${breakoutPlan.reason}`
+      if (shouldRenderBreakout) {
+        try {
+          breakoutLayer = await renderBreakoutLayer({
+            size,
+            layout,
+            sourceImage: new Uint8Array(normalizedSource),
+            subjectMaskSourceImage,
+            allowFallbackBand,
+            opacity: breakoutOpacity,
+            scale: breakoutScale,
+            topBiasPx: breakoutTopBiasPx,
+            sourceClass: analysis.sourceClass,
+          })
+        } catch (breakoutError) {
+          breakoutLayer = null
+          breakoutModeForLog = 'none'
+          breakoutDecisionReason = 'breakout-layer-render-error'
+          console.warn('[token/image] premium breakout render failed; rendering contained icon:', {
+            sourceKind: breakoutSourceKind,
+            message: breakoutError instanceof Error ? breakoutError.message : String(breakoutError ?? ''),
+          })
+        }
+      } else {
         breakoutLayer = null
-        breakoutModeForLog = 'none'
-        breakoutDecisionReason = 'breakout-layer-render-error'
-        console.warn('[token/image] premium breakout render failed; rendering contained icon:', {
-          sourceKind: breakoutSourceKind,
-          message: breakoutError instanceof Error ? breakoutError.message : String(breakoutError ?? ''),
-        })
       }
       if (BREAKOUT_DEBUG_LOG_ENABLED) {
         console.info('[breakout-debug]', JSON.stringify({
@@ -2798,6 +2967,12 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           breakoutAllowed: allowBreakoutForLayout,
           breakoutSource: breakoutSourceKind,
           breakoutPlanSource,
+          breakoutPlanReason: breakoutPlan.reason,
+          breakoutPlanMode: breakoutPlan.mode,
+          rembgCandidate: breakoutPlan.rembgCandidate,
+          rembgAvailable: rembgProbe.available,
+          allowFallbackBand,
+          shouldRenderBreakout,
           sourceAlphaBreakoutAllowed,
           breakoutAllowedByPreparedHeroCutout,
         }))
@@ -2884,6 +3059,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       mode: breakoutModeForLog,
       reason: breakoutDecisionReason,
       breakoutDrawn: Boolean(breakoutLayer),
+      fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
       suppressBreakout: Boolean(params.suppressBreakout),
       sourceClass: analysis?.sourceClass ?? null,
       fitMode: analysis?.fitMode ?? null,
@@ -2902,5 +3078,6 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 export const __testables = {
   resolveBreakoutSourceKind,
   resolveSourceAlphaBreakoutAllowed,
+  decideBreakoutPlan,
 }
 

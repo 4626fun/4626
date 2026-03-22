@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveWaitlistEntryCtaState } from './JoinWaitlistCta'
+import { deriveWaitlistEntryCtaState, shouldFallbackJoinWaitlistEntry } from './JoinWaitlistCta'
 
 describe('deriveWaitlistEntryCtaState', () => {
   it('shows join waitlist for unauthenticated users', () => {
@@ -63,5 +63,35 @@ describe('deriveWaitlistEntryCtaState', () => {
         ownerDelegationReady: true,
       }),
     ).toBe('open_app')
+  })
+
+  it('falls back to the waitlist modal when Privy is not ready for join auth', () => {
+    expect(
+      shouldFallbackJoinWaitlistEntry({
+        ctaState: 'join',
+        privyClientStatus: 'loading',
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldFallbackJoinWaitlistEntry({
+        ctaState: 'join',
+        privyClientStatus: 'disabled',
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldFallbackJoinWaitlistEntry({
+        ctaState: 'join',
+        privyClientStatus: 'ready',
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldFallbackJoinWaitlistEntry({
+        ctaState: 'continue_setup',
+        privyClientStatus: 'loading',
+      }),
+    ).toBe(false)
   })
 })

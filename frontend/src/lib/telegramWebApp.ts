@@ -63,6 +63,7 @@ export type TelegramMiniAppSession = {
 
 const TELEGRAM_WEB_APP_SCRIPT_URL = 'https://telegram.org/js/telegram-web-app.js?61'
 const TELEGRAM_SESSION_STORAGE_KEY = 'cv_tg_miniapp_session_v1'
+const TELEGRAM_SESSION_REQUEST_TIMEOUT_MS = 12_000
 let telegramScriptLoadPromise: Promise<void> | null = null
 let memoizedMiniAppSession: TelegramMiniAppSession | null = null
 let inFlightMiniAppSessionInitData = ''
@@ -205,6 +206,13 @@ function hashString(value: string): string {
   return `tg-${Math.abs(hash)}`
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
+    ((error as { name?: unknown } | null)?.name === 'AbortError')
+  )
+}
+
 export function readTelegramMiniAppIdentityKey(): string {
   const initData = readTelegramMiniAppInitData()
   if (!initData) return ''
@@ -293,6 +301,7 @@ type EnsureTelegramMiniAppSessionResult =
 
 export async function ensureTelegramMiniAppSession(params?: {
   fetcher?: (path: string, init?: ApiFetchInit) => Promise<Response>
+  timeoutMs?: number
 }): Promise<EnsureTelegramMiniAppSessionResult> {
   const webApp = await loadTelegramWebApp()
   const initData = asTrimmed(webApp?.initData ?? '')
@@ -315,12 +324,35 @@ export async function ensureTelegramMiniAppSession(params?: {
   }
 
   const fetcher = params?.fetcher ?? apiFetch
+  const timeoutMs = Math.max(1_000, Math.floor(params?.timeoutMs ?? TELEGRAM_SESSION_REQUEST_TIMEOUT_MS))
   const requestPromise = (async (): Promise<EnsureTelegramMiniAppSessionResult> => {
-    const response = await fetcher('/api/telegram/miniapp/session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ initData }),
-    })
+    const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null
+    const timeoutId =
+      abortController !== null
+        ? globalThis.setTimeout(() => {
+            abortController.abort()
+          }, timeoutMs)
+        : null
+    let response: Response
+    try {
+      response = await fetcher('/api/telegram/miniapp/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ initData }),
+        ...(abortController ? { signal: abortController.signal } : null),
+      })
+    } catch (error) {
+      clearStoredSession()
+      return {
+        ok: false,
+        error: isAbortError(error) ? 'telegram_miniapp_session_timeout' : 'telegram_miniapp_session_unreachable',
+        statusCode: isAbortError(error) ? 504 : 503,
+      }
+    } finally {
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId)
+      }
+    }
     const json = (await response.json().catch(() => null)) as MiniAppSessionEnvelope | null
     if (!response.ok || !json?.success || !json.data) {
       return {
