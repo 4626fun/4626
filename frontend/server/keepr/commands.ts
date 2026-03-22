@@ -1,5 +1,4 @@
 import type { Address } from 'viem'
-import sharp from 'sharp'
 
 import { checkSharesEligibility } from '../_lib/keeprGating.js'
 import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../_lib/keeprRegistry.js'
@@ -46,127 +45,6 @@ function formatHelpCommandRow(command: string, description: string, permission?:
     return `<code>${safeCommand}</code> — ${safeDescription} <i>(${safePermission})</i>`
   }
   return `<code>${safeCommand}</code> — ${safeDescription}`
-}
-
-function buildMarketChartPoints(values: number[], width: number, height: number): string {
-  if (values.length === 0) return ''
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = Math.max(max - min, 1e-9)
-  return values
-    .map((value, index) => {
-      const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width
-      const normalized = (value - min) / span
-      const y = height - normalized * height
-      return `${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
-}
-
-async function renderMarketChartCardPng(params: {
-  symbol: string
-  rangeLabel: string
-  closes: number[]
-  firstDate: string
-  lastDate: string
-  firstClose: number | null
-  lastClose: number | null
-  pct: number | null
-  minLow: number | null
-  maxHigh: number | null
-}): Promise<Buffer | null> {
-  if (params.closes.length < 2) return null
-
-  const width = 1200
-  const height = 720
-  const chartWidth = 980
-  const chartHeight = 360
-  const chartLeft = 110
-  const chartTop = 210
-  const points = buildMarketChartPoints(params.closes, chartWidth, chartHeight)
-  if (!points) return null
-
-  const pctColor = params.pct !== null && params.pct < 0 ? '#ff6b6b' : '#38d996'
-  const pointList = points.split(' ')
-  const lastPoint = pointList.length > 0 ? pointList[pointList.length - 1] ?? '' : ''
-  const lastPointY = Number(lastPoint.split(',')[1] ?? chartHeight / 2)
-  const rangeText =
-    params.maxHigh !== null && params.minLow !== null
-      ? `Range ${params.minLow.toFixed(2)} - ${params.maxHigh.toFixed(2)}`
-      : 'Range unavailable'
-  const closeText =
-    params.firstClose !== null && params.lastClose !== null
-      ? `${params.firstClose.toFixed(2)} -> ${params.lastClose.toFixed(2)}`
-      : 'Close unavailable'
-  const pctText = params.pct !== null ? `${params.pct >= 0 ? '+' : ''}${params.pct.toFixed(2)}%` : 'n/a'
-
-  const gridLines = Array.from({ length: 5 }, (_, idx) => {
-    const y = chartTop + (idx * chartHeight) / 4
-    return `<line x1="${chartLeft}" y1="${y}" x2="${chartLeft + chartWidth}" y2="${y}" stroke="rgba(255,255,255,0.08)" stroke-width="1" />`
-  }).join('')
-
-  const svg = `
-    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="bg" x1="0" y1="0" x2="${width}" y2="${height}" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#0b1220"/>
-          <stop offset="1" stop-color="#111c2f"/>
-        </linearGradient>
-        <linearGradient id="line" x1="${chartLeft}" y1="${chartTop}" x2="${chartLeft + chartWidth}" y2="${chartTop + chartHeight}" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#5eead4"/>
-          <stop offset="1" stop-color="#34d399"/>
-        </linearGradient>
-      </defs>
-      <rect width="${width}" height="${height}" rx="36" fill="url(#bg)"/>
-      <rect x="48" y="48" width="${width - 96}" height="${height - 96}" rx="28" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)"/>
-      <text x="86" y="112" fill="#7dd3fc" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="700">AKITA | MARKET CHART</text>
-      <text x="86" y="160" fill="#f8fafc" font-size="64" font-family="Inter, Arial, sans-serif" font-weight="700">${params.symbol}</text>
-      <text x="${width - 86}" y="112" fill="#cbd5e1" font-size="28" font-family="Inter, Arial, sans-serif" text-anchor="end">${params.rangeLabel}</text>
-      <text x="86" y="206" fill="#94a3b8" font-size="24" font-family="Inter, Arial, sans-serif">${params.firstDate} -> ${params.lastDate}</text>
-      <rect x="${width - 282}" y="132" width="196" height="64" rx="20" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)"/>
-      <text x="${width - 184}" y="174" fill="${pctColor}" font-size="34" font-family="Inter, Arial, sans-serif" font-weight="700" text-anchor="middle">${pctText}</text>
-      ${gridLines}
-      <polyline points="${points}" transform="translate(${chartLeft} ${chartTop})" stroke="url(#line)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
-      <circle cx="${chartLeft + chartWidth}" cy="${chartTop + lastPointY}" r="10" fill="#5eead4"/>
-      <text x="86" y="${height - 128}" fill="#f8fafc" font-size="34" font-family="Inter, Arial, sans-serif" font-weight="600">${closeText}</text>
-      <text x="86" y="${height - 84}" fill="#94a3b8" font-size="24" font-family="Inter, Arial, sans-serif">${rangeText}</text>
-    </svg>
-  `
-
-  try {
-    return await sharp(Buffer.from(svg)).png().toBuffer()
-  } catch {
-    return null
-  }
-}
-
-function buildMarketChartCaption(params: {
-  symbol: string
-  rangeLabel: string
-  points: number
-  firstDate: string
-  lastDate: string
-  firstClose: number | null
-  lastClose: number | null
-  pct: number | null
-  provider?: string | null
-}): string {
-  const summary =
-    params.firstClose !== null && params.lastClose !== null
-      ? `${params.firstClose.toFixed(2)} -> ${params.lastClose.toFixed(2)}${params.pct !== null ? ` (${formatSignedNumber(params.pct, 2)}%)` : ''}`
-      : 'Close unavailable'
-  const lines = [
-    '<b>AKITA | MARKET CHART</b>',
-    `<code>/mkt chart ${escapeTelegramHtml(params.symbol)} ${escapeTelegramHtml(params.rangeLabel)}</code>`,
-    '',
-    `<blockquote>${escapeTelegramHtml(`${params.symbol} • ${params.rangeLabel}\n${summary}`)}</blockquote>`,
-    '',
-    `${escapeTelegramHtml(`${params.points} points • ${params.firstDate} -> ${params.lastDate}`)}`,
-  ]
-  if (params.provider) {
-    lines.push(escapeTelegramHtml(`Provider: ${params.provider}`))
-  }
-  return lines.join('\n')
 }
 
 function escapeTelegramHtml(value: string): string {
@@ -1003,45 +881,9 @@ async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
       lines.push(`- range: high ${maxHigh.toFixed(2)} | low ${minLow.toFixed(2)}`)
     }
     if (envelope?.provider) lines.push(`- provider: ${envelope.provider}`)
-    const chartBuffer = await renderMarketChartCardPng({
-      symbol,
-      rangeLabel: range.label,
-      closes,
-      firstDate: String(first.date).slice(0, 10),
-      lastDate: String(last.date).slice(0, 10),
-      firstClose,
-      lastClose,
-      pct,
-      minLow,
-      maxHigh,
-    })
     return {
       ok: true,
       response: lines.join('\n'),
-      ...(chartBuffer
-        ? {
-            action: {
-              telegramMedia: {
-                kind: 'photo',
-                bytes: chartBuffer,
-                contentType: 'image/png',
-                filename: `market-chart-${symbol.toLowerCase()}-${range.label.replace(/[^a-z0-9._-]+/gi, '-')}.png`,
-                caption: buildMarketChartCaption({
-                  symbol,
-                  rangeLabel: range.label,
-                  points: points.length,
-                  firstDate: String(first.date).slice(0, 10),
-                  lastDate: String(last.date).slice(0, 10),
-                  firstClose,
-                  lastClose,
-                  pct,
-                  provider: envelope?.provider ? String(envelope.provider) : null,
-                }),
-                suppressText: true,
-              },
-            },
-          }
-        : {}),
     }
   }
 
