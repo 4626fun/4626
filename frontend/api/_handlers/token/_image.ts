@@ -417,7 +417,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 103
+const FRAME_STYLE_V = 104
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -449,7 +449,7 @@ const TOKEN_ICON_RECIPES: Record<LayoutMode, Omit<TokenIconRecipe, 'breakout'>> 
 
 const BREAKOUT_CONFIG = {
   enabled: true,
-  riseAboveFrameRatio: 0.175,
+  riseAboveFrameRatio: 0.21,
   visibleBelowFrameRatio: 0.055,
   fadeBelowFrameRatio: 0.21,
   minForegroundCoverage: 0.025,

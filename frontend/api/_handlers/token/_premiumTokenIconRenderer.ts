@@ -909,14 +909,26 @@ function decideBreakoutPlan(params: {
     analysis.fitMode === 'cover' &&
     !analysis.brightBadgeLike &&
     !params.suppressBreakout
+  const minTopCenterStdDev =
+    analysis.sourceClass === 'portraitPhoto' ? 17
+    : analysis.sourceClass === 'illustration' ? 16
+    : 20
+  const minTopOccupancy =
+    analysis.sourceClass === 'portraitPhoto' ? 0.035
+    : analysis.sourceClass === 'illustration' ? 0.045
+    : 0.06
+  const maxTopOccupancy =
+    analysis.sourceClass === 'portraitPhoto' ? 0.36
+    : analysis.sourceClass === 'illustration' ? 0.34
+    : 0.24
   const rembgCandidate =
     breakoutRequested &&
     !analysis.hasTransparency &&
     !analysis.lowResolution &&
     (analysis.sourceClass === 'portraitPhoto' || analysis.sourceClass === 'illustration') &&
-    analysis.topCenterStdDev > 20 &&
-    analysis.topOccupancy > 0.06 &&
-    analysis.topOccupancy < 0.24
+    analysis.topCenterStdDev > minTopCenterStdDev &&
+    analysis.topOccupancy > minTopOccupancy &&
+    analysis.topOccupancy < maxTopOccupancy
 
   if (params.suppressBreakout) {
     return { mode: 'none', breakoutRequested, rembgCandidate, reason: 'suppressed' }
@@ -2110,12 +2122,59 @@ export async function renderArtworkLayer(params: {
     .png()
     .toBuffer()
 
+  // Subtle chamber-clipped sheen makes the artwork read through a glass finish.
+  const sheenOpacity =
+    isBrightTone ? 0.10
+    : isPixelArt ? 0.08
+    : isPortraitHero ? 0.18
+    : 0.14
+  const glassSheenSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="floorSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0)"/>
+      <stop offset="68%" stop-color="rgba(255,255,255,0)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0.22)"/>
+    </linearGradient>
+    <radialGradient id="specular" cx="28%" cy="18%" r="46%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.16)"/>
+      <stop offset="44%" stop-color="rgba(255,255,255,0.05)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>
+  <rect
+    x="${layout.chamberX}"
+    y="${layout.chamberY}"
+    width="${layout.chamberSize}"
+    height="${layout.chamberSize}"
+    rx="${layout.chamberRadius}"
+    fill="url(#specular)"
+  />
+  <rect
+    x="${layout.chamberX}"
+    y="${layout.chamberY}"
+    width="${layout.chamberSize}"
+    height="${layout.chamberSize}"
+    rx="${layout.chamberRadius}"
+    fill="url(#floorSheen)"
+  />
+</svg>`
+  const glassSheen = await sharp(Buffer.from(glassSheenSvg)).png().toBuffer()
+  const glassSheenClipped = await sharp(glassSheen)
+    .ensureAlpha()
+    .composite([{ input: chamberMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+  const glossyHero = await sharp(framedHero)
+    .composite([{ input: await applyOpacity(glassSheenClipped, sheenOpacity), blend: 'screen' }])
+    .png()
+    .toBuffer()
+
   const shouldRevealRearLayers =
     params.sourceClass === 'portraitPhoto' ||
     params.sourceClass === 'illustration' ||
     params.sourceClass === 'generic'
   if (!shouldRevealRearLayers) {
-    return framedHero
+    return glossyHero
   }
 
   const rearRevealMaskSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
@@ -2136,7 +2195,7 @@ export async function renderArtworkLayer(params: {
   />
 </svg>`
   const rearRevealMask = await sharp(Buffer.from(rearRevealMaskSvg)).png().toBuffer()
-  return sharp(framedHero)
+  return sharp(glossyHero)
     .ensureAlpha()
     .composite([{ input: rearRevealMask, blend: 'dest-in' }])
     .png()
@@ -2750,13 +2809,13 @@ async function renderCreatorSignature(params: {
   const lockupWidth = squareSize + gap + textWidth
 
   const lockupRightEdge =
-    layout.frameX + layout.frameSize - Math.round(layout.frameStroke * 0.62)
+    layout.frameX + layout.frameSize - Math.round(layout.frameStroke * 0.56)
   const squareX = lockupRightEdge - lockupWidth
 
   const textX = squareX + squareSize + gap
 
   const bottomBandCenterY =
-    layout.frameY + layout.frameSize - Math.round(layout.frameStroke * 0.62)
+    layout.frameY + layout.frameSize - Math.round(layout.frameStroke * 0.56)
   const squareY = Math.round(bottomBandCenterY - squareSize / 2)
 
   const squareRx = Math.max(1, Math.round(squareSize * 0.15))
@@ -2792,6 +2851,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   let breakoutDecisionReason = 'no-source'
   let sourceAlphaBreakoutAllowedForLog = false
   let breakoutDesiredForLog = false
+  let rembgCandidateForLog = false
   if (params.sourceImage && params.sourceImage.length > 0) {
     try {
       normalizedSource = await normalizeSourceImage(params.sourceImage)
@@ -2844,6 +2904,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       breakoutSourceKind,
       rembgAvailable: rembgProbe.available,
     })
+    rembgCandidateForLog = breakoutPlan.rembgCandidate
     breakoutDesiredForLog = breakoutPlan.breakoutRequested
     breakoutDecisionReason = `plan:${breakoutPlan.reason}`
     const allowBreakoutForLayout =
@@ -3064,6 +3125,9 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       sourceClass: analysis?.sourceClass ?? null,
       fitMode: analysis?.fitMode ?? null,
       sourceAlphaBreakoutAllowed: sourceAlphaBreakoutAllowedForLog,
+      rembgCandidate: rembgCandidateForLog,
+      topCenterStdDev: analysis?.topCenterStdDev ?? null,
+      topOccupancy: analysis?.topOccupancy ?? null,
       breakoutDesired: breakoutDesiredForLog,
       hasHeroCutoutSource: Boolean(params.heroCutoutSourceImage && params.heroCutoutSourceImage.length > 0),
       rembgAvailable: rembg.available,

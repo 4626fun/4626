@@ -201,6 +201,37 @@ async function countRegionRgbDifference(params: {
   return diffCount
 }
 
+function buildAnalysis(overrides: Partial<{
+  lowResolution: boolean
+  brightBadgeLike: boolean
+  hasTransparency: boolean
+  topCenterStdDev: number
+  topOccupancy: number
+  preferredScale: number
+  fitMode: 'cover' | 'contain'
+  artworkTone: 'default' | 'bright'
+  allowBreakout: boolean
+  sourceClass: 'brightBadge' | 'portraitPhoto' | 'illustration' | 'pixelArt' | 'generic'
+  isPortraitLikeHeroAsset: boolean
+  usePortraitEnhancement: boolean
+}> = {}) {
+  return {
+    lowResolution: false,
+    brightBadgeLike: false,
+    hasTransparency: false,
+    topCenterStdDev: 26,
+    topOccupancy: 0.12,
+    preferredScale: 1,
+    fitMode: 'cover' as const,
+    artworkTone: 'default' as const,
+    allowBreakout: false,
+    sourceClass: 'illustration' as const,
+    isPortraitLikeHeroAsset: false,
+    usePortraitEnhancement: false,
+    ...overrides,
+  }
+}
+
 describe('premium token icon renderer', () => {
   it('renders fallback symbol card when source is missing', async () => {
     const png = await renderPremiumTokenIcon({
@@ -266,6 +297,67 @@ describe('premium token icon renderer', () => {
     expect(sourceKind).toBe('none')
   })
 
+  it('plans no breakout for bright-badge and opaque pixel-art cases', () => {
+    const brightBadgePlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({
+        brightBadgeLike: true,
+        sourceClass: 'brightBadge',
+      }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'none',
+      rembgAvailable: true,
+    })
+    expect(brightBadgePlan.mode).toBe('none')
+    expect(brightBadgePlan.reason).toBe('bright-badge-like')
+
+    const pixelPlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({
+        sourceClass: 'pixelArt',
+        hasTransparency: false,
+        lowResolution: false,
+        topCenterStdDev: 34,
+        topOccupancy: 0.12,
+      }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'none',
+      rembgAvailable: true,
+    })
+    expect(pixelPlan.mode).toBe('none')
+    expect(pixelPlan.reason).toBe('rembg-not-candidate')
+  })
+
+  it('plans hero/source-alpha breakout and suppresses rembg when unavailable', () => {
+    const heroPlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({ sourceClass: 'illustration', hasTransparency: true }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'heroCutout',
+      rembgAvailable: false,
+    })
+    expect(heroPlan.mode).toBe('heroCutout')
+
+    const sourceAlphaPlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({ sourceClass: 'illustration', hasTransparency: true, allowBreakout: true }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'sourceAlpha',
+      rembgAvailable: false,
+    })
+    expect(sourceAlphaPlan.mode).toBe('sourceAlpha')
+
+    const rembgUnavailablePlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({
+        sourceClass: 'portraitPhoto',
+        hasTransparency: false,
+        topCenterStdDev: 28,
+        topOccupancy: 0.12,
+      }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'none',
+      rembgAvailable: false,
+    })
+    expect(rembgUnavailablePlan.mode).toBe('none')
+    expect(rembgUnavailablePlan.reason).toBe('rembg-unavailable')
+  })
+
   it('keeps chamber rendering sourced from artwork when hero cutout is provided', async () => {
     const source = await createSource({ width: 900, height: 1200 })
     const heroCutout = await createPreparedHeroCutout({ width: 900, height: 1200 })
@@ -289,7 +381,7 @@ describe('premium token icon renderer', () => {
     expect(centerDelta).toBeLessThan(30)
   })
 
-  it('renders an opaque-source breakout fallback when hero cutout is absent', async () => {
+  it('keeps opaque source contained when no clean breakout mask is available', async () => {
     const transparentSource = await createTransparentSource({ width: 900, height: 1200 })
     const opaqueSource = new Uint8Array(
       await sharp(Buffer.from(transparentSource))
@@ -304,7 +396,7 @@ describe('premium token icon renderer', () => {
       suppressBreakout: true,
       symbol: 'AKITA',
     })
-    const opaqueWithFallbackBreakout = await renderPremiumTokenIcon({
+    const opaqueAuto = await renderPremiumTokenIcon({
       size: 512,
       sourceImage: opaqueSource,
       symbol: 'AKITA',
@@ -312,14 +404,42 @@ describe('premium token icon renderer', () => {
 
     const topDiff = await countRegionRgbDifference({
       a: opaqueContained,
-      b: opaqueWithFallbackBreakout,
+      b: opaqueAuto,
       x0: 198,
       y0: 56,
       x1: 314,
       y1: 150,
       threshold: 28,
     })
-    expect(topDiff).toBeGreaterThan(40)
+    expect(topDiff).toBeLessThan(4)
+  })
+
+  it('renders visible above-frame breakout for prepared hero cutout masks', async () => {
+    const source = await createSource({ width: 900, height: 1200 })
+    const heroCutout = await createPreparedHeroCutout({ width: 900, height: 1200 })
+    const withBreakout = await renderPremiumTokenIcon({
+      size: 512,
+      sourceImage: source,
+      heroCutoutSourceImage: heroCutout,
+      symbol: 'AKITA',
+    })
+    const contained = await renderPremiumTokenIcon({
+      size: 512,
+      sourceImage: source,
+      heroCutoutSourceImage: heroCutout,
+      suppressBreakout: true,
+      symbol: 'AKITA',
+    })
+    const topDiff = await countRegionRgbDifference({
+      a: contained,
+      b: withBreakout,
+      x0: 198,
+      y0: 56,
+      x1: 314,
+      y1: 150,
+      threshold: 28,
+    })
+    expect(topDiff).toBeGreaterThan(30)
   })
 
   it('gracefully ignores invalid hero cutout bytes and keeps contained rendering', async () => {
