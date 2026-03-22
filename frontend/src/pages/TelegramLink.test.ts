@@ -13,6 +13,7 @@ import {
   shouldAutoRefreshTelegramLinkEmail,
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldAutoStartTelegramLink,
+  shouldShowResetTelegramLinkAccount,
   shouldShowRetryTelegramSession,
   waitForTelegramLinkPrivyAuth,
 } from './TelegramLink'
@@ -144,6 +145,37 @@ describe('TelegramLink helpers', () => {
         telegramMiniAppContext: true,
       }),
     ).toBe(true)
+  })
+
+  it('shows account reset affordance for authenticated users stuck before email verification', () => {
+    expect(
+      shouldShowResetTelegramLinkAccount({
+        sessionState: 'ready',
+        hasLinkContext: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+      }),
+    ).toBe(true)
+  })
+
+  it('hides account reset affordance when the user is unauthenticated or already linking', () => {
+    expect(
+      shouldShowResetTelegramLinkAccount({
+        sessionState: 'ready',
+        hasLinkContext: true,
+        privyAuthenticated: false,
+        linkState: 'idle',
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldShowResetTelegramLinkAccount({
+        sessionState: 'ready',
+        hasLinkContext: true,
+        privyAuthenticated: true,
+        linkState: 'linking',
+      }),
+    ).toBe(false)
   })
 
   it('auto-starts linking only once from idle state', () => {

@@ -286,6 +286,21 @@ export function shouldShowRetryTelegramSession(params: {
   return params.sessionState === 'error' && params.telegramMiniAppContext
 }
 
+export function shouldShowResetTelegramLinkAccount(params: {
+  sessionState: TelegramLinkSessionState
+  hasLinkContext: boolean
+  privyAuthenticated: boolean
+  linkState: TelegramLinkFlowState
+}): boolean {
+  return (
+    params.sessionState === 'ready' &&
+    params.hasLinkContext &&
+    params.privyAuthenticated &&
+    params.linkState !== 'linking' &&
+    params.linkState !== 'linked'
+  )
+}
+
 export function shouldAutoStartTelegramLink(params: {
   hasLinkContext: boolean
   sessionState: TelegramLinkSessionState
@@ -426,6 +441,13 @@ export function TelegramLink() {
 
   const privyReady = Boolean(privy.ready)
   const privyAuthenticated = Boolean(privy.authenticated)
+  const logout = useMemo(
+    () =>
+      typeof (privy as any)?.logout === 'function'
+        ? ((privy as any).logout as () => Promise<void>)
+        : null,
+    [privy],
+  )
   const getAccessToken = useMemo(
     () =>
       typeof privy.getAccessToken === 'function'
@@ -725,8 +747,24 @@ export function TelegramLink() {
     }
   }, [privyAuthenticated, refreshEmailVerificationState])
 
+  const onResetAccount = useCallback(async () => {
+    linkAttemptRef.current = ''
+    setLinkState('idle')
+    setLinkMessage(null)
+    setEmailState('unknown')
+    setEmailMessage(null)
+    if (typeof logout === 'function') {
+      try {
+        await logout()
+      } catch {
+        // ignore
+      }
+    }
+  }, [logout])
+
   const onSignIn = useCallback(async () => {
     const startedAuthenticated = privyAuthenticated
+    let forcedLogoutForEmailRetry = false
     setLinkState('authenticating')
     setLinkMessage(null)
     setEmailState(startedAuthenticated ? 'verifying' : 'checking')
@@ -740,11 +778,19 @@ export function TelegramLink() {
           setLinkMessage(null)
           return
         }
-        const launchEmailLogin = async () => {
+        const launchEmailLogin = async (params?: { forceFreshSession?: boolean }) => {
+          if (params?.forceFreshSession && typeof logout === 'function') {
+            try {
+              await logout()
+              forcedLogoutForEmailRetry = true
+            } catch {
+              // ignore
+            }
+          }
           await login({ loginMethods: ['email'] } as any)
         }
-        if (emailState.hasAnyEmailAccount) {
-          await launchEmailLogin()
+        if (emailState.hasAnyEmailAccount || typeof logout === 'function') {
+          await launchEmailLogin({ forceFreshSession: true })
         } else {
           const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
           if (typeof linkEmail === 'function') {
@@ -752,7 +798,7 @@ export function TelegramLink() {
               await linkEmail()
             } catch (error) {
               if (isPrivyEmailAlreadyLinkedError(error)) {
-                await launchEmailLogin()
+                await launchEmailLogin({ forceFreshSession: true })
               } else {
                 throw error
               }
@@ -764,7 +810,7 @@ export function TelegramLink() {
       } else {
         await login({ loginMethods: ['email'] } as any)
       }
-      if (!startedAuthenticated) {
+      if (!startedAuthenticated || forcedLogoutForEmailRetry) {
         const authSettled = await waitForTelegramLinkPrivyAuth({
           readSnapshot: () => privyStatusRef.current,
         })
@@ -802,7 +848,7 @@ export function TelegramLink() {
       setLinkState('error')
       setLinkMessage(message)
     }
-  }, [login, privy, privyAuthenticated, refreshEmailVerificationState])
+  }, [login, logout, privy, privyAuthenticated, refreshEmailVerificationState])
 
   const { statusVariant, statusTitle, statusMessage, canSignIn, canRetryLink } = getTelegramLinkViewState({
     sessionState,
@@ -817,6 +863,12 @@ export function TelegramLink() {
   const showRetrySessionButton = shouldShowRetryTelegramSession({
     sessionState,
     telegramMiniAppContext: isTelegramMiniAppContext(),
+  })
+  const showResetAccountButton = shouldShowResetTelegramLinkAccount({
+    sessionState,
+    hasLinkContext: Boolean(telegramLinkContext),
+    privyAuthenticated,
+    linkState,
   })
 
   return (
@@ -876,6 +928,16 @@ export function TelegramLink() {
               className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
             >
               Retry Telegram session
+            </button>
+          ) : null}
+
+          {showResetAccountButton ? (
+            <button
+              type="button"
+              onClick={() => void onResetAccount()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+            >
+              Sign out and retry
             </button>
           ) : null}
 
