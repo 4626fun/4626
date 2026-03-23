@@ -124,6 +124,7 @@ import { deleteTelegramMessage as deleteTelegramMessageShared, editTelegramInlin
 import { sendTelegramStarsInvoice as sendTelegramStarsInvoiceShared } from './webhook/telegramApi/payments.js'
 import { isTelegramContextAllowed } from './webhook/services/access.js'
 import { emitTelegramFunnelEvent as emitTelegramFunnelEventShared } from './webhook/services/funnel.js'
+import { buildTelegramProcessedCommandResponse } from './webhook/services/commandResponse.js'
 import { buildDeployCommandFromIntent as buildDeployCommandFromIntentShared, formatDeployTokenFailure as formatDeployTokenFailureShared } from './webhook/services/deploy.js'
 import {
   buildVaultDeployPreviewReplyMarkup as buildVaultDeployPreviewReplyMarkupShared,
@@ -5782,10 +5783,12 @@ async function executeTelegramCommand(params: {
     isPrivateChat: isPrivateChatId(params.chatId),
     emptyResponseFallback: 'Command received.',
   })
-  return {
-    text: buildPremiumObservedCommandText(params.text, processed.responseText) ?? processed.responseText,
-    media: resolveTelegramMediaFromAction(processed.action),
-  }
+  return buildTelegramProcessedCommandResponse({
+    commandText: params.text,
+    processed,
+    buildObservedCommandText: buildPremiumObservedCommandText,
+    resolveMediaFromAction: resolveTelegramMediaFromAction,
+  })
 }
 
 function formatTradeTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {

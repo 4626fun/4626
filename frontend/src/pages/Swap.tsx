@@ -852,7 +852,6 @@ export function Swap() {
     quoteUpdatedAt,
     isReady,
     approvalRequired,
-    quoteIsStale,
     diagnosticsEnabled,
     txDebug,
     canary7702Eligible,
@@ -1048,7 +1047,6 @@ export function Swap() {
   // request flood when the upstream API is unhealthy (e.g. 403/429).
   const busyRef = useRef(busy)
   busyRef.current = busy
-  const staleAutoRefreshAtRef = useRef(0)
 
   // Debounced auto-quote: only fires when actual swap inputs change.
   useEffect(() => {
@@ -1060,23 +1058,6 @@ export function Swap() {
     return () => window.clearTimeout(timer)
     // `busy` intentionally omitted — use busyRef to check at call-time.
   }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
-
-  // Auto-refresh stale quotes so users are never forced to click "Refresh".
-  useEffect(() => {
-    if (activePanel !== 'swap') return
-    if (!executionReady || !isReady) return
-    if (!quoteUpdatedAt || !quoteIsStale) return
-    if (typeof document !== 'undefined' && document.hidden) return
-    if (busyRef.current) return
-    const now = Date.now()
-    if (now - staleAutoRefreshAtRef.current < 12_000) return
-    const timer = window.setTimeout(() => {
-      if (busyRef.current) return
-      staleAutoRefreshAtRef.current = Date.now()
-      void handleQuote()
-    }, 350)
-    return () => window.clearTimeout(timer)
-  }, [activePanel, executionReady, isReady, quoteUpdatedAt, quoteIsStale, handleQuote])
 
   // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
   useEffect(() => {

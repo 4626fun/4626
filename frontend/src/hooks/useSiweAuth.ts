@@ -184,8 +184,8 @@ async function fetchAuthMeAddress(): Promise<string | null> {
     return authMeCacheAddress
   }
 
-  let request: Promise<string | null> | null = null
-  request = (async () => {
+  let requestPromise!: Promise<string | null>
+  requestPromise = (async () => {
     try {
       const res = await apiFetch('/api/auth/me', {
         headers: {
@@ -202,16 +202,16 @@ async function fetchAuthMeAddress(): Promise<string | null> {
       primeAuthMeCacheIfFresh(token, null)
       return null
     } finally {
-      if (authMeInFlight === request) {
+      if (authMeInFlight === requestPromise) {
         authMeInFlight = null
         authMeInFlightToken = null
       }
     }
   })()
 
-  authMeInFlight = request
+  authMeInFlight = requestPromise
   authMeInFlightToken = token
-  return request
+  return requestPromise
 }
 
 function notifyStoredSessionTokenChanged() {

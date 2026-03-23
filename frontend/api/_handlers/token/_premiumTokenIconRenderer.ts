@@ -148,6 +148,8 @@ const PREMIUM_BREAKOUT_MASK_MAX_COVERAGE_ILLUSTRATION =
   )
 const ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO =
   clamp(Number(process.env.TOKEN_PREMIUM_ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO ?? 0.018), 0, 0.03)
+const ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX =
+  clamp(Math.round(Number(process.env.TOKEN_PREMIUM_ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX ?? 1)), 0, 8)
 
 function getSegmentationBreakoutMaxCoverage(sourceClass?: SourceClass): number {
   if (sourceClass === 'illustration') {
@@ -425,6 +427,7 @@ async function logBreakoutRuntimeBannerOnce(): Promise<void> {
       breakoutCoverageMaxThresholdIllustration: getSegmentationBreakoutMaxCoverage('illustration'),
       alignTargetTopRatio: PREMIUM_ALIGN_TARGET_TOP_RATIO,
       alignMaxBiasRatio: PREMIUM_ALIGN_MAX_BIAS_RATIO,
+      illustrationBreakoutExtraDownPx: ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX,
       fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
       runtimeLogEnabled: BREAKOUT_RUNTIME_LOG_ENABLED,
       debugAssetDumpEnabled: Boolean(BREAKOUT_DEBUG_DIR),
@@ -3528,7 +3531,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
                   resolveIllustrationHeroBreakoutTopBiasRatio(analysis.topOccupancy)
                 )
               : 0.033
-          )) - 1)
+          )) - ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX)
         : topBiasPx
       const breakoutScale = clamp(
         renderScale * (analysis.sourceClass === 'illustration' && resolvedPreset === 'hero' ? 1.03 : 1),
@@ -3750,6 +3753,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       reason: breakoutDecisionReason,
       breakoutDrawn: Boolean(breakoutLayer),
       fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
+      illustrationBreakoutExtraDownPx: ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX,
       suppressBreakout: Boolean(params.suppressBreakout),
       sourceClass: analysis?.sourceClass ?? null,
       fitMode: analysis?.fitMode ?? null,

@@ -1,6 +1,6 @@
 import { logger } from '../_lib/logger.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
-import { normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
+import { isHandledConversationalSlashPrefix, normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
 import { toAgentError } from '../agent/eliza/_errors.js'
 import { parsePositiveNumber } from '../agent/eliza/_rateLimit.js'
 import { withRetry, withTimeout } from '../agent/eliza/_retry.js'
@@ -399,17 +399,6 @@ function isLikelyIdentityDrift(text: string): boolean {
   return false
 }
 
-function isHandledSlashPrefix(raw: string): boolean {
-  const l = raw.toLowerCase()
-  return (
-    l.startsWith('/ai') ||
-    l.startsWith('/keepr') ||
-    l.startsWith('/send') ||
-    l.startsWith('@keepr') ||
-    l.startsWith('@bot')
-  )
-}
-
 // ---------------------------------------------------------------------------
 // generateLlmResponse — thin adapter into the Eliza runtime pipeline
 // ---------------------------------------------------------------------------
@@ -439,7 +428,7 @@ export async function generateLlmResponse(params: {
     return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: true }
   }
 
-  if (rawText.startsWith('/') && !isHandledSlashPrefix(rawText)) {
+  if (rawText.startsWith('/') && !isHandledConversationalSlashPrefix(rawText)) {
     return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: true }
   }
 
