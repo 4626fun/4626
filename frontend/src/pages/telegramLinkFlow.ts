@@ -874,6 +874,14 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
 
     try {
       if (startedAuthenticated) {
+        const initialVerification = await refreshEmailVerificationState({ poll: true })
+        if (initialVerification.status === 'verified') {
+          setLinkState('idle')
+          setLinkMessage(null)
+          linkAttemptRef.current = ''
+          return
+        }
+
         const currentEmailState = getPrivyEmailState((privy as any)?.user)
         const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
         const authAction = resolveTelegramLinkEmailAuthAction({
@@ -881,16 +889,6 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
           hasVerifiedEmail: currentEmailState.hasVerifiedEmail,
           canLinkEmail: typeof linkEmail === 'function',
         })
-
-        if (authAction === 'verified') {
-          const verification = await refreshEmailVerificationState({ poll: true })
-          setLinkState('idle')
-          setLinkMessage(null)
-          if (verification.status === 'verified') {
-            linkAttemptRef.current = ''
-          }
-          return
-        }
 
         if (authAction === 'link_email' && typeof linkEmail === 'function') {
           try {
