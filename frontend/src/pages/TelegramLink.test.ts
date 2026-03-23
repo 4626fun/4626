@@ -12,6 +12,7 @@ import {
   getTelegramLinkViewState,
   isPrivyEmailAlreadyLinkedError,
   pollTelegramLinkEmailVerification,
+  resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldAutoStartTelegramLink,
@@ -219,6 +220,33 @@ describe('TelegramLink helpers', () => {
         alreadyAttemptedForToken: true,
       }),
     ).toBe(false)
+  })
+
+
+  it('does not force a fresh auth loop when an authenticated user already has an email account', () => {
+    expect(
+      resolveTelegramLinkEmailAuthAction({
+        hasAnyEmailAccount: true,
+        hasVerifiedEmail: false,
+        canLinkEmail: true,
+      }),
+    ).toBe('login')
+
+    expect(
+      resolveTelegramLinkEmailAuthAction({
+        hasAnyEmailAccount: true,
+        hasVerifiedEmail: true,
+        canLinkEmail: true,
+      }),
+    ).toBe('verified')
+
+    expect(
+      resolveTelegramLinkEmailAuthAction({
+        hasAnyEmailAccount: false,
+        hasVerifiedEmail: false,
+        canLinkEmail: true,
+      }),
+    ).toBe('link_email')
   })
 
   it('auto-refreshes account email state only from the initial unknown state', () => {
