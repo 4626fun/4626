@@ -9,6 +9,7 @@ import { getAppBaseUrl } from '@/lib/host'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
 
 import { buildWaitlistEmailLoginOptions } from './waitlistLoginOptions'
+import { isRecoveryRequiredAuthError } from './waitlistAuthState'
 
 type JoinWaitlistCtaProps = {
   className?: string
@@ -37,6 +38,10 @@ type WaitlistBootstrapResponse =
     } & WaitlistCtaAccountSummary)
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+type WaitlistBootstrapErrorEnvelope = ApiEnvelope<WaitlistBootstrapResponse> & {
+  code?: string
+  recoveryRequired?: boolean
+}
 
 export type WaitlistEntryCtaState = 'join' | 'continue_setup' | 'open_app'
 export type WaitlistEntryPrivyClientStatus = 'disabled' | 'loading' | 'ready'
@@ -56,6 +61,21 @@ export function shouldFallbackJoinWaitlistEntry(params: {
   privyClientStatus: WaitlistEntryPrivyClientStatus
 }): boolean {
   return params.ctaState === 'join' && params.privyClientStatus !== 'ready'
+}
+
+export function shouldEscalateBootstrapErrorToWaitlist(params: {
+  status: number
+  payload: WaitlistBootstrapErrorEnvelope | null
+}): boolean {
+  const { status, payload } = params
+  const code = typeof payload?.code === 'string' ? payload.code : undefined
+  const message = typeof payload?.error === 'string' ? payload.error : undefined
+  return isRecoveryRequiredAuthError({
+    status,
+    code,
+    message,
+    recoveryRequired: payload?.recoveryRequired === true,
+  })
 }
 
 function useSafePrivy() {
@@ -88,6 +108,14 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
   const [loadingState, setLoadingState] = useState(false)
   const [account, setAccount] = useState<WaitlistCtaAccountSummary | null>(null)
   const [ownerDelegationReady, setOwnerDelegationReady] = useState(false)
+  const routeToWaitlist = useCallback(() => {
+    if (typeof onPrivyDisabled === 'function') {
+      onPrivyDisabled()
+      return
+    }
+    if (typeof window === 'undefined' || window.location.hash === '#waitlist') return
+    window.location.assign('/#waitlist')
+  }, [onPrivyDisabled])
 
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
@@ -123,9 +151,18 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
         },
         body: JSON.stringify({}),
       })
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
+      const payload = (await response.json().catch(() => null)) as WaitlistBootstrapErrorEnvelope | null
       if (!response.ok || !payload?.success || !payload.data || payload.data.requiresPrivyAuth) {
         setAccount(null)
+        if (
+          !response.ok &&
+          shouldEscalateBootstrapErrorToWaitlist({
+            status: response.status,
+            payload,
+          })
+        ) {
+          routeToWaitlist()
+        }
         return
       }
       setAccount(payload.data)
@@ -135,7 +172,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
     } finally {
       setLoadingState(false)
     }
-  }, [getAccessToken, privyAuthed])
+  }, [getAccessToken, privyAuthed, routeToWaitlist])
 
   useEffect(() => {
     void loadAccount()

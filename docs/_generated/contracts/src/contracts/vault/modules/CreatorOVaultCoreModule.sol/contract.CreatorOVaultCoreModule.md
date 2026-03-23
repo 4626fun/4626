@@ -41,7 +41,7 @@ uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000
 ### MINIMUM_FIRST_DEPOSIT
 
 ```solidity
-uint256 internal constant MINIMUM_FIRST_DEPOSIT = 5_000_000e18
+uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18
 ```
 
 

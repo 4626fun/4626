@@ -333,7 +333,6 @@ describe('TelegramLink helpers', () => {
     ).toBe(false)
   })
 
-
   it('does not force a fresh auth loop when an authenticated user already has an email account', () => {
     expect(
       resolveTelegramLinkEmailAuthAction({

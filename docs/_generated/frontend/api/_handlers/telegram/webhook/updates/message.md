@@ -8,6 +8,24 @@
 
 ## Functions
 
+### extractSharedSelection()
+
+> **extractSharedSelection**(`message`): \{ `kind`: `"users"`; `requestId`: `number` \| `null`; `users`: `object`[]; \} \| \{ `chatId`: `string`; `kind`: `"chat"`; `requestId`: `number` \| `null`; `title`: `string`; `username`: `string`; \} \| `null`
+
+Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/updates/message.ts#L45)
+
+#### Parameters
+
+##### message
+
+[`TelegramMessage`](../types.md#telegrammessage) | `null`
+
+#### Returns
+
+\{ `kind`: `"users"`; `requestId`: `number` \| `null`; `users`: `object`[]; \} \| \{ `chatId`: `string`; `kind`: `"chat"`; `requestId`: `number` \| `null`; `title`: `string`; `username`: `string`; \} \| `null`
+
+***
+
 ### extractUpdateMessage()
 
 > **extractUpdateMessage**(`update`): [`TelegramMessage`](../types.md#telegrammessage) \| `null`

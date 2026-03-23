@@ -12,7 +12,7 @@
 
 > `const` **\_\_testables**: `object`
 
-Defined in: [api/\_handlers/token/\_image.ts:2458](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2458)
+Defined in: [api/\_handlers/token/\_image.ts:2501](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2501)
 
 #### Type Declaration
 
@@ -112,6 +112,10 @@ Defined in: [api/\_handlers/token/\_image.ts:2458](https://github.com/wenakita/4
 
 `Uint8Array`\<`ArrayBufferLike`\> \| `null`
 
+###### suppressBreakout?
+
+`boolean`
+
 ###### symbol
 
 `string`
@@ -134,13 +138,33 @@ Defined in: [api/\_handlers/token/\_image.ts:2458](https://github.com/wenakita/4
 
 `CreatorTokenArtwork` \| `null`
 
+##### resolveHeroCutoutLoadPolicy()
+
+> **resolveHeroCutoutLoadPolicy**: (`params`) => `HeroCutoutLoadPolicy`
+
+###### Parameters
+
+###### params
+
+###### heroCutoutArtworkUrl?
+
+`string` \| `null`
+
+###### heroCutoutSourceBytes?
+
+`Uint8Array`\<`ArrayBufferLike`\> \| `null`
+
+###### Returns
+
+`HeroCutoutLoadPolicy`
+
 ## Functions
 
 ### default()
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/token/\_image.ts:135](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L135)
+Defined in: [api/\_handlers/token/\_image.ts:161](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L161)
 
 Token Image Generator API
 

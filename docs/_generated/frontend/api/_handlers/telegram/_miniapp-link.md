@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/telegram/\_miniapp-link.ts:89](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_miniapp-link.ts#L89)
+Defined in: [api/\_handlers/telegram/\_miniapp-link.ts:91](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_miniapp-link.ts#L91)
 
 #### Parameters
 

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveWaitlistEntryCtaState, shouldFallbackJoinWaitlistEntry } from './JoinWaitlistCta'
+import {
+  deriveWaitlistEntryCtaState,
+  shouldEscalateBootstrapErrorToWaitlist,
+  shouldFallbackJoinWaitlistEntry,
+} from './JoinWaitlistCta'
 
 describe('deriveWaitlistEntryCtaState', () => {
   it('shows join waitlist for unauthenticated users', () => {
@@ -91,6 +95,43 @@ describe('deriveWaitlistEntryCtaState', () => {
       shouldFallbackJoinWaitlistEntry({
         ctaState: 'continue_setup',
         privyClientStatus: 'loading',
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldEscalateBootstrapErrorToWaitlist', () => {
+  it('escalates 409 bootstrap failures into waitlist flow', () => {
+    expect(
+      shouldEscalateBootstrapErrorToWaitlist({
+        status: 409,
+        payload: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('escalates explicit recovery-required payloads', () => {
+    expect(
+      shouldEscalateBootstrapErrorToWaitlist({
+        status: 400,
+        payload: {
+          success: false,
+          error: 'Recovery required',
+          code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+          recoveryRequired: true,
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('does not escalate generic bootstrap failures', () => {
+    expect(
+      shouldEscalateBootstrapErrorToWaitlist({
+        status: 500,
+        payload: {
+          success: false,
+          error: 'Failed to bootstrap waitlist account',
+        },
       }),
     ).toBe(false)
   })

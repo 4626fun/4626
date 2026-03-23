@@ -12,7 +12,7 @@
 
 > **fetchProtocolRewardsBalance**(`account`): `Promise`\<`bigint`\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L45)
+Defined in: [src/lib/onchain/protocolRewards.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L52)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:45](https://github.com/wenakita/
 
 > **fetchProtocolRewardsBalances**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L55)
+Defined in: [src/lib/onchain/protocolRewards.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L62)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:55](https://github.com/wenakita/
 
 > **fetchProtocolRewardsBalancesFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L78)
+Defined in: [src/lib/onchain/protocolRewards.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L85)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:78](https://github.com/wenakita/
 
 > **fetchProtocolRewardsWithdrawnFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L113)
+Defined in: [src/lib/onchain/protocolRewards.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L120)
 
 #### Parameters
 

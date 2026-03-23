@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/deploy/session/\_continue.ts:532](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_continue.ts#L532)
+Defined in: [api/\_handlers/deploy/session/\_continue.ts:527](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_continue.ts#L527)
 
 #### Parameters
 

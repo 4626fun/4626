@@ -12,7 +12,7 @@
 
 > **PremiumTokenIconParams** = `object`
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L10)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:13](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L13)
 
 #### Properties
 
@@ -20,31 +20,37 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:10](https://gith
 
 > `optional` **heroCutoutSourceImage**: `Uint8Array`
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:13](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L13)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L16)
 
 ##### renderPreset?
 
 > `optional` **renderPreset**: `RenderPreset`
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L15)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L19)
 
 ##### size
 
 > **size**: `number`
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L11)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L14)
 
 ##### sourceImage?
 
 > `optional` **sourceImage**: `Uint8Array`
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L12)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L15)
+
+##### suppressBreakout?
+
+> `optional` **suppressBreakout**: `boolean`
+
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:17](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L17)
 
 ##### symbol?
 
 > `optional` **symbol**: `string`
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L14)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L18)
 
 ## Variables
 
@@ -52,9 +58,137 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:14](https://gith
 
 > `const` **\_\_testables**: `object`
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2455](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L2455)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:3595](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L3595)
 
 #### Type Declaration
+
+##### computeAlignedTopBiasPx()
+
+> **computeAlignedTopBiasPx**: (`params`) => `Promise`\<`SegmentationAlignmentResult`\>
+
+###### Parameters
+
+###### params
+
+###### baseTopBiasPx
+
+`number`
+
+###### fit
+
+`ArtworkFitMode`
+
+###### layout
+
+`PremiumLayout`
+
+###### maskRgbaPng
+
+`Buffer`
+
+###### scale
+
+`number`
+
+###### sourceClass
+
+`SourceClass`
+
+###### Returns
+
+`Promise`\<`SegmentationAlignmentResult`\>
+
+##### decideBreakoutPlan()
+
+> **decideBreakoutPlan**: (`params`) => `BreakoutPlan`
+
+###### Parameters
+
+###### params
+
+###### analysis
+
+`SourceAnalysis`
+
+###### breakoutSourceKind
+
+`BreakoutSourceKind`
+
+###### rembgAvailable
+
+`boolean`
+
+###### suppressBreakout?
+
+`boolean`
+
+###### Returns
+
+`BreakoutPlan`
+
+##### getTokenIconLayout()
+
+> **getTokenIconLayout**: (`size`, `preset`) => `PremiumLayout`
+
+###### Parameters
+
+###### size
+
+`number`
+
+###### preset
+
+`RenderPreset` = `'standard'`
+
+###### Returns
+
+`PremiumLayout`
+
+##### isSegmentationBreakoutCoverageAcceptable()
+
+> **isSegmentationBreakoutCoverageAcceptable**: (`coverage`) => `boolean`
+
+###### Parameters
+
+###### coverage
+
+`number`
+
+###### Returns
+
+`boolean`
+
+##### measureBreakoutMaskCoverage()
+
+> **measureBreakoutMaskCoverage**: (`params`) => `Promise`\<`number`\>
+
+###### Parameters
+
+###### params
+
+###### layout
+
+`PremiumLayout`
+
+###### maskRgbaPng
+
+`Buffer`
+
+###### scale
+
+`number`
+
+###### sourceClass
+
+`SourceClass`
+
+###### topBiasPx
+
+`number`
+
+###### Returns
+
+`Promise`\<`number`\>
 
 ##### resolveBreakoutSourceKind()
 
@@ -80,13 +214,33 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2455](https://gi
 
 `BreakoutSourceKind`
 
+##### resolveSourceAlphaBreakoutAllowed()
+
+> **resolveSourceAlphaBreakoutAllowed**: (`params`) => `boolean`
+
+###### Parameters
+
+###### params
+
+###### allowBreakout
+
+`boolean`
+
+###### suppressBreakout?
+
+`boolean`
+
+###### Returns
+
+`boolean`
+
 ## Functions
 
 ### renderArtworkLayer()
 
 > **renderArtworkLayer**(`params`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:1666](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L1666)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2118](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L2118)
 
 #### Parameters
 
@@ -138,7 +292,7 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:1666](https://gi
 
 > **renderBackgroundCard**(`params`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:718](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L718)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:1032](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L1032)
 
 #### Parameters
 
@@ -162,11 +316,15 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:718](https://git
 
 > **renderBreakoutLayer**(`params`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2097](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L2097)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2801](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L2801)
 
 #### Parameters
 
 ##### params
+
+###### allowFallbackBand?
+
+`boolean`
 
 ###### layout
 
@@ -192,6 +350,14 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2097](https://gi
 
 `Uint8Array`\<`ArrayBufferLike`\>
 
+###### subjectMaskKind?
+
+`"heroCutout"` \| `"sourceAlpha"` \| `"rembgCutout"`
+
+###### subjectMaskSourceImage?
+
+`Uint8Array`\<`ArrayBufferLike`\>
+
 ###### topBiasPx?
 
 `number`
@@ -206,7 +372,7 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2097](https://gi
 
 > **renderFrameBloom**(`params`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:946](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L946)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:1270](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L1270)
 
 #### Parameters
 
@@ -230,7 +396,7 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:946](https://git
 
 > **renderOuterGlow**(`params`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:853](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L853)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:1167](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L1167)
 
 #### Parameters
 
@@ -254,7 +420,7 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:853](https://git
 
 > **renderPremiumFrame**(`params`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:967](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L967)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:1291](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L1291)
 
 #### Parameters
 
@@ -278,7 +444,7 @@ Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:967](https://git
 
 > **renderPremiumTokenIcon**(`params`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:2249](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L2249)
+Defined in: [api/\_handlers/token/\_premiumTokenIconRenderer.ts:3206](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_premiumTokenIconRenderer.ts#L3206)
 
 #### Parameters
 

@@ -3071,53 +3071,130 @@ export async function renderBreakoutLayer(params: {
   return applyOpacity(masked, breakoutOpacity)
 }
 
+async function computeRegionLuma(params: {
+  image: Buffer
+  x: number
+  y: number
+  width: number
+  height: number
+}): Promise<number | null> {
+  const x0 = Math.max(0, Math.round(params.x))
+  const y0 = Math.max(0, Math.round(params.y))
+  const width = Math.max(1, Math.round(params.width))
+  const height = Math.max(1, Math.round(params.height))
+  const meta = await sharp(params.image).metadata()
+  const imageWidth = meta.width ?? 0
+  const imageHeight = meta.height ?? 0
+  if (imageWidth <= 0 || imageHeight <= 0) return null
+
+  const safeX = Math.min(x0, imageWidth - 1)
+  const safeY = Math.min(y0, imageHeight - 1)
+  const safeWidth = Math.max(1, Math.min(width, imageWidth - safeX))
+  const safeHeight = Math.max(1, Math.min(height, imageHeight - safeY))
+
+  const { data, info } = await sharp(params.image)
+    .ensureAlpha()
+    .extract({
+      left: safeX,
+      top: safeY,
+      width: safeWidth,
+      height: safeHeight,
+    })
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  let weightedLuma = 0
+  let alphaWeight = 0
+  for (let i = 0; i < data.length; i += info.channels) {
+    const alpha = (data[i + 3] ?? 0) / 255
+    if (alpha <= 0) continue
+    const r = data[i] ?? 0
+    const g = data[i + 1] ?? 0
+    const b = data[i + 2] ?? 0
+    const luma = r * 0.2126 + g * 0.7152 + b * 0.0722
+    weightedLuma += luma * alpha
+    alphaWeight += alpha
+  }
+
+  if (alphaWeight <= 0) return null
+  return weightedLuma / alphaWeight
+}
+
 async function renderCreatorSignature(params: {
   size: number
   layout: PremiumLayout
   symbol: string
+  backgroundLayer?: Buffer
 }): Promise<Buffer> {
-  const { size, layout, symbol } = params
+  const { size, layout, symbol, backgroundLayer } = params
   const MAX_CHARS = 12
   const displayName = symbol.slice(0, MAX_CHARS).toUpperCase()
+  const escapedDisplayName = escapeXml(displayName)
 
-  const baseFont = Math.round(size * 0.010)
+  const baseFont = Math.round(size * 0.0118)
   const fontSize = Math.max(
-    7,
+    8,
     displayName.length > 9
       ? Math.round(baseFont * (9 / displayName.length))
       : baseFont,
   )
 
-  const squareSize = Math.round(size * 0.0085)
+  const squareSize = Math.round(size * 0.0092)
   const gap = Math.round(size * 0.005)
 
   const letterSpacingEm = 0.06
   const textWidth = Math.ceil(displayName.length * fontSize * 0.70 + displayName.length * fontSize * letterSpacingEm)
   const lockupWidth = squareSize + gap + textWidth
 
-  const lockupRightEdge =
-    layout.frameX + layout.frameSize - Math.round(layout.frameStroke * 0.56)
-  const squareX = lockupRightEdge - lockupWidth
-
+  // Keep signature lockup comfortably inside the artwork chamber.
+  const chamberPadX = Math.max(8, Math.round(layout.chamberSize * 0.048))
+  const chamberPadY = Math.max(6, Math.round(layout.chamberSize * 0.042))
+  const lockupShiftLeft = Math.max(10, Math.round(layout.chamberSize * 0.068))
+  const lockupRightEdge = layout.chamberX + layout.chamberSize - lockupShiftLeft
+  const minSquareX = layout.chamberX + chamberPadX
+  const squareX = Math.max(minSquareX, lockupRightEdge - lockupWidth)
   const textX = squareX + squareSize + gap
 
-  const bottomBandCenterY =
-    layout.frameY + layout.frameSize - Math.round(layout.frameStroke * 0.56)
+  const bottomBandCenterY = layout.chamberY + layout.chamberSize - chamberPadY
   const squareY = Math.round(bottomBandCenterY - squareSize / 2)
 
   const squareRx = Math.max(1, Math.round(squareSize * 0.15))
   const letterSpacingPx = Math.round(fontSize * letterSpacingEm)
+  let textFill = 'rgba(0,0,0,0.82)'
+  let shadowFill = 'rgba(255,255,255,0.24)'
+  if (backgroundLayer) {
+    const sampleLuma = await computeRegionLuma({
+      image: backgroundLayer,
+      x: squareX - Math.max(1, gap),
+      y: squareY - Math.max(1, Math.round(fontSize * 0.45)),
+      width: lockupWidth + Math.max(2, gap * 2),
+      height: Math.max(squareSize, Math.round(fontSize * 1.65)),
+    })
+    if (sampleLuma !== null && sampleLuma < 118) {
+      textFill = 'rgba(255,255,255,0.95)'
+      shadowFill = 'rgba(0,0,0,0.48)'
+    }
+  }
+  const shadowDy = Math.max(1, Math.round(fontSize * 0.08))
 
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <rect x="${squareX}" y="${squareY}" width="${squareSize}" height="${squareSize}" rx="${squareRx}" fill="#2F7DFF"/>
+  <text x="${textX}" y="${bottomBandCenterY + shadowDy}"
+    dominant-baseline="central"
+    text-anchor="start"
+    font-family="Inter, 'Helvetica Neue', Arial, sans-serif"
+    font-weight="600"
+    font-size="${fontSize}"
+    fill="${shadowFill}"
+    letter-spacing="${letterSpacingPx}">${escapedDisplayName}</text>
   <text x="${textX}" y="${bottomBandCenterY}"
     dominant-baseline="central"
     text-anchor="start"
     font-family="Inter, 'Helvetica Neue', Arial, sans-serif"
     font-weight="600"
     font-size="${fontSize}"
-    fill="rgba(0,0,0,0.82)"
-    letter-spacing="${letterSpacingPx}">${displayName}</text>
+    fill="${textFill}"
+    letter-spacing="${letterSpacingPx}">${escapedDisplayName}</text>
 </svg>`
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
@@ -3443,7 +3520,12 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   }
 
   if (params.symbol) {
-    const signature = await renderCreatorSignature({ size, layout, symbol: params.symbol })
+    const signature = await renderCreatorSignature({
+      size,
+      layout,
+      symbol: params.symbol,
+      backgroundLayer: heroCompositeLayer,
+    })
     overlays.push(buildCompositeStep(signature, 'over'))
   }
 

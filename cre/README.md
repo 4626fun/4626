@@ -212,10 +212,17 @@ The command prints two artifacts:
 - token metadata JSON payload (mint/name/symbol/uri/image/extensions)
 - a ready-to-submit token-list entry payload (`chainId`, `address`, `symbol`, `name`, `decimals`, `logoURI`, `extensions.metadata`)
 
+`logoURI` resolution order:
+1. if `CREATOR_TOKEN` is provided, default to
+   `https://<api-origin>/v1/token/<creator-token>/image?chain=<creator-chain>&style=raw&format=png`
+   (stable proxy pattern)
+2. otherwise use `TOKEN_IMAGE` / `TOKEN_IMAGE_URL` (explicit image)
+3. if both are set, proxy wins by default; set `TOKEN_IMAGE_EXPLICIT_OVERRIDE=1` to force explicit image
+
 For reliable wallet/aggregator icon display (Phantom/Backpack/Jupiter/Meteora),
 complete all of the following:
 1. host a stable metadata URI (`TOKEN_METADATA_URI` or `TOKEN_URI`)
-2. host a stable HTTPS image URL (`TOKEN_IMAGE` or `TOKEN_IMAGE_URL`)
+2. use proxy fallback via `CREATOR_TOKEN` (or explicit image override when intentional)
 3. submit the generated token-list entry to the target ecosystem indexers
 4. avoid changing metadata/image URLs after launch
 

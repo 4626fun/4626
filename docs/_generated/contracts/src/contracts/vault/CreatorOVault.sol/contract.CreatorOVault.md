@@ -116,11 +116,11 @@ Serves two purposes:
 **Notes:**
 - security: Prevents "dust deposit → inflate → drain" attack vector
 
-- economics: TEMP: 5M tokens = 0.5% of typical 1B supply
+- economics: TEMP: 50M tokens = 5% of typical 1B supply
 
 
 ```solidity
-uint256 public constant MINIMUM_FIRST_DEPOSIT = 5_000_000e18
+uint256 public constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18
 ```
 
 

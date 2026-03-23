@@ -4,13 +4,10 @@ import { Loader2 } from 'lucide-react'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { Alert } from '@/components/ui/Alert'
 
-import {
-  getTelegramLinkPrimaryActionLabel,
-  getTelegramLinkSteps,
-  useTelegramLinkFlow,
-} from './telegramLinkFlow'
+import { getTelegramLinkPrimaryActionLabel, getTelegramLinkSteps, useTelegramLinkFlow } from './telegramLinkFlow'
 
 export {
+  canStartTelegramLink,
   fetchTelegramLinkEmailVerificationState,
   formatTelegramSessionError,
   getTelegramLinkPrimaryActionLabel,
@@ -31,7 +28,6 @@ export {
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldShowResetTelegramLinkAccount,
   shouldShowRetryTelegramSession,
-  canStartTelegramLink,
   waitForTelegramLinkPrivyAuth,
 } from './telegramLinkFlow'
 
@@ -56,6 +52,7 @@ export function TelegramLink() {
     onStartLink,
     onSignIn,
   } = useTelegramLinkFlow()
+
   const primaryActionLabel = getTelegramLinkPrimaryActionLabel({
     canSignIn: statusView.canSignIn,
     privyAuthenticated,
