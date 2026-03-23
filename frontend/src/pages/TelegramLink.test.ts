@@ -12,6 +12,7 @@ import {
   getTelegramLinkViewState,
   isPrivyEmailAlreadyLinkedError,
   pollTelegramLinkEmailVerification,
+  resolveTelegramLinkAuthSettlementPlan,
   resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
   shouldResetTelegramMiniAppSessionForLinkError,
@@ -247,6 +248,42 @@ describe('TelegramLink helpers', () => {
         canLinkEmail: true,
       }),
     ).toBe('link_email')
+  })
+
+
+  it('waits for a fresh Privy session when authenticated users launch email login again', () => {
+    expect(
+      resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated: true,
+        launchedLogin: true,
+        priorAccessToken: 'old-token',
+      }),
+    ).toEqual({
+      shouldWaitForAuth: true,
+      requireFreshAccessToken: 'old-token',
+    })
+
+    expect(
+      resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated: true,
+        launchedLogin: false,
+        priorAccessToken: 'old-token',
+      }),
+    ).toEqual({
+      shouldWaitForAuth: false,
+      requireFreshAccessToken: null,
+    })
+
+    expect(
+      resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated: false,
+        launchedLogin: true,
+        priorAccessToken: 'old-token',
+      }),
+    ).toEqual({
+      shouldWaitForAuth: true,
+      requireFreshAccessToken: null,
+    })
   })
 
   it('auto-refreshes account email state only from the initial unknown state', () => {

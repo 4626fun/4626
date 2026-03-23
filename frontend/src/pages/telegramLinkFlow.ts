@@ -65,6 +65,11 @@ type TelegramLinkEmailVerificationResult =
 
 export type TelegramLinkEmailAuthAction = 'verified' | 'login' | 'link_email'
 
+export type TelegramLinkAuthSettlementPlan = {
+  shouldWaitForAuth: boolean
+  requireFreshAccessToken: string | null
+}
+
 export type TelegramLinkViewState = {
   statusVariant: TelegramLinkAlertVariant
   statusTitle: string
@@ -180,6 +185,31 @@ export function resolveTelegramLinkEmailAuthAction(params: {
   if (params.hasVerifiedEmail) return 'verified'
   if (params.hasAnyEmailAccount) return 'login'
   return params.canLinkEmail ? 'link_email' : 'login'
+}
+
+export function resolveTelegramLinkAuthSettlementPlan(params: {
+  startedAuthenticated: boolean
+  launchedLogin: boolean
+  priorAccessToken: string | null
+}): TelegramLinkAuthSettlementPlan {
+  if (!params.startedAuthenticated) {
+    return {
+      shouldWaitForAuth: true,
+      requireFreshAccessToken: null,
+    }
+  }
+  if (!params.launchedLogin) {
+    return {
+      shouldWaitForAuth: false,
+      requireFreshAccessToken: null,
+    }
+  }
+  return {
+    shouldWaitForAuth: true,
+    requireFreshAccessToken: typeof params.priorAccessToken === 'string' && params.priorAccessToken.trim()
+      ? params.priorAccessToken.trim()
+      : null,
+  }
 }
 
 export function isTelegramLinkEmailVerificationRequiredError(error: unknown): boolean {
@@ -866,6 +896,13 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
 
   const onSignIn = useCallback(async () => {
     const startedAuthenticated = privyAuthenticated
+    const priorAccessToken = startedAuthenticated ? ((await getAccessToken().catch(() => null))?.trim() ?? '') : ''
+    let launchedLogin = false
+
+    const launchEmailLogin = async () => {
+      launchedLogin = true
+      await login(buildWaitlistEmailLoginOptions() as any)
+    }
 
     setLinkState('authenticating')
     setLinkMessage(null)
@@ -895,21 +932,26 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
             await linkEmail()
           } catch (error) {
             if (isPrivyEmailAlreadyLinkedError(error)) {
-              await login(buildWaitlistEmailLoginOptions() as any)
+              await launchEmailLogin()
             } else {
               throw error
             }
           }
         } else {
-          await login(buildWaitlistEmailLoginOptions() as any)
+          await launchEmailLogin()
         }
       } else {
-        await login(buildWaitlistEmailLoginOptions() as any)
+        await launchEmailLogin()
       }
 
-      if (!startedAuthenticated) {
+      const authSettlementPlan = resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated,
+        launchedLogin,
+        priorAccessToken,
+      })
+      if (authSettlementPlan.shouldWaitForAuth) {
         const authSettled = await waitForTelegramLinkPrivyAuth({
-          requireFreshAccessToken: null,
+          requireFreshAccessToken: authSettlementPlan.requireFreshAccessToken,
           readSnapshot: async () => {
             const accessToken = ((await getAccessToken().catch(() => null))?.trim() ?? '') || null
             const nextEmailState = getPrivyEmailState((privy as any)?.user)
