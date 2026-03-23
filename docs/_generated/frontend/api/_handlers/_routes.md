@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/\_routes.ts:3](https://github.com/wenakita/4626/blob
 
 > `const` **apiRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
 
-Defined in: [api/\_handlers/\_routes.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L14)
+Defined in: [api/\_handlers/\_routes.ts:9](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L9)
 
 ## Functions
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/\_routes.ts:14](https://github.com/wenakita/4626/blo
 
 > **getApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.ts:309](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L309)
+Defined in: [api/\_handlers/\_routes.ts:101](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L101)
 
 #### Parameters
 

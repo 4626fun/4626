@@ -12,7 +12,7 @@
 
 > **BuildInlineQueryAnswerParams** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:46](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L46)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L48)
 
 #### Properties
 
@@ -20,61 +20,73 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:46](https://githu
 
 > **chatId**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L50)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L52)
 
 ##### enablePmHandoff
 
 > **enablePmHandoff**: `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L55)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:57](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L57)
 
 ##### growthMode
 
 > **growthMode**: `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L54)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:56](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L56)
 
 ##### inlineResultCap
 
 > **inlineResultCap**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L53)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L55)
 
 ##### isLinked
 
 > **isLinked**: `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:51](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L51)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L53)
+
+##### linkButtonUrl?
+
+> `optional` **linkButtonUrl**: `string`
+
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:60](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L60)
 
 ##### mediaByKey?
 
 > `optional` **mediaByKey**: `Record`\<`string`, [`InlineMediaAsset`](#inlinemediaasset)\>
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:56](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L56)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:58](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L58)
+
+##### menuButtonUrl?
+
+> `optional` **menuButtonUrl**: `string`
+
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:59](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L59)
 
 ##### queryOffset
 
 > **queryOffset**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L48)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L50)
 
 ##### rawQuery
 
 > **rawQuery**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L47)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L49)
 
 ##### scopedVaults
 
 > **scopedVaults**: [`InlineScopedVaultRow`](#inlinescopedvaultrow)[]
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L52)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L54)
 
 ##### userId
 
 > **userId**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L49)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:51](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L51)
 
 ***
 
@@ -134,7 +146,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:9](https://github
 
 > **InlineQueryAnswer** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L35)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L37)
 
 #### Properties
 
@@ -142,49 +154,49 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:35](https://githu
 
 > `optional` **button**: `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L41)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L43)
 
 ##### nextOffset
 
 > **nextOffset**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L37)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L39)
 
 ##### offset
 
 > **offset**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L39)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L41)
 
 ##### queryClass
 
 > **queryClass**: [`InlineQueryClass`](#inlinequeryclass)
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L38)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L40)
 
 ##### results
 
 > **results**: `Record`\<`string`, `unknown`\>[]
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L36)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L38)
 
 ##### switchPmParameter?
 
 > `optional` **switchPmParameter**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L43)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L45)
 
 ##### switchPmText?
 
 > `optional` **switchPmText**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L42)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L44)
 
 ##### totalResults
 
 > **totalResults**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L40)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L42)
 
 ***
 
@@ -246,7 +258,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:17](https://githu
 
 > **buildInlineQueryAnswer**(`params`): [`InlineQueryAnswer`](#inlinequeryanswer)
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:252](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L252)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:261](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L261)
 
 #### Parameters
 
@@ -264,7 +276,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:252](https://gith
 
 > **classifyInlineQuery**(`rawQuery`): [`InlineQueryClass`](#inlinequeryclass)
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:86](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L86)
+Defined in: [api/\_handlers/telegram/webhook/parsers/inline.ts:90](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/inline.ts#L90)
 
 #### Parameters
 

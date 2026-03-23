@@ -23,7 +23,7 @@ This contract splits deployment into multiple calls:
 ### V3_FEE_TIER
 
 ```solidity
-uint24 public constant V3_FEE_TIER = 3000
+uint24 internal constant V3_FEE_TIER = 3000
 ```
 
 
@@ -43,23 +43,23 @@ Pinned Charm governance allowlist on Base. Deployments fail closed outside this 
 
 
 ```solidity
-address public constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1
+address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1
 ```
 
 
 ### CHARM_FACTORY_GOVERNANCE_LEGACY
 
 ```solidity
-address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6
+address internal constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6
 ```
 
 
 ### MIN_DEPOSIT
-Minimum deposit amount (5M tokens, 18 decimals)
+Minimum deposit amount (50M tokens, 18 decimals)
 
 
 ```solidity
-uint256 public constant MIN_DEPOSIT = 5_000_000e18
+uint256 public constant MIN_DEPOSIT = 50_000_000e18
 ```
 
 
@@ -280,16 +280,6 @@ constructor(
 ) ;
 ```
 
-### deployPhase1Core
-
-
-```solidity
-function deployPhase1Core(Phase1Params calldata params, CodeIds calldata codeIds)
-    external
-    nonReentrant
-    returns (Phase1Result memory out);
-```
-
 ### deployPhase1CoreWithSalt
 
 
@@ -299,16 +289,6 @@ function deployPhase1CoreWithSalt(
     CodeIds calldata codeIds,
     bytes32 shareOftSaltOverride
 ) external nonReentrant returns (Phase1Result memory out);
-```
-
-### finalizePhase1
-
-
-```solidity
-function finalizePhase1(Phase1Params calldata params, CodeIds calldata codeIds)
-    external
-    nonReentrant
-    returns (Phase1Result memory out);
 ```
 
 ### finalizePhase1WithSalt
@@ -338,39 +318,6 @@ function _deployPhase1CoreInternal(Phase1Params calldata params, CodeIds calldat
 function _finalizePhase1InternalSplit(Phase1Params calldata params, CodeIds calldata codeIds)
     internal
     returns (Phase1Result memory out);
-```
-
-### deployPhase2AndLaunch
-
-
-```solidity
-function deployPhase2AndLaunch(Phase2Params calldata params, CodeIds calldata codeIds)
-    external
-    nonReentrant
-    returns (Phase2Result memory);
-```
-
-### deployPhase2AndLaunchWithPermit
-
-
-```solidity
-function deployPhase2AndLaunchWithPermit(
-    Phase2Params calldata params,
-    CodeIds calldata codeIds,
-    PermitData calldata permit
-) external nonReentrant returns (Phase2Result memory);
-```
-
-### deployPhase2AndLaunchWithPermit2
-
-
-```solidity
-function deployPhase2AndLaunchWithPermit2(
-    Phase2Params calldata params,
-    CodeIds calldata codeIds,
-    ISignatureTransfer.PermitTransferFrom calldata permit,
-    bytes calldata signature
-) external nonReentrant returns (Phase2Result memory);
 ```
 
 ### deployPhase2Core
@@ -485,13 +432,6 @@ function _requireOwner(address owner) internal view;
 
 ```solidity
 function _pullCreatorTokens(address creatorToken, address owner, uint256 amount) internal;
-```
-
-### _permitAndPull
-
-
-```solidity
-function _permitAndPull(address creatorToken, address owner, uint256 amount, PermitData calldata permit) internal;
 ```
 
 ### _permit2Pull
@@ -957,17 +897,6 @@ struct Phase2FinalizeParams {
     bytes auctionSteps;
     bytes32 meteoraAlphaVault;
     IBaseSolanaBridge.Ix[] solanaIxs;
-}
-```
-
-### PermitData
-
-```solidity
-struct PermitData {
-    uint256 deadline;
-    uint8 v;
-    bytes32 r;
-    bytes32 s;
 }
 ```
 

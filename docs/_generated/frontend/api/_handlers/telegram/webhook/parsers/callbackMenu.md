@@ -12,7 +12,7 @@
 
 > **resolveHelpCallbackCommand**(`rawData`): `string` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/callbackMenu.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:112](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/callbackMenu.ts#L112)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:3](https://
 
 > **resolveImmediateCallbackToast**(`params`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:115](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/callbackMenu.ts#L115)
+Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:152](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/callbackMenu.ts#L152)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:115](https:
 
 > **resolveNavigationCallbackToast**(`rawData`, `mappedCommand`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:58](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/callbackMenu.ts#L58)
+Defined in: [api/\_handlers/telegram/webhook/parsers/callbackMenu.ts:128](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/callbackMenu.ts#L128)
 
 #### Parameters
 

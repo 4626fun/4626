@@ -18,7 +18,7 @@ contract MockCreatorCoinForReport is ERC20 {
 }
 
 contract CreatorOVaultReportTest is Test {
-    uint256 internal constant INITIAL_DEPOSIT = 6_000_000e18;
+    uint256 internal constant INITIAL_DEPOSIT = 50_000_000e18;
     uint256 internal constant PROFIT_ASSETS = 300_000e18;
     uint256 internal constant QUEUE_SHARES = 200_000e18;
 

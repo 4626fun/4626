@@ -40,7 +40,7 @@ Defined in: [api/\_handlers/telegram/webhook/updates/callbackQuery.ts:9](https:/
 
 ### normalizeCallbackQuery()
 
-> **normalizeCallbackQuery**(`callbackQuery`): \{ `callbackData`: `string`; `callbackMessageId?`: `number`; `callbackQueryId`: `string`; `chatId`: `string`; `userId`: `string`; \} \| `null`
+> **normalizeCallbackQuery**(`callbackQuery`): \{ `callbackData`: `string`; `callbackMessageId?`: `number`; `callbackQueryId`: `string`; `chatId?`: `string`; `inlineMessageId?`: `string`; `userId`: `string`; \} \| `null`
 
 Defined in: [api/\_handlers/telegram/webhook/updates/callbackQuery.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/updates/callbackQuery.ts#L19)
 
@@ -52,4 +52,4 @@ Defined in: [api/\_handlers/telegram/webhook/updates/callbackQuery.ts:19](https:
 
 #### Returns
 
-\{ `callbackData`: `string`; `callbackMessageId?`: `number`; `callbackQueryId`: `string`; `chatId`: `string`; `userId`: `string`; \} \| `null`
+\{ `callbackData`: `string`; `callbackMessageId?`: `number`; `callbackQueryId`: `string`; `chatId?`: `string`; `inlineMessageId?`: `string`; `userId`: `string`; \} \| `null`

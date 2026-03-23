@@ -136,7 +136,7 @@ Defined in: [api/\_handlers/cre/vaults/\_active.ts:30](https://github.com/wenaki
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/cre/vaults/\_active.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/vaults/_active.ts#L39)
+Defined in: [api/\_handlers/cre/vaults/\_active.ts:46](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/vaults/_active.ts#L46)
 
 #### Parameters
 
