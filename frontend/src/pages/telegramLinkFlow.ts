@@ -1114,7 +1114,7 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   const onSignIn = useCallback(async () => {
     emailVerificationAttemptedRef.current = true
     const startedAuthenticated = privyAuthenticated
-    const priorAccessToken = startedAuthenticated ? ((await getAccessToken().catch(() => null))?.trim() ?? '') : ''
+    const priorAccessToken = ''
     let launchedLogin = false
 
     const launchEmailLogin = async () => {
