@@ -307,7 +307,6 @@ describe('TelegramLink helpers', () => {
     ).toBe(false)
   })
 
-<<<<<<< ours
   it('enables the explicit Link Telegram action only when the handshake is ready', () => {
     expect(
       canStartTelegramLink({
@@ -333,9 +332,6 @@ describe('TelegramLink helpers', () => {
       }),
     ).toBe(false)
   })
-
-=======
->>>>>>> theirs
 
   it('does not force a fresh auth loop when an authenticated user already has an email account', () => {
     expect(
