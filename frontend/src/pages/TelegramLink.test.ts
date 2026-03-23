@@ -18,6 +18,7 @@ import {
   resolveTelegramLinkAuthSettlementPlan,
   resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
+  shouldRetryTelegramLinkEmailVerification,
   shouldRefreshTelegramLinkEmailOnForeground,
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldAutoStartTelegramLink,
@@ -470,6 +471,58 @@ describe('TelegramLink helpers', () => {
         privyAuthenticated: true,
         linkState: 'idle',
         emailState: 'verified',
+      }),
+    ).toBe(false)
+  })
+
+  it('keeps retrying email verification after the user has started the OTP flow', () => {
+    expect(
+      shouldRetryTelegramLinkEmailVerification({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+        emailState: 'needs_verification',
+        verificationAttempted: true,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldRetryTelegramLinkEmailVerification({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+        emailState: 'pending',
+        verificationAttempted: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not retry email verification before the user starts or after link completion', () => {
+    expect(
+      shouldRetryTelegramLinkEmailVerification({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+        emailState: 'needs_verification',
+        verificationAttempted: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldRetryTelegramLinkEmailVerification({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'linked',
+        emailState: 'pending',
+        verificationAttempted: true,
       }),
     ).toBe(false)
   })

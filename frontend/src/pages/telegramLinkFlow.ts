@@ -549,6 +549,23 @@ export function shouldAutoRefreshTelegramLinkEmail(params: {
   return params.emailState === 'unknown'
 }
 
+export function shouldRetryTelegramLinkEmailVerification(params: {
+  hasLinkContext: boolean
+  sessionState: TelegramLinkSessionState
+  privyReady: boolean
+  privyAuthenticated: boolean
+  linkState: TelegramLinkFlowState
+  emailState: TelegramLinkEmailState
+  verificationAttempted: boolean
+}): boolean {
+  if (!params.verificationAttempted) return false
+  if (!params.hasLinkContext) return false
+  if (params.sessionState !== 'ready') return false
+  if (!params.privyReady || !params.privyAuthenticated) return false
+  if (params.linkState === 'authenticating' || params.linkState === 'linking' || params.linkState === 'linked') return false
+  return params.emailState === 'needs_verification' || params.emailState === 'pending'
+}
+
 export function shouldRefreshTelegramLinkEmailOnForeground(params: {
   hasLinkContext: boolean
   sessionState: TelegramLinkSessionState
@@ -725,6 +742,7 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
   const linkAttemptRef = useRef('')
   const emailCheckRunRef = useRef(0)
+  const emailVerificationAttemptedRef = useRef(false)
   const privyStatusRef = useRef({ ready: privyReady, authenticated: privyAuthenticated })
 
   useEffect(() => {
@@ -829,6 +847,7 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       if (runId !== emailCheckRunRef.current) return result
 
       if (result.status === 'verified') {
+        emailVerificationAttemptedRef.current = false
         setEmailState('verified')
         setEmailMessage(null)
         return result
@@ -864,8 +883,19 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   }, [emailState, linkState, privyReady, refreshEmailVerificationState, sessionState, telegramLinkContext])
 
   useEffect(() => {
-    if (!telegramLinkContext || sessionState !== 'ready' || !privyReady || !privyAuthenticated) return
-    if (linkState === 'linked' || emailState !== 'pending') return
+    if (
+      !shouldRetryTelegramLinkEmailVerification({
+        hasLinkContext: Boolean(telegramLinkContext),
+        sessionState,
+        privyReady,
+        privyAuthenticated,
+        linkState,
+        emailState,
+        verificationAttempted: emailVerificationAttemptedRef.current,
+      })
+    ) {
+      return
+    }
     const retryId = window.setTimeout(() => {
       void refreshEmailVerificationState()
     }, TELEGRAM_EMAIL_PENDING_RETRY_MS)
@@ -1073,6 +1103,7 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
 
   const onResetAccount = useCallback(async () => {
     linkAttemptRef.current = ''
+    emailVerificationAttemptedRef.current = false
     setLinkState('idle')
     setLinkMessage(null)
     setEmailState('unknown')
@@ -1081,6 +1112,7 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   }, [logout])
 
   const onSignIn = useCallback(async () => {
+    emailVerificationAttemptedRef.current = true
     const startedAuthenticated = privyAuthenticated
     const priorAccessToken = startedAuthenticated ? ((await getAccessToken().catch(() => null))?.trim() ?? '') : ''
     let launchedLogin = false

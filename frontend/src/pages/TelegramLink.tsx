@@ -24,6 +24,7 @@ export {
   resolveTelegramLinkAuthSettlementPlan,
   resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
+  shouldRetryTelegramLinkEmailVerification,
   shouldRefreshTelegramLinkEmailOnForeground,
   shouldAutoStartTelegramLink,
   shouldResetTelegramMiniAppSessionForLinkError,
