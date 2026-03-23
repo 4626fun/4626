@@ -18,6 +18,7 @@ import {
   resolveTelegramLinkAuthSettlementPlan,
   resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
+  shouldRefreshTelegramLinkEmailOnForeground,
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldAutoStartTelegramLink,
   shouldShowResetTelegramLinkAccount,
@@ -333,14 +334,14 @@ describe('TelegramLink helpers', () => {
     ).toBe(false)
   })
 
-  it('does not force a fresh auth loop when an authenticated user already has an email account', () => {
+  it('prefers Privy email-linking for authenticated users until email is verified', () => {
     expect(
       resolveTelegramLinkEmailAuthAction({
         hasAnyEmailAccount: true,
         hasVerifiedEmail: false,
         canLinkEmail: true,
       }),
-    ).toBe('login')
+    ).toBe('link_email')
 
     expect(
       resolveTelegramLinkEmailAuthAction({
@@ -357,6 +358,14 @@ describe('TelegramLink helpers', () => {
         canLinkEmail: true,
       }),
     ).toBe('link_email')
+
+    expect(
+      resolveTelegramLinkEmailAuthAction({
+        hasAnyEmailAccount: true,
+        hasVerifiedEmail: false,
+        canLinkEmail: false,
+      }),
+    ).toBe('login')
   })
 
 
@@ -413,6 +422,54 @@ describe('TelegramLink helpers', () => {
         privyReady: true,
         linkState: 'idle',
         emailState: 'needs_verification',
+      }),
+    ).toBe(false)
+  })
+
+  it('refreshes the email gate when Telegram regains foreground after auth work', () => {
+    expect(
+      shouldRefreshTelegramLinkEmailOnForeground({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+        emailState: 'needs_verification',
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldRefreshTelegramLinkEmailOnForeground({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+        emailState: 'pending',
+      }),
+    ).toBe(true)
+  })
+
+  it('does not foreground-refresh once Telegram linking is already settled', () => {
+    expect(
+      shouldRefreshTelegramLinkEmailOnForeground({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'linked',
+        emailState: 'needs_verification',
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldRefreshTelegramLinkEmailOnForeground({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
+        privyAuthenticated: true,
+        linkState: 'idle',
+        emailState: 'verified',
       }),
     ).toBe(false)
   })

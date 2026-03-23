@@ -191,8 +191,9 @@ export function resolveTelegramLinkEmailAuthAction(params: {
   canLinkEmail: boolean
 }): TelegramLinkEmailAuthAction {
   if (params.hasVerifiedEmail) return 'verified'
+  if (params.canLinkEmail) return 'link_email'
   if (params.hasAnyEmailAccount) return 'login'
-  return params.canLinkEmail ? 'link_email' : 'login'
+  return 'login'
 }
 
 export function resolveTelegramLinkAuthSettlementPlan(params: {
@@ -539,6 +540,21 @@ export function shouldAutoRefreshTelegramLinkEmail(params: {
   return params.emailState === 'unknown'
 }
 
+export function shouldRefreshTelegramLinkEmailOnForeground(params: {
+  hasLinkContext: boolean
+  sessionState: TelegramLinkSessionState
+  privyReady: boolean
+  privyAuthenticated: boolean
+  linkState: TelegramLinkFlowState
+  emailState: TelegramLinkEmailState
+}): boolean {
+  if (!params.hasLinkContext) return false
+  if (params.sessionState !== 'ready') return false
+  if (!params.privyReady || !params.privyAuthenticated) return false
+  if (params.linkState === 'authenticating' || params.linkState === 'linking' || params.linkState === 'linked') return false
+  return params.emailState !== 'verified'
+}
+
 export function getTelegramLinkViewState(params: {
   sessionState: TelegramLinkSessionState
   emailState: TelegramLinkEmailState
@@ -846,6 +862,44 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
     }, TELEGRAM_EMAIL_PENDING_RETRY_MS)
     return () => window.clearTimeout(retryId)
   }, [emailState, linkState, privyAuthenticated, privyReady, refreshEmailVerificationState, sessionState, telegramLinkContext])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    if (
+      !shouldRefreshTelegramLinkEmailOnForeground({
+        hasLinkContext: Boolean(telegramLinkContext),
+        sessionState,
+        privyReady,
+        privyAuthenticated,
+        linkState,
+        emailState,
+      })
+    ) {
+      return
+    }
+
+    const refresh = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return
+      void refreshEmailVerificationState()
+    }
+
+    const onFocus = () => refresh()
+    const onVisibilityChange = () => refresh()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [
+    emailState,
+    linkState,
+    privyAuthenticated,
+    privyReady,
+    refreshEmailVerificationState,
+    sessionState,
+    telegramLinkContext,
+  ])
 
   const onStartLink = useCallback(async () => {
     if (!telegramLinkContext) return

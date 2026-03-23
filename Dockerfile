@@ -1,8 +1,9 @@
 # --------------------------------------------------------------------------
-# 4626 XMTP Agent — Production Dockerfile (Eliza Cloud compatible)
+# 4626 XMTP Agent — Production Dockerfile
 # --------------------------------------------------------------------------
-# Keeps root-level Dockerfile so Eliza Cloud CLI can auto-detect build config.
-# Mirrors frontend/Dockerfile.agent.
+# Legacy compatibility mirror of frontend/Dockerfile.agent.
+# Railway is the primary deployment path. Prefer frontend/Dockerfile.agent
+# and railway.toml for operational changes.
 # --------------------------------------------------------------------------
 
 FROM node:22-bookworm-slim AS base

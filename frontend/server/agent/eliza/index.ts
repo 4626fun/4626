@@ -586,6 +586,10 @@ function parseEnvBoolean(value: string | undefined, fallback: boolean): boolean 
   return fallback
 }
 
+function isRailwayRuntime(): boolean {
+  return Object.entries(process.env).some(([key, value]) => key.startsWith('RAILWAY_') && String(value ?? '').trim())
+}
+
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (typeof value === 'string') return value
   if (Array.isArray(value) && value.length > 0) return String(value[0] ?? '')
@@ -631,6 +635,15 @@ const AGENT_RUNTIME_LOCK_HEARTBEAT_MS = Math.floor(
 )
 const AGENT_RUNTIME_LOCK_STALE_MS = Math.floor(
   parsePositiveNumber(process.env.AGENT_RUNTIME_LOCK_STALE_MS, 30_000),
+)
+const RUNNING_ON_RAILWAY = isRailwayRuntime()
+const ELIZA_ALLOW_OFF_RAILWAY_PRIMARY = parseEnvBoolean(
+  process.env.ELIZA_ALLOW_OFF_RAILWAY_PRIMARY,
+  false,
+)
+const ELIZA_ALLOW_OFF_RAILWAY_GROVE_UPLOAD = parseEnvBoolean(
+  process.env.ELIZA_ALLOW_OFF_RAILWAY_GROVE_UPLOAD,
+  false,
 )
 const RUNTIME_LEASE_OWNER_ID = `${AGENT_RUNTIME_ROLE}:${Date.now().toString(36)}:${Math.random()
   .toString(16)
@@ -698,6 +711,11 @@ function validateStartupEnv(): EnvValidationResult {
       'AGENT_RUNTIME_ROLE=standby with AGENT_CONSUME_XMTP=true can create dual-consumer risk. Prefer AGENT_CONSUME_XMTP=false for standby replicas.',
     )
   }
+  if (RUNNING_ON_RAILWAY && (!AGENT_CONSUME_XMTP || AGENT_RUNTIME_ROLE === 'standby')) {
+    warnings.push(
+      'Railway in this repo is intended to run a single primary XMTP consumer. Standby mode is for local inspection, not the normal Railway deployment path.',
+    )
+  }
 
   if (AGENT_CONSUME_XMTP && !multiAgentConfigured && !hasPrivateKey && !hasCswConfig) {
     errors.push(
@@ -721,6 +739,17 @@ function validateStartupEnv(): EnvValidationResult {
 
   if (!['production', 'dev', 'local'].includes(XMTP_ENV)) {
     errors.push('XMTP_ENV must be one of: production, dev, local.')
+  }
+  if (
+    AGENT_CONSUME_XMTP &&
+    AGENT_RUNTIME_ROLE === 'primary' &&
+    XMTP_ENV === 'production' &&
+    !RUNNING_ON_RAILWAY &&
+    !ELIZA_ALLOW_OFF_RAILWAY_PRIMARY
+  ) {
+    errors.push(
+      'Production primary XMTP runtime is Railway-only by default. Run this on Railway, switch to XMTP_ENV=dev/local, use standby mode, or explicitly set ELIZA_ALLOW_OFF_RAILWAY_PRIMARY=true for a supervised override.',
+    )
   }
 
   if (!Number.isFinite(MAX_AGENTS) || MAX_AGENTS <= 0) {
@@ -1830,6 +1859,12 @@ async function uploadRegistrationToGrove(): Promise<void> {
       })
       return
     }
+    if (!RUNNING_ON_RAILWAY && !ELIZA_ALLOW_OFF_RAILWAY_GROVE_UPLOAD) {
+      regLogger.info('[eliza] Skipping Grove registration upload outside Railway', {
+        correlationId,
+      })
+      return
+    }
 
     const origin = (process.env.VITE_APP_URL ?? 'https://4626.fun').trim()
     const { payload, error } = buildAgentRegistration(origin)
@@ -2019,6 +2054,7 @@ async function main() {
   console.log(`  Mode: ${modeLabel}`)
   console.log(`  Runtime role: ${AGENT_RUNTIME_ROLE}`)
   console.log(`  Consume XMTP: ${AGENT_CONSUME_XMTP ? 'yes' : 'no (standby)'}`)
+  console.log(`  Railway runtime: ${RUNNING_ON_RAILWAY ? 'yes' : 'no'}`)
   console.log(`  Runtime lock: ${AGENT_RUNTIME_LOCK_REQUIRED ? `enabled (${AGENT_RUNTIME_LOCK_KEY})` : 'disabled'}`)
   console.log(
     `  LLM provider: ${llmProvider?.name ?? 'none (conversational AI disabled)'}${

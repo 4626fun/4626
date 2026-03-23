@@ -10,7 +10,7 @@
 dockerfilePath = "frontend/Dockerfile.agent"
 
 [deploy]
-# Number of replicas (only 1 — XMTP agent is stateful with local DB)
+# Number of replicas (only 1 — this repo assumes a single Railway primary)
 numReplicas = 1
 
 # Health check: use strict readiness to avoid routing

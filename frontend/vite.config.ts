@@ -438,6 +438,10 @@ export default defineConfig(({ command }) => {
   build: {
     sourcemap: enableSourcemap,
     rollupOptions: {
+      input: {
+        index: resolve(__dirname, 'index.html'),
+        app: resolve(__dirname, 'app.html'),
+      },
       output: {
         // Keep chunking conservative and let route-level dynamic imports own
         // most SDK splitting so heavy auth/web3 code stays off the initial path.

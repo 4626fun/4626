@@ -10,10 +10,17 @@ This runbook covers deploy, rollback, and on-call triage for the long-lived Eliz
 ## Scope
 
 - Service: Eliza runtime container (`frontend/Dockerfile.agent`)
-- Platform: Eliza Cloud primary + Railway fallback (or Docker with persistent volume)
+- Platform: Railway primary (or Docker with persistent volume for explicit operator-managed overrides)
 - Health endpoints:
   - Liveness: `/healthz` (boot is allowed)
   - Readiness: `/readyz` (must be fully ready)
+
+Operational assumption for this repo:
+
+- one Railway service
+- one replica
+- one primary XMTP consumer
+- no standby or failover deployment by default
 
 ## Critical Environment Checklist
 
@@ -22,9 +29,13 @@ Before shipping, verify these values are configured:
 - `XMTP_DB_DIRECTORY` points to a persistent mounted path (Railway volume: `/data/.xmtp-data`)
 - `XMTP_DB_ENCRYPTION_KEY` is set and stable across restarts
 - Runtime role is explicit:
-  - Primary: `AGENT_RUNTIME_ROLE=primary` and `AGENT_CONSUME_XMTP=true`
-  - Standby: `AGENT_RUNTIME_ROLE=standby` and `AGENT_CONSUME_XMTP=false`
-- Optional split-brain guard (recommended when primary/fallback share one DB):
+  - Railway deploy: `AGENT_RUNTIME_ROLE=primary` and `AGENT_CONSUME_XMTP=true`
+  - Standby remains available only for local inspection
+- Primary production boots are Railway-only by default:
+  - set `ELIZA_ALLOW_OFF_RAILWAY_PRIMARY=true` only for supervised off-Railway overrides
+- Off-Railway Grove registration uploads are disabled by default:
+  - set `ELIZA_ALLOW_OFF_RAILWAY_GROVE_UPLOAD=true` only for supervised off-Railway overrides
+- Optional split-brain guard (mostly future-proofing if you ever add a second deploy target):
   - `AGENT_RUNTIME_LOCK_REQUIRED=true`
   - `AGENT_RUNTIME_LOCK_KEY=xmtp-primary-runtime-lock`
   - `AGENT_RUNTIME_LOCK_HEARTBEAT_MS=10000`
@@ -46,38 +57,13 @@ Before shipping, verify these values are configured:
    - `railway.toml` uses `frontend/Dockerfile.agent`
    - persistent volume is mounted at `/data/.xmtp-data`
    - `healthcheckPath` is `/readyz` (strict readiness gate)
+   - Railway env is `AGENT_RUNTIME_ROLE=primary`
+   - Railway env is `AGENT_CONSUME_XMTP=true`
 2. Deploy (`railway up` or UI deploy).
 3. Watch startup logs until runtime mode and plugin/action counts print.
 4. Validate liveness and readiness:
    - `GET /healthz` should return `200`
    - `GET /readyz` should return `200` and `status: "ok"`
-
-## Deploy Procedure (Eliza Cloud Primary)
-
-1. Deploy with primary runtime env:
-   - `AGENT_RUNTIME_ROLE=primary`
-   - `AGENT_CONSUME_XMTP=true`
-2. Keep Railway running as standby with:
-   - `AGENT_RUNTIME_ROLE=standby`
-   - `AGENT_CONSUME_XMTP=false`
-3. Confirm both report healthy:
-   - Cloud `/readyz` returns `status: "ok"`
-   - Railway `/readyz` returns `status: "standby"`
-4. Confirm only Cloud consumes XMTP traffic.
-
-## Failover / Rollback (Cloud <-> Railway)
-
-1. Promote standby:
-   - Set Railway `AGENT_CONSUME_XMTP=true`
-   - Set Railway `AGENT_RUNTIME_ROLE=primary`
-2. Demote previous primary:
-   - Set Cloud `AGENT_CONSUME_XMTP=false`
-   - Set Cloud `AGENT_RUNTIME_ROLE=standby`
-3. Validate on promoted instance:
-   - `/readyz` is `200`
-   - `runtime.consumeXmtp=true`
-   - `/keepr status` succeeds in XMTP chat
-4. Rollback uses the exact reverse env switch.
 
 ## Go / No-Go Gates
 
@@ -87,7 +73,8 @@ Ship only if all pass:
 - `dependencies.xmtp.ready` is `true`
 - `dependencies.queueWorker.running` is `true` in multi-agent mode
 - `dependencies.queueWorker.stats.staleProcessing` is `0`
-- `runtime.role` and `runtime.consumeXmtp` match the intended primary/standby state
+- `runtime.role` is `primary`
+- `runtime.consumeXmtp` is `true`
 - If TEE gate is enabled, `teeAttestation.passed` is `true` from `/api/v1/agents/identity/verification`
 - `/keepr status` succeeds end-to-end in XMTP chat for a known configured vault
 
@@ -137,4 +124,3 @@ Symptoms: repeated new installations, approaching 10/10 installation limit, or d
   - `ELIZA_CHANNEL_DISCORD_ENABLED=true`
   - `ELIZA_CHANNEL_TWITTER_ENABLED=true`
   - Keep channel bot tokens server-side only.
-

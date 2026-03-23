@@ -19,6 +19,7 @@
 - [Supported Chains](#supported-chains-current-configuration)
 - [Quick Start (Local Development)](#quick-start-local-development)
 - [Testing and Build Commands](#testing-and-build-commands)
+- [XMTP Agent Runtime](#xmtp-agent-runtime)
 - [Frontend Routes and API Surface](#frontend-routes-and-api-surface)
 - [Environment and Secrets](#environment-and-secrets)
 - [Security and Invariants](#security-and-invariants)
@@ -304,6 +305,43 @@ pnpm -C apps/docs-site start
 | Contracts | `forge build`<br/>`forge test -vvv` |
 | Frontend build | `pnpm -C frontend build` |
 | Docs build | `pnpm -C apps/docs-site build` |
+
+## XMTP Agent Runtime
+
+The Keepr XMTP / Eliza runtime is not part of the normal local frontend dev loop.
+
+Authoritative runtime entrypoint:
+
+- `frontend/server/agent/eliza/index.ts`
+
+Authoritative operating model:
+
+- one Railway service
+- one Railway replica
+- one primary XMTP consumer
+- no standby or failover deployment by default
+
+Operational rules:
+
+- Railway is the only intended production-primary runtime.
+- Off-Railway production-primary boots are blocked by default.
+- Local standby mode exists only for inspection and smoke checks.
+- The persistent XMTP volume at `/data/.xmtp-data` must survive redeploys.
+
+Safe Railway redeploy checklist:
+
+1. Confirm Railway still has exactly one service and `numReplicas = 1` in `railway.toml`.
+2. Confirm Railway env keeps `AGENT_RUNTIME_ROLE=primary` and `AGENT_CONSUME_XMTP=true`.
+3. Confirm the Railway volume is still mounted at `/data/.xmtp-data`.
+4. Confirm `XMTP_DB_ENCRYPTION_KEY` is unchanged.
+5. Deploy and watch logs until `/readyz` becomes healthy.
+6. Run one XMTP smoke command such as `/keepr status`.
+
+Failure model:
+
+- If a redeploy crashes the only Railway primary, the agent has downtime until Railway restarts it successfully or you roll back.
+- There is no automatic standby failover in the default repo posture.
+- Reusing the same Railway volume and `XMTP_DB_ENCRYPTION_KEY` lets the runtime reopen the same XMTP installation after restart instead of churning installations.
 
 ## Frontend Routes and API Surface
 

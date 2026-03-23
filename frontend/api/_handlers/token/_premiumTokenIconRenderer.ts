@@ -112,7 +112,7 @@ const BREAKOUT_RUNTIME_LOG_ENABLED =
   BREAKOUT_DEBUG_LOG_ENABLED ||
   process.env.TOKEN_PREMIUM_BREAKOUT_LOG === '1'
 const ALLOW_PREMIUM_FALLBACK_BAND =
-  process.env.TOKEN_PREMIUM_BREAKOUT_FALLBACK_BAND === '1'
+  process.env.TOKEN_PREMIUM_BREAKOUT_FALLBACK_BAND !== '0'
 const PREMIUM_SEGMENTATION_ENABLED = process.env.TOKEN_PREMIUM_SEGMENTATION !== '0'
 const BREAKOUT_DEBUG_DIR = process.env.TOKEN_BREAKOUT_DEBUG_DIR
 const execFileP = promisify(execFile)
@@ -3046,7 +3046,9 @@ export async function renderBreakoutLayer(params: {
       .toBuffer()
   } else if (params.allowFallbackBand) {
     fallbackBandUsed = true
-    const breakoutSeed = masked
+    // Use the pre-above-frame seed so fallback can still recover when
+    // the primary subject mask gate rejects and leaves the above-frame pass empty.
+    const breakoutSeed = maskedAfterBreakoutMask
     const fallbackRadius = Math.max(1, Math.round(layout.breakoutWidth * 0.24))
     const fallbackBandMaskSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -3218,7 +3220,7 @@ async function renderCreatorSignature(params: {
   const displayName = symbol.slice(0, MAX_CHARS).toUpperCase()
   const escapedDisplayName = escapeXml(displayName)
 
-  const baseFont = Math.round(size * 0.0118)
+  const baseFont = Math.round(size * 0.013)
   const fontSize = Math.max(
     8,
     displayName.length > 9
@@ -3226,8 +3228,8 @@ async function renderCreatorSignature(params: {
       : baseFont,
   )
 
-  const squareSize = Math.round(size * 0.0092)
-  const gap = Math.round(size * 0.005)
+  const squareSize = Math.round(size * 0.0102)
+  const gap = Math.round(size * 0.0055)
 
   const letterSpacingEm = 0.06
   const textWidth = Math.ceil(displayName.length * fontSize * 0.70 + displayName.length * fontSize * letterSpacingEm)
@@ -3235,8 +3237,8 @@ async function renderCreatorSignature(params: {
 
   // Keep signature lockup comfortably inside the artwork chamber.
   const chamberPadX = Math.max(8, Math.round(layout.chamberSize * 0.048))
-  const chamberPadY = Math.max(6, Math.round(layout.chamberSize * 0.042))
-  const lockupShiftLeft = Math.max(10, Math.round(layout.chamberSize * 0.068))
+  const chamberPadY = Math.max(6, Math.round(layout.chamberSize * 0.05))
+  const lockupShiftLeft = Math.max(12, Math.round(layout.chamberSize * 0.095))
   const lockupRightEdge = layout.chamberX + layout.chamberSize - lockupShiftLeft
   const minSquareX = layout.chamberX + chamberPadX
   const squareX = Math.max(minSquareX, lockupRightEdge - lockupWidth)
@@ -3441,7 +3443,17 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
             ? 0.34
             : 0.22
       const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
-        ? Math.max(1, Math.round(layout.chamberSize * (resolvedPreset === 'hero' ? 0.016 : 0.033)))
+        ? Math.max(1, Math.round(layout.chamberSize * (
+            resolvedPreset === 'hero'
+              ? (
+                  // Dense top occupancy (badges/emblems touching the top band)
+                  // needs less lift to avoid clipping above the frame.
+                  analysis.topOccupancy > 0.58 ? 0.018
+                  : analysis.topOccupancy > 0.42 ? 0.026
+                  : 0.04
+                )
+              : 0.033
+          )))
         : topBiasPx
       const breakoutScale = clamp(
         renderScale * (analysis.sourceClass === 'illustration' && resolvedPreset === 'hero' ? 1.03 : 1),
@@ -3467,7 +3479,16 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       let subjectMaskSourceImage: Uint8Array | undefined
       let breakoutPlanSource: 'heroCutout' | 'sourceAlpha' | 'rembgCutout' | 'fallbackBand' | 'none' =
         breakoutPlan.mode === 'none' ? 'none' : breakoutPlan.mode
-      let allowFallbackBand = false
+      const fallbackBandTopOccupancyGate =
+        analysis.sourceClass === 'illustration'
+          ? analysis.topOccupancy < 0.56
+          : true
+      const fallbackBandAllowedBySignal =
+        ALLOW_PREMIUM_FALLBACK_BAND && fallbackBandTopOccupancyGate
+      let allowFallbackBand =
+        fallbackBandAllowedBySignal &&
+        breakoutPlan.mode === 'rembgCutout' &&
+        fallbackBandTopOccupancyGate
       let shouldRenderBreakout = false
       if (breakoutPlan.mode === 'heroCutout') {
         subjectMaskSourceImage = new Uint8Array(params.heroCutoutSourceImage!)
@@ -3481,14 +3502,14 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           subjectMaskSourceImage = new Uint8Array(rembgSegmentation.cutoutPng)
           breakoutPlanSource = 'rembgCutout'
           shouldRenderBreakout = true
-        } else if (ALLOW_PREMIUM_FALLBACK_BAND) {
+        } else if (fallbackBandAllowedBySignal) {
           allowFallbackBand = true
           breakoutPlanSource = 'fallbackBand'
           shouldRenderBreakout = true
         } else if (!segmentationFailureReasonForLog) {
           segmentationFailureReasonForLog = 'segmentation-unavailable'
         }
-      } else if (ALLOW_PREMIUM_FALLBACK_BAND && breakoutPlan.breakoutRequested) {
+      } else if (fallbackBandAllowedBySignal && breakoutPlan.breakoutRequested) {
         allowFallbackBand = true
         breakoutPlanSource = 'fallbackBand'
         shouldRenderBreakout = true

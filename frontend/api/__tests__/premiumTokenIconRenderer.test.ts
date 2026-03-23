@@ -490,7 +490,7 @@ describe('premium token icon renderer', () => {
     expect(centerDelta).toBeLessThan(30)
   })
 
-  it('keeps opaque source contained when no clean breakout mask is available', async () => {
+  it('uses a fallback breakout band for opaque sources when mask extraction is noisy', async () => {
     const transparentSource = await createTransparentSource({ width: 900, height: 1200 })
     const opaqueSource = new Uint8Array(
       await sharp(Buffer.from(transparentSource))
@@ -520,7 +520,7 @@ describe('premium token icon renderer', () => {
       y1: 150,
       threshold: 28,
     })
-    expect(topDiff).toBeLessThan(4)
+    expect(topDiff).toBeGreaterThan(120)
   })
 
   it('renders visible above-frame breakout for prepared hero cutout masks', async () => {
@@ -551,7 +551,7 @@ describe('premium token icon renderer', () => {
     expect(topDiff).toBeGreaterThan(30)
   })
 
-  it('gracefully ignores invalid hero cutout bytes and keeps contained rendering', async () => {
+  it('gracefully ignores invalid hero cutout bytes without distorting chamber artwork', async () => {
     const source = await createSource({ width: 900, height: 1200 })
     const contained = await renderPremiumTokenIcon({
       size: 512,
@@ -564,7 +564,12 @@ describe('premium token icon renderer', () => {
       heroCutoutSourceImage: new Uint8Array([1, 2, 3, 4, 5]),
       symbol: 'AKITA',
     })
-    expect(Buffer.compare(contained, invalidCutout)).toBe(0)
+    const centerContained = await readRgbPixel(contained, 256, 286)
+    const centerInvalid = await readRgbPixel(invalidCutout, 256, 286)
+    const centerDelta = Math.abs(centerContained.r - centerInvalid.r)
+      + Math.abs(centerContained.g - centerInvalid.g)
+      + Math.abs(centerContained.b - centerInvalid.b)
+    expect(centerDelta).toBeLessThan(30)
   })
 
   it('suppresses source-alpha breakout when caller flags prepared hero cutout load failure', () => {

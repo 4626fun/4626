@@ -236,6 +236,11 @@
       "headers": { "cache-control": "no-store" },
       "continue": true
     },
+    {
+      "src": "/app.html",
+      "headers": { "cache-control": "no-store" },
+      "continue": true
+    },
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
     { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
@@ -263,6 +268,16 @@
     { "src": "/api/wallet/solana/(.*)", "dest": "/api/wallet/solana/$1" },
     { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
     { "handle": "filesystem" },
+    {
+      "src": "/((?!assets/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
+      "dest": "/app.html"
+    },
     { "src": "/((?!assets/).*)", "dest": "/index.html" }
   ]
 }
