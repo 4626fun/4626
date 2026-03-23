@@ -169,6 +169,17 @@ export function isPrivyTelegramAlreadyLinkedError(error: unknown): boolean {
   )
 }
 
+export async function callPrivyMethod(target: unknown, methodNames: string[], args: unknown[] = []): Promise<boolean> {
+  if (!target || typeof target !== 'object') return false
+  for (const methodName of methodNames) {
+    const method = (target as Record<string, unknown>)[methodName]
+    if (typeof method !== 'function') continue
+    await (target as Record<string, (...args: unknown[]) => Promise<unknown>>)[methodName](...args)
+    return true
+  }
+  return false
+}
+
 export async function linkPrivyTelegramInMiniApp(params: {
   linkTelegram: ((params: { launchParams: { initDataRaw: string } }) => Promise<unknown>) | null | undefined
   launchParams: { initDataRaw?: string } | null | undefined
@@ -1129,23 +1140,20 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
 
     try {
       if (startedAuthenticated) {
-        const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
-        if (typeof linkEmail === 'function') {
-          try {
-            await linkEmail()
-          } catch (error) {
-            if (isPrivyEmailAlreadyLinkedError(error)) {
-              await refreshEmailVerificationState({ poll: true })
-              setLinkState('idle')
-              setLinkMessage(null)
-              linkAttemptRef.current = ''
-              return
-            } else {
-              throw error
-            }
+        try {
+          const linked = await callPrivyMethod(privy, ['linkEmail', 'linkEmailAccount'])
+          if (!linked) {
+            await launchEmailLogin()
           }
-        } else {
-          await launchEmailLogin()
+        } catch (error) {
+          if (isPrivyEmailAlreadyLinkedError(error)) {
+            await refreshEmailVerificationState({ poll: true })
+            setLinkState('idle')
+            setLinkMessage(null)
+            linkAttemptRef.current = ''
+            return
+          }
+          throw error
         }
       } else {
         await launchEmailLogin()

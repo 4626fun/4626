@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  callPrivyMethod,
   fetchTelegramLinkEmailVerificationState,
   canStartTelegramLink,
   formatTelegramSessionError,
@@ -585,6 +586,18 @@ describe('TelegramLink helpers', () => {
     expect(isPrivyTelegramAlreadyLinkedError(new Error('User already has an account of type telegram linked.'))).toBe(true)
     expect(isPrivyTelegramAlreadyLinkedError(new Error('Telegram already linked to this account.'))).toBe(true)
     expect(isPrivyTelegramAlreadyLinkedError(new Error('Completely different error'))).toBe(false)
+  })
+
+  it('calls Privy methods with their original object binding intact', async () => {
+    const privy = {
+      marker: 'bound',
+      linkEmail() {
+        if (this.marker !== 'bound') throw new Error('lost method binding')
+        return Promise.resolve()
+      },
+    }
+
+    await expect(callPrivyMethod(privy, ['linkEmail', 'linkEmailAccount'])).resolves.toBe(true)
   })
 
   it('links Privy Telegram account in Mini App when launch params are available', async () => {
