@@ -199,13 +199,13 @@ contract DeploymentBatcherPermit2Test is Test {
             makeAddr("vaultAdminModule")
         );
 
-        creatorToken.mint(ownerAddr, 20_000_000e18);
+        creatorToken.mint(ownerAddr, 100_000_000e18);
         vm.prank(ownerAddr);
         creatorToken.approve(address(permit2), type(uint256).max);
     }
 
     function test_finalizePhase2WithPermit2_pullsFundsViaPermit2_and_defersAuction() external {
-        uint256 depositAmount = 10_000_000e18;
+        uint256 depositAmount = 50_000_000e18;
         DeploymentBatcher.Phase2FinalizeParams memory params = DeploymentBatcher.Phase2FinalizeParams({
             creatorToken: address(creatorToken),
             owner: ownerAddr,
