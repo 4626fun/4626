@@ -5,6 +5,12 @@
   "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "framework": "vite",
   "outputDirectory": "dist",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true
+    }
+  },
   "functions": {
     "api/agent-registration.ts": {
       "includeFiles": "public/.well-known/agent-registration.json"
