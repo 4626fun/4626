@@ -11,7 +11,7 @@ import {
     MockVRFCoordinatorV2Plus,
     MockCreatorRegistryForVRF,
     MockEndpointV2
-} from "./CreatorVRFConsumerV2_5.RelayFunding.t.sol";
+} from "test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol";
 
 contract CreatorVRFConsumerV25SequenceScopingTest is Test {
     uint32 internal constant BASE_EID = 30184;

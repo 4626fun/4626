@@ -70,8 +70,13 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
           cache-dependency-path: |
+            pnpm-lock.yaml
             frontend/pnpm-lock.yaml
             apps/docs-site/pnpm-lock.yaml
+
+      - name: Install root dependencies
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: pnpm install --frozen-lockfile
 
       - name: Install frontend dependencies
         if: steps.detect.outputs.docs_sensitive == 'true'
