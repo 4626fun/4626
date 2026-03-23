@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { Alert } from '@/components/ui/Alert'
+import { Input } from '@/components/ui/Input'
 
 import { getTelegramLinkPrimaryActionLabel, getTelegramLinkSteps, useTelegramLinkFlow } from './telegramLinkFlow'
 
@@ -11,6 +12,7 @@ export {
   fetchTelegramLinkEmailVerificationState,
   formatTelegramSessionError,
   getTelegramLinkPrimaryActionLabel,
+  getPrivyPrimaryEmailAddress,
   getTelegramLinkSteps,
   getPrivyEmailState,
   getTelegramLinkSuccessMessage,
@@ -46,8 +48,17 @@ export function TelegramLink() {
     statusView,
     showRetrySessionButton,
     showResetAccountButton,
+    showEmailVerificationForm,
+    emailAuthStage,
+    emailInput,
+    codeInput,
     canStartLink,
     working,
+    onEmailInputChange,
+    onCodeInputChange,
+    onRequestEmailCode,
+    onVerifyEmailCode,
+    onEditEmail,
     onRetrySession,
     onRetryLink,
     onResetAccount,
@@ -124,8 +135,90 @@ export function TelegramLink() {
           ))}
         </div>
 
+        {showEmailVerificationForm ? (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="space-y-1">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">4626 email verification</div>
+              <div className="text-sm font-medium text-zinc-100">
+                {emailAuthStage === 'code' ? 'Enter the code from your email' : 'Send a one-time verification code'}
+              </div>
+              <div className="text-sm leading-6 text-zinc-400">
+                {emailAuthStage === 'code'
+                  ? 'Stay inside Telegram. After the code verifies, the Mini App will continue the link automatically.'
+                  : 'Enter the email address you want to use as your canonical 4626 identity. Telegram will link after that email verifies.'}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <Input
+                id="telegram-link-email"
+                label="4626 email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={emailInput}
+                disabled={working || emailAuthStage === 'code'}
+                onChange={(event) => onEmailInputChange(event.target.value)}
+              />
+
+              {emailAuthStage === 'code' ? (
+                <Input
+                  id="telegram-link-code"
+                  label="Verification code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={codeInput}
+                  disabled={working}
+                  onChange={(event) => onCodeInputChange(event.target.value)}
+                />
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {emailAuthStage === 'code' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void onVerifyEmailCode()}
+                    disabled={working}
+                    className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Verify code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onRequestEmailCode()}
+                    disabled={working}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Resend code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onEditEmail}
+                    disabled={working}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Use a different email
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void onRequestEmailCode()}
+                  disabled={working}
+                  className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Send verification code
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-6 flex flex-wrap gap-3">
-          {primaryActionLabel ? (
+          {primaryActionLabel && !showEmailVerificationForm ? (
             <button
               type="button"
               onClick={() => void onSignIn()}

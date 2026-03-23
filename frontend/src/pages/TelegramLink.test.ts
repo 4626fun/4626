@@ -7,6 +7,7 @@ import {
   getTelegramLinkPrimaryActionLabel,
   getTelegramLinkSteps,
   getPrivyEmailState,
+  getPrivyPrimaryEmailAddress,
   isPrivyTelegramAlreadyLinkedError,
   isTelegramLinkEmailVerificationRequiredError,
   linkPrivyTelegramInMiniApp,
@@ -196,6 +197,25 @@ describe('TelegramLink helpers', () => {
         privyAuthenticated: true,
       }),
     ).toBeNull()
+  })
+
+  it('extracts the primary email address from Privy user payloads', () => {
+    expect(
+      getPrivyPrimaryEmailAddress({
+        email: {
+          address: 'User@Example.com',
+        },
+      }),
+    ).toBe('user@example.com')
+
+    expect(
+      getPrivyPrimaryEmailAddress({
+        linked_accounts: [
+          { type: 'wallet', address: '0x1234' },
+          { type: 'email', address: 'Telegram@Example.com' },
+        ],
+      }),
+    ).toBe('telegram@example.com')
   })
 
   it('prefers session errors over generic authenticated copy', () => {

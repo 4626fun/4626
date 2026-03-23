@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
 import { runWaitlistPrivyLogout } from '@/components/waitlist/waitlistAuthState'
-import { buildWaitlistEmailLoginOptions } from '@/components/waitlist/waitlistLoginOptions'
 import { apiFetch } from '@/lib/apiBase'
 import {
   clearStoredTelegramMiniAppLinkContext,
@@ -86,6 +85,7 @@ export type TelegramLinkStep = {
   description: string
   status: TelegramLinkStepStatus
 }
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
@@ -144,6 +144,32 @@ export function getPrivyEmailState(user: unknown): PrivyEmailState {
   }
 
   return { hasAnyEmailAccount, hasVerifiedEmail }
+}
+
+export function getPrivyPrimaryEmailAddress(user: unknown): string {
+  const u = (user ?? {}) as Record<string, unknown>
+  const readAddress = (value: unknown): string => {
+    if (!value || typeof value !== 'object') return ''
+    const candidate = (value as Record<string, unknown>).address
+    return typeof candidate === 'string' ? candidate.trim().toLowerCase() : ''
+  }
+
+  const directEmail = readAddress(u.email)
+  if (directEmail) return directEmail
+
+  const linked = [
+    ...(Array.isArray(u.linkedAccounts) ? (u.linkedAccounts as unknown[]) : []),
+    ...(Array.isArray(u.linked_accounts) ? (u.linked_accounts as unknown[]) : []),
+  ]
+  for (const account of linked) {
+    const record = (account ?? {}) as Record<string, unknown>
+    const type = normalizeLowerString(record.type)
+    if (!type.includes('email')) continue
+    const address = readAddress(record)
+    if (address) return address
+  }
+
+  return ''
 }
 
 export function isPrivyEmailAlreadyLinkedError(error: unknown): boolean {
@@ -692,8 +718,17 @@ type UseTelegramLinkFlowResult = {
   statusView: TelegramLinkViewState
   showRetrySessionButton: boolean
   showResetAccountButton: boolean
+  showEmailVerificationForm: boolean
+  emailAuthStage: 'email' | 'code'
+  emailInput: string
+  codeInput: string
   canStartLink: boolean
   working: boolean
+  onEmailInputChange: (value: string) => void
+  onCodeInputChange: (value: string) => void
+  onRequestEmailCode: () => Promise<void>
+  onVerifyEmailCode: () => Promise<void>
+  onEditEmail: () => void
   onRetrySession: () => void
   onRetryLink: () => void
   onResetAccount: () => Promise<void>
@@ -705,10 +740,11 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const privy = usePrivy()
-  const { login } = useLogin()
+  const { sendCode, loginWithCode, state: emailOtpState } = useLoginWithEmail()
 
   const privyReady = Boolean(privy.ready)
   const privyAuthenticated = Boolean(privy.authenticated)
+  const privyUser = (privy as any)?.user ?? null
   const logout = useMemo(
     () =>
       typeof (privy as any)?.logout === 'function'
@@ -740,14 +776,24 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   const [emailState, setEmailState] = useState<TelegramLinkEmailState>('unknown')
   const [emailMessage, setEmailMessage] = useState<string | null>(null)
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
+  const [emailAuthStage, setEmailAuthStage] = useState<'email' | 'code'>('email')
+  const [emailInput, setEmailInput] = useState(() => getPrivyPrimaryEmailAddress(privyUser))
+  const [codeInput, setCodeInput] = useState('')
   const linkAttemptRef = useRef('')
   const emailCheckRunRef = useRef(0)
   const emailVerificationAttemptedRef = useRef(false)
   const privyStatusRef = useRef({ ready: privyReady, authenticated: privyAuthenticated })
+  const detectedPrivyEmail = useMemo(() => getPrivyPrimaryEmailAddress(privyUser), [privyUser])
+  const emailOtpStatus = emailOtpState?.status ?? 'initial'
 
   useEffect(() => {
     privyStatusRef.current = { ready: privyReady, authenticated: privyAuthenticated }
   }, [privyAuthenticated, privyReady])
+
+  useEffect(() => {
+    if (!detectedPrivyEmail) return
+    setEmailInput((current) => (current.trim().length > 0 ? current : detectedPrivyEmail))
+  }, [detectedPrivyEmail])
 
   const verifySession = useCallback(async () => {
     setSessionState('verifying')
@@ -1108,70 +1154,99 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
     setLinkMessage(null)
     setEmailState('unknown')
     setEmailMessage(null)
+    setEmailAuthStage('email')
+    setCodeInput('')
     await runWaitlistPrivyLogout({ logout })
   }, [logout])
 
-  const onSignIn = useCallback(async () => {
-    emailVerificationAttemptedRef.current = true
-    const startedAuthenticated = privyAuthenticated
-    const priorAccessToken = null
-    let launchedLogin = false
-
-    const launchEmailLogin = async () => {
-      launchedLogin = true
-      await login(buildWaitlistEmailLoginOptions() as any)
-    }
-
-    setLinkState('authenticating')
-    setLinkMessage(null)
-    setEmailState(startedAuthenticated ? 'verifying' : 'checking')
-    setEmailMessage('Verify your email to continue.')
-
-    try {
-      await launchEmailLogin()
-
-      const authSettlementPlan = resolveTelegramLinkAuthSettlementPlan({
-        startedAuthenticated,
-        launchedLogin,
-        priorAccessToken,
-      })
-      if (authSettlementPlan.shouldWaitForAuth) {
-        const authSettled = await waitForTelegramLinkPrivyAuth({
-          requireFreshAccessToken: authSettlementPlan.requireFreshAccessToken,
-          readSnapshot: async () => {
-            const accessToken = ((await getAccessToken().catch(() => null))?.trim() ?? '') || null
-            const nextEmailState = getPrivyEmailState((privy as any)?.user)
-            let serverEmailVerified = false
-            if (accessToken) {
-              const serverState = await fetchTelegramLinkEmailVerificationState({
-                getAccessToken: async () => accessToken,
-              }).catch<TelegramLinkEmailVerificationResult>(() => ({
-                status: 'needs_verification',
-              }))
-              serverEmailVerified = serverState.status === 'verified'
-            }
-            return {
-              ready: privyStatusRef.current.ready,
-              authenticated: privyStatusRef.current.authenticated,
-              accessToken,
-              hasVerifiedEmail: nextEmailState.hasVerifiedEmail,
-              serverEmailVerified,
-            }
-          },
-        })
-        if (!authSettled) {
-          setLinkState('idle')
-          setLinkMessage(null)
-          linkAttemptRef.current = ''
-          await refreshEmailVerificationState({ poll: true })
-          return
+  const finishEmailVerification = useCallback(async () => {
+    const authSettled = await waitForTelegramLinkPrivyAuth({
+      readSnapshot: async () => {
+        const accessToken = ((await getAccessToken().catch(() => null))?.trim() ?? '') || null
+        const nextEmailState = getPrivyEmailState((privy as any)?.user)
+        let serverEmailVerified = false
+        if (accessToken) {
+          const serverState = await fetchTelegramLinkEmailVerificationState({
+            getAccessToken: async () => accessToken,
+          }).catch<TelegramLinkEmailVerificationResult>(() => ({
+            status: 'needs_verification',
+          }))
+          serverEmailVerified = serverState.status === 'verified'
         }
-      }
-
-      await refreshEmailVerificationState({ poll: true })
+        return {
+          ready: privyStatusRef.current.ready,
+          authenticated: privyStatusRef.current.authenticated,
+          accessToken,
+          hasVerifiedEmail: nextEmailState.hasVerifiedEmail,
+          serverEmailVerified,
+        }
+      },
+    })
+    if (!authSettled) {
       setLinkState('idle')
       setLinkMessage(null)
       linkAttemptRef.current = ''
+      await refreshEmailVerificationState({ poll: true })
+      return
+    }
+
+    await refreshEmailVerificationState({ poll: true })
+    setCodeInput('')
+    setLinkState('idle')
+    setLinkMessage(null)
+    linkAttemptRef.current = ''
+  }, [getAccessToken, privy, refreshEmailVerificationState])
+
+  const onRequestEmailCode = useCallback(async () => {
+    const normalizedEmail = emailInput.trim().toLowerCase()
+    if (!normalizedEmail) {
+      setEmailState('error')
+      setEmailMessage('Enter the email address you want to verify with 4626.')
+      return
+    }
+
+    emailVerificationAttemptedRef.current = true
+    setLinkState('authenticating')
+    setLinkMessage(null)
+    setEmailState('verifying')
+    setEmailMessage(`Sending a verification code to ${normalizedEmail}...`)
+
+    try {
+      await sendCode({ email: normalizedEmail })
+      setEmailInput(normalizedEmail)
+      setCodeInput('')
+      setEmailAuthStage('code')
+      setLinkState('idle')
+      setEmailState('verifying')
+      setEmailMessage(`Enter the verification code sent to ${normalizedEmail}.`)
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : 'Failed to send a verification code.'
+      setLinkState('idle')
+      setEmailState('error')
+      setEmailMessage(message)
+    }
+  }, [emailInput, sendCode])
+
+  const onVerifyEmailCode = useCallback(async () => {
+    const normalizedCode = codeInput.trim()
+    if (!normalizedCode) {
+      setEmailState('error')
+      setEmailMessage('Enter the verification code from your email to continue.')
+      return
+    }
+
+    emailVerificationAttemptedRef.current = true
+    setLinkState('authenticating')
+    setLinkMessage(null)
+    setEmailState('verifying')
+    setEmailMessage('Verifying your email code...')
+
+    try {
+      await loginWithCode({ code: normalizedCode })
+      await finishEmailVerification()
     } catch (error: unknown) {
       if (isPrivyEmailAlreadyLinkedError(error)) {
         setLinkState('idle')
@@ -1183,11 +1258,25 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       const message =
         error instanceof Error && error.message.trim().length > 0
           ? error.message
-          : 'Failed to start 4626 sign-in.'
-      setLinkState('error')
-      setLinkMessage(message)
+          : 'Failed to verify your email code.'
+      setLinkState('idle')
+      setEmailState('error')
+      setEmailMessage(message)
     }
-  }, [getAccessToken, login, privy, privyAuthenticated, refreshEmailVerificationState])
+  }, [codeInput, finishEmailVerification, loginWithCode, refreshEmailVerificationState])
+
+  const onEditEmail = useCallback(() => {
+    setEmailAuthStage('email')
+    setCodeInput('')
+    setLinkState('idle')
+    setLinkMessage(null)
+    setEmailState('needs_verification')
+    setEmailMessage(null)
+  }, [])
+
+  const onSignIn = useCallback(async () => {
+    await onRequestEmailCode()
+  }, [onRequestEmailCode])
 
   const statusView = getTelegramLinkViewState({
     sessionState,
@@ -1199,6 +1288,12 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
     privyAuthenticated,
     hasLinkContext: Boolean(telegramLinkContext),
   })
+  const showEmailVerificationForm =
+    sessionState === 'ready' &&
+    Boolean(telegramLinkContext) &&
+    linkState !== 'linked' &&
+    !statusView.canRetryLink &&
+    emailState !== 'verified'
 
   return {
     linkState,
@@ -1220,6 +1315,10 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       privyAuthenticated,
       linkState,
     }),
+    showEmailVerificationForm,
+    emailAuthStage,
+    emailInput,
+    codeInput,
     canStartLink: canStartTelegramLink({
       hasLinkContext: Boolean(telegramLinkContext),
       sessionState,
@@ -1234,7 +1333,14 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       linkState === 'authenticating' ||
       linkState === 'linking' ||
       emailState === 'checking' ||
-      emailState === 'verifying',
+      emailState === 'verifying' ||
+      emailOtpStatus === 'sending-code' ||
+      emailOtpStatus === 'submitting-code',
+    onEmailInputChange: setEmailInput,
+    onCodeInputChange: setCodeInput,
+    onRequestEmailCode,
+    onVerifyEmailCode,
+    onEditEmail,
     onRetrySession,
     onRetryLink,
     onResetAccount,
