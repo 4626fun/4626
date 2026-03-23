@@ -6,7 +6,7 @@
   "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "git": {
     "deploymentEnabled": {
-      "*": false,
+      "**": false,
       "main": true
     }
   },
