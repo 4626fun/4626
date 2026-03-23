@@ -60,6 +60,7 @@ export function AccountContextProvider(props: { children: ReactNode }) {
 
   const waitlistMeQuery = useQuery({
     queryKey: ['account-context', 'waitlist-me'],
+    enabled: Boolean(signerAddress),
     queryFn: async (): Promise<WaitlistMeData | null> => {
       const res = await apiFetch('/api/waitlist/me', {
         method: 'GET',
@@ -317,4 +318,3 @@ export function useAccountContext(): AccountContextValue {
   }
   return ctx
 }
-

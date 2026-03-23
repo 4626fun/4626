@@ -6,7 +6,6 @@ import { ChatWidget } from './chat/ChatWidget'
 import { AccountModeIndicator } from './account/AccountModeIndicator'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
-import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
 type MobileNavItem = {
@@ -51,9 +50,9 @@ export function Layout() {
   const navigate = useNavigate()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
-  const { isAdmin } = useAdminStatus()
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
+  const isAdminRoute = location.pathname.startsWith('/admin')
   const showTopNavBar = hostMode !== 'marketing'
   const showAccountMode =
     hostMode !== 'marketing' &&
@@ -64,7 +63,7 @@ export function Layout() {
       location.pathname.startsWith('/status')
     )
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
-  const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
+  const items = isAdminRoute && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
 
   useEffect(() => {
     if (typeof window === 'undefined') return

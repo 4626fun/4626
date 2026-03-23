@@ -327,15 +327,17 @@ Operational rules:
 - Off-Railway production-primary boots are blocked by default.
 - Local standby mode exists only for inspection and smoke checks.
 - The persistent XMTP volume at `/data/.xmtp-data` must survive redeploys.
+- On Railway primary with Postgres configured, the runtime lease lock is expected to be enabled.
 
 Safe Railway redeploy checklist:
 
 1. Confirm Railway still has exactly one service and `numReplicas = 1` in `railway.toml`.
 2. Confirm Railway env keeps `AGENT_RUNTIME_ROLE=primary` and `AGENT_CONSUME_XMTP=true`.
-3. Confirm the Railway volume is still mounted at `/data/.xmtp-data`.
-4. Confirm `XMTP_DB_ENCRYPTION_KEY` is unchanged.
-5. Deploy and watch logs until `/readyz` becomes healthy.
-6. Run one XMTP smoke command such as `/keepr status`.
+3. Confirm the runtime lock remains enabled for the primary (`AGENT_RUNTIME_LOCK_REQUIRED=true`, default-on when Postgres is present).
+4. Confirm the Railway volume is still mounted at `/data/.xmtp-data`.
+5. Confirm `XMTP_DB_ENCRYPTION_KEY` is unchanged.
+6. Deploy and watch logs until `/readyz` becomes healthy with `status: "ok"`; `status: "standby"` is a misconfiguration.
+7. Run one XMTP smoke command such as `/keepr status`.
 
 Failure model:
 

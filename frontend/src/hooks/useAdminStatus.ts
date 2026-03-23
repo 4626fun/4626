@@ -44,14 +44,16 @@ export function deriveAdminStatus(input: DeriveAdminStatusInput): DeriveAdminSta
 function useAdminStatusQueryState(params: {
   authAddress: string | null
   sessionHydrated: boolean
+  enabled?: boolean
 }) {
-  const { authAddress, sessionHydrated } = params
+  const { authAddress, sessionHydrated, enabled = true } = params
   const hasSessionAddress = Boolean(authAddress)
+  const queryEnabled = enabled && sessionHydrated && hasSessionAddress
 
   const query = useQuery({
     queryKey: ['auth', 'admin', authAddress ?? 'none'],
     // Admin identity is session-scoped; do not require a currently connected wallet.
-    enabled: sessionHydrated && hasSessionAddress,
+    enabled: queryEnabled,
     queryFn: fetchAdminStatus,
     staleTime: 30_000,
     retry: 0,
@@ -60,7 +62,7 @@ function useAdminStatusQueryState(params: {
   const derived = deriveAdminStatus({
     authAddress,
     sessionHydrated,
-    queryLoading: query.isLoading,
+    queryLoading: queryEnabled ? query.isLoading : false,
     queryIsAdmin: query.data?.isAdmin === true,
   })
 
@@ -75,14 +77,16 @@ function useAdminStatusQueryState(params: {
 export function useAdminStatusFromSession(params: {
   authAddress: string | null
   sessionHydrated: boolean
+  enabled?: boolean
 }) {
   return useAdminStatusQueryState(params)
 }
 
-export function useAdminStatus() {
+export function useAdminStatus(params?: { enabled?: boolean }) {
   const { authAddress, sessionHydrated } = useSiweAuth()
   return useAdminStatusQueryState({
     authAddress,
     sessionHydrated,
+    enabled: params?.enabled,
   })
 }

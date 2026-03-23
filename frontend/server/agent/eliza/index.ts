@@ -622,9 +622,14 @@ const AGENT_CONSUME_XMTP = parseEnvBoolean(
   process.env.AGENT_CONSUME_XMTP,
   AGENT_RUNTIME_ROLE === 'primary',
 )
+const RUNNING_ON_RAILWAY = isRailwayRuntime()
+const AGENT_RUNTIME_LOCK_EXPLICITLY_CONFIGURED = (() => {
+  const raw = (process.env.AGENT_RUNTIME_LOCK_REQUIRED ?? '').trim()
+  return raw.length > 0
+})()
 const AGENT_RUNTIME_LOCK_REQUIRED = parseEnvBoolean(
   process.env.AGENT_RUNTIME_LOCK_REQUIRED,
-  false,
+  RUNNING_ON_RAILWAY && AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary' && isDbConfigured(),
 )
 const AGENT_RUNTIME_LOCK_KEY = (() => {
   const raw = (process.env.AGENT_RUNTIME_LOCK_KEY ?? '').trim()
@@ -636,7 +641,6 @@ const AGENT_RUNTIME_LOCK_HEARTBEAT_MS = Math.floor(
 const AGENT_RUNTIME_LOCK_STALE_MS = Math.floor(
   parsePositiveNumber(process.env.AGENT_RUNTIME_LOCK_STALE_MS, 30_000),
 )
-const RUNNING_ON_RAILWAY = isRailwayRuntime()
 const ELIZA_ALLOW_OFF_RAILWAY_PRIMARY = parseEnvBoolean(
   process.env.ELIZA_ALLOW_OFF_RAILWAY_PRIMARY,
   false,
@@ -711,9 +715,14 @@ function validateStartupEnv(): EnvValidationResult {
       'AGENT_RUNTIME_ROLE=standby with AGENT_CONSUME_XMTP=true can create dual-consumer risk. Prefer AGENT_CONSUME_XMTP=false for standby replicas.',
     )
   }
-  if (RUNNING_ON_RAILWAY && (!AGENT_CONSUME_XMTP || AGENT_RUNTIME_ROLE === 'standby')) {
-    warnings.push(
-      'Railway in this repo is intended to run a single primary XMTP consumer. Standby mode is for local inspection, not the normal Railway deployment path.',
+  if (RUNNING_ON_RAILWAY && AGENT_RUNTIME_ROLE !== 'primary') {
+    errors.push(
+      'Railway runtime must use AGENT_RUNTIME_ROLE=primary. Standby mode is reserved for local inspection only.',
+    )
+  }
+  if (RUNNING_ON_RAILWAY && !AGENT_CONSUME_XMTP) {
+    errors.push(
+      'Railway runtime must use AGENT_CONSUME_XMTP=true. Passive standby on Railway would silently disable the primary consumer.',
     )
   }
 
@@ -812,6 +821,18 @@ function validateStartupEnv(): EnvValidationResult {
   }
   if (AGENT_RUNTIME_LOCK_REQUIRED && AGENT_CONSUME_XMTP && !hasDb) {
     errors.push('AGENT_RUNTIME_LOCK_REQUIRED=true requires DATABASE_URL/POSTGRES_URL so the runtime lease lock can be acquired.')
+  }
+  if (
+    RUNNING_ON_RAILWAY &&
+    AGENT_CONSUME_XMTP &&
+    AGENT_RUNTIME_ROLE === 'primary' &&
+    hasDb &&
+    AGENT_RUNTIME_LOCK_EXPLICITLY_CONFIGURED &&
+    !AGENT_RUNTIME_LOCK_REQUIRED
+  ) {
+    errors.push(
+      'Railway primary requires the DB-backed runtime lease lock when Postgres is configured. Remove the override or set AGENT_RUNTIME_LOCK_REQUIRED=true.',
+    )
   }
   if (
     AGENT_RUNTIME_LOCK_REQUIRED &&

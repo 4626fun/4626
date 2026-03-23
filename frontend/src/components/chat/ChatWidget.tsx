@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useLogin } from '@privy-io/react-auth'
 import { MessageSquare, X } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 import { XmtpChatProvider, type ChatConversation, useXmtp } from '@/lib/xmtp/provider'
 import {
   getBasenameAutocompleteCandidate,
@@ -31,6 +32,7 @@ import { ChatWindow } from './ChatWindow'
 import { getChatCommandById } from './commandCenter'
 import { rekeyOpenWindows, type OpenWindow } from './chatWidgetState'
 import { shouldAutoConnectMessaging } from './autoConnectPolicy'
+import { hasChatDeepLinkSearch } from './chatActivation'
 
 const MAX_OPEN_WINDOWS = 3
 const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
@@ -76,21 +78,28 @@ function useSafeChatLogin() {
   }
 }
 
-function ConnectToChatPrompt() {
+function ConnectToChatPrompt(props: { onActivate?: (() => void) | null }) {
   const { login } = useSafeChatLogin()
+  const { isConnected } = useAccount()
   const [busy, setBusy] = useState(false)
+  const onActivate = props.onActivate ?? null
 
   const handleConnect = useCallback(async () => {
     if (busy) return
+    if (isConnected) {
+      onActivate?.()
+      return
+    }
     setBusy(true)
     try {
       await login({ loginMethods: ['email', 'wallet'] } as any)
+      onActivate?.()
     } catch {
       // user dismissed
     } finally {
       setBusy(false)
     }
-  }, [busy, login])
+  }, [busy, isConnected, login, onActivate])
 
   return (
     <>
@@ -626,6 +635,25 @@ function ChatWidgetInner() {
  * Drop this into any layout to get the full chat experience.
  */
 export function ChatWidget() {
+  const location = useLocation()
+  const [chatActivated, setChatActivated] = useState(() => hasChatDeepLinkSearch(location.search))
+
+  useEffect(() => {
+    if (hasChatDeepLinkSearch(location.search)) {
+      setChatActivated(true)
+    }
+  }, [location.search])
+
+  if (!chatActivated) {
+    return (
+      <ConnectToChatPrompt
+        onActivate={() => {
+          setChatActivated(true)
+        }}
+      />
+    )
+  }
+
   return (
     <XmtpChatProvider>
       <ChatWidgetInner />

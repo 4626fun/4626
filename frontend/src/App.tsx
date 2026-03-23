@@ -128,11 +128,14 @@ export function resolveAccess(routeId: RouteId, state: AccessState): AccessDecis
 }
 
 function useResolvedAccessState(): AccessState {
+  const location = useLocation()
   const { address: connectedAddressRaw, isConnected } = useAccount()
   const siwe = useSiweAuth()
+  const shouldLoadAdminStatus = location.pathname.startsWith('/admin')
   const adminStatus = useAdminStatusFromSession({
     authAddress: typeof siwe.authAddress === 'string' ? siwe.authAddress : null,
     sessionHydrated: siwe.sessionHydrated,
+    enabled: shouldLoadAdminStatus,
   })
 
   const connectedAddress = useMemo(

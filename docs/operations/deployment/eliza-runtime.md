@@ -10,7 +10,7 @@ This runbook covers deploy, rollback, and on-call triage for the long-lived Eliz
 ## Scope
 
 - Service: Eliza runtime container (`frontend/Dockerfile.agent`)
-- Platform: Railway primary (or Docker with persistent volume for explicit operator-managed overrides)
+- Platform: Railway primary
 - Health endpoints:
   - Liveness: `/healthz` (boot is allowed)
   - Readiness: `/readyz` (must be fully ready)
@@ -35,11 +35,12 @@ Before shipping, verify these values are configured:
   - set `ELIZA_ALLOW_OFF_RAILWAY_PRIMARY=true` only for supervised off-Railway overrides
 - Off-Railway Grove registration uploads are disabled by default:
   - set `ELIZA_ALLOW_OFF_RAILWAY_GROVE_UPLOAD=true` only for supervised off-Railway overrides
-- Optional split-brain guard (mostly future-proofing if you ever add a second deploy target):
+- DB-backed runtime lease lock:
   - `AGENT_RUNTIME_LOCK_REQUIRED=true`
   - `AGENT_RUNTIME_LOCK_KEY=xmtp-primary-runtime-lock`
   - `AGENT_RUNTIME_LOCK_HEARTBEAT_MS=10000`
   - `AGENT_RUNTIME_LOCK_STALE_MS=30000`
+  - On Railway primary with Postgres configured, this is expected to be enabled and defaults on.
 - Hard TEE gate for privileged signing/actions (if enabled):
   - `TEE_ENFORCEMENT_ENABLED=true`
   - `ERC8004_VALIDATION_REGISTRY` + `ERC8004_AGENT_ID` set
@@ -59,11 +60,13 @@ Before shipping, verify these values are configured:
    - `healthcheckPath` is `/readyz` (strict readiness gate)
    - Railway env is `AGENT_RUNTIME_ROLE=primary`
    - Railway env is `AGENT_CONSUME_XMTP=true`
+   - Runtime lock is enabled (`AGENT_RUNTIME_LOCK_REQUIRED=true`, default-on when Postgres is present)
 2. Deploy (`railway up` or UI deploy).
 3. Watch startup logs until runtime mode and plugin/action counts print.
 4. Validate liveness and readiness:
    - `GET /healthz` should return `200`
    - `GET /readyz` should return `200` and `status: "ok"`
+   - `status: "standby"` on Railway is a no-go and should be treated as misconfiguration
 
 ## Go / No-Go Gates
 
@@ -80,7 +83,7 @@ Ship only if all pass:
 
 ## Rollback Procedure
 
-1. Roll back to previous Railway deployment (or previous Docker image tag).
+1. Roll back to previous Railway deployment.
 2. Keep the same XMTP DB volume and encryption key (do not rotate during rollback).
 3. Re-check `/healthz` then `/readyz`.
 4. Re-run `/keepr status` smoke test.

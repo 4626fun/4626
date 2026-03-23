@@ -7,7 +7,6 @@ import { Alert } from '@/components/ui/Alert'
 import { getTelegramLinkPrimaryActionLabel, getTelegramLinkSteps, useTelegramLinkFlow } from './telegramLinkFlow'
 
 export {
-  callPrivyMethod,
   canStartTelegramLink,
   fetchTelegramLinkEmailVerificationState,
   formatTelegramSessionError,

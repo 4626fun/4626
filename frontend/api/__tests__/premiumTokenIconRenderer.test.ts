@@ -492,7 +492,7 @@ describe('premium token icon renderer', () => {
     expect(centerDelta).toBeLessThan(30)
   })
 
-  it('uses a fallback breakout band for opaque sources when mask extraction is noisy', async () => {
+  it('keeps opaque illustration-like sources contained when mask extraction is noisy', async () => {
     const transparentSource = await createTransparentSource({ width: 900, height: 1200 })
     const opaqueSource = new Uint8Array(
       await sharp(Buffer.from(transparentSource))
@@ -522,7 +522,7 @@ describe('premium token icon renderer', () => {
       y1: 150,
       threshold: 28,
     })
-    expect(topDiff).toBeGreaterThan(120)
+    expect(topDiff).toBeLessThan(8)
   })
 
   it('renders visible above-frame breakout for prepared hero cutout masks', async () => {

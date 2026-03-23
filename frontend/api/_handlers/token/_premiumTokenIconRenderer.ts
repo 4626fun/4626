@@ -147,7 +147,7 @@ const PREMIUM_BREAKOUT_MASK_MAX_COVERAGE_ILLUSTRATION =
     1,
   )
 const ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO =
-  clamp(Number(process.env.TOKEN_PREMIUM_ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO ?? 0.015), 0, 0.03)
+  clamp(Number(process.env.TOKEN_PREMIUM_ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO ?? 0.018), 0, 0.03)
 
 function getSegmentationBreakoutMaxCoverage(sourceClass?: SourceClass): number {
   if (sourceClass === 'illustration') {
@@ -3520,7 +3520,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
             ? 0.34
             : 0.22
       const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
-        ? Math.max(1, Math.round(layout.chamberSize * (
+        ? Math.max(0, Math.round(layout.chamberSize * (
             resolvedPreset === 'hero'
               ? (
                   // Keep dynamic occupancy shaping, then apply the same lowering delta
@@ -3528,7 +3528,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
                   resolveIllustrationHeroBreakoutTopBiasRatio(analysis.topOccupancy)
                 )
               : 0.033
-          )))
+          )) - 1)
         : topBiasPx
       const breakoutScale = clamp(
         renderScale * (analysis.sourceClass === 'illustration' && resolvedPreset === 'hero' ? 1.03 : 1),
@@ -3560,8 +3560,12 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         analysis.sourceClass === 'illustration'
           ? analysis.topOccupancy < 0.56
           : true
+      // Illustration breakouts should never degrade into fallback-band strips.
+      // If segmentation/cutout quality fails for illustration, prefer contained rendering.
       const fallbackBandAllowedBySignal =
-        ALLOW_PREMIUM_FALLBACK_BAND && fallbackBandTopOccupancyGate
+        ALLOW_PREMIUM_FALLBACK_BAND &&
+        analysis.sourceClass !== 'illustration' &&
+        fallbackBandTopOccupancyGate
       let allowFallbackBand =
         fallbackBandAllowedBySignal &&
         breakoutPlan.mode === 'rembgCutout' &&
