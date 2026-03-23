@@ -35,10 +35,10 @@
     "minimatch": "10.2.3",
     "qs": "6.14.2",
     "serialize-javascript": "7.0.4",
-    "tar": "7.5.10",
+    "tar": "7.5.11",
     "path-to-regexp": "6.3.0",
     "tmp": "0.2.4",
-    "undici": "6.23.0",
+    "undici": "6.24.0",
     "ws": "8.18.0"
   },
   "pnpm": {
@@ -59,10 +59,10 @@
       "minimatch": "10.2.3",
       "qs": "6.14.2",
       "serialize-javascript": "7.0.4",
-      "tar": "7.5.10",
+      "tar": "7.5.11",
       "path-to-regexp": "6.3.0",
       "tmp": "0.2.4",
-      "undici": "6.23.0",
+      "undici": "6.24.0",
       "ws": "8.18.0"
     },
     "peerDependencyRules": {

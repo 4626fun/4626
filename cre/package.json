@@ -56,12 +56,25 @@
   },
   "overrides": {
     "axios": "1.13.5",
+    "bigint-buffer": "file:./vendor/bigint-buffer",
     "bn.js": "5.2.3",
     "cross-fetch": "3.2.0",
     "esbuild": "0.27.3",
     "node-fetch": "2.7.0",
     "qs": "6.14.2",
     "rollup": "4.59.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "axios": "1.13.5",
+      "bigint-buffer": "file:./vendor/bigint-buffer",
+      "bn.js": "5.2.3",
+      "cross-fetch": "3.2.0",
+      "esbuild": "0.27.3",
+      "node-fetch": "2.7.0",
+      "qs": "6.14.2",
+      "rollup": "4.59.0"
+    }
   },
   "engines": {
     "node": ">=20.0.0"
