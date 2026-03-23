@@ -254,6 +254,14 @@ function AccessStateProvider(props: { children: ReactNode }) {
   return <AccessContext.Provider value={value}>{props.children}</AccessContext.Provider>
 }
 
+function LayoutWithAccountContext() {
+  return (
+    <AccountContextProvider>
+      <Layout />
+    </AccountContextProvider>
+  )
+}
+
 function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNode }) {
   const access = useAccessContext()
   const decision = resolveAccess(props.routeId, access)
@@ -539,135 +547,133 @@ function NotFoundPage() {
 function App() {
   return (
     <AccessStateProvider>
-      <AccountContextProvider>
-        <Routes>
+      <Routes>
+        <Route
+          element={
+            <>
+              <HostGuard />
+              <Outlet />
+            </>
+          }
+        >
           <Route
+            path="/telegram/menu"
             element={
-              <>
-                <HostGuard />
-                <Outlet />
-              </>
+              <RequireTelegramMiniAppEntry>
+                <TelegramMenu />
+              </RequireTelegramMiniAppEntry>
             }
-          >
-            <Route
-              path="/telegram/menu"
-              element={
-                <RequireTelegramMiniAppEntry>
-                  <TelegramMenu />
-                </RequireTelegramMiniAppEntry>
-              }
-            />
-            <Route
-              path="/telegram/link"
-              element={
-                <RequireTelegramMiniAppEntry>
-                  <TelegramLink />
-                </RequireTelegramMiniAppEntry>
-              }
-            />
-            <Route element={<Layout />}>
-            {/* Public routes (no session required) */}
-            <Route path="/" element={<Home />} />
-            <Route path="/404" element={<NotFoundPage />} />
-            <Route path="/waitlist" element={<WaitlistEntryRoute />} />
-            <Route
-              path="/faq"
-              element={
-                <MarketingOnlyRoute>
-                  <Faq />
-                </MarketingOnlyRoute>
-              }
-            />
-            <Route
-              path="/faq/how-it-works"
-              element={
-                <MarketingOnlyRoute>
-                  <FaqHowItWorks />
-                </MarketingOnlyRoute>
-              }
-            />
-            <Route
-              path="/status"
-              element={
-                <MarketingOnlyRoute>
-                  <Status />
-                </MarketingOnlyRoute>
-              }
-            />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/continue" element={<AppContinue />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="/account" element={<AccountsPage />} />
+          />
+          <Route
+            path="/telegram/link"
+            element={
+              <RequireTelegramMiniAppEntry>
+                <TelegramLink />
+              </RequireTelegramMiniAppEntry>
+            }
+          />
+          <Route element={<LayoutWithAccountContext />}>
+          {/* Public routes (no session required) */}
+          <Route path="/" element={<Home />} />
+          <Route path="/404" element={<NotFoundPage />} />
+          <Route path="/waitlist" element={<WaitlistEntryRoute />} />
+          <Route
+            path="/faq"
+            element={
+              <MarketingOnlyRoute>
+                <Faq />
+              </MarketingOnlyRoute>
+            }
+          />
+          <Route
+            path="/faq/how-it-works"
+            element={
+              <MarketingOnlyRoute>
+                <FaqHowItWorks />
+              </MarketingOnlyRoute>
+            }
+          />
+          <Route
+            path="/status"
+            element={
+              <MarketingOnlyRoute>
+                <Status />
+              </MarketingOnlyRoute>
+            }
+          />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/continue" element={<AppContinue />} />
+          <Route path="/accounts" element={<AccountsPage />} />
+          <Route path="/account" element={<AccountsPage />} />
 
-            {/* Session-gated routes */}
-            <Route element={<RequireSession />}>
-              <Route element={<RequireAccepted />}>
-                <Route path="/explore/creators" element={<ExploreCreators />} />
-                <Route path="/explore/content" element={<ExploreContent />} />
-                <Route path="/explore/trends" element={<ExploreTrends />} />
-                <Route path="/explore/transactions" element={<ExploreTransactions />} />
-                <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
-                <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
-                <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
-                <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
-                <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-                <Route path="/swap" element={<Swap />} />
-                <Route path="/positions" element={<Positions />} />
-                <Route path="/portfolio" element={<Portfolio />} />
-                <Route path="/portfolio/:address" element={<Portfolio />} />
+          {/* Session-gated routes */}
+          <Route element={<RequireSession />}>
+            <Route element={<RequireAccepted />}>
+              <Route path="/explore/creators" element={<ExploreCreators />} />
+              <Route path="/explore/content" element={<ExploreContent />} />
+              <Route path="/explore/trends" element={<ExploreTrends />} />
+              <Route path="/explore/transactions" element={<ExploreTransactions />} />
+              <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
+              <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
+              <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
+              <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
+              <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
+              <Route path="/swap" element={<Swap />} />
+              <Route path="/positions" element={<Positions />} />
+              <Route path="/portfolio" element={<Portfolio />} />
+              <Route path="/portfolio/:address" element={<Portfolio />} />
+              <Route
+                path="/deploy"
+                element={
+                  <WithSmartWallets>
+                    <DeployVault />
+                  </WithSmartWallets>
+                }
+              />
+              <Route path="/coin/:address/manage" element={<CoinManage />} />
+              <Route path="/creator/earnings" element={<CreatorEarnings />} />
+              <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
+              <Route path="/vote" element={<GaugeVoting />} />
+              <Route path="/auction/bid/:address" element={<AuctionBid />} />
+              <Route path="/complete-auction" element={<CompleteAuction />} />
+              <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
+              <Route path="/vault/:address" element={<Vault />} />
+              <Route path="/agents" element={<AgentDirectory />} />
+              <Route path="/agents/register" element={<AgentRegister />} />
+              <Route path="/agents/uri-service" element={<AgentUriService />} />
+              <Route path="/auction-demo" element={<AuctionDemo />} />
+            </Route>
+
+            <Route element={<RequireAdmin />}>
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="/admin/waitlist" replace />} />
+                <Route path="creator-access" element={<AdminCreatorAccess />} />
+                <Route path="waitlist" element={<AdminWaitlist />} />
+                <Route path="agent-setup" element={<AdminAgentSetup />} />
+                <Route path="imagegen" element={<AdminImageGeneration />} />
                 <Route
-                  path="/deploy"
+                  path="ops"
                   element={
                     <WithSmartWallets>
-                      <DeployVault />
+                      <AdminOps />
                     </WithSmartWallets>
                   }
                 />
-                <Route path="/coin/:address/manage" element={<CoinManage />} />
-                <Route path="/creator/earnings" element={<CreatorEarnings />} />
-                <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-                <Route path="/vote" element={<GaugeVoting />} />
-                <Route path="/auction/bid/:address" element={<AuctionBid />} />
-                <Route path="/complete-auction" element={<CompleteAuction />} />
-                <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-                <Route path="/vault/:address" element={<Vault />} />
-                <Route path="/agents" element={<AgentDirectory />} />
-                <Route path="/agents/register" element={<AgentRegister />} />
-                <Route path="/agents/uri-service" element={<AgentUriService />} />
-                <Route path="/auction-demo" element={<AuctionDemo />} />
-              </Route>
-
-              <Route element={<RequireAdmin />}>
-                <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to="/admin/waitlist" replace />} />
-                  <Route path="creator-access" element={<AdminCreatorAccess />} />
-                  <Route path="waitlist" element={<AdminWaitlist />} />
-                  <Route path="agent-setup" element={<AdminAgentSetup />} />
-                  <Route path="imagegen" element={<AdminImageGeneration />} />
-                  <Route
-                    path="ops"
-                    element={
-                      <WithSmartWallets>
-                        <AdminOps />
-                      </WithSmartWallets>
-                    }
-                  />
-                  <Route
-                    path="deploy-strategies"
-                    element={
-                      <WithSmartWallets>
-                        <AdminDeployStrategies />
-                      </WithSmartWallets>
-                    }
-                  />
-                </Route>
+                <Route
+                  path="deploy-strategies"
+                  element={
+                    <WithSmartWallets>
+                      <AdminDeployStrategies />
+                    </WithSmartWallets>
+                  }
+                />
               </Route>
             </Route>
-            </Route>
-            <Route path="*" element={<NotFoundPage />} />
           </Route>
-        </Routes>
-      </AccountContextProvider>
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
     </AccessStateProvider>
   )
 }

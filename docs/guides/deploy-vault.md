@@ -16,7 +16,7 @@ Preferred setup is a **1-click deploy**:
 - The user approves **one** EOA transaction (setup).
 - The server continues the deploy by submitting the remaining ERC-4337 UserOps and then cleans up the temporary owner.
 
-1. Navigate to [4626.fun/deploy](https://4626.fun/deploy)
+1. Navigate to [app.4626.fun/deploy](https://app.4626.fun/deploy)
 2. Sign in (Privy or SIWE) so the app can use the paymaster proxy (`/api/paymaster`)
 3. Connect an **owner EOA wallet** on Base (e.g. Coinbase Wallet) that is already an onchain owner of the canonical Coinbase Smart Wallet
 4. Click Deploy

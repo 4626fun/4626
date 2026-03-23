@@ -6,10 +6,10 @@
 
 4626 (4626.fun) is a monorepo with two primary dev loops:
 
-| Component | Directory | Toolchain | Dev command |
-|-----------|-----------|-----------|-------------|
-| **Frontend SPA + Vercel API** | `frontend/` | Vite 7 + React 19 + TypeScript | `pnpm -C frontend dev` |
-| **Solidity contracts** | `contracts/` (root) | Foundry (forge) | `forge build` / `forge test` |
+| Component                     | Directory           | Toolchain                      | Dev command                  |
+| ----------------------------- | ------------------- | ------------------------------ | ---------------------------- |
+| **Frontend SPA + Vercel API** | `frontend/`         | Vite 7 + React 19 + TypeScript | `pnpm -C frontend dev`       |
+| **Solidity contracts**        | `contracts/` (root) | Foundry (forge)                | `forge build` / `forge test` |
 
 Optional components: XMTP Keepr Agent (`frontend/server/agent/eliza/`), CRE automation (`cre/`), Docs site (`apps/docs-site/`), Solana program (`programs/creator-share-hook/`).
 
@@ -34,6 +34,7 @@ These are repo-level guardrails for internal automation, deploy orchestration, a
 - **Frontend**: `cd frontend && pnpm dev` starts Vite at `http://localhost:5173/`. Hot-reloads on file changes. The app is in waitlist mode by default — unauthenticated routes redirect to `/` or show the waitlist modal.
 - **Contracts**: `forge build` to compile, `forge test` to run all 72+ Solidity unit tests. Foundry must be on PATH (`$HOME/.foundry/bin`).
 - **XMTP Keepr agent**: production runs on Railway only, as a single primary XMTP consumer. Do not introduce a standby or second live deploy target unless product explicitly changes that operating model.
+- **Telegram is not the live Eliza transport.** Telegram bot updates and Mini App flows remain separate from the Railway XMTP runtime, even when they reuse shared agent-core helpers.
 
 ### Lint / test / typecheck
 
@@ -54,6 +55,10 @@ Standard commands are documented in `frontend/package.json` scripts:
 - **`pnpm.onlyBuiltDependencies`** is configured in `frontend/package.json` to avoid interactive `pnpm approve-builds` prompts.
 - **Waitlist/marketing page on localhost**: By default, `localhost` is treated as the "app" domain and redirects unauthenticated users to `4626.fun`. To test the waitlist/marketing page locally, set `VITE_HOST_MODE_OVERRIDE=marketing` and `VITE_MARKETING_ORIGIN=http://localhost:5173` in `frontend/.env`. This is already configured in the Cloud Agent `.env`.
 - **Railway-only XMTP primary**: the Eliza/XMTP runtime is intended to have exactly one live Railway primary with `AGENT_RUNTIME_ROLE=primary`, `AGENT_CONSUME_XMTP=true`, and `numReplicas = 1`. Local standby mode is for inspection only. If a Railway redeploy crashes, expect downtime until restart or rollback; there is no default standby failover.
+- **Keep app-shell providers quiet by default**: route-scoped or user-intent-gated mounts are preferred over eager global mounts. Current examples: `/api/auth/admin` only resolves on `/admin`, `AccountContextProvider` is mounted in the layout subtree rather than the outer app root, and chat/XMTP only mounts after explicit chat intent or deep-link context.
+- **`/swap` should not background-refresh idle quotes**: quote on input changes, then rebuild stale quotes during review/submit if needed. Avoid reintroducing timer-driven idle re-quote loops.
+- **Do not add new ad hoc session polling around `useSiweAuth()`**: session restoration already dedupes shared `/api/auth/me` work. New auth consumers should reuse the existing hook/provider path instead of layering separate refresh effects.
+- **Railway primary must fail fast if misconfigured**: standby mode or `AGENT_CONSUME_XMTP=false` on Railway is a startup error, not a healthy passive mode. When Postgres is configured, the DB-backed runtime lease lock is expected to stay enabled for the Railway primary.
 
 ### Account and auth invariants
 
@@ -87,16 +92,17 @@ Authoritative implementation notes live in `frontend/docs/account-auth-invariant
 
 The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`. It is deployed to Solana **mainnet**.
 
-| Detail | Value |
-|--------|-------|
-| Program ID | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` |
-| Upgrade authority | `7Qi3WW7q4kmqXcMBca76b3WjNMdRmjjjrpG5FTc8htxY` (from `SOLANA_PRIVATE_KEY` secret) |
-| ProgramData | `DojrYy5obEk2w9ZMpX1bLFHU4rrZqYQsZJZaXFxFGKFU` |
-| Binary | `programs/creator-share-hook/target/deploy/creator_share_hook.so` |
-| Data capacity | 372,488 bytes (extended with 80KB headroom beyond current 345KB binary) |
-| Anchor.toml cluster | `mainnet` (see `[provider]` section) |
+| Detail              | Value                                                                             |
+| ------------------- | --------------------------------------------------------------------------------- |
+| Program ID          | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`                                    |
+| Upgrade authority   | `7Qi3WW7q4kmqXcMBca76b3WjNMdRmjjjrpG5FTc8htxY` (from `SOLANA_PRIVATE_KEY` secret) |
+| ProgramData         | `DojrYy5obEk2w9ZMpX1bLFHU4rrZqYQsZJZaXFxFGKFU`                                    |
+| Binary              | `programs/creator-share-hook/target/deploy/creator_share_hook.so`                 |
+| Data capacity       | 372,488 bytes (extended with 80KB headroom beyond current 345KB binary)           |
+| Anchor.toml cluster | `mainnet` (see `[provider]` section)                                              |
 
 **Upgrade procedure:**
+
 1. Decode `SOLANA_PRIVATE_KEY` (base58) to a Solana CLI JSON keypair file (64-byte secret key array).
 2. `solana config set --url https://api.mainnet-beta.solana.com --keypair <deployer-keypair.json>`
 3. If the new `.so` is larger than the current program data, run `solana program extend EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU <extra-bytes>` first.
@@ -104,6 +110,7 @@ The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`.
 5. The deployer wallet needs enough SOL for the temporary buffer (~2.4 SOL for a ~345KB binary, refunded after upgrade) plus any extension rent.
 
 **Non-obvious caveats:**
+
 - `SOLANA_PRIVATE_KEY` is a **base58-encoded** secret key, not a JSON array. Convert before use with Solana CLI (the CLI expects `[u8; 64]` JSON array format).
 - The program keypair at `target/deploy/creator_share_hook-keypair.json` does **not** match the deployed program ID — do not pass it as `--program-id`. The deployed program ID is hardcoded in `declare_id!()` in `src/lib.rs`.
 - Solana CLI 3.x is installed at `~/.local/share/solana/install/active_release/bin/solana`; Anchor CLI 0.31.1 is at `/usr/local/cargo/bin/anchor`.
@@ -113,13 +120,13 @@ The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`.
 
 The deployment batcher is configured for Solana bridging:
 
-| Contract | Config | Value |
-|----------|--------|-------|
-| Batcher (`0xB87CBb...c84`) | `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
-| | `solanaDestination` | `0x5f38e34e...d4d1` |
-| SolanaBridgeAdapter (`0x2414b5...e8`) | `owner` | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret) |
-| Protocol treasury (Safe 1-of-2) | address | `0x7d429e...f2d3` |
-| | owners | `0xB05Cf0...` (`PRIVATE_KEY`), `0x2C1Af6B...` |
+| Contract                              | Config                | Value                                         |
+| ------------------------------------- | --------------------- | --------------------------------------------- |
+| Batcher (`0xB87CBb...c84`)            | `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8`  |
+|                                       | `solanaDestination`   | `0x5f38e34e...d4d1`                           |
+| SolanaBridgeAdapter (`0x2414b5...e8`) | `owner`               | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret)     |
+| Protocol treasury (Safe 1-of-2)       | address               | `0x7d429e...f2d3`                             |
+|                                       | owners                | `0xB05Cf0...` (`PRIVATE_KEY`), `0x2C1Af6B...` |
 
 **Key access:** `PRIVATE_KEY` secret is owner of both the adapter and the treasury Safe. To call `setSolanaConfig` on the batcher, execute via the Safe (threshold=1, so single-owner signature suffices). See git history for the `cast send` pattern used.
 
@@ -141,21 +148,23 @@ Operational access details for the Solana route provisioner (hostnames, IPs, SSH
 
 The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the full Solana-side setup via HTTP endpoints:
 
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /provision` | Creates bridge route via `wrap-token` CLI; with `SOLANA_AUTO_POOL=1`, also creates DLMM pool + Alpha Vault |
-| `POST /setup-creator` | Creates Token-2022 mint with Transfer Hook + TransferFeeConfig, initializes PDAs |
-| `POST /create-pool` | Creates Meteora DLMM pool for the creator's share token |
-| `POST /meteora-ixs` | Builds Meteora Alpha Vault deposit instructions |
+| Endpoint              | Purpose                                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `POST /provision`     | Creates bridge route via `wrap-token` CLI; with `SOLANA_AUTO_POOL=1`, also creates DLMM pool + Alpha Vault |
+| `POST /setup-creator` | Creates Token-2022 mint with Transfer Hook + TransferFeeConfig, initializes PDAs                           |
+| `POST /create-pool`   | Creates Meteora DLMM pool for the creator's share token                                                    |
+| `POST /meteora-ixs`   | Builds Meteora Alpha Vault deposit instructions                                                            |
 
 **Single-token architecture:** Meteora DLMM rejects Token-2022 mints with TransferHook extension (`UnsupportedMintExtension`). The deploy uses only the bridge-wrapped standard SPL token (created by `wrap-token`) for DLMM pools, Alpha Vault deposits, and trading. Transfer Hook functionality (lottery entries, fees) requires a separate Token-2022 mint if needed.
 
 **Full per-creator Solana setup sequence (with `SOLANA_AUTO_POOL=1`):**
+
 1. `POST /provision` — creates bridge-wrapped SPL token + route, then auto-creates DLMM pool + Alpha Vault
 2. (Optional) `POST /setup-creator` — creates Token-2022 mint with Transfer Hook, inits CreatorConfig/PendingEntries/WinnerRecord PDAs
 3. Register Meteora vault config in DB or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env
 
 **Meteora vault config** is resolved via `frontend/server/_lib/meteoraAlphaVaultConfig.ts`:
+
 - Priority 1: DB table `creator_meteora_alpha_vaults` (auto-created on first query)
 - Priority 2: `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env var (JSON map keyed by creator token address)
 
@@ -164,6 +173,7 @@ The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the
 Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && npm ci`.
 
 **Solana-specific workflows:**
+
 - `keepr-solana-relay-entries` — relays lottery entries from Solana → Base (every 30s)
 - `keepr-solana-settle-fees` — settles Solana fees → Base gauge (every 5min)
 - `keepr-solana-winner-relay` — relays Base lottery wins → records on Solana
@@ -172,6 +182,7 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 **Start:** `cd cre && tsx runner.ts` (runs all workflows). Dry-run: `DRY_RUN=true tsx runner.ts`.
 
 **Required secrets** (see `cre/secrets.example.env`):
+
 - `KEEPR_PRIVATE_KEY` — Base signer (EOA or ERC-4337 owner)
 - `SOLANA_KEEPER_KEYPAIR` — Solana payer/authority (base58)
 - `SOLANA_RPC_URL`, `BASE_RPC_URL` — RPC endpoints

@@ -44,6 +44,13 @@ pnpm install
 pnpm dev
 ```
 
+## Runtime Split
+
+- `frontend/` contains both the SPA and the Vercel request/response API surface.
+- The long-lived XMTP / Eliza runtime is not hosted by Vercel in production.
+- Production XMTP runs as a single Railway primary from `frontend/Dockerfile.agent`.
+- `/api/agent/process` must not be scheduled as a Vercel cron in the default repo operating model.
+
 ## API Reference
 
 See [Frontend API](/api/frontend) for auto-generated TypeDoc documentation.

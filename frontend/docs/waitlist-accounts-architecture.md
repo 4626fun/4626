@@ -37,6 +37,13 @@ Wallet invariants:
 - If the user does not yet have a CSW, route them to Base app referral flow, then resume owner-installation on return.
 - Wallet-dependent execution should stay gated until CSW owner confirmation succeeds.
 
+Implementation posture:
+
+- Session restoration is handled centrally through `frontend/src/hooks/useSiweAuth.ts`.
+- New UI surfaces should reuse that session path rather than layering separate `/api/auth/me` refresh loops.
+- Canonical account-context lookup should be deferred until a signer exists; disconnected route loads should not eagerly fetch wallet topology that cannot yet be used.
+- Provider-heavy surfaces should be route-scoped or user-intent-gated where practical.
+
 Legacy note:
 
 - The older heavy waitlist flow and its private step/hook files were removed after the thin waitlist convergence pass.

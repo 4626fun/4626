@@ -92,16 +92,23 @@ Vercel routes all API traffic through `frontend/api/[...path].ts`, which dispatc
 - **Do** register new endpoints in `frontend/api/_handlers/_routes.ts` (static loader map) so Vercel’s bundler includes them.
 - For local dev, `frontend/vite.config.ts` also maps a subset of `/api/*` to handlers.
 
+## Runtime split (important)
+
+- Vercel hosts the SPA plus request/response API handlers.
+- The long-lived XMTP / Eliza primary runtime does not run on Vercel in production.
+- Production XMTP consumes from exactly one Railway primary using `frontend/Dockerfile.agent`.
+- Do not add or re-enable a Vercel cron for `/api/agent/process`; that path is not part of the production Vercel topology.
+
 ## Pages
 
-| Route | Description |
-|-------|-------------|
-| `/` | Landing page with features |
-| `/deploy` | Deploy + activate vault (canonical) |
-| `/waitlist` | Collect emails for early access |
-| `/dashboard` | Legacy route (redirects) |
-| `/vault/:address` | Deposit/withdraw from vault |
-| `/launch` | Redirects to `/deploy` (legacy) |
+| Route             | Description                         |
+| ----------------- | ----------------------------------- |
+| `/`               | Landing page with features          |
+| `/deploy`         | Deploy + activate vault (canonical) |
+| `/waitlist`       | Collect emails for early access     |
+| `/dashboard`      | Legacy route (redirects)            |
+| `/vault/:address` | Deposit/withdraw from vault         |
+| `/launch`         | Redirects to `/deploy` (legacy)     |
 
 ## Deployed Contracts (Base)
 
@@ -140,26 +147,33 @@ pnpm build
 
 ## Environment Variables
 
-| Variable | Required | Scope | Description |
-|----------|----------|-------|-------------|
-| `VITE_CDP_PAYMASTER_URL` | Recommended | client | Paymaster/bundler endpoint override (set to `/api/paymaster` to use same-origin proxy) |
-| `CDP_PAYMASTER_URL` | Recommended (prod) | server | Real CDP paymaster/bundler endpoint used by `/api/paymaster` (keep secret) |
-| `VITE_ZORA_PUBLIC_API_KEY` | Recommended | client | Zora public key (restrict allowed origins) |
-| `ZORA_SERVER_API_KEY` | Recommended | server | Zora server key for Vercel Functions |
-| `VITE_BASE_RPC` | No | client | Base RPC used by the browser (default: public) |
-| `BASE_RPC_URL` | No | server | Base RPC used by Vercel Functions (defaults to `https://mainnet.base.org`) |
-| `DATABASE_URL` | Optional | server | Postgres connection string for local dev |
-| `AUTH_SESSION_SECRET` | Recommended | server | SIWE session secret (stable in production) |
-| `CREATOR_ACCESS_ADMIN_ADDRESSES` | Optional | server | Admin wallets allowed to approve/deny creator access |
-| `CREATOR_ACCESS_ADMIN_EMAILS` | Optional | server | Admin emails allowed to approve/deny creator access (looked up by wallet) |
-| `CREATOR_ALLOWLIST` | Optional | server | Legacy fallback allowlist (env-based, only used if DB is not configured) |
-| `PRIVY_APP_ID` | Optional | server | Privy App ID (server-side). Used by `/api/waitlist` when enabled |
-| `PRIVY_APP_SECRET` | Optional | server | Privy App Secret (server-side). Used by `/api/waitlist` when enabled |
-| `PRIVY_WAITLIST_PREGENERATE` | Optional | server | If true, `/api/waitlist` creates/fetches a Privy user and pregenerates an embedded Ethereum wallet |
+| Variable                         | Required           | Scope  | Description                                                                                        |
+| -------------------------------- | ------------------ | ------ | -------------------------------------------------------------------------------------------------- |
+| `VITE_CDP_PAYMASTER_URL`         | Recommended        | client | Paymaster/bundler endpoint override (set to `/api/paymaster` to use same-origin proxy)             |
+| `CDP_PAYMASTER_URL`              | Recommended (prod) | server | Real CDP paymaster/bundler endpoint used by `/api/paymaster` (keep secret)                         |
+| `VITE_ZORA_PUBLIC_API_KEY`       | Recommended        | client | Zora public key (restrict allowed origins)                                                         |
+| `ZORA_SERVER_API_KEY`            | Recommended        | server | Zora server key for Vercel Functions                                                               |
+| `VITE_BASE_RPC`                  | No                 | client | Base RPC used by the browser (default: public)                                                     |
+| `BASE_RPC_URL`                   | No                 | server | Base RPC used by Vercel Functions (defaults to `https://mainnet.base.org`)                         |
+| `DATABASE_URL`                   | Optional           | server | Postgres connection string for local dev                                                           |
+| `AUTH_SESSION_SECRET`            | Recommended        | server | SIWE session secret (stable in production)                                                         |
+| `CREATOR_ACCESS_ADMIN_ADDRESSES` | Optional           | server | Admin wallets allowed to approve/deny creator access                                               |
+| `CREATOR_ACCESS_ADMIN_EMAILS`    | Optional           | server | Admin emails allowed to approve/deny creator access (looked up by wallet)                          |
+| `CREATOR_ALLOWLIST`              | Optional           | server | Legacy fallback allowlist (env-based, only used if DB is not configured)                           |
+| `PRIVY_APP_ID`                   | Optional           | server | Privy App ID (server-side). Used by `/api/waitlist` when enabled                                   |
+| `PRIVY_APP_SECRET`               | Optional           | server | Privy App Secret (server-side). Used by `/api/waitlist` when enabled                               |
+| `PRIVY_WAITLIST_PREGENERATE`     | Optional           | server | If true, `/api/waitlist` creates/fetches a Privy user and pregenerates an embedded Ethereum wallet |
 
 ## Base Builder Codes Attribution
 
 This app uses a **wagmi-first** Builder Codes integration (ERC-8021 suffix) so attribution is configured once and then applied automatically.
+
+For Base Build registration and ownership verification:
+
+- Use **App URL** `https://app.4626.fun`
+- Do not use `https://4626.fun` for Base Build; that host is the marketing origin
+- The app homepage advertises ownership via `<meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />`
+- Production verification should confirm the live app homepage returns app-origin metadata, not marketing-origin metadata
 
 - **Setup**
   - Set `VITE_BASE_BUILDER_CODES` in `frontend/.env` (preferred, comma-separated if multiple codes).
@@ -209,6 +223,22 @@ Swap execution now uses capability-based routing in `src/lib/txRouter.ts` (not a
 - **Healthy patterns**
   - Base App CSW should generally show `wallet_sendCalls` (or explicit canonical ERC-4337 fallback).
   - Approval and swap should report matching sender semantics in the debug panel.
+
+## Swap runtime posture
+
+`/swap` is intentionally kept quieter than the rest of the app shell:
+
+- `useSiweAuth()` owns shared session restoration; do not add separate `/api/auth/me` polling around swap surfaces.
+- Canonical account lookup is deferred until a signer exists; `AccountContextProvider` should not eagerly fetch `/api/waitlist/me` for disconnected sessions.
+- Chat is lazy-activated and should not mount `XmtpChatProvider` on idle route load.
+- Stale quotes are rebuilt when the user reviews or submits a trade. Idle pages should not auto-refresh quotes just because the TTL expired.
+
+If a future change makes `/swap` feel like it is hard-refreshing, inspect these first:
+
+1. session token churn / repeated `useSiweAuth()` bridges
+2. eager provider mounts in the app shell
+3. account-context queries before a signer is present
+4. background quote refresh loops
 
 ## Waitlist (DB)
 

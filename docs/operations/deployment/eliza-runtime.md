@@ -22,6 +22,14 @@ Operational assumption for this repo:
 - one primary XMTP consumer
 - no standby or failover deployment by default
 
+Architecture note:
+
+- XMTP is the live Eliza transport on Railway.
+- Telegram remains a separate webhook + Mini App runtime and should not be treated as a second Eliza deployment target.
+- Shared cross-channel command/conversation logic lives in the agent core, but only the XMTP transport is hosted by this long-lived Railway service.
+- Vercel serves the frontend and stateless API handlers only; it is not a production XMTP worker target in the default repo posture.
+- `/api/agent/process` must not be scheduled on Vercel production or preview deployments.
+
 ## Critical Environment Checklist
 
 Before shipping, verify these values are configured:
@@ -31,6 +39,7 @@ Before shipping, verify these values are configured:
 - Runtime role is explicit:
   - Railway deploy: `AGENT_RUNTIME_ROLE=primary` and `AGENT_CONSUME_XMTP=true`
   - Standby remains available only for local inspection
+  - Railway standby or `AGENT_CONSUME_XMTP=false` is treated as startup misconfiguration and fails fast
 - Primary production boots are Railway-only by default:
   - set `ELIZA_ALLOW_OFF_RAILWAY_PRIMARY=true` only for supervised off-Railway overrides
 - Off-Railway Grove registration uploads are disabled by default:
@@ -68,11 +77,21 @@ Before shipping, verify these values are configured:
    - `GET /readyz` should return `200` and `status: "ok"`
    - `status: "standby"` on Railway is a no-go and should be treated as misconfiguration
 
+## Vercel Guardrail
+
+Keep the deployment split clean:
+
+- Vercel may serve `frontend/api/*` request/response handlers.
+- Railway is the only production-primary XMTP consumer.
+- Do not add a Vercel cron for `/api/agent/process`.
+- If `/api/agent/process` starts firing from a Vercel deployment, treat that as config drift. The usual symptom is repeated `503` noise because XMTP-primary env such as `XMTP_AGENT_KEY_ENCRYPTION_KEY` is intentionally not present there.
+
 ## Go / No-Go Gates
 
 Ship only if all pass:
 
 - `/readyz` is `200` with no blocking `readinessReasons`
+- `/readyz` reports `status: "ok"`; `status: "standby"` is a deploy failure on Railway
 - `dependencies.xmtp.ready` is `true`
 - `dependencies.queueWorker.running` is `true` in multi-agent mode
 - `dependencies.queueWorker.stats.staleProcessing` is `0`
@@ -116,6 +135,7 @@ Symptoms: repeated new installations, approaching 10/10 installation limit, or d
 - Send `"/keepr status"` in XMTP and confirm response returns.
 - Trigger a plain `/ai` question and confirm non-empty response (or explicit budget/rate-limit message).
 - Confirm Farcaster mention webhook route is reachable (`/api/farcaster/mention`) when enabled.
+- If Telegram bot flows matter for the release, verify them separately; Telegram is not served by this Railway XMTP runtime.
 
 ## Optional Telemetry And Channels
 

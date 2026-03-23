@@ -133,6 +133,15 @@ Rules:
 - do not treat CSW linkage as complete until owner confirmation succeeds
 - features that require canonical CSW execution must stay gated until this owner-installation step is complete
 
+### Session implementation notes
+
+These are implementation constraints that preserve the product model above:
+
+- `useSiweAuth()` is the shared app-session restoration path and should remain the single place that rehydrates the 4626 bearer/cookie-backed session.
+- Multiple UI consumers may read auth state, but they should not add independent `/api/auth/me` polling or bridge loops around the shared hook.
+- A connected owner EOA and a canonical CSW-backed app session are allowed to differ during canonical execution flows; wallet/session mismatch alone is not a reason to force a new session.
+- Features that require canonical submit should gate on the canonical-session checks instead of trying to auto-heal every mismatch in the background.
+
 ## Website rules
 
 Website auth should be simple:

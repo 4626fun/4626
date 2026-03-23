@@ -239,6 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 2) Direct creator coin address -> fetch coin image directly.
     let creatorTokenArtwork: CreatorTokenArtwork | null = null
     let zoraResolvedSymbol: string | null = null
+    let zoraResolvedHandle: string | null = null
     const zoraKey = requireServerKey()
     if (zoraKey) {
       try {
@@ -247,6 +248,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const pickCoinArtwork = (coinData: any): CreatorTokenArtwork | null =>
           resolveCreatorTokenArtwork(coinData)
+        const readCreatorHandle = (coinData: any): string | null => {
+          const handleCandidate =
+            typeof coinData?.creatorProfile?.handle === 'string'
+              ? coinData.creatorProfile.handle.trim()
+              : ''
+          return handleCandidate.length > 0 ? handleCandidate : null
+        }
 
         const readCoin = async (coinAddress: Address): Promise<any | null> => {
           const coinResponse = await sdk.getCoin({
@@ -261,6 +269,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (requestedCoin) {
           const artwork = pickCoinArtwork(requestedCoin)
           if (artwork) creatorTokenArtwork = artwork
+          const handleCandidate = readCreatorHandle(requestedCoin)
+          if (handleCandidate) zoraResolvedHandle = handleCandidate
           const symbolCandidate = typeof requestedCoin.symbol === 'string' ? requestedCoin.symbol.trim() : ''
           if (symbolCandidate) zoraResolvedSymbol = symbolCandidate
           if (!creatorCoin) creatorCoin = address as Address
@@ -271,6 +281,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const underlyingCoin = await readCoin(creatorCoin).catch(() => null)
           const underlyingArtwork = pickCoinArtwork(underlyingCoin)
           if (underlyingArtwork) creatorTokenArtwork = underlyingArtwork
+          const underlyingHandle = readCreatorHandle(underlyingCoin)
+          if (underlyingHandle) zoraResolvedHandle = underlyingHandle
         }
       } catch (e) {
         console.warn('[token/image] Failed to fetch Zora coin image:', e)
@@ -278,6 +290,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const renderedSymbol = zoraResolvedSymbol || String(symbol)
+    const renderedSignature = zoraResolvedHandle || renderedSymbol
     const artworkUrl = creatorTokenArtwork?.artworkUrl ?? null
     const heroCutoutArtworkUrl = creatorTokenArtwork?.heroCutoutArtworkUrl ?? null
 
@@ -317,6 +330,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         heroCutoutSourceBytes,
         suppressBreakout: heroCutoutLoadPolicy.suppressBreakout,
         symbol: renderedSymbol,
+        signatureText: renderedSignature,
         renderPreset,
       })
       const b64 = Buffer.from(iconPng).toString('base64')
@@ -336,6 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       heroCutoutUpstreamUrl: heroCutoutArtworkUrl,
       size,
       symbol: renderedSymbol,
+      signatureText: renderedSignature,
       sourceBytesOverride: preferredSourceBytes,
       sourceFingerprintOverride: preferredSourceFingerprint,
     })
@@ -422,7 +437,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 119
+const FRAME_STYLE_V = 126
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -2170,6 +2185,7 @@ async function renderDeterministicTokenIcon(params: {
   heroCutoutSourceBytes?: Uint8Array | null
   suppressBreakout?: boolean
   symbol: string
+  signatureText?: string
   renderPreset?: 'standard' | 'hero' | 'pixel'
 }): Promise<Uint8Array> {
   try {
@@ -2179,6 +2195,7 @@ async function renderDeterministicTokenIcon(params: {
       heroCutoutSourceImage: params.heroCutoutSourceBytes ?? undefined,
       suppressBreakout: params.suppressBreakout,
       symbol: params.symbol,
+      signatureText: params.signatureText ?? params.symbol,
       renderPreset: params.renderPreset,
     })
     return new Uint8Array(premium)
@@ -2325,6 +2342,7 @@ async function getOrCreatePng(params: {
   heroCutoutUpstreamUrl?: string | null
   size: number
   symbol: string
+  signatureText?: string
   renderPreset?: 'standard' | 'hero' | 'pixel'
   sourceBytesOverride?: Uint8Array | null
   sourceFingerprintOverride?: string | null
@@ -2344,7 +2362,10 @@ async function getOrCreatePng(params: {
   const heroCutoutFingerprint = params.heroCutoutUpstreamUrl
     ? sha256Hex(params.heroCutoutUpstreamUrl)
     : 'no-hero-cutout'
-  const recipeSeed = `${creatorCoinLc ?? 'no-coin'}:${sourceFingerprint}:${heroCutoutFingerprint}:${params.renderPreset ?? 'standard'}:${FRAME_STYLE_V}:${params.size}`
+  const signatureFingerprint = params.signatureText
+    ? sha256Hex(params.signatureText.toLowerCase())
+    : 'no-signature'
+  const recipeSeed = `${creatorCoinLc ?? 'no-coin'}:${sourceFingerprint}:${heroCutoutFingerprint}:${signatureFingerprint}:${params.renderPreset ?? 'standard'}:${FRAME_STYLE_V}:${params.size}`
 
   const tokenKey = `token-images/v1/base/${params.chainId}/${shareOftLc}/size-${params.size}/frame-${FRAME_STYLE_V}/${sha256Hex(
     recipeSeed,
@@ -2367,6 +2388,7 @@ async function getOrCreatePng(params: {
     heroCutoutSourceBytes,
     suppressBreakout: heroCutoutLoadPolicy.suppressBreakout,
     symbol: params.symbol,
+    signatureText: params.signatureText ?? params.symbol,
     renderPreset: params.renderPreset,
   })
 

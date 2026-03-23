@@ -10,6 +10,8 @@ Your app must meet all product, design, and technical guidelines outlined below.
 
 <Note>
   To submit your app for featured placement, first verify your mini app in the [Base Build dashboard](https://base.dev/), then fill out the [submission form](https://docs.google.com/forms/d/e/1FAIpQLSeZiB3fmMS7oxBKrWsoaew2LFxGpktnAtPAmJaNZv5TOCXIZg/viewform).
+
+  For 4626, the Base Build app URL should be `https://app.4626.fun`, not `https://4626.fun`.
 </Note>
 
 <Steps titleSize="h3">
@@ -56,6 +58,7 @@ Your app must meet all product, design, and technical guidelines outlined below.
     * App cover photo is **high quality**, does not contain Base logo or team photos, and is 1200×630px (1.91:1) dimensions, PNG/JPG.
     * Include 3 screenshots that highlight key app functionality. Use portrait orientation with 1284x2778 dimensions.
     * Subtitle should be descriptive and specific, and use sentence case capitalization with no punctuation at the end.
+    * The registered app URL homepage exposes `<meta name="base:app_id" ... />` and matches its own canonical origin
   </Step>
 </Steps>
 

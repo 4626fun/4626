@@ -62,4 +62,4 @@
 * **Follow icon specs**
   * Size: **1024×1024px**
   * Format: **PNG (no alpha transparency)**
-  * Defined via `iconUrl` in `farcaster.json`
+  * Configured in the Base Build dashboard for the registered app URL

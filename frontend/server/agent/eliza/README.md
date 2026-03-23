@@ -14,6 +14,12 @@ If you only remember one thing: **ElizaOS is not the app, wallet, or protocol la
 
 The package script `pnpm -C frontend agent:start` launches the active runtime in this folder.
 
+Important boundary:
+
+- This Railway runtime is for XMTP.
+- Telegram bot updates are handled by the webhook runtime under `frontend/api/_handlers/telegram/`.
+- Telegram Mini App auth/linking is separate from the long-lived XMTP agent process.
+
 ## Where ElizaOS comes into play
 
 In this repo, ElizaOS provides the agent-shaped abstraction layer:
@@ -30,20 +36,30 @@ What ElizaOS does **not** own here:
 - Coinbase Smart Wallet identity
 - the Vercel API router
 - the ERC-4626 contracts and vault logic
+- Telegram webhook + Mini App transport handling
 - the Telegram/XMTP frontend clients themselves
 
 Those systems already exist. Eliza sits on top and decides how the agent should react.
 
-## End-to-end message flow
+## End-to-end runtime flow
+
+XMTP path:
 
 1. A message comes in from XMTP.
 2. `plugins/xmtp/service.ts` turns it into a normalized runtime message.
 3. `index.ts` rate-limits, validates, and stores it as runtime memory.
 4. `runtimeBridge.ts` composes state and ranks Eliza actions.
-5. A plugin action handles it if there is a match.
-6. Most plugin actions delegate into existing 4626 production code.
-7. If no action claims it, `llm.ts` generates a fallback conversational reply.
+5. Deterministic commands are delegated through production handlers.
+6. If no action claims the message, XMTP fallback goes through `server/agent/core/processXmtpAgentInput.ts` and `server/agent/eliza/_xmtpFallback.ts`.
+7. The fallback uses the active runtime context, so memory and continuity stay on the live Eliza runtime.
 8. The reply is stored back into runtime memory and sent out over XMTP.
+
+Telegram path:
+
+1. Telegram Bot API updates hit the webhook runtime under `frontend/api/_handlers/telegram/`.
+2. Native Telegram UI flows stay in that adapter layer.
+3. Non-native command handling delegates through `server/agent/core/processTelegramAgentInput.ts`.
+4. Telegram may reuse shared command/conversation helpers, but it is still a separate transport runtime from XMTP.
 
 That means ElizaOS here is the **decision and memory layer**, not the low-level wallet or protocol implementation.
 
@@ -60,6 +76,19 @@ That means ElizaOS here is the **decision and memory layer**, not the low-level 
 - `plugins/telegram`, `plugins/discord`, `plugins/twitter`: optional channel context plugins
 
 The important pattern is that the Eliza plugin layer mostly **adapts existing 4626 server capabilities** into an agent runtime instead of inventing a separate backend.
+
+## Shared agent core
+
+Shared command/conversation seams now live in:
+
+- `server/agent/core/executeDeterministicCommand.ts`
+- `server/agent/core/executeConversationalFallback.ts`
+- `server/agent/core/processXmtpAgentInput.ts`
+- `server/agent/core/processTelegramAgentInput.ts`
+- `server/agent/core/resolveIdentityContext.ts`
+- `server/agent/core/resolveVaultRole.ts`
+
+These are shared building blocks, not evidence that Telegram ingress runs through the Railway XMTP runtime.
 
 ## Startup modes
 
@@ -95,6 +124,13 @@ Required env:
 - one LLM provider key
 
 Run this on Railway for real traffic.
+
+On Railway, startup now fails fast if:
+
+- `AGENT_RUNTIME_ROLE!=primary`
+- `AGENT_CONSUME_XMTP=false`
+
+On Railway primary with Postgres configured, the DB-backed runtime lease lock defaults on and is expected to stay enabled.
 
 What it proves:
 
@@ -155,6 +191,7 @@ For 4626, think about the stack this way:
 
 - Privy + CSW: identity and signing
 - XMTP: transport
+- Telegram webhook + Mini App: separate bot and account-linking transport
 - existing server modules: real business logic
 - ElizaOS: memory, routing, action selection, and conversational glue
 

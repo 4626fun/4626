@@ -1,6 +1,7 @@
 # Uniswap Integration Notes
 
 ## Environment
+
 Required variables:
 
 - `UNISWAP_API_KEY` (or `UNISWAP_API`) — server-side API key used by `/api/uniswap/*` proxy handlers.
@@ -22,6 +23,17 @@ pnpm dev
 - Runtime capability probing lives in `src/lib/uniswap/capabilities.ts` and surfaces support in the UI.
 - Default swap execution keeps the canonical smart-wallet ERC-4337 path for compatibility.
 - If advanced flows are unavailable for a wallet/provider, the app falls back to approval + standard swap build/execute.
+
+## Runtime posture on `/swap`
+
+- Session restoration is shared through `src/hooks/useSiweAuth.ts`; avoid parallel `/api/auth/me` polling from swap-specific code.
+- Admin session checks are route-scoped to `/admin` and should not be introduced into normal swap-route startup.
+- Account-context canonical lookup via `/api/waitlist/me` is deferred until a signer exists.
+- `ChatWidget` is lazy-activated; idle `/swap` should not mount `XmtpChatProvider`.
+- Auto-quote still runs on real input changes.
+- Idle stale-quote refresh is intentionally disabled. If a quote expires while the user is reviewing or submitting, `useSwapExecution.ts` rebuilds the quote on demand before execution continues.
+
+These rules exist to keep `/swap` from looking like it is reloading itself because of session churn, provider boot noise, or background requote loops.
 
 ## Liquidity feature scope
 

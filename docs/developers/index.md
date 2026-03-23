@@ -168,6 +168,28 @@ We welcome contributions from the community:
 4. **Commit** changes (`git commit -m 'Add amazing feature'`)
 5. **Push** to branch (`git push origin feature/amazing-feature`)
 6. **Open** a Pull Request
+7. **Delete** the branch after merge and prune stale remote refs:
+
+```bash
+git checkout main
+git pull --ff-only
+git branch -d feature/amazing-feature
+git push origin --delete feature/amazing-feature
+git remote prune origin
+```
+
+### Branch Hygiene
+
+- Keep `main` as the default working base unless a task explicitly depends on another branch.
+- Use one short-lived branch per task or PR.
+- Delete branches only after they are fully merged into `main` or another intended base.
+- Keep unmerged backup or worktree branches until the underlying work is intentionally retired.
+- Periodically review merged branches with:
+
+```bash
+git branch --merged main
+git branch -r --merged origin/main
+```
 
 ### Code Style
 

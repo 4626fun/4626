@@ -17,6 +17,7 @@ export type PremiumTokenIconParams = {
   heroCutoutSourceImage?: Uint8Array
   suppressBreakout?: boolean
   symbol?: string
+  signatureText?: string
   renderPreset?: RenderPreset
 }
 
@@ -115,7 +116,7 @@ const BREAKOUT_RUNTIME_LOG_ENABLED =
   BREAKOUT_DEBUG_LOG_ENABLED ||
   process.env.TOKEN_PREMIUM_BREAKOUT_LOG === '1'
 const ALLOW_PREMIUM_FALLBACK_BAND =
-  process.env.TOKEN_PREMIUM_BREAKOUT_FALLBACK_BAND !== '0'
+  process.env.TOKEN_PREMIUM_BREAKOUT_FALLBACK_BAND === '1'
 const PREMIUM_SEGMENTATION_ENABLED = process.env.TOKEN_PREMIUM_SEGMENTATION !== '0'
 const BREAKOUT_DEBUG_DIR = process.env.TOKEN_BREAKOUT_DEBUG_DIR
 const execFileP = promisify(execFile)
@@ -1359,10 +1360,14 @@ export async function renderPremiumFrame(params: {
 
   const faceSoft = await sharp(strokeLayer)
     .blur(Math.max(0.7, size * 0.0018))
+    .ensureAlpha()
+    .composite([{ input: ringMask, blend: 'dest-in' }])
     .png()
     .toBuffer()
   const faceEmission = await sharp(strokeLayer)
     .blur(Math.max(1.2, size * 0.0032))
+    .ensureAlpha()
+    .composite([{ input: ringMask, blend: 'dest-in' }])
     .png()
     .toBuffer()
 
@@ -2448,10 +2453,10 @@ async function createTopBreakoutMask(params: {
   const bottom = Math.min(size, top + layout.breakoutHeight)
   const height = Math.max(1, bottom - top)
   const radius = Math.max(1, Math.round((breakoutRight - breakoutX) * 0.30))
-  const topHoldOffset = isIllustration ? '40%' : '32%'
-  const lowerFadeOpacity = isIllustration ? '0.18' : '0.28'
-  const xFadeStart = isIllustration ? '4%' : '18%'
-  const xFadeEnd = isIllustration ? '94%' : '82%'
+  const topHoldOffset = isIllustration ? '30%' : '32%'
+  const lowerFadeOpacity = isIllustration ? '0.08' : '0.28'
+  const xFadeStart = isIllustration ? '8%' : '18%'
+  const xFadeEnd = isIllustration ? '90%' : '82%'
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="fadeY" x1="0" y1="${top}" x2="0" y2="${bottom}" gradientUnits="userSpaceOnUse">
@@ -2485,7 +2490,7 @@ async function createTopBreakoutMask(params: {
   />
 </svg>`
   return sharp(Buffer.from(svg))
-    .blur(isIllustration ? 0.32 : 0.6)
+    .blur(isIllustration ? 0.5 : 0.6)
     .png()
     .toBuffer()
 }
@@ -2497,8 +2502,8 @@ async function createBreakoutAboveFrameMask(params: {
 }): Promise<Buffer> {
   const { size, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
-  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.34 : 0.05)))
-  const edgeFeatherPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.46 : 0.12)))
+  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.38 : 0.05)))
+  const edgeFeatherPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.74 : 0.12)))
   const keepToY = Math.min(size, Math.max(0, layout.chamberY + overlapIntoChamberPx))
   const fadeEndY = Math.min(size, keepToY + edgeFeatherPx)
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
@@ -2575,15 +2580,15 @@ async function computeDynamicBreakoutWindow(params: {
 
   let targetWidth = targetRight - targetX
   const minWidth = Math.max(1, Math.round(params.layout.breakoutWidth * 0.96))
-  const maxWidth = Math.max(minWidth, Math.round(params.layout.breakoutWidth * 2.05))
+  const maxWidth = Math.max(minWidth, Math.round(params.layout.breakoutWidth * 1.45))
   targetWidth = Math.round(clamp(targetWidth, minWidth, maxWidth))
 
   const activeCenterX = (minActiveX + maxActiveX) / 2
   targetX = Math.round(activeCenterX - targetWidth / 2)
   targetX = Math.round(clamp(targetX, minXAllowed, maxRightAllowed - targetWidth))
 
-  const blendedX = Math.round(params.layout.breakoutX * 0.20 + targetX * 0.80)
-  const blendedWidth = Math.round(params.layout.breakoutWidth * 0.30 + targetWidth * 0.70)
+  const blendedX = Math.round(params.layout.breakoutX * 0.35 + targetX * 0.65)
+  const blendedWidth = Math.round(params.layout.breakoutWidth * 0.55 + targetWidth * 0.45)
   const finalWidth = Math.round(clamp(blendedWidth, minWidth, maxWidth))
   const leftBiasPx = Math.max(1, Math.round(params.layout.breakoutWidth * 0.06))
   const finalX = Math.round(clamp(blendedX - leftBiasPx, minXAllowed, maxRightAllowed - finalWidth))
@@ -2806,6 +2811,15 @@ async function createTopBreakoutSubjectMask(params: {
       ))
     ) {
       logMaskDecision(false, 'force-alpha-shape-gate-reject')
+      return null
+    }
+    if (
+      params.sourceClass === 'illustration' &&
+      topWeightedRatio > 0.40 &&
+      widthRatio > 0.95 &&
+      centroidYNorm < 0.69
+    ) {
+      logMaskDecision(false, 'force-alpha-top-heavy-wide-reject')
       return null
     }
   }
@@ -3087,21 +3101,50 @@ export async function renderBreakoutLayer(params: {
     maskedSharp = sharp(maskedAfterSubjectMask).ensureAlpha()
   }
   maskedSharp = maskedSharp.composite([{ input: aboveFrameMask, blend: 'dest-in' }])
-  if (!isIllustrationBreakout) {
-    maskedSharp = maskedSharp.blur(0.5)
-  }
+  maskedSharp = maskedSharp.blur(isIllustrationBreakout ? 0.46 : 0.5)
   let masked = await maskedSharp
     .png()
     .toBuffer()
   await writeBreakoutDebugAsset('4b-breakout-masked-pre-shadow.png', masked)
   await debugLogLayerBounds('breakoutSpritePreShadow', masked)
+  if (isIllustrationBreakout && params.subjectMaskKind === 'rembgCutout') {
+    const { data, info } = await sharp(masked)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const bounds = getAlphaBounds(data, info.width, info.height, info.channels)
+    const chamberSize = Math.max(1, layout.chamberSize)
+    const widthRatio = bounds ? bounds.width / chamberSize : 0
+    const heightRatio = bounds ? bounds.height / chamberSize : 0
+    const areaRatio = bounds ? bounds.nonZeroPixels / (chamberSize * chamberSize) : 0
+    const structurallyRejected =
+      !bounds ||
+      widthRatio < 0.24 ||
+      heightRatio < 0.075 ||
+      areaRatio < 0.0035
+    if (BREAKOUT_DEBUG_LOG_ENABLED) {
+      console.info('[breakout-debug]', JSON.stringify({
+        step: 'renderBreakoutLayer:structure-gate',
+        sourceClass: params.sourceClass ?? 'unknown',
+        subjectMaskKind: params.subjectMaskKind ?? null,
+        bounds,
+        widthRatio,
+        heightRatio,
+        areaRatio,
+        structurallyRejected,
+      }))
+    }
+    if (structurallyRejected) {
+      return createTransparentCanvas(size).png().toBuffer()
+    }
+  }
   let breakoutOpacity = params.opacity ?? 0.26
   let fallbackBandUsed = false
   let fallbackDetailMaskUsed = false
   if (subjectMask) {
     // Add subtle frame-contact shadow so real subject breakouts read as depth, not paste.
     const shadowOpacity =
-      params.sourceClass === 'illustration' ? 0.16
+      params.sourceClass === 'illustration' ? 0.17
       : params.sourceClass === 'portraitPhoto' ? 0.22
       : 0.18
     const shadowBlur = Math.max(1.4, size * 0.0032)
@@ -3291,28 +3334,21 @@ async function computeRegionLuma(params: {
 async function renderCreatorSignature(params: {
   size: number
   layout: PremiumLayout
-  symbol: string
+  signatureText: string
   backgroundLayer?: Buffer
 }): Promise<Buffer> {
-  const { size, layout, symbol, backgroundLayer } = params
-  const MAX_CHARS = 12
-  const displayName = symbol.slice(0, MAX_CHARS).toUpperCase()
+  const { size, layout, signatureText, backgroundLayer } = params
+  const MAX_SIGNATURE_CHARS = 64
+  const displayName = signatureText.trim().replace(/\s+/g, ' ').slice(0, MAX_SIGNATURE_CHARS)
   const escapedDisplayName = escapeXml(displayName)
 
-  const baseFont = Math.round(size * 0.013)
-  const fontSize = Math.max(
-    8,
-    displayName.length > 9
-      ? Math.round(baseFont * (9 / displayName.length))
-      : baseFont,
-  )
-
-  const squareSize = Math.round(size * 0.0102)
+  let fontSize = Math.max(6, Math.round(size * 0.013))
+  let squareSize = Math.round(size * 0.0102)
+  const minFontSize = 6
+  const minSquareSize = Math.max(4, Math.round(size * 0.0068))
   const gap = Math.round(size * 0.0055)
 
-  const letterSpacingEm = 0.06
-  const textWidth = Math.ceil(displayName.length * fontSize * 0.70 + displayName.length * fontSize * letterSpacingEm)
-  const lockupWidth = squareSize + gap + textWidth
+  let letterSpacingEm = displayName.length > 18 ? 0.03 : 0.06
 
   // Keep signature lockup comfortably inside the artwork chamber.
   const chamberPadX = Math.max(8, Math.round(layout.chamberSize * 0.048))
@@ -3320,6 +3356,37 @@ async function renderCreatorSignature(params: {
   const lockupShiftLeft = Math.max(12, Math.round(layout.chamberSize * 0.095))
   const lockupRightEdge = layout.chamberX + layout.chamberSize - lockupShiftLeft
   const minSquareX = layout.chamberX + chamberPadX
+  const maxLockupWidth = Math.max(24, lockupRightEdge - minSquareX)
+
+  const estimateTextWidth = (fontPx: number, trackingEm: number): number =>
+    Math.ceil(
+      displayName.length * fontPx * 0.62 +
+      Math.max(0, displayName.length - 1) * fontPx * trackingEm,
+    )
+  let textWidth = estimateTextWidth(fontSize, letterSpacingEm)
+  let availableTextWidth = Math.max(12, maxLockupWidth - squareSize - gap)
+  while (
+    squareSize + gap + textWidth > maxLockupWidth &&
+    (fontSize > minFontSize || squareSize > minSquareSize || letterSpacingEm > 0.01)
+  ) {
+    if (fontSize > minFontSize) {
+      fontSize -= 1
+    } else if (squareSize > minSquareSize) {
+      squareSize -= 1
+    }
+    if (letterSpacingEm > 0.01) {
+      letterSpacingEm = Math.max(0.01, letterSpacingEm - 0.005)
+    }
+    textWidth = estimateTextWidth(fontSize, letterSpacingEm)
+    availableTextWidth = Math.max(12, maxLockupWidth - squareSize - gap)
+  }
+
+  const textRenderWidth = Math.min(textWidth, availableTextWidth)
+  const textLengthAttrs =
+    textWidth > availableTextWidth
+      ? ` textLength="${textRenderWidth}" lengthAdjust="spacingAndGlyphs"`
+      : ''
+  const lockupWidth = squareSize + gap + textRenderWidth
   const squareX = Math.max(minSquareX, lockupRightEdge - lockupWidth)
   const textX = squareX + squareSize + gap
 
@@ -3354,7 +3421,7 @@ async function renderCreatorSignature(params: {
     font-weight="600"
     font-size="${fontSize}"
     fill="${shadowFill}"
-    letter-spacing="${letterSpacingPx}">${escapedDisplayName}</text>
+    letter-spacing="${letterSpacingPx}"${textLengthAttrs}>${escapedDisplayName}</text>
   <text x="${textX}" y="${bottomBandCenterY}"
     dominant-baseline="central"
     text-anchor="start"
@@ -3362,7 +3429,7 @@ async function renderCreatorSignature(params: {
     font-weight="600"
     font-size="${fontSize}"
     fill="${textFill}"
-    letter-spacing="${letterSpacingPx}">${escapedDisplayName}</text>
+    letter-spacing="${letterSpacingPx}"${textLengthAttrs}>${escapedDisplayName}</text>
 </svg>`
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
@@ -3518,7 +3585,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     if (allowBreakoutForLayout) {
       const breakoutOpacity =
         analysis.sourceClass === 'illustration'
-          ? (resolvedPreset === 'hero' ? 0.98 : 0.92)
+          ? (resolvedPreset === 'hero' ? 0.86 : 0.82)
           : analysis.sourceClass === 'portraitPhoto'
             ? 0.34
             : 0.22
@@ -3622,6 +3689,11 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
             topBiasPx: breakoutTopBiasPx,
             sourceClass: analysis.sourceClass,
           })
+          if (breakoutLayer && !await hasVisibleAlpha(breakoutLayer)) {
+            breakoutLayer = null
+            breakoutModeForLog = 'none'
+            breakoutDecisionReason = 'breakout-layer-empty'
+          }
         } catch (breakoutError) {
           breakoutLayer = null
           breakoutModeForLog = 'none'
@@ -3711,11 +3783,12 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     overlays.push(buildCompositeStep(breakoutLayer, 'over'))
   }
 
-  if (params.symbol) {
+  const signatureText = (params.signatureText ?? params.symbol ?? '').trim()
+  if (signatureText) {
     const signature = await renderCreatorSignature({
       size,
       layout,
-      symbol: params.symbol,
+      signatureText,
       backgroundLayer: heroCompositeLayer,
     })
     overlays.push(buildCompositeStep(signature, 'over'))

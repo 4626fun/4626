@@ -31,6 +31,24 @@ Prefer Dockerfile-based setup only when you need image-level control that snapsh
 
 Optional docs server (not in default terminals): `cd apps/docs-site && pnpm start` (port `3000`)
 
+## Branch Hygiene For Agent Sessions
+
+Cloud Agent and local agent runs can create many short-lived task branches. Keep the branch lifecycle explicit:
+
+- Start from an up-to-date `main` unless the task requires another base branch.
+- Use one disposable branch per task, not one long-lived branch for unrelated work.
+- After the branch is merged, delete both the local branch and the remote branch, then prune stale refs.
+
+```bash
+git checkout main
+git pull --ff-only
+git branch -d <merged-branch>
+git push origin --delete <merged-branch>
+git remote prune origin
+```
+
+- Do not auto-delete unmerged backup branches or branches still attached to active worktrees.
+
 ## Install and start model
 
 - `install` is **idempotent** and only installs dependencies.

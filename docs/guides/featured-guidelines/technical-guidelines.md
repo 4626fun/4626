@@ -8,21 +8,23 @@
 
 ## Complete Metadata
 
-Metadata includes your manifest and embed metadata. Complete, valid metadata is required for indexing, category placement, and high‑quality embeds.
+Metadata includes your Base Build app registration plus the homepage metadata returned by your chosen app URL. Complete, valid metadata is required for indexing, category placement, and high-quality embeds.
 
 **Acceptance Criteria**
 
-* Manifest is publicly accessible at `/.well-known/farcaster.json`
-* Required fields are present and valid (`accountAssociation`, `frame`, `primaryCategory`, `tags`)
-* Images meet size/format constraints; text fields respect length limits
+* The app URL homepage returns `200 OK`
+* The homepage `<head>` includes `<meta name="base:app_id" ... />`
+* The homepage `canonical` and `og:url` match the same app origin being registered
+* Dashboard metadata fields, images, and text are complete and valid
 
 **How to Implement**
 
-* Follow the [Manifest guide](/mini-apps/core-concepts/manifest)
+* Register the correct app URL in Base Build
+* Serve the app ID meta tag from the homepage head on that URL
 * Implement [embed metadata](/mini-apps/core-concepts/embeds-and-previews#implementation)
 
 <Note>
-  Validate your manifest using our preview tools at <a href="https://base.dev/preview">base.dev/preview</a>.
+  Do not rely on `/.well-known/farcaster.json` for Base Build ownership. Validate the live app URL directly and verify it in <a href="https://base.dev/">base.dev</a>.
 </Note>
 
 ## In-app Authentication

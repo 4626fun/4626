@@ -51,6 +51,11 @@ test -f docs/hackathon/evidence/cre-keepr-queue-local-simulation.md
 # 5) Push to a public remote
 git remote add public <PUBLIC_REPO_URL>
 git push public public-chainlink-submission:main
+
+# 6) If this export branch was temporary, clean it up locally afterwards
+git checkout main
+git branch -d public-chainlink-submission
+git remote remove public
 ```
 
 ## Option B — Sanitized Export Folder

@@ -34,7 +34,7 @@ forge test -vvv
 
 The easiest way to deploy is through the web interface:
 
-1. Navigate to [4626.fun/deploy](https://4626.fun/deploy)
+1. Navigate to [app.4626.fun/deploy](https://app.4626.fun/deploy)
 2. Connect Coinbase Smart Wallet
 3. Enter your Creator Coin address (e.g., `0x5b67...75` for akita)
 4. Send 50,000,000 tokens to your smart wallet (for initial CCA deposit)
