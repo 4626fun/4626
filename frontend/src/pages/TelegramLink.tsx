@@ -16,6 +16,8 @@ import {
   linkPrivyTelegramInMiniApp,
   normalizeTelegramLinkUiMessage,
   pollTelegramLinkEmailVerification,
+  resolveTelegramLinkAuthSettlementPlan,
+  resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
   shouldAutoStartTelegramLink,
   shouldResetTelegramMiniAppSessionForLinkError,
@@ -37,6 +39,8 @@ export {
   linkPrivyTelegramInMiniApp,
   normalizeTelegramLinkUiMessage,
   pollTelegramLinkEmailVerification,
+  resolveTelegramLinkAuthSettlementPlan,
+  resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
   shouldAutoStartTelegramLink,
   shouldResetTelegramMiniAppSessionForLinkError,
@@ -108,7 +112,7 @@ export function TelegramLink() {
               onClick={() => void onSignIn()}
               className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300"
             >
-              {privyAuthenticated ? 'Verify email' : 'Continue with 4626'}
+              {privyAuthenticated ? 'Continue' : 'Continue with 4626'}
             </button>
           ) : null}
 

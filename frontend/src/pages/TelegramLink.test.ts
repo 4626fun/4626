@@ -12,6 +12,8 @@ import {
   getTelegramLinkViewState,
   isPrivyEmailAlreadyLinkedError,
   pollTelegramLinkEmailVerification,
+  resolveTelegramLinkAuthSettlementPlan,
+  resolveTelegramLinkEmailAuthAction,
   shouldAutoRefreshTelegramLinkEmail,
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldAutoStartTelegramLink,
@@ -219,6 +221,69 @@ describe('TelegramLink helpers', () => {
         alreadyAttemptedForToken: true,
       }),
     ).toBe(false)
+  })
+
+
+  it('does not force a fresh auth loop when an authenticated user already has an email account', () => {
+    expect(
+      resolveTelegramLinkEmailAuthAction({
+        hasAnyEmailAccount: true,
+        hasVerifiedEmail: false,
+        canLinkEmail: true,
+      }),
+    ).toBe('login')
+
+    expect(
+      resolveTelegramLinkEmailAuthAction({
+        hasAnyEmailAccount: true,
+        hasVerifiedEmail: true,
+        canLinkEmail: true,
+      }),
+    ).toBe('verified')
+
+    expect(
+      resolveTelegramLinkEmailAuthAction({
+        hasAnyEmailAccount: false,
+        hasVerifiedEmail: false,
+        canLinkEmail: true,
+      }),
+    ).toBe('link_email')
+  })
+
+
+  it('waits for a fresh Privy session when authenticated users launch email login again', () => {
+    expect(
+      resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated: true,
+        launchedLogin: true,
+        priorAccessToken: 'old-token',
+      }),
+    ).toEqual({
+      shouldWaitForAuth: true,
+      requireFreshAccessToken: 'old-token',
+    })
+
+    expect(
+      resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated: true,
+        launchedLogin: false,
+        priorAccessToken: 'old-token',
+      }),
+    ).toEqual({
+      shouldWaitForAuth: false,
+      requireFreshAccessToken: null,
+    })
+
+    expect(
+      resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated: false,
+        launchedLogin: true,
+        priorAccessToken: 'old-token',
+      }),
+    ).toEqual({
+      shouldWaitForAuth: true,
+      requireFreshAccessToken: null,
+    })
   })
 
   it('auto-refreshes account email state only from the initial unknown state', () => {

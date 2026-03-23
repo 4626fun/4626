@@ -63,6 +63,13 @@ type TelegramLinkEmailVerificationResult =
   | { status: 'needs_verification' }
   | { status: 'error'; message: string }
 
+export type TelegramLinkEmailAuthAction = 'verified' | 'login' | 'link_email'
+
+export type TelegramLinkAuthSettlementPlan = {
+  shouldWaitForAuth: boolean
+  requireFreshAccessToken: string | null
+}
+
 export type TelegramLinkViewState = {
   statusVariant: TelegramLinkAlertVariant
   statusTitle: string
@@ -168,6 +175,41 @@ export function normalizeTelegramLinkUiMessage(message: string | null): string |
     return 'This email is already linked in Privy. Tap Retry link to continue Telegram linking.'
   }
   return message
+}
+
+export function resolveTelegramLinkEmailAuthAction(params: {
+  hasAnyEmailAccount: boolean
+  hasVerifiedEmail: boolean
+  canLinkEmail: boolean
+}): TelegramLinkEmailAuthAction {
+  if (params.hasVerifiedEmail) return 'verified'
+  if (params.hasAnyEmailAccount) return 'login'
+  return params.canLinkEmail ? 'link_email' : 'login'
+}
+
+export function resolveTelegramLinkAuthSettlementPlan(params: {
+  startedAuthenticated: boolean
+  launchedLogin: boolean
+  priorAccessToken: string | null
+}): TelegramLinkAuthSettlementPlan {
+  if (!params.startedAuthenticated) {
+    return {
+      shouldWaitForAuth: true,
+      requireFreshAccessToken: null,
+    }
+  }
+  if (!params.launchedLogin) {
+    return {
+      shouldWaitForAuth: false,
+      requireFreshAccessToken: null,
+    }
+  }
+  return {
+    shouldWaitForAuth: true,
+    requireFreshAccessToken: typeof params.priorAccessToken === 'string' && params.priorAccessToken.trim()
+      ? params.priorAccessToken.trim()
+      : null,
+  }
 }
 
 export function isTelegramLinkEmailVerificationRequiredError(error: unknown): boolean {
@@ -854,10 +896,13 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
 
   const onSignIn = useCallback(async () => {
     const startedAuthenticated = privyAuthenticated
-    let forcedLogoutForEmailRetry = false
-    const priorAccessToken = startedAuthenticated
-      ? ((await getAccessToken().catch(() => null))?.trim() ?? '')
-      : ''
+    const priorAccessToken = startedAuthenticated ? ((await getAccessToken().catch(() => null))?.trim() ?? '') : ''
+    let launchedLogin = false
+
+    const launchEmailLogin = async () => {
+      launchedLogin = true
+      await login(buildWaitlistEmailLoginOptions() as any)
+    }
 
     setLinkState('authenticating')
     setLinkMessage(null)
@@ -866,47 +911,47 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
 
     try {
       if (startedAuthenticated) {
-        const currentEmailState = getPrivyEmailState((privy as any)?.user)
-        if (currentEmailState.hasVerifiedEmail) {
-          linkAttemptRef.current = ''
+        const initialVerification = await refreshEmailVerificationState({ poll: true })
+        if (initialVerification.status === 'verified') {
           setLinkState('idle')
           setLinkMessage(null)
+          linkAttemptRef.current = ''
           return
         }
 
-        const launchEmailLogin = async (params?: { forceFreshSession?: boolean }) => {
-          if (params?.forceFreshSession && typeof logout === 'function') {
-            await runWaitlistPrivyLogout({ logout })
-            forcedLogoutForEmailRetry = true
-          }
-          await login(buildWaitlistEmailLoginOptions() as any)
-        }
+        const currentEmailState = getPrivyEmailState((privy as any)?.user)
+        const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
+        const authAction = resolveTelegramLinkEmailAuthAction({
+          hasAnyEmailAccount: currentEmailState.hasAnyEmailAccount,
+          hasVerifiedEmail: currentEmailState.hasVerifiedEmail,
+          canLinkEmail: typeof linkEmail === 'function',
+        })
 
-        if (currentEmailState.hasAnyEmailAccount || typeof logout === 'function') {
-          await launchEmailLogin({ forceFreshSession: true })
-        } else {
-          const linkEmail = (privy as any)?.linkEmail ?? (privy as any)?.linkEmailAccount
-          if (typeof linkEmail === 'function') {
-            try {
-              await linkEmail()
-            } catch (error) {
-              if (isPrivyEmailAlreadyLinkedError(error)) {
-                await launchEmailLogin({ forceFreshSession: true })
-              } else {
-                throw error
-              }
+        if (authAction === 'link_email' && typeof linkEmail === 'function') {
+          try {
+            await linkEmail()
+          } catch (error) {
+            if (isPrivyEmailAlreadyLinkedError(error)) {
+              await launchEmailLogin()
+            } else {
+              throw error
             }
-          } else {
-            await launchEmailLogin()
           }
+        } else {
+          await launchEmailLogin()
         }
       } else {
-        await login(buildWaitlistEmailLoginOptions() as any)
+        await launchEmailLogin()
       }
 
-      if (!startedAuthenticated || forcedLogoutForEmailRetry) {
+      const authSettlementPlan = resolveTelegramLinkAuthSettlementPlan({
+        startedAuthenticated,
+        launchedLogin,
+        priorAccessToken,
+      })
+      if (authSettlementPlan.shouldWaitForAuth) {
         const authSettled = await waitForTelegramLinkPrivyAuth({
-          requireFreshAccessToken: forcedLogoutForEmailRetry ? priorAccessToken : null,
+          requireFreshAccessToken: authSettlementPlan.requireFreshAccessToken,
           readSnapshot: async () => {
             const accessToken = ((await getAccessToken().catch(() => null))?.trim() ?? '') || null
             const nextEmailState = getPrivyEmailState((privy as any)?.user)
@@ -963,7 +1008,7 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       setLinkState('error')
       setLinkMessage(message)
     }
-  }, [getAccessToken, login, logout, privy, privyAuthenticated, refreshEmailVerificationState])
+  }, [getAccessToken, login, privy, privyAuthenticated, refreshEmailVerificationState])
 
   const statusView = getTelegramLinkViewState({
     sessionState,
