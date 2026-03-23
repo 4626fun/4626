@@ -20,6 +20,7 @@
  *   CREATOR_TOKEN           - Base creator token address (0x...) used for proxy fallback
  *   CREATOR_TOKEN_CHAIN_ID  - Chain for creator token lookup (default: 8453)
  *   API_ORIGIN / API_HOST   - API origin/host for proxy fallback (default: https://api.4626.fun)
+ *   TOKEN_IMAGE_EXPLICIT_OVERRIDE - "1" to force explicit TOKEN_IMAGE over proxy fallback
  *   TOKEN_DECIMALS          - Decimals for token-list payload (default: 9)
  *   BADGE_CHAIN_ID          - Solana token-list chainId (default: 101)
  *   BADGE_TARGET            - Submission target label (default: "meteora")
@@ -46,10 +47,36 @@ function normalizeApiOrigin(raw: string): string {
   }
 }
 
+function envFlag(name: string): boolean {
+  const raw = String(process.env[name] ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+function normalizeExternalUri(raw: string, keyLabel: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${keyLabel} must be an absolute URI. Received: ${value}`);
+  }
+  const protocol = parsed.protocol.toLowerCase();
+  if (protocol !== 'https:' && protocol !== 'http:' && protocol !== 'ipfs:' && protocol !== 'ar:') {
+    throw new Error(
+      `${keyLabel} must use https/http/ipfs/ar. Received protocol: ${protocol}`,
+    );
+  }
+  return parsed.toString();
+}
+
 const tokenMint = new PublicKey(requireEnv('TOKEN_MINT'));
 const tokenName = requireEnv('TOKEN_NAME');
 const tokenSymbol = requireEnv('TOKEN_SYMBOL');
-const tokenUri = (process.env.TOKEN_METADATA_URI ?? process.env.TOKEN_URI ?? '').trim();
+const tokenUri = normalizeExternalUri(
+  String(process.env.TOKEN_METADATA_URI ?? process.env.TOKEN_URI ?? ''),
+  'TOKEN_METADATA_URI/TOKEN_URI',
+);
 const creatorTokenRaw = (process.env.CREATOR_TOKEN ?? '').trim();
 const creatorToken = isEvmAddress(creatorTokenRaw) ? creatorTokenRaw.toLowerCase() : '';
 const creatorTokenChainIdRaw = (process.env.CREATOR_TOKEN_CHAIN_ID ?? '8453').trim();
@@ -61,11 +88,25 @@ const apiOrigin = normalizeApiOrigin((process.env.API_ORIGIN ?? process.env.API_
 const proxyImageFallbackUrl = creatorToken
   ? `${apiOrigin}/v1/token/${creatorToken}/image?chain=${creatorTokenChainId}&style=raw&format=png`
   : '';
-const tokenImageExplicit = (process.env.TOKEN_IMAGE ?? process.env.TOKEN_IMAGE_URL ?? '').trim();
-const tokenImage = tokenImageExplicit || proxyImageFallbackUrl;
-const tokenImageSource = tokenImageExplicit
-  ? 'explicit-env'
-  : (proxyImageFallbackUrl ? 'proxy-raw-fallback' : 'unset');
+const tokenImageExplicit = normalizeExternalUri(
+  String(process.env.TOKEN_IMAGE ?? process.env.TOKEN_IMAGE_URL ?? ''),
+  'TOKEN_IMAGE/TOKEN_IMAGE_URL',
+);
+const tokenImageExplicitOverride = envFlag('TOKEN_IMAGE_EXPLICIT_OVERRIDE');
+const tokenImage = (() => {
+  if (creatorToken) {
+    if (tokenImageExplicit && tokenImageExplicitOverride) return tokenImageExplicit;
+    return proxyImageFallbackUrl;
+  }
+  return tokenImageExplicit;
+})();
+const tokenImageSource = (() => {
+  if (creatorToken) {
+    if (tokenImageExplicit && tokenImageExplicitOverride) return 'explicit-env';
+    return proxyImageFallbackUrl ? 'proxy-raw-fallback' : 'unset';
+  }
+  return tokenImageExplicit ? 'explicit-env' : 'unset';
+})();
 const badgeTarget = (process.env.BADGE_TARGET ?? 'meteora').trim().toLowerCase();
 const tokenDecimalsRaw = (process.env.TOKEN_DECIMALS ?? '9').trim();
 const tokenDecimalsParsed = Number.parseInt(tokenDecimalsRaw, 10);
@@ -91,6 +132,12 @@ if (creatorToken) {
 }
 if (creatorTokenRaw && !creatorToken) {
   console.warn('WARN: CREATOR_TOKEN is set but not a valid 0x EVM address; proxy fallback is disabled.');
+}
+if (creatorToken && tokenImageExplicit && !tokenImageExplicitOverride) {
+  console.warn(
+    'WARN: TOKEN_IMAGE is ignored because CREATOR_TOKEN proxy fallback is active. ' +
+      'Set TOKEN_IMAGE_EXPLICIT_OVERRIDE=1 to force explicit TOKEN_IMAGE.',
+  );
 }
 if (!tokenUri) {
   console.warn('WARN: TOKEN_METADATA_URI/TOKEN_URI is missing. Wallet metadata indexing may fail.');
