@@ -419,7 +419,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 106
+const FRAME_STYLE_V = 107
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184

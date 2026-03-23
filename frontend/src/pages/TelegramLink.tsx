@@ -5,16 +5,13 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { Alert } from '@/components/ui/Alert'
 
 import {
+<<<<<<< ours
   getTelegramLinkPrimaryActionLabel,
   getTelegramLinkSteps,
   useTelegramLinkFlow,
-} from './telegramLinkFlow'
-
-export {
+=======
   fetchTelegramLinkEmailVerificationState,
   formatTelegramSessionError,
-  getTelegramLinkPrimaryActionLabel,
-  getTelegramLinkSteps,
   getPrivyEmailState,
   getTelegramLinkSuccessMessage,
   getTelegramLinkViewState,
@@ -31,7 +28,39 @@ export {
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldShowResetTelegramLinkAccount,
   shouldShowRetryTelegramSession,
+  useTelegramLinkFlow,
+  waitForTelegramLinkPrivyAuth,
+>>>>>>> theirs
+} from './telegramLinkFlow'
+
+export {
+  fetchTelegramLinkEmailVerificationState,
+  formatTelegramSessionError,
+<<<<<<< ours
+  getTelegramLinkPrimaryActionLabel,
+  getTelegramLinkSteps,
+=======
+>>>>>>> theirs
+  getPrivyEmailState,
+  getTelegramLinkSuccessMessage,
+  getTelegramLinkViewState,
+  isPrivyEmailAlreadyLinkedError,
+  isPrivyTelegramAlreadyLinkedError,
+  isTelegramLinkEmailVerificationRequiredError,
+  linkPrivyTelegramInMiniApp,
+  normalizeTelegramLinkUiMessage,
+  pollTelegramLinkEmailVerification,
+  resolveTelegramLinkAuthSettlementPlan,
+  resolveTelegramLinkEmailAuthAction,
+  shouldAutoRefreshTelegramLinkEmail,
+  shouldAutoStartTelegramLink,
+  shouldResetTelegramMiniAppSessionForLinkError,
+  shouldShowResetTelegramLinkAccount,
+  shouldShowRetryTelegramSession,
+<<<<<<< ours
   canStartTelegramLink,
+=======
+>>>>>>> theirs
   waitForTelegramLinkPrivyAuth,
 } from './telegramLinkFlow'
 
@@ -39,6 +68,7 @@ export function TelegramLink() {
   const {
     linkState,
     emailState,
+<<<<<<< ours
     sessionState,
     sessionError,
     linkMessage,
@@ -61,13 +91,11 @@ export function TelegramLink() {
     privyAuthenticated,
   })
   const steps = getTelegramLinkSteps({
+=======
+>>>>>>> theirs
     sessionState,
-    emailState,
-    linkState,
-    sessionError,
-    emailMessage,
-    linkMessage,
     privyAuthenticated,
+<<<<<<< ours
     hasLinkContext: Boolean(telegramLinkContext),
   })
 
@@ -83,6 +111,18 @@ export function TelegramLink() {
     required: 'Action required',
     pending: 'Pending',
   }
+=======
+    telegramLinkContext,
+    statusView,
+    showRetrySessionButton,
+    showResetAccountButton,
+    working,
+    onRetrySession,
+    onRetryLink,
+    onResetAccount,
+    onSignIn,
+  } = useTelegramLinkFlow()
+>>>>>>> theirs
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-2xl items-center px-4 py-10 sm:px-6">
@@ -126,13 +166,21 @@ export function TelegramLink() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
+<<<<<<< ours
           {primaryActionLabel ? (
+=======
+          {statusView.canSignIn ? (
+>>>>>>> theirs
             <button
               type="button"
               onClick={() => void onSignIn()}
               className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300"
             >
+<<<<<<< ours
               {primaryActionLabel}
+=======
+              {privyAuthenticated ? 'Continue' : 'Continue with 4626'}
+>>>>>>> theirs
             </button>
           ) : null}
 
