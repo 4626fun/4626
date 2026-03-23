@@ -1,5 +1,6 @@
 import { logger } from '../_lib/logger.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
+import { normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
 import { toAgentError } from '../agent/eliza/_errors.js'
 import { parsePositiveNumber } from '../agent/eliza/_rateLimit.js'
 import { withRetry, withTimeout } from '../agent/eliza/_retry.js'
@@ -17,7 +18,12 @@ import {
 
 const llmService = getElizaLlmService()
 const CHAT_MEMORY_AGENT_KEY = 'keepr-ai-chat'
-type ChatRuntimeBridge = ReturnType<typeof createRuntimeBridge>
+export type ChatRuntimeBridge = ReturnType<typeof createRuntimeBridge>
+export type SharedConversationalRuntimeContext = {
+  runtimeBridge: ChatRuntimeBridge
+  inboundMemory: unknown
+  state: Record<string, unknown>
+}
 
 type ChatRuntimeContext = {
   bridge: ChatRuntimeBridge
@@ -332,13 +338,6 @@ function resolveConversationSource(conversationType: string): string {
   return 'app'
 }
 
-function normalizeAiPrompt(text: string): string {
-  return String(text ?? '')
-    .replace(/^\/?ai\s*/i, '')
-    .replace(/^@(keepr|bot)\s*/i, '')
-    .trim()
-}
-
 function toSenderAddress(senderWallet: string): string | null {
   const normalized = String(senderWallet ?? '').trim().toLowerCase()
   if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null
@@ -421,6 +420,8 @@ export async function generateLlmResponse(params: {
   text: string
   vault: KeeprVaultRow | null
   runtimeTruth?: AssistantRuntimeTruthInput
+  runtimeContext?: SharedConversationalRuntimeContext
+  allowActionExecution?: boolean
 }): Promise<
   | { ok: true; response: string; handledByRuntime: boolean }
   | { ok: false; response: string; handledByRuntime: boolean }
@@ -428,10 +429,11 @@ export async function generateLlmResponse(params: {
   const conversationType = resolveConversationType(params.groupId)
   const conversationSource = resolveConversationSource(conversationType)
   const rawText = String(params.text ?? '').trim()
-  const normalizedPrompt = normalizeAiPrompt(params.text)
+  const normalizedPrompt = normalizeConversationalPrompt(params.text)
   const userText = normalizedPrompt || rawText
   let runtimeTruth = resolveAssistantRuntimeTruth(params.runtimeTruth)
   const identityIntent = classifyIdentityIntent(userText)
+  const allowActionExecution = params.allowActionExecution !== false
 
   if (!userText.trim()) {
     return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: true }
@@ -450,20 +452,27 @@ export async function generateLlmResponse(params: {
   let inbound: any = null
 
   try {
-    const ctx = await getChatRuntimeContext()
-    runtimeBridge = ctx.bridge
-    handledByRuntime = true
     const senderAddress = toSenderAddress(params.senderWallet)
-    inbound = runtimeBridge.createInboundMemory({
-      conversationId: params.groupId,
-      conversationType,
-      senderAddress,
-      source: conversationSource,
-      entityKey: senderAddress ?? `web-user:${params.groupId}`,
-      content: userText,
-    })
-    await runtimeBridge.runtime.createMemory(inbound as any, 'messages' as any)
-    state = (await (runtimeBridge.runtime as any).composeState(inbound as any)) as Record<string, unknown>
+    if (params.runtimeContext) {
+      runtimeBridge = params.runtimeContext.runtimeBridge
+      inbound = params.runtimeContext.inboundMemory
+      state = params.runtimeContext.state
+      handledByRuntime = true
+    } else {
+      const ctx = await getChatRuntimeContext()
+      runtimeBridge = ctx.bridge
+      handledByRuntime = true
+      inbound = runtimeBridge.createInboundMemory({
+        conversationId: params.groupId,
+        conversationType,
+        senderAddress,
+        source: conversationSource,
+        entityKey: senderAddress ?? `web-user:${params.groupId}`,
+        content: userText,
+      })
+      await runtimeBridge.runtime.createMemory(inbound as any, 'messages' as any)
+      state = (await (runtimeBridge.runtime as any).composeState(inbound as any)) as Record<string, unknown>
+    }
     const turns = trimTrailingCurrentUserTurn(extractRecentTurns(state), userText)
     historyTurns = turns.length
     const structuredMemoryContext = buildStructuredMemoryContext(state)
@@ -484,51 +493,54 @@ export async function generateLlmResponse(params: {
       groupId: params.groupId,
       turns: historyTurns,
       persistedInbound: (inbound as any)?.__persistedToDb === true,
+      providedRuntimeContext: Boolean(params.runtimeContext),
     })
 
-    const correlationId = `keepr-${params.groupId}-${Date.now()}`
-    const rankedActions = await runtimeBridge.rankActions(userText, inbound as any)
-    const maxCandidates = Math.max(1, ACTION_MAX_CANDIDATES)
-    const candidates = rankedActions.slice(0, maxCandidates)
-    for (const candidate of candidates) {
-      const handler = candidate.action?.handler
-      if (typeof handler !== 'function') continue
-      const actionName = String(candidate.action?.name ?? 'unknown')
-      const parts: string[] = []
-      try {
-        const actionRetryBudget = getActionRetryBudget(actionName, ACTION_MAX_RETRIES)
-        await withRetry({
-          operation: `action_${actionName.toLowerCase()}`,
-          maxRetries: actionRetryBudget,
-          correlationId,
-          run: async () =>
-            withTimeout(
-              handler(
-                runtimeBridge!.runtime as any,
-                inbound as any,
-                state as any,
-                undefined,
-                async (content: any) => {
-                  if (content?.text) parts.push(String(content.text))
-                  return []
-                },
+    if (allowActionExecution) {
+      const correlationId = `keepr-${params.groupId}-${Date.now()}`
+      const rankedActions = await runtimeBridge.rankActions(userText, inbound as any)
+      const maxCandidates = Math.max(1, ACTION_MAX_CANDIDATES)
+      const candidates = rankedActions.slice(0, maxCandidates)
+      for (const candidate of candidates) {
+        const handler = candidate.action?.handler
+        if (typeof handler !== 'function') continue
+        const actionName = String(candidate.action?.name ?? 'unknown')
+        const parts: string[] = []
+        try {
+          const actionRetryBudget = getActionRetryBudget(actionName, ACTION_MAX_RETRIES)
+          await withRetry({
+            operation: `action_${actionName.toLowerCase()}`,
+            maxRetries: actionRetryBudget,
+            correlationId,
+            run: async () =>
+              withTimeout(
+                handler(
+                  runtimeBridge!.runtime as any,
+                  inbound as any,
+                  state as any,
+                  undefined,
+                  async (content: any) => {
+                    if (content?.text) parts.push(String(content.text))
+                    return []
+                  },
+                ),
+                ACTION_TIMEOUT_MS,
+                `action_timeout_${actionName.toLowerCase()}`,
               ),
-              ACTION_TIMEOUT_MS,
-              `action_timeout_${actionName.toLowerCase()}`,
-            ),
-        })
-        const joined = parts.join('\n\n').trim()
-        if (joined) {
-          actionReply = joined
-          break
+          })
+          const joined = parts.join('\n\n').trim()
+          if (joined) {
+            actionReply = joined
+            break
+          }
+        } catch (error) {
+          const agentError = toAgentError(error, 'ACTION_FAILED', 'Action execution failed')
+          logger.warn('[ai/chat] action candidate failed', {
+            action: actionName,
+            error: agentError.message,
+            code: agentError.code,
+          })
         }
-      } catch (error) {
-        const agentError = toAgentError(error, 'ACTION_FAILED', 'Action execution failed')
-        logger.warn('[ai/chat] action candidate failed', {
-          action: actionName,
-          error: agentError.message,
-          code: agentError.code,
-        })
       }
     }
 

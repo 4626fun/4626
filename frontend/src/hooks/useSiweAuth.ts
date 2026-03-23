@@ -41,6 +41,12 @@ export const PRIVY_INTERACTIVE_LOGIN_METHODS = ['email', 'wallet'] as const
 let lastPrivyBridgeAttemptAt = 0
 let lastPrivyBridgeFailureAt = 0
 let lastPrivyBridgeFailureReason = ''
+const AUTH_ME_CACHE_TTL_MS = 1_500
+let authMeCacheToken: string | null = null
+let authMeCacheAddress: string | null = null
+let authMeCacheResolvedAt = 0
+let authMeInFlightToken: string | null = null
+let authMeInFlight: Promise<string | null> | null = null
 
 function shouldSkipAutoPrivyBridge(): boolean {
   const now = Date.now()
@@ -94,6 +100,32 @@ export function deriveSiweSessionState(input: DerivedSiweSessionStateInput): Der
   }
 }
 
+type ShouldAutoBridgeConnectedPrivySessionInput = {
+  isConnected: boolean
+  address: string | null | undefined
+  authAddress: string | null | undefined
+  busy: boolean
+  privyReady: boolean
+  privyAuthenticated: boolean
+  hasPrivyAccessTokenReader: boolean
+  skipAutoBridge: boolean
+  attemptedForAddress: string
+}
+
+export function shouldAutoBridgeConnectedPrivySession(
+  input: ShouldAutoBridgeConnectedPrivySessionInput,
+): boolean {
+  if (!input.isConnected || !input.address) return false
+  if (input.busy) return false
+  if (!input.privyReady || !input.privyAuthenticated || !input.hasPrivyAccessTokenReader) return false
+  if (input.skipAutoBridge) return false
+  if (typeof input.authAddress === 'string' && input.authAddress.trim().length > 0) return false
+
+  const key = input.address.toLowerCase()
+  if (input.attemptedForAddress === key) return false
+  return true
+}
+
 function coerceErrorMessage(e: unknown, fallback: string): string {
   if (typeof e === 'string' && e.trim().length > 0) return e
   if (e instanceof Error && typeof e.message === 'string' && e.message.trim().length > 0) return e.message
@@ -121,6 +153,67 @@ function getStoredSessionToken(): string | null {
   }
 }
 
+function invalidateAuthMeCache() {
+  authMeCacheToken = null
+  authMeCacheAddress = null
+  authMeCacheResolvedAt = 0
+  authMeInFlightToken = null
+  authMeInFlight = null
+}
+
+function primeAuthMeCache(token: string | null, address: string | null) {
+  authMeCacheToken = token
+  authMeCacheAddress = address
+  authMeCacheResolvedAt = Date.now()
+}
+
+function primeAuthMeCacheIfFresh(token: string | null, address: string | null) {
+  if (getStoredSessionToken() !== token) return
+  primeAuthMeCache(token, address)
+}
+
+async function fetchAuthMeAddress(): Promise<string | null> {
+  const token = getStoredSessionToken()
+  const now = Date.now()
+
+  if (authMeInFlight && authMeInFlightToken === token) {
+    return authMeInFlight
+  }
+
+  if (authMeCacheToken === token && now - authMeCacheResolvedAt < AUTH_ME_CACHE_TTL_MS) {
+    return authMeCacheAddress
+  }
+
+  let request: Promise<string | null> | null = null
+  request = (async () => {
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        headers: {
+          Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : null),
+        },
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<MeResponse> | null
+      const nextAddress =
+        json?.data && typeof (json.data as any)?.address === 'string' ? String((json.data as any).address) : null
+      primeAuthMeCacheIfFresh(token, nextAddress)
+      return nextAddress
+    } catch {
+      primeAuthMeCacheIfFresh(token, null)
+      return null
+    } finally {
+      if (authMeInFlight === request) {
+        authMeInFlight = null
+        authMeInFlightToken = null
+      }
+    }
+  })()
+
+  authMeInFlight = request
+  authMeInFlightToken = token
+  return request
+}
+
 function notifyStoredSessionTokenChanged() {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(SESSION_TOKEN_CHANGED_EVENT))
@@ -143,6 +236,7 @@ export function writeStoredSessionToken(token: string | null) {
   } catch {
     // ignore
   }
+  if (persisted) invalidateAuthMeCache()
   if (persisted) notifyStoredSessionTokenChanged()
 }
 
@@ -212,6 +306,9 @@ export function useSiweAuth() {
   const autoPrivyAttemptKeyRef = useRef<string>('')
   const autoPrivyGlobalAttemptRef = useRef(false)
   const refreshRequestIdRef = useRef(0)
+  const supersedePendingRefresh = useCallback(() => {
+    refreshRequestIdRef.current += 1
+  }, [])
 
   const sessionState = useMemo(
     () =>
@@ -225,20 +322,7 @@ export function useSiweAuth() {
 
   const refresh = useCallback(async () => {
     const requestId = ++refreshRequestIdRef.current
-    let nextAddress: string | null = null
-    try {
-      const token = getStoredSessionToken()
-      const res = await apiFetch('/api/auth/me', {
-        headers: {
-          Accept: 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : null),
-        },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<MeResponse> | null
-      nextAddress = json?.data && typeof (json.data as any)?.address === 'string' ? String((json.data as any).address) : null
-    } catch {
-      nextAddress = null
-    }
+    const nextAddress = await fetchAuthMeAddress()
 
     if (requestId === refreshRequestIdRef.current) {
       setAuthAddress(nextAddress)
@@ -319,6 +403,8 @@ export function useSiweAuth() {
         if (!sessionToken || !address) throw new Error('Privy sign-in failed')
 
         writeStoredSessionToken(sessionToken)
+        primeAuthMeCache(sessionToken, address)
+        supersedePendingRefresh()
         setAuthAddress(address)
         setCswOwnership(null)
         try {
@@ -331,6 +417,7 @@ export function useSiweAuth() {
         const message = coerceErrorMessage(e, 'Privy sign-in failed')
         if (shouldResetPrivyBridgeState(message)) {
           writeStoredSessionToken(null)
+          supersedePendingRefresh()
           setAuthAddress(null)
           setCswOwnership(null)
           autoPrivyAttemptKeyRef.current = ''
@@ -342,7 +429,7 @@ export function useSiweAuth() {
         setBusy(false)
       }
     },
-    [],
+    [supersedePendingRefresh],
   )
 
   // If Privy is authenticated, ensure we have a stored bearer token session.
@@ -389,18 +476,26 @@ export function useSiweAuth() {
     })()
   }, [authAddress, busy, getPrivyAccessToken, privyAuthenticated, privyReady, signInWithPrivyToken])
 
-  // Auto-bridge a Privy-authenticated user into a 4626 session (no SIWE signing),
-  // so `/api/auth/me` and other gated API routes work seamlessly.
+  // Auto-bridge a Privy-authenticated user into a 4626 session only when no
+  // app session exists yet. Do not chase connected-wallet/session mismatches
+  // here: canonical flows intentionally use an owner EOA plus a canonical CSW,
+  // and re-bridging on every mismatch rotates the bearer token, which forces
+  // repeated session rehydration across the app.
   useEffect(() => {
-    if (!isConnected || !address) return
-    if (busy) return
-    if (!privyReady || !privyAuthenticated || !getPrivyAccessToken) return
-    if (isSignedIn) return
-    if (shouldSkipAutoPrivyBridge()) return
+    const shouldAutoBridge = shouldAutoBridgeConnectedPrivySession({
+      isConnected,
+      address,
+      authAddress,
+      busy,
+      privyReady,
+      privyAuthenticated,
+      hasPrivyAccessTokenReader: Boolean(getPrivyAccessToken),
+      skipAutoBridge: shouldSkipAutoPrivyBridge(),
+      attemptedForAddress: autoPrivyAttemptKeyRef.current,
+    })
+    if (!shouldAutoBridge || !getPrivyAccessToken || !address) return
 
-    const key = address.toLowerCase()
-    if (autoPrivyAttemptKeyRef.current === key) return
-    autoPrivyAttemptKeyRef.current = key
+    autoPrivyAttemptKeyRef.current = address.toLowerCase()
 
     void (async () => {
       try {
@@ -411,7 +506,7 @@ export function useSiweAuth() {
         // ignore; user can always click "Sign in"
       }
     })()
-  }, [address, autoPrivyAttemptKeyRef, busy, getPrivyAccessToken, isConnected, isSignedIn, privyAuthenticated, privyReady, signInWithPrivyToken])
+  }, [address, authAddress, autoPrivyAttemptKeyRef, busy, getPrivyAccessToken, isConnected, privyAuthenticated, privyReady, signInWithPrivyToken])
 
   type SignInMethod = 'auto' | 'siwe' | 'privy'
 
@@ -519,6 +614,7 @@ export function useSiweAuth() {
         writeStoredSessionToken(sessionToken.trim())
       }
       const resolved = typeof signed === 'string' ? signed : null
+      supersedePendingRefresh()
       setAuthAddress(resolved)
       const csw = (verifyJson?.data as any)?.cswOwnership
       if (
@@ -544,7 +640,7 @@ export function useSiweAuth() {
     } finally {
       setBusy(false)
     }
-  }, [address, getPrivyAccessToken, login, privyAuthenticated, privyReady, signInWithPrivyToken, signMessageAsync])
+  }, [address, getPrivyAccessToken, login, privyAuthenticated, privyReady, signInWithPrivyToken, signMessageAsync, supersedePendingRefresh])
 
   const signOut = useCallback(async () => {
     setBusy(true)
@@ -552,12 +648,14 @@ export function useSiweAuth() {
     try {
       await apiFetch('/api/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } })
       writeStoredSessionToken(null)
+      primeAuthMeCache(null, null)
+      supersedePendingRefresh()
       setAuthAddress(null)
       setCswOwnership(null)
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [supersedePendingRefresh])
 
   return {
     authAddress,

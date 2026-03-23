@@ -15,7 +15,6 @@ import {
   Wallet,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { ProfileCard } from 'ethereum-identity-kit'
 import type { Address } from 'viem'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -328,8 +327,6 @@ export function Portfolio() {
   const publicAddress = resolvedAddresses.publicAddress
   const effectiveAddress = resolvedAddresses.effectiveAddress
   const isPublicMode = resolvedAddresses.isPublicMode
-  const identityLookupAddress = publicAddress ?? effectiveAddress
-
   const [tab, setTab] = useState<PortfolioTab>('overview')
   const [timeframe, setTimeframe] = useState<Timeframe>('1D')
   const [selectedAmoeCreatorCoin, setSelectedAmoeCreatorCoin] = useState<Address | null>(null)
@@ -748,18 +745,6 @@ export function Portfolio() {
               ))}
             </div>
 
-            {identityLookupAddress ? (
-              <div className="mt-4 rounded-2xl border border-white/8 bg-vault-card/55 p-4">
-                <div className="mb-3 text-[12px] text-white">Ethereum identity</div>
-                <ProfileCard
-                  addressOrName={identityLookupAddress}
-                  connectedAddress={wagmiAddress}
-                  darkMode
-                  showPoaps={false}
-                  showFollowButton={false}
-                />
-              </div>
-            ) : null}
           </motion.div>
 
           {tab === 'overview' ? (

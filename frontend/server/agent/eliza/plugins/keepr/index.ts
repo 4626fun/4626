@@ -4,7 +4,7 @@
  * Delegates all vault commands to the production handleKeeprCommand()
  * instead of reimplementing them. This gives ElizaOS access to the full
  * command set: vault status, rules, lock/unlock, check, sync, send,
- * social commands, and LLM /ai responses.
+ * and social commands.
  *
  * Also provides a vault-info provider that injects vault context
  * into the LLM prompt so the agent can answer vault-related questions.
@@ -21,7 +21,7 @@ import type {
   HandlerCallback,
 } from '@elizaos/core'
 
-import { handleKeeprCommand } from '../../../../keepr/commands.js'
+import { executeDeterministicCommand } from '../../../core/executeDeterministicCommand.js'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 import { assertTeeAttestationOrThrow } from '../../../../_lib/teeAttestationGate.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'
@@ -56,9 +56,6 @@ function isKeeprCommand(text: string): boolean {
     t.startsWith('tweet ') ||
     t.startsWith('/coin') ||
     t.startsWith('coin ') ||
-    t.startsWith('/ai') ||
-    t.startsWith('@keepr') ||
-    t.startsWith('@bot') ||
     t === '/help' ||
     t === 'help'
   )
@@ -101,10 +98,9 @@ const keeprCommandAction: Action = {
   similes: [
     'keepr status', 'vault status', 'send', 'transfer',
     'keepr help', 'help', 'commands',
-    'ai', 'ask keepr',
   ],
   description:
-    'Route vault commands (status, send, lock, unlock, check, sync, social, AI) through the production Keepr handler.',
+    'Route deterministic vault commands (status, send, lock, unlock, check, sync, social) through the production Keepr handler.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim()
@@ -153,17 +149,16 @@ const keeprCommandAction: Action = {
         }
       }
 
-      const result = await handleKeeprCommand({
+      const result = await executeDeterministicCommand({
         groupId: conversationId,
         senderWallet: senderAddress as `0x${string}`,
         text,
+        emptyResponseFallback: isKeeprStatusCommand(text)
+          ? 'Keepr status is temporarily unavailable. Please try again shortly.'
+          : undefined,
       })
 
-      if (result.response) {
-        await callback?.({ text: result.response } as Content)
-      } else if (isKeeprStatusCommand(text)) {
-        await callback?.({ text: 'Keepr status is temporarily unavailable. Please try again shortly.' } as Content)
-      }
+      await callback?.({ text: result.responseText } as Content)
     } catch (err: any) {
       const agentError = toAgentError(err, 'UPSTREAM_ERROR', 'Keepr command failed')
       console.error('[keepr-plugin] handleKeeprCommand error:', {
@@ -198,7 +193,7 @@ const keeprCommandAction: Action = {
 
 /**
  * Injects vault context into the LLM prompt so the agent can answer
- * vault-related questions conversationally (via /ai or @keepr).
+ * vault-related questions conversationally through the shared fallback path.
  * Uses the production getKeeprVaultByGroupId() instead of a separate DB query.
  */
 const vaultInfoProvider: Provider = {

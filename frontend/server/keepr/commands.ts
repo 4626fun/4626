@@ -25,7 +25,9 @@ import {
 } from './clashArenaCommands.js'
 import { handleSendCommand } from './sendCommand.js'
 import { handleWhoisCommand } from './whoisCommand.js'
-import { generateLlmResponse } from '../ai/chat.js'
+import { executeConversationalFallback } from '../agent/core/executeConversationalFallback.js'
+import { isConversationalAgentInput, normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
+import { resolveVaultAccessRoleFromVault } from '../agent/core/resolveVaultRole.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
 import { formatNumberedCommandFallback } from '../_lib/chatCommandFallback.js'
 
@@ -382,13 +384,6 @@ function formatAssistantOnlyBlocked(command: string): string {
     '- You can still use /ai, /help, /mkt, /whois, and /bankr status',
     '- To enable full actions: run /link, verify /linked, scope a vault, then confirm with /keepr status',
   ].join('\n')
-}
-
-function roleForWallet(params: { wallet: Address; owner: Address; admins: Address[] }): KeeprRole {
-  const w = params.wallet.toLowerCase()
-  if (w === params.owner.toLowerCase()) return 'OWNER'
-  if (params.admins.some((a) => a.toLowerCase() === w)) return 'ADMIN'
-  return 'MEMBER'
 }
 
 function formatVaultStatus(v: Awaited<ReturnType<typeof getKeeprVaultByGroupId>>): string {
@@ -919,12 +914,9 @@ export async function handleKeeprCommand(params: {
   }
 
   // AI commands should work even when vault config/DB is unavailable.
-  const looksLikeAi =
-    rawLower.startsWith('/ai') ||
-    rawLower.startsWith('@keepr') ||
-    rawLower.startsWith('@bot')
+  const looksLikeAi = isConversationalAgentInput(raw) && (/^\/ai\b/i.test(raw) || /^@(keepr|bot)\b/i.test(raw))
   if (looksLikeAi) {
-    const aiText = raw.replace(/^\/?ai\s*/i, '').replace(/^@(keepr|bot)\s*/i, '').trim()
+    const aiText = normalizeConversationalPrompt(raw)
     if (!aiText) {
       return { ok: true, response: 'Ask me anything about this vault or DeFi on Base.' }
     }
@@ -932,12 +924,13 @@ export async function handleKeeprCommand(params: {
     if (!v && looksLikeGroupConnectIntent(aiText)) {
       return { ok: true, response: formatGroupConnectGuidance(params.groupId) }
     }
-    return generateLlmResponse({
+    const aiResult = await executeConversationalFallback({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
       text: aiText,
       vault: v,
     })
+    return { ok: aiResult.ok, response: aiResult.responseText }
   }
 
   // Market data commands should work even when vault config/DB is unavailable.
@@ -959,10 +952,7 @@ export async function handleKeeprCommand(params: {
     const v = await getKeeprVaultByGroupId(params.groupId)
     let role: KeeprRole = 'MEMBER'
     if (v) {
-      const owner = v.canonicalOwnerAddress
-      const admins = Array.isArray(v.config?.roles?.admins) ? v.config.roles.admins : []
-      const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
-      role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
+      role = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: v })
     }
     return handleTwitterCommand({
       groupId: params.groupId,
@@ -978,11 +968,8 @@ export async function handleKeeprCommand(params: {
     let role: KeeprRole = 'MEMBER'
     let canonicalOwnerAddress: string | null = null
     if (v) {
-      const owner = v.canonicalOwnerAddress
-      const admins = Array.isArray(v.config?.roles?.admins) ? v.config.roles.admins : []
-      const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
-      role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
-      canonicalOwnerAddress = owner
+      role = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: v })
+      canonicalOwnerAddress = v.canonicalOwnerAddress
     }
     return handleBankrCommand({
       groupId: params.groupId,
@@ -998,10 +985,7 @@ export async function handleKeeprCommand(params: {
   if (looksLikeSend) {
     const sv = await getKeeprVaultByGroupId(params.groupId)
     if (!sv) return { ok: false, response: formatAssistantOnlyBlocked('/send') }
-    const sOwner = sv.canonicalOwnerAddress
-    const sAdmins = Array.isArray(sv.config?.roles?.admins) ? sv.config.roles.admins : []
-    const sAdminsLc = sAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
-    const sRole = roleForWallet({ wallet: params.senderWallet, owner: sOwner, admins: sAdminsLc })
+    const sRole = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: sv })
     return handleSendCommand({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
@@ -1016,10 +1000,7 @@ export async function handleKeeprCommand(params: {
   if (looksLikeCoin) {
     const cv = await getKeeprVaultByGroupId(params.groupId)
     if (!cv) return { ok: false, response: formatAssistantOnlyBlocked('/coin') }
-    const cOwner = cv.canonicalOwnerAddress
-    const cAdmins = Array.isArray(cv.config?.roles?.admins) ? cv.config.roles.admins : []
-    const cAdminsLc = cAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
-    const cRole = roleForWallet({ wallet: params.senderWallet, owner: cOwner, admins: cAdminsLc })
+    const cRole = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: cv })
     return handleCoinCommand({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
@@ -1069,10 +1050,7 @@ export async function handleKeeprCommand(params: {
     }
   }
 
-  const owner = v.canonicalOwnerAddress
-  const admins = Array.isArray(v.config?.roles?.admins) ? v.config.roles.admins : []
-  const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
-  const role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
+  const role = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: v })
 
   const prefix = raw.toLowerCase().startsWith('/keepr') ? '/keepr' : raw.toLowerCase().startsWith('keepr') ? 'keepr' : null
   if (!prefix) {

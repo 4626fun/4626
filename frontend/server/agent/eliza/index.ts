@@ -64,18 +64,18 @@ import { createRuntimeBridge } from './runtimeBridge.js'
 import { getElizaLlmService } from './llm.js'
 import { AgentError, isRetryableAgentError, toAgentError, toErrorDetails } from './_errors.js'
 import { withRetry, withTimeout, sleep } from './_retry.js'
-import { buildContinuityContextBlock } from './_stateHelpers.js'
 import { SlidingWindowRateLimiter, parsePositiveNumber } from './_rateLimit.js'
 import { enqueueAgentBackgroundTask, getAgentBackgroundQueueStats, startAgentBackgroundTaskWorker } from './_taskQueue.js'
 import { WelcomeConversationTracker, fingerprintAgentConfig, getActionRetryBudget } from './_runtimePolicy.js'
 import { getHealthProbeStatusCode } from './_healthStatus.js'
+import { handleXmtpFallbackResponse } from './_xmtpFallback.js'
 
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agentRegistrationPublisher.js'
-import { formatNumberedCommandFallback, formatWelcomeNumberedOptions } from '../../_lib/chatCommandFallback.js'
+import { formatWelcomeNumberedOptions } from '../../_lib/chatCommandFallback.js'
 import { createCorrelationLogger, logger } from '../../_lib/logger.js'
 import { emitTelemetryEvent } from '../../_lib/telemetry.js'
 import {
@@ -1263,99 +1263,15 @@ async function handleMessage(
     return 'Keepr status is temporarily unavailable. Please try again shortly.'
   }
 
-  // LLM fallback for /ai, @keepr, @bot, and plain text.
-  // Keep slash-prefixed commands command-only to avoid accidental
-  // hallucinated command handling by the LLM.
-  const lower = text.toLowerCase()
-  const isAi =
-    lower.startsWith('/ai') ||
-    lower.startsWith('@keepr') ||
-    lower.startsWith('@bot') ||
-    !text.startsWith('/')
-  if (!isAi) {
-    return formatNumberedCommandFallback({
-      intro: 'I did not recognize that slash command.',
-    })
-  }
-
-  const cleanText = text
-    .replace(/^\/?ai\s*/i, '')
-    .replace(/^@keepr\s*/i, '')
-    .replace(/^@bot\s*/i, '')
-    .trim()
-  if (!cleanText) return 'Ask me anything about this vault or DeFi on Base.'
-
-  let vaultContext = ''
-  const contextProviders = [...(keeprPlugin.providers ?? []), ...(knowledgePlugin.providers ?? [])]
-  for (const provider of contextProviders) {
-    try {
-      const result = await withRetry({
-        operation: `context_provider_${String(provider.name ?? 'unknown').toLowerCase()}`,
-        maxRetries: EXTERNAL_MAX_RETRIES,
-        correlationId,
-        run: async () =>
-          withTimeout(
-            provider.get(ctx.runtimeBridge.runtime as any, memory as any, state as any),
-            5_000,
-            `context_provider_timeout_${String(provider.name ?? 'unknown').toLowerCase()}`,
-          ),
-      })
-      if (result?.text) vaultContext += `${String(result.text).trim()}\n`
-    } catch (error) {
-      reqLogger.warn('[eliza] context provider failed', {
-        provider: String(provider.name ?? 'unknown'),
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  const senderWallet =
-    typeof msg.senderAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(msg.senderAddress)
-      ? msg.senderAddress.toLowerCase()
-      : null
-  if (senderWallet) {
-    vaultContext +=
-      '\n[wallet_context]\n' +
-      `primary_sender_wallet=${senderWallet}\n` +
-      'When the user says "my wallet", "my balance", or "my portfolio", default to this wallet unless they provide another address.\n' +
-      '[/wallet_context]\n'
-  }
-
-  try {
-    const continuityContextBlock = buildContinuityContextBlock(state as Record<string, unknown>)
-    const llm = await withRetry({
-      operation: 'llm_generate_response',
-      maxRetries: EXTERNAL_MAX_RETRIES,
-      correlationId,
-      run: async () => llmService.generateResponse({
-        agentKey: ctx.agentKey,
-        userMessage: cleanText,
-        systemPrompt: `${characterRuntimeConfig.systemPrompt}\n\n${continuityContextBlock}`.trim(),
-        vaultContext,
-        correlationId,
-        preferredModel: characterRuntimeConfig.preferredModel,
-      }),
-    })
-    const reply = llm.text ?? "I couldn't generate a response right now. Try again later."
-    const outbound = ctx.runtimeBridge.createOutboundMemory(
-      msg.conversationId,
-      msg.conversationType,
-      reply,
-    )
-    await ctx.runtimeBridge.runtime.createMemory(outbound as any, 'messages' as any)
-    return reply
-  } catch (error) {
-    const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM fallback failed')
-    reqLogger.error('[eliza] llm fallback failed', {
-      error: agentError.message,
-      code: agentError.code,
-      details: toErrorDetails(agentError),
-    })
-    if (agentError.code === 'BUDGET_EXCEEDED') {
-      return 'Daily AI budget limit reached for this agent. Please try again tomorrow.'
-    }
-    return "I couldn't generate a response right now. Try again later."
-  }
+  return handleXmtpFallbackResponse({
+    text,
+    conversationId: msg.conversationId,
+    senderAddress: msg.senderAddress,
+    runtimeBridge: ctx.runtimeBridge,
+    inboundMemory: memory as any,
+    state: state as Record<string, unknown>,
+    logger: reqLogger,
+  })
 }
 
 // ---------------------------------------------------------------------------

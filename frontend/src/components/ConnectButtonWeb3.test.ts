@@ -4,6 +4,7 @@ import {
   deriveConnectButtonState,
   deriveWalletIdentityPresentation,
   shouldAllowExternalWalletButtons,
+  shouldResolveConnectIdentity,
 } from './ConnectButtonWeb3'
 
 describe('deriveConnectButtonState', () => {
@@ -67,6 +68,41 @@ describe('shouldAllowExternalWalletButtons', () => {
         filteredConnectorCount: 0,
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldResolveConnectIdentity', () => {
+  it('skips nav identity resolution until the wallet UI is opened', () => {
+    expect(
+      shouldResolveConnectIdentity({
+        variant: 'nav',
+        identityAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        showMenu: false,
+        showOptions: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('allows nav identity resolution when a wallet menu is visible', () => {
+    expect(
+      shouldResolveConnectIdentity({
+        variant: 'nav',
+        identityAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        showMenu: true,
+        showOptions: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('always resolves identity for non-nav variants when an address exists', () => {
+    expect(
+      shouldResolveConnectIdentity({
+        variant: 'default',
+        identityAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        showMenu: false,
+        showOptions: false,
+      }),
+    ).toBe(true)
   })
 })
 

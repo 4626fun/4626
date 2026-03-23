@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import sharp from 'sharp'
 import { generateSegmentationMask, type SegmentationModel } from './_segmentation.js'
+import { ensureFontconfig } from '../../../server/_lib/ensureFontconfig.js'
 
 type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
 type ArtworkFitMode = 'cover' | 'contain'
@@ -105,6 +106,8 @@ type StackedArtworkUnderlay = {
   rearLayerA: Buffer | null
 }
 
+ensureFontconfig()
+
 const BREAKOUT_DEBUG_LOG_ENABLED =
   process.env.TOKEN_BREAKOUT_DEBUG === '1' ||
   Boolean(process.env.TOKEN_BREAKOUT_DEBUG_DIR)
@@ -137,10 +140,36 @@ const PREMIUM_BREAKOUT_MASK_MIN_COVERAGE =
   clamp(Number(process.env.TOKEN_PREMIUM_BREAKOUT_MASK_MIN_COVERAGE ?? 0.004), 0, 0.35)
 const PREMIUM_BREAKOUT_MASK_MAX_COVERAGE =
   clamp(Number(process.env.TOKEN_PREMIUM_BREAKOUT_MASK_MAX_COVERAGE ?? 0.58), PREMIUM_BREAKOUT_MASK_MIN_COVERAGE, 1)
+const PREMIUM_BREAKOUT_MASK_MAX_COVERAGE_ILLUSTRATION =
+  clamp(
+    Number(process.env.TOKEN_PREMIUM_BREAKOUT_MASK_MAX_COVERAGE_ILLUSTRATION ?? 0.66),
+    PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
+    1,
+  )
+const ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO =
+  clamp(Number(process.env.TOKEN_PREMIUM_ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO ?? 0.015), 0, 0.03)
 
-function isSegmentationBreakoutCoverageAcceptable(coverage: number): boolean {
+function getSegmentationBreakoutMaxCoverage(sourceClass?: SourceClass): number {
+  if (sourceClass === 'illustration') {
+    return Math.max(PREMIUM_BREAKOUT_MASK_MAX_COVERAGE, PREMIUM_BREAKOUT_MASK_MAX_COVERAGE_ILLUSTRATION)
+  }
+  return PREMIUM_BREAKOUT_MASK_MAX_COVERAGE
+}
+
+function isSegmentationBreakoutCoverageAcceptable(coverage: number, sourceClass?: SourceClass): boolean {
   if (!Number.isFinite(coverage)) return false
-  return coverage >= PREMIUM_BREAKOUT_MASK_MIN_COVERAGE && coverage <= PREMIUM_BREAKOUT_MASK_MAX_COVERAGE
+  return coverage >= PREMIUM_BREAKOUT_MASK_MIN_COVERAGE && coverage <= getSegmentationBreakoutMaxCoverage(sourceClass)
+}
+
+function resolveIllustrationHeroBreakoutTopBiasRatio(topOccupancy: number): number {
+  const base =
+    topOccupancy > 0.58
+      ? 0.018
+      : topOccupancy > 0.42
+        ? 0.026
+        : 0.04
+  // topBias shifts artwork upward, so subtract to move breakout lower.
+  return clamp(base - ILLUSTRATION_BREAKOUT_LOWER_DELTA_RATIO, 0.002, 0.12)
 }
 
 function resolveSegmentationModel(
@@ -393,6 +422,7 @@ async function logBreakoutRuntimeBannerOnce(): Promise<void> {
       },
       breakoutCoverageMinThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
       breakoutCoverageMaxThreshold: PREMIUM_BREAKOUT_MASK_MAX_COVERAGE,
+      breakoutCoverageMaxThresholdIllustration: getSegmentationBreakoutMaxCoverage('illustration'),
       alignTargetTopRatio: PREMIUM_ALIGN_TARGET_TOP_RATIO,
       alignMaxBiasRatio: PREMIUM_ALIGN_MAX_BIAS_RATIO,
       fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
@@ -1575,14 +1605,48 @@ async function measureBreakoutMaskCoverage(params: {
     sourceClass: params.sourceClass,
     maxTopBiasRatio: PREMIUM_ALIGN_MAX_BIAS_RATIO,
   })
-  const { data, info } = await sharp(maskCanvas)
+  const breakoutWindow = await computeDynamicBreakoutWindow({
+    sourceCanvas: maskCanvas,
+    layout: params.layout,
+    sourceClass: params.sourceClass,
+  })
+  const breakoutMask = await createTopBreakoutMask({
+    size: params.layout.size,
+    layout: params.layout,
+    sourceClass: params.sourceClass,
+    breakoutWindow: breakoutWindow ?? undefined,
+  })
+  const aboveFrameMask = await createBreakoutAboveFrameMask({
+    size: params.layout.size,
+    layout: params.layout,
+    sourceClass: params.sourceClass,
+  })
+  const effectiveMaskCanvas = await sharp(maskCanvas)
+    .ensureAlpha()
+    .composite([
+      { input: breakoutMask, blend: 'dest-in' },
+      { input: aboveFrameMask, blend: 'dest-in' },
+    ])
+    .png()
+    .toBuffer()
+  const { data, info } = await sharp(effectiveMaskCanvas)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })
-  const x0 = Math.max(0, params.layout.breakoutX)
-  const x1 = Math.min(info.width, params.layout.breakoutX + params.layout.breakoutWidth)
+  const coverageX = Math.round(breakoutWindow?.x ?? params.layout.breakoutX)
+  const coverageWidth = Math.round(breakoutWindow?.width ?? params.layout.breakoutWidth)
+  const x0 = Math.max(0, coverageX)
+  const x1 = Math.min(info.width, coverageX + coverageWidth)
   const y0 = Math.max(0, params.layout.breakoutY)
-  const y1 = Math.min(info.height, params.layout.breakoutY + params.layout.breakoutHeight)
+  const isIllustration = params.sourceClass === 'illustration'
+  const overlapIntoChamberPx = Math.max(1, Math.round(params.layout.frameStroke * (isIllustration ? 0.34 : 0.05)))
+  const edgeFeatherPx = Math.max(1, Math.round(params.layout.frameStroke * (isIllustration ? 0.46 : 0.12)))
+  const frameClearY = Math.min(info.height, params.layout.chamberY + overlapIntoChamberPx + edgeFeatherPx)
+  const y1 = Math.min(
+    info.height,
+    Math.min(params.layout.breakoutY + params.layout.breakoutHeight, frameClearY),
+  )
+  if (x1 <= x0 || y1 <= y0) return 0
   let on = 0
   let total = 0
   for (let y = y0; y < y1; y += 1) {
@@ -2464,7 +2528,16 @@ async function computeDynamicBreakoutWindow(params: {
   const searchX0 = Math.max(0, params.layout.breakoutX - searchPadX)
   const searchX1 = Math.min(width, params.layout.breakoutX + params.layout.breakoutWidth + searchPadX)
   const searchY0 = Math.max(0, params.layout.breakoutY - Math.round(params.layout.breakoutHeight * 0.08))
-  const searchY1 = Math.min(info.height, params.layout.breakoutY + Math.round(params.layout.breakoutHeight * 1.02))
+  const overlapIntoChamberPx = Math.max(1, Math.round(params.layout.frameStroke * 0.34))
+  const edgeFeatherPx = Math.max(1, Math.round(params.layout.frameStroke * 0.46))
+  const frameClearY = Math.min(info.height, params.layout.chamberY + overlapIntoChamberPx + edgeFeatherPx)
+  const searchY1 = Math.min(
+    info.height,
+    Math.min(
+      params.layout.breakoutY + Math.round(params.layout.breakoutHeight * 1.02),
+      frameClearY,
+    ),
+  )
   if (searchX1 <= searchX0 || searchY1 <= searchY0) return null
 
   const minHitsPerColumn = Math.max(2, Math.round((searchY1 - searchY0) * 0.04))
@@ -2976,7 +3049,10 @@ export async function renderBreakoutLayer(params: {
         : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
           ? 120
           : undefined,
-    strictContourGates: hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout',
+    strictContourGates:
+      hasPreparedMaskSource &&
+      params.subjectMaskKind === 'rembgCutout' &&
+      params.sourceClass !== 'illustration',
     breakoutWindow: breakoutWindow ?? undefined,
   })
   const aboveFrameMask = await createBreakoutAboveFrameMask({
@@ -3308,6 +3384,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   let segmentationModelForLog: SegmentationModel | null = null
   let segmentationExecutableForLog: string | null = null
   let segmentationCoverageForLog: number | null = null
+  let segmentationCoverageMaxThresholdForLog = getSegmentationBreakoutMaxCoverage(undefined)
   let segmentationAlignmentDeltaForLog: number | null = null
   let segmentationMaskTopYForLog: number | null = null
   let segmentationTargetTopYForLog: number | null = null
@@ -3446,11 +3523,9 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         ? Math.max(1, Math.round(layout.chamberSize * (
             resolvedPreset === 'hero'
               ? (
-                  // Dense top occupancy (badges/emblems touching the top band)
-                  // needs less lift to avoid clipping above the frame.
-                  analysis.topOccupancy > 0.58 ? 0.018
-                  : analysis.topOccupancy > 0.42 ? 0.026
-                  : 0.04
+                  // Keep dynamic occupancy shaping, then apply the same lowering delta
+                  // used for prior illustration alignment passes.
+                  resolveIllustrationHeroBreakoutTopBiasRatio(analysis.topOccupancy)
                 )
               : 0.033
           )))
@@ -3461,6 +3536,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         1.16,
       )
       if (breakoutPlan.mode === 'rembgCutout' && rembgSegmentation?.maskPngRgba) {
+        const rembgCoverageMaxThreshold = getSegmentationBreakoutMaxCoverage(analysis.sourceClass)
         rembgCoverage = await measureBreakoutMaskCoverage({
           layout,
           scale: breakoutScale,
@@ -3468,11 +3544,12 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           sourceClass: analysis.sourceClass,
           maskRgbaPng: rembgSegmentation.maskPngRgba,
         })
-        rembgCoveragePass = isSegmentationBreakoutCoverageAcceptable(rembgCoverage)
+        rembgCoveragePass = isSegmentationBreakoutCoverageAcceptable(rembgCoverage, analysis.sourceClass)
         segmentationCoverageForLog = rembgCoverage
+        segmentationCoverageMaxThresholdForLog = rembgCoverageMaxThreshold
         if (!rembgCoveragePass && rembgCoverage < PREMIUM_BREAKOUT_MASK_MIN_COVERAGE) {
           segmentationFailureReasonForLog = `segmentation-coverage-below-threshold:${rembgCoverage.toFixed(4)}`
-        } else if (!rembgCoveragePass && rembgCoverage > PREMIUM_BREAKOUT_MASK_MAX_COVERAGE) {
+        } else if (!rembgCoveragePass && rembgCoverage > rembgCoverageMaxThreshold) {
           segmentationFailureReasonForLog = `segmentation-coverage-above-threshold:${rembgCoverage.toFixed(4)}`
         }
       }
@@ -3569,7 +3646,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           segmentationModel: rembgSegmentation?.model ?? null,
           segmentationCoverage: rembgCoverage,
           segmentationCoverageMinThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
-          segmentationCoverageMaxThreshold: PREMIUM_BREAKOUT_MASK_MAX_COVERAGE,
+          segmentationCoverageMaxThreshold: segmentationCoverageMaxThresholdForLog,
           segmentationCoveragePass: rembgCoveragePass,
           segmentationAlignmentDeltaPx: segmentationAlignmentDeltaForLog,
           segmentationMaskTopY: segmentationMaskTopYForLog,
@@ -3686,7 +3763,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       segmentationExecutable: segmentationExecutableForLog,
       segmentationCoverage: segmentationCoverageForLog,
       segmentationCoverageMinThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
-      segmentationCoverageMaxThreshold: PREMIUM_BREAKOUT_MASK_MAX_COVERAGE,
+      segmentationCoverageMaxThreshold: segmentationCoverageMaxThresholdForLog,
       segmentationAlignmentDeltaPx: segmentationAlignmentDeltaForLog,
       segmentationMaskTopY: segmentationMaskTopYForLog,
       segmentationTargetTopY: segmentationTargetTopYForLog,
@@ -3709,4 +3786,3 @@ export const __testables = {
   computeAlignedTopBiasPx,
   measureBreakoutMaskCoverage,
 }
-

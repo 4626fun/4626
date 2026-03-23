@@ -11,6 +11,7 @@ import { promisify } from 'node:util'
 
 import sharp from 'sharp'
 import { renderPremiumTokenIcon } from './_premiumTokenIconRenderer.js'
+import { ensureFontconfig } from '../../../server/_lib/ensureFontconfig.js'
 
 const execFileP = promisify(execFile)
 
@@ -32,6 +33,8 @@ declare const process: { env: Record<string, string | undefined> }
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const IPFS_GATEWAY = `${String(process.env.IPFS_GATEWAY ?? DEFAULT_IPFS_GATEWAY).trim().replace(/\/+$/, '')}/`
 const IPNS_GATEWAY = IPFS_GATEWAY.replace(/\/ipfs\/$/i, '/')
+
+ensureFontconfig()
 
 function normalizeHttpUrl(value: string): string | null {
   try {
@@ -419,7 +422,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 108
+const FRAME_STYLE_V = 115
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184

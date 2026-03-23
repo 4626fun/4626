@@ -17,6 +17,7 @@ import type {
 } from '@elizaos/core'
 
 import { handleCoinCommand } from '../../../../zora/commands.js'
+import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 
 // ---------------------------------------------------------------------------
@@ -26,17 +27,6 @@ import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 function isCoinCommand(text: string): boolean {
   const t = text.trim().toLowerCase()
   return t.startsWith('/coin') || t.startsWith('coin ')
-}
-
-function roleForWallet(params: {
-  wallet: string
-  owner: string
-  admins: string[]
-}): 'OWNER' | 'ADMIN' | 'MEMBER' {
-  const w = params.wallet.toLowerCase()
-  if (w === params.owner.toLowerCase()) return 'OWNER'
-  if (params.admins.some((a) => a.toLowerCase() === w)) return 'ADMIN'
-  return 'MEMBER'
 }
 
 // ---------------------------------------------------------------------------
@@ -89,11 +79,7 @@ const zoraCoinAction: Action = {
       return
     }
 
-    const owner = vault.canonicalOwnerAddress
-    const admins = Array.isArray((vault as any).config?.roles?.admins)
-      ? (vault as any).config.roles.admins.filter((a: string) => /^0x[a-fA-F0-9]{40}$/.test(a))
-      : []
-    const role = roleForWallet({ wallet: senderAddress, owner, admins })
+    const role = resolveVaultAccessRoleFromVault({ wallet: senderAddress, vault })
 
     try {
       const result = await handleCoinCommand({

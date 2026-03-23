@@ -227,6 +227,30 @@ describe('generateLlmResponse memory integration', () => {
     expect(call?.preferredModel).toBe('test-model')
   })
 
+  it('uses provided runtime context and skips action execution when disabled', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const providedBridge = createRuntimeBridgeMock()
+
+    await generateLlmResponse({
+      groupId: 'xmtp:chat-7',
+      senderWallet: '0x7777777777777777777777777777777777777777',
+      text: 'plain text question',
+      vault: null,
+      runtimeContext: {
+        runtimeBridge: providedBridge as any,
+        inboundMemory: { id: 'provided-inbound', __persistedToDb: true },
+        state: {
+          recentMessages: [{ role: 'user', text: 'previous turn' }],
+        },
+      },
+      allowActionExecution: false,
+    })
+
+    expect(rankActionsMock).not.toHaveBeenCalled()
+    expect(createInboundMemoryMock).not.toHaveBeenCalled()
+    expect(generateResponseMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does NOT use custom identity/truth system prompts', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     await generateLlmResponse({

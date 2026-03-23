@@ -14,6 +14,17 @@ describe('createPrivyAppearance', () => {
     })
   })
 
+  it('drops detected wallet enumeration when injected-provider collision is present', () => {
+    expect(createPrivyAppearance({ walletCollisionDetected: true })).toEqual({
+      showWalletLoginFirst: true,
+      walletChainType: 'all',
+      walletList: ['coinbase_wallet'],
+      landingHeader: 'Continue to 4626',
+      loginMessage: 'Use verified email first, or continue with your wallet-native path.',
+      theme: '#0f1117',
+    })
+  })
+
   it('can prefer email first for waitlist auth', () => {
     expect(createPrivyAppearance({ showWalletLoginFirst: false })).toEqual({
       showWalletLoginFirst: false,

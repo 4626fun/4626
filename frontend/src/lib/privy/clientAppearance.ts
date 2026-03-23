@@ -1,8 +1,17 @@
-export function createPrivyAppearance(options?: { showWalletLoginFirst?: boolean }) {
+type PrivyAppearanceOptions = {
+  showWalletLoginFirst?: boolean
+  walletCollisionDetected?: boolean
+}
+
+export function createPrivyAppearance(options?: PrivyAppearanceOptions) {
+  const walletList = options?.walletCollisionDetected
+    ? ['coinbase_wallet']
+    : ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets']
+
   return {
     showWalletLoginFirst: options?.showWalletLoginFirst ?? true,
     walletChainType: 'all',
-    walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets'],
+    walletList,
     landingHeader: 'Continue to 4626',
     loginMessage: 'Use verified email first, or continue with your wallet-native path.',
     theme: '#0f1117',

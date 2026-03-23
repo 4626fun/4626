@@ -1,15 +1,12 @@
 import type { VercelRequest } from '@vercel/node'
 
 import { readSessionFromRequest } from '../auth/_shared.js'
+import { buildAgentSessionContext, type AgentSessionContext } from '../agent/core/resolveIdentityContext.js'
 import { isAddressLike, isServerAdminAddress, normalizeEmail } from './trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-export type RuntimeSessionContext = {
-  address: `0x${string}`
-  isAdmin: boolean
-  source: 'xmtp'
-}
+export type RuntimeSessionContext = AgentSessionContext
 
 export function getSessionAddress(req: VercelRequest): `0x${string}` | null {
   const session = readSessionFromRequest(req)
@@ -23,14 +20,10 @@ export function isAdminAddress(address: string): boolean {
 }
 
 export function buildRuntimeSessionContext(address: string | null | undefined): RuntimeSessionContext | null {
-  if (!address) return null
-  if (!isAddressLike(address)) return null
-  const normalized = address.toLowerCase() as `0x${string}`
-  return {
-    address: normalized,
-    isAdmin: isAdminAddress(normalized),
+  return buildAgentSessionContext({
+    address,
     source: 'xmtp',
-  }
+  })
 }
 
 function isValidEmail(v: string): boolean {

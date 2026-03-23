@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { PRIVY_INTERACTIVE_LOGIN_METHODS, deriveSiweSessionState, shouldResetPrivyBridgeState } from './useSiweAuth'
+import {
+  PRIVY_INTERACTIVE_LOGIN_METHODS,
+  deriveSiweSessionState,
+  shouldAutoBridgeConnectedPrivySession,
+  shouldResetPrivyBridgeState,
+} from './useSiweAuth'
 
 describe('PRIVY_INTERACTIVE_LOGIN_METHODS', () => {
   it('prefers email before wallet for explicit Privy sign-in', () => {
@@ -67,5 +72,55 @@ describe('deriveSiweSessionState', () => {
       hasSession: false,
       walletMatchesSession: false,
     })
+  })
+})
+
+describe('shouldAutoBridgeConnectedPrivySession', () => {
+  it('does not auto-bridge when an app session already exists for a different address', () => {
+    expect(
+      shouldAutoBridgeConnectedPrivySession({
+        isConnected: true,
+        address: '0x1111111111111111111111111111111111111111',
+        authAddress: '0x2222222222222222222222222222222222222222',
+        busy: false,
+        privyReady: true,
+        privyAuthenticated: true,
+        hasPrivyAccessTokenReader: true,
+        skipAutoBridge: false,
+        attemptedForAddress: '',
+      }),
+    ).toBe(false)
+  })
+
+  it('allows a connected-wallet auto-bridge only when no app session exists yet', () => {
+    expect(
+      shouldAutoBridgeConnectedPrivySession({
+        isConnected: true,
+        address: '0x1111111111111111111111111111111111111111',
+        authAddress: null,
+        busy: false,
+        privyReady: true,
+        privyAuthenticated: true,
+        hasPrivyAccessTokenReader: true,
+        skipAutoBridge: false,
+        attemptedForAddress: '',
+      }),
+    ).toBe(true)
+  })
+
+  it('does not auto-bridge again for an address already attempted', () => {
+    expect(
+      shouldAutoBridgeConnectedPrivySession({
+        isConnected: true,
+        address: '0x1111111111111111111111111111111111111111',
+        authAddress: null,
+        busy: false,
+        privyReady: true,
+        privyAuthenticated: true,
+        hasPrivyAccessTokenReader: true,
+        skipAutoBridge: false,
+        attemptedForAddress: '0x1111111111111111111111111111111111111111',
+      }),
+    ).toBe(false)
   })
 })

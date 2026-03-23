@@ -38,6 +38,78 @@ export function shouldAllowExternalWalletButtons(input: ExternalWalletButtonsInp
   return input.filteredConnectorCount > 0
 }
 
+type ResolveIdentityInput = {
+  variant: ConnectButtonVariant
+  identityAddress: string | null
+  showMenu: boolean
+  showOptions: boolean
+}
+
+export function shouldResolveConnectIdentity(input: ResolveIdentityInput): boolean {
+  if (!input.identityAddress) return false
+  if (input.variant !== 'nav') return true
+  return input.showMenu || input.showOptions
+}
+
+function ExternalWalletOptions(props: {
+  authBusy: boolean
+  hasMultipleInjectedProviders: boolean
+  lockedEthereumProviderGlobal: boolean
+  shouldHideInjectedConnector: boolean
+  showPrivyDivider?: boolean
+  onClose: () => void
+}) {
+  const { connect, connectors, isPending } = useConnect()
+
+  const filteredConnectors = useMemo(() => {
+    if (!props.shouldHideInjectedConnector) return connectors
+    return connectors.filter((connector) => {
+      const id = String((connector as any)?.id ?? '').toLowerCase()
+      return !id.includes('injected')
+    })
+  }, [connectors, props.shouldHideInjectedConnector])
+
+  const allowExternalWalletButtons = shouldAllowExternalWalletButtons({
+    filteredConnectorCount: filteredConnectors.length,
+  })
+
+  return (
+    <>
+      {props.showPrivyDivider ? (
+        <>
+          <div className="h-px bg-white/8 my-1" />
+          <div className="px-4 py-1 text-[10px] text-zinc-600 uppercase tracking-wider">External wallets</div>
+        </>
+      ) : null}
+      {props.hasMultipleInjectedProviders ? (
+        <div className="px-4 py-2 app-meta-value text-zinc-500">
+          Multiple wallet extensions detected. Use Coinbase Wallet.
+        </div>
+      ) : props.lockedEthereumProviderGlobal ? (
+        <div className="px-4 py-2 app-meta-value text-zinc-500">
+          Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
+        </div>
+      ) : null}
+      {allowExternalWalletButtons
+        ? filteredConnectors.map((connector) => (
+            <button
+              key={connector.uid}
+              type="button"
+              disabled={isPending || props.authBusy}
+              className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
+              onClick={() => {
+                connect({ connector })
+                props.onClose()
+              }}
+            >
+              <span className="label block">{connector.name}</span>
+            </button>
+          ))
+        : null}
+    </>
+  )
+}
+
 type WalletIdentityPresentationInput = {
   address: string
   basename: string | null
@@ -141,9 +213,12 @@ function IdentityButton({
  * 
  * Shows available connectors and handles connection.
  */
-export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectButtonVariant }) {
+export function ConnectButtonWeb3({
+  variant = 'default',
+}: {
+  variant?: ConnectButtonVariant
+}) {
   const { address, isConnected } = useAccount()
-  const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
   const privyStatus = usePrivyClientStatus()
@@ -154,17 +229,6 @@ export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectBu
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
   const shouldHideInjectedConnector = providerCollision.shouldDisableInjectedConnector
-
-  const filteredConnectors = useMemo(() => {
-    if (!shouldHideInjectedConnector) return connectors
-    return connectors.filter((connector) => {
-      const id = String((connector as any)?.id ?? '').toLowerCase()
-      return !id.includes('injected')
-    })
-  }, [connectors, shouldHideInjectedConnector])
-  const allowExternalWalletButtons = shouldAllowExternalWalletButtons({
-    filteredConnectorCount: filteredConnectors.length,
-  })
   const sessionAddress = auth.authAddress ?? null
   const buttonState = deriveConnectButtonState({
     sessionHydrated: auth.sessionHydrated,
@@ -174,11 +238,16 @@ export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectBu
   })
 
   const identityAddress = buttonState === 'connected-wallet' ? address ?? null : buttonState === 'session-restored' ? sessionAddress : null
-  const shouldResolveIdentity = Boolean(identityAddress)
+  const shouldResolveIdentity = shouldResolveConnectIdentity({
+    variant,
+    identityAddress,
+    showMenu,
+    showOptions,
+  })
   const sharedIdentity = useIdentity(shouldResolveIdentity ? identityAddress : null)
   const basename = shouldResolveIdentity ? sharedIdentity.basename : null
   const basenameAvatar = shouldResolveIdentity ? sharedIdentity.basenameAvatar : null
-  const sharedAgentIdentity = getAgentIdentity(identityAddress)
+  const sharedAgentIdentity = shouldResolveIdentity ? getAgentIdentity(identityAddress) : null
   const unifiedAvatar = sharedAgentIdentity?.avatar ?? sharedIdentity.avatar ?? basenameAvatar
 
   if (buttonState === 'hydrating') {
@@ -360,31 +429,13 @@ export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectBu
               onClick={() => setShowOptions(false)}
             />
             <div className="absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1">
-              {hasMultipleInjectedProviders ? (
-                <div className="px-4 py-2 app-meta-value text-zinc-500">
-                  Multiple wallet extensions detected. Use Coinbase Wallet.
-                </div>
-              ) : lockedEthereumProviderGlobal ? (
-                <div className="px-4 py-2 app-meta-value text-zinc-500">
-                  Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
-                </div>
-              ) : null}
-              {allowExternalWalletButtons
-                ? filteredConnectors.map((connector) => (
-                    <button
-                      key={connector.uid}
-                      type="button"
-                      disabled={isPending || auth.busy}
-                      className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
-                      onClick={() => {
-                        connect({ connector })
-                        setShowOptions(false)
-                      }}
-                    >
-                      <span className="label block">{connector.name}</span>
-                    </button>
-                  ))
-                : null}
+              <ExternalWalletOptions
+                authBusy={auth.busy}
+                hasMultipleInjectedProviders={hasMultipleInjectedProviders}
+                lockedEthereumProviderGlobal={lockedEthereumProviderGlobal}
+                shouldHideInjectedConnector={shouldHideInjectedConnector}
+                onClose={() => setShowOptions(false)}
+              />
             </div>
           </>
         )}
@@ -395,9 +446,9 @@ export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectBu
   // Disconnected - Privy-first sign in
   return (
     <div className="relative">
-      <button
-        type="button"
-        disabled={isPending || auth.busy}
+        <button
+          type="button"
+        disabled={auth.busy}
         onClick={() => {
           if (prefersPrivyWalletLogin) {
             void (async () => {
@@ -413,10 +464,10 @@ export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectBu
             ? 'inline-flex h-9 min-w-[112px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-100 transition-all duration-200 hover:bg-white/12 disabled:opacity-50'
             : 'btn-accent btn-no-icon disabled:opacity-50 flex min-w-[136px] items-center justify-center gap-2'
         }
-      >
+        >
         <Wallet className="w-4 h-4" />
         <span className={variant === 'nav' ? 'tracking-[0.01em]' : 'label'}>
-          {isPending || auth.busy ? 'Signing in…' : 'Sign in'}
+          {auth.busy ? 'Signing in…' : 'Sign in'}
         </span>
       </button>
       {auth.error ? <div className="mt-2 max-w-[280px] text-[11px] text-red-400/90">{auth.error}</div> : null}
@@ -442,35 +493,16 @@ export function ConnectButtonWeb3({ variant = 'default' }: { variant?: ConnectBu
                   <span className="label block">Sign in with email or wallet</span>
                   <span className="app-meta-value text-zinc-500 block mt-1">Verified email first, or continue with wallet</span>
                 </button>
-                <div className="h-px bg-white/8 my-1" />
-                <div className="px-4 py-1 text-[10px] text-zinc-600 uppercase tracking-wider">External wallets</div>
               </>
             ) : null}
-            {hasMultipleInjectedProviders ? (
-              <div className="px-4 py-2 app-meta-value text-zinc-500">
-                Multiple wallet extensions detected. Use Coinbase Wallet.
-              </div>
-            ) : lockedEthereumProviderGlobal ? (
-              <div className="px-4 py-2 app-meta-value text-zinc-500">
-                Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
-              </div>
-            ) : null}
-            {allowExternalWalletButtons
-              ? filteredConnectors.map((connector) => (
-                  <button
-                    key={connector.uid}
-                    type="button"
-                    disabled={isPending || auth.busy}
-                    className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
-                    onClick={() => {
-                      connect({ connector })
-                      setShowOptions(false)
-                    }}
-                  >
-                    <span className="label block">{connector.name}</span>
-                  </button>
-                ))
-              : null}
+            <ExternalWalletOptions
+              authBusy={auth.busy}
+              hasMultipleInjectedProviders={hasMultipleInjectedProviders}
+              lockedEthereumProviderGlobal={lockedEthereumProviderGlobal}
+              shouldHideInjectedConnector={shouldHideInjectedConnector}
+              showPrivyDivider={prefersPrivyWalletLogin}
+              onClose={() => setShowOptions(false)}
+            />
           </div>
         </>
       )}

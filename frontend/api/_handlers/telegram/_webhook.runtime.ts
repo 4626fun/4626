@@ -18,6 +18,11 @@ import {
   sendPrivyCoinbaseSmartWalletUserOperation,
 } from '../../../server/_lib/privyCoinbaseSmartWallet.js'
 import {
+  resolveTelegramIdentityContext,
+  type TelegramSenderWalletSource as SenderWalletSource,
+} from '../../../server/agent/core/resolveIdentityContext.js'
+import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
+import {
   consumeTelegramActionToken,
   createTelegramLinkStartToken,
   createTelegramActionToken,
@@ -53,7 +58,6 @@ import {
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { handleKeeprCommand } from '../../../server/keepr/commands.js'
-import { handleTwitterCommand } from '../../../server/twitter/commands.js'
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import {
   areHolderRoomsEnabled as areHolderRoomsEnabledShared,
@@ -383,8 +387,6 @@ function isPrivateChatId(chatId: string): boolean {
   return isPrivateChatIdShared(chatId)
 }
 
-type SenderWalletSource = 'user_map' | 'default' | 'zero'
-
 function resolveSenderWalletWithSource(userId: string): { senderWallet: `0x${string}`; source: SenderWalletSource } {
   const resolved = resolveSenderWalletWithSourceShared(userId)
   return {
@@ -405,21 +407,23 @@ function resolveCommandExecutionContext(params: {
   groupId: string
   senderWallet: `0x${string}`
   senderWalletSource: SenderWalletSource
+  session: ReturnType<typeof resolveTelegramIdentityContext>['session']
 } {
-  if (isPrivateChatId(params.chatId) && !params.isAdmin) {
-    // Prevent private-DM fallback defaults from inheriting privileged group/sender context.
-    return {
-      groupId: `telegram:${params.chatId}`,
-      senderWallet: ZERO_ADDRESS as `0x${string}`,
-      senderWalletSource: 'zero',
-    }
-  }
-  const resolvedSenderWallet = resolveSenderWalletWithSource(params.userId)
-  return {
-    groupId: resolveGroupId(params.chatId),
-    senderWallet: resolvedSenderWallet.senderWallet,
-    senderWalletSource: resolvedSenderWallet.source,
-  }
+  return resolveTelegramIdentityContext({
+    chatId: params.chatId,
+    userId: params.userId,
+    isAdmin: params.isAdmin,
+    zeroAddress: ZERO_ADDRESS as `0x${string}`,
+    isPrivateChatId,
+    resolveGroupId,
+    resolveSenderWalletWithSource: (userId) => {
+      const resolved = resolveSenderWalletWithSource(userId)
+      return {
+        wallet: resolved.senderWallet,
+        source: resolved.source,
+      }
+    },
+  })
 }
 
 function extractUpdateMessage(update: TelegramUpdate): TelegramMessage | null {
@@ -439,51 +443,6 @@ function splitTelegramMessage(text: string, maxLen = 3500): string[] {
     cursor = end
   }
   return parts
-}
-
-function isTwitterCommand(rawText: string): boolean {
-  const lower = asTrimmed(rawText).toLowerCase()
-  return /^(\/x|x)(\s|$)/.test(lower) || /^(\/tweet|tweet)(\s|$)/.test(lower)
-}
-
-function normalizeWalletAddress(value: unknown): `0x${string}` | null {
-  const normalized = asTrimmed(value)
-  if (!isAddressLike(normalized)) return null
-  return normalized.toLowerCase() as `0x${string}`
-}
-
-async function resolveTwitterCommandRole(params: {
-  isAdmin: boolean
-  groupId: string
-  senderWallet: `0x${string}`
-  senderWalletSource: SenderWalletSource
-}): Promise<'OWNER' | 'ADMIN' | 'MEMBER'> {
-  if (params.isAdmin) return 'ADMIN'
-  if (params.senderWalletSource !== 'user_map') return 'MEMBER'
-
-  const senderWallet = normalizeWalletAddress(params.senderWallet)
-  if (!senderWallet || senderWallet === ZERO_ADDRESS) return 'MEMBER'
-
-  try {
-    const vault = await getKeeprVaultByGroupId(params.groupId)
-    if (!vault) return 'MEMBER'
-
-    const ownerWallet = normalizeWalletAddress(vault.canonicalOwnerAddress ?? vault.config?.roles?.owner)
-    if (ownerWallet && senderWallet === ownerWallet) return 'OWNER'
-
-    const adminWallets = Array.isArray(vault.config?.roles?.admins) ? vault.config.roles.admins : []
-    for (const adminWallet of adminWallets) {
-      const normalizedAdminWallet = normalizeWalletAddress(adminWallet)
-      if (normalizedAdminWallet && senderWallet === normalizedAdminWallet) return 'ADMIN'
-    }
-  } catch (error) {
-    console.warn('[telegram/webhook] failed to resolve vault role for twitter command', {
-      groupId: params.groupId,
-      err: error instanceof Error ? error.message : String(error),
-    })
-  }
-
-  return 'MEMBER'
 }
 
 function isInlineLauncherCommand(rawText: string): boolean {
@@ -5812,49 +5771,21 @@ async function executeTelegramCommand(params: {
   })
   if (nativeResponse) return nativeResponse
 
-  if (isTwitterCommand(params.text)) {
-    const role = await resolveTwitterCommandRole({
-      isAdmin: params.isAdmin,
-      groupId: params.groupId,
-      senderWallet: params.senderWallet,
-      senderWalletSource: params.senderWalletSource,
-    })
-    const twitterResult = await handleTwitterCommand({
-      groupId: params.groupId,
-      senderWallet: params.senderWallet,
-      text: params.text,
-      role,
-    })
-    return { text: asTrimmed(twitterResult.response) }
-  }
-
-  if (isPrivateChatId(params.chatId) && isSensitiveDmCommand(params.text)) {
-    return { text: 'This command is only available in group chats, not private DMs.' }
-  }
-
-  const keeprResult = await handleKeeprCommand({
-    groupId: params.groupId,
-    senderWallet: params.senderWallet,
+  const processed = await processTelegramAgentInput({
     text: params.text,
     chatId: params.chatId,
     userId: params.userId,
+    groupId: params.groupId,
+    senderWallet: params.senderWallet,
+    senderWalletSource: params.senderWalletSource,
+    isAdmin: params.isAdmin,
+    isPrivateChat: isPrivateChatId(params.chatId),
+    emptyResponseFallback: 'Command received.',
   })
-  const rawResponse = asTrimmed(keeprResult?.response ?? '') || 'Command received.'
-  const actionPayload =
-    keeprResult && typeof keeprResult === 'object' && 'action' in keeprResult
-      ? (keeprResult as { action?: unknown }).action
-      : undefined
   return {
-    text: buildPremiumObservedCommandText(params.text, rawResponse) ?? rawResponse,
-    media: resolveTelegramMediaFromAction(actionPayload),
+    text: buildPremiumObservedCommandText(params.text, processed.responseText) ?? processed.responseText,
+    media: resolveTelegramMediaFromAction(processed.action),
   }
-}
-
-const SENSITIVE_DM_COMMAND_PREFIXES = ['/send', 'send ', '/lock', '/unlock', '/coin create', '/coin deploy'] as const
-
-function isSensitiveDmCommand(text: string): boolean {
-  const lower = text.trim().toLowerCase()
-  return SENSITIVE_DM_COMMAND_PREFIXES.some((prefix) => lower.startsWith(prefix))
 }
 
 function formatTradeTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {

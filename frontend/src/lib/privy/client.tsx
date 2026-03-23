@@ -4,6 +4,7 @@ import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { createPrivyAppearance } from './clientAppearance'
+import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -107,7 +108,11 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
     return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>
   }
 
-  const appearance = createPrivyAppearance({ showWalletLoginFirst })
+  const providerCollision = detectEthereumProviderCollision()
+  const appearance = createPrivyAppearance({
+    showWalletLoginFirst,
+    walletCollisionDetected: providerCollision.shouldDisableInjectedConnector,
+  })
   // Keep generic web login methods aligned with the canonical account model:
   // verified email first, wallet-native Base second. Zora uses cross-app auth.
   const loginMethods = ['email', 'wallet'] as const

@@ -87,10 +87,6 @@
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/agent/process",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/telegram/arena/watch-tick",
       "schedule": "* * * * *"
     }
@@ -240,6 +236,16 @@
       "src": "/app.html",
       "headers": { "cache-control": "no-store" },
       "continue": true
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
+      "dest": "/app.html"
     },
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
     { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },

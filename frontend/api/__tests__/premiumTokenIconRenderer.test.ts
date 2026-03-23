@@ -402,6 +402,8 @@ describe('premium token icon renderer', () => {
   it('bounds segmentation breakout coverage to prevent full-width strip artifacts', () => {
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0)).toBe(false)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.02)).toBe(true)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.6)).toBe(false)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.6, 'illustration')).toBe(true)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.99)).toBe(false)
   })
 

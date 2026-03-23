@@ -4,22 +4,12 @@ import type { Address } from 'viem'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 import { handleBankrCommand } from '../../../../bankr/commands.js'
 import { executeBankrSkill, type BankrRole, type BankrSkillName } from '../../../../bankr/agentSkills.js'
+import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
 
 const BANKR_SKILLS = new Set<BankrSkillName>(['bankr_status', 'bankr_me', 'bankr_balances', 'bankr_prompt'])
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
-}
-
-function roleForWallet(params: {
-  wallet: Address
-  owner: Address
-  admins: Address[]
-}): BankrRole {
-  const wallet = params.wallet.toLowerCase()
-  if (wallet === params.owner.toLowerCase()) return 'OWNER'
-  if (params.admins.some((entry) => entry.toLowerCase() === wallet)) return 'ADMIN'
-  return 'MEMBER'
 }
 
 function parseSkillInvocation(text: string): { skill: BankrSkillName; payload: Record<string, unknown> } | null {
@@ -92,15 +82,7 @@ const bankrSkillAction: Action = {
       const vault = await getKeeprVaultByGroupId(metadata.conversationId)
       if (vault) {
         canonicalOwnerAddress = String(vault.canonicalOwnerAddress ?? '').toLowerCase() || null
-        if (metadata.senderAddress && isAddressLike(canonicalOwnerAddress ?? '')) {
-          const admins = Array.isArray(vault.config?.roles?.admins) ? vault.config?.roles?.admins : []
-          const adminAddresses = admins.filter(isAddressLike).map((entry) => entry.toLowerCase() as Address)
-          role = roleForWallet({
-            wallet: metadata.senderAddress,
-            owner: canonicalOwnerAddress as Address,
-            admins: adminAddresses,
-          })
-        }
+        role = resolveVaultAccessRoleFromVault({ wallet: metadata.senderAddress, vault }) as BankrRole
       }
     }
 

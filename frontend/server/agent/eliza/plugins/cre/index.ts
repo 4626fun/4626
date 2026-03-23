@@ -34,6 +34,7 @@ import type {
   State,
 } from '@elizaos/core'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
+import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
 
 // ---------------------------------------------------------------------------
 // CRE action imports (relative path from frontend/server/agent/eliza/plugins/cre/)
@@ -159,17 +160,6 @@ export function isCreWriteCommandText(text: string): boolean {
   const withoutPrefix = normalized.startsWith('/cre ') ? normalized.slice(5).trim() : normalized.slice(4).trim()
   if (!withoutPrefix) return false
   return CRE_WRITE_SUBCOMMAND_PREFIXES.some((cmd) => withoutPrefix.startsWith(cmd))
-}
-
-function roleForWallet(params: {
-  wallet: string
-  owner: string
-  admins: string[]
-}): KeeprRole {
-  const w = params.wallet.toLowerCase()
-  if (w === params.owner.toLowerCase()) return 'OWNER'
-  if (params.admins.some((a) => a.toLowerCase() === w)) return 'ADMIN'
-  return 'MEMBER'
 }
 
 // ---------------------------------------------------------------------------
@@ -533,15 +523,7 @@ const creTriggerAction: Action = {
       } as Content)
       return
     }
-    const owner = String(vault.canonicalOwnerAddress ?? '').toLowerCase()
-    const admins = Array.isArray((vault as any).config?.roles?.admins)
-      ? (vault as any).config.roles.admins.filter((a: string) => /^0x[a-fA-F0-9]{40}$/.test(a))
-      : []
-    const role = roleForWallet({
-      wallet: senderAddress,
-      owner,
-      admins,
-    })
+    const role = resolveVaultAccessRoleFromVault({ wallet: senderAddress, vault })
     if (role === 'MEMBER') {
       await callback?.({ text: 'Denied: ADMIN or OWNER only.' } as Content)
       return

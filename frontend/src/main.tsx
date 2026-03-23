@@ -6,7 +6,6 @@ import { RootRouter } from './RootRouter'
 import { ThemeProvider } from '@/lib/theme'
 import '@4626/brand-kit/styles'
 import './index.css'
-import 'ethereum-identity-kit/css'
 
 const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Cannot redefine property:\s*ethereum/i,
