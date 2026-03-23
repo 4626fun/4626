@@ -182,7 +182,7 @@ console.log(JSON.stringify(tokenListEntry, null, 2));
 console.log();
 console.log('Wallet visibility checklist:');
 console.log('  1. Ensure TOKEN_METADATA_URI (or TOKEN_URI) resolves to valid JSON metadata');
-console.log('  2. Ensure TOKEN_IMAGE/TOKEN_IMAGE_URL is set, or provide CREATOR_TOKEN for proxy fallback');
+console.log('  2. Prefer CREATOR_TOKEN proxy fallback; use TOKEN_IMAGE override only when intentional');
 console.log('  3. Submit token-list entry to target indexers (Jupiter/Meteora/Orca as applicable)');
 console.log('  4. Keep metadata URI + logo URI stable after launch (avoid rotating URLs)');
 console.log();
