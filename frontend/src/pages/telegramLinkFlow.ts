@@ -78,6 +78,15 @@ export type TelegramLinkViewState = {
   canRetryLink: boolean
 }
 
+export type TelegramLinkStepStatus = 'complete' | 'current' | 'required' | 'pending'
+
+export type TelegramLinkStep = {
+  id: 'telegram' | 'email' | 'link'
+  title: string
+  description: string
+  status: TelegramLinkStepStatus
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
@@ -381,6 +390,87 @@ export function getTelegramLinkSuccessMessage(linkStatus: string): string {
     : 'Telegram linked. Finish Coinbase Smart Wallet setup in 4626 before trading from Telegram.'
 }
 
+export function getTelegramLinkPrimaryActionLabel(params: {
+  canSignIn: boolean
+  privyAuthenticated: boolean
+}): string | null {
+  if (!params.canSignIn) return null
+  return params.privyAuthenticated ? 'Verify your 4626 email' : 'Verify email with 4626'
+}
+
+export function getTelegramLinkSteps(params: {
+  sessionState: TelegramLinkSessionState
+  emailState: TelegramLinkEmailState
+  linkState: TelegramLinkFlowState
+  sessionError: string | null
+  emailMessage: string | null
+  linkMessage: string | null
+  privyAuthenticated: boolean
+  hasLinkContext: boolean
+}): TelegramLinkStep[] {
+  const { sessionState, emailState, linkState, sessionError, emailMessage, linkMessage, privyAuthenticated, hasLinkContext } = params
+
+  const telegramStep: TelegramLinkStep = {
+    id: 'telegram',
+    title: 'Verify Telegram session',
+    description:
+      sessionState === 'ready'
+        ? 'Telegram confirmed this Mini App launch and issued a one-time link session.'
+        : sessionError ??
+          (hasLinkContext
+            ? 'Keep this Mini App open while 4626 checks the Telegram launch session.'
+            : 'Start /link in Telegram to open a fresh Mini App link session.'),
+    status: sessionState === 'ready' ? 'complete' : sessionState === 'verifying' ? 'current' : 'required',
+  }
+
+  const emailStep: TelegramLinkStep = {
+    id: 'email',
+    title: 'Verify 4626 email',
+    description:
+      sessionState !== 'ready'
+        ? 'Telegram must verify the Mini App session before 4626 can check your account email.'
+        : emailState === 'verified'
+          ? '4626 confirmed the verified email on the account that will own this Telegram link.'
+          : emailMessage ??
+            (privyAuthenticated
+              ? 'Finish email OTP in 4626. If you signed into the wrong account, switch accounts before continuing.'
+              : 'Sign in with 4626 email OTP. Verified email is the canonical account key for Telegram linking.'),
+    status:
+      sessionState !== 'ready'
+        ? 'pending'
+        : emailState === 'verified'
+          ? 'complete'
+          : emailState === 'checking' || emailState === 'verifying' || emailState === 'pending'
+            ? 'current'
+            : 'required',
+  }
+
+  const linkStep: TelegramLinkStep = {
+    id: 'link',
+    title: 'Bind Telegram to account',
+    description:
+      linkState === 'linked'
+        ? linkMessage ?? 'Telegram is now attached to this 4626 account.'
+        : sessionState !== 'ready'
+          ? '4626 can only bind Telegram after the Mini App session is verified.'
+          : emailState !== 'verified'
+            ? 'After email verification succeeds, 4626 will bind this Telegram identity to the verified account.'
+            : linkMessage ?? '4626 is ready to bind this Telegram identity to the verified account.',
+    status:
+      linkState === 'linked'
+        ? 'complete'
+        : sessionState !== 'ready' || emailState !== 'verified'
+          ? 'pending'
+          : linkState === 'linking'
+            ? 'current'
+            : linkState === 'error'
+              ? 'required'
+              : 'current',
+  }
+
+  return [telegramStep, emailStep, linkStep]
+}
+
 export function shouldShowRetryTelegramSession(params: {
   sessionState: TelegramLinkSessionState
   telegramMiniAppContext: boolean
@@ -421,6 +511,21 @@ export function shouldAutoStartTelegramLink(params: {
   if (params.linkState !== 'idle') return false
   if (params.alreadyAttemptedForToken) return false
   return true
+}
+
+export function canStartTelegramLink(params: {
+  hasLinkContext: boolean
+  sessionState: TelegramLinkSessionState
+  sessionToken: string
+  privyReady: boolean
+  privyAuthenticated: boolean
+  emailState: TelegramLinkEmailState
+  linkState: TelegramLinkFlowState
+}): boolean {
+  return shouldAutoStartTelegramLink({
+    ...params,
+    alreadyAttemptedForToken: false,
+  })
 }
 
 export function shouldAutoRefreshTelegramLinkEmail(params: {
@@ -502,11 +607,11 @@ export function getTelegramLinkViewState(params: {
       : emailState === 'checking'
         ? 'Telegram session is verified. Checking whether your 4626 email is ready for linking.'
         : emailState === 'verifying'
-          ? 'Telegram session is verified. Complete the 4626 email OTP and we will resume the Telegram link automatically.'
+          ? 'Telegram session is verified. Complete the 4626 email OTP, then return here to finish the Telegram link.'
           : emailState === 'pending'
             ? 'Telegram session is verified. Your 4626 email verification is still syncing. Keep this flow inside Telegram, then retry email verification if needed.'
             : emailState === 'verified'
-              ? 'Telegram session is verified and your 4626 email is confirmed. Finishing the Telegram link now.'
+              ? 'Telegram session is verified and your 4626 email is confirmed. Tap Link Telegram to finish the handshake.'
               : privyAuthenticated
                 ? 'Telegram session is verified. Your 4626 email verification is the remaining step before we can link Telegram.'
                 : 'Sign in to 4626 and verify your email to finish linking.')
@@ -548,10 +653,12 @@ type UseTelegramLinkFlowResult = {
   statusView: TelegramLinkViewState
   showRetrySessionButton: boolean
   showResetAccountButton: boolean
+  canStartLink: boolean
   working: boolean
   onRetrySession: () => void
   onRetryLink: () => void
   onResetAccount: () => Promise<void>
+  onStartLink: () => Promise<void>
   onSignIn: () => Promise<void>
 }
 
@@ -594,7 +701,6 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   const [emailState, setEmailState] = useState<TelegramLinkEmailState>('unknown')
   const [emailMessage, setEmailMessage] = useState<string | null>(null)
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
-  const linkAttemptRef = useRef('')
   const emailCheckRunRef = useRef(0)
   const privyStatusRef = useRef({ ready: privyReady, authenticated: privyAuthenticated })
 
@@ -743,21 +849,23 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
     return () => window.clearTimeout(retryId)
   }, [emailState, linkState, privyAuthenticated, privyReady, refreshEmailVerificationState, sessionState, telegramLinkContext])
 
-  useEffect(() => {
-    const shouldAutoStart = shouldAutoStartTelegramLink({
-      hasLinkContext: Boolean(telegramLinkContext),
-      sessionState,
-      sessionToken,
-      privyReady,
-      privyAuthenticated,
-      emailState,
-      linkState,
-      alreadyAttemptedForToken: Boolean(telegramLinkContext && linkAttemptRef.current === telegramLinkContext.linkToken),
-    })
-    if (!telegramLinkContext || !shouldAutoStart) return
+  const onStartLink = useCallback(async () => {
+    if (!telegramLinkContext) return
+    if (
+      !canStartTelegramLink({
+        hasLinkContext: true,
+        sessionState,
+        sessionToken,
+        privyReady,
+        privyAuthenticated,
+        emailState,
+        linkState,
+      })
+    ) {
+      return
+    }
 
-    linkAttemptRef.current = telegramLinkContext.linkToken
-    void (async () => {
+    try {
       setLinkState('linking')
       setLinkMessage('Linking your Telegram identity to your 4626 account...')
 
@@ -822,7 +930,6 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
         }
         if (shouldResetTelegramMiniAppSessionForLinkError(message)) {
           clearTelegramMiniAppSession()
-          linkAttemptRef.current = ''
           setSessionToken('')
           setSessionState('error')
           setSessionError(formatTelegramSessionError(message, res.status || 500))
@@ -845,14 +952,14 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       )
       setLinkState('linked')
       setLinkMessage(getTelegramLinkSuccessMessage(json.data.linkStatus))
-    })().catch((error: unknown) => {
+    } catch (error: unknown) {
       const message =
         error instanceof Error && error.message.trim().length > 0
           ? error.message
           : 'Could not complete Telegram linking. Retry in a moment.'
       setLinkState('error')
       setLinkMessage(message)
-    })
+    }
   }, [
     emailState,
     getAccessToken,
@@ -877,7 +984,6 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   }, [verifySession])
 
   const onRetryLink = useCallback(() => {
-    linkAttemptRef.current = ''
     setLinkState('idle')
     setLinkMessage(null)
     if (privyAuthenticated) {
@@ -886,7 +992,6 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
   }, [privyAuthenticated, refreshEmailVerificationState])
 
   const onResetAccount = useCallback(async () => {
-    linkAttemptRef.current = ''
     setLinkState('idle')
     setLinkMessage(null)
     setEmailState('unknown')
@@ -915,7 +1020,6 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
         if (initialVerification.status === 'verified') {
           setLinkState('idle')
           setLinkMessage(null)
-          linkAttemptRef.current = ''
           return
         }
 
@@ -974,31 +1078,21 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
           },
         })
         if (!authSettled) {
-          linkAttemptRef.current = ''
           setLinkState('idle')
           setLinkMessage(null)
-          const verification = await refreshEmailVerificationState({ poll: true })
-          if (verification.status === 'verified') {
-            linkAttemptRef.current = ''
-          }
+          await refreshEmailVerificationState({ poll: true })
           return
         }
       }
 
-      const verification = await refreshEmailVerificationState({ poll: true })
+      await refreshEmailVerificationState({ poll: true })
       setLinkState('idle')
       setLinkMessage(null)
-      if (verification.status === 'verified') {
-        linkAttemptRef.current = ''
-      }
     } catch (error: unknown) {
       if (isPrivyEmailAlreadyLinkedError(error)) {
         setLinkState('idle')
         setLinkMessage(null)
-        const verification = await refreshEmailVerificationState({ poll: true })
-        if (verification.status === 'verified') {
-          linkAttemptRef.current = ''
-        }
+        await refreshEmailVerificationState({ poll: true })
         return
       }
       const message =
@@ -1041,6 +1135,15 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       privyAuthenticated,
       linkState,
     }),
+    canStartLink: canStartTelegramLink({
+      hasLinkContext: Boolean(telegramLinkContext),
+      sessionState,
+      sessionToken,
+      privyReady,
+      privyAuthenticated,
+      emailState,
+      linkState,
+    }),
     working:
       sessionState === 'verifying' ||
       linkState === 'authenticating' ||
@@ -1050,6 +1153,7 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
     onRetrySession,
     onRetryLink,
     onResetAccount,
+    onStartLink,
     onSignIn,
   }
 }

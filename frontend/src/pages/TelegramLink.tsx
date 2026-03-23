@@ -5,31 +5,16 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { Alert } from '@/components/ui/Alert'
 
 import {
-  fetchTelegramLinkEmailVerificationState,
-  formatTelegramSessionError,
-  getPrivyEmailState,
-  getTelegramLinkSuccessMessage,
-  getTelegramLinkViewState,
-  isPrivyEmailAlreadyLinkedError,
-  isPrivyTelegramAlreadyLinkedError,
-  isTelegramLinkEmailVerificationRequiredError,
-  linkPrivyTelegramInMiniApp,
-  normalizeTelegramLinkUiMessage,
-  pollTelegramLinkEmailVerification,
-  resolveTelegramLinkAuthSettlementPlan,
-  resolveTelegramLinkEmailAuthAction,
-  shouldAutoRefreshTelegramLinkEmail,
-  shouldAutoStartTelegramLink,
-  shouldResetTelegramMiniAppSessionForLinkError,
-  shouldShowResetTelegramLinkAccount,
-  shouldShowRetryTelegramSession,
+  getTelegramLinkPrimaryActionLabel,
+  getTelegramLinkSteps,
   useTelegramLinkFlow,
-  waitForTelegramLinkPrivyAuth,
 } from './telegramLinkFlow'
 
 export {
   fetchTelegramLinkEmailVerificationState,
   formatTelegramSessionError,
+  getTelegramLinkPrimaryActionLabel,
+  getTelegramLinkSteps,
   getPrivyEmailState,
   getTelegramLinkSuccessMessage,
   getTelegramLinkViewState,
@@ -46,6 +31,7 @@ export {
   shouldResetTelegramMiniAppSessionForLinkError,
   shouldShowResetTelegramLinkAccount,
   shouldShowRetryTelegramSession,
+  canStartTelegramLink,
   waitForTelegramLinkPrivyAuth,
 } from './telegramLinkFlow'
 
@@ -54,17 +40,49 @@ export function TelegramLink() {
     linkState,
     emailState,
     sessionState,
+    sessionError,
+    linkMessage,
+    emailMessage,
     privyAuthenticated,
     telegramLinkContext,
     statusView,
     showRetrySessionButton,
     showResetAccountButton,
+    canStartLink,
     working,
     onRetrySession,
     onRetryLink,
     onResetAccount,
+    onStartLink,
     onSignIn,
   } = useTelegramLinkFlow()
+  const primaryActionLabel = getTelegramLinkPrimaryActionLabel({
+    canSignIn: statusView.canSignIn,
+    privyAuthenticated,
+  })
+  const steps = getTelegramLinkSteps({
+    sessionState,
+    emailState,
+    linkState,
+    sessionError,
+    emailMessage,
+    linkMessage,
+    privyAuthenticated,
+    hasLinkContext: Boolean(telegramLinkContext),
+  })
+
+  const stepToneClasses: Record<(typeof steps)[number]['status'], string> = {
+    complete: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
+    current: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100',
+    required: 'border-amber-400/30 bg-amber-400/10 text-amber-100',
+    pending: 'border-white/10 bg-white/[0.03] text-zinc-300',
+  }
+  const stepLabel: Record<(typeof steps)[number]['status'], string> = {
+    complete: 'Done',
+    current: 'In progress',
+    required: 'Action required',
+    pending: 'Pending',
+  }
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-2xl items-center px-4 py-10 sm:px-6">
@@ -90,29 +108,31 @@ export function TelegramLink() {
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Telegram session</div>
-            <div className="mt-2 text-sm font-medium text-zinc-100">
-              {sessionState === 'ready' ? 'Verified' : sessionState === 'error' ? 'Needs retry' : 'Checking'}
+        <div className="mt-6 space-y-3">
+          {steps.map((step, index) => (
+            <div key={step.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step {index + 1}</div>
+                  <div className="text-sm font-medium text-zinc-100">{step.title}</div>
+                </div>
+                <div className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${stepToneClasses[step.status]}`}>
+                  {stepLabel[step.status]}
+                </div>
+              </div>
+              <div className="mt-2 text-sm leading-6 text-zinc-400">{step.description}</div>
             </div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">4626 account</div>
-            <div className="mt-2 text-sm font-medium text-zinc-100">
-              {privyAuthenticated ? 'Signed in' : linkState === 'authenticating' ? 'Waiting for sign-in' : 'Sign-in required'}
-            </div>
-          </div>
+          ))}
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          {statusView.canSignIn ? (
+          {primaryActionLabel ? (
             <button
               type="button"
               onClick={() => void onSignIn()}
               className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300"
             >
-              {privyAuthenticated ? 'Continue' : 'Continue with 4626'}
+              {primaryActionLabel}
             </button>
           ) : null}
 
@@ -132,7 +152,17 @@ export function TelegramLink() {
               onClick={() => void onResetAccount()}
               className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
             >
-              Sign out and retry
+              Use a different 4626 account
+            </button>
+          ) : null}
+
+          {canStartLink ? (
+            <button
+              type="button"
+              onClick={() => void onStartLink()}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-emerald-300"
+            >
+              Link Telegram
             </button>
           ) : null}
 
@@ -152,13 +182,13 @@ export function TelegramLink() {
                 to="/swap"
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-emerald-300"
               >
-                Open 4626
+                Open 4626 app
               </Link>
               <Link
                 to="/accounts"
                 className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
               >
-                Manage accounts
+                Manage linked accounts
               </Link>
             </>
           ) : null}

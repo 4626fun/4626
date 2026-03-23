@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   fetchTelegramLinkEmailVerificationState,
+  canStartTelegramLink,
   formatTelegramSessionError,
+  getTelegramLinkPrimaryActionLabel,
+  getTelegramLinkSteps,
   getPrivyEmailState,
   isPrivyTelegramAlreadyLinkedError,
   isTelegramLinkEmailVerificationRequiredError,
@@ -112,6 +115,87 @@ describe('TelegramLink helpers', () => {
     )
   })
 
+  it('shows explicit finish-link guidance once email verification is complete', () => {
+    expect(
+      getTelegramLinkViewState({
+        sessionState: 'ready',
+        emailState: 'verified',
+        linkState: 'idle',
+        sessionError: null,
+        emailMessage: null,
+        linkMessage: null,
+        privyAuthenticated: true,
+        hasLinkContext: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        statusTitle: 'Ready to link',
+        statusMessage: 'Telegram session is verified and your 4626 email is confirmed. Tap Link Telegram to finish the handshake.',
+      }),
+    )
+  })
+
+  it('builds staged progress for the happy path flow', () => {
+    expect(
+      getTelegramLinkSteps({
+        sessionState: 'ready',
+        emailState: 'verified',
+        linkState: 'linking',
+        sessionError: null,
+        emailMessage: null,
+        linkMessage: null,
+        privyAuthenticated: true,
+        hasLinkContext: true,
+      }),
+    ).toEqual([
+      expect.objectContaining({ id: 'telegram', status: 'complete' }),
+      expect.objectContaining({ id: 'email', status: 'complete' }),
+      expect.objectContaining({ id: 'link', status: 'current' }),
+    ])
+  })
+
+  it('marks email as required when telegram is ready but the 4626 account is not verified', () => {
+    expect(
+      getTelegramLinkSteps({
+        sessionState: 'ready',
+        emailState: 'needs_verification',
+        linkState: 'idle',
+        sessionError: null,
+        emailMessage: null,
+        linkMessage: null,
+        privyAuthenticated: false,
+        hasLinkContext: true,
+      }),
+    ).toEqual([
+      expect.objectContaining({ id: 'telegram', status: 'complete' }),
+      expect.objectContaining({ id: 'email', status: 'required' }),
+      expect.objectContaining({ id: 'link', status: 'pending' }),
+    ])
+  })
+
+  it('uses direct labels for the primary email CTA', () => {
+    expect(
+      getTelegramLinkPrimaryActionLabel({
+        canSignIn: true,
+        privyAuthenticated: false,
+      }),
+    ).toBe('Verify email with 4626')
+
+    expect(
+      getTelegramLinkPrimaryActionLabel({
+        canSignIn: true,
+        privyAuthenticated: true,
+      }),
+    ).toBe('Verify your 4626 email')
+
+    expect(
+      getTelegramLinkPrimaryActionLabel({
+        canSignIn: false,
+        privyAuthenticated: true,
+      }),
+    ).toBeNull()
+  })
+
   it('prefers session errors over generic authenticated copy', () => {
     expect(
       getTelegramLinkViewState({
@@ -219,6 +303,32 @@ describe('TelegramLink helpers', () => {
         emailState: 'verified',
         linkState: 'error',
         alreadyAttemptedForToken: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('enables the explicit Link Telegram action only when the handshake is ready', () => {
+    expect(
+      canStartTelegramLink({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        sessionToken: 'mini-session',
+        privyReady: true,
+        privyAuthenticated: true,
+        emailState: 'verified',
+        linkState: 'idle',
+      }),
+    ).toBe(true)
+
+    expect(
+      canStartTelegramLink({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        sessionToken: 'mini-session',
+        privyReady: true,
+        privyAuthenticated: true,
+        emailState: 'pending',
+        linkState: 'idle',
       }),
     ).toBe(false)
   })

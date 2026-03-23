@@ -2373,12 +2373,19 @@ async function createTopBreakoutMask(params: {
 }): Promise<Buffer> {
   const { size, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
+  const breakoutShiftX = isIllustration ? -Math.round(layout.breakoutWidth * 0.10) : 0
+  const breakoutExpandX = isIllustration ? Math.round(layout.breakoutWidth * 0.14) : 0
+  const breakoutX = Math.max(0, layout.breakoutX + breakoutShiftX - breakoutExpandX)
+  const breakoutRight = Math.min(size, layout.breakoutX + layout.breakoutWidth + breakoutShiftX + breakoutExpandX)
+  const breakoutWidth = Math.max(1, breakoutRight - breakoutX)
   const top = layout.breakoutY
   const bottom = Math.min(size, top + layout.breakoutHeight)
   const height = Math.max(1, bottom - top)
-  const radius = Math.max(1, Math.round(layout.breakoutWidth * 0.30))
+  const radius = Math.max(1, Math.round(breakoutWidth * 0.30))
   const topHoldOffset = isIllustration ? '40%' : '32%'
   const lowerFadeOpacity = isIllustration ? '0.18' : '0.28'
+  const xFadeStart = isIllustration ? '6%' : '18%'
+  const xFadeEnd = isIllustration ? '94%' : '82%'
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="fadeY" x1="0" y1="${top}" x2="0" y2="${bottom}" gradientUnits="userSpaceOnUse">
@@ -2387,25 +2394,25 @@ async function createTopBreakoutMask(params: {
       <stop offset="70%" stop-color="white" stop-opacity="${lowerFadeOpacity}"/>
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="fadeX" x1="${layout.breakoutX}" y1="0" x2="${layout.breakoutX + layout.breakoutWidth}" y2="0" gradientUnits="userSpaceOnUse">
+    <linearGradient id="fadeX" x1="${breakoutX}" y1="0" x2="${breakoutX + breakoutWidth}" y2="0" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="white" stop-opacity="0"/>
-      <stop offset="18%" stop-color="white" stop-opacity="1"/>
-      <stop offset="82%" stop-color="white" stop-opacity="1"/>
+      <stop offset="${xFadeStart}" stop-color="white" stop-opacity="1"/>
+      <stop offset="${xFadeEnd}" stop-color="white" stop-opacity="1"/>
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
   </defs>
   <rect
-    x="${layout.breakoutX}"
+    x="${breakoutX}"
     y="${top}"
-    width="${layout.breakoutWidth}"
+    width="${breakoutWidth}"
     height="${height}"
     rx="${radius}"
     fill="url(#fadeY)"
   />
   <rect
-    x="${layout.breakoutX}"
+    x="${breakoutX}"
     y="${top}"
-    width="${layout.breakoutWidth}"
+    width="${breakoutWidth}"
     height="${height}"
     rx="${radius}"
     fill="url(#fadeX)"
@@ -2424,8 +2431,8 @@ async function createBreakoutAboveFrameMask(params: {
 }): Promise<Buffer> {
   const { size, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
-  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.08 : 0.05)))
-  const edgeFeatherPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.16 : 0.12)))
+  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.2 : 0.05)))
+  const edgeFeatherPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.38 : 0.12)))
   const keepToY = Math.min(size, Math.max(0, layout.chamberY + overlapIntoChamberPx))
   const fadeEndY = Math.min(size, keepToY + edgeFeatherPx)
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
@@ -2448,6 +2455,7 @@ async function createTopBreakoutSubjectMask(params: {
   sourceClass?: SourceClass
   forceAlphaMask?: boolean
   strictContourGates?: boolean
+  forceAlphaThreshold?: number
 }): Promise<Buffer | null> {
   const { sourceCanvas, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
@@ -2460,13 +2468,14 @@ async function createTopBreakoutSubjectMask(params: {
 
   const width = info.width
   const height = info.height
-  const padXMul = isIllustration ? 0.20 : 0.14
+  const regionShiftX = isIllustration ? -Math.round(layout.breakoutWidth * 0.04) : 0
+  const padXMul = isIllustration ? 0.24 : 0.14
   const padYMul = isIllustration ? 0.32 : 0.26
   const yExtendMul = isIllustration ? 1.58 : 1.45
   const regionPadX = Math.max(1, Math.round(layout.breakoutWidth * padXMul))
   const regionPadY = Math.max(1, Math.round(layout.breakoutHeight * padYMul))
-  const x0 = Math.max(0, layout.breakoutX - regionPadX)
-  const x1 = Math.min(width, layout.breakoutX + layout.breakoutWidth + regionPadX)
+  const x0 = Math.max(0, layout.breakoutX + regionShiftX - regionPadX)
+  const x1 = Math.min(width, layout.breakoutX + regionShiftX + layout.breakoutWidth + regionPadX)
   const y0 = Math.max(0, layout.breakoutY - regionPadY)
   const y1 = Math.min(height, layout.breakoutY + Math.round(layout.breakoutHeight * yExtendMul))
 
@@ -2494,7 +2503,7 @@ async function createTopBreakoutSubjectMask(params: {
     return null
   }
 
-  const mask = Buffer.alloc(width * height, 0)
+  let mask = Buffer.alloc(width * height, 0)
   let presentCount = 0
   let presentTopCount = 0
   let presentMinX = width
@@ -2505,7 +2514,7 @@ async function createTopBreakoutSubjectMask(params: {
   let sumPresentY = 0
   const regionArea = Math.max(1, (x1 - x0) * (y1 - y0))
   const subjectTopBandY = y0 + Math.floor((y1 - y0) * 0.58)
-  const alphaThreshold = forceAlphaMask ? 20 : 28
+  const alphaThreshold = forceAlphaMask ? (params.forceAlphaThreshold ?? 20) : 28
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
       const idx = (y * width + x) * info.channels
@@ -2520,6 +2529,57 @@ async function createTopBreakoutSubjectMask(params: {
         if (x > presentMaxX) presentMaxX = x
         if (y < presentMinY) presentMinY = y
         if (y > presentMaxY) presentMaxY = y
+      }
+    }
+  }
+
+  let contourConstrained = false
+  if (forceAlphaMask && !strictContourGates && presentCount > 0) {
+    const contourMask = Buffer.alloc(width * height, 0)
+    for (let x = x0; x < x1; x += 1) {
+      let topY = -1
+      for (let y = y0; y < y1; y += 1) {
+        if (mask[y * width + x] !== 0) {
+          topY = y
+          break
+        }
+      }
+      if (topY < 0) continue
+      for (let y = topY; y < y1; y += 1) {
+        const idx = y * width + x
+        if (mask[idx] !== 0) contourMask[idx] = 255
+      }
+    }
+
+    let contourPresentCount = 0
+    for (let y = y0; y < y1; y += 1) {
+      for (let x = x0; x < x1; x += 1) {
+        if (contourMask[y * width + x] !== 0) contourPresentCount += 1
+      }
+    }
+    if (contourPresentCount > 0) {
+      contourConstrained = true
+      mask = contourMask
+      presentCount = 0
+      presentTopCount = 0
+      presentMinX = width
+      presentMaxX = -1
+      presentMinY = height
+      presentMaxY = -1
+      sumPresentX = 0
+      sumPresentY = 0
+      for (let y = y0; y < y1; y += 1) {
+        for (let x = x0; x < x1; x += 1) {
+          if (mask[y * width + x] === 0) continue
+          presentCount += 1
+          sumPresentX += x
+          sumPresentY += y
+          if (y <= subjectTopBandY) presentTopCount += 1
+          if (x < presentMinX) presentMinX = x
+          if (x > presentMaxX) presentMaxX = x
+          if (y < presentMinY) presentMinY = y
+          if (y > presentMaxY) presentMaxY = y
+        }
       }
     }
   }
@@ -2539,6 +2599,29 @@ async function createTopBreakoutSubjectMask(params: {
   const centroidNorm = (centroidX - x0) / Math.max(1, x1 - x0)
   const centroidYNorm = (centroidY - y0) / Math.max(1, y1 - y0)
   const flatnessRatio = widthRatio / Math.max(0.001, heightRatio)
+  const logMaskDecision = (accepted: boolean, reason: string): void => {
+    if (!BREAKOUT_DEBUG_LOG_ENABLED) return
+    console.info('[breakout-debug]', JSON.stringify({
+      step: 'createTopBreakoutSubjectMask:decision',
+      accepted,
+      reason,
+      forceAlphaMask,
+      strictContourGates,
+      sourceClass: params.sourceClass ?? 'unknown',
+      presentRatio,
+      widthRatio,
+      heightRatio,
+      topWeightedRatio,
+      centroidNorm,
+      centroidYNorm,
+      flatnessRatio,
+      alphaPartialRatio,
+      alphaMostlyTransparentRatio,
+      contourConstrained,
+      region: { x0, y0, x1, y1 },
+      presentCount,
+    }))
+  }
 
   if (!forceAlphaMask) {
     const maxPresentRatio = isIllustration ? 0.86 : 0.38
@@ -2560,6 +2643,7 @@ async function createTopBreakoutSubjectMask(params: {
       centroidYNorm > maxCentroidYNorm ||
       flatnessRatio > maxFlatnessRatio
     ) {
+      logMaskDecision(false, 'shape-gate-reject')
       return null
     }
   } else {
@@ -2577,6 +2661,7 @@ async function createTopBreakoutSubjectMask(params: {
         centroidYNorm > 0.74
       ))
     ) {
+      logMaskDecision(false, 'force-alpha-shape-gate-reject')
       return null
     }
   }
@@ -2597,6 +2682,7 @@ async function createTopBreakoutSubjectMask(params: {
     const edgeRatio = presentCount > 0 ? edgePixelCount / presentCount : 0
     const minEdgeRatio = isIllustration ? 0.04 : 0.07
     if (edgeRatio < minEdgeRatio) {
+      logMaskDecision(false, 'edge-ratio-reject')
       return null
     }
   }
@@ -2618,6 +2704,7 @@ async function createTopBreakoutSubjectMask(params: {
   for (let i = 0; i < pxCount; i++) {
     rgba[i * 4 + 3] = processed[i] ?? 0
   }
+  logMaskDecision(true, 'accepted')
   return sharp(rgba, { raw: { width: maskInfo.width, height: maskInfo.height, channels: 4 } })
     .png()
     .toBuffer()
@@ -2789,12 +2876,21 @@ export async function renderBreakoutLayer(params: {
   }
   await writeBreakoutDebugAsset('1-breakout-source-canvas.png', sourceCanvas)
   const breakoutMask = await createTopBreakoutMask({ size, layout, sourceClass: params.sourceClass })
+  const requiresPreparedMaskSource =
+    params.subjectMaskKind === 'heroCutout' || params.subjectMaskKind === 'rembgCutout'
+  const hasPreparedMaskSource = requiresPreparedMaskSource && subjectRefCanvas !== null
   const subjectMask = await createTopBreakoutSubjectMask({
     sourceCanvas: subjectRefCanvas ?? sourceCanvas,
     layout,
     sourceClass: params.sourceClass,
-    forceAlphaMask: !!subjectRefCanvas,
-    strictContourGates: params.subjectMaskKind === 'rembgCutout',
+    forceAlphaMask: hasPreparedMaskSource,
+    forceAlphaThreshold:
+      hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
+        ? 88
+        : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
+          ? 120
+          : undefined,
+    strictContourGates: hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout',
   })
   const aboveFrameMask = await createBreakoutAboveFrameMask({
     size,
@@ -2809,11 +2905,20 @@ export async function renderBreakoutLayer(params: {
   await debugLogLayerBounds('subjectMask', subjectMaskDebug)
   await debugLogLayerBounds('aboveFrameMask', aboveFrameMask)
 
-  let maskedSharp = sharp(sourceCanvas)
+  const breakoutSeedCanvas = subjectRefCanvas ?? sourceCanvas
+  let maskedSharp = sharp(breakoutSeedCanvas)
     .ensureAlpha()
     .composite([{ input: breakoutMask, blend: 'dest-in' }])
+  const maskedAfterBreakoutMask = await maskedSharp.png().toBuffer()
+  await writeBreakoutDebugAsset('4a-breakout-after-window-mask.png', maskedAfterBreakoutMask)
+  await debugLogLayerBounds('breakoutAfterWindowMask', maskedAfterBreakoutMask)
+  maskedSharp = sharp(maskedAfterBreakoutMask).ensureAlpha()
   if (subjectMask) {
     maskedSharp = maskedSharp.composite([{ input: subjectMask, blend: 'dest-in' }])
+    const maskedAfterSubjectMask = await maskedSharp.png().toBuffer()
+    await writeBreakoutDebugAsset('4ab-breakout-after-subject-mask.png', maskedAfterSubjectMask)
+    await debugLogLayerBounds('breakoutAfterSubjectMask', maskedAfterSubjectMask)
+    maskedSharp = sharp(maskedAfterSubjectMask).ensureAlpha()
   }
   maskedSharp = maskedSharp.composite([{ input: aboveFrameMask, blend: 'dest-in' }])
   if (!isIllustrationBreakout) {
@@ -2822,6 +2927,8 @@ export async function renderBreakoutLayer(params: {
   let masked = await maskedSharp
     .png()
     .toBuffer()
+  await writeBreakoutDebugAsset('4b-breakout-masked-pre-shadow.png', masked)
+  await debugLogLayerBounds('breakoutSpritePreShadow', masked)
   let breakoutOpacity = params.opacity ?? 0.26
   let fallbackBandUsed = false
   let fallbackDetailMaskUsed = false
@@ -3170,7 +3277,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
             ? 0.34
             : 0.22
       const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
-        ? Math.max(1, Math.round(layout.chamberSize * (resolvedPreset === 'hero' ? 0.052 : 0.042)))
+        ? Math.max(1, Math.round(layout.chamberSize * (resolvedPreset === 'hero' ? 0.016 : 0.033)))
         : topBiasPx
       const breakoutScale = clamp(
         renderScale * (analysis.sourceClass === 'illustration' && resolvedPreset === 'hero' ? 1.03 : 1),
