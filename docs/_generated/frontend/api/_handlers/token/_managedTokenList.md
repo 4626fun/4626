@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/token/\_managedTokenList.ts:123](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_managedTokenList.ts#L123)
+Defined in: [api/\_handlers/token/\_managedTokenList.ts:125](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_managedTokenList.ts#L125)
 
 #### Parameters
 

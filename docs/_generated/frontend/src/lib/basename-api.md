@@ -74,7 +74,7 @@ Defined in: [src/lib/basename-api.ts:20](https://github.com/wenakita/4626/blob/m
 
 > **formatBasename**(`name`): `string`
 
-Defined in: [src/lib/basename-api.ts:567](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L567)
+Defined in: [src/lib/basename-api.ts:577](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L577)
 
 Format Basename for display (remove .base.eth suffix for cleaner look)
 
@@ -94,7 +94,7 @@ Format Basename for display (remove .base.eth suffix for cleaner look)
 
 > **getBasename**(`address`, `chainId`): `Promise`\<`string` \| `null`\>
 
-Defined in: [src/lib/basename-api.ts:296](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L296)
+Defined in: [src/lib/basename-api.ts:306](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L306)
 
 Get Basename for an address
 
@@ -118,7 +118,7 @@ Get Basename for an address
 
 > **getBasenameProfile**(`address`, `chainId`): `Promise`\<[`BasenameInfo`](#basenameinfo)\>
 
-Defined in: [src/lib/basename-api.ts:426](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L426)
+Defined in: [src/lib/basename-api.ts:436](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L436)
 
 Get Basename with full profile info
 
@@ -142,7 +142,7 @@ Get Basename with full profile info
 
 > **getBasenameProfileByName**(`input`): `Promise`\<[`BasenameInfo`](#basenameinfo)\>
 
-Defined in: [src/lib/basename-api.ts:502](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L502)
+Defined in: [src/lib/basename-api.ts:512](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L512)
 
 Get Basename profile info directly from a basename handle.
 Accepts "akita", "@akita", or "akita.base.eth".
@@ -163,7 +163,7 @@ Accepts "akita", "@akita", or "akita.base.eth".
 
 > **hasBasename**(`address`): `Promise`\<`boolean`\>
 
-Defined in: [src/lib/basename-api.ts:575](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L575)
+Defined in: [src/lib/basename-api.ts:585](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L585)
 
 Check if address has a Basename
 
@@ -201,7 +201,7 @@ Defined in: [src/lib/basename-api.ts:246](https://github.com/wenakita/4626/blob/
 
 > **resolveBasenameAddress**(`input`, `chainId`): `Promise`\<`string` \| `null`\>
 
-Defined in: [src/lib/basename-api.ts:372](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L372)
+Defined in: [src/lib/basename-api.ts:382](https://github.com/wenakita/4626/blob/main/frontend/src/lib/basename-api.ts#L382)
 
 Resolve a Basename handle (or full basename) to an EVM address.
 Accepts:

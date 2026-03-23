@@ -80,7 +80,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:38](https://github.c
 
 > **readTelegramMiniAppSessionToken**(`params`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:207](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniAppAuth.ts#L207)
+Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:223](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniAppAuth.ts#L223)
 
 #### Parameters
 
@@ -104,7 +104,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:207](https://github.
 
 > **resolveTelegramMiniAppVerificationStatusCode**(`reason`): `number`
 
-Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:125](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniAppAuth.ts#L125)
+Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:141](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniAppAuth.ts#L141)
 
 #### Parameters
 
@@ -122,7 +122,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:125](https://github.
 
 > **verifyTelegramMiniAppInitData**(`params`): [`TelegramMiniAppInitDataVerificationResult`](#telegramminiappinitdataverificationresult)
 
-Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:145](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniAppAuth.ts#L145)
+Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:161](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniAppAuth.ts#L161)
 
 #### Parameters
 

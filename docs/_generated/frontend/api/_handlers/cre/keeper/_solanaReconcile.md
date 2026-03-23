@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/cre/keeper/\_solanaReconcile.ts:96](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_solanaReconcile.ts#L96)
+Defined in: [api/\_handlers/cre/keeper/\_solanaReconcile.ts:100](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_solanaReconcile.ts#L100)
 
 #### Parameters
 

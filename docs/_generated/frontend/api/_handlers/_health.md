@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/\_health.ts:171](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_health.ts#L171)
+Defined in: [api/\_handlers/\_health.ts:170](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_health.ts#L170)
 
 #### Parameters
 

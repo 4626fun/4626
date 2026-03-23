@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/telegram/\_bot-config.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_bot-config.ts#L40)
+Defined in: [api/\_handlers/telegram/\_bot-config.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_bot-config.ts#L47)
 
 #### Parameters
 

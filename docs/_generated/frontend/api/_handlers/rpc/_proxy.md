@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/rpc/\_proxy.ts:276](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/rpc/_proxy.ts#L276)
+Defined in: [api/\_handlers/rpc/\_proxy.ts:464](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/rpc/_proxy.ts#L464)
 
 #### Parameters
 
