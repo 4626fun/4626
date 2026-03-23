@@ -506,6 +506,23 @@ describe('TelegramLink helpers', () => {
     })
   })
 
+  it('detects verified email accounts from server-style snake_case numeric timestamps', () => {
+    expect(
+      getPrivyEmailState({
+        linked_accounts: [
+          {
+            type: 'email',
+            address: 'akira@example.com',
+            verified_at: 1674788927,
+          },
+        ],
+      }),
+    ).toEqual({
+      hasAnyEmailAccount: true,
+      hasVerifiedEmail: true,
+    })
+  })
+
   it('treats Privy email-already-linked errors as recoverable', () => {
     expect(isPrivyEmailAlreadyLinkedError(new Error('User already has an account of type email linked.'))).toBe(true)
     expect(isPrivyEmailAlreadyLinkedError(new Error('Completely different error'))).toBe(false)

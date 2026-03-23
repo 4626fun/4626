@@ -50,9 +50,19 @@ function accountHasVerifiedFlag(value: unknown): boolean {
   if (isTruthy(account.verified)) return true
   if (isTruthy(account.isVerified)) return true
   if (isTruthy(account.is_verified)) return true
-  const verifiedAt = typeof account.verifiedAt === 'string' ? account.verifiedAt.trim() : ''
-  const verifiedAtSnake = typeof account.verified_at === 'string' ? account.verified_at.trim() : ''
-  return verifiedAt.length > 0 || verifiedAtSnake.length > 0
+  const hasTimestamp = (candidate: unknown): boolean => {
+    if (typeof candidate === 'number') return Number.isFinite(candidate) && candidate > 0
+    if (typeof candidate === 'string') return candidate.trim().length > 0
+    return false
+  }
+  return (
+    hasTimestamp(account.verifiedAt) ||
+    hasTimestamp(account.verified_at) ||
+    hasTimestamp(account.firstVerifiedAt) ||
+    hasTimestamp(account.first_verified_at) ||
+    hasTimestamp(account.latestVerifiedAt) ||
+    hasTimestamp(account.latest_verified_at)
+  )
 }
 
 function candidateEmailFromAccount(value: unknown): string | null {
@@ -160,4 +170,3 @@ export function isServerAdminAddress(address: string): boolean {
   if (!normalized) return false
   return readServerAdminAddressSet().has(normalized)
 }
-

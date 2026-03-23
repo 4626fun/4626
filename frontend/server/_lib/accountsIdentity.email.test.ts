@@ -70,6 +70,24 @@ describe('accountsIdentity verified email handling', () => {
     expect(db.calls.some((call) => call.text.includes('insert into account_linked_methods'))).toBe(false)
   })
 
+  it('promotes server-auth email accounts that use snake_case numeric verification timestamps', async () => {
+    const db = createRecordingDb()
+
+    await syncEmailIdentity({
+      db: db as any,
+      privyUserId: 'did:privy:test-user',
+      privyUser: {
+        id: 'did:privy:test-user',
+        linked_accounts: [{ type: 'email', address: 'verified@example.com', verified_at: 1674788927 }],
+      } as any,
+    })
+
+    const accountUpsert = db.calls.find((call) => call.text.includes('insert into accounts'))
+    expect(accountUpsert?.values[1]).toBe('verified@example.com')
+    expect(accountUpsert?.values[2]).toBe(true)
+    expect(db.calls.some((call) => call.text.includes('insert into account_linked_methods'))).toBe(true)
+  })
+
   it('rejects explicit email linking until Privy marks the email verified', async () => {
     const db = createRecordingDb()
 

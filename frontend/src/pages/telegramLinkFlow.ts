@@ -106,9 +106,18 @@ function accountHasVerifiedFlag(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false
   const account = value as Record<string, unknown>
   if (account.verified === true || account.isVerified === true || account.is_verified === true) return true
-  const verifiedAt = normalizeLowerString(account.verifiedAt)
-  const verifiedAtSnake = normalizeLowerString(account.verified_at)
-  return verifiedAt.length > 0 || verifiedAtSnake.length > 0
+  const hasTimestamp = (candidate: unknown): boolean => {
+    if (typeof candidate === 'number') return Number.isFinite(candidate) && candidate > 0
+    return normalizeLowerString(candidate).length > 0
+  }
+  return (
+    hasTimestamp(account.verifiedAt) ||
+    hasTimestamp(account.verified_at) ||
+    hasTimestamp(account.firstVerifiedAt) ||
+    hasTimestamp(account.first_verified_at) ||
+    hasTimestamp(account.latestVerifiedAt) ||
+    hasTimestamp(account.latest_verified_at)
+  )
 }
 
 export function getPrivyEmailState(user: unknown): PrivyEmailState {
