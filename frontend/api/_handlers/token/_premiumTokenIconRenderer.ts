@@ -2370,21 +2370,20 @@ async function createTopBreakoutMask(params: {
   size: number
   layout: PremiumLayout
   sourceClass?: SourceClass
+  breakoutWindow?: { x: number; width: number }
 }): Promise<Buffer> {
   const { size, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
-  const breakoutShiftX = isIllustration ? -Math.round(layout.breakoutWidth * 0.10) : 0
-  const breakoutExpandX = isIllustration ? Math.round(layout.breakoutWidth * 0.14) : 0
-  const breakoutX = Math.max(0, layout.breakoutX + breakoutShiftX - breakoutExpandX)
-  const breakoutRight = Math.min(size, layout.breakoutX + layout.breakoutWidth + breakoutShiftX + breakoutExpandX)
-  const breakoutWidth = Math.max(1, breakoutRight - breakoutX)
+  const breakoutX = Math.max(0, Math.round(params.breakoutWindow?.x ?? layout.breakoutX))
+  const breakoutWidth = Math.max(1, Math.round(params.breakoutWindow?.width ?? layout.breakoutWidth))
+  const breakoutRight = Math.min(size, breakoutX + breakoutWidth)
   const top = layout.breakoutY
   const bottom = Math.min(size, top + layout.breakoutHeight)
   const height = Math.max(1, bottom - top)
-  const radius = Math.max(1, Math.round(breakoutWidth * 0.30))
+  const radius = Math.max(1, Math.round((breakoutRight - breakoutX) * 0.30))
   const topHoldOffset = isIllustration ? '40%' : '32%'
   const lowerFadeOpacity = isIllustration ? '0.18' : '0.28'
-  const xFadeStart = isIllustration ? '6%' : '18%'
+  const xFadeStart = isIllustration ? '4%' : '18%'
   const xFadeEnd = isIllustration ? '94%' : '82%'
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -2394,7 +2393,7 @@ async function createTopBreakoutMask(params: {
       <stop offset="70%" stop-color="white" stop-opacity="${lowerFadeOpacity}"/>
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="fadeX" x1="${breakoutX}" y1="0" x2="${breakoutX + breakoutWidth}" y2="0" gradientUnits="userSpaceOnUse">
+    <linearGradient id="fadeX" x1="${breakoutX}" y1="0" x2="${breakoutRight}" y2="0" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="white" stop-opacity="0"/>
       <stop offset="${xFadeStart}" stop-color="white" stop-opacity="1"/>
       <stop offset="${xFadeEnd}" stop-color="white" stop-opacity="1"/>
@@ -2404,7 +2403,7 @@ async function createTopBreakoutMask(params: {
   <rect
     x="${breakoutX}"
     y="${top}"
-    width="${breakoutWidth}"
+    width="${Math.max(1, breakoutRight - breakoutX)}"
     height="${height}"
     rx="${radius}"
     fill="url(#fadeY)"
@@ -2412,7 +2411,7 @@ async function createTopBreakoutMask(params: {
   <rect
     x="${breakoutX}"
     y="${top}"
-    width="${breakoutWidth}"
+    width="${Math.max(1, breakoutRight - breakoutX)}"
     height="${height}"
     rx="${radius}"
     fill="url(#fadeX)"
@@ -2431,8 +2430,8 @@ async function createBreakoutAboveFrameMask(params: {
 }): Promise<Buffer> {
   const { size, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
-  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.2 : 0.05)))
-  const edgeFeatherPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.38 : 0.12)))
+  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.34 : 0.05)))
+  const edgeFeatherPx = Math.max(1, Math.round(layout.frameStroke * (isIllustration ? 0.46 : 0.12)))
   const keepToY = Math.min(size, Math.max(0, layout.chamberY + overlapIntoChamberPx))
   const fadeEndY = Math.min(size, keepToY + edgeFeatherPx)
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
@@ -2449,6 +2448,72 @@ async function createBreakoutAboveFrameMask(params: {
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
+async function computeDynamicBreakoutWindow(params: {
+  sourceCanvas: Buffer
+  layout: PremiumLayout
+  sourceClass?: SourceClass
+}): Promise<{ x: number; width: number } | null> {
+  if (params.sourceClass !== 'illustration') return null
+  const { data, info } = await sharp(params.sourceCanvas)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const width = info.width
+  const channels = info.channels
+  const searchPadX = Math.max(2, Math.round(params.layout.breakoutWidth * 0.34))
+  const searchX0 = Math.max(0, params.layout.breakoutX - searchPadX)
+  const searchX1 = Math.min(width, params.layout.breakoutX + params.layout.breakoutWidth + searchPadX)
+  const searchY0 = Math.max(0, params.layout.breakoutY - Math.round(params.layout.breakoutHeight * 0.08))
+  const searchY1 = Math.min(info.height, params.layout.breakoutY + Math.round(params.layout.breakoutHeight * 1.02))
+  if (searchX1 <= searchX0 || searchY1 <= searchY0) return null
+
+  const minHitsPerColumn = Math.max(2, Math.round((searchY1 - searchY0) * 0.04))
+  let minActiveX = width
+  let maxActiveX = -1
+  for (let x = searchX0; x < searchX1; x += 1) {
+    let hits = 0
+    for (let y = searchY0; y < searchY1; y += 1) {
+      const idx = (y * width + x) * channels
+      const alpha = data[idx + 3] ?? 0
+      if (alpha > 74) hits += 1
+    }
+    if (hits >= minHitsPerColumn) {
+      if (x < minActiveX) minActiveX = x
+      if (x > maxActiveX) maxActiveX = x
+    }
+  }
+  if (maxActiveX < minActiveX) return null
+
+  const leftMargin = Math.max(2, Math.round(params.layout.breakoutWidth * 0.16))
+  const rightMargin = Math.max(2, Math.round(params.layout.breakoutWidth * 0.06))
+  const minXAllowed = Math.max(0, params.layout.chamberX - Math.round(params.layout.breakoutWidth * 0.30))
+  const maxRightAllowed = Math.min(
+    width,
+    params.layout.chamberX + params.layout.chamberSize + Math.round(params.layout.breakoutWidth * 0.20),
+  )
+
+  let targetX = minActiveX - leftMargin
+  let targetRight = maxActiveX + rightMargin + 1
+  targetX = Math.round(clamp(targetX, minXAllowed, maxRightAllowed - 1))
+  targetRight = Math.round(clamp(targetRight, targetX + 1, maxRightAllowed))
+
+  let targetWidth = targetRight - targetX
+  const minWidth = Math.max(1, Math.round(params.layout.breakoutWidth * 0.96))
+  const maxWidth = Math.max(minWidth, Math.round(params.layout.breakoutWidth * 2.05))
+  targetWidth = Math.round(clamp(targetWidth, minWidth, maxWidth))
+
+  const activeCenterX = (minActiveX + maxActiveX) / 2
+  targetX = Math.round(activeCenterX - targetWidth / 2)
+  targetX = Math.round(clamp(targetX, minXAllowed, maxRightAllowed - targetWidth))
+
+  const blendedX = Math.round(params.layout.breakoutX * 0.20 + targetX * 0.80)
+  const blendedWidth = Math.round(params.layout.breakoutWidth * 0.30 + targetWidth * 0.70)
+  const finalWidth = Math.round(clamp(blendedWidth, minWidth, maxWidth))
+  const leftBiasPx = Math.max(1, Math.round(params.layout.breakoutWidth * 0.06))
+  const finalX = Math.round(clamp(blendedX - leftBiasPx, minXAllowed, maxRightAllowed - finalWidth))
+  return { x: finalX, width: finalWidth }
+}
+
 async function createTopBreakoutSubjectMask(params: {
   sourceCanvas: Buffer
   layout: PremiumLayout
@@ -2456,6 +2521,7 @@ async function createTopBreakoutSubjectMask(params: {
   forceAlphaMask?: boolean
   strictContourGates?: boolean
   forceAlphaThreshold?: number
+  breakoutWindow?: { x: number; width: number }
 }): Promise<Buffer | null> {
   const { sourceCanvas, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
@@ -2468,14 +2534,16 @@ async function createTopBreakoutSubjectMask(params: {
 
   const width = info.width
   const height = info.height
-  const regionShiftX = isIllustration ? -Math.round(layout.breakoutWidth * 0.04) : 0
-  const padXMul = isIllustration ? 0.24 : 0.14
+  const breakoutWindowX = Math.round(params.breakoutWindow?.x ?? layout.breakoutX)
+  const breakoutWindowWidth = Math.round(params.breakoutWindow?.width ?? layout.breakoutWidth)
+  const regionShiftX = params.breakoutWindow ? 0 : isIllustration ? -Math.round(layout.breakoutWidth * 0.10) : 0
+  const padXMul = isIllustration ? 0.26 : 0.14
   const padYMul = isIllustration ? 0.32 : 0.26
   const yExtendMul = isIllustration ? 1.58 : 1.45
-  const regionPadX = Math.max(1, Math.round(layout.breakoutWidth * padXMul))
+  const regionPadX = Math.max(1, Math.round(breakoutWindowWidth * padXMul))
   const regionPadY = Math.max(1, Math.round(layout.breakoutHeight * padYMul))
-  const x0 = Math.max(0, layout.breakoutX + regionShiftX - regionPadX)
-  const x1 = Math.min(width, layout.breakoutX + regionShiftX + layout.breakoutWidth + regionPadX)
+  const x0 = Math.max(0, breakoutWindowX + regionShiftX - regionPadX)
+  const x1 = Math.min(width, breakoutWindowX + regionShiftX + breakoutWindowWidth + regionPadX)
   const y0 = Math.max(0, layout.breakoutY - regionPadY)
   const y1 = Math.min(height, layout.breakoutY + Math.round(layout.breakoutHeight * yExtendMul))
 
@@ -2875,7 +2943,25 @@ export async function renderBreakoutLayer(params: {
     }
   }
   await writeBreakoutDebugAsset('1-breakout-source-canvas.png', sourceCanvas)
-  const breakoutMask = await createTopBreakoutMask({ size, layout, sourceClass: params.sourceClass })
+  const breakoutWindowSeedCanvas = subjectRefCanvas ?? sourceCanvas
+  const breakoutWindow = await computeDynamicBreakoutWindow({
+    sourceCanvas: breakoutWindowSeedCanvas,
+    layout,
+    sourceClass: params.sourceClass,
+  })
+  if (BREAKOUT_DEBUG_LOG_ENABLED && breakoutWindow) {
+    console.info('[breakout-debug]', JSON.stringify({
+      step: 'computeDynamicBreakoutWindow',
+      breakoutWindow,
+      sourceClass: params.sourceClass ?? 'unknown',
+    }))
+  }
+  const breakoutMask = await createTopBreakoutMask({
+    size,
+    layout,
+    sourceClass: params.sourceClass,
+    breakoutWindow: breakoutWindow ?? undefined,
+  })
   const requiresPreparedMaskSource =
     params.subjectMaskKind === 'heroCutout' || params.subjectMaskKind === 'rembgCutout'
   const hasPreparedMaskSource = requiresPreparedMaskSource && subjectRefCanvas !== null
@@ -2886,11 +2972,12 @@ export async function renderBreakoutLayer(params: {
     forceAlphaMask: hasPreparedMaskSource,
     forceAlphaThreshold:
       hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
-        ? 88
+        ? 72
         : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
           ? 120
           : undefined,
     strictContourGates: hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout',
+    breakoutWindow: breakoutWindow ?? undefined,
   })
   const aboveFrameMask = await createBreakoutAboveFrameMask({
     size,
