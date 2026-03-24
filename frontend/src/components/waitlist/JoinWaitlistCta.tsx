@@ -5,7 +5,7 @@ import { ArrowRight, Loader2 } from 'lucide-react'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/host'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
 
@@ -23,6 +23,7 @@ type JoinWaitlistCtaProps = {
 
 type WaitlistCtaAccountSummary = {
   emailVerified: boolean
+  appAccessStatus: string | null
   accountSignals: {
     canonicalCswAddress: string | null
   }
@@ -53,7 +54,10 @@ export function deriveWaitlistEntryCtaState(params: {
   ownerDelegationReady: boolean
 }): WaitlistEntryCtaState {
   if (!params.authenticated || !params.account?.emailVerified) return 'join'
-  if (params.account.accountSignals.canonicalCswAddress && params.ownerDelegationReady) return 'open_app'
+  const appAccessStatus = String(params.account.appAccessStatus ?? '').trim().toLowerCase()
+  if (appAccessStatus === 'approved' && params.account.accountSignals.canonicalCswAddress && params.ownerDelegationReady) {
+    return 'open_app'
+  }
   return 'continue_setup'
 }
 
@@ -115,7 +119,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
       return
     }
     if (typeof window === 'undefined') return
-    const target = getPrivyCapableWaitlistEntryUrl('needs-session')
+    const target = getMarketingWaitlistEntryUrl('needs-session')
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return
     window.location.assign(target)
@@ -230,7 +234,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
     if (typeof window === 'undefined') return
 
     if (ctaState === 'continue_setup') {
-      window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-acceptance'))
+      window.location.assign(getMarketingWaitlistEntryUrl('needs-acceptance'))
       return
     }
 

@@ -138,7 +138,7 @@ export type TelegramLinkEvent =
   | { type: 'TELEGRAM_VERIFIED'; proof: TelegramSessionProof }
   | { type: 'TELEGRAM_VERIFY_FAILED'; error: FlowError }
   | { type: 'EMAIL_CHANGED'; email: string }
-  | { type: 'SUBMIT_EMAIL' }
+  | { type: 'SUBMIT_EMAIL'; email: string }
   | { type: 'EMAIL_CODE_SENT'; resendAvailableAt?: number | null }
   | { type: 'EMAIL_CODE_SEND_FAILED'; error: FlowError }
   | { type: 'CODE_CHANGED'; code: string }
@@ -269,7 +269,7 @@ export function telegramLinkReducer(state: TelegramLinkState, event: TelegramLin
           return {
             tag: 'sending_email_code',
             proof: state.proof,
-            email: state.email,
+            email: event.email,
           }
         case 'RESET':
           return {

@@ -54,7 +54,7 @@ function isPrivyOriginAllowed(): boolean {
 }
 
 export function isPrivyHostModeAllowed(mode: HostMode): boolean {
-  return mode !== 'marketing'
+  return mode === 'marketing' || mode === 'app'
 }
 
 export function getPrivyAppId(): string | null {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties, type FormEvent, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, ShieldCheck, ShieldX, Unplug } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkAccount, useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
@@ -12,7 +12,7 @@ import {
   type TelegramMiniAppLinkContext,
 } from '@/lib/telegramMiniAppLink'
 import { createTelegramLinkFlowId, trackTelegramLinkTelemetryEvent } from '@/lib/telegramLinkTelemetry'
-import { ensureTelegramMiniAppSession, readTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
+import { ensureTelegramMiniAppSession, loadTelegramWebApp, readTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 
 import {
   createFlowError,
@@ -41,6 +41,7 @@ type TelegramLinkCompleteData = {
 }
 
 const OTP_RESEND_DELAY_MS = 30_000
+const OTP_SEND_TIMEOUT_MS = 12_000
 const PRIVY_SYNC_TIMEOUT_MS = 20_000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -48,6 +49,8 @@ const TG_VIEWPORT_STYLE: CSSProperties = {
   boxSizing: 'border-box',
   height: 'var(--cv-tg-viewport-stable-height, 100dvh)',
   maxHeight: 'var(--cv-tg-viewport-stable-height, 100dvh)',
+  touchAction: 'manipulation',
+  WebkitTapHighlightColor: 'transparent',
   paddingTop: 'max(10px, var(--cv-tg-safe-top, 0px))',
   paddingBottom: 'max(10px, var(--cv-tg-content-safe-bottom, 0px))',
   paddingLeft: 'max(12px, var(--cv-tg-content-safe-left, 0px))',
@@ -72,12 +75,41 @@ function isValidEmail(email: string): boolean {
 
 type EmailSubmitDisabledReason = 'not_collect_email' | 'empty' | 'invalid_email'
 
-function getEmailSubmitDisabledReason(state: TelegramLinkState): EmailSubmitDisabledReason | null {
-  if (state.tag !== 'collect_email') return 'not_collect_email'
-  const normalized = normalizeEmailCandidate(state.email)
-  if (!normalized) return 'empty'
-  if (!isValidEmail(normalized)) return 'invalid_email'
-  return null
+function getEmailSubmitAssessment(
+  state: TelegramLinkState,
+  emailOverride?: string,
+): {
+  disabledReason: EmailSubmitDisabledReason | null
+  normalizedEmail: string
+  emailValid: boolean
+} {
+  if (state.tag !== 'collect_email') {
+    return {
+      disabledReason: 'not_collect_email',
+      normalizedEmail: '',
+      emailValid: false,
+    }
+  }
+  const normalized = normalizeEmailCandidate(emailOverride ?? state.email)
+  if (!normalized) {
+    return {
+      disabledReason: 'empty',
+      normalizedEmail: normalized,
+      emailValid: false,
+    }
+  }
+  if (!isValidEmail(normalized)) {
+    return {
+      disabledReason: 'invalid_email',
+      normalizedEmail: normalized,
+      emailValid: false,
+    }
+  }
+  return {
+    disabledReason: null,
+    normalizedEmail: normalized,
+    emailValid: true,
+  }
 }
 
 function buildOtpSendError(error: unknown): FlowError {
@@ -311,21 +343,26 @@ export function TelegramLink() {
   const { sendCode, loginWithCode } = useLoginWithEmail()
   const getAccessToken = typeof privy.getAccessToken === 'function' ? privy.getAccessToken.bind(privy) : null
   const stateRef = useRef(state)
+  const emailInputRef = useRef<HTMLInputElement | null>(null)
   const flowIdRef = useRef(createTelegramLinkFlowId())
   const flowStartedAtRef = useRef(Date.now())
   const lastStateDescriptorRef = useRef<FlowStateDescriptor | null>(null)
   const lastEmailSubmitDisabledReasonRef = useRef<string | null>(null)
   const emailSubmitGestureLockRef = useRef(false)
   const emailSubmitGestureResetTimerRef = useRef<number | null>(null)
+  const telegramMainButtonHandlerRef = useRef<(() => void) | null>(null)
+  const [telegramUiReady, setTelegramUiReady] = useState(false)
   const privySnapshotRef = useRef({
     ready: Boolean(privy.ready),
     authenticated: Boolean(privy.authenticated),
     user: privy.user ?? null,
     getAccessToken,
   })
-  const emailSubmitDisabledReason = getEmailSubmitDisabledReason(state)
-  const normalizedCollectEmail = state.tag === 'collect_email' ? normalizeEmailCandidate(state.email) : ''
-  const emailIsValid = state.tag === 'collect_email' ? isValidEmail(normalizedCollectEmail) : false
+  const {
+    disabledReason: emailSubmitDisabledReason,
+    normalizedEmail: normalizedCollectEmail,
+    emailValid: emailIsValid,
+  } = getEmailSubmitAssessment(state)
   const emailSubmitDisabled = emailSubmitDisabledReason !== null
 
   useEffect(() => {
@@ -415,7 +452,20 @@ export function TelegramLink() {
   })
 
   useEffect(() => {
-    return setupTelegramMiniAppUi({ requestExpand: true })
+    let active = true
+    let teardown = () => {}
+
+    void (async () => {
+      await loadTelegramWebApp().catch(() => null)
+      if (!active) return
+      teardown = setupTelegramMiniAppUi({ requestExpand: true })
+      setTelegramUiReady(Boolean(readTelegramWebApp()))
+    })()
+
+    return () => {
+      active = false
+      teardown()
+    }
   }, [])
 
   useEffect(() => {
@@ -589,7 +639,19 @@ export function TelegramLink() {
       }
 
       try {
-        await sendCode({ email: normalized })
+        let timeoutId: number | null = null
+        try {
+          await Promise.race([
+            sendCode({ email: normalized }),
+            new Promise<never>((_, reject) => {
+              timeoutId = window.setTimeout(() => {
+                reject(new Error('telegram_link_send_code_timeout'))
+              }, OTP_SEND_TIMEOUT_MS)
+            }),
+          ])
+        } finally {
+          if (timeoutId !== null) window.clearTimeout(timeoutId)
+        }
         if (cancelled) return
         emitTelemetry('telegram_link_email_code_send_succeeded', {
           status: 'succeeded',
@@ -601,7 +663,14 @@ export function TelegramLink() {
         })
       } catch (error) {
         if (cancelled) return
-        const flowError = buildOtpSendError(error)
+        const flowError =
+          coerceErrorMessage(error, '') === 'telegram_link_send_code_timeout'
+            ? createFlowError({
+                code: 'OTP_SEND_FAILED',
+                message: 'Verification email took too long to start. Try again.',
+                recoverable: true,
+              })
+            : buildOtpSendError(error)
         emitTelemetry('telegram_link_email_code_send_failed', {
           status: 'failed',
           durationMs: Date.now() - startedAt,
@@ -993,20 +1062,22 @@ export function TelegramLink() {
     }
   }, [emitTelemetry, state])
 
-  const submitEmail = useCallback((source: 'click' | 'pointerdown' | 'touchstart' | 'mousedown' | 'telegram_main_button' | 'enter') => {
+  const submitEmail = useCallback((source: 'submit' | 'click' | 'pointerdown' | 'touchstart' | 'mousedown' | 'telegram_main_button' | 'enter') => {
+    const snapshot = stateRef.current
+    const assessment = getEmailSubmitAssessment(snapshot, emailInputRef.current?.value)
     emitTelemetry(
       'telegram_link_email_submit_attempted',
       {
-        status: emailSubmitDisabled ? 'blocked' : 'submitted',
-        disabled: emailSubmitDisabled,
-        disabledReason: emailSubmitDisabledReason ?? 'ready',
-        normalizedEmail: normalizedCollectEmail,
-        emailValid: emailIsValid,
+        status: assessment.disabledReason ? 'blocked' : 'submitted',
+        disabled: assessment.disabledReason !== null,
+        disabledReason: assessment.disabledReason ?? 'ready',
+        normalizedEmail: assessment.normalizedEmail,
+        emailValid: assessment.emailValid,
         source,
       },
-      state,
+      snapshot,
     )
-    if (emailSubmitDisabled) return
+    if (assessment.disabledReason) return
     if (emailSubmitGestureLockRef.current) return
     emailSubmitGestureLockRef.current = true
     if (typeof window !== 'undefined') {
@@ -1018,16 +1089,24 @@ export function TelegramLink() {
     }
     const activeElement = typeof document !== 'undefined' ? document.activeElement : null
     if (activeElement instanceof HTMLElement) activeElement.blur()
-    dispatch({ type: 'SUBMIT_EMAIL' })
-  }, [dispatch, emailIsValid, emailSubmitDisabled, emailSubmitDisabledReason, emitTelemetry, normalizedCollectEmail, state])
+    dispatch({ type: 'SUBMIT_EMAIL', email: assessment.normalizedEmail })
+  }, [dispatch, emitTelemetry])
 
-  const handleEmailSubmitActivation = (source: 'click' | 'pointerdown' | 'touchstart' | 'mousedown') => (event: SyntheticEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
+  const handleEmailSubmitActivation = (source: 'click' | 'pointerdown' | 'touchstart' | 'mousedown') => () => {
     submitEmail(source)
   }
 
+  const handleEmailFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    submitEmail('submit')
+  }
+
+  const handleTelegramMainButtonClick = useCallback(() => {
+    submitEmail('telegram_main_button')
+  }, [submitEmail])
+
   useEffect(() => {
+    if (!telegramUiReady) return
     const mainButton = readTelegramWebApp()?.MainButton
     if (!mainButton) return
 
@@ -1045,12 +1124,6 @@ export function TelegramLink() {
     }
 
     if (state.tag === 'collect_email') {
-      const handler = () => submitEmail('telegram_main_button')
-      try {
-        mainButton.offClick?.(handler)
-      } catch {
-        // Ignore stale listener cleanup errors.
-      }
       try {
         mainButton.setText?.('Send Code')
         mainButton.setParams?.({
@@ -1066,19 +1139,11 @@ export function TelegramLink() {
           mainButton.enable?.()
         }
         mainButton.show?.()
-        mainButton.onClick?.(handler)
       } catch {
         // Ignore SDK errors so the inline button remains the fallback.
       }
 
-      return () => {
-        try {
-          mainButton.offClick?.(handler)
-        } catch {
-          // Ignore SDK errors.
-        }
-        hideButton()
-      }
+      return () => hideButton()
     }
 
     if (state.tag === 'sending_email_code') {
@@ -1107,7 +1172,41 @@ export function TelegramLink() {
     return () => {
       hideButton()
     }
-  }, [emailSubmitDisabled, state.tag, submitEmail])
+  }, [emailSubmitDisabled, state.tag, telegramUiReady])
+
+  useEffect(() => {
+    if (!telegramUiReady) return
+    const mainButton = readTelegramWebApp()?.MainButton
+    if (!mainButton) return
+
+    if (telegramMainButtonHandlerRef.current) {
+      try {
+        mainButton.offClick?.(telegramMainButtonHandlerRef.current)
+      } catch {
+        // Ignore SDK errors.
+      }
+      telegramMainButtonHandlerRef.current = null
+    }
+
+    if (state.tag !== 'collect_email' && state.tag !== 'sending_email_code') return
+
+    telegramMainButtonHandlerRef.current = handleTelegramMainButtonClick
+    try {
+      mainButton.onClick?.(handleTelegramMainButtonClick)
+    } catch {
+      telegramMainButtonHandlerRef.current = null
+    }
+
+    return () => {
+      if (!telegramMainButtonHandlerRef.current) return
+      try {
+        mainButton.offClick?.(telegramMainButtonHandlerRef.current)
+      } catch {
+        // Ignore SDK errors.
+      }
+      telegramMainButtonHandlerRef.current = null
+    }
+  }, [handleTelegramMainButtonClick, state.tag, telegramUiReady])
 
   const handleCodeSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1152,11 +1251,12 @@ export function TelegramLink() {
 
       case 'collect_email':
         return (
-          <div className="space-y-3">
+          <form className="space-y-3" onSubmit={handleEmailFormSubmit}>
             <label htmlFor="telegram-link-email" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-[#666666]">
               Verified Email
             </label>
             <input
+              ref={emailInputRef}
               id="telegram-link-email"
               type="email"
               autoComplete="email"
@@ -1178,11 +1278,10 @@ export function TelegramLink() {
             {state.emailError ? <InlineError message={state.emailError} /> : null}
             {emailSubmitHelperText ? <p className="text-[12px] leading-[1.4] text-[#666666]">{emailSubmitHelperText}</p> : null}
             <button
-              type="button"
+              type="submit"
               onPointerDown={handleEmailSubmitActivation('pointerdown')}
               onTouchStart={handleEmailSubmitActivation('touchstart')}
               onMouseDown={handleEmailSubmitActivation('mousedown')}
-              onClick={handleEmailSubmitActivation('click')}
               data-testid="telegram-link-submit"
               data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
               data-email-normalized={normalizedCollectEmail}
@@ -1193,7 +1292,7 @@ export function TelegramLink() {
             >
               Send Code
             </button>
-          </div>
+          </form>
         )
 
       case 'sending_email_code':
@@ -1345,7 +1444,7 @@ export function TelegramLink() {
           <section
             data-flow-state={state.tag}
             data-testid="telegram-link-panel"
-            className="flex w-full flex-col rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-4"
+            className="relative isolate flex w-full flex-col rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-4 touch-manipulation"
           >
             <h1 className="text-[20px] font-semibold text-[#EDEDED]">Verify Email</h1>
             <p className="mt-1 text-[13px] leading-[1.4] text-[#666666]">

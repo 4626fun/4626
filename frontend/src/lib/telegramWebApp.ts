@@ -86,6 +86,20 @@ export type TelegramMiniAppSession = {
 const TELEGRAM_WEB_APP_SCRIPT_URL = 'https://telegram.org/js/telegram-web-app.js?61'
 const TELEGRAM_SESSION_STORAGE_KEY = 'cv_tg_miniapp_session_v1'
 const TELEGRAM_SESSION_REQUEST_TIMEOUT_MS = 12_000
+const TELEGRAM_WEB_APP_READY_TIMEOUT_MS = 2_000
+const TELEGRAM_WEB_APP_READY_POLL_MS = 50
+const TELEGRAM_WEB_APP_CSS_VAR_NAMES = [
+  '--cv-tg-viewport-height',
+  '--cv-tg-viewport-stable-height',
+  '--cv-tg-safe-top',
+  '--cv-tg-safe-bottom',
+  '--cv-tg-safe-left',
+  '--cv-tg-safe-right',
+  '--cv-tg-content-safe-top',
+  '--cv-tg-content-safe-bottom',
+  '--cv-tg-content-safe-left',
+  '--cv-tg-content-safe-right',
+] as const
 let telegramScriptLoadPromise: Promise<void> | null = null
 let memoizedMiniAppSession: TelegramMiniAppSession | null = null
 let inFlightMiniAppSessionInitData = ''
@@ -195,6 +209,15 @@ function applyTelegramWebAppCssVars(webApp: TelegramWebAppLike | null): void {
   setCssVar('--cv-tg-content-safe-right', toPx(webApp.contentSafeAreaInset?.right))
 }
 
+function clearTelegramWebAppCssVars(): void {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  delete root.dataset.tgColorScheme
+  for (const name of TELEGRAM_WEB_APP_CSS_VAR_NAMES) {
+    root.style.removeProperty(name)
+  }
+}
+
 export function readTelegramWebApp(): TelegramWebAppLike | null {
   return readTelegramWebAppUnsafe()
 }
@@ -263,25 +286,65 @@ export async function loadTelegramWebApp(): Promise<TelegramWebAppLike | null> {
   if (typeof window === 'undefined' || typeof document === 'undefined') return null
   if (!telegramScriptLoadPromise) {
     telegramScriptLoadPromise = new Promise<void>((resolve, reject) => {
+      const resolveWhenReady = () => {
+        if (readTelegramWebAppUnsafe()) {
+          clearTimers()
+          resolve()
+        }
+      }
+      const rejectWith = (error: Error) => {
+        clearTimers()
+        reject(error)
+      }
+      let pollTimer: number | null = null
+      let deadlineTimer: number | null = null
+      const clearTimers = () => {
+        if (pollTimer !== null) window.clearTimeout(pollTimer)
+        if (deadlineTimer !== null) window.clearTimeout(deadlineTimer)
+      }
+      const startPolling = () => {
+        const poll = () => {
+          if (readTelegramWebAppUnsafe()) {
+            clearTimers()
+            resolve()
+            return
+          }
+          pollTimer = window.setTimeout(poll, TELEGRAM_WEB_APP_READY_POLL_MS)
+        }
+        deadlineTimer = window.setTimeout(() => {
+          clearTimers()
+          rejectWith(new Error('telegram_script_load_timeout'))
+        }, TELEGRAM_WEB_APP_READY_TIMEOUT_MS)
+        poll()
+      }
       const found = Array.from(document.getElementsByTagName('script')).find((script) =>
         String(script.src || '').includes('telegram-web-app.js'),
       )
       if (found) {
-        found.addEventListener('load', () => resolve(), { once: true })
-        found.addEventListener('error', () => reject(new Error('telegram_script_load_failed')), { once: true })
-        // Also resolve shortly in case the script already loaded before listeners attached.
-        window.setTimeout(() => resolve(), 0)
+        if (readTelegramWebAppUnsafe()) {
+          resolve()
+          return
+        }
+        found.addEventListener('load', resolveWhenReady, { once: true })
+        found.addEventListener('error', () => rejectWith(new Error('telegram_script_load_failed')), { once: true })
+        startPolling()
         return
       }
       const script = document.createElement('script')
       script.async = true
       script.src = TELEGRAM_WEB_APP_SCRIPT_URL
-      script.onload = () => resolve()
-      script.onerror = () => reject(new Error('telegram_script_load_failed'))
+      script.onload = resolveWhenReady
+      script.onerror = () => rejectWith(new Error('telegram_script_load_failed'))
       document.head.appendChild(script)
-    }).catch(() => {})
+      startPolling()
+    })
   }
-  await telegramScriptLoadPromise
+  try {
+    await telegramScriptLoadPromise
+  } catch {
+    telegramScriptLoadPromise = null
+    return null
+  }
   return readTelegramWebAppUnsafe()
 }
 
@@ -320,6 +383,7 @@ export function setupTelegramMiniAppUi(params?: { requestExpand?: boolean }): ()
         // Ignore listener cleanup errors.
       }
     }
+    clearTelegramWebAppCssVars()
   }
 }
 

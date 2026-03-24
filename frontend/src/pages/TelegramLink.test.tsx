@@ -70,6 +70,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/lib/telegramWebApp', () => ({
   ensureTelegramMiniAppSession: ensureSessionMock,
+  loadTelegramWebApp: vi.fn(async () => ({ MainButton: telegramMainButtonMock })),
   readTelegramWebApp: () => ({ MainButton: telegramMainButtonMock }),
   setupTelegramMiniAppUi: setupUiMock,
 }))
@@ -380,6 +381,30 @@ describe('TelegramLink UI flow', () => {
     await screen.findByText('Unable to send verification code.')
     expect(screen.getByText('Verify Email')).toBeTruthy()
     expect((screen.getByLabelText('Verified Email') as HTMLInputElement).value).toBe('user@example.com')
+  })
+
+  it('returns to collect_email with an inline error when sendCode hangs', async () => {
+    try {
+      const user = userEvent.setup()
+      sendCodeMock.mockImplementationOnce(() => new Promise(() => {}))
+      renderFlow()
+
+      await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'Send Code' }))
+
+      expect(document.querySelector('[data-flow-state="sending_email_code"]')).toBeTruthy()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(12_000)
+      })
+
+      expect(screen.getByText('Verification email took too long to start. Try again.')).toBeTruthy()
+      expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
+      expect((screen.getByRole('button', { name: 'Send Code' }) as HTMLButtonElement).disabled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the OTP input usable after send and on recoverable verify failures', async () => {

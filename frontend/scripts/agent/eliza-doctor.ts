@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { resolveXmtpDbDirectory } from '../../server/_lib/xmtpDbDirectory.js'
+import { hasDedicatedMount, resolveXmtpDbDirectory } from '../../server/_lib/xmtpDbDirectory.js'
 
 type StartupMode = 'multi-agent' | 'single-agent-csw' | 'single-agent-eoa' | 'standby-only' | 'unconfigured'
 
@@ -73,6 +73,7 @@ function buildChecks(mode: StartupMode): Check[] {
   const configuredXmtpDbDir = env('XMTP_DB_DIRECTORY')
   const effectiveXmtpDbDir = resolveXmtpDbDirectory()
   const displayedXmtpDbDir = configuredXmtpDbDir || effectiveXmtpDbDir
+  const hasDedicatedXmtpMount = hasDedicatedMount(effectiveXmtpDbDir)
   const runningOnRailway = isRailwayRuntime()
   const productionPrimaryBlocked =
     consumeXmtp &&
@@ -116,6 +117,16 @@ function buildChecks(mode: StartupMode): Check[] {
         configuredXmtpDbDir && path.resolve(configuredXmtpDbDir) !== path.resolve(effectiveXmtpDbDir)
           ? `configured=${configuredXmtpDbDir}, effective=${effectiveXmtpDbDir}`
           : displayedXmtpDbDir,
+    },
+    {
+      label: 'Dedicated XMTP volume mount',
+      ok: !runningOnRailway || !consumeXmtp || hasDedicatedXmtpMount,
+      detail:
+        !runningOnRailway || !consumeXmtp
+          ? 'not required in this shell'
+          : hasDedicatedXmtpMount
+            ? `mounted at ${effectiveXmtpDbDir}`
+            : `no dedicated mount detected for ${effectiveXmtpDbDir}`,
     },
     {
       label: 'XMTP DB encryption key',

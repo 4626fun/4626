@@ -2,8 +2,8 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
-import { getHostMode, type HostMode } from '@/lib/host'
+import { buildWaitlistEntryUrl, getMarketingWaitlistEntryUrl, type WaitlistEntryReason } from '@/lib/auth/waitlistEntry'
+import { getHostMode, getMarketingBaseUrl, type HostMode } from '@/lib/host'
 import { useEffect, useMemo, useState } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
 import { JoinWaitlistCtaWithProvider } from '@/components/waitlist/JoinWaitlistCta'
@@ -14,6 +14,13 @@ const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
 
 type HomeRedirectInput = {
   hostMode: HostMode
+  search: string
+  hash: string
+}
+
+type HomeWaitlistRedirectInput = {
+  hostMode: HostMode
+  marketingOrigin: string
   search: string
   hash: string
 }
@@ -38,6 +45,23 @@ export function shouldRedirectHomeToSwap(input: HomeRedirectInput): boolean {
   if (isWaitlistAccessReason) return false
   if (input.hash === '#waitlist') return false
   return true
+}
+
+function readWaitlistAccessReason(search: string): WaitlistEntryReason | null {
+  const params = new URLSearchParams(search)
+  const reason = String(params.get('reason') ?? '').trim().toLowerCase()
+  if (reason === 'needs-session' || reason === 'needs-acceptance') {
+    return reason
+  }
+  return null
+}
+
+export function getHomeWaitlistRedirectTarget(input: HomeWaitlistRedirectInput): string | null {
+  if (input.hostMode !== 'app') return null
+  const reason = readWaitlistAccessReason(input.search)
+  if (reason) return buildWaitlistEntryUrl(input.marketingOrigin, reason)
+  if (input.hash === '#waitlist') return buildWaitlistEntryUrl(input.marketingOrigin, 'needs-session')
+  return null
 }
 
 export function shouldOpenWaitlistModal(input: WaitlistModalInput): boolean {
@@ -94,6 +118,16 @@ export function Home() {
     })
   }, [location.hash, location.search, stickyWaitlistOpen])
   const hostMode = getHostMode()
+  const homeWaitlistRedirectTarget = useMemo(
+    () =>
+      getHomeWaitlistRedirectTarget({
+        hostMode,
+        marketingOrigin: getMarketingBaseUrl(),
+        search: location.search,
+        hash: location.hash,
+      }),
+    [hostMode, location.hash, location.search],
+  )
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
@@ -135,6 +169,11 @@ export function Home() {
     })
   ) {
     return <Navigate to="/swap" replace />
+  }
+
+  if (homeWaitlistRedirectTarget) {
+    if (typeof window !== 'undefined') window.location.replace(homeWaitlistRedirectTarget)
+    return null
   }
 
   const closeWaitlistModal = () => {
