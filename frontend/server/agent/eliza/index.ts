@@ -1871,6 +1871,7 @@ async function uploadRegistrationToGrove(): Promise<void> {
 }
 
 let agentBooted = false
+let lastReadinessLogKey: string | null = null
 
 async function main() {
   // Suppress known non-fatal native/runtime noise that causes alert fatigue.
@@ -2169,14 +2170,13 @@ function startHealthServer() {
     if (requiresXmtp && agentCount === 0) readinessReasons.push('no_agents')
     if (latestEnvValidation.errors.length > 0) readinessReasons.push('env_validation_failed')
     if (shouldCheckDb && db === null) readinessReasons.push('db_unavailable')
-    if (requiresXmtp && !xmtpReady) readinessReasons.push('xmtp_not_running')
+    if (requiresXmtp && agentCount > 0 && !xmtpReady) readinessReasons.push('xmtp_not_running')
     if ((queueStats?.staleProcessing ?? 0) > 0) readinessReasons.push('queue_stale_leases')
     const ready = Boolean(
       agentBooted &&
-      (requiresXmtp ? agentCount > 0 : true) &&
       latestEnvValidation.errors.length === 0 &&
       (shouldCheckDb ? db !== null : true) &&
-      (requiresXmtp ? xmtpReady : true),
+      (requiresXmtp && agentCount > 0 ? xmtpReady : true),
     )
     const status =
       requiresXmtp && !agentBooted
@@ -2190,6 +2190,19 @@ function startHealthServer() {
           : agentCount === 0
             ? 'no_agents'
             : 'degraded'
+    const readinessLogKey = `${ready ? 'ready' : 'not_ready'}:${readinessReasons.join(',') || 'none'}`
+    if (readinessLogKey !== lastReadinessLogKey) {
+      lastReadinessLogKey = readinessLogKey
+      logger.info('[eliza] readiness state changed', {
+        ready,
+        status,
+        reasons: readinessReasons,
+        agentBooted,
+        agentCount,
+        requiresXmtp,
+        xmtpReady,
+      })
+    }
     const probePath = url as '/healthz' | '/readyz'
     const detailedHealthAccess = hasDetailedHealthAccess(_req)
     const statusCode = getHealthProbeStatusCode({
