@@ -133,31 +133,16 @@ describe('telegram webhook parsers', () => {
 
   it('classifies inline query intent for ranking', () => {
     expect(classifyInlineQuery('/buy vault 0.1')).toBe('trade')
-    expect(classifyInlineQuery('arena tune attack=100')).toBe('arena')
-    expect(classifyInlineQuery('zones commander sw')).toBe('arena')
     expect(classifyInlineQuery('mkt quote btc')).toBe('market')
     expect(classifyInlineQuery('ask ai')).toBe('ai')
     expect(classifyInlineQuery('')).toBe('discovery')
   })
 
-  it('maps arena help shortcut callbacks to concrete commands', () => {
-    expect(resolveHelpCallbackCommand('help:arena_tune')).toBe(
-      '/arena tune attack=100 eco=2.1 expansion=2.4 retreat=0.55 defense=1.3 air=0.4 raid=14 safety=8',
-    )
-    expect(resolveHelpCallbackCommand('help:arena_rules')).toBe('/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6')
-    expect(resolveHelpCallbackCommand('help:arena_zones')).toBe('/arena zones C:attack W:defend N:scout commander=SW')
-    expect(resolveHelpCallbackCommand('help:arena_control')).toBe('/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW')
-    expect(resolveHelpCallbackCommand('help:arena_play')).toBe('/arena play')
-    expect(resolveHelpCallbackCommand('help:arena_find')).toBe('/arena find')
-    expect(resolveHelpCallbackCommand('help:arena_state')).toBe('/arena state')
-    expect(resolveHelpCallbackCommand('help:arena_result')).toBe('/arena result')
-    expect(resolveHelpCallbackCommand('help:arena_watch_on')).toBe('/arena watch on')
-    expect(resolveHelpCallbackCommand('help:arena_watch_status')).toBe('/arena watch status')
-    expect(resolveNavigationCallbackToast('help:arena_control', '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW')).toBe(
-      'Arena control template',
-    )
-    expect(resolveNavigationCallbackToast('help:arena_find', '/arena find')).toBe('Arena find match')
-    expect(resolveNavigationCallbackToast('help:arena_watch_status', '/arena watch status')).toBe('Arena watch status')
+  it('leaves removed arena help callbacks unmapped', () => {
+    expect(resolveHelpCallbackCommand('help:arena_tune')).toBeNull()
+    expect(resolveHelpCallbackCommand('help:arena_play')).toBeNull()
+    expect(resolveHelpCallbackCommand('help:arena_watch_status')).toBeNull()
+    expect(resolveNavigationCallbackToast('help:arena_play', null)).toBe('Help topic')
   })
 
   it('maps CRE and Solana operator callbacks to concrete commands', () => {
@@ -268,11 +253,11 @@ describe('telegram webhook parsers', () => {
       inlineResultCap: 8,
       growthMode: true,
       enablePmHandoff: true,
-      linkButtonUrl: 'https://app.4626.fun/telegram/link',
+      linkButtonUrl: 'https://v1.4626.fun/telegram/link',
     })
     expect(unlinked.button).toEqual({
       text: 'Connect wallet',
-      web_app: { url: 'https://app.4626.fun/telegram/link' },
+      web_app: { url: 'https://v1.4626.fun/telegram/link' },
     })
     expect(unlinked.switchPmParameter).toMatch(/^inline_link_/)
 
@@ -286,11 +271,11 @@ describe('telegram webhook parsers', () => {
       inlineResultCap: 8,
       growthMode: false,
       enablePmHandoff: true,
-      menuButtonUrl: 'https://app.4626.fun/telegram/menu',
+      menuButtonUrl: 'https://v1.4626.fun/telegram/menu',
     })
     expect(linked.button).toEqual({
       text: 'Open 4626',
-      web_app: { url: 'https://app.4626.fun/telegram/menu' },
+      web_app: { url: 'https://v1.4626.fun/telegram/menu' },
     })
     expect(linked.switchPmParameter).toBeUndefined()
   })

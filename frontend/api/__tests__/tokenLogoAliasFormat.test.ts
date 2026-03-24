@@ -60,7 +60,7 @@ describe('token logo alias formatting', () => {
     const req = createMockReq({
       method: 'GET',
       query: { address: SHARE_OFT, format: 'png', size: '64', chain: '8453' },
-      headers: { host: 'app.4626.fun' },
+      headers: { host: 'v1.4626.fun' },
     })
     const res = createMockRes()
     await handler(req, res)
@@ -79,7 +79,7 @@ describe('token logo alias formatting', () => {
     const req = createMockReq({
       method: 'GET',
       query: { address: SHARE_OFT, format: 'svg', size: '64', chain: '8453' },
-      headers: { host: 'app.4626.fun' },
+      headers: { host: 'v1.4626.fun' },
     })
     const res = createMockRes()
     await handler(req, res)

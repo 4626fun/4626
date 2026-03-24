@@ -32,7 +32,7 @@ describe('v1 spec endpoint', () => {
     const mod = await import('../_handlers/v1/_spec.ts')
     const handler = mod.default
 
-    const req = createMockReq({ method: 'GET', headers: { host: 'app.4626.fun' } })
+    const req = createMockReq({ method: 'GET', headers: { host: 'v1.4626.fun' } })
     const res = createMockRes()
 
     await handler(req, res)

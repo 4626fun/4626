@@ -22,7 +22,7 @@ vi.mock('../../server/auth/_siwa.js', () => ({
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
-  getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
+  getCanonicalOrigin: vi.fn(() => 'https://v1.4626.fun'),
 }))
 
 const readContractMock = vi.fn()

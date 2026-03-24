@@ -83,7 +83,7 @@ describe('v1 auction status handler', () => {
     const req = createMockReq({
       method: 'GET',
       query: { ccaStrategy: CCA_STRATEGY },
-      headers: { host: 'app.4626.fun' },
+      headers: { host: 'v1.4626.fun' },
     })
     const res = createMockRes()
 

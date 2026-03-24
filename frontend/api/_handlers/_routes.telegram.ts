@@ -11,7 +11,6 @@ const telegramRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'metrics': () => import('./telegram/_metrics.js'),
   'portfolio': () => import('./telegram/_portfolio.js'),
   'holder-recheck': () => import('./telegram/_holder-recheck.js'),
-  'arena/watch-tick': () => import('./telegram/_arena-watch-tick.js'),
   'unlink': () => import('./telegram/_unlink.js'),
 }
 

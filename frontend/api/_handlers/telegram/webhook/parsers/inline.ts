@@ -1,7 +1,7 @@
 import { asTrimmed, isAddressLike, truncateAddress } from '../utils.js'
 import { parseTelegramTradeIntent } from './trade.js'
 
-export type InlineQueryClass = 'trade' | 'arena' | 'market' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general'
+export type InlineQueryClass = 'trade' | 'market' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general'
 
 export type InlineMediaAsset = {
   photoUrl?: string
@@ -92,8 +92,6 @@ export function classifyInlineQuery(rawQuery: string): InlineQueryClass {
   if (!query) return 'discovery'
   if (parseTelegramTradeIntent(query.startsWith('/') ? query : `/${query}`)) return 'trade'
   if (/\b(buy|sell|bid|trade)\b/.test(query)) return 'trade'
-  if (/^\/?arena(\s|$)/.test(query)) return 'arena'
-  if (/\b(arena|clash|pregame|commander|tune|tuning|rules|zones|overdrive|match)\b/.test(query)) return 'arena'
   if (/\b(mkt|market|quote|price|btc|eth|sol)\b/.test(query)) return 'market'
   if (/\b(ai|assistant|prompt|question|analyze)\b/.test(query)) return 'ai'
   if (/\b(link|wallet|connect)\b/.test(query)) return 'link'
@@ -273,11 +271,6 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const xPostCommand = `/x post ${normalizeInlineDraft(normalizedQuery)} --confirm`
   const aiPrompt = normalizedQuery ? `/ai ${normalizedQuery}` : '/ai What should I do next?'
   const marketQuote = `/mkt quote ${inferMarketSymbol(normalizedQuery)}`
-  const arenaTuneCommand =
-    '/arena tune attack=100 eco=2.1 expansion=2.4 retreat=0.55 defense=1.3 air=0.4 raid=14 safety=8'
-  const arenaRulesCommand = '/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6'
-  const arenaZonesCommand = '/arena zones C:attack W:defend N:scout commander=SW'
-  const arenaControlCommand = '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW'
   const copy = buildCommonCopy(growthMode)
   const lowerQuery = normalizedQuery.toLowerCase()
   const wantsDeploy = queryClass === 'deploy' || /\b(deploy|launch|create)\b/.test(lowerQuery)
@@ -286,7 +279,6 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const wantsAi = queryClass === 'ai'
   const wantsMarket = queryClass === 'market'
   const wantsSignals = /\b(signal|signals|feed|live)\b/.test(lowerQuery) || queryClass === 'discovery'
-  const wantsArena = queryClass === 'arena' || /\b(arena|clash|pregame|commander|tune|tuning|rules|zones|overdrive|match)\b/.test(lowerQuery)
 
   const templates: InlineResultTemplate[] = []
   const pushTemplate = (template: InlineResultTemplate) => {
@@ -308,99 +300,6 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       baseScore: 120,
       intentTags: ['trade'],
       mediaKey: 'card:trade',
-    })
-  }
-
-  if (wantsArena) {
-    pushTemplate({
-      key: 'arena-menu',
-      title: 'Arena: Command guide',
-      description: 'Step-by-step control + templates',
-      command: '/arena menu',
-      baseScore: 118,
-      intentTags: ['arena', 'general'],
-      mediaKey: 'card:arena-menu',
-    })
-    pushTemplate({
-      key: 'arena-find',
-      title: 'Arena: Find match',
-      description: 'Queue for next opponent',
-      command: '/arena find',
-      baseScore: 116,
-      intentTags: ['arena', 'discovery', 'general'],
-      mediaKey: 'card:arena-find',
-    })
-    pushTemplate({
-      key: 'arena-play',
-      title: 'Arena: Play now',
-      description: 'Find match + auto-enable watch',
-      command: '/arena play',
-      baseScore: 114,
-      intentTags: ['arena', 'discovery', 'general'],
-      mediaKey: 'card:arena-play',
-    })
-    pushTemplate({
-      key: 'arena-state',
-      title: 'Arena: Current state',
-      description: 'Live game snapshot',
-      command: '/arena state',
-      baseScore: 111,
-      intentTags: ['arena', 'discovery', 'general'],
-      mediaKey: 'card:arena-state',
-    })
-    pushTemplate({
-      key: 'arena-result',
-      title: 'Arena: Match result',
-      description: 'Latest outcome + duration',
-      command: '/arena result',
-      baseScore: 110,
-      intentTags: ['arena', 'discovery', 'general'],
-      mediaKey: 'card:arena-result',
-    })
-    pushTemplate({
-      key: 'arena-tune-template',
-      title: 'Arena: Tune template',
-      description: 'Pregame tuning (copy + edit)',
-      command: arenaTuneCommand,
-      baseScore: 109,
-      intentTags: ['arena', 'general'],
-      mediaKey: 'card:arena-tune',
-    })
-    pushTemplate({
-      key: 'arena-rules-template',
-      title: 'Arena: Rules template',
-      description: 'Production dials 0-10',
-      command: arenaRulesCommand,
-      baseScore: 108,
-      intentTags: ['arena', 'general'],
-      mediaKey: 'card:arena-rules',
-    })
-    pushTemplate({
-      key: 'arena-zones-template',
-      title: 'Arena: Zones template',
-      description: 'Zone orders + commander move',
-      command: arenaZonesCommand,
-      baseScore: 107,
-      intentTags: ['arena', 'general'],
-      mediaKey: 'card:arena-zones',
-    })
-    pushTemplate({
-      key: 'arena-control-template',
-      title: 'Arena: Control template',
-      description: 'Combined dials + zones',
-      command: arenaControlCommand,
-      baseScore: 106,
-      intentTags: ['arena', 'general'],
-      mediaKey: 'card:arena-control',
-    })
-    pushTemplate({
-      key: 'arena-watch-status',
-      title: 'Arena: Watch status',
-      description: 'Check Telegram live updates',
-      command: '/arena watch status',
-      baseScore: 103,
-      intentTags: ['arena', 'general'],
-      mediaKey: 'card:arena-watch',
     })
   }
 

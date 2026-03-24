@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   getCompletedImageProjectForVaultMock: vi.fn(),
   getImageGenerationProjectMock: vi.fn(),
   setImageProjectVaultAddressMock: vi.fn(),
-  getCanonicalOriginMock: vi.fn(() => 'https://app.4626.fun'),
+  getCanonicalOriginMock: vi.fn(() => 'https://v1.4626.fun'),
 }))
 
 vi.mock('./imageProjects.js', () => ({
@@ -141,7 +141,7 @@ describe('deploy launch image gate', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.getCanonicalOriginMock.mockReturnValue('https://app.4626.fun')
+    mocks.getCanonicalOriginMock.mockReturnValue('https://v1.4626.fun')
   })
 
   afterEach(() => {
@@ -182,7 +182,7 @@ describe('deploy launch image gate', () => {
       shareOFT: ADDR.shareOft,
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://app.4626.fun/api/v1/token/${ADDR.shareOft.toLowerCase()}/image?chain=8453&format=png`,
+      `https://v1.4626.fun/api/v1/token/${ADDR.shareOft.toLowerCase()}/image?chain=8453&format=png`,
       { method: 'GET' },
     )
     expect(mocks.createImageGenerationProjectMock).not.toHaveBeenCalled()
@@ -250,7 +250,7 @@ describe('deploy launch image gate', () => {
     expect(mocks.getImageGenerationProjectMock).toHaveBeenCalledWith('imgproj_new')
     expect(mocks.setImageProjectVaultAddressMock).toHaveBeenCalledWith('imgproj_new', ADDR.vault)
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://app.4626.fun/api/v1/token/${ADDR.shareOft.toLowerCase()}/image?chain=8453&format=png`,
+      `https://v1.4626.fun/api/v1/token/${ADDR.shareOft.toLowerCase()}/image?chain=8453&format=png`,
       { method: 'GET' },
     )
     expect(persisted[persisted.length - 1]).toEqual(

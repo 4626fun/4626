@@ -85,10 +85,6 @@
     {
       "path": "/api/sync-creator-metrics",
       "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/telegram/arena/watch-tick",
-      "schedule": "* * * * *"
     }
   ],
   "routes": [
@@ -247,7 +243,7 @@
       "has": [
         {
           "type": "host",
-          "value": "app.4626.fun"
+          "value": "v1.4626.fun"
         }
       ],
       "dest": "/app.html"
@@ -284,7 +280,7 @@
       "has": [
         {
           "type": "host",
-          "value": "app.4626.fun"
+          "value": "v1.4626.fun"
         }
       ],
       "dest": "/app.html"

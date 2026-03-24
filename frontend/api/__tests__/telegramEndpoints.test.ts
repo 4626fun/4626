@@ -141,7 +141,7 @@ describe('telegram endpoint handlers', () => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
       TELEGRAM_LINK_API_SECRET: TELEGRAM_LINK_SECRET,
-      TELEGRAM_MINI_APP_URL: 'https://app.4626.fun',
+      TELEGRAM_MINI_APP_URL: 'https://v1.4626.fun',
       TELEGRAM_BOT_TOKEN: 'test-bot-token',
       TELEGRAM_FUNNEL_METRICS_ENABLED: 'true',
       TELEGRAM_MINIAPP_SESSION_ENABLED: 'true',
@@ -536,6 +536,7 @@ describe('telegram endpoint handlers', () => {
     expect(await getTelegramApiHandler('link/telemetry')).toBeTypeOf('function')
     expect(await getTelegramApiHandler('miniapp/session')).toBeTypeOf('function')
     expect(await getTelegramApiHandler('metrics')).toBeTypeOf('function')
+    expect(await getTelegramApiHandler('watch-tick')).toBeNull()
   })
 
   it('POST /api/telegram/bot-config syncs commands and menu button', async () => {
@@ -552,12 +553,12 @@ describe('telegram endpoint handlers', () => {
     expect(setTelegramMyCommandsMock).toHaveBeenCalledTimes(3)
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledTimes(1)
     expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.miniAppUrl).toBe('https://app.4626.fun/telegram/menu')
+    expect(res.body?.data?.miniAppUrl).toBe('https://v1.4626.fun/telegram/menu')
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
       expect.objectContaining({
         menuButton: expect.objectContaining({
           type: 'web_app',
-          web_app: { url: 'https://app.4626.fun/telegram/menu' },
+          web_app: { url: 'https://v1.4626.fun/telegram/menu' },
         }),
       }),
     )

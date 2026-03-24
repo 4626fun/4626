@@ -68,7 +68,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
-  getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
+  getCanonicalOrigin: vi.fn(() => 'https://v1.4626.fun'),
 }))
 
 vi.mock('../../server/_lib/deploySessions.js', () => ({

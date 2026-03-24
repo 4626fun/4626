@@ -47,7 +47,7 @@ describe('uniswap handlers block nested quote token bypass', () => {
     const handler = await loadOrderHandler()
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.2.0.1' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.2.0.1' },
       body: {
         signature: '0xabc',
         quote: {
@@ -69,7 +69,7 @@ describe('uniswap handlers block nested quote token bypass', () => {
     const handler = await loadSwap5792Handler()
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.2.0.2' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.2.0.2' },
       body: {
         deadline: Date.now() + 60_000,
         classicQuote: {
@@ -91,7 +91,7 @@ describe('uniswap handlers block nested quote token bypass', () => {
     const handler = await loadSwap7702Handler()
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.2.0.3' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.2.0.3' },
       body: {
         smartContractDelegationAddress: '0x0000000000000000000000000000000000000005',
         classicQuote: {

@@ -15,7 +15,7 @@ export function shouldNavigateAfterWaitlistHandoff(input: AppContinueGateInput):
 
   // The server session cookie is sufficient to gate API access.
   // Privy client-side auth is domain-specific and won't be
-  // available on app.4626.fun after a cross-origin handoff from
+  // available on v1.4626.fun after a cross-origin handoff from
   // 4626.fun. Let it bridge lazily once the user is in the app.
   return true
 }

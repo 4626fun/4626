@@ -67,7 +67,7 @@ Rules:
 
 ## Routing facts
 
-- `/telegram/link` is intentionally app-only and belongs on `app.4626.fun`.
+- `/telegram/link` is intentionally app-only and belongs on `v1.4626.fun`.
 - It is outside the normal accepted-route waitlist gating when valid Telegram Mini App context or link-query context is present.
 - Any rebuild should preserve that routing behavior.
 
@@ -98,7 +98,7 @@ Current problem:
 - We want a simpler deterministic flow with explicit states and minimal hidden retries.
 
 Routing facts:
-- /telegram/link is intentionally app-only and should run on app.4626.fun.
+- /telegram/link is intentionally app-only and should run on v1.4626.fun.
 - It is allowed when Telegram Mini App context or Telegram link query context is present.
 - It should not depend on the normal waitlist-gated app flow when launched correctly from Telegram.
 

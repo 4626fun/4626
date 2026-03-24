@@ -15,7 +15,7 @@ import { useEffect } from 'react'
 const SITE_NAME = '4626'
 
 function getPageOrigin(): string {
-  if (typeof window === 'undefined') return 'https://app.4626.fun'
+  if (typeof window === 'undefined') return 'https://v1.4626.fun'
   return window.location.origin
 }
 

@@ -37,7 +37,7 @@ describe('/api/uniswap/swap token policy with nested quote tokens', () => {
     const handler = await loadSwapHandler()
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.99' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.99' },
       body: {
         quote: {
           input: { token: '0x0000000000000000000000000000000000000001', amount: '1' },
@@ -62,7 +62,7 @@ describe('/api/uniswap/swap token policy with nested quote tokens', () => {
     const handler = await loadSwapHandler()
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.100' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.100' },
       body: {
         quote: {
           tokenIn: '0x0000000000000000000000000000000000000002',

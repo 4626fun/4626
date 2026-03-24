@@ -464,15 +464,6 @@ function isHelpCategoryCommand(rawText: string): boolean {
   return /^\/?help\s+\S+\s*$/i.test(text) || /^\/?keepr\s+help\s+\S+\s*$/i.test(text)
 }
 
-function isArenaHelpCommand(rawText: string): boolean {
-  const text = asTrimmed(rawText)
-  return (
-    /^\/?help\s+arena\s*$/i.test(text) ||
-    /^\/?keepr\s+help\s+arena\s*$/i.test(text) ||
-    /^\/?arena\s+(help|menu)\s*$/i.test(text)
-  )
-}
-
 const TELEGRAM_NATIVE_COMMANDS = new Set([
   'start',
   'link',
@@ -526,7 +517,6 @@ const TELEGRAM_COMMAND_HEADS = [
   'ai',
   'mkt',
   'coin',
-  'arena',
 ] as const
 const TELEGRAM_COMMAND_HEADS_PATTERN = TELEGRAM_COMMAND_HEADS.join('|')
 
@@ -1311,18 +1301,6 @@ function buildInlineLauncherReplyMarkup(): Record<string, unknown> {
         { text: 'Vault status', switch_inline_query_current_chat: 'keepr status' },
       ],
       [{ text: 'Market quote', switch_inline_query_current_chat: 'mkt quote BTC' }],
-      [
-        { text: 'Arena Play', switch_inline_query_current_chat: 'arena play' },
-        { text: 'Arena State', switch_inline_query_current_chat: 'arena state' },
-      ],
-      [
-        { text: 'Arena Find', switch_inline_query_current_chat: 'arena find' },
-        { text: 'Arena Result', switch_inline_query_current_chat: 'arena result' },
-      ],
-      [
-        { text: 'Arena Tune', switch_inline_query_current_chat: 'arena tune template' },
-        { text: 'Arena Control', switch_inline_query_current_chat: 'arena control template' },
-      ],
       [{ text: 'Back', callback_data: 'menu:start' }],
     ],
   }
@@ -1343,38 +1321,8 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
       ],
       [
         { text: menuLabel('wallet'), callback_data: 'help:wallet' },
-        { text: 'Arena', callback_data: 'help:arena' },
         { text: 'Help', callback_data: 'help:all' },
       ],
-      [{ text: menuLabel('back'), callback_data: 'menu:start' }],
-    ],
-  }
-}
-
-function buildArenaHelpShortcutReplyMarkup(): Record<string, unknown> {
-  return {
-    inline_keyboard: [
-      [
-        { text: 'Find Match', callback_data: 'help:arena_find' },
-        { text: 'Play (Auto Watch)', callback_data: 'help:arena_play' },
-      ],
-      [
-        { text: 'State', callback_data: 'help:arena_state' },
-        { text: 'Latest Result', callback_data: 'help:arena_result' },
-      ],
-      [
-        { text: 'Watch On', callback_data: 'help:arena_watch_on' },
-        { text: 'Watch Status', callback_data: 'help:arena_watch_status' },
-      ],
-      [
-        { text: 'Tune Template', callback_data: 'help:arena_tune' },
-        { text: 'Rules Template', callback_data: 'help:arena_rules' },
-      ],
-      [
-        { text: 'Zones Template', callback_data: 'help:arena_zones' },
-        { text: 'Control Template', callback_data: 'help:arena_control' },
-      ],
-      [{ text: 'Help Topics', callback_data: 'menu:topics' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -1663,10 +1611,9 @@ function buildFocusedHelpText(): string {
     '<code>/wallet</code> — wallet, positions, and actions',
     '<code>/signals</code> — recent trade feed',
     '<code>/vaults</code> — browse vaults',
-    '<code>/arena help</code> — Clash of Claw controls',
     '',
     '<u>Need more?</u>',
-    '<code>/help coin|market|social|ops|bankr|wallet|arena</code> — focused guides',
+    '<code>/help coin|market|social|ops|bankr|wallet</code> — focused guides',
     '<code>/help all</code> — complete command catalog',
     'Tap <b>CRE Ops</b> or <b>Solana</b> below for one-tap keeper actions.',
   ].join('\n')
@@ -6661,7 +6608,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     getDb,
     getTelegramLinkByUserId: ({ db, telegramUserId }) => getTelegramLinkByUserId({ db, telegramUserId }),
     logTelegramActionAudit,
-    sendTelegramMessage,
+    sendTelegramMessage: async (args: {
+      botToken: string
+      chatId: string
+      text: string
+      replyToMessageId?: number
+      replyMarkup?: Record<string, unknown>
+    }): Promise<void> => {
+      await sendTelegramMessage({
+        botToken: args.botToken,
+        chatId: args.chatId,
+        text: args.text,
+        replyToMessageId: args.replyToMessageId,
+        replyMarkup: args.replyMarkup,
+      })
+    },
     botToken,
     onMessageError: (error, meta) => {
       console.error('[telegram/webhook] tip thank-you message failed', {
@@ -7093,6 +7054,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             messageId: callbackMessageId,
             text: firstChunk,
             replyMarkup: callbackResponse.replyMarkup,
+            dismissOwnerUserId: userId,
           })
           startIdx = 1
         }
@@ -7106,6 +7068,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: chunk,
           replyToMessageId: idx === 0 && startIdx === 0 ? callbackMessageId : undefined,
           replyMarkup: idx === 0 && startIdx === 0 ? callbackResponse.replyMarkup : undefined,
+          dismissOwnerUserId: userId,
         })
       }
       const signalChunks = splitTelegramMessage(asTrimmed(callbackResponse.signalText ?? ''))
@@ -7148,6 +7111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           messageId: callbackMessageId as number,
           text: staticMenuResponse.text,
           replyMarkup: staticMenuResponse.replyMarkup,
+          dismissOwnerUserId: userId,
         })
       } else {
         await sendTelegramMessage({
@@ -7156,6 +7120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: staticMenuResponse.text,
           replyToMessageId: callbackMessageId,
           replyMarkup: staticMenuResponse.replyMarkup,
+          dismissOwnerUserId: userId,
         })
       }
       return res.status(200).json({
@@ -7172,6 +7137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           messageId: callbackMessageId as number,
           text: 'Unknown menu action. Send /start to reopen the menu.',
           replyMarkup: buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked }),
+          dismissOwnerUserId: userId,
         })
       } else {
         await sendTelegramMessage({
@@ -7180,6 +7146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: 'Unknown menu action. Send /start to reopen the menu.',
           replyToMessageId: callbackMessageId,
           replyMarkup: buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked }),
+          dismissOwnerUserId: userId,
         })
       }
       return res.status(200).json({
@@ -7197,6 +7164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text:
             'Inline shortcuts are ready. Tap a button below to pre-fill a draft in this chat, then send it.',
           replyMarkup: buildInlineLauncherReplyMarkup(),
+          dismissOwnerUserId: userId,
         })
       } else {
         await sendTelegramMessage({
@@ -7206,6 +7174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'Inline shortcuts are ready. Tap a button below to pre-fill a draft in this chat, then send it.',
           replyToMessageId: callbackMessageId,
           replyMarkup: buildInlineLauncherReplyMarkup(),
+          dismissOwnerUserId: userId,
         })
       }
       return res.status(200).json({
@@ -7249,13 +7218,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const helpMarkup = response.replyMarkup
       ?? resolveOperatorReplyMarkup(mappedCommand)
-      ?? (isArenaHelpCommand(mappedCommand)
-        ? buildArenaHelpShortcutReplyMarkup()
-        : isHelpCategoryCommand(mappedCommand)
-          ? buildHelpCategoryReplyMarkup()
-          : isHelpCommand(mappedCommand)
-            ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
-            : undefined)
+      ?? (isHelpCategoryCommand(mappedCommand)
+        ? buildHelpCategoryReplyMarkup()
+        : isHelpCommand(mappedCommand)
+          ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
+          : undefined)
     if (response.media) {
       const mediaCaption = asTrimmed(response.media.caption ?? response.text)
       await sendTelegramPhoto({
@@ -7267,6 +7234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...(mediaCaption ? { caption: mediaCaption } : {}),
         ...(canReplaceMenuMessage ? {} : { replyToMessageId: callbackMessageId }),
         replyMarkup: response.media.replyMarkup ?? helpMarkup,
+        dismissOwnerUserId: userId,
       })
       if (canReplaceMenuMessage) {
         await deleteTelegramMessage({
@@ -7283,6 +7251,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             botToken,
             chatId,
             text: chunk,
+            dismissOwnerUserId: userId,
           })
         }
       }
@@ -7298,6 +7267,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         messageId: callbackMessageId as number,
         text: response.text,
         replyMarkup: helpMarkup,
+        dismissOwnerUserId: userId,
       })
     } else {
       const chunks = splitTelegramMessage(response.text)
@@ -7310,6 +7280,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: chunk,
           replyToMessageId: idx === 0 ? callbackMessageId : undefined,
           replyMarkup: idx === 0 ? helpMarkup : undefined,
+          dismissOwnerUserId: userId,
         })
       }
     }
@@ -7514,13 +7485,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const helpMarkup = response.replyMarkup
     ?? resolveOperatorReplyMarkup(normalizedText)
-    ?? (isArenaHelpCommand(normalizedText)
-      ? buildArenaHelpShortcutReplyMarkup()
-      : isHelpCategoryCommand(normalizedText)
-        ? buildHelpCategoryReplyMarkup()
-        : isHelpCommand(normalizedText)
-          ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
-          : undefined)
+    ?? (isHelpCategoryCommand(normalizedText)
+      ? buildHelpCategoryReplyMarkup()
+      : isHelpCommand(normalizedText)
+        ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
+        : undefined)
   const deliveryState = await loadTelegramActiveMessageState({
     chatId,
     ownerUserId: userId,

@@ -939,7 +939,9 @@ describe('telegram webhook handler', () => {
     expect(form.get('caption')).toBe('<b>AKITA | MARKET CHART</b>')
     expect(form.get('parse_mode')).toBe('HTML')
     expect(String(form.get('reply_to_message_id') ?? '')).toBe('91')
-    expect(String(form.get('reply_markup') ?? '')).toBe('')
+    const replyMarkup = JSON.parse(String(form.get('reply_markup') ?? '{}'))
+    const buttons = replyMarkup.inline_keyboard.flat()
+    expect(buttons.some((button: any) => String(button?.callback_data ?? '').startsWith('message:delete:99'))).toBe(true)
   })
 
   it('backticks only the command and not the help description', async () => {
@@ -994,7 +996,63 @@ describe('telegram webhook handler', () => {
     expect(text).toContain('<code>/cre status</code>')
     expect(text).toContain('<blockquote expandable>')
     const buttons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(false)
+    expect(buttons.some((button: any) => String(button?.callback_data ?? '').startsWith('message:delete:99'))).toBe(true)
+  })
+
+  it('edits the previous tracked group reply for the same user instead of stacking a new one', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramActiveMessageMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        chatId: '-100123',
+        ownerTelegramUserId: '99',
+        messageId: 701,
+        createdAt: null,
+        updatedAt: null,
+      })
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, result: { message_id: 701 } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, result: { message_id: 701 } }),
+      })
+
+    const firstReq = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_0_1_1,
+        message: { message_id: 401, text: '/help', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const firstRes = createMockRes()
+    await handler(firstReq, firstRes)
+
+    const secondReq = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_0_1_2,
+        message: { message_id: 402, text: '/link', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const secondRes = createMockRes()
+    await handler(secondReq, secondRes)
+
+    expect(firstRes.statusCode).toBe(200)
+    expect(secondRes.statusCode).toBe(200)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
+    const editPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(editPayload.message_id).toBe(701)
+    const editButtons = editPayload.reply_markup?.inline_keyboard?.flat?.() ?? []
+    expect(editButtons.some((button: any) => String(button?.callback_data ?? '').startsWith('message:delete:99'))).toBe(true)
   })
 
   it('handles /start in DM as onboarding welcome with a single Start inline CTA', async () => {
@@ -2788,6 +2846,41 @@ describe('telegram webhook handler', () => {
     expect(deletePayload.message_id).toBe(503)
   })
 
+  it('rejects group delete callback when a different user clicks the owner-scoped dismiss button', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_22_2,
+        callback_query: {
+          id: 'cb-delete-group-mismatch',
+          data: 'message:delete:99',
+          from: { id: 42 },
+          message: { message_id: 504, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    const ackPayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(ackPayload.text ?? '')).toContain('Only the requester can dismiss this.')
+    expect(ackPayload.show_alert).toBe(true)
+  })
+
   it('renders /help connect CTA as menu callback for deterministic /link flow', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
@@ -3441,7 +3534,7 @@ describe('telegram webhook handler', () => {
     expect(primaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Decline')).toBe(true)
     expect(String(primaryButtons?.[0]?.callback_data ?? '')).toContain('trade:accept:trade-token-1')
     const allButtons = keyboard.flat()
-    expect(allButtons.some((button: any) => button?.callback_data === 'message:delete')).toBe(false)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '').startsWith('message:delete:99'))).toBe(true)
   })
 
   it('renders bid preview with live auction context and drift safety note', async () => {

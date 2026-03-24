@@ -211,7 +211,7 @@ function useResolvedAccessState(): AccessState {
 
 const AccessContext = createContext<AccessState | null>(null)
 
-/** Redirect from 4626.fun to app.4626.fun when user hits app-only routes. */
+/** Redirect from 4626.fun to v1.4626.fun when user hits app-only routes. */
 function HostGuard() {
   const location = useLocation()
   if (typeof window === 'undefined') return null

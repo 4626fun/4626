@@ -106,7 +106,7 @@ describe('agent SIWA verification', () => {
     vi.clearAllMocks()
 
     parseSiwaMessageSafeMock.mockReturnValue({
-      domain: 'app.4626.fun',
+      domain: 'v1.4626.fun',
       address: CANONICAL_CSW,
       agentId: 2205,
       agentRegistry: AGENT_REGISTRY,
@@ -151,7 +151,7 @@ describe('agent SIWA verification', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'app.4626.fun' },
+      headers: { host: 'v1.4626.fun' },
       body: {
         message: 'siwa-message',
         signature: '0xsig',
@@ -187,7 +187,7 @@ describe('agent SIWA verification', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'app.4626.fun' },
+      headers: { host: 'v1.4626.fun' },
       body: {
         message: 'siwa-message',
         signature: '0xsig',
@@ -207,7 +207,7 @@ describe('agent SIWA verification', () => {
 
   it('rejects SIWA messages whose address no longer matches the nonce-bound canonical owner', async () => {
     parseSiwaMessageSafeMock.mockReturnValue({
-      domain: 'app.4626.fun',
+      domain: 'v1.4626.fun',
       address: OTHER_CSW,
       agentId: 2205,
       agentRegistry: AGENT_REGISTRY,
@@ -224,7 +224,7 @@ describe('agent SIWA verification', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'app.4626.fun' },
+      headers: { host: 'v1.4626.fun' },
       body: {
         message: 'siwa-message',
         signature: '0xsig',

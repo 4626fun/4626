@@ -10,7 +10,7 @@ function isPrivateChatId(chatId: string): boolean {
 export function resolveTelegramMiniAppUrl(): string {
   const configured = asTrimmed(getTelegramWebhookConfig().miniAppUrl)
   if (configured && /^https?:\/\//i.test(configured)) return configured
-  return 'https://app.4626.fun'
+  return 'https://v1.4626.fun'
 }
 
 export function buildTelegramMiniAppUrl(params: {

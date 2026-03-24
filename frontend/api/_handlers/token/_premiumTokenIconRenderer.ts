@@ -2599,11 +2599,11 @@ async function createTopBreakoutMask(params: {
   const breakoutWidth = Math.max(1, Math.round(params.breakoutWindow?.width ?? layout.breakoutWidth))
   const breakoutRight = Math.min(size, breakoutX + breakoutWidth)
   const top = isPixelRembgCutout
-    ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.10))
+    ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.24))
     : layout.breakoutY
   const rembgDepthMultiplier =
     isRembgCutout
-      ? (params.sourceClass === 'pixelArt' ? 1.86 : params.sourceClass === 'illustration' ? 1.28 : 1.16)
+      ? (params.sourceClass === 'pixelArt' ? 1.78 : params.sourceClass === 'illustration' ? 1.28 : 1.16)
       : 1
   const bottom = Math.min(size, top + Math.round(layout.breakoutHeight * rembgDepthMultiplier))
   const height = Math.max(1, bottom - top)
@@ -2613,12 +2613,12 @@ async function createTopBreakoutMask(params: {
   const bottomFadeOpacity = isRembgCutout ? '1' : '0'
   const lowerFadeStop = isRembgCutout ? '100%' : '70%'
   const xFadeStart =
-    isPixelRembgCutout ? '22%'
+    isPixelRembgCutout ? '28%'
     : isRembgCutout ? '0%'
     : isIllustration ? '8%'
     : '18%'
   const xFadeEnd =
-    isPixelRembgCutout ? '78%'
+    isPixelRembgCutout ? '72%'
     : isRembgCutout ? '100%'
     : isIllustration ? '90%'
     : '82%'
@@ -2797,7 +2797,9 @@ function selectDominantUpperSubjectComponent(params: {
     height - 1,
     Math.round(layout.chamberY + layout.chamberSize * (params.sourceClass === 'pixelArt' ? 0.68 : 0.66)),
   )
-  const minComponentPixels = Math.max(36, Math.round(regionArea * 0.002))
+  const minComponentPixels = isPixelArt
+    ? Math.max(40, Math.round(regionArea * 0.0006))
+    : Math.max(36, Math.round(regionArea * 0.002))
   const chamberCenterX = layout.chamberX + layout.chamberSize / 2
   const visited = new Uint8Array(width * height)
   const queue: number[] = []
@@ -2895,9 +2897,9 @@ function selectDominantUpperSubjectComponent(params: {
   const best = candidates[0]
   if (!best) return null
 
-  const minScore = best.score * (isPixelArt ? 0.28 : isIllustration ? 0.52 : 0.42)
-  const minArea = Math.max(minComponentPixels, Math.round(best.area * (isPixelArt ? 0.06 : isIllustration ? 0.18 : 0.14)))
-  const maxComponents = isPixelArt ? 4 : isIllustration ? 2 : 3
+  const minScore = best.score * (isPixelArt ? 0.2 : isIllustration ? 0.52 : 0.42)
+  const minArea = Math.max(minComponentPixels, Math.round(best.area * (isPixelArt ? 0.003 : isIllustration ? 0.18 : 0.14)))
+  const maxComponents = isPixelArt ? 6 : isIllustration ? 2 : 3
   const selected = candidates
     .filter((candidate) => candidate.score >= minScore && candidate.area >= minArea)
     .slice(0, maxComponents)
@@ -2905,6 +2907,66 @@ function selectDominantUpperSubjectComponent(params: {
   for (const candidate of selected) {
     for (const idx of candidate.pixels) {
       unionPixels.push(idx)
+    }
+  }
+  if (isPixelArt) {
+    // Preserve thin top-center details (e.g., hats/goggles) that may be small
+    // compared to the dominant head/body component.
+    const centerX = layout.chamberX + layout.chamberSize / 2
+    const centerHalfWidth = Math.max(20, Math.round(layout.chamberSize * 0.16))
+    const centerX0 = Math.max(x0, Math.floor(centerX - centerHalfWidth))
+    const centerX1 = Math.min(x1 - 1, Math.ceil(centerX + centerHalfWidth))
+    const topBandY1 = Math.min(
+      y1 - 1,
+      y0 + Math.max(8, Math.round((y1 - y0) * 0.24)),
+    )
+    const minTopCenterPixels = Math.max(42, Math.round(regionArea * 0.00025))
+    const topCenterPixels: number[] = []
+    for (let y = y0; y <= topBandY1; y += 1) {
+      for (let x = centerX0; x <= centerX1; x += 1) {
+        const idx = y * width + x
+        if ((mask[idx] ?? 0) !== 0) {
+          topCenterPixels.push(idx)
+        }
+      }
+    }
+    if (topCenterPixels.length >= minTopCenterPixels) {
+      for (const idx of topCenterPixels) {
+        unionPixels.push(idx)
+      }
+    }
+    // Final hard-lock for pixel cutouts:
+    // keep only a center-top shell so breakout favors hat/goggles over wide ear/body blobs.
+    const selectedMask = new Uint8Array(width * height)
+    for (const idx of unionPixels) {
+      selectedMask[idx] = 1
+    }
+    const shellCenterHalfWidth = Math.max(24, Math.round(layout.chamberSize * 0.24))
+    const shellX0 = Math.max(x0, Math.floor(centerX - shellCenterHalfWidth))
+    const shellX1 = Math.min(x1 - 1, Math.ceil(centerX + shellCenterHalfWidth))
+    const shellDepthPx = Math.max(14, Math.round(layout.breakoutHeight * 1.28))
+    const shellPixels: number[] = []
+    for (let x = shellX0; x <= shellX1; x += 1) {
+      let topY = -1
+      for (let y = y0; y < y1; y += 1) {
+        const idx = y * width + x
+        if (selectedMask[idx] !== 0) {
+          topY = y
+          break
+        }
+      }
+      if (topY < 0) continue
+      const stopY = Math.min(y1 - 1, topY + shellDepthPx)
+      for (let y = topY; y <= stopY; y += 1) {
+        const idx = y * width + x
+        if (selectedMask[idx] !== 0) {
+          shellPixels.push(idx)
+        }
+      }
+    }
+    const minShellPixels = Math.max(180, Math.round(regionArea * 0.0022))
+    if (shellPixels.length >= minShellPixels) {
+      return shellPixels
     }
   }
   return unionPixels.length > 0 ? unionPixels : null
@@ -3394,7 +3456,7 @@ export async function renderBreakoutLayer(params: {
               params.sourceClass === 'illustration'
                 ? 36
                 : params.sourceClass === 'pixelArt'
-                  ? 12
+                  ? 8
                   : 22,
             )
           : normalizedSubjectRef
@@ -3442,7 +3504,7 @@ export async function renderBreakoutLayer(params: {
       hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
         ? 72
         : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
-          ? (params.sourceClass === 'pixelArt' ? 24 : 96)
+          ? (params.sourceClass === 'pixelArt' ? 16 : 96)
           : undefined,
     strictContourGates:
       hasPreparedMaskSource &&
@@ -3475,7 +3537,7 @@ export async function renderBreakoutLayer(params: {
       const maxWidth = Math.round(
         layout.chamberSize * (
           isRembgBreakout
-            ? (params.sourceClass === 'pixelArt' ? 0.82 : 0.9)
+            ? (params.sourceClass === 'pixelArt' ? 0.66 : 0.9)
             : (params.sourceClass === 'pixelArt' ? 0.62 : 0.74)
         ),
       )
@@ -3558,8 +3620,8 @@ export async function renderBreakoutLayer(params: {
       const breakoutCenterX = bounds.minX + bounds.width / 2
       const maxShiftX = Math.max(2, Math.round(layout.chamberSize * 0.05))
       const shiftX = Math.round(clamp(chamberCenterX - breakoutCenterX, -maxShiftX, maxShiftX))
-      const targetTopY = Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.20))
-      const maxShiftY = Math.max(3, Math.round(layout.chamberSize * 0.028))
+      const targetTopY = Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.30))
+      const maxShiftY = Math.max(4, Math.round(layout.chamberSize * 0.04))
       const shiftY = Math.round(clamp(targetTopY - bounds.minY, -maxShiftY, maxShiftY))
       if (shiftX !== 0 || shiftY !== 0) {
         masked = await shiftLayerCanvas({
@@ -4084,7 +4146,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           )) - ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX)
         : (
             analysis.sourceClass === 'pixelArt' && breakoutPlan.mode === 'rembgCutout'
-              ? topBiasPx + Math.max(9, Math.round(layout.chamberSize * 0.017))
+              ? topBiasPx + Math.max(12, Math.round(layout.chamberSize * 0.02))
               : topBiasPx
           )
       const breakoutScale = clamp(

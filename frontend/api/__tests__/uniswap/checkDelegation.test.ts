@@ -38,7 +38,7 @@ describe('/api/uniswap/checkDelegation', () => {
     const req = createMockReq({
       method: 'POST',
       headers: {
-        origin: 'https://app.4626.fun',
+        origin: 'https://v1.4626.fun',
         'x-forwarded-for': '10.1.1.3',
       },
       body: {
@@ -65,7 +65,7 @@ describe('/api/uniswap/checkDelegation', () => {
     restoreEnv = applyEnv({ UNISWAP_API_KEY: 'test-key' })
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.4' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.4' },
       body: { walletAddresses: ['0x0000000000000000000000000000000000000002'] },
     })
     const res = createMockRes()
@@ -85,7 +85,7 @@ describe('/api/uniswap/checkDelegation', () => {
     })
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.5' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.5' },
       body: {
         chainIds: [10],
         walletAddresses: ['0x0000000000000000000000000000000000000002'],
@@ -104,7 +104,7 @@ describe('/api/uniswap/checkDelegation', () => {
     restoreEnv = applyEnv({ UNISWAP_API_KEY: 'test-key' })
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.6' },
+      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.6' },
       body: {
         chainIds: [8453],
         walletAddresses: ['0xnot-an-address'],

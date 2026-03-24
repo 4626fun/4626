@@ -30,7 +30,7 @@ function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {
     ? bodyUrl
     : configured && /^https?:\/\//i.test(configured)
       ? configured
-      : 'https://app.4626.fun'
+      : 'https://v1.4626.fun'
   return buildTelegramMiniAppUrl({
     baseUrl,
     pathname: '/telegram/menu',

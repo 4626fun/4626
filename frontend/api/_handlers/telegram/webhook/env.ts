@@ -202,7 +202,7 @@ export function readInlineMediaAssetMap(): Record<string, TelegramInlineMediaAss
 export function resolveTelegramMiniAppUrl(): string {
   const configured = getTelegramWebhookConfig().miniAppUrl
   if (configured) return configured
-  return 'https://app.4626.fun'
+  return 'https://v1.4626.fun'
 }
 
 export function areHolderRoomsEnabled(): boolean {

@@ -56,7 +56,7 @@ Telegram onboarding/linking flows must remain isolated from normal app routing a
 
 ### Rules
 
-- `/telegram/link` runs only on `app.4626.fun`
+- `/telegram/link` runs only on `v1.4626.fun`
 - The route is valid when:
   - Telegram Mini App context is present, OR
   - Telegram link query parameters are present

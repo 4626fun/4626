@@ -28,7 +28,7 @@ function resolveAppOrigin(req: VercelRequest): string {
     return getCanonicalOrigin(req)
   } catch {
     // Keep directory metadata deterministic when env wiring is incomplete.
-    return 'https://app.4626.fun'
+    return 'https://v1.4626.fun'
   }
 }
 

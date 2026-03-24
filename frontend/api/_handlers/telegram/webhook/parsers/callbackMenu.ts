@@ -32,16 +32,6 @@ const CRE_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
 
 const HELP_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
   all: '/help all',
-  arena_tune: '/arena tune attack=100 eco=2.1 expansion=2.4 retreat=0.55 defense=1.3 air=0.4 raid=14 safety=8',
-  arena_rules: '/arena rules ECO:6 TECH:7 DEF:4 AIR:3 ASSIST:6',
-  arena_zones: '/arena zones C:attack W:defend N:scout commander=SW',
-  arena_control: '/arena control ECO:6 TECH:7 C:attack NE:scout commander=SW',
-  arena_play: '/arena play',
-  arena_find: '/arena find',
-  arena_state: '/arena state',
-  arena_result: '/arena result',
-  arena_watch_on: '/arena watch on',
-  arena_watch_status: '/arena watch status',
 }
 
 const HELP_TOPIC_ACTIONS = new Set([
@@ -52,7 +42,6 @@ const HELP_TOPIC_ACTIONS = new Set([
   'ops',
   'bankr',
   'wallet',
-  'arena',
 ])
 
 const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
@@ -88,16 +77,6 @@ const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
   'cre:report': 'Reporting vaults',
   'cre:settle-fees': 'Settling fees',
   'cre:relay-entries': 'Relaying entries',
-  'help:arena_tune': 'Arena tune template',
-  'help:arena_rules': 'Arena rules template',
-  'help:arena_zones': 'Arena zones template',
-  'help:arena_control': 'Arena control template',
-  'help:arena_play': 'Arena play',
-  'help:arena_find': 'Arena find match',
-  'help:arena_state': 'Arena state',
-  'help:arena_result': 'Arena result',
-  'help:arena_watch_on': 'Arena watch enabled',
-  'help:arena_watch_status': 'Arena watch status',
 }
 
 function resolveNamespacedCallbackCommand(
