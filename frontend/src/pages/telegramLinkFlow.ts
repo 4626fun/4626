@@ -587,7 +587,7 @@ export function shouldRetryTelegramLinkEmailVerification(params: {
   if (!params.verificationAttempted) return false
   if (!params.hasLinkContext) return false
   if (params.sessionState !== 'ready') return false
-  if (!params.privyReady || !params.privyAuthenticated) return false
+  if (!params.privyReady) return false
   if (params.linkState === 'authenticating' || params.linkState === 'linking' || params.linkState === 'linked') return false
   return params.emailState === 'needs_verification' || params.emailState === 'pending'
 }
@@ -873,8 +873,10 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
 
       if (!privyAuthenticated) {
         if (runId === emailCheckRunRef.current) {
-          setEmailState('needs_verification')
-          setEmailMessage(null)
+          setEmailState(poll ? 'pending' : 'needs_verification')
+          setEmailMessage(
+            poll ? 'Your email code was accepted. Waiting for your 4626 session to finish syncing...' : null,
+          )
         }
         return { status: 'needs_verification' } satisfies TelegramLinkEmailVerificationResult
       }

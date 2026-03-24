@@ -513,6 +513,18 @@ describe('TelegramLink helpers', () => {
         hasLinkContext: true,
         sessionState: 'ready',
         privyReady: true,
+        privyAuthenticated: false,
+        linkState: 'idle',
+        emailState: 'pending',
+        verificationAttempted: true,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldRetryTelegramLinkEmailVerification({
+        hasLinkContext: true,
+        sessionState: 'ready',
+        privyReady: true,
         privyAuthenticated: true,
         linkState: 'idle',
         emailState: 'pending',
