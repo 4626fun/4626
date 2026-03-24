@@ -2605,7 +2605,7 @@ async function createTopBreakoutMask(params: {
     : layout.breakoutY
   const rembgDepthMultiplier =
     isPreparedCutout
-      ? (params.sourceClass === 'pixelArt' ? (isHeroCutout ? 1.62 : 1.78) : params.sourceClass === 'illustration' ? 1.28 : (isHeroCutout ? 1.8 : 1.16))
+      ? (params.sourceClass === 'pixelArt' ? (isHeroCutout ? 1.62 : 1.78) : params.sourceClass === 'illustration' ? 1.28 : (isHeroCutout ? 2.2 : 1.16))
       : 1
   const bottom = Math.min(size, top + Math.round(layout.breakoutHeight * rembgDepthMultiplier))
   const height = Math.max(1, bottom - top)
@@ -2680,7 +2680,7 @@ async function createBreakoutAboveFrameMask(params: {
         ? (
             params.sourceClass === 'pixelArt'
               ? (isHeroCutout ? 0.62 : 0.78)
-              : isIllustration ? 0.62 : (isHeroCutout ? 1.8 : 0.42)
+              : isIllustration ? 0.62 : (isHeroCutout ? 2.4 : 0.42)
           )
         : isIllustration ? 0.38 : 0.05
     )),
@@ -3540,7 +3540,7 @@ export async function renderBreakoutLayer(params: {
     forceAlphaMask: hasPreparedMaskSource,
     forceAlphaThreshold:
       hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
-        ? 28
+        ? 8
         : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
           ? (params.sourceClass === 'pixelArt' ? 8 : 96)
           : undefined,
@@ -3572,7 +3572,7 @@ export async function renderBreakoutLayer(params: {
       const marginRight = Math.max(
         4,
         Math.round(layout.breakoutWidth * (
-          isRembgBreakout ? 0.24 : isHeroCutout ? 0.38 : 0.12
+          isRembgBreakout ? 0.24 : isHeroCutout ? 0.52 : 0.12
         )),
       )
       const desiredX = subjectBounds.minX - marginLeft
@@ -3594,7 +3594,7 @@ export async function renderBreakoutLayer(params: {
           isRembgBreakout
             ? (params.sourceClass === 'pixelArt' ? 0.66 : 0.9)
             : isHeroCutout
-              ? (params.sourceClass === 'pixelArt' ? 0.52 : 0.92)
+              ? (params.sourceClass === 'pixelArt' ? 0.52 : 1.0)
               : (params.sourceClass === 'pixelArt' ? 0.62 : 0.74)
         ),
       )
@@ -3697,7 +3697,7 @@ export async function renderBreakoutLayer(params: {
       layer: masked,
       size,
       offsetX: 0,
-      offsetY: -34,
+      offsetY: -24,
     })
   }
   if (params.subjectMaskKind === 'rembgCutout' && params.sourceClass === 'illustration') {

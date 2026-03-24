@@ -977,8 +977,7 @@ export function TelegramLink() {
     }
   }, [emitTelemetry, state])
 
-  const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const submitEmail = () => {
     emitTelemetry(
       'telegram_link_email_submit_attempted',
       {
@@ -991,7 +990,14 @@ export function TelegramLink() {
       state,
     )
     if (emailSubmitDisabled) return
+    const activeElement = typeof document !== 'undefined' ? document.activeElement : null
+    if (activeElement instanceof HTMLElement) activeElement.blur()
     dispatch({ type: 'SUBMIT_EMAIL' })
+  }
+
+  const blurActiveElement = () => {
+    const activeElement = typeof document !== 'undefined' ? document.activeElement : null
+    if (activeElement instanceof HTMLElement) activeElement.blur()
   }
 
   const handleCodeSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1037,7 +1043,7 @@ export function TelegramLink() {
 
       case 'collect_email':
         return (
-          <form className="space-y-3" onSubmit={handleEmailSubmit}>
+          <div className="space-y-3">
             <label htmlFor="telegram-link-email" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-[#666666]">
               Verified Email
             </label>
@@ -1046,26 +1052,37 @@ export function TelegramLink() {
               type="email"
               autoComplete="email"
               inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="done"
               value={state.email}
               onChange={(event) => dispatch({ type: 'EMAIL_CHANGED', email: event.target.value })}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                submitEmail()
+              }}
               placeholder="name@example.com"
               className="block h-11 w-full rounded-md border border-white/10 bg-[#111111] px-3 text-[15px] text-[#EDEDED] outline-none focus:border-[#0052FF] focus:ring-0"
             />
             {state.emailError ? <InlineError message={state.emailError} /> : null}
             {emailSubmitHelperText ? <p className="text-[12px] leading-[1.4] text-[#666666]">{emailSubmitHelperText}</p> : null}
             <button
-              type="submit"
+              type="button"
+              onPointerDown={blurActiveElement}
+              onClick={submitEmail}
               data-testid="telegram-link-submit"
               data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
               data-email-normalized={normalizedCollectEmail}
               data-email-valid={emailIsValid ? 'true' : 'false'}
               data-flow-tag={state.tag}
-              className="block h-11 w-full rounded-md bg-[#0052FF] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+              className="block h-11 w-full touch-manipulation rounded-md bg-[#0052FF] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
               disabled={emailSubmitDisabled}
             >
               Send Code
             </button>
-          </form>
+          </div>
         )
 
       case 'sending_email_code':

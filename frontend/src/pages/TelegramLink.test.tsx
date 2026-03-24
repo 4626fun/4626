@@ -233,10 +233,12 @@ describe('TelegramLink UI flow', () => {
     const user = userEvent.setup()
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), ' USER@EXAMPLE.COM ')
+    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    await user.type(input, ' USER@EXAMPLE.COM ')
     const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
 
     expect(submitButton.disabled).toBe(false)
+    expect(document.activeElement).toBe(input)
 
     await user.click(submitButton)
 
