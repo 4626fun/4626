@@ -1884,6 +1884,7 @@ async function uploadRegistrationToGrove(): Promise<void> {
 }
 
 let agentBooted = false
+let lastReadinessLogKey: string | null = null
 
 async function main() {
   // Suppress known non-fatal native/runtime noise that causes alert fatigue.
@@ -2202,6 +2203,19 @@ function startHealthServer() {
           : agentCount === 0
             ? 'no_agents'
             : 'degraded'
+    const readinessLogKey = `${ready ? 'ready' : 'not_ready'}:${readinessReasons.join(',') || 'none'}`
+    if (readinessLogKey !== lastReadinessLogKey) {
+      lastReadinessLogKey = readinessLogKey
+      logger.info('[eliza] readiness state changed', {
+        ready,
+        status,
+        reasons: readinessReasons,
+        agentBooted,
+        agentCount,
+        requiresXmtp,
+        xmtpReady,
+      })
+    }
     const probePath = url as '/healthz' | '/readyz'
     const detailedHealthAccess = hasDetailedHealthAccess(_req)
     const statusCode = getHealthProbeStatusCode({
