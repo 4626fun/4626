@@ -1333,7 +1333,6 @@ export function useTelegramLinkFlow(): UseTelegramLinkFlowResult {
       linkState === 'authenticating' ||
       linkState === 'linking' ||
       emailState === 'checking' ||
-      emailState === 'verifying' ||
       emailOtpStatus === 'sending-code' ||
       emailOtpStatus === 'submitting-code',
     onEmailInputChange: setEmailInput,
