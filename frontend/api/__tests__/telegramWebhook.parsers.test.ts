@@ -186,6 +186,16 @@ describe('telegram webhook parsers', () => {
 
     expect(
       shouldAutoRouteToAi({
+        chatId: '7726886643',
+        text: '@akitai_bot how are we doing',
+        message: {},
+        aiFollowupEnabled: true,
+        isPrivateChatId,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldAutoRouteToAi({
         chatId: '-1001',
         text: 'how are we doing',
         message: { reply_to_message: { from: { is_bot: true } } },

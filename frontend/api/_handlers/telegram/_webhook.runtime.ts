@@ -1903,7 +1903,34 @@ async function sendTelegramMessage(params: {
   replyMarkup?: Record<string, unknown>
   dismissOwnerUserId?: string | null
 }): Promise<{ messageId: number | null }> {
-  return sendTelegramMessageShared(params)
+  try {
+    return await sendTelegramMessageShared(params)
+  } catch (error) {
+    console.error('[telegram/webhook] sendMessage delivery failed', {
+      chatId: params.chatId,
+      replyToMessageId: params.replyToMessageId ?? null,
+      messageThreadId: params.messageThreadId ?? null,
+      hasReplyMarkup: Boolean(params.replyMarkup),
+      err: error instanceof Error ? error.message : String(error),
+    })
+    const fallbackText = asTrimmed(params.text)
+    if (!fallbackText) return { messageId: null }
+    try {
+      return await sendTelegramMessageShared({
+        botToken: params.botToken,
+        chatId: params.chatId,
+        text: fallbackText,
+        ...(typeof params.messageThreadId === 'number' ? { messageThreadId: params.messageThreadId } : {}),
+      })
+    } catch (fallbackError) {
+      console.error('[telegram/webhook] sendMessage fallback delivery failed', {
+        chatId: params.chatId,
+        messageThreadId: params.messageThreadId ?? null,
+        err: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+      })
+      return { messageId: null }
+    }
+  }
 }
 
 async function sendTelegramPhoto(params: {
@@ -1957,7 +1984,21 @@ async function replaceTelegramMenuMessage(params: {
   replyMarkup?: Record<string, unknown>
   dismissOwnerUserId?: string | null
 }): Promise<{ messageId: number | null }> {
-  return replaceTelegramMenuMessageShared(params)
+  try {
+    return await replaceTelegramMenuMessageShared(params)
+  } catch (error) {
+    console.error('[telegram/webhook] replace menu message failed', {
+      chatId: params.chatId,
+      messageId: params.messageId,
+      hasReplyMarkup: Boolean(params.replyMarkup),
+      err: error instanceof Error ? error.message : String(error),
+    })
+    return sendTelegramMessage({
+      botToken: params.botToken,
+      chatId: params.chatId,
+      text: params.text,
+    })
+  }
 }
 
 async function loadTelegramActiveMessageState(params: {
@@ -1972,20 +2013,33 @@ async function loadTelegramActiveMessageState(params: {
   if (!dismissOwnerUserId) {
     return { db: null, activeMessageId: null, dismissOwnerUserId: null }
   }
-  const db = await getDb()
-  if (!db) {
-    return { db: null, activeMessageId: null, dismissOwnerUserId }
-  }
-  await ensureTelegramTradingSchema(db as any)
-  const active = await getTelegramActiveMessage({
-    db: db as any,
-    chatId: params.chatId,
-    ownerTelegramUserId: dismissOwnerUserId,
-  })
-  return {
-    db,
-    activeMessageId: typeof active?.messageId === 'number' ? active.messageId : null,
-    dismissOwnerUserId,
+  try {
+    const db = await getDb()
+    if (!db) {
+      return { db: null, activeMessageId: null, dismissOwnerUserId }
+    }
+    await ensureTelegramTradingSchema(db as any)
+    const active = await getTelegramActiveMessage({
+      db: db as any,
+      chatId: params.chatId,
+      ownerTelegramUserId: dismissOwnerUserId,
+    })
+    return {
+      db,
+      activeMessageId: typeof active?.messageId === 'number' ? active.messageId : null,
+      dismissOwnerUserId,
+    }
+  } catch (error) {
+    console.error('[telegram/webhook] active message state load failed', {
+      chatId: params.chatId,
+      ownerUserId: dismissOwnerUserId,
+      err: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      db: null,
+      activeMessageId: null,
+      dismissOwnerUserId,
+    }
   }
 }
 

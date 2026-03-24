@@ -23,6 +23,7 @@ describe('deriveWaitlistEntryCtaState', () => {
         authenticated: true,
         account: {
           emailVerified: false,
+          appAccessStatus: null,
           accountSignals: { canonicalCswAddress: null },
         },
         ownerDelegationReady: false,
@@ -36,6 +37,7 @@ describe('deriveWaitlistEntryCtaState', () => {
         authenticated: true,
         account: {
           emailVerified: true,
+          appAccessStatus: null,
           accountSignals: { canonicalCswAddress: null },
         },
         ownerDelegationReady: false,
@@ -49,6 +51,7 @@ describe('deriveWaitlistEntryCtaState', () => {
         authenticated: true,
         account: {
           emailVerified: true,
+          appAccessStatus: null,
           accountSignals: { canonicalCswAddress: '0x123' },
         },
         ownerDelegationReady: false,
@@ -56,17 +59,46 @@ describe('deriveWaitlistEntryCtaState', () => {
     ).toBe('continue_setup')
   })
 
-  it('shows open app once a canonical csw exists and owner delegation is ready', () => {
+  it('keeps continue setup until admin approval exists', () => {
     expect(
       deriveWaitlistEntryCtaState({
         authenticated: true,
         account: {
           emailVerified: true,
+          appAccessStatus: 'pending',
+          accountSignals: { canonicalCswAddress: '0x123' },
+        },
+        ownerDelegationReady: true,
+      }),
+    ).toBe('continue_setup')
+  })
+
+  it('shows open app only after admin approval and wallet readiness', () => {
+    expect(
+      deriveWaitlistEntryCtaState({
+        authenticated: true,
+        account: {
+          emailVerified: true,
+          appAccessStatus: 'approved',
           accountSignals: { canonicalCswAddress: '0x123' },
         },
         ownerDelegationReady: true,
       }),
     ).toBe('open_app')
+  })
+
+  it('keeps approved accounts in continue setup until owner delegation is ready', () => {
+    expect(
+      deriveWaitlistEntryCtaState({
+        authenticated: true,
+        account: {
+          emailVerified: true,
+          appAccessStatus: 'approved',
+          accountSignals: { canonicalCswAddress: '0x123' },
+        },
+        ownerDelegationReady: false,
+      }),
+    ).toBe('continue_setup')
   })
 
   it('falls back to the waitlist modal when Privy is not ready for join auth', () => {

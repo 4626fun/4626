@@ -12,9 +12,9 @@ export function WaitlistModal({ open, onClose }: WaitlistModalProps) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Account setup"
-      description="Sign in with email, then continue directly into canonical smart-wallet setup."
-      maxWidth="sm:max-w-[480px]"
+      title="Waitlist status"
+      description="Verify email, track points, and watch your place on the leaderboard while admin approval is pending."
+      maxWidth="sm:max-w-[980px]"
       placement="center"
     >
       <WaitlistFlowWithProviders variant="modal" />

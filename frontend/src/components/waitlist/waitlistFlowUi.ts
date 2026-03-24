@@ -43,8 +43,7 @@ export type WaitlistDoneUi = {
 
 export function canEnterAppFromAccountState(params: { appAccessStatus: string | null; tier: number }): boolean {
   const status = String(params.appAccessStatus ?? '').trim().toLowerCase()
-  if (status === 'approved') return true
-  return params.tier >= 1
+  return status === 'approved'
 }
 
 /** Copy for the waitlist sign-in step (email is collected only in the Privy modal). */
@@ -52,7 +51,7 @@ export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
     title: 'Get early access',
     subtitle:
-      'Sign in with your email (one-time code). After verification, continue directly into smart-wallet setup.',
+      'Sign in with your email (one-time code). After verification, track your points, climb the leaderboard, and keep building your account while approval is pending.',
     ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue with email`,
     busyLabel: 'Opening email sign-in…',
   }
@@ -94,7 +93,7 @@ export function deriveWaitlistDoneUi(canEnterApp: boolean): WaitlistDoneUi {
 
   return {
     title: "You're in!",
-    subtitle: 'Visit accounts to manage connected identities, earn points, and track your status.',
+    subtitle: 'Visit accounts to manage connected identities, earn points, and wait for admin approval.',
     primaryLabel: `${SHARE_SYMBOL_PREFIX} Go to accounts`,
     secondaryLabel: null,
   }

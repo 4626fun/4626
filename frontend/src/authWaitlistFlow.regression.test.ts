@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveAccess } from './App'
+import { getWaitlistEntryRouteTarget, resolveAccess } from './App'
 import { buildAppEntryPath } from './lib/auth/appEntry'
-import { buildWaitlistEntryPath } from './lib/auth/waitlistEntry'
+import { buildWaitlistEntryUrl } from './lib/auth/waitlistEntry'
 import { shouldNavigateAfterWaitlistHandoff } from './lib/auth/appContinueGate'
+import { MARKETING_ORIGIN } from './lib/host'
 
 const SESSION_ADDRESS = '0x1234567890123456789012345678901234567890'
 
@@ -77,7 +78,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-acceptance',
-      redirectTo: buildWaitlistEntryPath('needs-acceptance'),
+      redirectTo: buildWaitlistEntryUrl('https://4626.fun', 'needs-acceptance'),
     })
   })
 
@@ -98,7 +99,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({ allow: true, reason: 'ok' })
   })
 
-  it('redirects missing-session app traffic to the app-origin waitlist entry', () => {
+  it('redirects missing-session app traffic to the marketing waitlist entry', () => {
     expect(
       resolveAccess('accepted', {
         loading: false,
@@ -115,7 +116,29 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-session',
-      redirectTo: buildWaitlistEntryPath('needs-session'),
+      redirectTo: buildWaitlistEntryUrl('https://4626.fun', 'needs-session'),
+    })
+  })
+
+  it('keeps waitlist entry local on marketing host and bounces app-host entry back to marketing', () => {
+    expect(
+      getWaitlistEntryRouteTarget({
+        hostMode: 'marketing',
+        search: '?reason=needs-acceptance',
+      }),
+    ).toEqual({
+      kind: 'internal',
+      to: '/?reason=needs-acceptance#waitlist',
+    })
+
+    expect(
+      getWaitlistEntryRouteTarget({
+        hostMode: 'app',
+        search: '?reason=needs-acceptance',
+      }),
+    ).toEqual({
+      kind: 'external',
+      to: `${MARKETING_ORIGIN}/?reason=needs-acceptance#waitlist`,
     })
   })
 })

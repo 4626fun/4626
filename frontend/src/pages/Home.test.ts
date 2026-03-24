@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWaitlistCloseTarget, shouldOpenWaitlistModal, shouldRedirectHomeToSwap } from './Home'
+import { buildWaitlistCloseTarget, getHomeWaitlistRedirectTarget, shouldOpenWaitlistModal, shouldRedirectHomeToSwap } from './Home'
 
 describe('shouldRedirectHomeToSwap', () => {
   it('redirects app home traffic to /swap by default', () => {
@@ -45,6 +45,39 @@ describe('shouldRedirectHomeToSwap', () => {
 })
 
 describe('waitlist modal URL helpers', () => {
+  it('redirects app-host waitlist URLs back to the marketing waitlist entry', () => {
+    expect(
+      getHomeWaitlistRedirectTarget({
+        hostMode: 'app',
+        marketingOrigin: 'https://4626.fun',
+        search: '?reason=needs-session',
+        hash: '#waitlist',
+      }),
+    ).toBe('https://4626.fun/?reason=needs-session#waitlist')
+  })
+
+  it('redirects bare app-host waitlist hashes back to the marketing waitlist entry', () => {
+    expect(
+      getHomeWaitlistRedirectTarget({
+        hostMode: 'app',
+        marketingOrigin: 'https://4626.fun',
+        search: '',
+        hash: '#waitlist',
+      }),
+    ).toBe('https://4626.fun/?reason=needs-session#waitlist')
+  })
+
+  it('keeps marketing-host waitlist URLs local', () => {
+    expect(
+      getHomeWaitlistRedirectTarget({
+        hostMode: 'marketing',
+        marketingOrigin: 'https://4626.fun',
+        search: '?reason=needs-session',
+        hash: '#waitlist',
+      }),
+    ).toBeNull()
+  })
+
   it('opens modal for sticky session flag', () => {
     expect(
       shouldOpenWaitlistModal({

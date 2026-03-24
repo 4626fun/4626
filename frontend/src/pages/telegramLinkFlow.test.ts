@@ -106,6 +106,27 @@ describe('telegramLinkReducer', () => {
     })
   })
 
+  it('captures the explicit normalized email snapshot on submit', () => {
+    const proof = makeProof()
+    const collect = {
+      tag: 'collect_email' as const,
+      proof,
+      email: 'stale@example.com',
+      emailError: null,
+    }
+
+    const next = telegramLinkReducer(collect, {
+      type: 'SUBMIT_EMAIL',
+      email: 'user@example.com',
+    })
+
+    expect(next).toEqual({
+      tag: 'sending_email_code',
+      proof,
+      email: 'user@example.com',
+    })
+  })
+
   it('keeps recoverable OTP verify failures inline on enter_email_code', () => {
     const proof = makeProof()
     const verifying = {

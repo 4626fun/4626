@@ -4,7 +4,7 @@ import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
 import { AccountModeIndicator } from './account/AccountModeIndicator'
-import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
@@ -140,7 +140,7 @@ export function Layout() {
                   }`}
                   showArrow={false}
                   ariaLabel={label}
-                  onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
+                  onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
                 >
                   <>
                     <Icon

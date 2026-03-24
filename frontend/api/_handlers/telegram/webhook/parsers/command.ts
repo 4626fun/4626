@@ -21,6 +21,6 @@ export function shouldAutoRouteToAi(params: {
   if (text.startsWith('/')) return false
   if (isLikelyCommandText(text)) return false
   const lower = text.toLowerCase()
-  if (lower.startsWith('@keepr') || lower.startsWith('@bot')) return true
+  if (lower.startsWith('@keepr') || lower.startsWith('@bot') || lower.startsWith('@akitai_bot')) return true
   return Boolean(params.message.reply_to_message?.from?.is_bot)
 }

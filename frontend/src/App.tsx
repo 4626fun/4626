@@ -7,7 +7,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
-import { buildWaitlistEntryPath } from '@/lib/auth/waitlistEntry'
+import { buildWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { readStoredTelegramMiniAppLinkContext, readTelegramMiniAppLinkContext } from '@/lib/telegramMiniAppLink'
 import { hasTelegramMiniAppEntrypointContext } from '@/lib/telegramWebApp'
 import { AdminLayout } from './components/AdminLayout'
@@ -105,8 +105,8 @@ function withReason(to: string, reason: AccessReason | 'host-redirect' | 'extern
   }
 }
 
-function waitlistEntryHref(reason: 'needs-session' | 'needs-acceptance'): string {
-  return buildWaitlistEntryPath(reason)
+function waitlistEntryHref(marketingUrl: string, reason: 'needs-session' | 'needs-acceptance'): string {
+  return buildWaitlistEntryUrl(marketingUrl, reason)
 }
 
 const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolean; creator?: boolean; admin?: boolean }> = {
@@ -121,10 +121,14 @@ export function resolveAccess(routeId: RouteId, state: AccessState): AccessDecis
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
   if (req.session && !state.sessionValid) {
-    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref('needs-session') }
+    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref(state.marketingUrl, 'needs-session') }
   }
   if (req.accepted && !state.accepted) {
-    return { allow: false, reason: 'needs-acceptance', redirectTo: waitlistEntryHref('needs-acceptance') }
+    return {
+      allow: false,
+      reason: 'needs-acceptance',
+      redirectTo: waitlistEntryHref(state.marketingUrl, 'needs-acceptance'),
+    }
   }
   if (req.creator && !state.creator) {
     const deployPrefix = state.hostMode === 'marketing' ? APP_ORIGIN : ''
@@ -225,17 +229,29 @@ function HostGuard() {
 }
 
 /** Keep waitlist entry canonical on marketing domain as /#waitlist. */
+export function getWaitlistEntryRouteTarget(params: {
+  hostMode: import('@/lib/host').HostMode
+  search: string
+}): { kind: 'internal'; to: string } | { kind: 'external'; to: string } {
+  const search = params.search || ''
+  if (params.hostMode === 'marketing') {
+    return { kind: 'internal', to: `/${search}#waitlist` }
+  }
+  return { kind: 'external', to: `${MARKETING_ORIGIN}/${search}#waitlist` }
+}
+
 function WaitlistEntryRoute() {
   const location = useLocation()
-  const mode = getHostMode()
-  const search = location.search || ''
+  const target = getWaitlistEntryRouteTarget({
+    hostMode: getHostMode(),
+    search: location.search || '',
+  })
 
-  if (mode === 'marketing') {
-    return <Navigate to={`/${search}#waitlist`} replace />
+  if (target.kind === 'internal') {
+    return <Navigate to={target.to} replace />
   }
 
-  const target = `${MARKETING_ORIGIN}/${search}#waitlist`
-  if (typeof window !== 'undefined') window.location.replace(target)
+  if (typeof window !== 'undefined') window.location.replace(target.to)
   return null
 }
 
@@ -516,18 +532,22 @@ function NotFoundPage() {
 
   const appCta = useMemo(() => {
     if (!access.sessionValid) {
-      return { href: waitlistEntryHref('needs-session'), label: 'Sign In', hint: 'Sign in to get started.' }
+      return {
+        href: waitlistEntryHref(access.marketingUrl, 'needs-session'),
+        label: 'Sign In',
+        hint: 'Sign in to get started.',
+      }
     }
     if (!access.accepted) {
       return {
-        href: waitlistEntryHref('needs-acceptance'),
+        href: waitlistEntryHref(access.marketingUrl, 'needs-acceptance'),
         label: 'Join Waitlist',
         hint: 'This route requires accepted app access.',
       }
     }
     const tradeHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/swap' : withReason('/swap', 'not-found')
     return { href: tradeHref, label: 'Go To Trade', hint: 'Your session is valid. Continue to the canonical app landing route.' }
-  }, [access.accepted, access.sessionValid, access.hostMode])
+  }, [access.accepted, access.sessionValid, access.hostMode, access.marketingUrl])
 
   return (
     <div className="min-h-screen bg-black text-white">

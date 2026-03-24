@@ -4,6 +4,7 @@ type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise
 type ApiHandlerModule = { default?: ApiHandler }
 
 const waitlistRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+  '': () => import('./_waitlist.js'),
   'join': () => import('./waitlist/_join.js'),
   'bootstrap': () => import('./waitlist/_bootstrap.js'),
   'csw-link': () => import('./waitlist/_csw-link.js'),

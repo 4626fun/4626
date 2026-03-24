@@ -17,15 +17,16 @@ type ExecuteDeterministicCommandParams = {
 }
 
 function normalizeKeeprCommandResult(params: {
-  result: KeeprCommandResult
+  result: KeeprCommandResult | null | undefined
   emptyResponseFallback?: string
 }): DeterministicCommandResult {
-  const rawResponseText = typeof params.result.response === 'string' ? params.result.response.trim() : ''
+  const result = params.result ?? { ok: false as const, response: '' }
+  const rawResponseText = typeof result.response === 'string' ? result.response.trim() : ''
   return {
-    ok: params.result.ok,
+    ok: result.ok,
     responseText: rawResponseText || params.emptyResponseFallback || 'Command received.',
     rawResponseText,
-    ...('action' in params.result ? { action: params.result.action } : {}),
+    ...('action' in result ? { action: result.action } : {}),
   }
 }
 
