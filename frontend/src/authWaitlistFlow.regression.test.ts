@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveAccess } from './App'
 import { buildAppEntryPath } from './lib/auth/appEntry'
+import { buildWaitlistEntryPath } from './lib/auth/waitlistEntry'
 import { shouldNavigateAfterWaitlistHandoff } from './lib/auth/appContinueGate'
-import { MARKETING_ORIGIN } from './lib/host'
 
 const SESSION_ADDRESS = '0x1234567890123456789012345678901234567890'
 
@@ -77,7 +77,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-acceptance',
-      redirectTo: `${MARKETING_ORIGIN}/?reason=needs-acceptance#waitlist`,
+      redirectTo: buildWaitlistEntryPath('needs-acceptance'),
     })
   })
 
@@ -98,7 +98,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({ allow: true, reason: 'ok' })
   })
 
-  it('redirects missing-session app traffic to the marketing waitlist entry', () => {
+  it('redirects missing-session app traffic to the app-origin waitlist entry', () => {
     expect(
       resolveAccess('accepted', {
         loading: false,
@@ -115,7 +115,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-session',
-      redirectTo: `${MARKETING_ORIGIN}/?reason=needs-session#waitlist`,
+      redirectTo: buildWaitlistEntryPath('needs-session'),
     })
   })
 })

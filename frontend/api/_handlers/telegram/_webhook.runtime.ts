@@ -107,10 +107,16 @@ import {
 import {
   buildInlineQueryAnswer,
   classifyInlineQuery,
+  normalizeInlineTokenAddress,
   type InlineMediaAsset,
   type InlineQueryAnswer,
   type InlineQueryClass,
 } from './webhook/parsers/inline.js'
+import {
+  buildInlineTokenAnalysisAnswer,
+  parseTokenAnalysisResultId,
+} from './webhook/inlineTokenFormatting.js'
+import { resolveInlineTokenAnalysis } from './webhook/services/inlineTokenAnalysis.js'
 import {
   commandHasArguments as commandHasArgumentsShared,
   parseTelegramTradeIntent as parseTelegramTradeIntentShared,
@@ -1244,6 +1250,17 @@ async function buildInlineQueryResults(params: {
 }): Promise<InlineQueryAnswer> {
   const userId = asTrimmed(params.userId)
   const chatId = asTrimmed(params.chatId)
+  const normalizedTokenAddress = normalizeInlineTokenAddress(params.rawQuery)
+  if (normalizedTokenAddress) {
+    const db = await getDb().catch(() => null)
+    const resolution = await resolveInlineTokenAnalysis({
+      normalizedAddress: normalizedTokenAddress,
+      db: db as any,
+      secondaryBudgetMs: 250,
+    })
+    return buildInlineTokenAnalysisAnswer({ resolution })
+  }
+
   let link: Awaited<ReturnType<typeof getTelegramLinkByUserId>> | null = null
   let scopedVaults: Awaited<ReturnType<typeof listTelegramScopedVaults>> = []
   const db = await getDb().catch(() => null)
@@ -2541,7 +2558,7 @@ function buildTelegramPickedUserActionsReplyMarkup(profile: ResolvedTelegramPick
     { text: `Buy ${profile.creatorCoinSymbol ?? 'Creator'}`, callback_data: `tradeflow:v:buy:${profile.vaultAddress}` },
   ]
   if (profile.creatorCoinAddress) {
-    buttons.push({ text: 'Coin', switch_inline_query_current_chat: `coin ${profile.creatorCoinAddress}` })
+    buttons.push({ text: 'Analyze Token', switch_inline_query_current_chat: profile.creatorCoinAddress })
   }
   return {
     inline_keyboard: [buttons],
@@ -6517,9 +6534,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     chosenInlineResult: update.chosen_inline_result,
     onChosenInlineResult: async ({ resultId, userId, query, inlineMessageId }) => {
       const resultMatch = resultId.match(/^r(\d+):([a-z0-9_]+):(.+)$/i)
-      const rankPosition = resultMatch ? Number(resultMatch[1]) + 1 : null
-      const resultType = resultMatch ? asTrimmed(resultMatch[2]).toLowerCase() : null
-      const resultKey = resultMatch ? asTrimmed(resultMatch[3]) : null
+      const tokenResult = parseTokenAnalysisResultId(resultId)
+      const rankPosition = resultMatch ? Number(resultMatch[1]) + 1 : tokenResult?.rankPosition ?? null
+      const resultType = resultMatch ? asTrimmed(resultMatch[2]).toLowerCase() : tokenResult ? 'article' : null
+      const resultKey = resultMatch ? asTrimmed(resultMatch[3]) : tokenResult?.resultType ?? null
       const queryClass: InlineQueryClass = classifyInlineQuery(query)
       const db = await getDb().catch(() => null)
       if (!db) return

@@ -8,9 +8,10 @@ import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
+import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
-import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import { ZORA_PRIVY_APP_ID, usePrivyClientStatus } from '@/lib/privy/client'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import {
   type ApiEnvelope,
@@ -100,6 +101,18 @@ function readApiErrorMessage(payload: unknown, fallback: string): string {
 function isSessionEmailMismatchError(message: unknown): boolean {
   const text = typeof message === 'string' ? message.toLowerCase() : ''
   return text.includes('email does not match authenticated user') || text.includes('session email mismatch')
+}
+
+function isPrivyLoginBootstrapError(error: unknown): boolean {
+  const text = typeof error === 'string' ? error : typeof (error as any)?.message === 'string' ? (error as any).message : ''
+  const normalized = text.trim().toLowerCase()
+  return (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('blocked by cors') ||
+    (normalized.includes('access-control-allow-origin') && normalized.includes('privy')) ||
+    normalized.includes('email verification is unavailable in this client')
+  )
 }
 
 function useSafePrivy() {
@@ -271,6 +284,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const sectionId = props.sectionId ?? 'waitlist'
 
   const privy = useSafePrivy()
+  const privyClientStatus = usePrivyClientStatus()
   const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
   const { data: walletClient } = useWalletClient()
@@ -310,6 +324,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
+  const redirectToPrivyCapableWaitlist = useCallback((reason: 'needs-session' | 'needs-acceptance' = 'needs-session') => {
+    if (typeof window === 'undefined') return false
+    const target = getPrivyCapableWaitlistEntryUrl(reason)
+    const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (target === current) return false
+    window.location.assign(target)
+    return true
+  }, [])
 
   useEffect(() => {
     if (typeof privy?.logout === 'function') {
@@ -390,6 +412,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setNotice(null)
     setRecoveryRequired(false)
     try {
+      if (!privyAuthed && privyClientStatus === 'disabled' && redirectToPrivyCapableWaitlist('needs-session')) {
+        authAttemptInFlightRef.current = false
+        setBusy(false)
+        return
+      }
       if (privyAuthed) {
         const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
         if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
@@ -409,6 +436,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setError(
         isRecoveryRequired
           ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
+          : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToPrivyCapableWaitlist('needs-session')
+            ? 'Redirecting to the app sign-in flow…'
           : typeof authError?.message === 'string'
             ? authError.message
             : 'Failed to start sign-in.',
@@ -416,7 +445,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privy, privyAuthed, runBootstrap])
+  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToPrivyCapableWaitlist, runBootstrap])
 
   const onContinueWithBase = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -599,16 +628,25 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setNotice(null)
     setRecoveryRequired(false)
     try {
+      if (privyClientStatus === 'disabled' && redirectToPrivyCapableWaitlist('needs-session')) {
+        authAttemptInFlightRef.current = false
+        setBusy(false)
+        return
+      }
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
       await login(buildWaitlistRecoveryLoginOptions() as any)
     } catch (recoverError: any) {
+      if (isPrivyLoginBootstrapError(recoverError) && redirectToPrivyCapableWaitlist('needs-session')) {
+        setError('Redirecting to the app sign-in flow…')
+        return
+      }
       setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
       setRecoveryRequired(true)
     } finally {
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login])
+  }, [busy, login, privyClientStatus, redirectToPrivyCapableWaitlist])
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
     setEnterAppBusy(true)

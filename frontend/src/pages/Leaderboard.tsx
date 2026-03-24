@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from '@/components/ui/Alert'
 import { apiFetch } from '@/lib/apiBase'
+import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
@@ -125,7 +126,7 @@ export function Leaderboard() {
           <JoinWaitlistCta
             className="btn-accent btn-compact h-fit inline-flex items-center"
             showArrow={false}
-            onPrivyDisabled={() => window.location.assign('/#waitlist')}
+            onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
           >
             Invite friends
           </JoinWaitlistCta>

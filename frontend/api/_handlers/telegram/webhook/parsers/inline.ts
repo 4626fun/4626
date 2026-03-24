@@ -1,7 +1,9 @@
+import { getAddress, isAddress } from 'viem'
+
 import { asTrimmed, isAddressLike, truncateAddress } from '../utils.js'
 import { parseTelegramTradeIntent } from './trade.js'
 
-export type InlineQueryClass = 'trade' | 'market' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general'
+export type InlineQueryClass = 'trade' | 'market' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general' | 'token_analysis'
 
 export type InlineMediaAsset = {
   photoUrl?: string
@@ -87,9 +89,18 @@ function clampInlineResultCap(value: number): number {
   return Math.max(3, Math.min(20, Math.floor(value)))
 }
 
+export function normalizeInlineTokenAddress(rawQuery: string): `0x${string}` | null {
+  const trimmed = asTrimmed(rawQuery)
+  if (!trimmed || /\s/.test(trimmed)) return null
+  if (!isAddress(trimmed)) return null
+  return getAddress(trimmed).toLowerCase() as `0x${string}`
+}
+
 export function classifyInlineQuery(rawQuery: string): InlineQueryClass {
-  const query = asTrimmed(rawQuery).toLowerCase()
-  if (!query) return 'discovery'
+  const trimmed = asTrimmed(rawQuery)
+  if (!trimmed) return 'discovery'
+  if (normalizeInlineTokenAddress(trimmed)) return 'token_analysis'
+  const query = trimmed.toLowerCase()
   if (parseTelegramTradeIntent(query.startsWith('/') ? query : `/${query}`)) return 'trade'
   if (/\b(buy|sell|bid|trade)\b/.test(query)) return 'trade'
   if (/\b(mkt|market|quote|price|btc|eth|sol)\b/.test(query)) return 'market'

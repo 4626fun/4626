@@ -1,13 +1,86 @@
 import { describe, expect, it } from 'vitest'
+import { getAddress } from 'viem'
 
 import { shouldAutoRouteToAi } from '../_handlers/telegram/webhook/parsers/command.js'
 import { resolveHelpCallbackCommand, resolveNavigationCallbackToast } from '../_handlers/telegram/webhook/parsers/callbackMenu.js'
 import { parseDeployCallbackData, parseTelegramDeployIntent } from '../_handlers/telegram/webhook/parsers/deploy.js'
 import { parseHolderRoomIdentifier } from '../_handlers/telegram/webhook/parsers/holderRooms.js'
-import { buildInlineQueryAnswer, classifyInlineQuery } from '../_handlers/telegram/webhook/parsers/inline.js'
+import {
+  buildInlineTokenAnalysisAnswer,
+  renderCatchUpMessage,
+  renderRiskMessage,
+  renderTokenSnapshotMessage,
+} from '../_handlers/telegram/webhook/inlineTokenFormatting.js'
+import {
+  scoreTokenMetadataQuality,
+  selectStrongestSupportedMarket,
+  type ResolvedInlineTokenAnalysis,
+} from '../_handlers/telegram/webhook/services/inlineTokenAnalysis.js'
+import { buildInlineQueryAnswer, classifyInlineQuery, normalizeInlineTokenAddress } from '../_handlers/telegram/webhook/parsers/inline.js'
 import { commandHasArguments, parseTelegramTradeIntent, parseTradeCallbackData, parseTradeFlowCallbackData } from '../_handlers/telegram/webhook/parsers/trade.js'
 
 describe('telegram webhook parsers', () => {
+  const exampleToken: ResolvedInlineTokenAnalysis = {
+    kind: 'resolved',
+    normalizedAddress: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+    checksumAddress: getAddress('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'),
+    chain: 'base',
+    chainLabel: 'Base',
+    dexId: 'uniswap',
+    dexUrl: 'https://dexscreener.com/base/0x0000000000000000000000000000000000000001',
+    pairAddress: '0x1111111111111111111111111111111111111111',
+    name: 'USD Coin',
+    symbol: 'USDC',
+    decimals: 6,
+    logoUrl: 'https://example.com/usdc.png',
+    metadataQualityScore: 31,
+    verifiedTokenMetadataPresent: true,
+    ageSource: 'token_created',
+    createdAt: '2026-03-20T12:00:00.000Z',
+    marketCapUsd: 1_250_000_000,
+    fdvUsd: 1_250_000_000,
+    liquidityUsd: 8_750_000,
+    volume24hUsd: 42_500_000,
+    volume6hUsd: 11_000_000,
+    volume1hUsd: 2_600_000,
+    volume5mUsd: 125_000,
+    holders: 121_000,
+    priceChange24h: 0.0021,
+    buys24h: 42_100,
+    sells24h: 41_980,
+    buys1h: 1_980,
+    sells1h: 1_910,
+    vaultLink: {
+      linked: true,
+      relation: 'creator_coin',
+      vaultAddress: '0x2222222222222222222222222222222222222222',
+      creatorCoinAddress: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+      shareTokenAddress: '0x3333333333333333333333333333333333333333',
+      creatorLabel: 'Akita Treasury',
+    },
+    secondary: {
+      risk: {
+        ownership: 'owned',
+        mint: null,
+        blacklist: null,
+        proxy: 'no',
+        taxBps: null,
+        liquidityStatus: 'unknown',
+      },
+      metadataQuality: {
+        verifiedTokenMetadataPresent: true,
+        name: 'USD Coin',
+        symbol: 'USDC',
+        decimals: 6,
+        logoUrl: 'https://example.com/usdc.png',
+        supportsLogo: true,
+      },
+      createdAt: '2026-03-20T12:00:00.000Z',
+      holders: 121_000,
+      creatorLabel: 'Akita Treasury',
+    },
+  }
+
   it('parses buy, sell, and bid trade intents', () => {
     expect(parseTelegramTradeIntent('/buy 0x1111111111111111111111111111111111111111 0.42')).toMatchObject({
       actionType: 'buy',
@@ -136,6 +209,16 @@ describe('telegram webhook parsers', () => {
     expect(classifyInlineQuery('mkt quote btc')).toBe('market')
     expect(classifyInlineQuery('ask ai')).toBe('ai')
     expect(classifyInlineQuery('')).toBe('discovery')
+    expect(classifyInlineQuery('  0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913  ')).toBe('token_analysis')
+    expect(classifyInlineQuery('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913 risk')).not.toBe('token_analysis')
+  })
+
+  it('normalizes exact bare token addresses only after trimming', () => {
+    expect(normalizeInlineTokenAddress(' 0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913 ')).toBe(
+      '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+    )
+    expect(normalizeInlineTokenAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913 risk')).toBeNull()
+    expect(normalizeInlineTokenAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913\nfoo')).toBeNull()
   })
 
   it('leaves removed arena help callbacks unmapped', () => {
@@ -305,5 +388,233 @@ describe('telegram webhook parsers', () => {
       'livefeed:signals:pause',
       'livefeed:signals:close',
     ])
+  })
+
+  it('builds token analysis cards in the required order with deterministic ids', () => {
+    const answer = buildInlineTokenAnalysisAnswer({
+      resolution: exampleToken,
+      nowMs: Date.parse('2026-03-23T12:00:00.000Z'),
+    })
+
+    expect(answer.queryClass).toBe('token_analysis')
+    expect(answer.totalResults).toBe(7)
+    expect(answer.results.map((entry: any) => entry.title)).toEqual([
+      'Token Snapshot',
+      'Catch Up',
+      'Risk Scan',
+      'Holder Breakdown',
+      'Flow / Momentum',
+      'Conviction Check',
+      'Vault Link',
+    ])
+    expect(answer.results.map((entry: any) => entry.description)).toEqual([
+      'Overview and key metrics',
+      'Fast context summary',
+      'Contract and structural risks',
+      'Who owns this token',
+      'Recent activity and momentum',
+      'Bull vs bear case',
+      '4626 / vault relationship',
+    ])
+    expect(answer.results.map((entry: any) => entry.id)).toEqual([
+      'token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:snapshot',
+      'token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:catchup',
+      'token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:risk',
+      'token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:holders',
+      'token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:flow',
+      'token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:conviction',
+      'token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:vault',
+    ])
+    expect(
+      answer.results.every(
+        (entry: any) =>
+          entry?.input_message_content?.parse_mode === 'HTML'
+          && entry?.input_message_content?.disable_web_page_preview === true,
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps token analysis ids stable across input address casing', () => {
+    const lower = normalizeInlineTokenAddress('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913')
+    const mixed = normalizeInlineTokenAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913')
+    expect(lower).toBe(mixed)
+
+    const lowerAnswer = buildInlineTokenAnalysisAnswer({
+      resolution: {
+        ...exampleToken,
+        normalizedAddress: lower!,
+      },
+      nowMs: Date.parse('2026-03-23T12:00:00.000Z'),
+    })
+    const mixedAnswer = buildInlineTokenAnalysisAnswer({
+      resolution: {
+        ...exampleToken,
+        normalizedAddress: mixed!,
+      },
+      nowMs: Date.parse('2026-03-23T12:00:00.000Z'),
+    })
+
+    expect(lowerAnswer.results.map((entry: any) => entry.id)).toEqual(mixedAnswer.results.map((entry: any) => entry.id))
+  })
+
+  it('renders snapshot, catch up, and risk cards with stable premium formatting', () => {
+    expect(renderTokenSnapshotMessage(exampleToken, Date.parse('2026-03-23T12:00:00.000Z'))).toMatchInlineSnapshot(`
+      "<b>USD Coin (USDC)</b>
+      <code>0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913</code> • Base • 3d
+
+      MC: $1.3B • FDV: $1.3B
+      Liq: $8.8M • Vol: $42.5M • Holders: 121K
+
+      Vault: Akita Treasury
+
+      <b>Summary:</b>
+      Liquid Base market with heavy turnover and broad holder depth."
+    `)
+    expect(renderCatchUpMessage(exampleToken)).toMatchInlineSnapshot(`
+      "<b>Catch Up</b>
+
+      <b>What:</b> USD Coin (USDC) is trading on Base.
+      <b>Why moving:</b> 24h price is +0.21% on $42.5M volume.
+      <b>What changed:</b> Liquidity is $8.8M and holders are at 121K.
+      <b>Now:</b> Vault-linked to Akita Treasury inside the 4626 surface.
+      <b>Focus:</b> Watch order flow stay above 1910 sells against 1980 buys."
+    `)
+    expect(renderRiskMessage(exampleToken)).toMatchInlineSnapshot(`
+      "<b>Risk Profile</b>
+
+      Ownership: owned
+      Proxy: no
+      Liquidity: unknown
+
+      <b>Verdict:</b>
+      Owner privileges are still live; liquidity controls are not verified."
+    `)
+  })
+
+  it('renders an unresolved fallback card with a deterministic id', () => {
+    const answer = buildInlineTokenAnalysisAnswer({
+      resolution: {
+        kind: 'unresolved',
+        normalizedAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        checksumAddress: getAddress('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+        reason: 'no_supported_active_market',
+      },
+    })
+
+    expect(answer.totalResults).toBe(1)
+    expect(answer.results[0]).toMatchObject({
+      id: 'token:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:unresolved',
+      title: 'Token Unresolved',
+      description: 'No supported token or active market found',
+    })
+    expect(String((answer.results[0] as any)?.input_message_content?.message_text ?? '')).toContain(
+      'Token metadata resolved, but no supported active market or meaningful liquidity was found.',
+    )
+  })
+
+  it('selects fallback markets deterministically by liquidity, volume, metadata quality, then chain priority', () => {
+    const normalizedAddress = '0x9999999999999999999999999999999999999999' as const
+    const selection = selectStrongestSupportedMarket({
+      normalizedAddress,
+      pairs: [
+        {
+          chainId: 'ethereum',
+          pairAddress: '0x1000000000000000000000000000000000000001',
+          baseToken: { address: normalizedAddress, name: 'Example', symbol: 'EXM' },
+          liquidity: { usd: 50_000 },
+          volume: { h24: 10_000 },
+          txns: { h24: { buys: 10, sells: 8 } },
+        },
+        {
+          chainId: 'arbitrum',
+          pairAddress: '0x1000000000000000000000000000000000000002',
+          baseToken: { address: normalizedAddress, name: 'Example', symbol: 'EXM' },
+          liquidity: { usd: 50_000 },
+          volume: { h24: 10_000 },
+          txns: { h24: { buys: 10, sells: 8 } },
+        },
+        {
+          chainId: 'optimism',
+          pairAddress: '0x1000000000000000000000000000000000000003',
+          baseToken: { address: normalizedAddress, name: 'Example', symbol: '' },
+          liquidity: { usd: 50_000 },
+          volume: { h24: 11_000 },
+          txns: { h24: { buys: 11, sells: 8 } },
+        },
+      ],
+    })
+
+    expect(selection.reason).toBeNull()
+    expect(selection.candidate?.chain).toBe('optimism')
+
+    const chainPriorityTie = selectStrongestSupportedMarket({
+      normalizedAddress,
+      pairs: [
+        {
+          chainId: 'ethereum',
+          pairAddress: '0x1000000000000000000000000000000000000010',
+          baseToken: { address: normalizedAddress, name: 'Example', symbol: 'EXM' },
+          liquidity: { usd: 75_000 },
+          volume: { h24: 15_000 },
+          txns: { h24: { buys: 15, sells: 10 } },
+        },
+        {
+          chainId: 'arbitrum',
+          pairAddress: '0x1000000000000000000000000000000000000011',
+          baseToken: { address: normalizedAddress, name: 'Example', symbol: 'EXM' },
+          liquidity: { usd: 75_000 },
+          volume: { h24: 15_000 },
+          txns: { h24: { buys: 15, sells: 10 } },
+        },
+      ],
+    })
+
+    expect(chainPriorityTie.candidate?.chain).toBe('ethereum')
+  })
+
+  it('scores metadata quality deterministically', () => {
+    expect(
+      scoreTokenMetadataQuality({
+        verifiedTokenMetadataPresent: true,
+        name: 'USD Coin',
+        symbol: 'USDC',
+        decimals: 6,
+        logoUrl: 'https://example.com/logo.png',
+        supportsLogo: true,
+      }),
+    ).toBe(31)
+    expect(
+      scoreTokenMetadataQuality({
+        verifiedTokenMetadataPresent: false,
+        name: '',
+        symbol: '',
+        decimals: null,
+        logoUrl: 'https://example.com/logo.png',
+        supportsLogo: false,
+      }),
+    ).toBe(0)
+  })
+
+  it('keeps snapshot and catch up renderable from primary data alone', () => {
+    const primaryOnly = {
+      ...exampleToken,
+      secondary: {
+        risk: {
+          ownership: null,
+          mint: null,
+          blacklist: null,
+          proxy: null,
+          taxBps: null,
+          liquidityStatus: 'unknown',
+        },
+        metadataQuality: {},
+        createdAt: null,
+        holders: null,
+        creatorLabel: null,
+      },
+    } satisfies ResolvedInlineTokenAnalysis
+
+    expect(renderTokenSnapshotMessage(primaryOnly, Date.parse('2026-03-23T12:00:00.000Z'))).toContain('<b>Summary:</b>')
+    expect(renderCatchUpMessage(primaryOnly)).toContain('<b>Focus:</b>')
   })
 })

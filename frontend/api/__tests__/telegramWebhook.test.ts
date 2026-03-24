@@ -862,6 +862,13 @@ describe('telegram webhook handler', () => {
     expect(actionPayload.text).toContain('Trade creator coin from this card.')
     const buttons = actionPayload.reply_markup.inline_keyboard.flat()
     expect(buttons.some((button: any) => button?.callback_data === 'tradeflow:v:buy:0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(
+      buttons.some(
+        (button: any) =>
+          button?.text === 'Analyze Token'
+          && button?.switch_inline_query_current_chat === '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      ),
+    ).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
   })
 
@@ -1275,6 +1282,155 @@ describe('telegram webhook handler', () => {
     const tradeResult = payload.results.find((entry: any) => String(entry?.input_message_content?.message_text ?? '').trim() === '/buy')
     expect(tradeResult).toBeTruthy()
     expect(String(tradeResult?.title ?? '').toLowerCase()).toContain('buy')
+  })
+
+  it('answers bare-address inline queries with premium token analysis cards without routing through /ai', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        if (url.includes('api.dexscreener.com/latest/dex/tokens/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              pairs: [{
+                chainId: 'base',
+                dexId: 'uniswap',
+                url: 'https://dexscreener.com/base/0xfeed',
+                pairAddress: '0x1111111111111111111111111111111111111111',
+                baseToken: {
+                  address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+                  name: 'USD Coin',
+                  symbol: 'USDC',
+                },
+                txns: {
+                  h24: { buys: 420, sells: 400 },
+                  h1: { buys: 22, sells: 19 },
+                },
+                volume: { h24: 4_250_000, h1: 210_000, h6: 1_100_000, m5: 11_000 },
+                priceChange: { h24: 0.4 },
+                liquidity: { usd: 980_000 },
+                marketCap: 1_250_000_000,
+                fdv: 1_250_000_000,
+                pairCreatedAt: Date.parse('2026-03-20T12:00:00.000Z'),
+              }],
+            }),
+            text: async () => '',
+          } as Response
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true }),
+          text: async () => '',
+        } as Response
+      }),
+    )
+    createPublicClientMock.mockReturnValueOnce({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        if (functionName === 'owner') return '0x9999999999999999999999999999999999999999'
+        if (functionName === 'decimals') return 6
+        if (functionName === 'name') return 'USD Coin'
+        if (functionName === 'symbol') return 'USDC'
+        if (functionName === 'paused') return false
+        return 0n
+      }),
+      getStorageAt: vi.fn(async () => '0x'),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_11,
+        inline_query: {
+          id: 'iq-token',
+          from: { id: 42 },
+          query: '  0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913  ',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(getTelegramLinkByUserIdMock).not.toHaveBeenCalled()
+    expect(listTelegramScopedVaultsMock).not.toHaveBeenCalled()
+
+    const payload = JSON.parse(String((fetch as any).mock.calls.at(-1)?.[1]?.body ?? '{}'))
+    expect(payload.inline_query_id).toBe('iq-token')
+    expect(payload.cache_time).toBe(5)
+    expect(payload.results.map((entry: any) => entry.title)).toEqual([
+      'Token Snapshot',
+      'Catch Up',
+      'Risk Scan',
+      'Holder Breakdown',
+      'Flow / Momentum',
+      'Conviction Check',
+      'Vault Link',
+    ])
+    expect(payload.results[0]?.id).toBe('token:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:snapshot')
+    expect(String(payload.results[0]?.input_message_content?.message_text ?? '')).not.toContain('/ai')
+  })
+
+  it('returns one deterministic unresolved token card even without group configuration', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        if (url.includes('api.dexscreener.com/latest/dex/tokens/0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ pairs: [] }),
+            text: async () => '',
+          } as Response
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true }),
+          text: async () => '',
+        } as Response
+      }),
+    )
+    getDbMock.mockResolvedValueOnce(null)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_12,
+        inline_query: {
+          id: 'iq-token-unresolved',
+          from: { id: 777 },
+          query: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls.at(-1)?.[1]?.body ?? '{}'))
+    expect(payload.cache_time).toBe(5)
+    expect(payload.results).toHaveLength(1)
+    expect(payload.results[0]).toMatchObject({
+      id: 'token:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:unresolved',
+      title: 'Token Unresolved',
+      description: 'No supported token or active market found',
+    })
+    expect(String(payload.results[0]?.input_message_content?.message_text ?? '')).toContain(
+      'No supported token or pair was found for this address.',
+    )
   })
 
   it('uses brand-style inline growth copy when TELEGRAM_INLINE_GROWTH_MODE is enabled', async () => {

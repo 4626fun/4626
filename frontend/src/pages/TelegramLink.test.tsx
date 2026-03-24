@@ -208,7 +208,7 @@ describe('TelegramLink UI flow', () => {
     renderFlow()
 
     const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
-    const submitButton = screen.getByRole('button', { name: 'Send Code' }) as HTMLButtonElement
+    const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
 
     expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
     expect(submitButton.disabled).toBe(true)
@@ -225,6 +225,8 @@ describe('TelegramLink UI flow', () => {
     expect(sendCodeMock).not.toHaveBeenCalled()
     expect(submitButton.disabled).toBe(false)
     expect(submitButton.getAttribute('data-disabled-reason')).toBe('ready')
+    expect(submitButton.getAttribute('data-email-normalized')).toBe('user@example.com')
+    expect(submitButton.getAttribute('data-email-valid')).toBe('true')
   })
 
   it('keeps the Send Code button clickable after valid email entry', async () => {
@@ -232,7 +234,7 @@ describe('TelegramLink UI flow', () => {
     renderFlow()
 
     await user.type(await screen.findByLabelText('Verified Email'), ' USER@EXAMPLE.COM ')
-    const submitButton = screen.getByRole('button', { name: 'Send Code' }) as HTMLButtonElement
+    const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
 
     expect(submitButton.disabled).toBe(false)
 
@@ -244,6 +246,28 @@ describe('TelegramLink UI flow', () => {
     await screen.findByLabelText('Email Verification Code')
   })
 
+  it('dispatches SUBMIT_EMAIL on click and leaves collect_email only after explicit submit', async () => {
+    const user = userEvent.setup()
+    const sendCodeDeferred = deferred<void>()
+    sendCodeMock.mockImplementationOnce(() => sendCodeDeferred.promise)
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
+
+    await user.click(screen.getByTestId('telegram-link-submit'))
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-flow-state="sending_email_code"]')).toBeTruthy()
+    })
+    expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
+
+    await act(async () => {
+      sendCodeDeferred.resolve()
+      await sendCodeDeferred.promise
+    })
+  })
+
   it('keeps decorative overlays non-interactive', async () => {
     renderFlow()
 
@@ -251,6 +275,22 @@ describe('TelegramLink UI flow', () => {
     const overlay = screen.getByTestId('telegram-link-decorative-overlay')
 
     expect(overlay.className).toContain('pointer-events-none')
+  })
+
+  it('locks document scrolling for the Telegram shell', async () => {
+    const view = renderFlow()
+
+    await screen.findByLabelText('Verified Email')
+
+    expect(document.documentElement.classList.contains('telegram-link-html-lock')).toBe(true)
+    expect(document.body.classList.contains('telegram-link-body-lock')).toBe(true)
+    expect(screen.getByTestId('telegram-link-shell').className).toContain('overflow-hidden')
+    expect(screen.getByTestId('telegram-link-panel').className).toContain('overflow-hidden')
+
+    view.unmount()
+
+    expect(document.documentElement.classList.contains('telegram-link-html-lock')).toBe(false)
+    expect(document.body.classList.contains('telegram-link-body-lock')).toBe(false)
   })
 
   it('does not reset or remount the email input while typing', async () => {

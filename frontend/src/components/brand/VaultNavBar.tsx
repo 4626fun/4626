@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import { ConnectButton } from '@/components/ConnectButton'
 import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
+import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { Logo } from './Logo'
@@ -50,7 +51,6 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: NavIt
 
 export function VaultNavBar() {
   const location = useLocation()
-  const navigate = useNavigate()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
@@ -69,7 +69,7 @@ export function VaultNavBar() {
             key={item.to}
             className="group relative inline-flex h-8 items-center justify-center rounded-xl border-0 px-2.5 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25"
             showArrow={false}
-            onPrivyDisabled={() => navigate('/#waitlist')}
+            onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
           >
             <span
               className={`relative z-10 text-[10px] font-medium tracking-[0.01em] ${

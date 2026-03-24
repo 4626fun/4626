@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useEffect } from 'react'
 import { TokenImage } from '@/components/TokenImage'
 import { AKITA } from '@/config/contracts'
+import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -138,7 +139,7 @@ export function FaqHowItWorks() {
                   <JoinWaitlistCta
                     className="text-brand-accent hover:text-brand-400 underline underline-offset-4 text-sm"
                     showArrow={false}
-                    onPrivyDisabled={() => window.location.assign('/#waitlist')}
+                    onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
                   >
                     Join waitlist
                   </JoinWaitlistCta>
@@ -166,4 +167,3 @@ export function FaqHowItWorks() {
     </div>
   )
 }
-

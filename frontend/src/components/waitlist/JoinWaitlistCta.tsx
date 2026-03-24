@@ -5,6 +5,7 @@ import { ArrowRight, Loader2 } from 'lucide-react'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
+import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/host'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
 
@@ -113,8 +114,11 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
       onPrivyDisabled()
       return
     }
-    if (typeof window === 'undefined' || window.location.hash === '#waitlist') return
-    window.location.assign('/#waitlist')
+    if (typeof window === 'undefined') return
+    const target = getPrivyCapableWaitlistEntryUrl('needs-session')
+    const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (target === current) return
+    window.location.assign(target)
   }, [onPrivyDisabled])
 
   const privyAuthed = Boolean(privy?.authenticated)
@@ -209,14 +213,14 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
           privyClientStatus,
         })
       ) {
-        onPrivyDisabled?.()
+        routeToWaitlist()
         return
       }
       setBusy(true)
       try {
         await login(buildWaitlistEmailLoginOptions() as any)
       } catch {
-        onPrivyDisabled?.()
+        routeToWaitlist()
       } finally {
         setBusy(false)
       }
@@ -226,12 +230,12 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
     if (typeof window === 'undefined') return
 
     if (ctaState === 'continue_setup') {
-      window.location.assign('/#waitlist')
+      window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-acceptance'))
       return
     }
 
     window.location.assign(buildAppEntryUrl(getAppBaseUrl()))
-  }, [busy, ctaState, loadingState, login, onPrivyDisabled, privyClientStatus])
+  }, [busy, ctaState, loadingState, login, privyClientStatus, routeToWaitlist])
 
   const idleContent = (() => {
     if (ctaState === 'continue_setup') {

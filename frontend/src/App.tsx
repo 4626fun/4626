@@ -7,6 +7,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
+import { buildWaitlistEntryPath } from '@/lib/auth/waitlistEntry'
 import { readStoredTelegramMiniAppLinkContext, readTelegramMiniAppLinkContext } from '@/lib/telegramMiniAppLink'
 import { hasTelegramMiniAppEntrypointContext } from '@/lib/telegramWebApp'
 import { AdminLayout } from './components/AdminLayout'
@@ -104,9 +105,8 @@ function withReason(to: string, reason: AccessReason | 'host-redirect' | 'extern
   }
 }
 
-function waitlistEntryHref(reason: 'needs-session' | 'needs-acceptance', hostMode: import('@/lib/host').HostMode): string {
-  const local = `${withReason('/', reason)}#waitlist`
-  return hostMode === 'app' ? `${MARKETING_ORIGIN}${local}` : local
+function waitlistEntryHref(reason: 'needs-session' | 'needs-acceptance'): string {
+  return buildWaitlistEntryPath(reason)
 }
 
 const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolean; creator?: boolean; admin?: boolean }> = {
@@ -121,10 +121,10 @@ export function resolveAccess(routeId: RouteId, state: AccessState): AccessDecis
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
   if (req.session && !state.sessionValid) {
-    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref('needs-session', state.hostMode) }
+    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref('needs-session') }
   }
   if (req.accepted && !state.accepted) {
-    return { allow: false, reason: 'needs-acceptance', redirectTo: waitlistEntryHref('needs-acceptance', state.hostMode) }
+    return { allow: false, reason: 'needs-acceptance', redirectTo: waitlistEntryHref('needs-acceptance') }
   }
   if (req.creator && !state.creator) {
     const deployPrefix = state.hostMode === 'marketing' ? APP_ORIGIN : ''
@@ -515,13 +515,12 @@ function NotFoundPage() {
   const access = useAccessContext()
 
   const appCta = useMemo(() => {
-    const prefix = access.hostMode === 'app' ? MARKETING_ORIGIN : ''
     if (!access.sessionValid) {
-      return { href: prefix + withReason('/', 'needs-session'), label: 'Sign In', hint: 'Sign in to get started.' }
+      return { href: waitlistEntryHref('needs-session'), label: 'Sign In', hint: 'Sign in to get started.' }
     }
     if (!access.accepted) {
       return {
-        href: waitlistEntryHref('needs-acceptance', access.hostMode),
+        href: waitlistEntryHref('needs-acceptance'),
         label: 'Join Waitlist',
         hint: 'This route requires accepted app access.',
       }

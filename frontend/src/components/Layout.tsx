@@ -1,9 +1,10 @@
 import { Suspense, useEffect, useState } from 'react'
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, Link, useLocation } from 'react-router-dom'
 import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
 import { AccountModeIndicator } from './account/AccountModeIndicator'
+import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
@@ -47,7 +48,6 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: Mobil
 
 export function Layout() {
   const location = useLocation()
-  const navigate = useNavigate()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
@@ -140,7 +140,7 @@ export function Layout() {
                   }`}
                   showArrow={false}
                   ariaLabel={label}
-                  onPrivyDisabled={() => navigate('/#waitlist')}
+                  onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
                 >
                   <>
                     <Icon

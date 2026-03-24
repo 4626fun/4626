@@ -45,11 +45,13 @@ const PRIVY_SYNC_TIMEOUT_MS = 20_000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const TG_VIEWPORT_STYLE: CSSProperties = {
-  minHeight: 'max(100vh, var(--cv-tg-viewport-stable-height, 100vh))',
-  paddingTop: 'max(16px, var(--cv-tg-safe-top, 0px))',
-  paddingBottom: 'max(24px, var(--cv-tg-safe-bottom, 0px))',
-  paddingLeft: 'max(16px, var(--cv-tg-content-safe-left, 0px))',
-  paddingRight: 'max(16px, var(--cv-tg-content-safe-right, 0px))',
+  boxSizing: 'border-box',
+  height: 'var(--cv-tg-viewport-stable-height, 100dvh)',
+  maxHeight: 'var(--cv-tg-viewport-stable-height, 100dvh)',
+  paddingTop: 'max(10px, var(--cv-tg-safe-top, 0px))',
+  paddingBottom: 'max(10px, var(--cv-tg-content-safe-bottom, 0px))',
+  paddingLeft: 'max(12px, var(--cv-tg-content-safe-left, 0px))',
+  paddingRight: 'max(12px, var(--cv-tg-content-safe-right, 0px))',
 }
 
 function sleep(ms: number): Promise<void> {
@@ -183,21 +185,21 @@ function getFlowHeadline(tag: string): string {
 function getFlowDescription(tag: string): string {
   switch (tag) {
     case 'verify_telegram_session':
-      return 'Validating the Telegram Mini App proof before any account work starts.'
+      return 'Validating the Telegram Mini App proof.'
     case 'collect_email':
     case 'sending_email_code':
-      return 'Verified email is the canonical 4626 identity and recovery key.'
+      return 'Verified email is the canonical 4626 identity.'
     case 'enter_email_code':
     case 'verifying_email_code':
-      return 'Enter the email code inline. Telegram remains a linked identity only.'
+      return 'Enter the code inline. Telegram remains linked only.'
     case 'wait_for_privy_sync':
-      return 'Email verification succeeded. Waiting for Privy and the canonical 4626 account to finish syncing.'
+      return 'Email verified. Waiting for Privy and the canonical 4626 account.'
     case 'bind_telegram':
-      return 'Canonical account is ready. Binding the Telegram identity to that verified-email account.'
+      return 'Canonical account ready. Binding Telegram now.'
     case 'success':
-      return 'Canonical account resolved from verified email. Telegram is now attached to that account.'
+      return 'Canonical account resolved. Telegram is attached.'
     case 'expired_or_error':
-      return 'Telegram launch or account sync could not be completed. No implicit retries were applied.'
+      return 'Telegram launch or account sync could not complete.'
     default:
       return ''
   }
@@ -320,10 +322,26 @@ export function TelegramLink() {
     getAccessToken,
   })
   const emailSubmitDisabledReason = getEmailSubmitDisabledReason(state)
+  const normalizedCollectEmail = state.tag === 'collect_email' ? normalizeEmailCandidate(state.email) : ''
+  const emailIsValid = state.tag === 'collect_email' ? isValidEmail(normalizedCollectEmail) : false
+  const emailSubmitDisabled = emailSubmitDisabledReason !== null
 
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const html = document.documentElement
+    const body = document.body
+    html.classList.add('telegram-link-html-lock')
+    body.classList.add('telegram-link-body-lock')
+
+    return () => {
+      html.classList.remove('telegram-link-html-lock')
+      body.classList.remove('telegram-link-body-lock')
+    }
+  }, [])
 
   useEffect(() => {
     privySnapshotRef.current = {
@@ -436,12 +454,15 @@ export function TelegramLink() {
       'telegram_link_email_submit_state',
       {
         status: reason === 'ready' ? 'ready' : 'disabled',
+        disabled: reason !== 'ready',
         disabledReason: reason,
-        normalizedEmail: normalizeEmailCandidate(state.email),
+        normalizedEmail: normalizedCollectEmail,
+        emailValid: emailIsValid,
+        flowTag: state.tag,
       },
       state,
     )
-  }, [emailSubmitDisabledReason, emitTelemetry, state])
+  }, [emailIsValid, emailSubmitDisabledReason, emitTelemetry, normalizedCollectEmail, state])
 
   useEffect(() => {
     if (state.tag !== 'verify_telegram_session') return
@@ -958,6 +979,18 @@ export function TelegramLink() {
 
   const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    emitTelemetry(
+      'telegram_link_email_submit_attempted',
+      {
+        status: emailSubmitDisabled ? 'blocked' : 'submitted',
+        disabled: emailSubmitDisabled,
+        disabledReason: emailSubmitDisabledReason ?? 'ready',
+        normalizedEmail: normalizedCollectEmail,
+        emailValid: emailIsValid,
+      },
+      state,
+    )
+    if (emailSubmitDisabled) return
     dispatch({ type: 'SUBMIT_EMAIL' })
   }
 
@@ -993,7 +1026,7 @@ export function TelegramLink() {
         ? null
         : emailSubmitDisabledReason === 'invalid_email'
           ? 'Enter a complete email address to continue.'
-          : 'Email creates or resolves the canonical 4626 account. Telegram attaches after sync.'
+          : 'Email resolves the canonical 4626 account. Telegram attaches after sync.'
       : null
 
   const renderContent = () => {
@@ -1003,8 +1036,8 @@ export function TelegramLink() {
 
       case 'collect_email':
         return (
-          <form className="space-y-3.5" onSubmit={handleEmailSubmit}>
-            <div className="space-y-2">
+          <form className="space-y-3" onSubmit={handleEmailSubmit}>
+            <div className="space-y-1.5">
               <label htmlFor="telegram-link-email" className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#666666]">
                 Verified Email
               </label>
@@ -1018,17 +1051,21 @@ export function TelegramLink() {
                   value={state.email}
                   onChange={(event) => dispatch({ type: 'EMAIL_CHANGED', email: event.target.value })}
                   placeholder="name@example.com"
-                  className="h-12 w-full rounded-[18px] border border-white/[0.08] bg-white/[0.03] pl-11 pr-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/80 focus:bg-white/[0.04] focus:ring-0"
+                  className="h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] pl-11 pr-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/75 focus:bg-white/[0.04] focus:ring-0"
                 />
               </div>
               {state.emailError ? <InlineError message={state.emailError} /> : null}
-              {emailSubmitHelperText ? <p className="text-[12px] leading-5 text-[#666666]">{emailSubmitHelperText}</p> : null}
+              {emailSubmitHelperText ? <p className="text-[11px] leading-[1.35] text-[#666666]">{emailSubmitHelperText}</p> : null}
             </div>
             <button
               type="submit"
+              data-testid="telegram-link-submit"
               data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
-              className="inline-flex h-12 w-full items-center justify-center rounded-[18px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
-              disabled={emailSubmitDisabledReason !== null}
+              data-email-normalized={normalizedCollectEmail}
+              data-email-valid={emailIsValid ? 'true' : 'false'}
+              data-flow-tag={state.tag}
+              className="relative z-10 inline-flex h-11 w-full touch-manipulation items-center justify-center rounded-[16px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+              disabled={emailSubmitDisabled}
             >
               Send Code
             </button>
@@ -1040,11 +1077,11 @@ export function TelegramLink() {
 
       case 'enter_email_code':
         return (
-          <form className="space-y-3.5" onSubmit={handleCodeSubmit}>
-            <div className="text-sm text-[#EDEDED]">
+          <form className="space-y-3" onSubmit={handleCodeSubmit}>
+            <div className="text-[13px] text-[#EDEDED]">
               Code sent to <span className="font-mono text-[13px]">{state.email}</span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label htmlFor="telegram-link-code" className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#666666]">
                 Email Verification Code
               </label>
@@ -1056,14 +1093,14 @@ export function TelegramLink() {
                 value={state.code}
                 onChange={(event) => dispatch({ type: 'CODE_CHANGED', code: event.target.value.replace(/\s+/g, '').slice(0, 6) })}
                 placeholder="000000"
-                className="h-12 w-full rounded-[18px] border border-white/[0.08] bg-white/[0.03] px-4 text-center font-mono text-[18px] tracking-[0.38em] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/80 focus:bg-white/[0.04] focus:ring-0"
+                className="h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-4 text-center font-mono text-[18px] tracking-[0.34em] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/75 focus:bg-white/[0.04] focus:ring-0"
               />
               {state.codeError ? <InlineError message={state.codeError} /> : null}
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2.5">
               <button
                 type="submit"
-                className="inline-flex h-12 flex-1 items-center justify-center rounded-[18px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+                className="relative z-10 inline-flex h-11 flex-1 touch-manipulation items-center justify-center rounded-[16px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
                 disabled={state.code.trim().length < 6}
               >
                 Verify Code
@@ -1071,7 +1108,7 @@ export function TelegramLink() {
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'RESEND_CODE' })}
-                className="inline-flex h-12 items-center justify-center rounded-[18px] border border-white/[0.08] bg-transparent px-4 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-55"
+                className="inline-flex h-11 touch-manipulation items-center justify-center rounded-[16px] border border-white/[0.06] bg-transparent px-4 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-55"
                 disabled={!canResend}
               >
                 {canResend ? 'Resend' : `${resendSeconds}s`}
@@ -1165,7 +1202,11 @@ export function TelegramLink() {
   }
 
   return (
-    <div className="relative overflow-x-hidden overflow-y-auto bg-[#020202] text-[#EDEDED]" style={TG_VIEWPORT_STYLE}>
+    <div
+      data-testid="telegram-link-shell"
+      className="relative flex overflow-hidden bg-[#020202] text-[#EDEDED]"
+      style={TG_VIEWPORT_STYLE}
+    >
       <PageMeta title="Telegram Link" description="Verify email inside Telegram and bind Telegram to the canonical 4626 account." canonicalPath="/telegram/link" />
       <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
@@ -1173,35 +1214,36 @@ export function TelegramLink() {
         <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[30rem] py-3 sm:py-5">
+      <div className="relative z-10 mx-auto flex h-full w-full max-w-[27rem] items-start">
         <div
           data-flow-state={state.tag}
-          className="w-full rounded-[28px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.52)] backdrop-blur-xl sm:px-5 sm:py-5"
+          data-testid="telegram-link-panel"
+          className="flex w-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-[#666666]">
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2 py-0.75 text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">
                 Telegram Mini App
               </div>
-              <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
-              <p className="max-w-xl text-[13px] leading-5 text-[#666666]">{getFlowDescription(state.tag)}</p>
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
+              <p className="max-w-xl text-[12px] leading-[1.35] text-[#666666]">{getFlowDescription(state.tag)}</p>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-5">
+          <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] leading-[1.35]">
             <span className="font-mono text-[#EDEDED]">email -&gt; account</span>
             <span className="font-mono text-[#666666]">telegram -&gt; linked</span>
           </div>
 
           {proof ? (
-            <div className="mt-3 grid gap-x-4 gap-y-3 border-t border-white/[0.06] pt-3 text-sm sm:grid-cols-3">
+            <div className="mt-2 grid gap-x-3 gap-y-2 border-t border-white/[0.05] pt-2.5 text-sm sm:grid-cols-3">
               <MetaField label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
               <MetaField label="Chat" value={proof.chatId ?? 'direct'} />
               <MetaField label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
             </div>
           ) : null}
 
-          <div className="mt-4">{renderContent()}</div>
+          <div className="mt-3 min-h-0 overflow-y-auto pr-0.5 scrollbar-hide">{renderContent()}</div>
         </div>
       </div>
     </div>
@@ -1223,12 +1265,12 @@ function StatusBlock(props: {
   const Icon = props.icon
 
   return (
-    <div className={`rounded-[20px] border px-4 py-3 ${toneClasses}`}>
+    <div className={`rounded-[18px] border px-3.5 py-2.5 ${toneClasses}`}>
       <div className="flex items-start gap-3">
         <div className="mt-0.5 rounded-full border border-white/10 bg-white/[0.05] p-1.5">
           <Icon className={`h-4 w-4 ${props.spinning ? 'animate-spin' : ''}`} />
         </div>
-        <div className="text-sm leading-5">{props.body}</div>
+        <div className="text-[13px] leading-5">{props.body}</div>
       </div>
     </div>
   )
@@ -1236,7 +1278,7 @@ function StatusBlock(props: {
 
 function InlineError(props: { message: string }) {
   return (
-    <div className="rounded-[14px] bg-[#ef4444]/10 px-3 py-2 text-sm text-[#EDEDED]">
+    <div className="rounded-[12px] bg-[#ef4444]/10 px-3 py-2 text-[12px] leading-[1.35] text-[#EDEDED]">
       {props.message}
     </div>
   )
@@ -1245,8 +1287,8 @@ function InlineError(props: { message: string }) {
 function MetaField(props: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#666666]">{props.label}</div>
-      <div className="mt-1 truncate font-mono text-[13px] text-[#EDEDED]">{props.value}</div>
+      <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
+      <div className="mt-0.5 truncate font-mono text-[12px] text-[#EDEDED]">{props.value}</div>
     </div>
   )
 }

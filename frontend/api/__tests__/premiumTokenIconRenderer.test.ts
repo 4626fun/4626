@@ -453,7 +453,8 @@ describe('premium token icon renderer', () => {
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.82, 'pixelArt')).toBe(true)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.94, 'pixelArt')).toBe(true)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.98, 'pixelArt')).toBe(true)
-    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.995, 'pixelArt')).toBe(false)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.995, 'pixelArt')).toBe(true)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.999, 'pixelArt')).toBe(false)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.99)).toBe(false)
   })
 
