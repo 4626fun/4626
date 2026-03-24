@@ -366,6 +366,41 @@ async function scrubTopDarkFringe(image: Buffer): Promise<Buffer> {
     .toBuffer()
 }
 
+async function shiftLayerCanvas(params: {
+  layer: Buffer
+  size: number
+  offsetX: number
+  offsetY: number
+}): Promise<Buffer> {
+  const offsetX = Math.round(params.offsetX)
+  const offsetY = Math.round(params.offsetY)
+  if (offsetX === 0 && offsetY === 0) return params.layer
+
+  const pad = Math.max(2, Math.abs(offsetX), Math.abs(offsetY)) + 2
+  const expandedSize = params.size + pad * 2
+  const shifted = await sharp({
+    create: {
+      width: expandedSize,
+      height: expandedSize,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: params.layer, left: pad + offsetX, top: pad + offsetY }])
+    .png()
+    .toBuffer()
+
+  return sharp(shifted)
+    .extract({
+      left: pad,
+      top: pad,
+      width: params.size,
+      height: params.size,
+    })
+    .png()
+    .toBuffer()
+}
+
 function resolveSegmentationModelForSourceClass(sourceClass: SourceClass): SegmentationModel {
   switch (sourceClass) {
     case 'portraitPhoto':
@@ -3481,7 +3516,7 @@ export async function renderBreakoutLayer(params: {
 
   const breakoutSeedCanvas =
     params.subjectMaskKind === 'rembgCutout'
-      ? sourceCanvas
+      ? (params.sourceClass === 'pixelArt' ? (subjectRefCanvas ?? sourceCanvas) : sourceCanvas)
       : subjectRefCanvas ?? sourceCanvas
   let maskedSharp = sharp(breakoutSeedCanvas)
     .ensureAlpha()
@@ -3508,6 +3543,30 @@ export async function renderBreakoutLayer(params: {
   let masked = await maskedSharp
     .png()
     .toBuffer()
+  if (params.subjectMaskKind === 'rembgCutout' && params.sourceClass === 'pixelArt') {
+    const { data, info } = await sharp(masked)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const bounds = getAlphaBounds(data, info.width, info.height, info.channels)
+    if (bounds) {
+      const chamberCenterX = layout.chamberX + layout.chamberSize / 2
+      const breakoutCenterX = bounds.minX + bounds.width / 2
+      const maxShiftX = Math.max(2, Math.round(layout.chamberSize * 0.05))
+      const shiftX = Math.round(clamp(chamberCenterX - breakoutCenterX, -maxShiftX, maxShiftX))
+      const targetTopY = Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.08))
+      const maxShiftY = Math.max(2, Math.round(layout.chamberSize * 0.018))
+      const shiftY = Math.round(clamp(targetTopY - bounds.minY, -maxShiftY, maxShiftY))
+      if (shiftX !== 0 || shiftY !== 0) {
+        masked = await shiftLayerCanvas({
+          layer: masked,
+          size,
+          offsetX: shiftX,
+          offsetY: shiftY,
+        })
+      }
+    }
+  }
   if (params.subjectMaskKind === 'rembgCutout' && params.sourceClass === 'illustration') {
     masked = await scrubTopDarkFringe(masked)
   }
@@ -4021,7 +4080,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           )) - ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX)
         : (
             analysis.sourceClass === 'pixelArt' && breakoutPlan.mode === 'rembgCutout'
-              ? topBiasPx + Math.max(4, Math.round(layout.chamberSize * 0.013))
+              ? topBiasPx + Math.max(9, Math.round(layout.chamberSize * 0.017))
               : topBiasPx
           )
       const breakoutScale = clamp(

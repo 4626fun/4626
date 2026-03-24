@@ -15,6 +15,8 @@ const {
   linkTelegramMock,
   privyState,
   linkAccountCallbacksRef,
+  trackTelegramLinkTelemetryEventMock,
+  createTelegramLinkFlowIdMock,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   ensureSessionMock: vi.fn(),
@@ -33,6 +35,8 @@ const {
     getAccessToken: vi.fn(async () => 'privy-access-token'),
   },
   linkAccountCallbacksRef: { current: null as any },
+  trackTelegramLinkTelemetryEventMock: vi.fn(),
+  createTelegramLinkFlowIdMock: vi.fn(() => 'flow-telemetry-1'),
 }))
 
 vi.mock('react-router-dom', async () => {
@@ -50,6 +54,11 @@ vi.mock('@/lib/telegramWebApp', () => ({
 
 vi.mock('@/lib/apiBase', () => ({
   apiFetch: apiFetchMock,
+}))
+
+vi.mock('@/lib/telegramLinkTelemetry', () => ({
+  trackTelegramLinkTelemetryEvent: trackTelegramLinkTelemetryEventMock,
+  createTelegramLinkFlowId: createTelegramLinkFlowIdMock,
 }))
 
 vi.mock('@privy-io/react-auth', () => ({
@@ -194,6 +203,56 @@ beforeEach(() => {
 })
 
 describe('TelegramLink UI flow', () => {
+  it('keeps collect_email stable while typing and only enables Send Code for a normalized valid email', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    const submitButton = screen.getByRole('button', { name: 'Send Code' }) as HTMLButtonElement
+
+    expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
+    expect(submitButton.disabled).toBe(true)
+    expect(submitButton.getAttribute('data-disabled-reason')).toBe('empty')
+
+    await user.type(input, 'USER@EXAMPLE')
+    expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
+    expect(sendCodeMock).not.toHaveBeenCalled()
+    expect(submitButton.disabled).toBe(true)
+    expect(submitButton.getAttribute('data-disabled-reason')).toBe('invalid_email')
+
+    await user.type(input, '.COM ')
+    expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
+    expect(sendCodeMock).not.toHaveBeenCalled()
+    expect(submitButton.disabled).toBe(false)
+    expect(submitButton.getAttribute('data-disabled-reason')).toBe('ready')
+  })
+
+  it('keeps the Send Code button clickable after valid email entry', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Verified Email'), ' USER@EXAMPLE.COM ')
+    const submitButton = screen.getByRole('button', { name: 'Send Code' }) as HTMLButtonElement
+
+    expect(submitButton.disabled).toBe(false)
+
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
+    })
+    await screen.findByLabelText('Email Verification Code')
+  })
+
+  it('keeps decorative overlays non-interactive', async () => {
+    renderFlow()
+
+    await screen.findByLabelText('Verified Email')
+    const overlay = screen.getByTestId('telegram-link-decorative-overlay')
+
+    expect(overlay.className).toContain('pointer-events-none')
+  })
+
   it('does not reset or remount the email input while typing', async () => {
     const user = userEvent.setup()
     renderFlow()
@@ -342,5 +401,43 @@ describe('TelegramLink UI flow', () => {
     await waitFor(() => {
       expect(screen.getByText('Telegram Linked')).toBeTruthy()
     })
+  })
+
+  it('emits transition and completion telemetry for the happy path', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+    await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByText('Telegram Linked')
+
+    expect(trackTelegramLinkTelemetryEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_flow_started',
+        flowId: 'flow-telemetry-1',
+      }),
+    )
+    expect(trackTelegramLinkTelemetryEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_state_transition',
+        fromTag: 'verify_telegram_session',
+        toTag: 'collect_email',
+      }),
+    )
+    expect(trackTelegramLinkTelemetryEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_backend_completion_succeeded',
+        status: 'succeeded',
+      }),
+    )
+    expect(trackTelegramLinkTelemetryEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_flow_completed',
+        status: 'succeeded',
+      }),
+    )
   })
 })

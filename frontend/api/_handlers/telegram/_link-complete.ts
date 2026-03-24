@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { trackTelegramLinkEvent } from '../../../server/_lib/telegramLinkTelemetry.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
 import {
@@ -27,6 +28,7 @@ import {
 type LinkCompleteBody = {
   sessionToken?: string
   linkToken?: string | null
+  flowId?: string | null
 }
 
 type LinkCompleteResponse = {
@@ -63,7 +65,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (await readJsonBody<LinkCompleteBody>(req).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
   const sessionToken = asTrimmed(body.sessionToken)
   const linkToken = asTrimmed(body.linkToken ?? '')
+  const flowId = asTrimmed(body.flowId ?? '')
   if (!sessionToken) {
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_backend_completion_result',
+      source: 'telegram-link-complete',
+      flowId,
+      phase: 'bind_telegram.complete_backend',
+      status: 'failed',
+      payload: {
+        reason: 'missing_session_token',
+      },
+    })
     return res
       .status(400)
       .json(withCode({ success: false, error: 'sessionToken is required' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
@@ -100,6 +113,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!sessionResult.ok) {
       const code = sessionResult.reason === 'expired' || sessionResult.reason === 'revoked' ? 'EXPIRED_TELEGRAM_SESSION' : 'INVALID_TELEGRAM_CONTEXT'
       const status = sessionResult.reason === 'invalid' ? 400 : 409
+      await trackTelegramLinkEvent({
+        event: 'telegram_link_miniapp_session_result',
+        source: 'telegram-link-complete',
+        flowId,
+        phase: 'bind_telegram.complete_backend',
+        status: 'failed',
+        privyUserId: context.privyUserId,
+        payload: {
+          reason: sessionResult.reason,
+        },
+      })
       return res.status(status).json(
         withCode(
           {
@@ -117,6 +141,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const session = sessionResult.session
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_miniapp_session_result',
+      source: 'telegram-link-complete',
+      flowId,
+      phase: 'bind_telegram.complete_backend',
+      status: 'succeeded',
+      telegramUserId: session.telegramUserId,
+      privyUserId: context.privyUserId,
+      chatId: session.chatId,
+    })
     const existingLink = await getTelegramLinkByUserId({
       db: db as any,
       telegramUserId: session.telegramUserId,
@@ -128,6 +162,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (linkToken) {
       const tokenStatus = readTelegramLinkStartTokenStatus(linkToken)
       if (!tokenStatus.ok) {
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_claim_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'failed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            reason: tokenStatus.reason,
+            stage: 'status_check',
+          },
+        })
         return res.status(tokenStatus.reason === 'expired' ? 409 : 400).json(
           withCode(
             {
@@ -143,11 +191,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (tokenStatus.payload.telegramUserId !== session.telegramUserId) {
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_claim_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'failed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            reason: 'telegram_user_mismatch',
+          },
+        })
         return res
           .status(409)
           .json(withCode({ success: false, error: 'Telegram launch token does not match the active Telegram user.' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
       }
       if (session.chatId && tokenStatus.payload.chatId !== session.chatId) {
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_claim_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'failed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            reason: 'telegram_chat_mismatch',
+          },
+        })
         return res
           .status(409)
           .json(withCode({ success: false, error: 'Telegram launch token does not match the active Telegram chat.' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
@@ -160,17 +234,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       if (claim.ok) {
         shouldConsumeLinkToken = true
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_claim_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'claimed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            claimState: claim.state ?? null,
+          },
+        })
       } else if (claim.reason === 'consumed') {
         const claimState = await readTelegramLinkStartTokenClaim({
           db: db as any,
           token: linkToken,
         })
         if (!sameUserExistingLink || claimState?.privyUserId?.toLowerCase() !== context.privyUserId.toLowerCase() || !claimState?.consumedAt) {
+          await trackTelegramLinkEvent({
+            event: 'telegram_link_token_claim_result',
+            source: 'telegram-link-complete',
+            flowId,
+            phase: 'bind_telegram.complete_backend',
+            status: 'failed',
+            telegramUserId: session.telegramUserId,
+            privyUserId: context.privyUserId,
+            chatId: session.chatId,
+            payload: {
+              reason: 'already_consumed_by_other_user',
+            },
+          })
           return res
             .status(409)
             .json(withCode({ success: false, error: 'Telegram link token has already been used.' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
         }
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_claim_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'already_consumed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            idempotent: true,
+          },
+        })
       } else if (claim.reason === 'claimed_by_other_user') {
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_claim_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'failed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            reason: 'claimed_by_other_user',
+          },
+        })
         return res.status(409).json(
           withCode(
             {
@@ -181,6 +307,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ),
         )
       } else {
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_claim_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'failed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            reason: claim.reason,
+          },
+        })
         return res.status(claim.reason === 'expired' ? 409 : 400).json(
           withCode(
             {
@@ -202,6 +341,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       privyUserId: context.privyUserId,
     })
     if (!mergePreflight.ok) {
+      await trackTelegramLinkEvent({
+        event: 'telegram_link_backend_completion_result',
+        source: 'telegram-link-complete',
+        flowId,
+        phase: 'bind_telegram.complete_backend',
+        status: 'failed',
+        telegramUserId: session.telegramUserId,
+        privyUserId: context.privyUserId,
+        chatId: session.chatId,
+        payload: {
+          reason: 'merge_preflight_recovery_required',
+          mergeReason: mergePreflight.reason ?? null,
+        },
+      })
       return res.status(409).json(
         withCode(
           {
@@ -241,14 +394,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         privyUserId: context.privyUserId,
       })
       if (consumeState !== 'consumed') {
+        await trackTelegramLinkEvent({
+          event: 'telegram_link_token_consume_result',
+          source: 'telegram-link-complete',
+          flowId,
+          phase: 'bind_telegram.complete_backend',
+          status: 'failed',
+          telegramUserId: session.telegramUserId,
+          privyUserId: context.privyUserId,
+          chatId: session.chatId,
+          payload: {
+            consumeState,
+          },
+        })
         throw new Error('telegram_link_token_consume_failed')
       }
+      await trackTelegramLinkEvent({
+        event: 'telegram_link_token_consume_result',
+        source: 'telegram-link-complete',
+        flowId,
+        phase: 'bind_telegram.complete_backend',
+        status: 'consumed',
+        telegramUserId: session.telegramUserId,
+        privyUserId: context.privyUserId,
+        chatId: session.chatId,
+      })
     }
 
     const account = await buildAccountsMePayload({
       db: db as any,
       privyUserId: context.privyUserId,
       privyUser: context.privyUser,
+    })
+
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_backend_completion_result',
+      source: 'telegram-link-complete',
+      flowId,
+      phase: 'bind_telegram.complete_backend',
+      status: 'succeeded',
+      telegramUserId: session.telegramUserId,
+      privyUserId: context.privyUserId,
+      chatId: session.chatId,
+      payload: {
+        linkStatus: link.linkStatus,
+        ownerVerified,
+      },
     })
 
     return res.status(200).json({
@@ -260,6 +451,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<LinkCompleteResponse>)
   } catch (error: unknown) {
     if (isIdentityRecoveryRequiredError(error)) {
+      await trackTelegramLinkEvent({
+        event: 'telegram_link_backend_completion_result',
+        source: 'telegram-link-complete',
+        flowId,
+        phase: 'bind_telegram.complete_backend',
+        status: 'failed',
+        payload: {
+          reason: 'identity_recovery_required',
+        },
+      })
       return res.status(409).json(
         withCode(
           {
@@ -273,6 +474,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const message = asTrimmed((error as { message?: unknown } | null)?.message) || 'Failed to complete Telegram link'
     const status = isUnauthorizedMessage(message) ? 401 : message === 'profile_sync_failed' ? 409 : 500
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_backend_completion_result',
+      source: 'telegram-link-complete',
+      flowId,
+      phase: 'bind_telegram.complete_backend',
+      status: 'failed',
+      payload: {
+        reason: message,
+        httpStatus: status,
+      },
+    })
     return res.status(status).json(
       withCode(
         {

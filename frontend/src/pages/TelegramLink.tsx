@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { AlertTriangle, CheckCircle2, LoaderCircle, Mail, RefreshCw, ShieldCheck, ShieldX, Unplug } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkAccount, useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
@@ -9,7 +9,9 @@ import {
   clearStoredTelegramMiniAppLinkContext,
   resolveTelegramMiniAppLinkContext,
   stripTelegramMiniAppLinkParams,
+  type TelegramMiniAppLinkContext,
 } from '@/lib/telegramMiniAppLink'
+import { createTelegramLinkFlowId, trackTelegramLinkTelemetryEvent } from '@/lib/telegramLinkTelemetry'
 import { ensureTelegramMiniAppSession, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 
 import {
@@ -22,6 +24,8 @@ import {
   type CanonicalAccountReady,
   type FlowError,
   type TelegramLinkResult,
+  type TelegramLinkState,
+  type TelegramSessionProof,
 } from './telegramLinkFlow'
 
 type ApiEnvelope<T> = {
@@ -62,6 +66,16 @@ function coerceErrorMessage(error: unknown, fallback: string): string {
 
 function isValidEmail(email: string): boolean {
   return EMAIL_RE.test(normalizeEmailCandidate(email))
+}
+
+type EmailSubmitDisabledReason = 'not_collect_email' | 'empty' | 'invalid_email'
+
+function getEmailSubmitDisabledReason(state: TelegramLinkState): EmailSubmitDisabledReason | null {
+  if (state.tag !== 'collect_email') return 'not_collect_email'
+  const normalized = normalizeEmailCandidate(state.email)
+  if (!normalized) return 'empty'
+  if (!isValidEmail(normalized)) return 'invalid_email'
+  return null
 }
 
 function buildOtpSendError(error: unknown): FlowError {
@@ -212,6 +226,74 @@ function formatTelegramHandle(username: string | null, userId: string): string {
   return username ? `@${username}` : `user:${userId}`
 }
 
+function getTelemetryProof(state: TelegramLinkState): TelegramSessionProof | null {
+  switch (state.tag) {
+    case 'collect_email':
+    case 'sending_email_code':
+    case 'enter_email_code':
+    case 'verifying_email_code':
+    case 'wait_for_privy_sync':
+    case 'bind_telegram':
+    case 'success':
+      return state.proof
+    case 'expired_or_error':
+      return state.proof ?? null
+    default:
+      return null
+  }
+}
+
+function getTelemetryLinkContext(state: TelegramLinkState): TelegramMiniAppLinkContext | null {
+  if (state.tag === 'verify_telegram_session') return state.linkContext
+  const proof = getTelemetryProof(state)
+  if (proof?.linkContext) return proof.linkContext
+  if (state.tag === 'expired_or_error' && state.retryTarget?.tag === 'verify_telegram_session') {
+    return state.retryTarget.linkContext
+  }
+  return null
+}
+
+function getTelemetryPhase(state: TelegramLinkState): string {
+  if (state.tag === 'bind_telegram') {
+    return state.step === 'ensure_privy_link'
+      ? 'bind_telegram.ensure_privy_link'
+      : 'bind_telegram.complete_backend'
+  }
+  return state.tag
+}
+
+type FlowStateDescriptor = {
+  tag: TelegramLinkState['tag']
+  step: string | null
+  errorCode: string | null
+}
+
+function describeFlowState(state: TelegramLinkState): FlowStateDescriptor {
+  if (state.tag === 'bind_telegram') {
+    return {
+      tag: state.tag,
+      step: state.step,
+      errorCode: null,
+    }
+  }
+  if (state.tag === 'expired_or_error') {
+    return {
+      tag: state.tag,
+      step: null,
+      errorCode: state.error.code,
+    }
+  }
+  return {
+    tag: state.tag,
+    step: null,
+    errorCode: null,
+  }
+}
+
+function formatFlowStateDescriptor(value: FlowStateDescriptor): string {
+  return value.step ? `${value.tag}:${value.step}` : value.tag
+}
+
 export function TelegramLink() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -227,12 +309,17 @@ export function TelegramLink() {
   const { sendCode, loginWithCode } = useLoginWithEmail()
   const getAccessToken = typeof privy.getAccessToken === 'function' ? privy.getAccessToken.bind(privy) : null
   const stateRef = useRef(state)
+  const flowIdRef = useRef(createTelegramLinkFlowId())
+  const flowStartedAtRef = useRef(Date.now())
+  const lastStateDescriptorRef = useRef<FlowStateDescriptor | null>(null)
+  const lastEmailSubmitDisabledReasonRef = useRef<string | null>(null)
   const privySnapshotRef = useRef({
     ready: Boolean(privy.ready),
     authenticated: Boolean(privy.authenticated),
     user: privy.user ?? null,
     getAccessToken,
   })
+  const emailSubmitDisabledReason = getEmailSubmitDisabledReason(state)
 
   useEffect(() => {
     stateRef.current = state
@@ -247,20 +334,48 @@ export function TelegramLink() {
     }
   }, [getAccessToken, privy.authenticated, privy.ready, privy.user])
 
+  const emitTelemetry = useCallback((
+    event: string,
+    payload: Record<string, unknown> = {},
+    snapshot: TelegramLinkState = stateRef.current,
+  ) => {
+    const proof = getTelemetryProof(snapshot)
+    const linkContext = getTelemetryLinkContext(snapshot)
+    trackTelegramLinkTelemetryEvent({
+      event,
+      flowId: flowIdRef.current,
+      phase: getTelemetryPhase(snapshot),
+      telegramUserId: proof?.telegramUserId ?? null,
+      chatId: proof?.chatId ?? null,
+      linkTokenPresent: Boolean(linkContext?.linkToken),
+      ...payload,
+    })
+  }, [])
+
   const { linkTelegram } = useLinkAccount({
-    onSuccess: ({ linkMethod }) => {
+    onSuccess: ({ linkMethod, user }) => {
       if (linkMethod !== 'telegram') return
       if (stateRef.current.tag !== 'bind_telegram' || stateRef.current.step !== 'ensure_privy_link') return
+      emitTelemetry('telegram_link_privy_link_succeeded', {
+        status: 'succeeded',
+        privyUserId: typeof (user as { id?: unknown } | null)?.id === 'string' ? String((user as any).id) : null,
+      })
       dispatch({ type: 'PRIVY_TELEGRAM_LINK_SUCCEEDED' })
     },
     onError: (errorCode, details) => {
       if (details?.linkMethod !== 'telegram') return
       if (stateRef.current.tag !== 'bind_telegram' || stateRef.current.step !== 'ensure_privy_link') return
+      const error = isTelegramLaunchParamError(String(errorCode))
+        ? buildLaunchParamFailure()
+        : buildBindFailure(coerceErrorMessage(errorCode, 'Telegram link failed.'), true)
+      emitTelemetry('telegram_link_privy_link_failed', {
+        status: 'failed',
+        errorCode: error.code,
+        recoverable: error.recoverable,
+      })
       dispatch({
         type: 'PRIVY_TELEGRAM_LINK_FAILED',
-        error: isTelegramLaunchParamError(String(errorCode))
-          ? buildLaunchParamFailure()
-          : buildBindFailure(coerceErrorMessage(errorCode, 'Telegram link failed.'), true),
+        error,
       })
     },
   })
@@ -270,20 +385,106 @@ export function TelegramLink() {
   }, [])
 
   useEffect(() => {
+    const next = describeFlowState(state)
+    const previous = lastStateDescriptorRef.current
+    if (!previous) {
+      emitTelemetry(
+        'telegram_link_flow_started',
+        {
+          status: 'started',
+          hasLinkToken: Boolean(getTelemetryLinkContext(state)?.linkToken),
+          state: formatFlowStateDescriptor(next),
+          elapsedMs: 0,
+        },
+        state,
+      )
+    } else if (
+      previous.tag !== next.tag ||
+      previous.step !== next.step ||
+      previous.errorCode !== next.errorCode
+    ) {
+      emitTelemetry(
+        'telegram_link_state_transition',
+        {
+          status: 'transition',
+          fromState: formatFlowStateDescriptor(previous),
+          toState: formatFlowStateDescriptor(next),
+          fromTag: previous.tag,
+          toTag: next.tag,
+          fromStep: previous.step,
+          toStep: next.step,
+          errorCode: next.errorCode,
+          elapsedMs: Date.now() - flowStartedAtRef.current,
+        },
+        state,
+      )
+    }
+    lastStateDescriptorRef.current = next
+  }, [emitTelemetry, state])
+
+  useEffect(() => {
+    if (state.tag !== 'collect_email') {
+      lastEmailSubmitDisabledReasonRef.current = null
+      return
+    }
+
+    const reason = emailSubmitDisabledReason ?? 'ready'
+    if (lastEmailSubmitDisabledReasonRef.current === reason) return
+    lastEmailSubmitDisabledReasonRef.current = reason
+
+    emitTelemetry(
+      'telegram_link_email_submit_state',
+      {
+        status: reason === 'ready' ? 'ready' : 'disabled',
+        disabledReason: reason,
+        normalizedEmail: normalizeEmailCandidate(state.email),
+      },
+      state,
+    )
+  }, [emailSubmitDisabledReason, emitTelemetry, state])
+
+  useEffect(() => {
     if (state.tag !== 'verify_telegram_session') return
 
     let cancelled = false
     void (async () => {
-      const verified = await ensureTelegramMiniAppSession()
+      const startedAt = Date.now()
+      emitTelemetry('telegram_link_miniapp_session_verification_started', { status: 'started' }, state)
+
+      const verified = await ensureTelegramMiniAppSession({
+        flowId: flowIdRef.current,
+      })
       if (cancelled) return
 
       if (!verified.ok) {
+        const error = buildTelegramSessionError(verified.error, verified.statusCode)
+        emitTelemetry(
+          'telegram_link_miniapp_session_verification_failed',
+          {
+            status: 'failed',
+            durationMs: Date.now() - startedAt,
+            statusCode: verified.statusCode,
+            errorCode: error.code,
+          },
+          state,
+        )
         dispatch({
           type: 'TELEGRAM_VERIFY_FAILED',
-          error: buildTelegramSessionError(verified.error, verified.statusCode),
+          error,
         })
         return
       }
+
+      emitTelemetry(
+        'telegram_link_miniapp_session_verification_succeeded',
+        {
+          status: 'succeeded',
+          durationMs: Date.now() - startedAt,
+          telegramUserId: verified.session.telegramUserId,
+          chatId: verified.session.chatId,
+        },
+        state,
+      )
 
       const proof = {
         sessionToken: verified.session.sessionToken,
@@ -318,22 +519,34 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [dispatch, location.hash, location.pathname, location.search, navigate, state])
+  }, [dispatch, emitTelemetry, location.hash, location.pathname, location.search, navigate, state])
 
   useEffect(() => {
     if (state.tag !== 'sending_email_code') return
 
     let cancelled = false
     void (async () => {
+      const startedAt = Date.now()
       const normalized = normalizeEmailCandidate(state.email)
+      emitTelemetry('telegram_link_email_code_send_started', {
+        status: 'started',
+        hasEmail: normalized.length > 0,
+      })
       if (!isValidEmail(normalized)) {
+        const error = createFlowError({
+          code: 'OTP_SEND_FAILED',
+          message: 'Enter a valid email address.',
+          recoverable: true,
+        })
+        emitTelemetry('telegram_link_email_code_send_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          errorCode: error.code,
+          recoverable: error.recoverable,
+        })
         dispatch({
           type: 'EMAIL_CODE_SEND_FAILED',
-          error: createFlowError({
-            code: 'OTP_SEND_FAILED',
-            message: 'Enter a valid email address.',
-            recoverable: true,
-          }),
+          error,
         })
         return
       }
@@ -341,15 +554,26 @@ export function TelegramLink() {
       try {
         await sendCode({ email: normalized })
         if (cancelled) return
+        emitTelemetry('telegram_link_email_code_send_succeeded', {
+          status: 'succeeded',
+          durationMs: Date.now() - startedAt,
+        })
         dispatch({
           type: 'EMAIL_CODE_SENT',
           resendAvailableAt: Date.now() + OTP_RESEND_DELAY_MS,
         })
       } catch (error) {
         if (cancelled) return
+        const flowError = buildOtpSendError(error)
+        emitTelemetry('telegram_link_email_code_send_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          errorCode: flowError.code,
+          recoverable: flowError.recoverable,
+        })
         dispatch({
           type: 'EMAIL_CODE_SEND_FAILED',
-          error: buildOtpSendError(error),
+          error: flowError,
         })
       }
     })()
@@ -357,22 +581,34 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [sendCode, state])
+  }, [emitTelemetry, sendCode, state])
 
   useEffect(() => {
     if (state.tag !== 'verifying_email_code') return
 
     let cancelled = false
     void (async () => {
+      const startedAt = Date.now()
       const normalizedCode = state.code.trim()
+      emitTelemetry('telegram_link_email_code_verify_started', {
+        status: 'started',
+        codeLength: normalizedCode.length,
+      })
       if (normalizedCode.length < 6) {
+        const error = createFlowError({
+          code: 'OTP_VERIFY_FAILED',
+          message: 'Enter the 6-digit code from your email.',
+          recoverable: true,
+        })
+        emitTelemetry('telegram_link_email_code_verify_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          errorCode: error.code,
+          recoverable: error.recoverable,
+        })
         dispatch({
           type: 'EMAIL_CODE_VERIFY_FAILED',
-          error: createFlowError({
-            code: 'OTP_VERIFY_FAILED',
-            message: 'Enter the 6-digit code from your email.',
-            recoverable: true,
-          }),
+          error,
         })
         return
       }
@@ -380,12 +616,23 @@ export function TelegramLink() {
       try {
         await loginWithCode({ code: normalizedCode })
         if (cancelled) return
+        emitTelemetry('telegram_link_email_code_verify_succeeded', {
+          status: 'succeeded',
+          durationMs: Date.now() - startedAt,
+        })
         dispatch({ type: 'EMAIL_CODE_VERIFIED' })
       } catch (error) {
         if (cancelled) return
+        const flowError = buildOtpVerifyError(error)
+        emitTelemetry('telegram_link_email_code_verify_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          errorCode: flowError.code,
+          recoverable: flowError.recoverable,
+        })
         dispatch({
           type: 'EMAIL_CODE_VERIFY_FAILED',
-          error: buildOtpVerifyError(error),
+          error: flowError,
         })
       }
     })()
@@ -393,7 +640,7 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [loginWithCode, state])
+  }, [emitTelemetry, loginWithCode, state])
 
   useEffect(() => {
     if (state.tag !== 'wait_for_privy_sync') return
@@ -402,9 +649,22 @@ export function TelegramLink() {
     void (async () => {
       const expectedEmail = normalizeEmailCandidate(state.email)
       const deadline = state.startedAt + PRIVY_SYNC_TIMEOUT_MS
+      const startedAt = Date.now()
+      let pollCount = 0
+      let accessTokenRetries = 0
+      let accountsFetchAttempts = 0
+      let lastSnapshot = privySnapshotRef.current
+
+      emitTelemetry('telegram_link_privy_sync_started', {
+        status: 'started',
+        privyReady: lastSnapshot.ready,
+        privyAuthenticated: lastSnapshot.authenticated,
+      })
 
       while (!cancelled && Date.now() < deadline) {
         const snapshot = privySnapshotRef.current
+        lastSnapshot = snapshot
+        pollCount += 1
         if (!snapshot.ready || !snapshot.authenticated || !snapshot.user || typeof snapshot.getAccessToken !== 'function') {
           await sleep(250)
           continue
@@ -417,11 +677,13 @@ export function TelegramLink() {
           accessToken = ''
         }
         if (!accessToken) {
+          accessTokenRetries += 1
           await sleep(300)
           continue
         }
 
         try {
+          accountsFetchAttempts += 1
           const response = await apiFetch('/api/accounts/me', {
             method: 'GET',
             headers: {
@@ -432,6 +694,14 @@ export function TelegramLink() {
           const json = (await response.json().catch(() => null)) as ApiEnvelope<CanonicalAccountReady> | null
           const account = response.ok ? parseCanonicalAccount(json?.data, expectedEmail) : null
           if (account) {
+            emitTelemetry('telegram_link_privy_sync_ready', {
+              status: 'ready',
+              durationMs: Date.now() - startedAt,
+              pollCount,
+              accessTokenRetries,
+              accountsFetchAttempts,
+              privyUserId: account.privyUserId,
+            })
             dispatch({ type: 'PRIVY_SYNC_READY', account })
             return
           }
@@ -443,6 +713,16 @@ export function TelegramLink() {
       }
 
       if (!cancelled) {
+        emitTelemetry('telegram_link_privy_sync_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          pollCount,
+          accessTokenRetries,
+          accountsFetchAttempts,
+          privyReady: lastSnapshot.ready,
+          privyAuthenticated: lastSnapshot.authenticated,
+          errorCode: 'PRIVY_SYNC_FAILED',
+        })
         dispatch({
           type: 'PRIVY_SYNC_FAILED',
           error: buildPrivySyncFailure(),
@@ -453,18 +733,29 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [state])
+  }, [emitTelemetry, state])
 
   useEffect(() => {
     if (state.tag !== 'bind_telegram' || state.step !== 'ensure_privy_link') return
 
     const snapshot = privySnapshotRef.current
     if (hasMatchingPrivyTelegramAccount(snapshot.user, state.proof)) {
+      emitTelemetry('telegram_link_privy_link_skipped', {
+        status: 'skipped',
+        privyUserId: state.account.privyUserId,
+        reason: 'already_linked_to_privy_user',
+      })
       dispatch({ type: 'PRIVY_TELEGRAM_LINK_SKIPPED' })
       return
     }
 
     if (!snapshot.ready || !snapshot.authenticated) {
+      emitTelemetry('telegram_link_privy_link_failed', {
+        status: 'failed',
+        errorCode: 'BIND_TELEGRAM_FAILED',
+        privyUserId: state.account.privyUserId,
+        reason: 'privy_session_not_ready',
+      })
       dispatch({
         type: 'PRIVY_TELEGRAM_LINK_FAILED',
         error: buildBindFailure('Privy session was not ready for Telegram linking.', true),
@@ -472,20 +763,36 @@ export function TelegramLink() {
       return
     }
 
+    emitTelemetry('telegram_link_privy_link_started', {
+      status: 'started',
+      privyUserId: state.account.privyUserId,
+    })
     linkTelegram({
       launchParams: {
         initDataRaw: state.proof.initDataRaw,
       },
     })
-  }, [linkTelegram, state])
+  }, [emitTelemetry, linkTelegram, state])
 
   useEffect(() => {
     if (state.tag !== 'bind_telegram' || state.step !== 'complete_backend') return
 
     let cancelled = false
     void (async () => {
+      const startedAt = Date.now()
       const snapshot = privySnapshotRef.current
+      emitTelemetry('telegram_link_backend_completion_started', {
+        status: 'started',
+        privyUserId: state.account.privyUserId,
+      })
       if (typeof snapshot.getAccessToken !== 'function') {
+        emitTelemetry('telegram_link_backend_completion_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          privyUserId: state.account.privyUserId,
+          errorCode: 'BIND_TELEGRAM_FAILED',
+          reason: 'missing_access_token_reader',
+        })
         dispatch({
           type: 'BIND_TELEGRAM_FAILED',
           error: buildBindFailure('Privy access token reader is unavailable.', true),
@@ -500,6 +807,13 @@ export function TelegramLink() {
         accessToken = ''
       }
       if (!accessToken) {
+        emitTelemetry('telegram_link_backend_completion_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          privyUserId: state.account.privyUserId,
+          errorCode: 'BIND_TELEGRAM_FAILED',
+          reason: 'missing_access_token',
+        })
         dispatch({
           type: 'BIND_TELEGRAM_FAILED',
           error: buildBindFailure('Privy access token was unavailable.', true),
@@ -518,6 +832,7 @@ export function TelegramLink() {
           body: JSON.stringify({
             sessionToken: state.proof.sessionToken,
             linkToken: state.proof.linkContext?.linkToken ?? null,
+            flowId: flowIdRef.current,
           }),
         })
         const json = (await response.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteData> | null
@@ -527,7 +842,19 @@ export function TelegramLink() {
           const message = json?.error || 'Unable to complete Telegram binding.'
           const code = String(json?.code ?? '').trim().toUpperCase()
           const lower = message.toLowerCase()
+          let errorCode = 'BIND_TELEGRAM_FAILED'
+          let recoverable = response.status >= 500 || response.status === 0
           if (code.includes('RECOVERY_REQUIRED') || lower.includes('recovery required')) {
+            errorCode = 'RECOVERY_REQUIRED'
+            recoverable = false
+            emitTelemetry('telegram_link_backend_completion_failed', {
+              status: 'failed',
+              durationMs: Date.now() - startedAt,
+              responseStatus: response.status,
+              privyUserId: state.account.privyUserId,
+              errorCode,
+              recoverable,
+            })
             dispatch({
               type: 'BIND_TELEGRAM_FAILED',
               error: createFlowError({
@@ -539,6 +866,16 @@ export function TelegramLink() {
             return
           }
           if (code.includes('EXPIRED_TELEGRAM_SESSION') || lower.includes('expired telegram') || lower.includes('telegram session')) {
+            errorCode = 'EXPIRED_TELEGRAM_SESSION'
+            recoverable = false
+            emitTelemetry('telegram_link_backend_completion_failed', {
+              status: 'failed',
+              durationMs: Date.now() - startedAt,
+              responseStatus: response.status,
+              privyUserId: state.account.privyUserId,
+              errorCode,
+              recoverable,
+            })
             dispatch({
               type: 'BIND_TELEGRAM_FAILED',
               error: createFlowError({
@@ -549,6 +886,14 @@ export function TelegramLink() {
             })
             return
           }
+          emitTelemetry('telegram_link_backend_completion_failed', {
+            status: 'failed',
+            durationMs: Date.now() - startedAt,
+            responseStatus: response.status,
+            privyUserId: state.account.privyUserId,
+            errorCode,
+            recoverable,
+          })
           dispatch({
             type: 'BIND_TELEGRAM_FAILED',
             error: buildBindFailure(message, response.status >= 500 || response.status === 0),
@@ -556,12 +901,25 @@ export function TelegramLink() {
           return
         }
 
+        emitTelemetry('telegram_link_backend_completion_succeeded', {
+          status: 'succeeded',
+          durationMs: Date.now() - startedAt,
+          responseStatus: response.status,
+          privyUserId: json.data.link.privyUserId ?? state.account.privyUserId,
+          linkStatus: json.data.link.linkStatus,
+        })
         dispatch({
           type: 'BIND_TELEGRAM_SUCCEEDED',
           link: json.data.link,
         })
       } catch (error) {
         if (cancelled) return
+        emitTelemetry('telegram_link_backend_completion_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          privyUserId: state.account.privyUserId,
+          errorCode: 'BIND_TELEGRAM_FAILED',
+        })
         dispatch({
           type: 'BIND_TELEGRAM_FAILED',
           error: buildBindFailure(coerceErrorMessage(error, 'Unable to complete Telegram binding.'), true),
@@ -572,7 +930,7 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [state])
+  }, [emitTelemetry, state])
 
   useEffect(() => {
     if (state.tag !== 'enter_email_code' || !state.resendAvailableAt || state.resendAvailableAt <= Date.now()) return
@@ -584,13 +942,19 @@ export function TelegramLink() {
     return () => {
       window.clearInterval(timer)
     }
-  }, [state])
+  }, [emitTelemetry, state])
 
   useEffect(() => {
     if (state.tag === 'success') {
+      emitTelemetry('telegram_link_flow_completed', {
+        status: 'succeeded',
+        elapsedMs: Date.now() - flowStartedAtRef.current,
+        privyUserId: state.account.privyUserId,
+        linkStatus: state.link.linkStatus,
+      }, state)
       clearStoredTelegramMiniAppLinkContext()
     }
-  }, [state.tag])
+  }, [emitTelemetry, state])
 
   const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -623,6 +987,15 @@ export function TelegramLink() {
         ? state.proof
         : null
 
+  const emailSubmitHelperText =
+    state.tag === 'collect_email'
+      ? state.emailError
+        ? null
+        : emailSubmitDisabledReason === 'invalid_email'
+          ? 'Enter a complete email address to continue.'
+          : 'Email creates or resolves the canonical 4626 account. Telegram attaches after sync.'
+      : null
+
   const renderContent = () => {
     switch (state.tag) {
       case 'verify_telegram_session':
@@ -630,7 +1003,7 @@ export function TelegramLink() {
 
       case 'collect_email':
         return (
-          <form className="space-y-4" onSubmit={handleEmailSubmit}>
+          <form className="space-y-3.5" onSubmit={handleEmailSubmit}>
             <div className="space-y-2">
               <label htmlFor="telegram-link-email" className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#666666]">
                 Verified Email
@@ -645,15 +1018,17 @@ export function TelegramLink() {
                   value={state.email}
                   onChange={(event) => dispatch({ type: 'EMAIL_CHANGED', email: event.target.value })}
                   placeholder="name@example.com"
-                  className="h-13 w-full rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] pl-11 pr-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[#0052FF] focus:ring-0"
+                  className="h-12 w-full rounded-[18px] border border-white/[0.08] bg-white/[0.03] pl-11 pr-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/80 focus:bg-white/[0.04] focus:ring-0"
                 />
               </div>
               {state.emailError ? <InlineError message={state.emailError} /> : null}
+              {emailSubmitHelperText ? <p className="text-[12px] leading-5 text-[#666666]">{emailSubmitHelperText}</p> : null}
             </div>
             <button
               type="submit"
-              className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:opacity-55"
-              disabled={!state.email.trim()}
+              data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
+              className="inline-flex h-12 w-full items-center justify-center rounded-[18px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+              disabled={emailSubmitDisabledReason !== null}
             >
               Send Code
             </button>
@@ -665,8 +1040,8 @@ export function TelegramLink() {
 
       case 'enter_email_code':
         return (
-          <form className="space-y-4" onSubmit={handleCodeSubmit}>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-[#EDEDED]">
+          <form className="space-y-3.5" onSubmit={handleCodeSubmit}>
+            <div className="text-sm text-[#EDEDED]">
               Code sent to <span className="font-mono text-[13px]">{state.email}</span>
             </div>
             <div className="space-y-2">
@@ -681,14 +1056,14 @@ export function TelegramLink() {
                 value={state.code}
                 onChange={(event) => dispatch({ type: 'CODE_CHANGED', code: event.target.value.replace(/\s+/g, '').slice(0, 6) })}
                 placeholder="000000"
-                className="h-13 w-full rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] px-4 text-center font-mono text-[18px] tracking-[0.38em] text-[#EDEDED] outline-none transition focus:border-[#0052FF] focus:ring-0"
+                className="h-12 w-full rounded-[18px] border border-white/[0.08] bg-white/[0.03] px-4 text-center font-mono text-[18px] tracking-[0.38em] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/80 focus:bg-white/[0.04] focus:ring-0"
               />
               {state.codeError ? <InlineError message={state.codeError} /> : null}
             </div>
             <div className="flex gap-3">
               <button
                 type="submit"
-                className="inline-flex h-12 flex-1 items-center justify-center rounded-2xl bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:opacity-55"
+                className="inline-flex h-12 flex-1 items-center justify-center rounded-[18px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
                 disabled={state.code.trim().length < 6}
               >
                 Verify Code
@@ -696,7 +1071,7 @@ export function TelegramLink() {
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'RESEND_CODE' })}
-                className="inline-flex h-12 items-center justify-center rounded-2xl border border-[#1F1F1F] bg-transparent px-4 text-sm font-medium text-[#EDEDED] transition hover:border-white/20 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-55"
+                className="inline-flex h-12 items-center justify-center rounded-[18px] border border-white/[0.08] bg-transparent px-4 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-55"
                 disabled={!canResend}
               >
                 {canResend ? 'Resend' : `${resendSeconds}s`}
@@ -734,19 +1109,19 @@ export function TelegramLink() {
 
       case 'success':
         return (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <StatusBlock
               icon={CheckCircle2}
               tone="success"
               body={`Canonical account ${state.account.email} is ready. Telegram ${formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} is linked.`}
             />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <MetaCard label="Telegram" value={formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} />
-              <MetaCard label="Profile" value={String(state.link.profileId)} />
-              <MetaCard label="Link Status" value={state.link.linkStatus} />
-              <MetaCard label="Canonical Email" value={state.account.email} />
+            <div className="grid gap-x-4 gap-y-3 border-t border-white/[0.06] pt-3 sm:grid-cols-2">
+              <MetaField label="Telegram" value={formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} />
+              <MetaField label="Profile" value={String(state.link.profileId)} />
+              <MetaField label="Link Status" value={state.link.linkStatus} />
+              <MetaField label="Canonical Email" value={state.account.email} />
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-[#EDEDED]">
+            <div className="text-sm leading-6 text-[#666666]">
               Telegram is attached to the verified-email 4626 account. Telegram does not replace email recovery.
             </div>
           </div>
@@ -756,7 +1131,7 @@ export function TelegramLink() {
         return (
           <div className="space-y-4">
             <StatusBlock icon={state.error.recoverable ? AlertTriangle : ShieldX} tone="error" body={state.error.message} />
-            <div className="rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] px-4 py-3">
+            <div className="rounded-[18px] bg-white/[0.03] px-4 py-3">
               <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#666666]">{getErrorTitle(state.error)}</div>
               <div className="mt-2 text-sm leading-6 text-[#EDEDED]">
                 {state.error.recoverable
@@ -769,19 +1144,19 @@ export function TelegramLink() {
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'RETRY' })}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9]"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[18px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9]"
                 >
                   <RefreshCw className="h-4 w-4" />
                   Retry
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'RESET' })}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#1F1F1F] bg-transparent px-5 text-sm font-medium text-[#EDEDED] transition hover:border-white/20 hover:bg-white/[0.04]"
-              >
-                <Unplug className="h-4 w-4" />
-                Reset Flow
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'RESET' })}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[18px] border border-white/[0.08] bg-transparent px-5 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04]"
+                >
+                  <Unplug className="h-4 w-4" />
+                  Reset Flow
               </button>
             </div>
           </div>
@@ -790,44 +1165,43 @@ export function TelegramLink() {
   }
 
   return (
-    <div className="overflow-hidden bg-[#020202] text-[#EDEDED]" style={TG_VIEWPORT_STYLE}>
+    <div className="relative overflow-x-hidden overflow-y-auto bg-[#020202] text-[#EDEDED]" style={TG_VIEWPORT_STYLE}>
       <PageMeta title="Telegram Link" description="Verify email inside Telegram and bind Telegram to the canonical 4626 account." canonicalPath="/telegram/link" />
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
         <div className="absolute right-[-10%] top-[8%] h-80 w-80 rounded-full bg-[#3B82F6]/12 blur-3xl" />
         <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-xl items-center justify-center py-6">
-        <div className="w-full rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.82))] p-5 shadow-[0_30px_120px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-6">
-          <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-3">
-                <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.24em] text-[#666666]">
-                  Telegram Mini App
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-[28px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
-                  <p className="max-w-lg text-sm leading-6 text-[#666666]">{getFlowDescription(state.tag)}</p>
-                </div>
+      <div className="relative z-10 mx-auto w-full max-w-[30rem] py-3 sm:py-5">
+        <div
+          data-flow-state={state.tag}
+          className="w-full rounded-[28px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.52)] backdrop-blur-xl sm:px-5 sm:py-5"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-[#666666]">
+                Telegram Mini App
               </div>
-              <div className="rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] px-3 py-2 text-right">
-                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#666666]">Identity Model</div>
-                <div className="mt-1 text-[13px] font-mono text-[#EDEDED]">email -&gt; account</div>
-                <div className="text-[11px] font-mono text-[#666666]">telegram -&gt; linked</div>
-              </div>
+              <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
+              <p className="max-w-xl text-[13px] leading-5 text-[#666666]">{getFlowDescription(state.tag)}</p>
             </div>
-
-            {proof ? (
-              <div className="mt-5 grid gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-4 text-sm sm:grid-cols-3">
-                <MetaCard label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
-                <MetaCard label="Chat" value={proof.chatId ?? 'direct'} />
-                <MetaCard label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
-              </div>
-            ) : null}
-
-            <div className="mt-5">{renderContent()}</div>
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-5">
+            <span className="font-mono text-[#EDEDED]">email -&gt; account</span>
+            <span className="font-mono text-[#666666]">telegram -&gt; linked</span>
+          </div>
+
+          {proof ? (
+            <div className="mt-3 grid gap-x-4 gap-y-3 border-t border-white/[0.06] pt-3 text-sm sm:grid-cols-3">
+              <MetaField label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
+              <MetaField label="Chat" value={proof.chatId ?? 'direct'} />
+              <MetaField label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
+            </div>
+          ) : null}
+
+          <div className="mt-4">{renderContent()}</div>
         </div>
       </div>
     </div>
@@ -849,12 +1223,12 @@ function StatusBlock(props: {
   const Icon = props.icon
 
   return (
-    <div className={`rounded-[22px] border px-4 py-4 ${toneClasses}`}>
+    <div className={`rounded-[20px] border px-4 py-3 ${toneClasses}`}>
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-full border border-white/10 bg-white/[0.05] p-2">
+        <div className="mt-0.5 rounded-full border border-white/10 bg-white/[0.05] p-1.5">
           <Icon className={`h-4 w-4 ${props.spinning ? 'animate-spin' : ''}`} />
         </div>
-        <div className="text-sm leading-6">{props.body}</div>
+        <div className="text-sm leading-5">{props.body}</div>
       </div>
     </div>
   )
@@ -862,17 +1236,17 @@ function StatusBlock(props: {
 
 function InlineError(props: { message: string }) {
   return (
-    <div className="rounded-2xl border border-[#ef4444]/20 bg-[#ef4444]/10 px-3 py-2 text-sm text-[#EDEDED]">
+    <div className="rounded-[14px] bg-[#ef4444]/10 px-3 py-2 text-sm text-[#EDEDED]">
       {props.message}
     </div>
   )
 }
 
-function MetaCard(props: { label: string; value: string }) {
+function MetaField(props: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] px-4 py-3">
+    <div className="min-w-0">
       <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#666666]">{props.label}</div>
-      <div className="mt-2 truncate font-mono text-[13px] text-[#EDEDED]">{props.value}</div>
+      <div className="mt-1 truncate font-mono text-[13px] text-[#EDEDED]">{props.value}</div>
     </div>
   )
 }

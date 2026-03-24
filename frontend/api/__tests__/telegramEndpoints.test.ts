@@ -42,6 +42,7 @@ const {
   setTelegramMyCommandsMock,
   setTelegramChatMenuButtonMock,
   resolveTelegramBotTokenMock,
+  trackTelegramLinkEventMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   dbSqlMock: vi.fn(),
@@ -67,6 +68,7 @@ const {
   setTelegramMyCommandsMock: vi.fn(),
   setTelegramChatMenuButtonMock: vi.fn(),
   resolveTelegramBotTokenMock: vi.fn(),
+  trackTelegramLinkEventMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -100,6 +102,10 @@ vi.mock('../../server/_lib/telegramBotApi.js', () => ({
   setTelegramMyCommands: setTelegramMyCommandsMock,
   setTelegramChatMenuButton: setTelegramChatMenuButtonMock,
   resolveTelegramBotToken: resolveTelegramBotTokenMock,
+}))
+
+vi.mock('../../server/_lib/telegramLinkTelemetry.js', () => ({
+  trackTelegramLinkEvent: trackTelegramLinkEventMock,
 }))
 
 function buildTelegramMiniAppInitData(params: {
@@ -338,6 +344,12 @@ describe('telegram endpoint handlers', () => {
     expect(claimTelegramMiniAppReplayNonceMock).toHaveBeenCalledTimes(1)
     expect(createTelegramMiniAppSessionMock).toHaveBeenCalledTimes(1)
     expect(res.body?.data?.sessionToken).toBe('mini-session-token')
+    expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_miniapp_session_result',
+        status: 'succeeded',
+      }),
+    )
   })
 
   it('POST /api/telegram/miniapp/session rejects invalid initData', async () => {
@@ -375,6 +387,15 @@ describe('telegram endpoint handlers', () => {
     expect(res.statusCode).toBe(409)
     expect(res.body?.success).toBe(false)
     expect(String(res.body?.error ?? '')).toContain('replay')
+    expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_miniapp_session_result',
+        status: 'failed',
+        payload: expect.objectContaining({
+          reason: 'replay_detected',
+        }),
+      }),
+    )
   })
 
   it('POST /api/telegram/miniapp/session recovers replayed initData when a matching session already exists', async () => {
@@ -433,6 +454,38 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.data?.conversion?.tradePreviewToConfirmRatePct).toBe(66.67)
   })
 
+  it('POST /api/telegram/link/telemetry accepts telegram link events', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_link-telemetry.ts')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        event: 'telegram_link_state_transition',
+        flowId: 'flow-1',
+        phase: 'collect_email',
+        status: 'transition',
+        fromTag: 'verify_telegram_session',
+        toTag: 'collect_email',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_state_transition',
+        flowId: 'flow-1',
+        phase: 'collect_email',
+        status: 'transition',
+        payload: expect.objectContaining({
+          fromTag: 'verify_telegram_session',
+          toTag: 'collect_email',
+        }),
+      }),
+    )
+  })
+
   it('GET /api/telegram/metrics returns 404 when rollout flag is disabled', async () => {
     const { default: handler } = await import('../_handlers/telegram/_metrics.ts')
     isTelegramFunnelMetricsEnabledMock.mockReturnValueOnce(false)
@@ -480,6 +533,7 @@ describe('telegram endpoint handlers', () => {
     expect(await getTelegramApiHandler('miniapp/link')).toBeNull()
     expect(await getTelegramApiHandler('merge-preflight')).toBeNull()
     expect(await getTelegramApiHandler('link/complete')).toBeTypeOf('function')
+    expect(await getTelegramApiHandler('link/telemetry')).toBeTypeOf('function')
     expect(await getTelegramApiHandler('miniapp/session')).toBeTypeOf('function')
     expect(await getTelegramApiHandler('metrics')).toBeTypeOf('function')
   })

@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { trackTelegramLinkEvent } from '../../../server/_lib/telegramLinkTelemetry.js'
 import {
   claimTelegramMiniAppReplayNonce,
   createTelegramMiniAppSession,
@@ -17,6 +18,7 @@ import { asTrimmed } from './webhook/utils.js'
 
 type MiniAppSessionBody = {
   initData?: string
+  flowId?: string | null
 }
 
 type MiniAppSessionData = {
@@ -46,12 +48,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (await readJsonBody<MiniAppSessionBody>(req).catch(() => null)) ?? (req.body as MiniAppSessionBody | null) ?? {}
   const initData = asTrimmed(body.initData ?? '')
+  const flowId = asTrimmed(body.flowId ?? '')
   const verified = verifyTelegramMiniAppInitData({
     initData,
     botToken,
     maxAgeSeconds: config.miniAppInitDataMaxAgeSeconds,
   })
   if (!verified.ok) {
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_miniapp_session_result',
+      source: 'telegram-miniapp-session',
+      flowId,
+      phase: 'verify_telegram_session',
+      status: 'failed',
+      payload: {
+        reason: verified.reason,
+      },
+    })
     return res.status(resolveTelegramMiniAppVerificationStatusCode(verified.reason)).json({
       success: false,
       error: `telegram_miniapp_${verified.reason}`,
@@ -65,11 +78,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId: identity.telegramUserId,
     })
   ) {
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_miniapp_session_result',
+      source: 'telegram-miniapp-session',
+      flowId,
+      phase: 'verify_telegram_session',
+      status: 'failed',
+      telegramUserId: identity.telegramUserId,
+      chatId: identity.chatId,
+      payload: {
+        reason: 'session_disabled',
+      },
+    })
     return res.status(403).json({ success: false, error: 'telegram_miniapp_session_disabled' } satisfies ApiEnvelope<never>)
   }
 
   const db = await getDb()
   if (!db) {
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_miniapp_session_result',
+      source: 'telegram-miniapp-session',
+      flowId,
+      phase: 'verify_telegram_session',
+      status: 'failed',
+      telegramUserId: identity.telegramUserId,
+      chatId: identity.chatId,
+      payload: {
+        reason: 'db_unavailable',
+      },
+    })
     return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
   await ensureWaitlistSchema(db as any)
@@ -82,6 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     authDate: identity.authDate,
     ttlSeconds: config.miniAppReplayTtlSeconds,
   })
+  let reusedExistingSession = false
   if (!replayAccepted) {
     const reusable = await findReusableTelegramMiniAppSession({
       db: db as any,
@@ -91,8 +129,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       authDate: identity.authDate,
     })
     if (!reusable) {
+      await trackTelegramLinkEvent({
+        event: 'telegram_link_miniapp_session_result',
+        source: 'telegram-miniapp-session',
+        flowId,
+        phase: 'verify_telegram_session',
+        status: 'failed',
+        telegramUserId: identity.telegramUserId,
+        chatId: identity.chatId,
+        payload: {
+          reason: 'replay_detected',
+          replayAccepted: false,
+        },
+      })
       return res.status(409).json({ success: false, error: 'telegram_miniapp_replay_detected' } satisfies ApiEnvelope<never>)
     }
+    reusedExistingSession = true
   }
 
   const created = await createTelegramMiniAppSession({
@@ -107,8 +159,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ttlSeconds: config.miniAppSessionTtlSeconds,
   })
   if (!created) {
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_miniapp_session_result',
+      source: 'telegram-miniapp-session',
+      flowId,
+      phase: 'verify_telegram_session',
+      status: 'failed',
+      telegramUserId: identity.telegramUserId,
+      chatId: identity.chatId,
+      payload: {
+        reason: 'session_create_failed',
+        replayAccepted,
+        reusedExistingSession,
+      },
+    })
     return res.status(500).json({ success: false, error: 'telegram_miniapp_session_create_failed' } satisfies ApiEnvelope<never>)
   }
+
+  await trackTelegramLinkEvent({
+    event: 'telegram_link_miniapp_session_result',
+    source: 'telegram-miniapp-session',
+    flowId,
+    phase: 'verify_telegram_session',
+    status: 'succeeded',
+    telegramUserId: identity.telegramUserId,
+    chatId: identity.chatId,
+    payload: {
+      replayAccepted,
+      reusedExistingSession,
+    },
+  })
 
   return res.status(200).json({
     success: true,

@@ -212,6 +212,12 @@ The flow must be implemented as an explicit state machine with at least:
 - OTP failure must be recoverable without restarting the flow.
 - Privy sync delays must not cause regression to earlier states.
 
+### Observability
+
+- The Telegram Mini App flow must emit transition-level telemetry from one authoritative state machine.
+- Telemetry must cover Mini App session verification outcome, Privy/account sync timing, backend completion result, and link-token claim/consume outcome.
+- Observability must preserve transport boundaries: Telegram-specific onboarding/link telemetry stays on the Telegram webhook + Mini App side and must not rely on the Railway XMTP runtime.
+
 ### Account Resolution
 
 - Existing email -> attach Telegram

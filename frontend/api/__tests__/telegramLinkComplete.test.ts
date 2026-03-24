@@ -20,6 +20,7 @@ const {
   getTelegramLinkByUserIdMock,
   runTelegramMergePreflightMock,
   upsertTelegramUserLinkMock,
+  trackTelegramLinkEventMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(),
@@ -38,6 +39,7 @@ const {
   getTelegramLinkByUserIdMock: vi.fn(),
   runTelegramMergePreflightMock: vi.fn(),
   upsertTelegramUserLinkMock: vi.fn(),
+  trackTelegramLinkEventMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -74,6 +76,10 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   getTelegramLinkByUserId: getTelegramLinkByUserIdMock,
   runTelegramMergePreflight: runTelegramMergePreflightMock,
   upsertTelegramUserLink: upsertTelegramUserLinkMock,
+}))
+
+vi.mock('../../server/_lib/telegramLinkTelemetry.js', () => ({
+  trackTelegramLinkEvent: trackTelegramLinkEventMock,
 }))
 
 describe('POST /api/telegram/link/complete', () => {
@@ -193,6 +199,24 @@ describe('POST /api/telegram/link/complete', () => {
     )
     expect(finalizeTelegramLinkStartTokenConsumptionMock).toHaveBeenCalledTimes(1)
     expect(res.body?.data?.link?.telegramUserId).toBe('42')
+    expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_token_claim_result',
+        status: 'claimed',
+      }),
+    )
+    expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_token_consume_result',
+        status: 'consumed',
+      }),
+    )
+    expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'telegram_link_backend_completion_result',
+        status: 'succeeded',
+      }),
+    )
   })
 
   it('returns idempotent success when the same Privy user already owns the Telegram link and token is already consumed', async () => {
