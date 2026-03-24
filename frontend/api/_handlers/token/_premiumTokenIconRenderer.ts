@@ -2564,11 +2564,11 @@ async function createTopBreakoutMask(params: {
   const breakoutWidth = Math.max(1, Math.round(params.breakoutWindow?.width ?? layout.breakoutWidth))
   const breakoutRight = Math.min(size, breakoutX + breakoutWidth)
   const top = isPixelRembgCutout
-    ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.16))
+    ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.10))
     : layout.breakoutY
   const rembgDepthMultiplier =
     isRembgCutout
-      ? (params.sourceClass === 'pixelArt' ? 1.74 : params.sourceClass === 'illustration' ? 1.28 : 1.16)
+      ? (params.sourceClass === 'pixelArt' ? 1.86 : params.sourceClass === 'illustration' ? 1.28 : 1.16)
       : 1
   const bottom = Math.min(size, top + Math.round(layout.breakoutHeight * rembgDepthMultiplier))
   const height = Math.max(1, bottom - top)
@@ -2577,8 +2577,16 @@ async function createTopBreakoutMask(params: {
   const lowerFadeOpacity = isRembgCutout ? '1' : isIllustration ? '0.08' : '0.28'
   const bottomFadeOpacity = isRembgCutout ? '1' : '0'
   const lowerFadeStop = isRembgCutout ? '100%' : '70%'
-  const xFadeStart = isRembgCutout ? '0%' : isIllustration ? '8%' : '18%'
-  const xFadeEnd = isRembgCutout ? '100%' : isIllustration ? '90%' : '82%'
+  const xFadeStart =
+    isPixelRembgCutout ? '22%'
+    : isRembgCutout ? '0%'
+    : isIllustration ? '8%'
+    : '18%'
+  const xFadeEnd =
+    isPixelRembgCutout ? '78%'
+    : isRembgCutout ? '100%'
+    : isIllustration ? '90%'
+    : '82%'
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="fadeY" x1="0" y1="${top}" x2="0" y2="${bottom}" gradientUnits="userSpaceOnUse">
@@ -2630,7 +2638,7 @@ async function createBreakoutAboveFrameMask(params: {
     1,
     Math.round(layout.frameStroke * (
       isRembgCutout
-        ? (params.sourceClass === 'pixelArt' ? 0.52 : isIllustration ? 0.62 : 0.42)
+        ? (params.sourceClass === 'pixelArt' ? 0.78 : isIllustration ? 0.62 : 0.42)
         : isIllustration ? 0.38 : 0.05
     )),
   )
@@ -2638,18 +2646,20 @@ async function createBreakoutAboveFrameMask(params: {
     1,
     Math.round(layout.frameStroke * (
       isRembgCutout
-        ? (params.sourceClass === 'pixelArt' ? 1.24 : isIllustration ? 1.42 : 1.06)
+        ? (params.sourceClass === 'pixelArt' ? 1.42 : isIllustration ? 1.42 : 1.06)
         : isIllustration ? 0.74 : 0.12
     )),
   )
   const keepToY = Math.min(size, Math.max(0, layout.chamberY + overlapIntoChamberPx))
   const fadeEndY = Math.min(size, keepToY + edgeFeatherPx)
+  const keepToOffset = clamp(keepToY / Math.max(1, size), 0, 1)
+  const fadeEndOffset = clamp(fadeEndY / Math.max(1, size), keepToOffset, 1)
   const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="breakoutAboveFrame" x1="0" y1="0" x2="0" y2="${size}" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="white" stop-opacity="1"/>
-      <stop offset="${Math.round((keepToY / Math.max(1, size)) * 100)}%" stop-color="white" stop-opacity="1"/>
-      <stop offset="${Math.round((fadeEndY / Math.max(1, size)) * 100)}%" stop-color="white" stop-opacity="0"/>
+      <stop offset="${keepToOffset}" stop-color="white" stop-opacity="1"/>
+      <stop offset="${fadeEndOffset}" stop-color="white" stop-opacity="0"/>
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
   </defs>
@@ -2850,9 +2860,9 @@ function selectDominantUpperSubjectComponent(params: {
   const best = candidates[0]
   if (!best) return null
 
-  const minScore = best.score * (isPixelArt ? 0.34 : isIllustration ? 0.52 : 0.42)
-  const minArea = Math.max(minComponentPixels, Math.round(best.area * (isPixelArt ? 0.1 : isIllustration ? 0.18 : 0.14)))
-  const maxComponents = isPixelArt ? 3 : isIllustration ? 2 : 3
+  const minScore = best.score * (isPixelArt ? 0.28 : isIllustration ? 0.52 : 0.42)
+  const minArea = Math.max(minComponentPixels, Math.round(best.area * (isPixelArt ? 0.06 : isIllustration ? 0.18 : 0.14)))
+  const maxComponents = isPixelArt ? 4 : isIllustration ? 2 : 3
   const selected = candidates
     .filter((candidate) => candidate.score >= minScore && candidate.area >= minArea)
     .slice(0, maxComponents)
@@ -3393,7 +3403,7 @@ export async function renderBreakoutLayer(params: {
       hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
         ? 72
         : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
-          ? (params.sourceClass === 'pixelArt' ? 58 : 96)
+          ? (params.sourceClass === 'pixelArt' ? 46 : 96)
           : undefined,
     strictContourGates:
       hasPreparedMaskSource &&
@@ -3426,7 +3436,7 @@ export async function renderBreakoutLayer(params: {
       const maxWidth = Math.round(
         layout.chamberSize * (
           isRembgBreakout
-            ? (params.sourceClass === 'pixelArt' ? 0.95 : 0.9)
+            ? (params.sourceClass === 'pixelArt' ? 0.82 : 0.9)
             : (params.sourceClass === 'pixelArt' ? 0.62 : 0.74)
         ),
       )
@@ -4011,7 +4021,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
           )) - ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX)
         : (
             analysis.sourceClass === 'pixelArt' && breakoutPlan.mode === 'rembgCutout'
-              ? topBiasPx + Math.max(6, Math.round(layout.chamberSize * 0.018))
+              ? topBiasPx + Math.max(4, Math.round(layout.chamberSize * 0.013))
               : topBiasPx
           )
       const breakoutScale = clamp(

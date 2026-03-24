@@ -8,7 +8,8 @@ This checklist covers the remaining operational steps after removing the old Far
 - Set **App URL** to the production web app URL (`https://app.4626.fun`).
 - Do not use `https://4626.fun` as the Base Build URL. That host remains marketing/waitlist.
 - Verify icon, tagline, description, and screenshots in Base Build match current brand assets.
-- Ensure no workflow depends on `/.well-known/farcaster.json` for Base Build metadata.
+- Treat the app homepage `<meta name="base:app_id" ... />` as the primary Base.dev ownership signal.
+- Keep `/.well-known/farcaster.json` and `fc:miniapp` / `fc:frame` metadata live until the April 9, 2026 cutover because older Base/Farcaster import and preview tooling still reads them.
 - Ensure the app homepage `<head>` includes:
 
 ```html

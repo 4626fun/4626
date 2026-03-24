@@ -128,6 +128,11 @@
       "continue": true
     },
     {
+      "src": "/.well-known/farcaster.json",
+      "headers": { "cache-control": "no-store" },
+      "continue": true
+    },
+    {
       "src": "/explore/(.*)",
       "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true

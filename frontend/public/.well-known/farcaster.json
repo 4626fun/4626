@@ -1,0 +1,25 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "baseBuilder": {
+    "ownerAddress": "0x8719fa7Be10533fd69885b124a8c84f9C51071AF"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "4626.fun",
+    "homeUrl": "https://app.4626.fun/",
+    "iconUrl": "https://app.4626.fun/miniapp-icon.png",
+    "splashImageUrl": "https://app.4626.fun/miniapp-splash.png",
+    "splashBackgroundColor": "#0052FF",
+    "subtitle": "Creator vaults on Base",
+    "description": "Deposit creator coins into vaults. Earn from trading fees. Everyone earns together.",
+    "primaryCategory": "finance",
+    "tags": ["creator", "vaults", "defi", "base", "trading"],
+    "heroImageUrl": "https://app.4626.fun/miniapp-hero.png",
+    "screenshotUrls": ["https://app.4626.fun/screenshot-portrait.png"],
+    "canonicalDomain": "app.4626.fun"
+  }
+}

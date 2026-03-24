@@ -307,6 +307,7 @@ type EnsureTelegramMiniAppSessionResult =
 
 export async function ensureTelegramMiniAppSession(params?: {
   fetcher?: (path: string, init?: ApiFetchInit) => Promise<Response>
+  flowId?: string
   timeoutMs?: number
 }): Promise<EnsureTelegramMiniAppSessionResult> {
   const webApp = await loadTelegramWebApp()
@@ -344,7 +345,10 @@ export async function ensureTelegramMiniAppSession(params?: {
       response = await fetcher('/api/telegram/miniapp/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ initData }),
+        body: JSON.stringify({
+          initData,
+          flowId: asTrimmed(params?.flowId ?? '') || null,
+        }),
         ...(abortController ? { signal: abortController.signal } : null),
       })
     } catch (error) {
