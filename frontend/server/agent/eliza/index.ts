@@ -2169,14 +2169,13 @@ function startHealthServer() {
     if (requiresXmtp && agentCount === 0) readinessReasons.push('no_agents')
     if (latestEnvValidation.errors.length > 0) readinessReasons.push('env_validation_failed')
     if (shouldCheckDb && db === null) readinessReasons.push('db_unavailable')
-    if (requiresXmtp && !xmtpReady) readinessReasons.push('xmtp_not_running')
+    if (requiresXmtp && agentCount > 0 && !xmtpReady) readinessReasons.push('xmtp_not_running')
     if ((queueStats?.staleProcessing ?? 0) > 0) readinessReasons.push('queue_stale_leases')
     const ready = Boolean(
       agentBooted &&
-      (requiresXmtp ? agentCount > 0 : true) &&
       latestEnvValidation.errors.length === 0 &&
       (shouldCheckDb ? db !== null : true) &&
-      (requiresXmtp ? xmtpReady : true),
+      (requiresXmtp && agentCount > 0 ? xmtpReady : true),
     )
     const status =
       requiresXmtp && !agentBooted
