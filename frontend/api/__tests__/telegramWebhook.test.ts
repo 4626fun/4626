@@ -224,6 +224,7 @@ describe('telegram webhook handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) }))
+    handleKeeprCommandMock.mockResolvedValue({ ok: true, response: 'Command received.' })
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
     ensureWaitlistSchemaMock.mockResolvedValue(undefined)
     ensureKeeprSchemaMock.mockResolvedValue(undefined)
@@ -3055,6 +3056,65 @@ describe('telegram webhook handler', () => {
     )
     expect(connectButton).toBeTruthy()
     expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
+  })
+
+  it('returns 200 when outbound delivery fails instead of crashing the webhook', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => '{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}',
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => '{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}',
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_16_1,
+        message: { message_id: 161, text: '/help', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(String(res.body?.data?.ok ?? '')).toBe('true')
+    expect((fetch as any).mock.calls.length).toBe(2)
+    const firstPayload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    const fallbackPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(firstPayload.reply_markup).toBeTruthy()
+    expect(fallbackPayload.reply_markup).toBeUndefined()
+    expect(fallbackPayload.reply_to_message_id).toBeUndefined()
+  })
+
+  it('continues when active message state lookup fails', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramActiveMessageMock.mockRejectedValueOnce(new Error('active_state_lookup_failed'))
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_16_2,
+        message: { message_id: 162, text: '/help', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.chat_id).toBe('-100123')
   })
 
   it('handles /wallet as a telegram-native command without delegating to keepr', async () => {
