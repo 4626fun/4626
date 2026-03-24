@@ -165,3 +165,55 @@ If an older flow violates these invariants, it should be:
 - or migrated
 
 Compatibility is less important than preserving one clear account model.
+
+## Telegram Mini App Implementation Invariants
+
+The Telegram Mini App flow must follow these implementation-level guarantees:
+
+### Required States
+
+The flow must be implemented as an explicit state machine with at least:
+
+- `verify_telegram_session`
+- `collect_email`
+- `sending_email_code`
+- `enter_email_code`
+- `verifying_email_code`
+- `wait_for_privy_sync`
+- `bind_telegram`
+- `success`
+- `expired_or_error`
+
+### State Ownership
+
+- There must be a single source of truth for flow state.
+- UI must map 1:1 to state machine state.
+- Do not derive verification state from multiple async sources.
+
+### Verification Semantics
+
+- Email is not considered verified until:
+  1. OTP is valid AND
+  2. canonical account is resolved AND
+  3. session is fully hydrated
+
+- “Verified” UI must not render before all conditions above are met.
+
+### Telegram Binding
+
+- Telegram identity must only be attached after:
+  - verified email
+  - canonical account resolution
+- Telegram must never become the canonical identity.
+
+### Failure Handling
+
+- Expired or invalid Telegram session must produce explicit error state.
+- OTP failure must be recoverable without restarting the flow.
+- Privy sync delays must not cause regression to earlier states.
+
+### Account Resolution
+
+- Existing email -> attach Telegram
+- New email -> create account, then attach Telegram
+- No duplicate accounts for same verified email

@@ -444,6 +444,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Frontend guide: `frontend/README.md`
 - Swap integration/runtime notes: `frontend/docs/uniswap-integration-notes.md`
 - Account + onboarding architecture: `frontend/docs/account-auth-invariants.md`, `frontend/docs/waitlist-accounts-architecture.md`
+- Telegram Mini App link/onboarding architecture: `frontend/docs/telegram-miniapp-link-architecture.md`
 - CRE guide: `cre/README.md`
 
 ## Cloud Agent Onboarding

@@ -5,8 +5,6 @@ type ApiHandlerModule = { default?: ApiHandler }
 
 const telegramRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'bot-config': () => import('./telegram/_bot-config.js'),
-  'miniapp/link': () => import('./telegram/_miniapp-link.js'),
-  'merge-preflight': () => import('./telegram/_merge-preflight.js'),
   'miniapp/session': () => import('./telegram/_miniapp-session.js'),
   'metrics': () => import('./telegram/_metrics.js'),
   'portfolio': () => import('./telegram/_portfolio.js'),

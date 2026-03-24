@@ -364,10 +364,10 @@ describe('premium token icon renderer', () => {
       rembgAvailable: true,
     })
     expect(pixelPlan.mode).toBe('none')
-    expect(pixelPlan.reason).toBe('rembg-not-candidate')
+    expect(pixelPlan.reason).toBe('no-breakout-source')
   })
 
-  it('plans hero/source-alpha breakout and suppresses rembg when unavailable', () => {
+  it('plans hero/source-alpha breakout and only uses rembg for high-confidence opaque assets', () => {
     const heroPlan = __testables.decideBreakoutPlan({
       analysis: buildAnalysis({ sourceClass: 'illustration', hasTransparency: true }),
       suppressBreakout: false,
@@ -384,9 +384,9 @@ describe('premium token icon renderer', () => {
     })
     expect(sourceAlphaPlan.mode).toBe('sourceAlpha')
 
-    const rembgUnavailablePlan = __testables.decideBreakoutPlan({
+    const opaqueIllustrationPlan = __testables.decideBreakoutPlan({
       analysis: buildAnalysis({
-        sourceClass: 'portraitPhoto',
+        sourceClass: 'illustration',
         hasTransparency: false,
         topCenterStdDev: 28,
         topOccupancy: 0.12,
@@ -395,8 +395,51 @@ describe('premium token icon renderer', () => {
       breakoutSourceKind: 'none',
       rembgAvailable: false,
     })
-    expect(rembgUnavailablePlan.mode).toBe('none')
-    expect(rembgUnavailablePlan.reason).toBe('rembg-unavailable')
+    expect(opaqueIllustrationPlan.mode).toBe('none')
+    expect(opaqueIllustrationPlan.reason).toBe('no-breakout-source')
+
+    const highConfidenceOpaqueIllustrationPlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({
+        sourceClass: 'illustration',
+        hasTransparency: false,
+        lowResolution: false,
+        topCenterStdDev: 56,
+        topOccupancy: 0.55,
+      }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'none',
+      rembgAvailable: true,
+    })
+    expect(highConfidenceOpaqueIllustrationPlan.mode).toBe('rembgCutout')
+    expect(highConfidenceOpaqueIllustrationPlan.reason).toBe('rembg-candidate')
+
+    const denseOpaqueIllustrationPlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({
+        sourceClass: 'illustration',
+        hasTransparency: false,
+        lowResolution: false,
+        topCenterStdDev: 61,
+        topOccupancy: 0.9,
+      }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'none',
+      rembgAvailable: true,
+    })
+    expect(denseOpaqueIllustrationPlan.mode).toBe('rembgCutout')
+
+    const highConfidencePixelArtPlan = __testables.decideBreakoutPlan({
+      analysis: buildAnalysis({
+        sourceClass: 'pixelArt',
+        hasTransparency: false,
+        lowResolution: true,
+        topCenterStdDev: 41,
+        topOccupancy: 0.64,
+      }),
+      suppressBreakout: false,
+      breakoutSourceKind: 'none',
+      rembgAvailable: true,
+    })
+    expect(highConfidencePixelArtPlan.mode).toBe('rembgCutout')
   })
 
   it('bounds segmentation breakout coverage to prevent full-width strip artifacts', () => {
@@ -404,6 +447,10 @@ describe('premium token icon renderer', () => {
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.02)).toBe(true)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.6)).toBe(false)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.6, 'illustration')).toBe(true)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.7, 'illustration')).toBe(true)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.74, 'illustration')).toBe(false)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.74, 'pixelArt')).toBe(true)
+    expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.82, 'pixelArt')).toBe(false)
     expect(__testables.isSegmentationBreakoutCoverageAcceptable(0.99)).toBe(false)
   })
 

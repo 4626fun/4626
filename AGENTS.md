@@ -86,6 +86,48 @@ These are product-level rules, not implementation suggestions. Future auth/onboa
 - **Website sign-in should use email OTP by default.** Do not assume Telegram is the primary website login flow unless product explicitly changes this rule later.
 - **Do not preserve legacy auth paths just for backward compatibility.** If an old path conflicts with these invariants, remove or migrate it.
 
+## Telegram Mini App Flow Rules
+
+The Telegram Mini App account-link/onboarding flow must follow strict architectural rules to remain reliable inside Telegram WebView.
+
+### State Management
+
+- The Telegram flow must use a **single authoritative state machine**.
+- Do not distribute flow control across multiple `useEffect`s, auth hooks, or route guards.
+- UI must render directly from explicit machine state.
+- Do not use derived booleans like `isVerified`, `isReady`, etc. across multiple sources.
+
+### Authentication & OTP
+
+- OTP must be handled **inline inside the Mini App**.
+- Do NOT use Privy modal or popup flows inside Telegram WebView.
+- OTP verification success is **not equivalent** to account/session readiness.
+- A distinct `wait_for_privy_sync` phase must exist.
+
+### State Integrity
+
+- Do not allow regression from post-verification states back to email collection unless explicitly triggered by failure/expiry.
+- Do not reset email or OTP input due to unrelated auth/session updates.
+- Do not remount or key major UI trees on unstable async values.
+
+### Routing
+
+- `/telegram/link` must not fall back into normal waitlist-gated app logic when valid Telegram context is present.
+- Telegram flows must remain isolated from generic app routing decisions.
+
+### Telegram Identity
+
+- Telegram session proof must be verified before entering the flow.
+- Telegram identity must only be bound **after canonical account resolution via verified email**.
+
+### Anti-Patterns (STRICTLY FORBIDDEN)
+
+- Privy popup/modal usage inside Telegram WebView
+- Multiple competing sources of truth for verification state
+- Hidden retries masking state transitions
+- Rendering “verified” UI before canonical account state is confirmed
+- Route guards mutating flow state mid-session
+
 Authoritative implementation notes live in `frontend/docs/account-auth-invariants.md` and `frontend/docs/waitlist-accounts-architecture.md`.
 
 ### Solana program deployment

@@ -49,3 +49,34 @@ Legacy note:
 - The older heavy waitlist flow and its private step/hook files were removed after the thin waitlist convergence pass.
 - New product work should build on `frontend/src/components/waitlist/ThinWaitlistFlow.tsx`, `frontend/src/pages/Waitlist.tsx`, and `frontend/src/pages/accounts/AccountsPage.tsx`.
 - If an older auth path conflicts with `frontend/docs/account-auth-invariants.md`, remove or migrate it rather than preserving it.
+
+## Telegram Flow Routing Boundary
+
+Telegram onboarding/linking flows must remain isolated from normal app routing and waitlist gating.
+
+### Rules
+
+- `/telegram/link` runs only on `app.4626.fun`
+- The route is valid when:
+  - Telegram Mini App context is present, OR
+  - Telegram link query parameters are present
+
+### Separation from Waitlist Flow
+
+- Valid Telegram flows must bypass normal waitlist gating.
+- Waitlist acceptance logic must not reassert control once Telegram flow begins.
+- Telegram onboarding must not depend on general app session state.
+
+### Rationale
+
+Telegram flows:
+
+- begin from an external trusted context (Telegram)
+- require their own identity verification (Telegram + email)
+- must not be interrupted by unrelated app routing logic
+
+Mixing these flows leads to:
+
+- state resets
+- UI flicker
+- incorrect account resolution

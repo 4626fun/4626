@@ -1,305 +1,39 @@
 import { Link } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import { Alert } from '@/components/ui/Alert'
-import { Input } from '@/components/ui/Input'
-
-import { getTelegramLinkPrimaryActionLabel, getTelegramLinkSteps, useTelegramLinkFlow } from './telegramLinkFlow'
-
-export {
-  canStartTelegramLink,
-  fetchTelegramLinkEmailVerificationState,
-  formatTelegramSessionError,
-  getTelegramLinkPrimaryActionLabel,
-  getPrivyPrimaryEmailAddress,
-  getTelegramLinkSteps,
-  getPrivyEmailState,
-  getTelegramLinkSuccessMessage,
-  getTelegramLinkViewState,
-  isPrivyEmailAlreadyLinkedError,
-  isPrivyTelegramAlreadyLinkedError,
-  isTelegramLinkEmailVerificationRequiredError,
-  linkPrivyTelegramInMiniApp,
-  normalizeTelegramLinkUiMessage,
-  pollTelegramLinkEmailVerification,
-  resolveTelegramLinkAuthSettlementPlan,
-  resolveTelegramLinkEmailAuthAction,
-  shouldAutoRefreshTelegramLinkEmail,
-  shouldRetryTelegramLinkEmailVerification,
-  shouldRefreshTelegramLinkEmailOnForeground,
-  shouldAutoStartTelegramLink,
-  shouldResetTelegramMiniAppSessionForLinkError,
-  shouldShowResetTelegramLinkAccount,
-  shouldShowRetryTelegramSession,
-  waitForTelegramLinkPrivyAuth,
-} from './telegramLinkFlow'
 
 export function TelegramLink() {
-  const {
-    linkState,
-    emailState,
-    sessionState,
-    sessionError,
-    linkMessage,
-    emailMessage,
-    privyAuthenticated,
-    telegramLinkContext,
-    statusView,
-    showRetrySessionButton,
-    showResetAccountButton,
-    showEmailVerificationForm,
-    emailAuthStage,
-    emailInput,
-    codeInput,
-    canStartLink,
-    working,
-    onEmailInputChange,
-    onCodeInputChange,
-    onRequestEmailCode,
-    onVerifyEmailCode,
-    onEditEmail,
-    onRetrySession,
-    onRetryLink,
-    onResetAccount,
-    onStartLink,
-    onSignIn,
-  } = useTelegramLinkFlow()
-
-  const primaryActionLabel = getTelegramLinkPrimaryActionLabel({
-    canSignIn: statusView.canSignIn,
-    privyAuthenticated,
-  })
-  const steps = getTelegramLinkSteps({
-    sessionState,
-    emailState,
-    linkState,
-    sessionError,
-    emailMessage,
-    linkMessage,
-    privyAuthenticated,
-    hasLinkContext: Boolean(telegramLinkContext),
-  })
-
-  const stepToneClasses: Record<(typeof steps)[number]['status'], string> = {
-    complete: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
-    current: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100',
-    required: 'border-amber-400/30 bg-amber-400/10 text-amber-100',
-    pending: 'border-white/10 bg-white/[0.03] text-zinc-300',
-  }
-  const stepLabel: Record<(typeof steps)[number]['status'], string> = {
-    complete: 'Done',
-    current: 'In progress',
-    required: 'Action required',
-    pending: 'Pending',
-  }
-
   return (
     <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-2xl items-center px-4 py-10 sm:px-6">
       <PageMeta title="Telegram Link" description="Link your Telegram identity to 4626." canonicalPath="/telegram/link" />
       <div className="w-full rounded-3xl border border-white/10 bg-black/40 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8">
         <div className="space-y-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-cyan-300/80">Telegram Mini App</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Link Telegram to your 4626 account</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Telegram link flow removed for rebuild</h1>
           <p className="max-w-xl text-sm leading-6 text-zinc-400">
-            This page is only for the Telegram account-link handshake. It verifies the Mini App session first, then binds your
-            Telegram identity after you verify your email with 4626.
+            The previous Telegram account-link implementation has been intentionally removed so the flow can be rebuilt from
+            first principles.
           </p>
         </div>
 
-        <Alert variant={statusView.statusVariant} title={statusView.statusTitle} className="mt-6">
-          {statusView.statusMessage}
-        </Alert>
-
-        {!telegramLinkContext && linkState !== 'linked' ? (
-          <div className="mt-4 text-sm text-zinc-400">
-            The one-time Telegram link token is missing. Open Telegram and run <span className="font-mono text-zinc-200">/link</span>{' '}
-            again to get a fresh Mini App launch.
-          </div>
-        ) : null}
-
-        <div className="mt-6 space-y-3">
-          {steps.map((step, index) => (
-            <div key={step.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step {index + 1}</div>
-                  <div className="text-sm font-medium text-zinc-100">{step.title}</div>
-                </div>
-                <div className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${stepToneClasses[step.status]}`}>
-                  {stepLabel[step.status]}
-                </div>
-              </div>
-              <div className="mt-2 text-sm leading-6 text-zinc-400">{step.description}</div>
-            </div>
-          ))}
+        <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
+          This route is currently a placeholder. Use the rebuild handoff document before writing a new Telegram linking flow.
         </div>
 
-        {showEmailVerificationForm ? (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="space-y-1">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">4626 email verification</div>
-              <div className="text-sm font-medium text-zinc-100">
-                {emailAuthStage === 'code' ? 'Enter the code from your email' : 'Send a one-time verification code'}
-              </div>
-              <div className="text-sm leading-6 text-zinc-400">
-                {emailAuthStage === 'code'
-                  ? 'Stay inside Telegram. After the code verifies, the Mini App will continue the link automatically.'
-                  : 'Enter the email address you want to use as your canonical 4626 identity. Telegram will link after that email verifies.'}
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <Input
-                id="telegram-link-email"
-                label="4626 email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={emailInput}
-                disabled={working || emailAuthStage === 'code'}
-                onChange={(event) => onEmailInputChange(event.target.value)}
-              />
-
-              {emailAuthStage === 'code' ? (
-                <Input
-                  id="telegram-link-code"
-                  label="Verification code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="123456"
-                  value={codeInput}
-                  disabled={working}
-                  onChange={(event) => onCodeInputChange(event.target.value)}
-                />
-              ) : null}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              {emailAuthStage === 'code' ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void onVerifyEmailCode()}
-                    disabled={working}
-                    className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Verify code
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onRequestEmailCode()}
-                    disabled={working}
-                    className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Resend code
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onEditEmail}
-                    disabled={working}
-                    className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Use a different email
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void onRequestEmailCode()}
-                  disabled={working}
-                  className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Send verification code
-                </button>
-              )}
-            </div>
-          </div>
-        ) : null}
+        <div className="mt-6 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-zinc-300">
+          <div className="font-medium text-zinc-100">Next steps</div>
+          <div>Rebuild the flow with an explicit state machine for Telegram session verification, inline email OTP, sync, and final bind.</div>
+          <div>Handoff doc: <span className="font-mono text-zinc-100">frontend/docs/telegram-link-rebuild-handoff.md</span></div>
+        </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          {primaryActionLabel && !showEmailVerificationForm ? (
-            <button
-              type="button"
-              onClick={() => void onSignIn()}
-              className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-300"
-            >
-              {primaryActionLabel}
-            </button>
-          ) : null}
-
-          {showRetrySessionButton ? (
-            <button
-              type="button"
-              onClick={onRetrySession}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Retry Telegram session
-            </button>
-          ) : null}
-
-          {showResetAccountButton ? (
-            <button
-              type="button"
-              onClick={() => void onResetAccount()}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Use a different 4626 account
-            </button>
-          ) : null}
-
-          {canStartLink ? (
-            <button
-              type="button"
-              onClick={() => void onStartLink()}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-emerald-300"
-            >
-              Link Telegram
-            </button>
-          ) : null}
-
-          {statusView.canRetryLink ? (
-            <button
-              type="button"
-              onClick={onRetryLink}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Retry link
-            </button>
-          ) : null}
-
-          {linkState === 'linked' ? (
-            <>
-              <Link
-                to="/swap"
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-medium text-black transition hover:bg-emerald-300"
-              >
-                Open 4626 app
-              </Link>
-              <Link
-                to="/accounts"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-              >
-                Manage linked accounts
-              </Link>
-            </>
-          ) : null}
+          <Link
+            to="/accounts"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+          >
+            Go to accounts
+          </Link>
         </div>
-
-        <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4 text-xs leading-6 text-zinc-400">
-          <div className="font-medium uppercase tracking-[0.18em] text-zinc-500">Notes</div>
-          <div className="mt-2">
-            Keep this flow inside Telegram while linking. If the Mini App session expires or gets consumed, reopen the Mini App
-            from Telegram to mint a fresh session before retrying.
-          </div>
-        </div>
-
-        {working ? (
-          <div className="mt-4 inline-flex items-center gap-2 text-sm text-zinc-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Working...</span>
-          </div>
-        ) : null}
       </div>
     </div>
   )
