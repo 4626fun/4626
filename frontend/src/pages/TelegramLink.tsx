@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { AlertTriangle, CheckCircle2, LoaderCircle, Mail, RefreshCw, ShieldCheck, ShieldX, Unplug } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, ShieldCheck, ShieldX, Unplug } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkAccount, useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
@@ -1028,6 +1028,7 @@ export function TelegramLink() {
           ? 'Enter a complete email address to continue.'
           : 'Email resolves the canonical 4626 account. Telegram attaches after sync.'
       : null
+  const isMinimalVerifyEmailStep = state.tag === 'collect_email' || state.tag === 'sending_email_code'
 
   const renderContent = () => {
     switch (state.tag) {
@@ -1037,26 +1038,21 @@ export function TelegramLink() {
       case 'collect_email':
         return (
           <form className="space-y-3" onSubmit={handleEmailSubmit}>
-            <div className="space-y-1.5">
-              <label htmlFor="telegram-link-email" className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#666666]">
-                Verified Email
-              </label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#666666]" />
-                <input
-                  id="telegram-link-email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  value={state.email}
-                  onChange={(event) => dispatch({ type: 'EMAIL_CHANGED', email: event.target.value })}
-                  placeholder="name@example.com"
-                  className="h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] pl-11 pr-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/75 focus:bg-white/[0.04] focus:ring-0"
-                />
-              </div>
-              {state.emailError ? <InlineError message={state.emailError} /> : null}
-              {emailSubmitHelperText ? <p className="text-[11px] leading-[1.35] text-[#666666]">{emailSubmitHelperText}</p> : null}
-            </div>
+            <label htmlFor="telegram-link-email" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-[#666666]">
+              Verified Email
+            </label>
+            <input
+              id="telegram-link-email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              value={state.email}
+              onChange={(event) => dispatch({ type: 'EMAIL_CHANGED', email: event.target.value })}
+              placeholder="name@example.com"
+              className="block h-11 w-full rounded-md border border-white/10 bg-[#111111] px-3 text-[15px] text-[#EDEDED] outline-none focus:border-[#0052FF] focus:ring-0"
+            />
+            {state.emailError ? <InlineError message={state.emailError} /> : null}
+            {emailSubmitHelperText ? <p className="text-[12px] leading-[1.4] text-[#666666]">{emailSubmitHelperText}</p> : null}
             <button
               type="submit"
               data-testid="telegram-link-submit"
@@ -1064,7 +1060,7 @@ export function TelegramLink() {
               data-email-normalized={normalizedCollectEmail}
               data-email-valid={emailIsValid ? 'true' : 'false'}
               data-flow-tag={state.tag}
-              className="relative z-10 inline-flex h-11 w-full touch-manipulation items-center justify-center rounded-[16px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+              className="block h-11 w-full rounded-md bg-[#0052FF] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
               disabled={emailSubmitDisabled}
             >
               Send Code
@@ -1208,43 +1204,68 @@ export function TelegramLink() {
       style={TG_VIEWPORT_STYLE}
     >
       <PageMeta title="Telegram Link" description="Verify email inside Telegram and bind Telegram to the canonical 4626 account." canonicalPath="/telegram/link" />
-      <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
-        <div className="absolute right-[-10%] top-[8%] h-80 w-80 rounded-full bg-[#3B82F6]/12 blur-3xl" />
-        <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
-      </div>
+      {!isMinimalVerifyEmailStep ? (
+        <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
+          <div className="absolute right-[-10%] top-[8%] h-80 w-80 rounded-full bg-[#3B82F6]/12 blur-3xl" />
+          <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
+        </div>
+      ) : null}
 
       <div className="relative z-10 mx-auto flex h-full w-full max-w-[27rem] items-start">
-        <div
-          data-flow-state={state.tag}
-          data-testid="telegram-link-panel"
-          className="flex w-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2 py-0.75 text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">
-                Telegram Mini App
+        {isMinimalVerifyEmailStep ? (
+          <section
+            data-flow-state={state.tag}
+            data-testid="telegram-link-panel"
+            className="flex w-full flex-col rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-4"
+          >
+            <h1 className="text-[20px] font-semibold text-[#EDEDED]">Verify Email</h1>
+            <p className="mt-1 text-[13px] leading-[1.4] text-[#666666]">
+              Verified email is the canonical 4626 identity. Telegram links after verification.
+            </p>
+
+            {proof ? (
+              <div className="mt-3 space-y-1.5 text-[13px] leading-[1.4] text-[#EDEDED]">
+                <div>Telegram: <span className="font-mono">{formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)}</span></div>
+                <div>Chat: <span className="font-mono">{proof.chatId ?? 'direct'}</span></div>
+                <div>Session: <span className="font-mono">{new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
               </div>
-              <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
-              <p className="max-w-xl text-[12px] leading-[1.35] text-[#666666]">{getFlowDescription(state.tag)}</p>
+            ) : null}
+
+            <div className="mt-4">{renderContent()}</div>
+          </section>
+        ) : (
+          <div
+            data-flow-state={state.tag}
+            data-testid="telegram-link-panel"
+            className="flex w-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2 py-0.75 text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">
+                  Telegram Mini App
+                </div>
+                <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
+                <p className="max-w-xl text-[12px] leading-[1.35] text-[#666666]">{getFlowDescription(state.tag)}</p>
+              </div>
             </div>
-          </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] leading-[1.35]">
-            <span className="font-mono text-[#EDEDED]">email -&gt; account</span>
-            <span className="font-mono text-[#666666]">telegram -&gt; linked</span>
-          </div>
-
-          {proof ? (
-            <div className="mt-2 grid gap-x-3 gap-y-2 border-t border-white/[0.05] pt-2.5 text-sm sm:grid-cols-3">
-              <MetaField label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
-              <MetaField label="Chat" value={proof.chatId ?? 'direct'} />
-              <MetaField label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
+            <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] leading-[1.35]">
+              <span className="font-mono text-[#EDEDED]">email -&gt; account</span>
+              <span className="font-mono text-[#666666]">telegram -&gt; linked</span>
             </div>
-          ) : null}
 
-          <div className="mt-3 min-h-0 overflow-y-auto pr-0.5 scrollbar-hide">{renderContent()}</div>
-        </div>
+            {proof ? (
+              <div className="mt-2 grid gap-x-3 gap-y-2 border-t border-white/[0.05] pt-2.5 text-sm sm:grid-cols-3">
+                <MetaField label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
+                <MetaField label="Chat" value={proof.chatId ?? 'direct'} />
+                <MetaField label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
+              </div>
+            ) : null}
+
+            <div className="mt-3 min-h-0 overflow-y-auto pr-0.5 scrollbar-hide">{renderContent()}</div>
+          </div>
+        )}
       </div>
     </div>
   )

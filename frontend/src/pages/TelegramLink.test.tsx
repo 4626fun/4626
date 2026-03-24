@@ -268,13 +268,14 @@ describe('TelegramLink UI flow', () => {
     })
   })
 
-  it('keeps decorative overlays non-interactive', async () => {
+  it('renders the verify-email step without decorative overlays', async () => {
     renderFlow()
 
     await screen.findByLabelText('Verified Email')
-    const overlay = screen.getByTestId('telegram-link-decorative-overlay')
-
-    expect(overlay.className).toContain('pointer-events-none')
+    expect(screen.queryByTestId('telegram-link-decorative-overlay')).toBeNull()
+    expect(screen.getByText(/Telegram:/)).toBeTruthy()
+    expect(screen.getByText(/Chat:/)).toBeTruthy()
+    expect(screen.getByText(/Session:/)).toBeTruthy()
   })
 
   it('locks document scrolling for the Telegram shell', async () => {
@@ -285,7 +286,7 @@ describe('TelegramLink UI flow', () => {
     expect(document.documentElement.classList.contains('telegram-link-html-lock')).toBe(true)
     expect(document.body.classList.contains('telegram-link-body-lock')).toBe(true)
     expect(screen.getByTestId('telegram-link-shell').className).toContain('overflow-hidden')
-    expect(screen.getByTestId('telegram-link-panel').className).toContain('overflow-hidden')
+    expect(screen.getByTestId('telegram-link-panel').className).not.toContain('overflow-y-auto')
 
     view.unmount()
 

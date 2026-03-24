@@ -1,3 +1,5 @@
+import { getHostMode, type HostMode } from '@/lib/host'
+
 export function isPublicSiteMode(): boolean {
   const v = String(import.meta.env.VITE_PUBLIC_SITE_MODE ?? '')
     .trim()
@@ -51,6 +53,10 @@ function isPrivyOriginAllowed(): boolean {
   return getPrivyAllowedOrigins().has(origin)
 }
 
+export function isPrivyHostModeAllowed(mode: HostMode): boolean {
+  return mode !== 'marketing'
+}
+
 export function getPrivyAppId(): string | null {
   const appId = String(import.meta.env.VITE_PRIVY_APP_ID ?? '').trim()
   if (appId.length > 0) return appId
@@ -62,6 +68,7 @@ export function isPrivyClientEnabled(): boolean {
   if (!isTruthyEnv(import.meta.env.VITE_PRIVY_ENABLED)) return false
   if (!getPrivyAppId()) return false
   if (!isPrivyOriginAllowed()) return false
+  if (typeof window !== 'undefined' && !isPrivyHostModeAllowed(getHostMode())) return false
   return true
 }
 
