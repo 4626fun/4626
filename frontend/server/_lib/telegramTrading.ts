@@ -190,6 +190,15 @@ export type TelegramLinkStartTokenClaimResult =
       reason: 'invalid' | 'expired' | 'consumed' | 'claimed_by_other_user'
     }
 
+export type TelegramLinkStartTokenClaim = {
+  telegramUserId: string
+  chatId: string
+  privyUserId: string
+  expiresAt: string
+  consumedAt: string | null
+  createdAt: string | null
+}
+
 export type TelegramFunnelMetrics = {
   windowHours: number
   since: string
@@ -595,6 +604,66 @@ export async function consumeTelegramLinkStartToken(params: {
     RETURNING token_hash;
   `
   return Boolean(consumed.rows?.[0]?.token_hash)
+}
+
+export async function finalizeTelegramLinkStartTokenConsumption(params: {
+  db: Db
+  token: string
+  privyUserId: string
+}): Promise<'consumed' | 'other_user' | 'missing' | 'expired'> {
+  const token = asTrimmed(params.token)
+  const privyUserId = asTrimmed(params.privyUserId)
+  if (!token || !privyUserId) return 'missing'
+  const tokenHash = hashTelegramLinkStartToken(token)
+  const consumed = await params.db.sql`
+    UPDATE telegram_link_start_token_claims
+    SET consumed_at = COALESCE(consumed_at, NOW())
+    WHERE token_hash = ${tokenHash}
+      AND privy_user_id = ${privyUserId}
+      AND expires_at > NOW()
+    RETURNING consumed_at;
+  `
+  if (consumed.rows?.[0]?.consumed_at) {
+    return 'consumed'
+  }
+
+  const existing = await params.db.sql`
+    SELECT privy_user_id, expires_at, consumed_at
+    FROM telegram_link_start_token_claims
+    WHERE token_hash = ${tokenHash}
+    LIMIT 1;
+  `
+  const row = existing.rows?.[0]
+  if (!row) return 'missing'
+  if (asTrimmed(row.privy_user_id).toLowerCase() !== privyUserId.toLowerCase()) return 'other_user'
+  const expiresAtMs = Date.parse(String(row.expires_at ?? ''))
+  if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) return 'expired'
+  return row.consumed_at ? 'consumed' : 'missing'
+}
+
+export async function readTelegramLinkStartTokenClaim(params: {
+  db: Db
+  token: string
+}): Promise<TelegramLinkStartTokenClaim | null> {
+  const token = asTrimmed(params.token)
+  if (!token) return null
+  const tokenHash = hashTelegramLinkStartToken(token)
+  const result = await params.db.sql`
+    SELECT telegram_user_id, chat_id, privy_user_id, expires_at, consumed_at, created_at
+    FROM telegram_link_start_token_claims
+    WHERE token_hash = ${tokenHash}
+    LIMIT 1;
+  `
+  const row = result.rows?.[0]
+  if (!row) return null
+  return {
+    telegramUserId: String(row.telegram_user_id),
+    chatId: asTrimmed(row.chat_id),
+    privyUserId: asTrimmed(row.privy_user_id),
+    expiresAt: toIso(row.expires_at) ?? new Date(0).toISOString(),
+    consumedAt: toIso(row.consumed_at),
+    createdAt: toIso(row.created_at),
+  }
 }
 
 function mapTelegramMiniAppSessionRow(row: any): TelegramMiniAppSession {

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { computeAcceptedFromAllowlist, hasTelegramLinkQueryContext, resolveAllowlistMode } from './App'
+import { computeAcceptedFromAllowlist, hasTelegramLinkEntryContext, hasTelegramLinkQueryContext, resolveAllowlistMode } from './App'
 
 describe('allowlist access resolution', () => {
   it('fails closed when allowlist mode is unresolved', () => {
@@ -22,6 +22,10 @@ describe('allowlist access resolution', () => {
 })
 
 describe('telegram link query context', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('accepts valid tg link token query context', () => {
     expect(hasTelegramLinkQueryContext('?tgEntry=link&tgLinkToken=token-123')).toBe(true)
   })
@@ -29,5 +33,28 @@ describe('telegram link query context', () => {
   it('rejects invalid tg link query context', () => {
     expect(hasTelegramLinkQueryContext('?tgEntry=link')).toBe(false)
     expect(hasTelegramLinkQueryContext('?tgEntry=other&tgLinkToken=token-123')).toBe(false)
+  })
+
+  it('accepts stored tg link context even after query cleanup', () => {
+    const storage = new Map<string, string>([
+      [
+        'cv_tg_link_context_v1',
+        JSON.stringify({
+          linkToken: 'token-123',
+          chatId: '-1001',
+          telegramUsername: 'akita',
+          savedAtMs: Date.now(),
+        }),
+      ],
+    ])
+    vi.stubGlobal('window', {
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+      },
+    } as any)
+
+    expect(hasTelegramLinkEntryContext('')).toBe(true)
   })
 })

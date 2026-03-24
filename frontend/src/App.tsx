@@ -7,7 +7,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
-import { readTelegramMiniAppLinkContext } from '@/lib/telegramMiniAppLink'
+import { readStoredTelegramMiniAppLinkContext, readTelegramMiniAppLinkContext } from '@/lib/telegramMiniAppLink'
 import { hasTelegramMiniAppEntrypointContext } from '@/lib/telegramWebApp'
 import { AdminLayout } from './components/AdminLayout'
 import { AppLoadingState } from '@/components/AppLoadingState'
@@ -72,6 +72,15 @@ export function computeAcceptedFromAllowlist(params: {
 export function hasTelegramLinkQueryContext(search: string): boolean {
   try {
     return Boolean(readTelegramMiniAppLinkContext(new URLSearchParams(search)))
+  } catch {
+    return false
+  }
+}
+
+export function hasTelegramLinkEntryContext(search: string): boolean {
+  if (hasTelegramLinkQueryContext(search)) return true
+  try {
+    return Boolean(readStoredTelegramMiniAppLinkContext())
   } catch {
     return false
   }
@@ -288,9 +297,9 @@ function RequireAccepted(props: { children?: React.ReactNode }) {
 function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode }) {
   const access = useAccessContext()
   const location = useLocation()
-  const hasLinkQueryContext = hasTelegramLinkQueryContext(location.search)
+  const hasLinkEntryContext = hasTelegramLinkEntryContext(location.search)
 
-  if (hasTelegramMiniAppEntrypointContext() || hasLinkQueryContext) {
+  if (hasTelegramMiniAppEntrypointContext() || hasLinkEntryContext) {
     return props.children ? <>{props.children}</> : <Outlet />
   }
 

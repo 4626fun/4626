@@ -1,0 +1,289 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import { getDb } from '../../../server/_lib/postgres.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { syncUserWallets } from '../../../server/_lib/walletSync.js'
+import {
+  buildAccountsMePayload,
+  ensureAccountsIdentitySchema,
+  recordProviderLink,
+  syncEmailIdentity,
+  verifyPrivyForAccounts,
+} from '../../../server/_lib/accountsIdentity.js'
+import {
+  claimTelegramLinkStartToken,
+  ensureTelegramTradingSchema,
+  finalizeTelegramLinkStartTokenConsumption,
+  getTelegramLinkByUserId,
+  readTelegramLinkStartTokenClaim,
+  readTelegramLinkStartTokenStatus,
+  readTelegramMiniAppSession,
+  runTelegramMergePreflight,
+  upsertTelegramUserLink,
+} from '../../../server/_lib/telegramTrading.js'
+
+type LinkCompleteBody = {
+  sessionToken?: string
+  linkToken?: string | null
+}
+
+type LinkCompleteResponse = {
+  link: NonNullable<Awaited<ReturnType<typeof upsertTelegramUserLink>>>
+  account: Awaited<ReturnType<typeof buildAccountsMePayload>>
+}
+
+function asTrimmed(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function withCode<T>(payload: ApiEnvelope<T>, code: string) {
+  return { ...payload, code }
+}
+
+function isUnauthorizedMessage(message: string): boolean {
+  return /token|unauthorized|forbidden|privy/i.test(message)
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCors(req, res)
+  setNoStore(res)
+  if (handleOptions(req, res)) return
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const db = await getDb()
+  if (!db) {
+    return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = (await readJsonBody<LinkCompleteBody>(req).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
+  const sessionToken = asTrimmed(body.sessionToken)
+  const linkToken = asTrimmed(body.linkToken ?? '')
+  if (!sessionToken) {
+    return res
+      .status(400)
+      .json(withCode({ success: false, error: 'sessionToken is required' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
+  }
+
+  try {
+    const context = await verifyPrivyForAccounts(req)
+    await ensureWaitlistSchema(db as any)
+    await ensureAccountsIdentitySchema(db as any)
+    await ensureTelegramTradingSchema(db as any)
+
+    await syncEmailIdentity({
+      db: db as any,
+      privyUserId: context.privyUserId,
+      privyUser: context.privyUser,
+    })
+
+    const syncResult = await syncUserWallets(db as any, context.privyUser)
+    const profileId = Number(syncResult.profileId)
+    if (!Number.isFinite(profileId) || profileId <= 0) {
+      throw new Error('profile_sync_failed')
+    }
+    const canonicalCswAddress = syncResult.canonicalSmartWallet?.address ?? null
+    const ownerVerified =
+      Boolean(canonicalCswAddress) &&
+      Boolean(syncResult.embeddedEoa?.address) &&
+      Boolean(syncResult.activeOwnerWallet?.address) &&
+      String(syncResult.activeOwnerWallet?.address).toLowerCase() === String(syncResult.embeddedEoa?.address).toLowerCase()
+
+    const sessionResult = await readTelegramMiniAppSession({
+      db: db as any,
+      sessionToken,
+    })
+    if (!sessionResult.ok) {
+      const code = sessionResult.reason === 'expired' || sessionResult.reason === 'revoked' ? 'EXPIRED_TELEGRAM_SESSION' : 'INVALID_TELEGRAM_CONTEXT'
+      const status = sessionResult.reason === 'invalid' ? 400 : 409
+      return res.status(status).json(
+        withCode(
+          {
+            success: false,
+            error:
+              sessionResult.reason === 'expired'
+                ? 'Telegram session expired. Reopen the Mini App from Telegram and verify again.'
+                : sessionResult.reason === 'revoked'
+                  ? 'Telegram session was revoked. Reopen the Mini App from Telegram and verify again.'
+                  : 'Telegram session proof is invalid.',
+          } satisfies ApiEnvelope<never>,
+          code,
+        ),
+      )
+    }
+
+    const session = sessionResult.session
+    const existingLink = await getTelegramLinkByUserId({
+      db: db as any,
+      telegramUserId: session.telegramUserId,
+    })
+    const sameUserExistingLink =
+      existingLink?.privyUserId?.toLowerCase() === context.privyUserId.toLowerCase()
+
+    let shouldConsumeLinkToken = false
+    if (linkToken) {
+      const tokenStatus = readTelegramLinkStartTokenStatus(linkToken)
+      if (!tokenStatus.ok) {
+        return res.status(tokenStatus.reason === 'expired' ? 409 : 400).json(
+          withCode(
+            {
+              success: false,
+              error:
+                tokenStatus.reason === 'expired'
+                  ? 'Telegram link token expired. Restart the link flow from Telegram.'
+                  : 'Telegram link token is invalid.',
+            } satisfies ApiEnvelope<never>,
+            tokenStatus.reason === 'expired' ? 'EXPIRED_TELEGRAM_SESSION' : 'INVALID_TELEGRAM_CONTEXT',
+          ),
+        )
+      }
+
+      if (tokenStatus.payload.telegramUserId !== session.telegramUserId) {
+        return res
+          .status(409)
+          .json(withCode({ success: false, error: 'Telegram launch token does not match the active Telegram user.' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
+      }
+      if (session.chatId && tokenStatus.payload.chatId !== session.chatId) {
+        return res
+          .status(409)
+          .json(withCode({ success: false, error: 'Telegram launch token does not match the active Telegram chat.' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
+      }
+
+      const claim = await claimTelegramLinkStartToken({
+        db: db as any,
+        token: linkToken,
+        privyUserId: context.privyUserId,
+      })
+      if (claim.ok) {
+        shouldConsumeLinkToken = true
+      } else if (claim.reason === 'consumed') {
+        const claimState = await readTelegramLinkStartTokenClaim({
+          db: db as any,
+          token: linkToken,
+        })
+        if (!sameUserExistingLink || claimState?.privyUserId?.toLowerCase() !== context.privyUserId.toLowerCase() || !claimState?.consumedAt) {
+          return res
+            .status(409)
+            .json(withCode({ success: false, error: 'Telegram link token has already been used.' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
+        }
+      } else if (claim.reason === 'claimed_by_other_user') {
+        return res.status(409).json(
+          withCode(
+            {
+              success: false,
+              error: 'Recovery required: this Telegram identity is already claimed by another account.',
+            } satisfies ApiEnvelope<never>,
+            'RECOVERY_REQUIRED',
+          ),
+        )
+      } else {
+        return res.status(claim.reason === 'expired' ? 409 : 400).json(
+          withCode(
+            {
+              success: false,
+              error:
+                claim.reason === 'expired'
+                  ? 'Telegram link token expired. Restart the link flow from Telegram.'
+                  : 'Telegram link token is invalid.',
+            } satisfies ApiEnvelope<never>,
+            claim.reason === 'expired' ? 'EXPIRED_TELEGRAM_SESSION' : 'INVALID_TELEGRAM_CONTEXT',
+          ),
+        )
+      }
+    }
+
+    const mergePreflight = await runTelegramMergePreflight({
+      db: db as any,
+      telegramUserId: session.telegramUserId,
+      privyUserId: context.privyUserId,
+    })
+    if (!mergePreflight.ok) {
+      return res.status(409).json(
+        withCode(
+          {
+            success: false,
+            error: 'Recovery required: this Telegram account is already linked to another 4626 account.',
+          } satisfies ApiEnvelope<never>,
+          'RECOVERY_REQUIRED',
+        ),
+      )
+    }
+
+    await recordProviderLink({
+      db: db as any,
+      privyUserId: context.privyUserId,
+      provider: 'telegram',
+      value: session.telegramUserId,
+      privyUser: context.privyUser,
+    })
+
+    const link = await upsertTelegramUserLink({
+      db: db as any,
+      telegramUserId: session.telegramUserId,
+      telegramUsername: session.telegramUsername,
+      profileId,
+      privyUserId: context.privyUserId,
+      canonicalCswAddress,
+      ownerVerified,
+    })
+    if (!link) {
+      throw new Error('telegram_link_upsert_failed')
+    }
+
+    if (linkToken && shouldConsumeLinkToken) {
+      const consumeState = await finalizeTelegramLinkStartTokenConsumption({
+        db: db as any,
+        token: linkToken,
+        privyUserId: context.privyUserId,
+      })
+      if (consumeState !== 'consumed') {
+        throw new Error('telegram_link_token_consume_failed')
+      }
+    }
+
+    const account = await buildAccountsMePayload({
+      db: db as any,
+      privyUserId: context.privyUserId,
+      privyUser: context.privyUser,
+    })
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        link,
+        account,
+      } satisfies LinkCompleteResponse,
+    } satisfies ApiEnvelope<LinkCompleteResponse>)
+  } catch (error: unknown) {
+    if (isIdentityRecoveryRequiredError(error)) {
+      return res.status(409).json(
+        withCode(
+          {
+            success: false,
+            error: 'Recovery required: this Telegram account is already linked to another 4626 account.',
+          } satisfies ApiEnvelope<never>,
+          'RECOVERY_REQUIRED',
+        ),
+      )
+    }
+
+    const message = asTrimmed((error as { message?: unknown } | null)?.message) || 'Failed to complete Telegram link'
+    const status = isUnauthorizedMessage(message) ? 401 : message === 'profile_sync_failed' ? 409 : 500
+    return res.status(status).json(
+      withCode(
+        {
+          success: false,
+          error:
+            message === 'telegram_link_token_consume_failed'
+              ? 'Telegram link completed, but the single-use link token could not be finalized.'
+              : message,
+        } satisfies ApiEnvelope<never>,
+        message === 'telegram_link_token_consume_failed' ? 'BIND_TELEGRAM_FAILED' : 'UNKNOWN',
+      ),
+    )
+  }
+}

@@ -479,6 +479,7 @@ describe('telegram endpoint handlers', () => {
     expect(await getApiHandler('telegram/metrics')).toBeNull()
     expect(await getTelegramApiHandler('miniapp/link')).toBeNull()
     expect(await getTelegramApiHandler('merge-preflight')).toBeNull()
+    expect(await getTelegramApiHandler('link/complete')).toBeTypeOf('function')
     expect(await getTelegramApiHandler('miniapp/session')).toBeTypeOf('function')
     expect(await getTelegramApiHandler('metrics')).toBeTypeOf('function')
   })
