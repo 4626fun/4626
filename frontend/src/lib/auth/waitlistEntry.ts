@@ -1,4 +1,4 @@
-import { getAppBaseUrl } from '@/lib/host'
+import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 
 export type WaitlistEntryReason = 'needs-session' | 'needs-acceptance'
 
@@ -14,4 +14,8 @@ export function buildWaitlistEntryUrl(baseUrl: string, reason: WaitlistEntryReas
 
 export function getPrivyCapableWaitlistEntryUrl(reason: WaitlistEntryReason): string {
   return buildWaitlistEntryUrl(getAppBaseUrl(), reason)
+}
+
+export function getMarketingWaitlistEntryUrl(reason: WaitlistEntryReason): string {
+  return buildWaitlistEntryUrl(getMarketingBaseUrl(), reason)
 }

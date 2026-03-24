@@ -63,6 +63,11 @@ export function getPrivyAppId(): string | null {
   return DEFAULT_PRIVY_APP_ID
 }
 
+export function getPrivyClientId(): string | null {
+  const clientId = String(import.meta.env.VITE_PRIVY_CLIENT_ID ?? '').trim()
+  return clientId.length > 0 ? clientId : null
+}
+
 export function isPrivyClientEnabled(): boolean {
   // Explicit enable flag (so Privy can't break production unexpectedly).
   if (!isTruthyEnv(import.meta.env.VITE_PRIVY_ENABLED)) return false

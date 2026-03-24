@@ -4,7 +4,7 @@ import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
@@ -633,7 +633,7 @@ export function AccountsPage(props: {
             <JoinWaitlistCta
               className="text-xs text-zinc-500 hover:text-zinc-300"
               showArrow={false}
-              onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
+              onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
             >
               Back to waitlist
             </JoinWaitlistCta>

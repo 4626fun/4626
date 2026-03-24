@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
+import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { createPrivyAppearance } from './clientAppearance'
@@ -18,7 +18,7 @@ export function usePrivyClientStatus(): PrivyClientStatus {
 type PrivyProviderConfig = Parameters<typeof PrivyProvider>[0]['config']
 
 class PrivyProviderSafetyBoundary extends Component<
-  { appId: string; baseConfig: PrivyProviderConfig; safeConfig: PrivyProviderConfig; children: ReactNode },
+  { appId: string; clientId: string | null; baseConfig: PrivyProviderConfig; safeConfig: PrivyProviderConfig; children: ReactNode },
   { safeMode: boolean }
 > {
   state = { safeMode: false }
@@ -38,11 +38,11 @@ class PrivyProviderSafetyBoundary extends Component<
   }
 
   render() {
-    const { appId, baseConfig, safeConfig, children } = this.props
+    const { appId, clientId, baseConfig, safeConfig, children } = this.props
     const config = this.state.safeMode ? safeConfig : baseConfig
 
     return (
-      <PrivyProvider appId={appId} config={config as any}>
+      <PrivyProvider appId={appId} {...(clientId ? { clientId } : null)} config={config as any}>
         {children}
       </PrivyProvider>
     )
@@ -74,6 +74,7 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   const { children, showWalletLoginFirst = true } = props
   const enabled = isPrivyClientEnabled()
   const appId = enabled ? getPrivyAppId() : null
+  const clientId = enabled ? getPrivyClientId() : null
   const hasRuntimeConfig = Boolean(enabled && appId)
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
   const handleRuntimeStatus = useCallback((next: PrivyClientStatus) => {
@@ -148,7 +149,7 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
 
   return (
     <PrivyClientContext.Provider value={ctx}>
-      <PrivyProviderSafetyBoundary appId={appId} baseConfig={baseConfig} safeConfig={safeConfig}>
+      <PrivyProviderSafetyBoundary appId={appId} clientId={clientId} baseConfig={baseConfig} safeConfig={safeConfig}>
         <PrivyStatusObserver onStatus={handleRuntimeStatus} />
         {children}
       </PrivyProviderSafetyBoundary>

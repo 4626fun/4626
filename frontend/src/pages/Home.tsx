@@ -2,7 +2,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { getHostMode, type HostMode } from '@/lib/host'
 import { useEffect, useMemo, useState } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
@@ -219,7 +219,7 @@ export function Home() {
             >
               <JoinWaitlistCtaWithProvider
                 className={heroCtaClass}
-                onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
+                onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
               />
             </motion.div>
           ) : null}
