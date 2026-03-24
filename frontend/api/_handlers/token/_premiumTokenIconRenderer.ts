@@ -2605,7 +2605,7 @@ async function createTopBreakoutMask(params: {
     : layout.breakoutY
   const rembgDepthMultiplier =
     isPreparedCutout
-      ? (params.sourceClass === 'pixelArt' ? (isHeroCutout ? 1.62 : 1.78) : params.sourceClass === 'illustration' ? 1.28 : (isHeroCutout ? 2.2 : 1.16))
+      ? (params.sourceClass === 'pixelArt' ? (isHeroCutout ? 1.62 : 1.78) : params.sourceClass === 'illustration' ? 1.28 : 1.16)
       : 1
   const bottom = Math.min(size, top + Math.round(layout.breakoutHeight * rembgDepthMultiplier))
   const height = Math.max(1, bottom - top)
@@ -2680,7 +2680,7 @@ async function createBreakoutAboveFrameMask(params: {
         ? (
             params.sourceClass === 'pixelArt'
               ? (isHeroCutout ? 0.62 : 0.78)
-              : isIllustration ? 0.62 : (isHeroCutout ? 2.4 : 0.42)
+              : isIllustration ? 0.62 : (isHeroCutout ? 0.42 : 0.42)
           )
         : isIllustration ? 0.38 : 0.05
     )),
@@ -2692,7 +2692,7 @@ async function createBreakoutAboveFrameMask(params: {
         ? (
             params.sourceClass === 'pixelArt'
               ? (isHeroCutout ? 1.18 : 1.42)
-              : isIllustration ? 1.42 : (isHeroCutout ? 1.2 : 1.06)
+              : isIllustration ? 1.42 : (isHeroCutout ? 1.06 : 1.06)
           )
         : isIllustration ? 0.74 : 0.12
     )),
@@ -3432,6 +3432,9 @@ export async function renderBreakoutLayer(params: {
   if (!params.sourceImage || params.sourceImage.length === 0) {
     return createTransparentCanvas(size).png().toBuffer()
   }
+  if (params.subjectMaskKind === 'heroCutout' && params.sourceClass !== 'pixelArt') {
+    return createTransparentCanvas(size).png().toBuffer()
+  }
 
   const normalized = await normalizeSourceImage(params.sourceImage)
   const isIllustrationBreakout = params.sourceClass === 'illustration'
@@ -3540,7 +3543,7 @@ export async function renderBreakoutLayer(params: {
     forceAlphaMask: hasPreparedMaskSource,
     forceAlphaThreshold:
       hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
-        ? 8
+        ? 28
         : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
           ? (params.sourceClass === 'pixelArt' ? 8 : 96)
           : undefined,
@@ -3572,7 +3575,7 @@ export async function renderBreakoutLayer(params: {
       const marginRight = Math.max(
         4,
         Math.round(layout.breakoutWidth * (
-          isRembgBreakout ? 0.24 : isHeroCutout ? 0.52 : 0.12
+          isRembgBreakout ? 0.24 : isHeroCutout ? 0.12 : 0.12
         )),
       )
       const desiredX = subjectBounds.minX - marginLeft
@@ -3594,7 +3597,7 @@ export async function renderBreakoutLayer(params: {
           isRembgBreakout
             ? (params.sourceClass === 'pixelArt' ? 0.66 : 0.9)
             : isHeroCutout
-              ? (params.sourceClass === 'pixelArt' ? 0.52 : 1.0)
+              ? (params.sourceClass === 'pixelArt' ? 0.52 : 0.74)
               : (params.sourceClass === 'pixelArt' ? 0.62 : 0.74)
         ),
       )
@@ -3691,14 +3694,6 @@ export async function renderBreakoutLayer(params: {
         })
       }
     }
-  }
-  if (params.subjectMaskKind === 'heroCutout' && params.sourceClass !== 'pixelArt') {
-    masked = await shiftLayerCanvas({
-      layer: masked,
-      size,
-      offsetX: 0,
-      offsetY: -24,
-    })
   }
   if (params.subjectMaskKind === 'rembgCutout' && params.sourceClass === 'illustration') {
     masked = await scrubTopDarkFringe(masked)

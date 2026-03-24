@@ -9,6 +9,27 @@ type TelegramSafeAreaInset = {
   right?: number
 }
 
+type TelegramMainButtonParams = {
+  text?: string
+  color?: string
+  text_color?: string
+  is_active?: boolean
+  is_visible?: boolean
+}
+
+type TelegramMainButtonLike = {
+  show?: () => void
+  hide?: () => void
+  enable?: () => void
+  disable?: () => void
+  showProgress?: (leaveActive?: boolean) => void
+  hideProgress?: () => void
+  setText?: (text: string) => void
+  setParams?: (params: TelegramMainButtonParams) => void
+  onClick?: (handler: () => void) => void
+  offClick?: (handler: () => void) => void
+}
+
 export type TelegramInlineQueryChatType = 'users' | 'bots' | 'groups' | 'channels'
 
 type TelegramWebAppLike = {
@@ -21,6 +42,7 @@ type TelegramWebAppLike = {
   contentSafeAreaInset?: TelegramSafeAreaInset
   ready?: () => void
   expand?: () => void
+  MainButton?: TelegramMainButtonLike
   switchInlineQuery?: (query: string, chooseChatTypes?: TelegramInlineQueryChatType[]) => void
   onEvent?: (eventType: string, eventHandler: () => void) => void
   offEvent?: (eventType: string, eventHandler: () => void) => void

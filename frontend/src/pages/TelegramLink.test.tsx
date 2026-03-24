@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,8 @@ const {
   navigateMock,
   ensureSessionMock,
   setupUiMock,
+  telegramMainButtonMock,
+  telegramMainButtonState,
   apiFetchMock,
   sendCodeMock,
   loginWithCodeMock,
@@ -21,6 +23,25 @@ const {
   navigateMock: vi.fn(),
   ensureSessionMock: vi.fn(),
   setupUiMock: vi.fn(() => vi.fn()),
+  telegramMainButtonState: { clickHandler: null as null | (() => void) },
+  telegramMainButtonMock: {
+    show: vi.fn(),
+    hide: vi.fn(),
+    enable: vi.fn(),
+    disable: vi.fn(),
+    showProgress: vi.fn(),
+    hideProgress: vi.fn(),
+    setText: vi.fn(),
+    setParams: vi.fn(),
+    onClick: vi.fn((handler: () => void) => {
+      telegramMainButtonState.clickHandler = handler
+    }),
+    offClick: vi.fn((handler: () => void) => {
+      if (telegramMainButtonState.clickHandler === handler) {
+        telegramMainButtonState.clickHandler = null
+      }
+    }),
+  },
   apiFetchMock: vi.fn(),
   sendCodeMock: vi.fn(),
   loginWithCodeMock: vi.fn(),
@@ -49,6 +70,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/lib/telegramWebApp', () => ({
   ensureTelegramMiniAppSession: ensureSessionMock,
+  readTelegramWebApp: () => ({ MainButton: telegramMainButtonMock }),
   setupTelegramMiniAppUi: setupUiMock,
 }))
 
@@ -114,6 +136,7 @@ function mockVerifiedSession() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  telegramMainButtonState.clickHandler = null
   mockVerifiedSession()
   privyState.ready = true
   privyState.authenticated = true
@@ -248,6 +271,24 @@ describe('TelegramLink UI flow', () => {
     await screen.findByLabelText('Email Verification Code')
   })
 
+  it('submits from pointer activation while the email input is focused', async () => {
+    renderFlow()
+
+    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'user@example.com' } })
+    input.focus()
+    const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
+
+    expect(submitButton.disabled).toBe(false)
+    expect(document.activeElement).toBe(input)
+
+    fireEvent.pointerDown(submitButton)
+
+    await waitFor(() => {
+      expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
+    })
+  })
+
   it('dispatches SUBMIT_EMAIL on click and leaves collect_email only after explicit submit', async () => {
     const user = userEvent.setup()
     const sendCodeDeferred = deferred<void>()
@@ -267,6 +308,25 @@ describe('TelegramLink UI flow', () => {
     await act(async () => {
       sendCodeDeferred.resolve()
       await sendCodeDeferred.promise
+    })
+  })
+
+  it('exposes the same email submit path through Telegram MainButton', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+
+    expect(telegramMainButtonMock.show).toHaveBeenCalled()
+    expect(telegramMainButtonMock.enable).toHaveBeenCalled()
+    expect(telegramMainButtonState.clickHandler).toBeTypeOf('function')
+
+    await act(async () => {
+      telegramMainButtonState.clickHandler?.()
+    })
+
+    await waitFor(() => {
+      expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
     })
   })
 
