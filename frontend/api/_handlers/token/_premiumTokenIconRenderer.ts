@@ -3391,7 +3391,11 @@ export async function renderBreakoutLayer(params: {
         params.subjectMaskKind === 'rembgCutout'
           ? await hardenImageAlpha(
               normalizedSubjectRef,
-              params.sourceClass === 'illustration' ? 36 : 22,
+              params.sourceClass === 'illustration'
+                ? 36
+                : params.sourceClass === 'pixelArt'
+                  ? 12
+                  : 22,
             )
           : normalizedSubjectRef
       await writeBreakoutDebugAsset('1a-breakout-subject-ref-normalized.png', normalizedSubjectRef)
@@ -3438,7 +3442,7 @@ export async function renderBreakoutLayer(params: {
       hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
         ? 72
         : hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout'
-          ? (params.sourceClass === 'pixelArt' ? 46 : 96)
+          ? (params.sourceClass === 'pixelArt' ? 24 : 96)
           : undefined,
     strictContourGates:
       hasPreparedMaskSource &&
