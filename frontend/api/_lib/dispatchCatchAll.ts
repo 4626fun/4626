@@ -21,8 +21,13 @@ function normalizePrefix(prefix: string): string {
 }
 
 function getApiSubpath(req: VercelRequest, prefixes: string[]): string {
-  const qp = firstQueryPathSegment((req as any)?.query?.path)
-  if (qp) return qp
+  const query = (req as any)?.query
+  const hasExplicitQueryPath =
+    query != null &&
+    typeof query === 'object' &&
+    Object.prototype.hasOwnProperty.call(query, 'path')
+  const qp = firstQueryPathSegment(query?.path)
+  if (qp || hasExplicitQueryPath) return qp
 
   const rawUrl = typeof req.url === 'string' ? req.url : ''
   const pathname = (rawUrl.split('?')[0] ?? '').trim()
@@ -39,6 +44,7 @@ function getApiSubpath(req: VercelRequest, prefixes: string[]): string {
 }
 
 function isSafeSubpath(p: string): boolean {
+  if (p === '') return true
   if (!p) return false
   if (p.includes('\\')) return false
   if (p.includes('..')) return false

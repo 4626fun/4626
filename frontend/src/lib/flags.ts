@@ -10,6 +10,7 @@ export function isPublicSiteMode(): boolean {
 const DEFAULT_PRIVY_APP_ID = 'cmk411efm034jl50cs618o8cy'
 const DEFAULT_PRIVY_ALLOWED_ORIGINS = new Set<string>([
   'https://4626.fun',
+  'https://app.4626.fun',
   'https://v1.4626.fun',
   'http://localhost:5173',
   'http://localhost:5174',
