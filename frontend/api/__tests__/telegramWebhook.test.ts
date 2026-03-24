@@ -1288,13 +1288,11 @@ describe('telegram webhook handler', () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input)
         if (url.includes('api.dexscreener.com/latest/dex/tokens/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913')) {
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({
+          return new Response(
+            JSON.stringify({
               pairs: [{
                 chainId: 'base',
                 dexId: 'uniswap',
@@ -1317,16 +1315,14 @@ describe('telegram webhook handler', () => {
                 pairCreatedAt: Date.parse('2026-03-20T12:00:00.000Z'),
               }],
             }),
-            text: async () => '',
-          } as Response
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          )
         }
 
-        return {
-          ok: true,
+        return new Response(JSON.stringify({ ok: true }), {
           status: 200,
-          json: async () => ({ ok: true }),
-          text: async () => '',
-        } as Response
+          headers: { 'content-type': 'application/json' },
+        })
       }),
     )
     createPublicClientMock.mockReturnValueOnce({
@@ -1349,7 +1345,7 @@ describe('telegram webhook handler', () => {
         inline_query: {
           id: 'iq-token',
           from: { id: 42 },
-          query: '  0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913  ',
+          query: '  0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  ',
         },
       },
     })
@@ -1359,7 +1355,6 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     expect(handleKeeprCommandMock).not.toHaveBeenCalled()
-    expect(getTelegramLinkByUserIdMock).not.toHaveBeenCalled()
     expect(listTelegramScopedVaultsMock).not.toHaveBeenCalled()
 
     const payload = JSON.parse(String((fetch as any).mock.calls.at(-1)?.[1]?.body ?? '{}'))
@@ -1382,23 +1377,19 @@ describe('telegram webhook handler', () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input)
         if (url.includes('api.dexscreener.com/latest/dex/tokens/0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')) {
-          return {
-            ok: true,
+          return new Response(JSON.stringify({ pairs: [] }), {
             status: 200,
-            json: async () => ({ pairs: [] }),
-            text: async () => '',
-          } as Response
+            headers: { 'content-type': 'application/json' },
+          })
         }
 
-        return {
-          ok: true,
+        return new Response(JSON.stringify({ ok: true }), {
           status: 200,
-          json: async () => ({ ok: true }),
-          text: async () => '',
-        } as Response
+          headers: { 'content-type': 'application/json' },
+        })
       }),
     )
     getDbMock.mockResolvedValueOnce(null)

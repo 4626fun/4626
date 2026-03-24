@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveWaitlistStep } from './ThinWaitlistFlow'
+import { resolveWaitlistStep, shouldAutoStartWaitlistAuth } from './ThinWaitlistFlow'
 
 describe('resolveWaitlistStep', () => {
   it('keeps unverified accounts on auth', () => {
@@ -73,5 +73,79 @@ describe('resolveWaitlistStep', () => {
         ownerDelegationVerified: true,
       }),
     ).toBe('done')
+  })
+})
+
+describe('shouldAutoStartWaitlistAuth', () => {
+  it('auto-starts auth for modal entry when Privy is ready and the user is signed out', () => {
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'modal',
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not auto-start auth for recovery, errors, or non-modal variants', () => {
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'embedded',
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'modal',
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: true,
+        error: null,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'modal',
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: 'Failed to start sign-in.',
+      }),
+    ).toBe(false)
+  })
+
+  it('does not auto-start auth when Privy is not ready or the user is already signed in', () => {
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'modal',
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'loading',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'modal',
+        step: 'auth',
+        privyAuthed: true,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(false)
   })
 })

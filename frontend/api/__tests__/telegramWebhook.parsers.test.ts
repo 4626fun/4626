@@ -20,10 +20,11 @@ import { buildInlineQueryAnswer, classifyInlineQuery, normalizeInlineTokenAddres
 import { commandHasArguments, parseTelegramTradeIntent, parseTradeCallbackData, parseTradeFlowCallbackData } from '../_handlers/telegram/webhook/parsers/trade.js'
 
 describe('telegram webhook parsers', () => {
+  const exampleChecksumAddress = getAddress('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913')
   const exampleToken: ResolvedInlineTokenAnalysis = {
     kind: 'resolved',
     normalizedAddress: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-    checksumAddress: getAddress('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'),
+    checksumAddress: exampleChecksumAddress,
     chain: 'base',
     chainLabel: 'Base',
     dexId: 'uniswap',
@@ -209,16 +210,16 @@ describe('telegram webhook parsers', () => {
     expect(classifyInlineQuery('mkt quote btc')).toBe('market')
     expect(classifyInlineQuery('ask ai')).toBe('ai')
     expect(classifyInlineQuery('')).toBe('discovery')
-    expect(classifyInlineQuery('  0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913  ')).toBe('token_analysis')
-    expect(classifyInlineQuery('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913 risk')).not.toBe('token_analysis')
+    expect(classifyInlineQuery(`  ${exampleChecksumAddress}  `)).toBe('token_analysis')
+    expect(classifyInlineQuery(`${exampleChecksumAddress} risk`)).not.toBe('token_analysis')
   })
 
   it('normalizes exact bare token addresses only after trimming', () => {
-    expect(normalizeInlineTokenAddress(' 0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913 ')).toBe(
+    expect(normalizeInlineTokenAddress(` ${exampleChecksumAddress} `)).toBe(
       '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
     )
-    expect(normalizeInlineTokenAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913 risk')).toBeNull()
-    expect(normalizeInlineTokenAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913\nfoo')).toBeNull()
+    expect(normalizeInlineTokenAddress(`${exampleChecksumAddress} risk`)).toBeNull()
+    expect(normalizeInlineTokenAddress(`${exampleChecksumAddress}\nfoo`)).toBeNull()
   })
 
   it('leaves removed arena help callbacks unmapped', () => {
@@ -436,7 +437,7 @@ describe('telegram webhook parsers', () => {
 
   it('keeps token analysis ids stable across input address casing', () => {
     const lower = normalizeInlineTokenAddress('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913')
-    const mixed = normalizeInlineTokenAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913')
+    const mixed = normalizeInlineTokenAddress(exampleChecksumAddress)
     expect(lower).toBe(mixed)
 
     const lowerAnswer = buildInlineTokenAnalysisAnswer({
@@ -460,7 +461,7 @@ describe('telegram webhook parsers', () => {
   it('renders snapshot, catch up, and risk cards with stable premium formatting', () => {
     expect(renderTokenSnapshotMessage(exampleToken, Date.parse('2026-03-23T12:00:00.000Z'))).toMatchInlineSnapshot(`
       "<b>USD Coin (USDC)</b>
-      <code>0x833589fCD6eDb6E08f4c7C32D4f71b54bDa02913</code> • Base • 3d
+      <code>0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913</code> • Base • 3d
 
       MC: $1.3B • FDV: $1.3B
       Liq: $8.8M • Vol: $42.5M • Holders: 121K

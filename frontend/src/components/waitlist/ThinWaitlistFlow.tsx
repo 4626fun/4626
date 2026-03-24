@@ -174,6 +174,23 @@ export function resolveWaitlistStep(params: {
   return 'wallet'
 }
 
+export function shouldAutoStartWaitlistAuth(params: {
+  variant?: Variant
+  step: WaitlistStep
+  privyAuthed: boolean
+  privyClientStatus: 'disabled' | 'loading' | 'ready'
+  recoveryRequired: boolean
+  error: string | null
+}): boolean {
+  if ((params.variant ?? 'embedded') !== 'modal') return false
+  if (params.step !== 'auth') return false
+  if (params.privyAuthed) return false
+  if (params.privyClientStatus !== 'ready') return false
+  if (params.recoveryRequired) return false
+  if (params.error) return false
+  return true
+}
+
 function CoinbaseLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -780,6 +797,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   }, [privyAuthed, runBootstrap, step])
 
   const authUi = deriveWaitlistAuthUi()
+  const shouldAutoStartAuth = shouldAutoStartWaitlistAuth({
+    variant,
+    step,
+    privyAuthed,
+    privyClientStatus,
+    recoveryRequired,
+    error,
+  })
   const canonicalCswAddress = account?.accountSignals?.canonicalCswAddress ?? null
   const walletSelectionNeeded = !canonicalCswAddress
   const ownerInstallNeeded = Boolean(canonicalCswAddress && ownerDelegationVerified === false)
@@ -788,6 +813,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     tier: account?.score?.tier ?? 0,
   })
   const doneUi = deriveWaitlistDoneUi(canEnterApp)
+
+  useEffect(() => {
+    if (!shouldAutoStartAuth) return
+    if (busy || authAttemptInFlightRef.current || authAutoAttemptedRef.current) return
+    authAutoAttemptedRef.current = true
+    void onContinueAuth()
+  }, [busy, onContinueAuth, shouldAutoStartAuth])
 
   const indicatorSteps = [
     {
@@ -826,21 +858,30 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
               <p className="text-sm text-zinc-400">{authUi.subtitle}</p>
             </div>
 
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void onContinueAuth()}
-              className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {authUi.busyLabel}
-                </>
-              ) : (
-                authUi.ctaLabel
-              )}
-            </button>
+            {shouldAutoStartAuth ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                <div className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                  Opening secure email sign-in…
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onContinueAuth()}
+                className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {busy ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {authUi.busyLabel}
+                  </>
+                ) : (
+                  authUi.ctaLabel
+                )}
+              </button>
+            )}
 
             {error ? (
               <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

@@ -466,20 +466,23 @@ export function renderCatchUpMessage(token: ResolvedInlineTokenAnalysis): string
 
 export function renderRiskMessage(token: ResolvedInlineTokenAnalysis): string {
   const risk = token.secondary.risk
-  const lines = [
-    '<b>Risk Profile</b>',
-    '',
+  const riskRows = [
     risk.ownership ? `Ownership: ${formatRiskValue(risk.ownership)}` : null,
     risk.mint ? `Mint: ${formatRiskValue(risk.mint)}` : null,
     risk.blacklist ? `Blacklist: ${formatRiskValue(risk.blacklist)}` : null,
     risk.proxy ? `Proxy: ${formatRiskValue(risk.proxy)}` : null,
     risk.taxBps != null ? `Tax: ${formatRiskValue(risk.taxBps)}` : null,
     risk.liquidityStatus ? `Liquidity: ${formatRiskValue(risk.liquidityStatus)}` : null,
+  ].filter((line): line is string => Boolean(line))
+  const lines = [
+    '<b>Risk Profile</b>',
+    '',
+    ...riskRows,
     '',
     '<b>Verdict:</b>',
     escapeTelegramHtml(riskVerdict(token)),
   ]
-  return buildCardMessage({ lines, proseLineIndexes: [10] })
+  return buildCardMessage({ lines, proseLineIndexes: [lines.length - 1] })
 }
 
 function renderHolderMessage(token: ResolvedInlineTokenAnalysis): string {

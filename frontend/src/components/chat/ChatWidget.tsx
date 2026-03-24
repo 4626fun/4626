@@ -15,7 +15,7 @@
  * └──────────────────────────────────────────┘
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useLogin } from '@privy-io/react-auth'
 import { MessageSquare, X } from 'lucide-react'
@@ -636,13 +636,18 @@ function ChatWidgetInner() {
  */
 export function ChatWidget() {
   const location = useLocation()
-  const [chatActivated, setChatActivated] = useState(() => hasChatDeepLinkSearch(location.search))
+  const hasDeepLinkActivation = hasChatDeepLinkSearch(location.search)
+  const [chatActivated, setChatActivated] = useState(() => hasDeepLinkActivation)
 
   useEffect(() => {
-    if (hasChatDeepLinkSearch(location.search)) {
-      setChatActivated(true)
-    }
-  }, [location.search])
+    if (!hasDeepLinkActivation) return
+    const timeoutId = window.setTimeout(() => {
+      startTransition(() => {
+        setChatActivated(true)
+      })
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [hasDeepLinkActivation])
 
   if (!chatActivated) {
     return (
