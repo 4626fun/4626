@@ -4,6 +4,10 @@ import { asTrimmed, splitTelegramMessage } from '../utils.js'
 
 const TELEGRAM_DISMISS_CALLBACK = 'message:delete' as const
 
+export type TelegramSentMessage = {
+  messageId: number | null
+}
+
 function shouldRetryWithoutParseMode(status: number, detailsLower: string): boolean {
   if (status !== 400) return false
   return (
@@ -23,18 +27,29 @@ function stripTelegramFormatting(value: string): string {
     .replace(/&amp;/g, '&')
 }
 
-function buildDismissButton(): Record<string, string> {
+function buildDismissButton(params: {
+  chatId?: string
+  dismissOwnerUserId?: string | null
+}): Record<string, string> {
+  const ownerUserId = asTrimmed(params.dismissOwnerUserId ?? '')
+  if (!isPrivateChatId(params.chatId ?? '') && ownerUserId) {
+    return { text: '🗑', callback_data: `${TELEGRAM_DISMISS_CALLBACK}:${ownerUserId}` }
+  }
   return { text: '🗑', callback_data: TELEGRAM_DISMISS_CALLBACK }
 }
 
 function withDismissButton(params: {
   chatId?: string
   replyMarkup?: Record<string, unknown>
+  dismissOwnerUserId?: string | null
 }): Record<string, unknown> | undefined {
-  if (!params.chatId || !isPrivateChatId(params.chatId)) {
+  const chatId = asTrimmed(params.chatId ?? '')
+  const dismissOwnerUserId = asTrimmed(params.dismissOwnerUserId ?? '')
+  const canAppendDismiss = Boolean(chatId) && (isPrivateChatId(chatId) || Boolean(dismissOwnerUserId))
+  if (!canAppendDismiss) {
     return params.replyMarkup
   }
-  const dismissButton = buildDismissButton()
+  const dismissButton = buildDismissButton({ chatId, dismissOwnerUserId })
   if (!params.replyMarkup || typeof params.replyMarkup !== 'object') {
     return { inline_keyboard: [[dismissButton]] }
   }
@@ -45,7 +60,7 @@ function withDismissButton(params: {
   if (!inlineKeyboard) return params.replyMarkup
 
   const hasDismissButton = inlineKeyboard.some((row) =>
-    Array.isArray(row) && row.some((button) => button?.callback_data === TELEGRAM_DISMISS_CALLBACK),
+    Array.isArray(row) && row.some((button) => String(button?.callback_data ?? '').startsWith(TELEGRAM_DISMISS_CALLBACK)),
   )
   if (hasDismissButton) return params.replyMarkup
 
@@ -62,7 +77,8 @@ export async function sendTelegramMessage(params: {
   replyToMessageId?: number
   messageThreadId?: number
   replyMarkup?: Record<string, unknown>
-}): Promise<void> {
+  dismissOwnerUserId?: string | null
+}): Promise<TelegramSentMessage> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/sendMessage`
   const formatted = formatTelegramOutboundText(params.text)
   const sendOnce = async (input?: {
@@ -82,7 +98,11 @@ export async function sendTelegramMessage(params: {
     if (typeof params.messageThreadId === 'number') {
       payload.message_thread_id = params.messageThreadId
     }
-    const replyMarkup = withDismissButton({ chatId: params.chatId, replyMarkup: params.replyMarkup })
+    const replyMarkup = withDismissButton({
+      chatId: params.chatId,
+      replyMarkup: params.replyMarkup,
+      dismissOwnerUserId: params.dismissOwnerUserId,
+    })
     if (replyMarkup) payload.reply_markup = replyMarkup
     return fetch(endpoint, {
       method: 'POST',
@@ -96,7 +116,7 @@ export async function sendTelegramMessage(params: {
     replyToMessageId,
     parseMode: formatted.parseMode,
   })
-  if (response.ok) return
+  if (response.ok) return { messageId: await readTelegramResponseMessageId(response) }
 
   let details = await response.text().catch(() => '')
   let detailsLower = details.toLowerCase()
@@ -111,7 +131,7 @@ export async function sendTelegramMessage(params: {
       replyToMessageId,
       parseMode: formatted.parseMode,
     })
-    if (response.ok) return
+    if (response.ok) return { messageId: await readTelegramResponseMessageId(response) }
     details = await response.text().catch(() => '')
     detailsLower = details.toLowerCase()
   }
@@ -123,7 +143,7 @@ export async function sendTelegramMessage(params: {
       text: plainText,
       parseMode: null,
     })
-    if (retryWithoutParseMode.ok) return
+    if (retryWithoutParseMode.ok) return { messageId: await readTelegramResponseMessageId(retryWithoutParseMode) }
     const retryDetails = await retryWithoutParseMode.text().catch(() => '')
     throw new Error(`telegram_send_failed_${retryWithoutParseMode.status}:${retryDetails.slice(0, 180)}`)
   }
@@ -141,7 +161,8 @@ export async function sendTelegramPhoto(params: {
   replyToMessageId?: number
   messageThreadId?: number
   replyMarkup?: Record<string, unknown>
-}): Promise<void> {
+  dismissOwnerUserId?: string | null
+}): Promise<TelegramSentMessage> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/sendPhoto`
   const formattedCaption = formatTelegramOutboundText(asTrimmed(params.caption ?? ''))
   const form = new FormData()
@@ -158,7 +179,11 @@ export async function sendTelegramPhoto(params: {
   if (typeof params.messageThreadId === 'number') {
     form.append('message_thread_id', String(params.messageThreadId))
   }
-  const replyMarkup = withDismissButton({ chatId: params.chatId, replyMarkup: params.replyMarkup })
+  const replyMarkup = withDismissButton({
+    chatId: params.chatId,
+    replyMarkup: params.replyMarkup,
+    dismissOwnerUserId: params.dismissOwnerUserId,
+  })
   if (replyMarkup) {
     form.append('reply_markup', JSON.stringify(replyMarkup))
   }
@@ -167,7 +192,7 @@ export async function sendTelegramPhoto(params: {
     method: 'POST',
     body: form,
   })
-  if (response.ok) return
+  if (response.ok) return { messageId: await readTelegramResponseMessageId(response) }
   const details = await response.text().catch(() => '')
   throw new Error(`telegram_photo_failed_${response.status}:${details.slice(0, 180)}`)
 }
@@ -178,11 +203,16 @@ export async function editTelegramMessage(params: {
   messageId: number
   text: string
   replyMarkup?: Record<string, unknown>
+  dismissOwnerUserId?: string | null
 }): Promise<boolean> {
   return editTelegramMessageInternal({
     botToken: params.botToken,
     text: params.text,
-    replyMarkup: withDismissButton({ chatId: params.chatId, replyMarkup: params.replyMarkup }),
+    replyMarkup: withDismissButton({
+      chatId: params.chatId,
+      replyMarkup: params.replyMarkup,
+      dismissOwnerUserId: params.dismissOwnerUserId,
+    }),
     target: {
       chat_id: params.chatId,
       message_id: params.messageId,
@@ -272,7 +302,8 @@ export async function replaceTelegramMenuMessage(params: {
   messageId: number
   text: string
   replyMarkup?: Record<string, unknown>
-}): Promise<void> {
+  dismissOwnerUserId?: string | null
+}): Promise<TelegramSentMessage> {
   const chunks = splitTelegramMessage(params.text)
   const firstChunk = chunks[0] ?? 'Command received.'
   let edited = false
@@ -283,22 +314,35 @@ export async function replaceTelegramMenuMessage(params: {
       messageId: params.messageId,
       text: firstChunk,
       replyMarkup: params.replyMarkup,
+      dismissOwnerUserId: params.dismissOwnerUserId,
     })
   } catch {
     edited = false
   }
   if (!edited) {
-    await sendTelegramMessage({
+    const sent = await sendTelegramMessage({
       botToken: params.botToken,
       chatId: params.chatId,
       text: firstChunk,
       replyMarkup: params.replyMarkup,
+      dismissOwnerUserId: params.dismissOwnerUserId,
     })
     await deleteTelegramMessage({
       botToken: params.botToken,
       chatId: params.chatId,
       messageId: params.messageId,
     }).catch(() => {})
+    for (let idx = 1; idx < chunks.length; idx += 1) {
+      const chunk = chunks[idx]
+      if (!chunk) continue
+      await sendTelegramMessage({
+        botToken: params.botToken,
+        chatId: params.chatId,
+        text: chunk,
+        dismissOwnerUserId: params.dismissOwnerUserId,
+      })
+    }
+    return sent
   }
 
   for (let idx = 1; idx < chunks.length; idx += 1) {
@@ -308,6 +352,28 @@ export async function replaceTelegramMenuMessage(params: {
       botToken: params.botToken,
       chatId: params.chatId,
       text: chunk,
+      dismissOwnerUserId: params.dismissOwnerUserId,
     })
   }
+  return { messageId: params.messageId }
+}
+
+async function readTelegramResponseMessageId(response: Response): Promise<number | null> {
+  let payload: any = null
+  if (typeof (response as any)?.json === 'function') {
+    try {
+      payload = await (response as any).json()
+    } catch {
+      payload = null
+    }
+  }
+  if (!payload && typeof (response as any)?.text === 'function') {
+    try {
+      payload = JSON.parse(await (response as any).text())
+    } catch {
+      payload = null
+    }
+  }
+  const messageIdRaw = Number(payload?.result?.message_id ?? payload?.message_id)
+  return Number.isFinite(messageIdRaw) && messageIdRaw > 0 ? Math.floor(messageIdRaw) : null
 }

@@ -141,6 +141,14 @@ export type TelegramInlineSignalFeed = {
   updatedAt: string | null
 }
 
+export type TelegramActiveMessage = {
+  chatId: string
+  ownerTelegramUserId: string
+  messageId: number
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export type TelegramSignalRow = {
   telegramUserId: string
   actionType: string
@@ -1226,6 +1234,16 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       );
     `
     await db.sql`
+      CREATE TABLE IF NOT EXISTS telegram_active_messages (
+        chat_id TEXT NOT NULL,
+        owner_telegram_user_id BIGINT NOT NULL,
+        message_id BIGINT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (chat_id, owner_telegram_user_id)
+      );
+    `
+    await db.sql`
       ALTER TABLE telegram_arena_watchers
       ADD COLUMN IF NOT EXISTS watch_match_id TEXT NULL;
     `
@@ -1257,6 +1275,10 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_inline_signal_feeds_source_idx
       ON telegram_inline_signal_feeds (source_chat_id, updated_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_active_messages_updated_idx
+      ON telegram_active_messages (updated_at DESC);
     `
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_funnel_events_created_idx
@@ -1941,6 +1963,20 @@ function mapTelegramInlineSignalFeedRow(row: any): TelegramInlineSignalFeed {
     lastPushedAt: toIso(row.last_pushed_at),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
+  }
+}
+
+function mapTelegramActiveMessageRow(row: any): TelegramActiveMessage | null {
+  const chatId = asTrimmed(row?.chat_id)
+  const ownerTelegramUserId = String(row?.owner_telegram_user_id ?? '').trim()
+  const messageIdRaw = Number(row?.message_id)
+  if (!chatId || !ownerTelegramUserId || !Number.isFinite(messageIdRaw) || messageIdRaw <= 0) return null
+  return {
+    chatId,
+    ownerTelegramUserId,
+    messageId: Math.floor(messageIdRaw),
+    createdAt: toIso(row?.created_at),
+    updatedAt: toIso(row?.updated_at),
   }
 }
 
@@ -2666,6 +2702,95 @@ export async function touchTelegramInlineSignalFeedPush(params: {
       last_pushed_at = NOW(),
       updated_at = NOW()
     WHERE inline_message_id = ${inlineMessageId};
+  `
+}
+
+export async function getTelegramActiveMessage(params: {
+  db: Db
+  chatId: string
+  ownerTelegramUserId: string | number | bigint
+}): Promise<TelegramActiveMessage | null> {
+  const chatId = asTrimmed(params.chatId)
+  const ownerTelegramUserId = normalizeTelegramUserId(params.ownerTelegramUserId)
+  if (!chatId || !ownerTelegramUserId) return null
+  const result = await params.db.sql`
+    SELECT
+      chat_id,
+      owner_telegram_user_id,
+      message_id,
+      created_at,
+      updated_at
+    FROM telegram_active_messages
+    WHERE chat_id = ${chatId}
+      AND owner_telegram_user_id = ${ownerTelegramUserId.toString()}
+    LIMIT 1;
+  `
+  return mapTelegramActiveMessageRow(result.rows?.[0] ?? null)
+}
+
+export async function upsertTelegramActiveMessage(params: {
+  db: Db
+  chatId: string
+  ownerTelegramUserId: string | number | bigint
+  messageId: number
+}): Promise<TelegramActiveMessage | null> {
+  const chatId = asTrimmed(params.chatId)
+  const ownerTelegramUserId = normalizeTelegramUserId(params.ownerTelegramUserId)
+  const messageIdRaw = Number(params.messageId)
+  if (!chatId || !ownerTelegramUserId || !Number.isFinite(messageIdRaw) || messageIdRaw <= 0) return null
+  const messageId = Math.floor(messageIdRaw)
+  const result = await params.db.sql`
+    INSERT INTO telegram_active_messages (
+      chat_id,
+      owner_telegram_user_id,
+      message_id,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${chatId},
+      ${ownerTelegramUserId.toString()},
+      ${messageId},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (chat_id, owner_telegram_user_id) DO UPDATE
+    SET
+      message_id = EXCLUDED.message_id,
+      updated_at = NOW()
+    RETURNING
+      chat_id,
+      owner_telegram_user_id,
+      message_id,
+      created_at,
+      updated_at;
+  `
+  return mapTelegramActiveMessageRow(result.rows?.[0] ?? null)
+}
+
+export async function clearTelegramActiveMessage(params: {
+  db: Db
+  chatId: string
+  ownerTelegramUserId: string | number | bigint
+  messageId?: number | null
+}): Promise<void> {
+  const chatId = asTrimmed(params.chatId)
+  const ownerTelegramUserId = normalizeTelegramUserId(params.ownerTelegramUserId)
+  if (!chatId || !ownerTelegramUserId) return
+  const messageIdRaw = Number(params.messageId)
+  if (Number.isFinite(messageIdRaw) && messageIdRaw > 0) {
+    await params.db.sql`
+      DELETE FROM telegram_active_messages
+      WHERE chat_id = ${chatId}
+        AND owner_telegram_user_id = ${ownerTelegramUserId.toString()}
+        AND message_id = ${Math.floor(messageIdRaw)};
+    `
+    return
+  }
+  await params.db.sql`
+    DELETE FROM telegram_active_messages
+    WHERE chat_id = ${chatId}
+      AND owner_telegram_user_id = ${ownerTelegramUserId.toString()};
   `
 }
 

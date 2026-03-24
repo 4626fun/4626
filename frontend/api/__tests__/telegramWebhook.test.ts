@@ -12,11 +12,13 @@ const {
   createTelegramLinkStartTokenMock,
   createTelegramActionTokenMock,
   consumeTelegramActionTokenMock,
+  clearTelegramActiveMessageMock,
   upsertTelegramTradePercentPromptMock,
   getTelegramTradePercentPromptMock,
   consumeTelegramTradePercentPromptMock,
   clearTelegramTradePercentPromptMock,
   ensureTelegramTradingSchemaMock,
+  getTelegramActiveMessageMock,
   getTelegramLinkByUserIdMock,
   getTelegramPortfolioSummaryMock,
   getTelegramInlineSignalFeedByInlineMessageIdMock,
@@ -44,6 +46,7 @@ const {
   sendPrivyCoinbaseSmartWalletUserOperationMock,
   readTelegramOnboardingSessionMock,
   tryInsertTelegramPrivateDmWelcomeSentMock,
+  upsertTelegramActiveMessageMock,
   upsertTelegramOnboardingSessionMock,
   startAkitaVaultDeployFromTelegramMock,
   fetchVaultDeployStatusFromTelegramMock,
@@ -56,11 +59,13 @@ const {
   createTelegramLinkStartTokenMock: vi.fn(),
   createTelegramActionTokenMock: vi.fn(),
   consumeTelegramActionTokenMock: vi.fn(),
+  clearTelegramActiveMessageMock: vi.fn(),
   upsertTelegramTradePercentPromptMock: vi.fn(),
   getTelegramTradePercentPromptMock: vi.fn(),
   consumeTelegramTradePercentPromptMock: vi.fn(),
   clearTelegramTradePercentPromptMock: vi.fn(),
   ensureTelegramTradingSchemaMock: vi.fn(),
+  getTelegramActiveMessageMock: vi.fn(),
   getTelegramLinkByUserIdMock: vi.fn(),
   getTelegramPortfolioSummaryMock: vi.fn(),
   getTelegramInlineSignalFeedByInlineMessageIdMock: vi.fn(),
@@ -88,6 +93,7 @@ const {
   sendPrivyCoinbaseSmartWalletUserOperationMock: vi.fn(),
   readTelegramOnboardingSessionMock: vi.fn(),
   tryInsertTelegramPrivateDmWelcomeSentMock: vi.fn(),
+  upsertTelegramActiveMessageMock: vi.fn(),
   upsertTelegramOnboardingSessionMock: vi.fn(),
   startAkitaVaultDeployFromTelegramMock: vi.fn(),
   fetchVaultDeployStatusFromTelegramMock: vi.fn(),
@@ -143,11 +149,13 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   createTelegramLinkStartToken: createTelegramLinkStartTokenMock,
   createTelegramActionToken: createTelegramActionTokenMock,
   consumeTelegramActionToken: consumeTelegramActionTokenMock,
+  clearTelegramActiveMessage: clearTelegramActiveMessageMock,
   upsertTelegramTradePercentPrompt: upsertTelegramTradePercentPromptMock,
   getTelegramTradePercentPrompt: getTelegramTradePercentPromptMock,
   consumeTelegramTradePercentPrompt: consumeTelegramTradePercentPromptMock,
   clearTelegramTradePercentPrompt: clearTelegramTradePercentPromptMock,
   ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
+  getTelegramActiveMessage: getTelegramActiveMessageMock,
   getTelegramLinkByUserId: getTelegramLinkByUserIdMock,
   getTelegramPortfolioSummary: getTelegramPortfolioSummaryMock,
   getTelegramInlineSignalFeedByInlineMessageId: getTelegramInlineSignalFeedByInlineMessageIdMock,
@@ -170,6 +178,7 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   upsertTelegramInlineSignalFeed: upsertTelegramInlineSignalFeedMock,
   readTelegramOnboardingSession: readTelegramOnboardingSessionMock,
   tryInsertTelegramPrivateDmWelcomeSent: tryInsertTelegramPrivateDmWelcomeSentMock,
+  upsertTelegramActiveMessage: upsertTelegramActiveMessageMock,
   upsertTelegramOnboardingSession: upsertTelegramOnboardingSessionMock,
 }))
 
@@ -241,6 +250,8 @@ describe('telegram webhook handler', () => {
     getTelegramTradePercentPromptMock.mockResolvedValue(null)
     consumeTelegramTradePercentPromptMock.mockResolvedValue(null)
     clearTelegramTradePercentPromptMock.mockResolvedValue(undefined)
+    clearTelegramActiveMessageMock.mockResolvedValue(undefined)
+    getTelegramActiveMessageMock.mockResolvedValue(null)
     getTelegramLinkByUserIdMock.mockResolvedValue(null)
     getTelegramPortfolioSummaryMock.mockResolvedValue(null)
     getTelegramInlineSignalFeedByInlineMessageIdMock.mockResolvedValue(null)
@@ -275,6 +286,7 @@ describe('telegram webhook handler', () => {
     upsertTelegramInlineSignalFeedMock.mockResolvedValue(null)
     readTelegramOnboardingSessionMock.mockResolvedValue(null)
     tryInsertTelegramPrivateDmWelcomeSentMock.mockResolvedValue(true)
+    upsertTelegramActiveMessageMock.mockResolvedValue(null)
     upsertTelegramOnboardingSessionMock.mockResolvedValue(undefined)
     startAkitaVaultDeployFromTelegramMock.mockResolvedValue({
       ok: false,

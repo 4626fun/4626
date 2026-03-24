@@ -3558,8 +3558,8 @@ export async function renderBreakoutLayer(params: {
       const breakoutCenterX = bounds.minX + bounds.width / 2
       const maxShiftX = Math.max(2, Math.round(layout.chamberSize * 0.05))
       const shiftX = Math.round(clamp(chamberCenterX - breakoutCenterX, -maxShiftX, maxShiftX))
-      const targetTopY = Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.08))
-      const maxShiftY = Math.max(2, Math.round(layout.chamberSize * 0.018))
+      const targetTopY = Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.20))
+      const maxShiftY = Math.max(3, Math.round(layout.chamberSize * 0.028))
       const shiftY = Math.round(clamp(targetTopY - bounds.minY, -maxShiftY, maxShiftY))
       if (shiftX !== 0 || shiftY !== 0) {
         masked = await shiftLayerCanvas({

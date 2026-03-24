@@ -23,6 +23,7 @@ import {
 } from '../../../server/agent/core/resolveIdentityContext.js'
 import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
 import {
+  clearTelegramActiveMessage,
   consumeTelegramActionToken,
   createTelegramLinkStartToken,
   createTelegramActionToken,
@@ -33,6 +34,7 @@ import {
   ensureTelegramTradingSchema,
   getTelegramInlineSignalFeedByInlineMessageId,
   getTelegramChatTradePolicy,
+  getTelegramActiveMessage,
   getHolderRoomPolicyByVault,
   getTelegramLinkByUserId,
   getTelegramPortfolioSummary,
@@ -50,6 +52,7 @@ import {
   setTelegramInlineSignalFeedPaused,
   touchTelegramInlineSignalFeedPush,
   tryInsertTelegramPrivateDmWelcomeSent,
+  upsertTelegramActiveMessage,
   upsertTelegramInlineSignalFeed,
   upsertTelegramOnboardingSession,
   upsertTelegramTradePercentPrompt,
@@ -1934,7 +1937,8 @@ async function sendTelegramMessage(params: {
   replyToMessageId?: number
   messageThreadId?: number
   replyMarkup?: Record<string, unknown>
-}): Promise<void> {
+  dismissOwnerUserId?: string | null
+}): Promise<{ messageId: number | null }> {
   return sendTelegramMessageShared(params)
 }
 
@@ -1948,7 +1952,8 @@ async function sendTelegramPhoto(params: {
   replyToMessageId?: number
   messageThreadId?: number
   replyMarkup?: Record<string, unknown>
-}): Promise<void> {
+  dismissOwnerUserId?: string | null
+}): Promise<{ messageId: number | null }> {
   return sendTelegramPhotoShared(params)
 }
 
@@ -1958,6 +1963,7 @@ async function editTelegramMessage(params: {
   messageId: number
   text: string
   replyMarkup?: Record<string, unknown>
+  dismissOwnerUserId?: string | null
 }): Promise<boolean> {
   return editTelegramMessageShared(params)
 }
@@ -1985,8 +1991,71 @@ async function replaceTelegramMenuMessage(params: {
   messageId: number
   text: string
   replyMarkup?: Record<string, unknown>
-}): Promise<void> {
+  dismissOwnerUserId?: string | null
+}): Promise<{ messageId: number | null }> {
   return replaceTelegramMenuMessageShared(params)
+}
+
+async function loadTelegramActiveMessageState(params: {
+  chatId: string
+  ownerUserId?: string | null
+}): Promise<{
+  db: Awaited<ReturnType<typeof getDb>> | null
+  activeMessageId: number | null
+  dismissOwnerUserId: string | null
+}> {
+  const dismissOwnerUserId = asTrimmed(params.ownerUserId ?? '') || null
+  if (!dismissOwnerUserId) {
+    return { db: null, activeMessageId: null, dismissOwnerUserId: null }
+  }
+  const db = await getDb()
+  if (!db) {
+    return { db: null, activeMessageId: null, dismissOwnerUserId }
+  }
+  await ensureTelegramTradingSchema(db as any)
+  const active = await getTelegramActiveMessage({
+    db: db as any,
+    chatId: params.chatId,
+    ownerTelegramUserId: dismissOwnerUserId,
+  })
+  return {
+    db,
+    activeMessageId: typeof active?.messageId === 'number' ? active.messageId : null,
+    dismissOwnerUserId,
+  }
+}
+
+async function upsertTelegramActiveMessageState(params: {
+  db: Awaited<ReturnType<typeof getDb>> | null
+  chatId: string
+  ownerUserId?: string | null
+  messageId?: number | null
+}): Promise<void> {
+  const ownerUserId = asTrimmed(params.ownerUserId ?? '')
+  const messageId = Number(params.messageId)
+  if (!params.db || !ownerUserId || !Number.isFinite(messageId) || messageId <= 0) return
+  await upsertTelegramActiveMessage({
+    db: params.db as any,
+    chatId: params.chatId,
+    ownerTelegramUserId: ownerUserId,
+    messageId: Math.floor(messageId),
+  })
+}
+
+async function clearTelegramActiveMessageState(params: {
+  db: Awaited<ReturnType<typeof getDb>> | null
+  chatId: string
+  ownerUserId?: string | null
+  messageId?: number | null
+}): Promise<void> {
+  const ownerUserId = asTrimmed(params.ownerUserId ?? '')
+  if (!params.db || !ownerUserId) return
+  await clearTelegramActiveMessage({
+    db: params.db as any,
+    chatId: params.chatId,
+    ownerTelegramUserId: ownerUserId,
+    messageId: typeof params.messageId === 'number' ? params.messageId : null,
+  })
 }
 
 async function answerTelegramInlineQuery(params: {
@@ -6796,7 +6865,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    if (callbackDataLower === 'message:delete') {
+    if (callbackDataLower === 'message:delete' || callbackDataLower.startsWith('message:delete:')) {
+      const dismissOwnerUserId = callbackDataLower.startsWith('message:delete:')
+        ? asTrimmed(callbackDataLower.slice('message:delete:'.length))
+        : ''
+      if (dismissOwnerUserId && dismissOwnerUserId !== userId) {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'Only the requester can dismiss this.',
+          showAlert: true,
+        }).catch(() => {})
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
       try {
         await answerTelegramCallbackQuery({
           botToken,
@@ -6817,6 +6901,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           messageId: callbackMessageId,
         }).catch(() => {})
       }
+      const dismissState = await loadTelegramActiveMessageState({
+        chatId,
+        ownerUserId: dismissOwnerUserId || userId,
+      }).catch(() => ({ db: null, activeMessageId: null, dismissOwnerUserId: dismissOwnerUserId || userId }))
+      await clearTelegramActiveMessageState({
+        db: dismissState.db,
+        chatId,
+        ownerUserId: dismissOwnerUserId || userId,
+        messageId: callbackMessageId,
+      }).catch(() => {})
       return res.status(200).json({
         success: true,
         data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
@@ -7351,6 +7445,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         text: buildStartAndLinkNudgeText(),
         replyToMessageId: messageId,
         replyMarkup: buildStartAndLinkNudgeReplyMarkup(),
+        dismissOwnerUserId: userId,
       })
       return res.status(200).json({
         success: true,
@@ -7367,6 +7462,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Inline shortcuts are ready. Tap a button below to pre-fill a draft in this chat, then send it.',
       replyToMessageId: messageId,
       replyMarkup: buildInlineLauncherReplyMarkup(),
+      dismissOwnerUserId: userId,
     })
     return res.status(200).json({
       success: true,
@@ -7416,7 +7512,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const chunks = splitTelegramMessage(response.text)
   const helpMarkup = response.replyMarkup
     ?? resolveOperatorReplyMarkup(normalizedText)
     ?? (isArenaHelpCommand(normalizedText)
@@ -7426,18 +7521,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : isHelpCommand(normalizedText)
           ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
           : undefined)
+  const deliveryState = await loadTelegramActiveMessageState({
+    chatId,
+    ownerUserId: userId,
+  })
   if (response.media) {
     const mediaCaption = asTrimmed(response.media.caption ?? response.text)
-    await sendTelegramPhoto({
+    const sentPhoto = await sendTelegramPhoto({
       botToken,
       chatId,
       photo: response.media.bytes,
       ...(response.media.filename ? { filename: response.media.filename } : {}),
       ...(response.media.contentType ? { contentType: response.media.contentType } : {}),
       ...(mediaCaption ? { caption: mediaCaption } : {}),
-      replyToMessageId: message.message_id,
+      replyToMessageId: deliveryState.activeMessageId ? undefined : message.message_id,
       replyMarkup: response.media.replyMarkup ?? helpMarkup,
+      dismissOwnerUserId: deliveryState.dismissOwnerUserId,
     })
+    if (
+      deliveryState.activeMessageId &&
+      (!sentPhoto.messageId || sentPhoto.messageId !== deliveryState.activeMessageId)
+    ) {
+      await deleteTelegramMessage({
+        botToken,
+        chatId,
+        messageId: deliveryState.activeMessageId,
+      }).catch(() => {})
+    }
+    await upsertTelegramActiveMessageState({
+      db: deliveryState.db,
+      chatId,
+      ownerUserId: userId,
+      messageId: sentPhoto.messageId,
+    }).catch(() => {})
     if (!response.media.suppressText) {
       const textChunks = splitTelegramMessage(response.text)
       for (const chunk of textChunks) {
@@ -7446,6 +7562,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           botToken,
           chatId,
           text: chunk,
+          dismissOwnerUserId: deliveryState.dismissOwnerUserId,
         })
       }
     }
@@ -7454,15 +7571,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
-  for (let idx = 0; idx < chunks.length; idx += 1) {
+  const chunks = splitTelegramMessage(response.text)
+  if (chunks.length > 0) {
+    const firstChunk = chunks[0] ?? ''
+    let trackedMessageId: number | null = null
+    if (firstChunk) {
+      if (deliveryState.activeMessageId) {
+        const replaced = await replaceTelegramMenuMessage({
+          botToken,
+          chatId,
+          messageId: deliveryState.activeMessageId,
+          text: firstChunk,
+          replyMarkup: helpMarkup,
+          dismissOwnerUserId: deliveryState.dismissOwnerUserId,
+        })
+        trackedMessageId = replaced.messageId ?? deliveryState.activeMessageId
+      } else {
+        const sent = await sendTelegramMessage({
+          botToken,
+          chatId,
+          text: firstChunk,
+          replyToMessageId: message.message_id,
+          replyMarkup: helpMarkup,
+          dismissOwnerUserId: deliveryState.dismissOwnerUserId,
+        })
+        trackedMessageId = sent.messageId
+      }
+    }
+    await upsertTelegramActiveMessageState({
+      db: deliveryState.db,
+      chatId,
+      ownerUserId: userId,
+      messageId: trackedMessageId,
+    }).catch(() => {})
+  }
+  for (let idx = 1; idx < chunks.length; idx += 1) {
     const chunk = chunks[idx]
     if (!chunk) continue
     await sendTelegramMessage({
       botToken,
       chatId,
       text: chunk,
-      replyToMessageId: idx === 0 ? message.message_id : undefined,
-      replyMarkup: idx === 0 ? helpMarkup : undefined,
+      dismissOwnerUserId: deliveryState.dismissOwnerUserId,
     })
   }
   const signalChunks = splitTelegramMessage(asTrimmed(response.signalText ?? ''))
