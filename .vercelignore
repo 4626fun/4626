@@ -57,5 +57,30 @@ target
 **/.xmtp-data
 
 # Archived design media moved out of frontend/public to avoid shipping it.
-design/base-brand-archive
-design/public-asset-archive
+/design/base-brand-archive
+/design/public-asset-archive
+
+# This project deploys from `frontend/`. Exclude unrelated monorepo workspaces
+# and source trees when the Vercel CLI is pointed at the repo root.
+/apps
+/contracts
+/cre
+/design
+/deployments
+/docs
+/lib
+/out
+/output
+/programs
+/script
+/scripts
+/target
+/test
+/tests
+/tmp
+/tools
+
+# Local/generated project state outside the frontend deploy surface.
+/agent-logs
+/broadcast
+/cache
