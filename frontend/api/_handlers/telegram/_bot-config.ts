@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import {
   resolveTelegramBotToken,
+  setTelegramWebhook,
   setTelegramChatMenuButton,
   setTelegramMyCommands,
 } from '../../../server/_lib/telegramBotApi.js'
@@ -21,7 +22,9 @@ type BotConfigBody = {
   menuMode?: 'web_app' | 'commands'
   menuText?: string
   miniAppUrl?: string
+  webhookUrl?: string
   chatId?: string | number
+  dropPendingUpdates?: boolean
 }
 
 function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {
@@ -42,6 +45,17 @@ function readChatId(body: BotConfigBody): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value))
   if (typeof value === 'string') return value.trim()
   return ''
+}
+
+function resolveWebhookUrl(req: VercelRequest, body: BotConfigBody, configured: string): string {
+  const explicitUrl = asTrimmed(body.webhookUrl)
+  if (explicitUrl && /^https?:\/\//i.test(explicitUrl)) return explicitUrl
+  if (configured && /^https?:\/\//i.test(configured)) return configured
+
+  const host = asTrimmed(req.headers['x-forwarded-host'] || req.headers.host || '')
+  if (!host) return ''
+  const proto = asTrimmed(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'http' ? 'http' : 'https'
+  return `${proto}://${host}/api/telegram/webhook`
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -69,6 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : 'web_app'
   const menuText = asTrimmed(body.menuText || config.menuButtonText || 'Link 4626') || 'Link 4626'
   const miniAppUrl = resolveMiniAppUrl(body, config.miniAppUrl)
+  const webhookUrl = resolveWebhookUrl(req, body, config.webhookUrl)
   const chatId = readChatId(body)
 
   const scopes = [
@@ -78,6 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ] as const
 
   if (!dryRun) {
+    if (webhookUrl) {
+      await setTelegramWebhook({
+        botToken,
+        url: webhookUrl,
+        secretToken: config.webhookSecret,
+        dropPendingUpdates: body.dropPendingUpdates === true,
+        allowedUpdates: ['message', 'callback_query', 'inline_query', 'chosen_inline_result', 'pre_checkout_query'],
+      })
+    }
     for (const row of scopes) {
       await setTelegramMyCommands({
         botToken,
@@ -107,6 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       menuMode,
       menuText,
       miniAppUrl,
+      webhookUrl: webhookUrl || null,
       chatId: chatId || null,
     },
   } satisfies ApiEnvelope<{
@@ -115,6 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     menuMode: 'web_app' | 'commands'
     menuText: string
     miniAppUrl: string
+    webhookUrl: string | null
     chatId: string | null
   }>)
 }
