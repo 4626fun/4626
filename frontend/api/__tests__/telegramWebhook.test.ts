@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import webhookHandler from '../_handlers/telegram/_webhook.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
+const AKITA_TOKEN_ADDRESS = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
+
 const {
   handleKeeprCommandMock,
   handleTwitterCommandMock,
@@ -261,7 +263,7 @@ describe('telegram webhook handler', () => {
     listTelegramScopedVaultsMock.mockResolvedValue([
       {
         vaultAddress: '0x1111111111111111111111111111111111111111',
-        creatorCoinAddress: '0x2222222222222222222222222222222222222222',
+        creatorCoinAddress: AKITA_TOKEN_ADDRESS,
         chainId: 8453,
         groupId: 'xmtp-group-1',
         isSettled: false,
@@ -801,7 +803,7 @@ describe('telegram webhook handler', () => {
           return {
             rows: [{
               canonical_csw_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-              creator_coin_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              creator_coin_address: AKITA_TOKEN_ADDRESS,
               zora_handle: 'akita',
             }],
           }
@@ -866,8 +868,8 @@ describe('telegram webhook handler', () => {
     expect(
       buttons.some(
         (button: any) =>
-          button?.text === 'Analyze Token'
-          && button?.switch_inline_query_current_chat === '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          button?.text === 'Analyze $AKITA'
+          && button?.switch_inline_query_current_chat === AKITA_TOKEN_ADDRESS,
       ),
     ).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
@@ -1365,7 +1367,7 @@ describe('telegram webhook handler', () => {
       .filter(Boolean)
       .join('\n')
     expect(resultTexts).toContain('/link')
-    expect(resultTexts).toContain('/help')
+    expect(resultTexts).toContain('/buy')
   })
 
   it('answers inline query with reusable trade command result', async () => {
@@ -1537,6 +1539,61 @@ describe('telegram webhook handler', () => {
     )
   })
 
+  it('resolves approved token symbol queries into the same token analysis flow', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes(`api.dexscreener.com/latest/dex/tokens/${AKITA_TOKEN_ADDRESS}`)) {
+          return new Response(JSON.stringify({
+            pairs: [{
+              chainId: 'base',
+              dexId: 'uniswap',
+              pairAddress: '0x7777777777777777777777777777777777777777',
+              baseToken: { address: AKITA_TOKEN_ADDRESS, symbol: 'AKITA', name: 'Akita' },
+              quoteToken: { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH', name: 'Wrapped Ether' },
+              priceUsd: '0.12',
+              liquidity: { usd: 250000 },
+              volume: { h24: 120000 },
+              txns: { h24: { buys: 15, sells: 10 } },
+              priceChange: { h24: 7.5 },
+            }],
+          }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }),
+    )
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 5_12_1,
+        inline_query: {
+          id: 'iq-token-symbol',
+          from: { id: 42 },
+          query: '$AKITA',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls.at(-1)?.[1]?.body ?? '{}'))
+    expect(payload.inline_query_id).toBe('iq-token-symbol')
+    expect(payload.results[0]?.id).toBe(`token:${AKITA_TOKEN_ADDRESS}:snapshot`)
+  })
+
   it('uses brand-style inline growth copy when TELEGRAM_INLINE_GROWTH_MODE is enabled', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     const restoreGrowthEnv = applyEnv({
@@ -1566,8 +1623,8 @@ describe('telegram webhook handler', () => {
       const descriptions = payload.results.map((entry: any) => String(entry?.description ?? ''))
 
       expect(titles.some((title: string) => title.includes('Connect wallet'))).toBe(true)
-      expect(descriptions.some((description: string) => description.includes('One-time setup • buy, sell, bid'))).toBe(true)
-      expect(titles.some((title: string) => title.includes('Guide'))).toBe(true)
+      expect(titles).toContain('Buy $AKITA')
+      expect(descriptions.some((description: string) => description.includes('Approved token'))).toBe(true)
       expect(titles.some((title: string) => title.includes('Ask Keepr AI'))).toBe(false)
       expect(titles.join(' ')).not.toContain('🚀')
       expect(descriptions.join(' ')).not.toContain('🚀')
@@ -1602,6 +1659,7 @@ describe('telegram webhook handler', () => {
       .map((entry: any) => String(entry?.input_message_content?.message_text ?? ''))
       .filter(Boolean)
     expect(resultTexts.some((text: string) => text.startsWith('/link'))).toBe(true)
+    expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Buy $AKITA')
     expect(Boolean(payload.switch_pm_parameter || payload.button?.start_parameter)).toBe(true)
     expect(String(payload.button?.web_app?.url ?? '')).toContain('/telegram/link')
     expect(String(payload.button?.text ?? '')).toBe('Connect wallet')
@@ -1627,7 +1685,7 @@ describe('telegram webhook handler', () => {
     listTelegramScopedVaultsMock.mockResolvedValueOnce([
       {
         vaultAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        creatorCoinAddress: '0x1111111111111111111111111111111111111111',
+        creatorCoinAddress: AKITA_TOKEN_ADDRESS,
         chainId: 8453,
         groupId: 'g1',
         isSettled: false,
@@ -1673,12 +1731,19 @@ describe('telegram webhook handler', () => {
     expect(payload.results.length).toBeLessThanOrEqual(8)
     expect(String(payload.button?.text ?? '')).toBe('Open 4626')
     expect(String(payload.button?.web_app?.url ?? '')).toContain('/telegram/menu')
-    const resultTexts = payload.results
-      .map((entry: any) => String(entry?.input_message_content?.message_text ?? ''))
-      .filter(Boolean)
-    expect(resultTexts.some((text: string) => text.trim() === '/buy')).toBe(true)
-    expect(resultTexts.some((text: string) => text.trim() === '/bid')).toBe(true)
-    expect(typeof payload.next_offset).toBe('string')
+    expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Buy $AKITA')
+    const buyAkita = payload.results.find((entry: any) => String(entry?.title ?? '') === 'Buy $AKITA')
+    expect(String(buyAkita?.input_message_content?.message_text ?? '').trim()).toBe('/buy')
+    expect(
+      buyAkita?.reply_markup?.inline_keyboard?.flat?.().some(
+        (button: any) =>
+          String(button?.text ?? '') === 'Analyze $AKITA'
+          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
+      ),
+    ).toBe(true)
+    if (Object.prototype.hasOwnProperty.call(payload, 'next_offset')) {
+      expect(typeof payload.next_offset).toBe('string')
+    }
   })
 
   it('respects inline query offset when paginating results', async () => {
@@ -1704,8 +1769,7 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(Array.isArray(payload.results)).toBe(true)
-    const firstId = String(payload.results[0]?.id ?? '')
-    expect(firstId.startsWith('r4:')).toBe(true)
+    expect(payload.results).toHaveLength(0)
   })
 
   it('hides PM handoff when TELEGRAM_INLINE_PM_HANDOFF_ENABLED is off', async () => {
@@ -1965,7 +2029,8 @@ describe('telegram webhook handler', () => {
     expect(payload.reply_markup?.inline_keyboard?.length).toBeGreaterThan(0)
     const allButtons = payload.reply_markup.inline_keyboard.flat()
     expect(allButtons.some((button: any) => typeof button.switch_inline_query_current_chat === 'string')).toBe(true)
-    expect(allButtons.some((button: any) => typeof button.switch_inline_query === 'string')).toBe(true)
+    expect(allButtons.some((button: any) => typeof button.switch_inline_query === 'string')).toBe(false)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
   })
 
   it('allows admin private DM even when target chat is set', async () => {
@@ -2499,6 +2564,43 @@ describe('telegram webhook handler', () => {
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
     expect(allButtons.some((button: any) => typeof button.switch_inline_query_current_chat === 'string')).toBe(false)
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(false)
+  })
+
+  it('renders a focused inline launcher with approved-token shortcuts only', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 11_0_1,
+        message: {
+          message_id: 16,
+          text: '/inline',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Analyze $AKITA')).toBe(true)
+    expect(
+      allButtons.some(
+        (button: any) =>
+          String(button?.text ?? '') === 'Analyze $AKITA'
+          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
+      ),
+    ).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Buy $AKITA')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Draft X post')).toBe(false)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Ask AI')).toBe(false)
   })
 
   it('handles callback query for more tools menu and returns secondary actions', async () => {
@@ -4850,11 +4952,19 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Step 1/3')
-    expect(String(payload.text ?? '')).toContain('Pick a vault')
+    expect(String(payload.text ?? '')).toContain('Pick an approved token')
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     expect(Array.isArray(keyboard)).toBe(true)
     const flat = keyboard.flat()
+    expect(flat.some((button: any) => String(button?.text ?? '') === 'Buy $AKITA')).toBe(true)
     expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('tradeflow:v:buy:'))).toBe(true)
+    expect(
+      flat.some(
+        (button: any) =>
+          String(button?.text ?? '') === 'Analyze $AKITA'
+          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
+      ),
+    ).toBe(true)
     expect(clearTelegramTradePercentPromptMock).toHaveBeenCalledWith({
       db: expect.anything(),
       chatId: '-100123',

@@ -1,5 +1,11 @@
 import { getAddress, isAddress } from 'viem'
 
+import {
+  buildTelegramAnalyzeInlineDraft,
+  filterTelegramApprovedTradeVaults,
+  resolveTelegramApprovedInlineTokenQuery,
+  TELEGRAM_APPROVED_INLINE_TOKENS,
+} from '../approvedTokens.js'
 import { asTrimmed, isAddressLike, truncateAddress } from '../utils.js'
 import { parseTelegramTradeIntent } from './trade.js'
 
@@ -91,6 +97,8 @@ function clampInlineResultCap(value: number): number {
 
 export function normalizeInlineTokenAddress(rawQuery: string): `0x${string}` | null {
   const trimmed = asTrimmed(rawQuery)
+  const approvedToken = resolveTelegramApprovedInlineTokenQuery(trimmed)
+  if (approvedToken) return approvedToken.address
   if (!trimmed || /\s/.test(trimmed)) return null
   if (!isAddress(trimmed)) return null
   return getAddress(trimmed).toLowerCase() as `0x${string}`
@@ -290,6 +298,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const wantsAi = queryClass === 'ai'
   const wantsMarket = queryClass === 'market'
   const wantsSignals = /\b(signal|signals|feed|live)\b/.test(lowerQuery) || queryClass === 'discovery'
+  const approvedScopedVaults = filterTelegramApprovedTradeVaults(params.scopedVaults)
 
   const templates: InlineResultTemplate[] = []
   const pushTemplate = (template: InlineResultTemplate) => {
@@ -324,26 +333,28 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       intentTags: ['trade', 'link', 'general'],
       mediaKey: 'card:link',
     })
-  } else {
+  }
+
+  TELEGRAM_APPROVED_INLINE_TOKENS.forEach((token, index) => {
+    const scopedVault = approvedScopedVaults.find((vault) => vault.approvedToken.address === token.address)
+    const description = !params.isLinked
+      ? 'Approved token • link first to trade'
+      : scopedVault
+        ? 'Approved token • direct buy flow'
+        : 'Approved token • trade availability depends on this chat'
     pushTemplate({
-      key: 'trade-quickstart',
-      title: 'Buy now',
-      description: tradeFlowHint,
+      key: `approved-buy-${token.symbol.toLowerCase()}`,
+      title: token.buyLabel,
+      description,
       command: '/buy',
-      baseScore: 100,
-      intentTags: ['trade', 'general'],
+      replyMarkup: {
+        inline_keyboard: [[{ text: token.analyzeLabel, switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(token) }]],
+      },
+      baseScore: 104 - index,
+      intentTags: ['trade', 'discovery', 'general'],
       mediaKey: 'card:buy',
     })
-    pushTemplate({
-      key: 'wallet',
-      title: copy.walletTitle,
-      description: copy.walletDescription,
-      command: '/wallet',
-      baseScore: 86,
-      intentTags: ['discovery', 'general'],
-      mediaKey: 'card:portfolio',
-    })
-  }
+  })
 
   if (wantsSignals) {
     pushTemplate({
@@ -364,83 +375,8 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       mediaKey: 'card:signals',
     })
   }
-
-  const sortedVaults = [...params.scopedVaults].sort((left, right) => left.vaultAddress.localeCompare(right.vaultAddress))
-  for (let idx = 0; idx < sortedVaults.length; idx += 1) {
-    const vault = sortedVaults[idx]
-    const vaultAddress = asTrimmed(vault?.vaultAddress ?? '').toLowerCase()
-    if (!isAddressLike(vaultAddress)) continue
-
-    pushTemplate({
-      key: `vault-buy-${idx}`,
-      title: `Buy ${truncateAddress(vaultAddress)}`,
-      description: tradeFlowHint,
-      command: '/buy',
-      baseScore: 92 - idx,
-      intentTags: ['trade', 'discovery'],
-      mediaKey: `vault:${vaultAddress}`,
-    })
-
-    if (isAddressLike(vault.ccaStrategyAddress) && !vault.isSettled) {
-      pushTemplate({
-        key: `vault-bid-${idx}`,
-        title: `Bid ${truncateAddress(vaultAddress)}`,
-        description: 'Auction flow • ETH % sizing',
-        command: '/bid',
-        baseScore: 90 - idx,
-        intentTags: ['trade', 'discovery'],
-        mediaKey: `vault:${vaultAddress}`,
-      })
-    }
-  }
-
-  pushTemplate({
-    key: 'vaults',
-    title: 'Vaults',
-    description: 'See active vaults in this chat',
-    command: '/vaults',
-    baseScore: 80,
-    intentTags: ['discovery', 'general'],
-    mediaKey: 'card:vaults',
-  })
-  pushTemplate({
-    key: 'auctions',
-    title: 'Auctions',
-    description: 'Open active CCA auctions',
-    command: '/auctions',
-    baseScore: 79,
-    intentTags: ['discovery', 'trade'],
-    mediaKey: 'card:auctions',
-  })
-  pushTemplate({
-    key: 'signals',
-    title: 'Signals',
-    description: 'Latest buy/sell events',
-    command: '/signals',
-    baseScore: 78,
-    intentTags: ['discovery', 'trade'],
-    mediaKey: 'card:signals',
-  })
-  pushTemplate({
-    key: 'link-status',
-    title: 'Wallet status',
-    description: 'Telegram ↔ wallet connection',
-    command: '/linked',
-    baseScore: 74,
-    intentTags: ['link', 'general'],
-    mediaKey: 'card:linked',
-  })
-  pushTemplate({
-    key: 'help',
-    title: copy.helpTitle,
-    description: copy.helpDescription,
-    command: '/help',
-    baseScore: 72,
-    intentTags: ['general'],
-    mediaKey: 'card:help',
-  })
-  // Keep inline discovery laser-focused on connect + trade + wallet.
-  // Show advanced tools only when the user explicitly asks for them.
+  // Keep inline discovery focused on link + approved-token trading.
+  // Only show the broader utility surfaces when the query explicitly asks for them.
   if (wantsStatus) {
     pushTemplate({
       key: 'status',
@@ -450,6 +386,17 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       baseScore: 71,
       intentTags: ['discovery', 'general'],
       mediaKey: 'card:status',
+    })
+  }
+  if (params.isLinked && /\bwallet\b/.test(lowerQuery)) {
+    pushTemplate({
+      key: 'wallet',
+      title: copy.walletTitle,
+      description: copy.walletDescription,
+      command: '/wallet',
+      baseScore: 83,
+      intentTags: ['discovery', 'general'],
+      mediaKey: 'card:portfolio',
     })
   }
   if (wantsDeploy || wantsSocial) {

@@ -105,6 +105,12 @@ import {
   parseVaultDeployCallbackData as parseVaultDeployCallbackDataShared,
 } from './webhook/parsers/vaultDeploy.js'
 import {
+  buildTelegramAnalyzeInlineDraft,
+  filterTelegramApprovedTradeVaults,
+  getTelegramApprovedInlineTokenByAddress,
+  TELEGRAM_APPROVED_INLINE_TOKENS,
+} from './webhook/approvedTokens.js'
+import {
   buildInlineQueryAnswer,
   classifyInlineQuery,
   normalizeInlineTokenAddress,
@@ -1306,18 +1312,15 @@ async function buildInlineQueryResults(params: {
 }
 
 function buildInlineLauncherReplyMarkup(): Record<string, unknown> {
+  const primaryToken = TELEGRAM_APPROVED_INLINE_TOKENS[0]
   return {
     inline_keyboard: [
-      [
-        { text: 'Share', switch_inline_query: '' },
-        { text: 'Search', switch_inline_query_current_chat: '' },
-      ],
-      [{ text: 'Draft X post', switch_inline_query_current_chat: 'x post your update here' }],
-      [
-        { text: 'Ask AI', switch_inline_query_current_chat: 'ai What should I do next?' },
-        { text: 'Vault status', switch_inline_query_current_chat: 'keepr status' },
-      ],
-      [{ text: 'Market quote', switch_inline_query_current_chat: 'mkt quote BTC' }],
+      primaryToken
+        ? [{ text: primaryToken.analyzeLabel, switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(primaryToken) }]
+        : [{ text: 'Share', switch_inline_query: '' }],
+      primaryToken
+        ? [{ text: primaryToken.buyLabel, callback_data: 'menu:buy' }]
+        : [{ text: menuLabel('buy'), callback_data: 'menu:buy' }],
       [{ text: 'Back', callback_data: 'menu:start' }],
     ],
   }
@@ -2620,10 +2623,19 @@ function buildTelegramPickedUserProfileText(params: {
 
 function buildTelegramPickedUserActionsReplyMarkup(profile: ResolvedTelegramPickerUserProfile | null): Record<string, unknown> | undefined {
   if (!profile?.vaultAddress) return undefined
+  const approvedToken = getTelegramApprovedInlineTokenByAddress(profile.creatorCoinAddress)
   const buttons: Array<Record<string, unknown>> = [
-    { text: `Buy ${profile.creatorCoinSymbol ?? 'Creator'}`, callback_data: `tradeflow:v:buy:${profile.vaultAddress}` },
+    {
+      text: approvedToken?.buyLabel ?? `Buy ${profile.creatorCoinSymbol ?? 'Creator'}`,
+      callback_data: `tradeflow:v:buy:${profile.vaultAddress}`,
+    },
   ]
-  if (profile.creatorCoinAddress) {
+  if (approvedToken) {
+    buttons.push({
+      text: approvedToken.analyzeLabel,
+      switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(approvedToken),
+    })
+  } else if (profile.creatorCoinAddress) {
     buttons.push({ text: 'Analyze Token', switch_inline_query_current_chat: profile.creatorCoinAddress })
   }
   return {
@@ -3142,6 +3154,26 @@ function buildTradeVaultPickerReplyMarkup(params: {
   actionType: InteractiveTradeAction
   scopedVaults: ScopedVaultRow[]
 }): Record<string, unknown> {
+  if (params.actionType === 'buy') {
+    const approvedVaults = filterTelegramApprovedTradeVaults(params.scopedVaults).slice(0, 12)
+    if (approvedVaults.length > 0) {
+      return {
+        inline_keyboard: [
+          ...approvedVaults.map((vault) => ([
+            {
+              text: vault.approvedToken.buyLabel,
+              callback_data: `tradeflow:v:${params.actionType}:${vault.vaultAddress.toLowerCase()}`,
+            },
+            {
+              text: vault.approvedToken.analyzeLabel,
+              switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(vault.approvedToken),
+            },
+          ])),
+          [{ text: 'Back', callback_data: 'menu:start' }],
+        ],
+      }
+    }
+  }
   const rows: Array<Array<Record<string, unknown>>> = []
   const buttons = params.scopedVaults.slice(0, 12).map((vault) => ({
     text: truncateAddress(vault.vaultAddress),
@@ -3935,13 +3967,18 @@ async function executeTelegramNativeCommand(params: {
         params.tradePrefetch?.scopedVaults
           ? params.tradePrefetch.scopedVaults
           : await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
-      if (scopedVaults.length === 0) {
+      const approvedBuyVaults = actionType === 'buy' ? filterTelegramApprovedTradeVaults(scopedVaults) : scopedVaults
+      if (approvedBuyVaults.length === 0) {
         return {
           text: [
             'Trade blocked',
             '',
-            '- no vaults are currently scoped for this chat',
-            '- ask an admin to configure telegram_chat_vault_scope',
+            actionType === 'buy'
+              ? `- no approved tokens are currently scoped for this chat (${TELEGRAM_APPROVED_INLINE_TOKENS.map((token) => `$${token.symbol}`).join(', ')})`
+              : '- no vaults are currently scoped for this chat',
+            actionType === 'buy'
+              ? '- ask an admin to scope an approved token for this chat'
+              : '- ask an admin to configure telegram_chat_vault_scope',
           ].join('\n'),
         }
       }
@@ -3967,10 +4004,13 @@ async function executeTelegramNativeCommand(params: {
         }
       }
       return {
-        text: `Step 1/3 • Pick a vault to ${flowStartState.actionType.toUpperCase()}`,
+        text:
+          flowStartState.actionType === 'buy' && approvedBuyVaults.length > 0
+            ? 'Step 1/3 • Pick an approved token to BUY'
+            : `Step 1/3 • Pick a vault to ${flowStartState.actionType.toUpperCase()}`,
         replyMarkup: buildTradeVaultPickerReplyMarkup({
           actionType: flowStartState.actionType,
-          scopedVaults,
+          scopedVaults: approvedBuyVaults,
         }),
       }
     }

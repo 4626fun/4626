@@ -101,6 +101,8 @@ vi.mock('@privy-io/react-auth', () => ({
 
 import { TelegramLink } from './TelegramLink'
 
+const CANONICAL_CSW_ADDRESS = '0x1234567890abcdef1234567890abcdef12345678'
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
@@ -171,7 +173,7 @@ beforeEach(() => {
             linkedMethods: { email: ['user@example.com'] },
             accountSignals: {
               linked: true,
-              canonicalCswAddress: null,
+              canonicalCswAddress: CANONICAL_CSW_ADDRESS,
               creatorCoin: null,
               zoraHandle: null,
               lastResolvedAt: '2026-03-23T00:00:00.000Z',
@@ -197,7 +199,7 @@ beforeEach(() => {
               privyUserId: 'did:privy:user-1',
               profileId: 11,
               linkStatus: 'pending_wallet_setup',
-              canonicalCswAddress: null,
+              canonicalCswAddress: CANONICAL_CSW_ADDRESS,
               ownerVerified: false,
             },
             account: {
@@ -208,7 +210,7 @@ beforeEach(() => {
               linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
               accountSignals: {
                 linked: true,
-                canonicalCswAddress: null,
+                canonicalCswAddress: CANONICAL_CSW_ADDRESS,
                 creatorCoin: null,
                 zoraHandle: null,
                 lastResolvedAt: '2026-03-23T00:00:00.000Z',
@@ -499,7 +501,7 @@ describe('TelegramLink UI flow', () => {
             linkedMethods: { email: ['user@example.com'] },
             accountSignals: {
               linked: true,
-              canonicalCswAddress: null,
+              canonicalCswAddress: CANONICAL_CSW_ADDRESS,
               creatorCoin: null,
               zoraHandle: null,
               lastResolvedAt: '2026-03-23T00:00:00.000Z',
@@ -511,6 +513,8 @@ describe('TelegramLink UI flow', () => {
       await accountsDeferred.promise
     })
     await screen.findByText('Telegram Linked')
+    expect(screen.getByText('0x1234…5678')).toBeTruthy()
+    expect(screen.getByText('Canonical CSW')).toBeTruthy()
   })
 
   it('does not strip query-derived link context before proof capture', async () => {

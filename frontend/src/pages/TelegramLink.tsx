@@ -260,6 +260,10 @@ function formatTelegramHandle(username: string | null, userId: string): string {
   return username ? `@${username}` : `user:${userId}`
 }
 
+function shortAddress(value: string): string {
+  return `${value.slice(0, 6)}…${value.slice(-4)}`
+}
+
 function getTelemetryProof(state: TelegramLinkState): TelegramSessionProof | null {
   switch (state.tag) {
     case 'collect_email':
@@ -1410,6 +1414,7 @@ export function TelegramLink() {
         )
 
       case 'success':
+        const canonicalCswAddress = state.link.canonicalCswAddress ?? state.account.accountSignals.canonicalCswAddress
         return (
           <div className="space-y-4">
             <StatusBlock
@@ -1422,6 +1427,11 @@ export function TelegramLink() {
               <MetaField label="Profile" value={String(state.link.profileId)} />
               <MetaField label="Link Status" value={state.link.linkStatus} />
               <MetaField label="Canonical Email" value={state.account.email} />
+              <MetaField
+                label="Canonical CSW"
+                value={canonicalCswAddress ? shortAddress(canonicalCswAddress) : 'Pending wallet setup'}
+                title={canonicalCswAddress ?? 'Canonical Coinbase Smart Wallet not set yet.'}
+              />
             </div>
             <div className="text-sm leading-6 text-[#666666]">
               Telegram is attached to the verified-email 4626 account. Telegram does not replace email recovery.
@@ -1574,9 +1584,9 @@ function InlineError(props: { message: string }) {
   )
 }
 
-function MetaField(props: { label: string; value: string }) {
+function MetaField(props: { label: string; value: string; title?: string }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" title={props.title}>
       <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
       <div className="mt-0.5 truncate font-mono text-[12px] text-[#EDEDED]">{props.value}</div>
     </div>
