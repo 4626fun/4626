@@ -91,6 +91,38 @@ export async function setTelegramChatMenuButton(params: {
   })
 }
 
+export async function setTelegramWebhook(params: {
+  botToken: string
+  url: string
+  secretToken?: string
+  dropPendingUpdates?: boolean
+  allowedUpdates?: string[]
+}): Promise<void> {
+  const url = asTrimmed(params.url)
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error('telegram_set_webhook_invalid_url')
+  }
+  const payload: Record<string, unknown> = { url }
+  const secretToken = asTrimmed(params.secretToken)
+  if (secretToken) {
+    payload.secret_token = secretToken
+  }
+  if (typeof params.dropPendingUpdates === 'boolean') {
+    payload.drop_pending_updates = params.dropPendingUpdates
+  }
+  const allowedUpdates = Array.isArray(params.allowedUpdates)
+    ? params.allowedUpdates.map((value) => asTrimmed(value)).filter(Boolean)
+    : []
+  if (allowedUpdates.length > 0) {
+    payload.allowed_updates = allowedUpdates
+  }
+  await callTelegramBotApi({
+    botToken: params.botToken,
+    method: 'setWebhook',
+    payload,
+  })
+}
+
 export function resolveTelegramBotToken(): string {
   return asTrimmed(process.env.TELEGRAM_BOT_TOKEN ?? '')
 }
