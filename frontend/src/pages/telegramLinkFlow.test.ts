@@ -4,7 +4,7 @@ import {
   createFlowError,
   createInitialTelegramLinkState,
   telegramLinkReducer,
-  type CanonicalAccountReady,
+  type TelegramLinkReadyAccount,
   type TelegramLinkResult,
   type TelegramSessionProof,
 } from './telegramLinkFlow'
@@ -28,24 +28,12 @@ function makeProof(): TelegramSessionProof {
   }
 }
 
-function makeAccount(): CanonicalAccountReady {
+function makeAccount(): TelegramLinkReadyAccount {
   return {
     privyUserId: 'did:privy:user-1',
     email: 'user@example.com',
     emailVerified: true,
-    appAccessStatus: 'approved',
-    linkedMethods: { email: ['user@example.com'] },
-    accountSignals: {
-      linked: true,
-      canonicalCswAddress: null,
-      creatorCoin: null,
-      zoraHandle: null,
-      lastResolvedAt: '2026-03-23T00:00:00.000Z',
-    },
-    score: {
-      points: 15,
-      tier: 1,
-    },
+    canonicalCswAddress: null,
   }
 }
 

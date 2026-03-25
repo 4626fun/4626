@@ -1,6 +1,6 @@
 import { getAddress, isAddress } from 'viem'
 
-import type { KeeprCommandResult } from './commands.js'
+import type { KeeprCommandResult } from '../commands/types.js'
 import { getEnsProfile, type EnsProfile } from '../_lib/ensResolver.js'
 import { getBasenameName } from '../_lib/basenameResolver.js'
 
@@ -100,4 +100,3 @@ export async function handleWhoisCommand(params: {
     pending.delete(address)
   }
 }
-

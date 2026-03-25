@@ -30,6 +30,12 @@ import {
   normalizeSolanaAssetMintOrigin,
   parseSolanaOvaultMintCompatibilityHints,
 } from '../../../server/_lib/solanaOvaultCompatibility.js'
+import {
+  evaluateCanonicalBridgeTokenPolicy,
+  evaluateRemoteProvisionerLiveness,
+  probeRemoteProvisionerHealth,
+  readSolanaBridgeLivenessPolicy,
+} from '../../../server/_lib/solanaBridgePolicy.js'
 import { resolveShareTokenMetadataUrls } from '../../../server/_lib/shareTokenMetadata.js'
 
 type RegisterSolanaBridgeTokenRequest = {
@@ -1365,6 +1371,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // "AKITA" vs "■AKITA"), avoids ConstraintSeeds issues, and is the primary
   // tradeable brand token that Solana users actually want to hold.
   const resolvedBridgeToken: Address = bridgeToken
+  const canonicalBridgeTokenPolicy = evaluateCanonicalBridgeTokenPolicy({
+    bridgeToken: resolvedBridgeToken,
+  })
+  if (!canonicalBridgeTokenPolicy.allowed) {
+    const statusCode = canonicalBridgeTokenPolicy.code === 'allowlist_missing' ? 503 : 409
+    return res.status(statusCode).json({
+      success: false,
+      error:
+        canonicalBridgeTokenPolicy.message ??
+        'Bridge token is blocked by canonical wrapped-asset policy.',
+    } satisfies ApiEnvelope<never>)
+  }
   const explicitTokenMetadataUriRaw =
     typeof body?.tokenMetadataUri === 'string' ? body.tokenMetadataUri.trim() : ''
   const explicitTokenMetadataUri = explicitTokenMetadataUriRaw
@@ -1663,6 +1681,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const requestMintExplicit = isBytes32Hex(reqMint)
     let solanaMint: Hex | null = requestMintExplicit ? (reqMint as Hex) : readSolanaMintFromEnv()
     let dynamicProvisionError: string | null = null
+    const bridgeLivenessPolicy = readSolanaBridgeLivenessPolicy()
+    const dynamicRouteEnabled = readDynamicSolanaRouteEnabled()
+    const dynamicProvisionerUrls = dynamicRouteEnabled ? readDynamicProvisionerUrls() : []
+    const dynamicProvisionerHealthUrls =
+      dynamicProvisionerUrls.length > 0
+        ? readDynamicProvisionerHealthUrls(dynamicProvisionerUrls)
+        : []
+    const dynamicProvisionerSecret =
+      dynamicProvisionerUrls.length > 0 ? readDynamicProvisionerSecret() : ''
+    let dynamicLivenessChecked = false
+    let dynamicLivenessError: string | null = null
+    const ensureDynamicProvisionerLiveness = async (): Promise<boolean> => {
+      if (dynamicLivenessChecked) return dynamicLivenessError === null
+      dynamicLivenessChecked = true
+
+      if (!bridgeLivenessPolicy.enforced || !dynamicRouteEnabled) {
+        dynamicLivenessError = null
+        return true
+      }
+      // Local CLI-only dynamic provisioning does not expose external health probes.
+      if (dynamicProvisionerUrls.length === 0) {
+        dynamicLivenessError = null
+        return true
+      }
+
+      const healthUrl =
+        dynamicProvisionerHealthUrls[0] ||
+        readDynamicProvisionerHealthUrl(dynamicProvisionerUrls[0] ?? '')
+      if (!healthUrl) {
+        dynamicLivenessError =
+          'Bridge liveness gate is enabled, but SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL is not configured.'
+        return false
+      }
+
+      const probe = await probeRemoteProvisionerHealth({
+        url: healthUrl,
+        secret: dynamicProvisionerSecret,
+        timeoutMs: 4_000,
+      })
+      const liveness = evaluateRemoteProvisionerLiveness({
+        enforced: true,
+        maxHealthAgeSeconds: bridgeLivenessPolicy.maxHealthAgeSeconds,
+        probe,
+      })
+      if (!liveness.healthy) {
+        dynamicLivenessError = `Bridge liveness gate blocked dynamic route provisioning. ${liveness.blockers.join(' ')}`
+        return false
+      }
+
+      dynamicLivenessError = null
+      return true
+    }
     const appendDynamicProvisionDetail = (message: string): string =>
       dynamicProvisionError ? `${message} Dynamic route provisioning error: ${dynamicProvisionError}` : message
     const readExistingTokenForMint = async (mint: Hex): Promise<Address> =>
@@ -1687,6 +1757,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .then((v) => BigInt(v as bigint))
         .catch(() => null)
     const trySwitchToDynamicMint = async (): Promise<boolean> => {
+      const livenessReady = await ensureDynamicProvisionerLiveness()
+      if (!livenessReady) {
+        dynamicProvisionError = dynamicLivenessError
+        logger.warn('[deploy/registerSolanaBridgeToken] Dynamic Solana route blocked by liveness gate', {
+          caller: callerTag,
+          bridgeToken,
+          error: dynamicProvisionError,
+        })
+        return false
+      }
       try {
         const dynamicMint = await tryProvisionDynamicRoute({
           bridgeToken,

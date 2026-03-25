@@ -16,7 +16,7 @@ describe('chat command fallback formatting', () => {
       includeHint: 'Try /help for the full list.',
     })
     expect(fallback).toContain('Unknown command.')
-    expect(fallback).toContain('3) /bankr status')
+    expect(fallback).toContain('3) /cre health')
     expect(fallback).toContain('Try /help for the full list.')
   })
 })

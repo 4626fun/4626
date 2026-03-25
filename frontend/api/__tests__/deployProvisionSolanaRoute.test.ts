@@ -56,5 +56,28 @@ describe('deploy provisionSolanaRoute handler', () => {
       restoreEnv()
     }
   })
+
+  it('returns 409 when bridge token is outside canonical allowlist', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: 'test-secret',
+      SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST: '0x1111111111111111111111111111111111111111',
+      SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST_REQUIRED: '0',
+    })
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-secret' },
+        body: { bridgeToken: '0x49b2FC0E4582F0AeA8c733993A8e18508de7Cd86' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(res.body?.success).toBe(false)
+      expect(String(res.body?.error ?? '')).toContain('SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST')
+    } finally {
+      restoreEnv()
+    }
+  })
 })
 

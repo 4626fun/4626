@@ -40,7 +40,6 @@ const HELP_TOPIC_ACTIONS = new Set([
   'market',
   'social',
   'ops',
-  'bankr',
   'wallet',
 ])
 

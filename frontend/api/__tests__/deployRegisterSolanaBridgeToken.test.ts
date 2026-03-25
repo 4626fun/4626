@@ -264,6 +264,48 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     expect(String(res.body?.error ?? '')).toContain('Internal Solana registration secret is required')
   })
 
+  it('returns 409 when bridge token is outside canonical allowlist', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST: '0x1111111111111111111111111111111111111111',
+      SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST_REQUIRED: '0',
+    })
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba', buildOnly: true },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST')
+      expect(createPublicClientMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('returns 503 when canonical allowlist is required but empty', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST: '',
+      SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST_REQUIRED: '1',
+    })
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba', buildOnly: true },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(503)
+      expect(String(res.body?.error ?? '')).toContain('allowlist is required but empty')
+      expect(createPublicClientMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('fails compatibility when transfer-hook mint uses non-zero OFT fee', async () => {
     const mockPublicClient = {
       readContract: vi.fn(async (args: any) => {
@@ -819,6 +861,71 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       expect(String(res.body?.error ?? '')).toContain('Dynamic route provisioning error')
       expect(String(res.body?.error ?? '')).toContain('neither a valid local SOLANA_BRIDGE_CLI_DIR exists')
     } finally {
+      restoreEnv()
+    }
+  })
+
+  it('blocks dynamic route provisioning when bridge liveness gate reports unhealthy provisioner', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: 'https://provisioner.4626.fun/provision',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL: 'https://provisioner.4626.fun/healthz',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: 'test-secret',
+      SOLANA_BRIDGE_LIVENESS_ENFORCED: '1',
+      SOLANA_BRIDGE_LIVENESS_MAX_HEALTH_AGE_SECONDS: '120',
+      SOLANA_BRIDGE_CLI_DIR: undefined,
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      })
+      ;(globalThis as any).fetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            ok: false,
+            payerHealthy: false,
+            now: new Date().toISOString(),
+          }),
+      })) as any
+
+      const req = createInternalReq({
+        method: 'POST',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('Bridge liveness gate blocked dynamic route provisioning')
+      expect(String(res.body?.error ?? '')).toContain('ok=false')
+      expect(createWalletClientMock).not.toHaveBeenCalled()
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
       restoreEnv()
     }
   })

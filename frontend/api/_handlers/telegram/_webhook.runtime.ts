@@ -105,6 +105,12 @@ import {
   parseVaultDeployCallbackData as parseVaultDeployCallbackDataShared,
 } from './webhook/parsers/vaultDeploy.js'
 import {
+  buildTelegramAnalyzeInlineDraft,
+  filterTelegramApprovedTradeVaults,
+  getTelegramApprovedInlineTokenByAddress,
+  TELEGRAM_APPROVED_INLINE_TOKENS,
+} from './webhook/approvedTokens.js'
+import {
   buildInlineQueryAnswer,
   classifyInlineQuery,
   normalizeInlineTokenAddress,
@@ -152,6 +158,15 @@ import {
 import { normalizeCallbackQuery } from './webhook/updates/callbackQuery.js'
 import { extractSharedSelection, extractUpdateMessage as extractUpdateMessageShared, normalizeMessageContext } from './webhook/updates/message.js'
 import { handleChosenInlineResultUpdate } from './webhook/updates/chosenInlineResult.js'
+import {
+  appendCommandMicroHints as appendCommandMicroHintsShared,
+  getCommandHead as getCommandHeadShared,
+  isHelpCategoryCommand as isHelpCategoryCommandShared,
+  isHelpCommand as isHelpCommandShared,
+  isInlineLauncherCommand as isInlineLauncherCommandShared,
+  isLikelyCommandText as isLikelyCommandTextShared,
+  wrapCommandListingsWithBackticks as wrapCommandListingsWithBackticksShared,
+} from './webhook/utils.js'
 import { handleInlineQueryUpdate } from './webhook/updates/inlineQuery.js'
 import { handlePreCheckoutUpdate } from './webhook/updates/preCheckout.js'
 import { handleSuccessfulPaymentUpdate } from './webhook/updates/successfulPayment.js'
@@ -456,75 +471,16 @@ function splitTelegramMessage(text: string, maxLen = 3500): string[] {
 }
 
 function isInlineLauncherCommand(rawText: string): boolean {
-  const lower = asTrimmed(rawText).toLowerCase()
-  return /^(\/inline|inline|\/shortcuts|shortcuts)(\s|$)/.test(lower)
+  return isInlineLauncherCommandShared(rawText)
 }
 
 function isHelpCommand(rawText: string): boolean {
-  const text = asTrimmed(rawText)
-  return /^\/?help(?:\s+\S+)?\s*$/i.test(text) || /^\/?keepr\s+help(?:\s+\S+)?\s*$/i.test(text)
+  return isHelpCommandShared(rawText)
 }
 
 function isHelpCategoryCommand(rawText: string): boolean {
-  const text = asTrimmed(rawText)
-  return /^\/?help\s+\S+\s*$/i.test(text) || /^\/?keepr\s+help\s+\S+\s*$/i.test(text)
+  return isHelpCategoryCommandShared(rawText)
 }
-
-const TELEGRAM_NATIVE_COMMANDS = new Set([
-  'start',
-  'link',
-  'linked',
-  'unlink',
-  'zora',
-  'deploy',
-  'vaultdeploy',
-  'join',
-  'rooms',
-  'eligibility',
-  'wallet',
-  'vaults',
-  'list',
-  'auctions',
-  'mybids',
-  'signals',
-  'buy',
-  'sell',
-  'bid',
-  'tip',
-])
-
-const TELEGRAM_COMMAND_HEADS = [
-  'start',
-  'help',
-  'keepr',
-  'link',
-  'linked',
-  'unlink',
-  'zora',
-  'deploy',
-  'vaultdeploy',
-  'join',
-  'rooms',
-  'eligibility',
-  'wallet',
-  'vaults',
-  'list',
-  'auctions',
-  'mybids',
-  'signals',
-  'buy',
-  'sell',
-  'bid',
-  'tip',
-  'inline',
-  'shortcuts',
-  'x',
-  'tweet',
-  'ai',
-  'mkt',
-  'coin',
-] as const
-const TELEGRAM_COMMAND_HEADS_PATTERN = TELEGRAM_COMMAND_HEADS.join('|')
 
 type TelegramCommandResponse = {
   text: string
@@ -544,128 +500,11 @@ type TelegramCommandResponse = {
 }
 
 function wrapCommandListingsWithBackticks(text: string): string {
-  const splitCommandSuffix = (command: string): { commandPart: string; suffix: string } => {
-    const separators = [' — ', ' – ', ' - ', ' | ', ' -> ']
-    let hitIndex = -1
-    for (const separator of separators) {
-      const idx = command.indexOf(separator)
-      if (idx > 0 && (hitIndex < 0 || idx < hitIndex)) {
-        hitIndex = idx
-      }
-    }
-    if (hitIndex <= 0) return { commandPart: command, suffix: '' }
-    return {
-      commandPart: command.slice(0, hitIndex).trimEnd(),
-      suffix: command.slice(hitIndex),
-    }
-  }
-
-  const formatCommandForBackticks = (rawCommand: string): string => {
-    const command = asTrimmed(rawCommand)
-    if (!command || command.includes('`')) return command
-    const { commandPart, suffix } = splitCommandSuffix(command)
-    const tokens = commandPart.split(/\s+/g).filter(Boolean)
-    if (tokens.length === 0) return command
-
-    const hasPlaceholder = tokens.some((token) => /^<[^>]+>$/.test(token) || /^\$<[^>]+>$/.test(token))
-    if (!hasPlaceholder) return `\`${commandPart}\`${suffix}`
-
-    const head: string[] = []
-    for (const token of tokens) {
-      if (head.length === 0) {
-        head.push(token)
-        continue
-      }
-      if (/^<[^>]+>$/.test(token) || /^\$<[^>]+>$/.test(token)) break
-      if (/^--/.test(token)) break
-      if (/^0x[a-fA-F0-9]{6,}$/.test(token)) break
-      if (/^\d+(?:\.\d+)?$/.test(token)) break
-      if (/^\$\d+(?:\.\d+)?$/.test(token)) break
-      if (head.length >= 2) break
-      head.push(token)
-    }
-
-    const remainder = tokens.slice(head.length).join(' ')
-    if (head.length === 0) return `\`${commandPart}\`${suffix}`
-    const formatted = remainder ? `\`${head.join(' ')}\` ${remainder}` : `\`${head.join(' ')}\``
-    return `${formatted}${suffix}`
-  }
-
-  const bulletCommandPattern = new RegExp(`^(\\s*[-*]\\s*)(\\/(?:${TELEGRAM_COMMAND_HEADS_PATTERN})\\b.*)$`, 'i')
-  const commandAfterColonPattern = new RegExp(`^(.*?:\\s+)(\\/(?:${TELEGRAM_COMMAND_HEADS_PATTERN})\\b.*)$`, 'i')
-  const inlineCommandPattern = new RegExp(
-    `(^|\\s)(\\/(?:${TELEGRAM_COMMAND_HEADS_PATTERN})\\b(?:\\s+[a-z0-9_<>$:./-]+(?:\\s+[a-z0-9_<>$:./-]+)*)?)`,
-    'gi',
-  )
-
-  return text
-    .split('\n')
-    .map((line) => {
-      if (!line || line.includes('`')) return line
-      const bulletMatch = line.match(bulletCommandPattern)
-      if (bulletMatch) {
-        return `${bulletMatch[1]}${formatCommandForBackticks(bulletMatch[2])}`
-      }
-      const colonMatch = line.match(commandAfterColonPattern)
-      if (colonMatch) {
-        return `${colonMatch[1]}${formatCommandForBackticks(colonMatch[2])}`
-      }
-      return line.replace(inlineCommandPattern, (_full, prefix: string, cmd: string) => {
-        return `${prefix}${formatCommandForBackticks(String(cmd))}`
-      })
-    })
-    .join('\n')
+  return wrapCommandListingsWithBackticksShared(text)
 }
 
-const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string }> = [
-  {
-    pattern: /\/coin\s+create\s+<name>\s+<symbol>\s+<(?:uri|url)>/i,
-    hint: 'name: 1-24 chars, symbol: 2-6 chars, url: https://...',
-  },
-  {
-    pattern: /\/mkt\s+quote\s+<symbol>/i,
-    hint: 'symbol: ticker, e.g. BTC',
-  },
-  {
-    pattern: /\/buy\b/i,
-    hint: 'interactive: pick vault, choose size, then Accept',
-  },
-  {
-    pattern: /\/sell\b/i,
-    hint: 'interactive: pick vault, choose size, then Accept',
-  },
-  {
-    pattern: /\/bid\b/i,
-    hint: 'interactive: pick vault, choose ETH %, then Accept',
-  },
-  {
-    pattern: /\/join\s+<vault\|ticker>/i,
-    hint: 'vault|ticker: scoped vault address or symbol',
-  },
-  {
-    pattern: /\/eligibility\s+<vault\|ticker>/i,
-    hint: 'checks holder-room threshold for a scoped vault',
-  },
-]
-
 function appendCommandMicroHints(text: string): string {
-  const lines = text.split('\n')
-  const nextLines = lines.slice(1)
-  const output: string[] = []
-  for (let idx = 0; idx < lines.length; idx += 1) {
-    const line = lines[idx] ?? ''
-    output.push(line)
-    if (!line) continue
-    const nextLine = nextLines[idx] ?? ''
-    if (nextLine.includes('↳')) continue
-    for (const rule of TELEGRAM_COMMAND_MICRO_HINTS) {
-      if (rule.pattern.test(line)) {
-        output.push(`  ↳ ${rule.hint}`)
-        break
-      }
-    }
-  }
-  return output.join('\n')
+  return appendCommandMicroHintsShared(text)
 }
 
 type ParsedTelegramTradeIntent =
@@ -876,12 +715,11 @@ const UINT128_MAX = (1n << 128n) - 1n
 const Q96 = 2n ** 96n
 
 function getCommandHead(rawText: string): string {
-  const token = asTrimmed(rawText).split(/\s+/g)[0] ?? ''
-  return token.replace(/^\//, '').toLowerCase()
+  return getCommandHeadShared(rawText)
 }
 
 function isLikelyCommandText(rawText: string): boolean {
-  return TELEGRAM_COMMAND_HEADS.includes(getCommandHead(rawText) as (typeof TELEGRAM_COMMAND_HEADS)[number])
+  return isLikelyCommandTextShared(rawText)
 }
 
 function isTelegramAiFollowupEnabled(): boolean {
@@ -990,6 +828,20 @@ function parseVaultDeployCallbackData(rawData: string):
   | { kind: 'status'; token: string }
   | null {
   return parseVaultDeployCallbackDataShared(rawData)
+}
+
+function parseTwitterCallbackData(rawData: string):
+  | { kind: 'confirm' | 'decline'; token: string }
+  | null {
+  const data = asTrimmed(rawData)
+  const match = data.match(/^twitter:(confirm|decline):([a-zA-Z0-9._-]+)$/)
+  if (!match) return null
+  const token = asTrimmed(match[2] ?? '')
+  if (!token) return null
+  return {
+    kind: match[1] === 'confirm' ? 'confirm' : 'decline',
+    token,
+  }
 }
 
 function getPrivyServerAuth(): { appId: string; appSecret: string } {
@@ -1167,6 +1019,41 @@ function buildTradePreviewReplyMarkup(params: {
   }
 }
 
+function buildTwitterPostPreviewReplyMarkup(token: string): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Post', callback_data: `twitter:confirm:${token}` },
+        { text: 'Cancel', callback_data: `twitter:decline:${token}` },
+      ],
+    ],
+  }
+}
+
+function formatTwitterTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {
+  if (reason === 'expired') return 'X post confirmation expired. Start a new `/x post` preview.'
+  if (reason === 'consumed') return 'This X post preview was already used or cancelled.'
+  if (reason === 'scope_mismatch') return 'X post confirmation scope mismatch. Use a fresh preview from this chat.'
+  return 'X post confirmation token not found. Start a new `/x post` preview.'
+}
+
+function buildTwitterPostRecoveryReplyMarkup(tweetText?: string): Record<string, unknown> {
+  const rows: Array<Array<Record<string, unknown>>> = []
+  const draft = asTrimmed(tweetText ?? '')
+  if (draft) {
+    rows.push([buildReusableCommandButton('Reuse Draft', `/x post ${draft}`)])
+  } else {
+    rows.push([buildReusableCommandButton('Compose X Post', '/x post ')])
+  }
+  rows.push([
+    { text: 'X Help', callback_data: 'help:social' },
+    { text: 'Back', callback_data: 'menu:start' },
+  ])
+  return {
+    inline_keyboard: rows,
+  }
+}
+
 function formatTradePreviewText(params: {
   actionType: 'buy' | 'sell' | 'bid'
   targetLabel: string
@@ -1306,18 +1193,15 @@ async function buildInlineQueryResults(params: {
 }
 
 function buildInlineLauncherReplyMarkup(): Record<string, unknown> {
+  const primaryToken = TELEGRAM_APPROVED_INLINE_TOKENS[0]
   return {
     inline_keyboard: [
-      [
-        { text: 'Share', switch_inline_query: '' },
-        { text: 'Search', switch_inline_query_current_chat: '' },
-      ],
-      [{ text: 'Draft X post', switch_inline_query_current_chat: 'x post your update here' }],
-      [
-        { text: 'Ask AI', switch_inline_query_current_chat: 'ai What should I do next?' },
-        { text: 'Vault status', switch_inline_query_current_chat: 'keepr status' },
-      ],
-      [{ text: 'Market quote', switch_inline_query_current_chat: 'mkt quote BTC' }],
+      primaryToken
+        ? [{ text: primaryToken.analyzeLabel, switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(primaryToken) }]
+        : [{ text: 'Share', switch_inline_query: '' }],
+      primaryToken
+        ? [{ text: primaryToken.buyLabel, callback_data: 'menu:buy' }]
+        : [{ text: menuLabel('buy'), callback_data: 'menu:buy' }],
       [{ text: 'Back', callback_data: 'menu:start' }],
     ],
   }
@@ -1334,12 +1218,9 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
       [
         { text: 'Social', callback_data: 'help:social' },
         { text: 'Ops', callback_data: 'help:ops' },
-        { text: 'Bankr', callback_data: 'help:bankr' },
-      ],
-      [
         { text: menuLabel('wallet'), callback_data: 'help:wallet' },
-        { text: 'Help', callback_data: 'help:all' },
       ],
+      [{ text: 'Help', callback_data: 'help:all' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -1642,7 +1523,7 @@ function buildFocusedHelpText(): string {
     '<code>/vaults</code> — browse vaults',
     '',
     '<u>Need more?</u>',
-    '<code>/help coin|market|social|ops|bankr|wallet</code> — focused guides',
+    '<code>/help coin|market|social|ops|wallet</code> — focused guides',
     '<code>/help all</code> — complete command catalog',
     'Tap <b>CRE Ops</b> or <b>Solana</b> below for one-tap keeper actions.',
   ].join('\n')
@@ -2620,10 +2501,19 @@ function buildTelegramPickedUserProfileText(params: {
 
 function buildTelegramPickedUserActionsReplyMarkup(profile: ResolvedTelegramPickerUserProfile | null): Record<string, unknown> | undefined {
   if (!profile?.vaultAddress) return undefined
+  const approvedToken = getTelegramApprovedInlineTokenByAddress(profile.creatorCoinAddress)
   const buttons: Array<Record<string, unknown>> = [
-    { text: `Buy ${profile.creatorCoinSymbol ?? 'Creator'}`, callback_data: `tradeflow:v:buy:${profile.vaultAddress}` },
+    {
+      text: approvedToken?.buyLabel ?? `Buy ${profile.creatorCoinSymbol ?? 'Creator'}`,
+      callback_data: `tradeflow:v:buy:${profile.vaultAddress}`,
+    },
   ]
-  if (profile.creatorCoinAddress) {
+  if (approvedToken) {
+    buttons.push({
+      text: approvedToken.analyzeLabel,
+      switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(approvedToken),
+    })
+  } else if (profile.creatorCoinAddress) {
     buttons.push({ text: 'Analyze Token', switch_inline_query_current_chat: profile.creatorCoinAddress })
   }
   return {
@@ -3142,6 +3032,26 @@ function buildTradeVaultPickerReplyMarkup(params: {
   actionType: InteractiveTradeAction
   scopedVaults: ScopedVaultRow[]
 }): Record<string, unknown> {
+  if (params.actionType === 'buy') {
+    const approvedVaults = filterTelegramApprovedTradeVaults(params.scopedVaults).slice(0, 12)
+    if (approvedVaults.length > 0) {
+      return {
+        inline_keyboard: [
+          ...approvedVaults.map((vault) => ([
+            {
+              text: vault.approvedToken.buyLabel,
+              callback_data: `tradeflow:v:${params.actionType}:${vault.vaultAddress.toLowerCase()}`,
+            },
+            {
+              text: vault.approvedToken.analyzeLabel,
+              switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(vault.approvedToken),
+            },
+          ])),
+          [{ text: 'Back', callback_data: 'menu:start' }],
+        ],
+      }
+    }
+  }
   const rows: Array<Array<Record<string, unknown>>> = []
   const buttons = params.scopedVaults.slice(0, 12).map((vault) => ({
     text: truncateAddress(vault.vaultAddress),
@@ -3935,13 +3845,18 @@ async function executeTelegramNativeCommand(params: {
         params.tradePrefetch?.scopedVaults
           ? params.tradePrefetch.scopedVaults
           : await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
-      if (scopedVaults.length === 0) {
+      const approvedBuyVaults = actionType === 'buy' ? filterTelegramApprovedTradeVaults(scopedVaults) : scopedVaults
+      if (approvedBuyVaults.length === 0) {
         return {
           text: [
             'Trade blocked',
             '',
-            '- no vaults are currently scoped for this chat',
-            '- ask an admin to configure telegram_chat_vault_scope',
+            actionType === 'buy'
+              ? `- no approved tokens are currently scoped for this chat (${TELEGRAM_APPROVED_INLINE_TOKENS.map((token) => `$${token.symbol}`).join(', ')})`
+              : '- no vaults are currently scoped for this chat',
+            actionType === 'buy'
+              ? '- ask an admin to scope an approved token for this chat'
+              : '- ask an admin to configure telegram_chat_vault_scope',
           ].join('\n'),
         }
       }
@@ -3967,10 +3882,13 @@ async function executeTelegramNativeCommand(params: {
         }
       }
       return {
-        text: `Step 1/3 • Pick a vault to ${flowStartState.actionType.toUpperCase()}`,
+        text:
+          flowStartState.actionType === 'buy' && approvedBuyVaults.length > 0
+            ? 'Step 1/3 • Pick an approved token to BUY'
+            : `Step 1/3 • Pick a vault to ${flowStartState.actionType.toUpperCase()}`,
         replyMarkup: buildTradeVaultPickerReplyMarkup({
           actionType: flowStartState.actionType,
-          scopedVaults,
+          scopedVaults: approvedBuyVaults,
         }),
       }
     }
@@ -5843,6 +5761,45 @@ function resolveTelegramMediaFromAction(action: any): TelegramCommandResponse['m
   }
 }
 
+async function resolveTelegramReplyMarkupFromAction(params: {
+  action: unknown
+  chatId: string
+  userId: string
+}): Promise<Record<string, unknown> | undefined> {
+  const action = params.action as any
+  if (asTrimmed(action?.action ?? '') !== 'twitter.preview_post') return undefined
+
+  const tweetText = asTrimmed(action?.tweetText ?? '')
+  if (!tweetText) return buildTwitterPostRecoveryReplyMarkup()
+
+  const db = await getDb().catch(() => null)
+  if (!db) return buildTwitterPostRecoveryReplyMarkup(tweetText)
+
+  try {
+    await ensureTelegramTradingSchema(db as any)
+    const token = await createTelegramActionToken({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      actionType: 'twitter_post',
+      intentPayload: {
+        version: 1,
+        tweetText,
+        createdAt: new Date().toISOString(),
+      },
+      ttlSeconds: Math.max(30, Math.min(60 * 15, Math.floor(Number(action?.ttlSeconds ?? 90)))),
+    })
+    return buildTwitterPostPreviewReplyMarkup(token.token)
+  } catch (error) {
+    console.error('[telegram/webhook] failed to create twitter action token', {
+      chatId: params.chatId,
+      userId: params.userId,
+      err: error instanceof Error ? error.message : String(error),
+    })
+    return buildTwitterPostRecoveryReplyMarkup(tweetText)
+  }
+}
+
 async function executeTelegramCommand(params: {
   text: string
   chatId: string
@@ -5880,14 +5837,23 @@ async function executeTelegramCommand(params: {
     senderWalletSource: params.senderWalletSource,
     isAdmin: params.isAdmin,
     isPrivateChat: isPrivateChatId(params.chatId),
+    twitterConfirmMode: 'preview_only',
     emptyResponseFallback: 'Command received.',
   })
-  return buildTelegramProcessedCommandResponse({
+  const response: TelegramCommandResponse = buildTelegramProcessedCommandResponse({
     commandText: params.text,
     processed,
     buildObservedCommandText: buildPremiumObservedCommandText,
     resolveMediaFromAction: resolveTelegramMediaFromAction,
   })
+  if (!response.media?.replyMarkup) {
+    response.replyMarkup = await resolveTelegramReplyMarkupFromAction({
+      action: processed.action,
+      chatId: params.chatId,
+      userId: params.userId,
+    })
+  }
+  return response
 }
 
 function formatTradeTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {
@@ -6535,6 +6501,94 @@ async function handleTelegramTradeCallback(params: {
   }
 }
 
+async function handleTelegramTwitterCallback(params: {
+  callbackData: string
+  chatId: string
+  userId: string
+  groupId: string
+  senderWallet: `0x${string}`
+  senderWalletSource: SenderWalletSource
+  isAdmin: boolean
+}): Promise<TelegramCommandResponse | null> {
+  const callback = parseTwitterCallbackData(params.callbackData)
+  if (!callback) return null
+
+  const db = await getDb()
+  if (!db) {
+    return {
+      text: 'X post action unavailable while database is offline. Please retry in a few seconds.',
+      callbackToast: 'Temporarily unavailable',
+    }
+  }
+
+  await ensureTelegramTradingSchema(db as any)
+
+  const consumed = await consumeTelegramActionToken({
+    db: db as any,
+    token: callback.token,
+    telegramUserId: params.userId,
+    chatId: params.chatId,
+    actionType: 'twitter_post',
+  })
+  if (!consumed.ok) {
+    const callbackToast =
+      consumed.reason === 'expired'
+        ? 'Preview expired'
+        : consumed.reason === 'consumed'
+          ? 'Already used'
+          : consumed.reason === 'scope_mismatch'
+            ? 'Wrong chat scope'
+            : 'Preview missing'
+    return {
+      text: formatTwitterTokenFailure(consumed.reason),
+      callbackToast,
+      replyMarkup: buildTwitterPostRecoveryReplyMarkup(),
+    }
+  }
+
+  const intent = consumed.intentPayload ?? {}
+  const tweetText = asTrimmed(intent.tweetText ?? '')
+  if (!tweetText) {
+    return {
+      text: 'X post preview is missing its draft text. Start a new `/x post` preview.',
+      callbackToast: 'Invalid preview',
+      replyMarkup: buildTwitterPostRecoveryReplyMarkup(),
+    }
+  }
+
+  if (callback.kind === 'decline') {
+    return {
+      text: `Cancelled X post preview.\n\nDraft kept:\n${tweetText}`,
+      callbackToast: 'Post cancelled',
+      replyMarkup: buildTwitterPostRecoveryReplyMarkup(tweetText),
+    }
+  }
+
+  const processed = await processTelegramAgentInput({
+    text: `/x post ${tweetText} --confirm`,
+    chatId: params.chatId,
+    userId: params.userId,
+    groupId: params.groupId,
+    senderWallet: params.senderWallet,
+    senderWalletSource: params.senderWalletSource,
+    isAdmin: params.isAdmin,
+    isPrivateChat: isPrivateChatId(params.chatId),
+    twitterConfirmMode: 'allow_direct_confirm',
+    emptyResponseFallback: 'Command received.',
+  })
+
+  const response: TelegramCommandResponse = buildTelegramProcessedCommandResponse({
+    commandText: `/x post ${tweetText} --confirm`,
+    processed,
+    buildObservedCommandText: buildPremiumObservedCommandText,
+    resolveMediaFromAction: resolveTelegramMediaFromAction,
+  })
+  return {
+    ...response,
+    callbackToast: asTrimmed((processed.action as any)?.action) === 'twitter.posted' ? 'Post sent' : 'Post failed',
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -7110,6 +7164,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         messageId: callbackMessageId,
         groupId,
         senderWallet,
+      })) ??
+      (await handleTelegramTwitterCallback({
+        callbackData,
+        chatId,
+        userId,
+        groupId,
+        senderWallet,
+        senderWalletSource,
+        isAdmin,
       }))
     if (callbackResponse) {
       if (!callbackAcknowledged) {

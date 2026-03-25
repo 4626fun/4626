@@ -7,8 +7,8 @@ export type NumberedCommandOption = {
 const DEFAULT_OPTIONS: readonly NumberedCommandOption[] = [
   { index: 1, command: '/help', description: 'see all commands' },
   { index: 2, command: '/keepr status', description: 'check this vault' },
-  { index: 3, command: '/bankr status', description: 'verify Bankr + wallet match' },
-  { index: 4, command: '/cre health', description: 'check keeper health' },
+  { index: 3, command: '/cre health', description: 'check keeper health' },
+  { index: 4, command: '/wallet', description: 'review wallet + positions' },
   { index: 5, command: '/ai <question>', description: 'ask in plain English' },
 ]
 

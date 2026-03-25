@@ -3,7 +3,6 @@ export type ChatCommandMode = 'send' | 'prefill'
 export type ChatCommandCategoryId =
   | 'vault'
   | 'market'
-  | 'bankr'
   | 'cre'
   | 'wallet'
   | 'knowledge'
@@ -29,7 +28,6 @@ export type ChatCommandDefinition = {
 export const CHAT_COMMAND_CATEGORIES: readonly ChatCommandCategory[] = [
   { id: 'vault', label: 'Vault' },
   { id: 'market', label: 'Market' },
-  { id: 'bankr', label: 'Bankr' },
   { id: 'cre', label: 'CRE' },
   { id: 'wallet', label: 'Wallet' },
   { id: 'knowledge', label: 'Knowledge' },
@@ -45,7 +43,7 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     command: '/help',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['vault-status', 'bankr-status', 'cre-health'],
+    followUpIds: ['vault-status', 'cre-health', 'market-quote-eth'],
   },
   {
     id: 'ai-assistant',
@@ -96,46 +94,6 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     risk: 'read',
     mode: 'send',
     followUpIds: ['market-quote-eth'],
-  },
-  {
-    id: 'bankr-status',
-    label: 'Bankr Status',
-    description: 'Verify Bankr config and canonical wallet match.',
-    category: 'bankr',
-    command: '/bankr status',
-    risk: 'read',
-    mode: 'send',
-    followUpIds: ['bankr-me', 'bankr-balances'],
-  },
-  {
-    id: 'bankr-me',
-    label: 'Bankr Account',
-    description: 'View current Bankr account metadata.',
-    category: 'bankr',
-    command: '/bankr me',
-    risk: 'read',
-    mode: 'send',
-    followUpIds: ['bankr-balances', 'bankr-ask'],
-  },
-  {
-    id: 'bankr-balances',
-    label: 'Bankr Balances',
-    description: 'View balances across Base and Solana.',
-    category: 'bankr',
-    command: '/bankr balances base,solana',
-    risk: 'read',
-    mode: 'send',
-    followUpIds: ['bankr-status', 'bankr-ask'],
-  },
-  {
-    id: 'bankr-ask',
-    label: 'Bankr Ask',
-    description: 'Ask Bankr a read-only question.',
-    category: 'bankr',
-    command: '/bankr ask summarize my current market exposure',
-    risk: 'read',
-    mode: 'send',
-    followUpIds: ['bankr-status', 'bankr-balances'],
   },
   {
     id: 'cre-health',
@@ -208,16 +166,6 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     followUpIds: ['help'],
   },
   {
-    id: 'bankr-exec-template',
-    label: 'Bankr Write (Template)',
-    description: 'Prefill write command template requiring explicit instruction.',
-    category: 'advanced',
-    command: '/bankr exec <instruction> --confirm',
-    risk: 'write',
-    mode: 'prefill',
-    followUpIds: ['bankr-status'],
-  },
-  {
     id: 'cre-tend',
     label: 'CRE Tend',
     description: 'Trigger vault tend operation.',
@@ -262,7 +210,6 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
 const QUICK_ACTION_IDS = [
   'help',
   'vault-status',
-  'bankr-status',
   'cre-health',
   'market-quote-eth',
 ] as const
@@ -342,9 +289,6 @@ export function searchChatCommands(query: string, limit = 8): ChatCommandDefinit
 
 export function inferCommandIdFromAgentText(text: string): string | null {
   const lower = text.toLowerCase()
-  if (lower.includes('bankr status')) return 'bankr-status'
-  if (lower.includes('bankr account') || lower.includes('/bankr me')) return 'bankr-me'
-  if (lower.includes('bankr balances')) return 'bankr-balances'
   if (lower.includes('cre health')) return 'cre-health'
   if (lower.includes('cre status')) return 'cre-status'
   if (lower.includes('settle fees') || lower.includes('fee settlement') || lower.includes('fees settled')) return 'cre-settle-fees'

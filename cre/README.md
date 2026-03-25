@@ -71,7 +71,7 @@ Expected output highlights:
 
 ## What It Does
 
-Every 5 minutes, the unified `4626` workflow runs five tasks in sequence:
+Every 5 minutes, the unified `4626` workflow runs six tasks in sequence:
 
 | Task | What | Impact |
 |------|------|--------|
@@ -80,6 +80,7 @@ Every 5 minutes, the unified `4626` workflow runs five tasks in sequence:
 | **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
 | **Auction Settlement** | Settle graduated CCA auctions (`sweepCurrency`, `sweepUnsoldTokens`) | Feature |
 | **Keepr Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
+| **Bridge Integrity Monitor** | Monitor bridge signer overlap, canonical route/scalar drift, and liveness freshness | Risk/Integrity |
 
 An optional always-on listener complements cron for lower-latency strategy reactions:
 
@@ -154,6 +155,7 @@ The Solana integration runs as separate workflows (cron-driven, independent from
 | **keepr-solana-winner-relay** | Relay Base winners to Solana WinnerRecord PDA | 1m |
 | **keepr-solana-graduation** | Close Alpha Vault when Base CCA graduates | 1m |
 | **keepr-solana-price-monitor** | Monitor DLMM price + recenter on deviation | 1m |
+| **bridge-integrity-monitor** | Monitor bridge route/scalar/liveness invariants from 4626 integration layer | 5m |
 
 Required env vars for Solana workflows (see `secrets.example.env`):
 - `SOLANA_RPC_URL`
@@ -434,6 +436,7 @@ npm run start:charm-rebalance-manager
 npm run start:auction-settlement
 npm run start:keepr-queue
 npm run start:strategy-event-listener
+npm run start:bridge-integrity-monitor
 
 # Tests
 npm test

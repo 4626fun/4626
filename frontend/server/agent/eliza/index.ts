@@ -52,7 +52,6 @@ import { crePlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
 import { uniswapPlugin } from './plugins/uniswap/index.js'
 import { knowledgePlugin } from './plugins/knowledge/index.js'
-import { bankrPlugin } from './plugins/bankr/index.js'
 import { telegramPlugin } from './plugins/telegram/index.js'
 import { discordPlugin } from './plugins/discord/index.js'
 import { twitterPlugin } from './plugins/twitter/index.js'
@@ -407,7 +406,6 @@ const corePlugins = [
   keeprPlugin,
   zoraPlugin,
   uniswapPlugin,
-  bankrPlugin,
   lensPlugin,
   walletIntelPlugin,
   reputationPlugin,
@@ -537,7 +535,6 @@ export {
   keeprPlugin,
   zoraPlugin,
   uniswapPlugin,
-  bankrPlugin,
   lensPlugin,
   walletIntelPlugin,
   reputationPlugin,

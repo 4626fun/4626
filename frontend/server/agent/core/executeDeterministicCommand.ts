@@ -1,4 +1,5 @@
-import { handleKeeprCommand, type KeeprCommandResult } from '../../keepr/commands.js'
+import { handleKeeprCommand } from '../../keepr/commands.js'
+import type { KeeprCommandResult } from '../../commands/types.js'
 
 export type DeterministicCommandResult = {
   ok: boolean

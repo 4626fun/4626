@@ -11,7 +11,6 @@ describe('runtime policy', () => {
     expect(getActionRetryBudget('KEEPR_COMMAND', 2)).toBe(0)
     expect(getActionRetryBudget('ZORA_COIN', 3)).toBe(0)
     expect(getActionRetryBudget('CRE_TRIGGER', 3)).toBe(0)
-    expect(getActionRetryBudget('BANKR_SKILL', 2)).toBe(0)
     expect(getActionRetryBudget('UNISWAP_SKILL', 2)).toBe(0)
     expect(getActionRetryBudget('CRE_OBSERVE', 3)).toBe(3)
   })
@@ -55,4 +54,3 @@ describe('runtime policy', () => {
     expect(tracker.has('conv-3', 2_201)).toBe(false)
   })
 })
-

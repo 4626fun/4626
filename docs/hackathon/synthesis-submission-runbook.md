@@ -8,7 +8,6 @@ Ship one flagship submission and reuse it across these core tracks:
 - `Let the Agent Cook — No Humans Required`
 - `Agents With Receipts — ERC-8004`
 - `Agentic Finance (Uniswap)`
-- `Best Bankr LLM Gateway Use`
 - `ENS Identity`
 - `ENS Open Integration`
 - `ENS Communication`
@@ -47,17 +46,6 @@ Stretch tracks stay opt-in:
 - Agent runtime command surface: `frontend/server/agent/eliza/plugins/uniswap/index.ts`
 - Judge-friendly command doc: `frontend/docs/eliza-openclaw-uniswap.md`
 
-### Bankr surface
-
-- Real Bankr API client: `frontend/server/bankr/client.ts`
-- Canonical wallet match probe: `frontend/server/bankr/probe.ts`
-- Write-guarded Bankr skill layer: `frontend/server/bankr/agentSkills.ts`
-- Admin probe/profile routes:
-  - `frontend/api/_handlers/bankr/_status.ts`
-  - `frontend/api/_handlers/bankr/_profile.ts`
-- Agent runtime command surface: `frontend/server/agent/eliza/plugins/bankr/index.ts`
-- Listing/runbook doc: `frontend/docs/bankr-profile-onboarding.md`
-
 ### ENS / Basename surface
 
 - Browser Basename resolution + profile fetch: `frontend/src/lib/basename-api.ts`
@@ -85,10 +73,6 @@ The repo is implementation-complete enough for the core story, but final submiss
 
 - One successful `deploy-run.json`
 - One explorer-visible Uniswap tx hash
-- One successful Bankr proof:
-  - job result
-  - profile proof
-  - or wallet-verified screenshot / API response
 - One ENS/Basename-first demo capture:
   - portfolio auto-discovery
   - wallet intelligence output
@@ -107,7 +91,6 @@ Current bundle generation is blocked until these are available:
 
 - `CV_AUTH_SESSION_TOKEN` for deploy autopilot
 - `UNISWAP_API_KEY` for live Uniswap proof
-- `BANKR_API_KEY` for live Bankr proof
 - `BASE_RPC_URL`
 
 The checked-in environment already appears to contain the ERC-8004 registry values in `frontend/.env`.
@@ -188,6 +171,5 @@ Use one short judge flow:
 2. Run or replay the deploy autopilot evidence.
 3. Show the generated `agent.json` and `agent_log.json`.
 4. Show one live Uniswap proof.
-5. Show one live Bankr proof.
-6. Show ENS/Basename-first identity or messaging.
-7. If available, show one paid x402 review proof.
+5. Show ENS/Basename-first identity or messaging.
+6. If available, show one paid x402 review proof.

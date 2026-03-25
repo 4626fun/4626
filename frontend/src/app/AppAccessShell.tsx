@@ -1,14 +1,14 @@
 import { Outlet } from 'react-router-dom'
 
-import AppAuthProviders from './AppAuthProviders'
 import { AccessStateProvider } from './accessRuntime'
+import { WalletProviders } from '@/web3/Web3Providers'
 
 export default function AppAccessShell() {
   return (
-    <AppAuthProviders>
+    <WalletProviders>
       <AccessStateProvider>
         <Outlet />
       </AccessStateProvider>
-    </AppAuthProviders>
+    </WalletProviders>
   )
 }

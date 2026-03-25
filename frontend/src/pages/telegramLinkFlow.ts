@@ -30,24 +30,11 @@ export type TelegramSessionProof = {
   linkContext: TelegramMiniAppLinkContext | null
 }
 
-export type CanonicalAccountReady = {
+export type TelegramLinkReadyAccount = {
   privyUserId: string
   email: string
   emailVerified: true
-  appAccessStatus: string | null
-  linkedMethods: Record<string, string[]>
-  accountSignals: {
-    linked: boolean
-    canonicalCswAddress: string | null
-    creatorCoin: { address: string } | null
-    zoraHandle: string | null
-    lastResolvedAt: string | null
-  }
-  score: {
-    points: number
-    tier: number
-    multipliers?: Record<string, number>
-  }
+  canonicalCswAddress: string | null
 }
 
 export type TelegramLinkResult = {
@@ -72,7 +59,7 @@ type RetryTarget =
   | {
       tag: 'bind_telegram'
       proof: TelegramSessionProof
-      account: CanonicalAccountReady
+      account: TelegramLinkReadyAccount
       step: 'ensure_privy_link' | 'complete_backend'
     }
 
@@ -116,13 +103,13 @@ export type TelegramLinkState =
   | {
       tag: 'bind_telegram'
       proof: TelegramSessionProof
-      account: CanonicalAccountReady
+      account: TelegramLinkReadyAccount
       step: 'ensure_privy_link' | 'complete_backend'
     }
   | {
       tag: 'success'
       proof: TelegramSessionProof
-      account: CanonicalAccountReady
+      account: TelegramLinkReadyAccount
       link: TelegramLinkResult
     }
   | {
@@ -145,7 +132,7 @@ export type TelegramLinkEvent =
   | { type: 'SUBMIT_CODE' }
   | { type: 'EMAIL_CODE_VERIFIED' }
   | { type: 'EMAIL_CODE_VERIFY_FAILED'; error: FlowError }
-  | { type: 'PRIVY_SYNC_READY'; account: CanonicalAccountReady }
+  | { type: 'PRIVY_SYNC_READY'; account: TelegramLinkReadyAccount }
   | { type: 'PRIVY_SYNC_FAILED'; error: FlowError }
   | { type: 'PRIVY_TELEGRAM_LINK_SKIPPED' }
   | { type: 'PRIVY_TELEGRAM_LINK_SUCCEEDED' }

@@ -15,6 +15,7 @@ import {
   setNoStore,
 } from '../../../server/auth/_shared.js'
 import { logger } from '../../../server/_lib/logger.js'
+import { evaluateCanonicalBridgeTokenPolicy } from '../../../server/_lib/solanaBridgePolicy.js'
 
 type ProvisionRouteRequest = {
   bridgeToken?: string
@@ -366,6 +367,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid bridgeToken address' } satisfies ApiEnvelope<never>)
   }
   const bridgeToken = bridgeTokenRaw as Address
+  const canonicalBridgeTokenPolicy = evaluateCanonicalBridgeTokenPolicy({ bridgeToken })
+  if (!canonicalBridgeTokenPolicy.allowed) {
+    const statusCode = canonicalBridgeTokenPolicy.code === 'allowlist_missing' ? 503 : 409
+    return res.status(statusCode).json({
+      success: false,
+      error:
+        canonicalBridgeTokenPolicy.message ??
+        'Bridge token is blocked by canonical wrapped-asset policy.',
+    } satisfies ApiEnvelope<never>)
+  }
 
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   if (!cliDir || !existsSync(cliDir)) {

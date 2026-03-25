@@ -9,6 +9,7 @@
  *   3. Charm Rebalance — trigger Charm vault rebalance on 10%+ move
  *   4. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
  *   5. Keepr Queue     — execute pending XMTP/Neynar group actions
+ *   6. Bridge Integrity — monitor bridge signer/route/scalar/liveness drift
  *
  * All vaults are fetched from the registry API (keepr_vaults table).
  * Falls back to single-vault env vars if KEEPR_API_KEY is not set.
@@ -25,6 +26,10 @@ import {
 } from '../actions/charm-rebalance-manager.action.js';
 import { executeSettlement, type BatchSettlementResult } from '../actions/auction-settlement.action.js';
 import { executeQueueProcessor, type QueueExecutorResult } from '../actions/keepr-queue-executor.action.js';
+import {
+  executeBridgeIntegrityMonitor,
+  type BridgeIntegrityMonitorResult,
+} from '../actions/bridge-integrity-monitor.action.js';
 import { alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = '4626';
@@ -35,6 +40,7 @@ export interface UnifiedResult {
   charmRebalance: BatchCharmRebalanceResult | null;
   settlement: BatchSettlementResult | null;
   queue: QueueExecutorResult | null;
+  bridgeIntegrity: BridgeIntegrityMonitorResult | null;
   errors: string[];
   durationMs: number;
 }
@@ -50,6 +56,7 @@ export async function handler(): Promise<void> {
   let charmRebalanceResult: BatchCharmRebalanceResult | null = null;
   let settlementResult: BatchSettlementResult | null = null;
   let queueResult: QueueExecutorResult | null = null;
+  let bridgeIntegrityResult: BridgeIntegrityMonitorResult | null = null;
 
   // ── 1. Vault Keeper (tend + report) ──────────────────────────────────
   try {
@@ -127,6 +134,27 @@ export async function handler(): Promise<void> {
     }
   }
 
+  // ── 6. Bridge Integrity Monitor (signer/route/scalar/liveness) ─────────
+  try {
+    console.log('═══ Bridge Integrity Monitor ═══');
+    bridgeIntegrityResult = await executeBridgeIntegrityMonitor();
+    console.log(
+      `  status=${bridgeIntegrityResult.status} checks=${bridgeIntegrityResult.checksRun} ` +
+        `routes=${bridgeIntegrityResult.monitoredRoutes} overlaps=${bridgeIntegrityResult.signerOverlapCount} ` +
+        `critical=${bridgeIntegrityResult.criticalFindings.length} warnings=${bridgeIntegrityResult.warningFindings.length}`,
+    );
+    // Critical monitor findings are surfaced via workflow-level error summary.
+    if (bridgeIntegrityResult.status === 'critical') {
+      errors.push(
+        `bridge-integrity-monitor: ${bridgeIntegrityResult.criticalFindings.join(' | ') || 'critical findings detected'}`,
+      );
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  bridge-integrity-monitor failed: ${msg}`);
+    errors.push(`bridge-integrity-monitor: ${msg}`);
+  }
+
   const durationMs = Date.now() - start;
 
   // ── Summary ──────────────────────────────────────────────────────────
@@ -156,6 +184,15 @@ export async function handler(): Promise<void> {
       : null,
     queue: queueResult
       ? { processed: queueResult.processed, succeeded: queueResult.succeeded }
+      : null,
+    bridgeIntegrity: bridgeIntegrityResult
+      ? {
+          status: bridgeIntegrityResult.status,
+          checksRun: bridgeIntegrityResult.checksRun,
+          monitoredRoutes: bridgeIntegrityResult.monitoredRoutes,
+          criticalFindings: bridgeIntegrityResult.criticalFindings.length,
+          warningFindings: bridgeIntegrityResult.warningFindings.length,
+        }
       : null,
     errors: errors.length,
   };

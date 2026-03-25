@@ -17,6 +17,7 @@
  *   tsx runner.ts auction-settlement     # Run just auction settlement
  *   tsx runner.ts keepr-queue            # Run just the keepr queue processor
  *   tsx runner.ts strategy-event-listener # Run always-on event listener
+ *   tsx runner.ts bridge-integrity-monitor # Run bridge integrity monitor
  *
  * Environment:
  *   - Loads .env file from cre/ directory
@@ -73,6 +74,9 @@ async function main() {
       case 'strategy-event-listener':
         workflow = await import('./workflows/strategy-event-listener.workflow.js');
         break;
+      case 'bridge-integrity-monitor':
+        workflow = await import('./workflows/bridge-integrity-monitor.workflow.js');
+        break;
       default:
         console.error(`Unknown workflow: ${workflowName}`);
         console.error('');
@@ -86,6 +90,7 @@ async function main() {
         console.error('  auction-settlement   — sweep graduated auctions');
         console.error('  keepr-queue          — process XMTP/Neynar queue');
         console.error('  strategy-event-listener — always-on WS listener for Ajna/Charm triggers');
+        console.error('  bridge-integrity-monitor — monitor Solana bridge route/liveness integrity');
         process.exit(1);
     }
 

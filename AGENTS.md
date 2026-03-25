@@ -93,7 +93,9 @@ The Telegram Mini App account-link/onboarding flow must follow strict architectu
 ### State Management
 
 - The Telegram flow must use a **single authoritative state machine**.
-- Do not distribute flow control across multiple `useEffect`s, auth hooks, or route guards.
+- Keep one reducer-backed source of truth plus one **state-scoped effect layer**.
+- Multiple `useEffect`s are acceptable when they are keyed by explicit machine state and guarded against re-entry.
+- Route/bootstrap helpers may admit the Telegram surface, but they must not mutate machine state mid-session.
 - UI must render directly from explicit machine state.
 - Do not use derived booleans like `isVerified`, `isReady`, etc. across multiple sources.
 
@@ -120,6 +122,24 @@ The Telegram Mini App account-link/onboarding flow must follow strict architectu
 - Telegram session proof must be verified before entering the flow.
 - Telegram identity must only be bound **after canonical account resolution via verified email**.
 
+### Current Preserved Link Path
+
+The currently working Telegram -> Privy -> canonical-account path is preserved in
+`docs/telegram-canonical-link-preservation.md`.
+
+Any simplification must keep this semantic order:
+
+1. verify fresh Telegram Mini App proof
+2. perform inline email OTP inside the Mini App
+3. wait for verified-email account readiness + Privy sync explicitly
+4. ensure the active Privy user is linked to Telegram
+5. complete backend persistence with optional single-use link-token claim/consume
+6. keep canonical CSW / embedded-EOA rules intact without requiring immediate CSW owner confirmation for link success
+
+Do not replace this with hidden provider magic, modal auth, webhook-only
+binding, or a shortcut that binds Telegram before verified-email account
+resolution.
+
 ### Anti-Patterns (STRICTLY FORBIDDEN)
 
 - Privy popup/modal usage inside Telegram WebView
@@ -128,7 +148,11 @@ The Telegram Mini App account-link/onboarding flow must follow strict architectu
 - Rendering “verified” UI before canonical account state is confirmed
 - Route guards mutating flow state mid-session
 
-Authoritative implementation notes live in `frontend/docs/account-auth-invariants.md` and `frontend/docs/waitlist-accounts-architecture.md`.
+Authoritative implementation notes live in:
+
+- `docs/telegram-canonical-link-preservation.md`
+- `frontend/docs/account-auth-invariants.md`
+- `frontend/docs/waitlist-accounts-architecture.md`
 
 ### Solana program deployment
 

@@ -108,9 +108,6 @@ vi.mock('../../agent/eliza/plugins/zora/index.js', () => ({
 vi.mock('../../agent/eliza/plugins/uniswap/index.js', () => ({
   uniswapPlugin: { name: 'uniswap', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/bankr/index.js', () => ({
-  bankrPlugin: { name: 'bankr', actions: [], providers: [] },
-}))
 vi.mock('../../agent/eliza/plugins/lens/index.js', () => ({
   lensPlugin: { name: 'lens', actions: [], providers: [] },
 }))

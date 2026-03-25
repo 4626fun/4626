@@ -1,7 +1,7 @@
 {
   "flagshipDemo": {
     "title": "4626 is an ERC-8004-registered Base agent that discovers a task, plans a solution, executes onchain actions, verifies outcomes, and publishes receipts.",
-    "narrative": "Use one canonical deploy-centric demo, then reuse the same identity for Uniswap, Bankr, and ENS/Basename proofs.",
+    "narrative": "Use one canonical deploy-centric demo, then reuse the same identity for Uniswap and ENS/Basename proofs.",
     "videoUrl": ""
   },
   "links": {
@@ -20,12 +20,6 @@
       "txHash": "",
       "explorerUrl": "",
       "quoteRequestId": "",
-      "description": ""
-    },
-    "bankr": {
-      "jobId": "",
-      "proofUrl": "",
-      "walletMatch": true,
       "description": ""
     },
     "ens": {
@@ -49,7 +43,6 @@
     "letTheAgentCook": "",
     "agentsWithReceipts": "",
     "uniswap": "",
-    "bankr": "",
     "ensIdentity": "",
     "ensOpenIntegration": "",
     "ensCommunication": "",

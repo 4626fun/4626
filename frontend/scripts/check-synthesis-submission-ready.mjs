@@ -56,13 +56,6 @@ const CHECKS = [
     required: true,
   },
   {
-    id: 'bankr-key',
-    label: 'BANKR_API_KEY',
-    type: 'env',
-    key: 'BANKR_API_KEY',
-    required: true,
-  },
-  {
     id: 'base-rpc',
     label: 'BASE_RPC_URL',
     type: 'env',

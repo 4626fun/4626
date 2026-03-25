@@ -5,28 +5,16 @@ import { createMockReq, createMockRes } from './helpers'
 
 const {
   getKeeprVaultByGroupIdMock,
-  isBankrWriteCommandTextMock,
-  probeBankrCanonicalWalletMatchMock,
   isCreWriteCommandTextMock,
   readSessionFromRequestMock,
 } = vi.hoisted(() => ({
   getKeeprVaultByGroupIdMock: vi.fn(),
-  isBankrWriteCommandTextMock: vi.fn(),
-  probeBankrCanonicalWalletMatchMock: vi.fn(),
   isCreWriteCommandTextMock: vi.fn(),
   readSessionFromRequestMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/keeprRegistry.js', () => ({
   getKeeprVaultByGroupId: getKeeprVaultByGroupIdMock,
-}))
-
-vi.mock('../../server/bankr/agentSkills.js', () => ({
-  isBankrWriteCommandText: isBankrWriteCommandTextMock,
-}))
-
-vi.mock('../../server/bankr/probe.js', () => ({
-  probeBankrCanonicalWalletMatch: probeBankrCanonicalWalletMatchMock,
 }))
 
 vi.mock('../../server/agent/eliza/plugins/cre/index.js', () => ({
@@ -44,7 +32,6 @@ vi.mock('../../server/auth/_shared.js', async () => {
 describe('POST /api/v1/chat/command-preflight', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    isBankrWriteCommandTextMock.mockReturnValue(false)
     isCreWriteCommandTextMock.mockReturnValue(false)
     getKeeprVaultByGroupIdMock.mockResolvedValue({
       canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -53,10 +40,6 @@ describe('POST /api/v1/chat/command-preflight', () => {
           admins: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
         },
       },
-    })
-    probeBankrCanonicalWalletMatchMock.mockResolvedValue({
-      walletMatch: true,
-      reason: 'wallet_match',
     })
     readSessionFromRequestMock.mockReturnValue({
       address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -69,7 +52,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/bankr status',
+        command: '/wallet',
       },
     })
     const res = createMockRes()
@@ -83,12 +66,12 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('rejects write preflight when sender wallet is missing', async () => {
-    isBankrWriteCommandTextMock.mockReturnValueOnce(true)
+    isCreWriteCommandTextMock.mockReturnValueOnce(true)
     const req = createMockReq({
       method: 'POST',
       body: {
         conversationId: 'group-1',
-        command: '/bankr exec rebalance --confirm',
+        command: '/cre tend',
       },
     })
     const res = createMockRes()
@@ -101,14 +84,14 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('rejects write preflight when auth session is missing', async () => {
-    isBankrWriteCommandTextMock.mockReturnValueOnce(true)
+    isCreWriteCommandTextMock.mockReturnValueOnce(true)
     readSessionFromRequestMock.mockReturnValueOnce(null)
     const req = createMockReq({
       method: 'POST',
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/bankr exec rebalance --confirm',
+        command: '/cre tend',
       },
     })
     const res = createMockRes()
@@ -121,7 +104,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('rejects write preflight when sender wallet mismatches session wallet', async () => {
-    isBankrWriteCommandTextMock.mockReturnValueOnce(true)
+    isCreWriteCommandTextMock.mockReturnValueOnce(true)
     readSessionFromRequestMock.mockReturnValueOnce({
       address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     })
@@ -130,7 +113,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/bankr exec rebalance --confirm',
+        command: '/cre tend',
       },
     })
     const res = createMockRes()
@@ -164,42 +147,14 @@ describe('POST /api/v1/chat/command-preflight', () => {
     expect(res.body?.data?.guardCategory).toBe('role_denied')
   })
 
-  it('rejects bankr writes when wallet match probe fails', async () => {
-    isBankrWriteCommandTextMock.mockReturnValueOnce(true)
-    probeBankrCanonicalWalletMatchMock.mockResolvedValueOnce({
-      walletMatch: false,
-      reason: 'wallet_mismatch',
-    })
+  it('allows CRE writes when role checks pass', async () => {
+    isCreWriteCommandTextMock.mockReturnValueOnce(true)
     const req = createMockReq({
       method: 'POST',
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/bankr exec rebalance --confirm',
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.allowed).toBe(false)
-    expect(res.body?.data?.guardCategory).toBe('wallet_mismatch')
-    expect(res.body?.data?.walletMatch).toBe(false)
-  })
-
-  it('allows bankr writes when role and wallet match checks pass', async () => {
-    isBankrWriteCommandTextMock.mockReturnValueOnce(true)
-    probeBankrCanonicalWalletMatchMock.mockResolvedValueOnce({
-      walletMatch: true,
-      reason: 'wallet_match',
-    })
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        conversationId: 'group-1',
-        senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/bankr exec rebalance --confirm',
+        command: '/cre tend',
       },
     })
     const res = createMockRes()
@@ -209,7 +164,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.allowed).toBe(true)
     expect(res.body?.data?.role).toBe('OWNER')
-    expect(res.body?.data?.walletMatch).toBe(true)
+    expect(res.body?.data?.walletMatch).toBeNull()
   })
 
   it('fails closed when backend checks throw', async () => {

@@ -10,18 +10,18 @@ import {
 
 describe('chat command center helpers', () => {
   it('normalizes command text lookups', () => {
-    const command = getChatCommandByCommandText('   /BANKR   STATUS   ')
-    expect(command?.id).toBe('bankr-status')
+    const command = getChatCommandByCommandText('   /CRE   STATUS   ')
+    expect(command?.id).toBe('cre-status')
   })
 
   it('returns slash autocomplete suggestions for partial input', () => {
-    const suggestions = searchChatCommands('/bankr', 5)
+    const suggestions = searchChatCommands('/cre', 5)
     expect(suggestions.length).toBeGreaterThan(0)
-    expect(suggestions.some((entry) => entry.id === 'bankr-status')).toBe(true)
+    expect(suggestions.some((entry) => entry.id === 'cre-health')).toBe(true)
   })
 
   it('infers follow-up command context from agent output', () => {
-    expect(inferCommandIdFromAgentText('Bankr status looks healthy.')).toBe('bankr-status')
+    expect(inferCommandIdFromAgentText('CRE status looks healthy.')).toBe('cre-status')
     expect(inferCommandIdFromAgentText('Fees settled on Solana.')).toBe('cre-settle-fees')
     expect(inferCommandIdFromAgentText('Relay entries from Solana now.')).toBe('cre-relay-entries')
     expect(inferCommandIdFromAgentText('Unknown output without hints')).toBeNull()

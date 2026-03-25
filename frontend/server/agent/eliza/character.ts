@@ -76,7 +76,6 @@ On-chain identity:
     '@4626/plugin-keepr',
     '@4626/plugin-zora',
     '@4626/plugin-uniswap',
-    '@4626/plugin-bankr',
     '@4626/plugin-lens',
     '@4626/plugin-wallet-intel',
     '@4626/plugin-reputation',

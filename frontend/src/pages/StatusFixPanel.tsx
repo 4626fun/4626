@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { base } from 'wagmi/chains'
@@ -93,20 +93,19 @@ export default function StatusFixPanel(props: {
   const txReceipt = useWaitForTransactionReceipt({
     hash: fixHash ?? undefined,
     chainId: base.id,
+    query: {
+      onSuccess: () => {
+        setFixHash(null)
+        setFixingId(null)
+        setFixError(null)
+        onApplied()
+      },
+      onError: () => {
+        setFixHash(null)
+        setFixingId(null)
+      },
+    },
   })
-
-  useEffect(() => {
-    if (!fixHash) return
-    if (txReceipt.isSuccess) {
-      setFixHash(null)
-      setFixingId(null)
-      setFixError(null)
-      onApplied()
-    } else if (txReceipt.isError) {
-      setFixHash(null)
-      setFixingId(null)
-    }
-  }, [fixHash, onApplied, txReceipt.isError, txReceipt.isSuccess])
 
   const canFixShare = !!address && !!context.shareOwner && address.toLowerCase() === context.shareOwner.toLowerCase()
   const canFixVault = !!address && !!context.vaultOwner && address.toLowerCase() === context.vaultOwner.toLowerCase()
@@ -254,6 +253,7 @@ export default function StatusFixPanel(props: {
         context.ajnaMinBucket === undefined ||
         context.ajnaMinBucket !== context.ajnaSuggestedBucket)
     ) {
+      const suggestedBucket = context.ajnaSuggestedBucket
       actions.push({
         id: 'fix-ajna-bucket',
         title: 'Set Ajna min bucket (suggested)',
@@ -267,7 +267,7 @@ export default function StatusFixPanel(props: {
             address: context.ajnaAuth as `0x${string}`,
             abi: AJNA_AUTH_ADMIN_ABI,
             functionName: 'setMinBucketIndex',
-            args: [context.ajnaSuggestedBucket],
+            args: [suggestedBucket],
             chainId: base.id,
           })
           setFixHash(hash)

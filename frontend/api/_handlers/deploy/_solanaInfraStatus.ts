@@ -14,6 +14,14 @@ import {
   normalizeSolanaAssetMintOrigin,
   readSolanaOvaultMintCompatibilityHintsFromEnv,
 } from '../../../server/_lib/solanaOvaultCompatibility.js'
+import {
+  evaluateCanonicalBridgeTokenPolicy,
+  evaluateRemoteProvisionerLiveness,
+  probeRemoteProvisionerHealth,
+  readCanonicalBridgeTokenAllowlist,
+  readCanonicalBridgeTokenAllowlistRequired,
+  readSolanaBridgeLivenessPolicy,
+} from '../../../server/_lib/solanaBridgePolicy.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
@@ -118,6 +126,15 @@ type SolanaInfraStatusResponse = {
   remoteProvisionerPayerMinSol: string | null
   remoteProvisionerPayerHealthy: boolean | null
   remoteProvisionerPayerError: string | null
+  canonicalBridgeTokenAllowlistConfigured: boolean
+  canonicalBridgeTokenAllowlistSize: number
+  canonicalBridgeTokenAllowlistRequired: boolean
+  defaultRouteBridgeTokenAllowlisted: boolean | null
+  bridgeLivenessEnforced: boolean
+  bridgeLivenessMaxHealthAgeSeconds: number | null
+  bridgeLivenessHealthy: boolean | null
+  bridgeLivenessHealthAgeSeconds: number | null
+  bridgeLivenessBlockers: string[]
   meteoraProvisionerUrlConfigured: boolean
   meteoraProvisionerSecretConfigured: boolean
   internalRegistrationSecretConfigured: boolean
@@ -183,76 +200,6 @@ function deriveDynamicProvisioningMode(params: {
   if (params.cliExists) return 'local-cli'
   if (params.provisionerUrlConfigured) return 'remote-provisioner'
   return 'misconfigured'
-}
-
-async function probeProvisioner(url: string, secret: string): Promise<{
-  reachable: boolean
-  statusCode: number | null
-  healthOk: boolean | null
-  payerConfigured: boolean | null
-  payerPubkey: string | null
-  payerBalanceSol: string | null
-  payerMinSol: string | null
-  payerHealthy: boolean | null
-  payerError: string | null
-}> {
-  if (!url) {
-    return {
-      reachable: false,
-      statusCode: null,
-      healthOk: null,
-      payerConfigured: null,
-      payerPubkey: null,
-      payerBalanceSol: null,
-      payerMinSol: null,
-      payerHealthy: null,
-      payerError: null,
-    }
-  }
-  const ac = new AbortController()
-  const timer = setTimeout(() => ac.abort(), 4_000)
-  try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
-      signal: ac.signal,
-    })
-    const raw = await res.text().catch(() => '')
-    let payload: Record<string, unknown> | null = null
-    try {
-      payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : null
-    } catch {
-      payload = null
-    }
-    return {
-      reachable: true,
-      statusCode: res.status,
-      healthOk: typeof payload?.ok === 'boolean' ? payload.ok : null,
-      payerConfigured:
-        typeof payload?.payerConfigured === 'boolean' ? payload.payerConfigured : null,
-      payerPubkey: typeof payload?.payerPubkey === 'string' ? payload.payerPubkey : null,
-      payerBalanceSol:
-        typeof payload?.payerBalanceSol === 'string' ? payload.payerBalanceSol : null,
-      payerMinSol: typeof payload?.payerMinSol === 'string' ? payload.payerMinSol : null,
-      payerHealthy:
-        typeof payload?.payerHealthy === 'boolean' ? payload.payerHealthy : null,
-      payerError: typeof payload?.payerError === 'string' ? payload.payerError : null,
-    }
-  } catch {
-    return {
-      reachable: false,
-      statusCode: null,
-      healthOk: null,
-      payerConfigured: null,
-      payerPubkey: null,
-      payerBalanceSol: null,
-      payerMinSol: null,
-      payerHealthy: null,
-      payerError: null,
-    }
-  } finally {
-    clearTimeout(timer)
-  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -451,11 +398,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     cliExists: localCliDirExists,
     provisionerUrlConfigured: remoteProvisionerUrlConfigured,
   })
+  const remoteProvisionerHealthProbeUrl = remoteProvisionerUrlConfigured
+    ? (remoteProvisionerHealthUrlConfigured ? remoteProvisionerHealthUrl : remoteProvisionerUrl)
+    : null
   const provisionerProbe = remoteProvisionerUrlConfigured
-    ? await probeProvisioner(
-        remoteProvisionerHealthUrlConfigured ? remoteProvisionerHealthUrl : remoteProvisionerUrl,
-        remoteProvisionerSecret,
-      )
+    ? await probeRemoteProvisionerHealth({
+        url: String(remoteProvisionerHealthProbeUrl ?? ''),
+        secret: remoteProvisionerSecret,
+        timeoutMs: 4_000,
+      })
     : {
         reachable: false,
         statusCode: null as number | null,
@@ -466,6 +417,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         payerMinSol: null as string | null,
         payerHealthy: null as boolean | null,
         payerError: null as string | null,
+        reportedAtIso: null as string | null,
+        reportedAtMs: null as number | null,
       }
   const remoteProvisionerReachable = remoteProvisionerUrlConfigured ? provisionerProbe.reachable : null
   const remoteProvisionerStatusCode = remoteProvisionerUrlConfigured ? provisionerProbe.statusCode : null
@@ -476,6 +429,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const remoteProvisionerPayerMinSol = remoteProvisionerUrlConfigured ? provisionerProbe.payerMinSol : null
   const remoteProvisionerPayerHealthy = remoteProvisionerUrlConfigured ? provisionerProbe.payerHealthy : null
   const remoteProvisionerPayerError = remoteProvisionerUrlConfigured ? provisionerProbe.payerError : null
+  const canonicalBridgeTokenAllowlist = readCanonicalBridgeTokenAllowlist()
+  const canonicalBridgeTokenAllowlistRequired = readCanonicalBridgeTokenAllowlistRequired()
+  const defaultRouteBridgeTokenPolicy = defaultRouteBridgeToken
+    ? evaluateCanonicalBridgeTokenPolicy({ bridgeToken: defaultRouteBridgeToken })
+    : null
+  const defaultRouteBridgeTokenAllowlisted = defaultRouteBridgeTokenPolicy
+    ? defaultRouteBridgeTokenPolicy.allowed
+    : null
+  const bridgeLivenessPolicy = readSolanaBridgeLivenessPolicy()
+  const bridgeLivenessApplies =
+    bridgeLivenessPolicy.enforced && dynamicProvisioningMode === 'remote-provisioner'
+  const bridgeLivenessEvaluation = bridgeLivenessApplies
+    ? evaluateRemoteProvisionerLiveness({
+        enforced: true,
+        maxHealthAgeSeconds: bridgeLivenessPolicy.maxHealthAgeSeconds,
+        probe: provisionerProbe,
+      })
+    : { healthy: true, blockers: [] as string[], healthAgeSeconds: null as number | null }
 
   const blockers: string[] = []
   if (!batcherAddress) {
@@ -520,9 +491,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Default Solana mint route is not active for SOLANA_DEFAULT_BRIDGE_TOKEN (scalar=0) and dynamic provisioning is disabled.',
     )
   }
+  if (solanaEnabledOnBatcher && canonicalBridgeTokenAllowlistRequired && canonicalBridgeTokenAllowlist.size === 0) {
+    blockers.push(
+      'Canonical bridge token allowlist is required but empty. Configure SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST.',
+    )
+  }
+  if (
+    solanaEnabledOnBatcher &&
+    defaultRouteBridgeTokenPolicy &&
+    !defaultRouteBridgeTokenPolicy.allowed &&
+    defaultRouteBridgeTokenPolicy.message
+  ) {
+    blockers.push(`Canonical bridge token policy: ${defaultRouteBridgeTokenPolicy.message}`)
+  }
   if (solanaEnabledOnBatcher && !existingMintCompatible) {
     for (const blocker of mintEligibility.mintCompatibility.blockers) {
       blockers.push(`OVault compatibility: ${blocker}`)
+    }
+  }
+  if (bridgeLivenessApplies && !bridgeLivenessEvaluation.healthy) {
+    for (const livenessBlocker of bridgeLivenessEvaluation.blockers) {
+      blockers.push(`Bridge liveness: ${livenessBlocker}`)
     }
   }
 
@@ -535,6 +524,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       remoteProvisionerReachable !== false &&
       remoteProvisionerHealthOk !== false &&
       remoteProvisionerPayerHealthy !== false)
+  const bridgeLivenessReady = !bridgeLivenessApplies || bridgeLivenessEvaluation.healthy
   const meteoraProvisionerReady = !meteoraProvisionerUrlConfigured || meteoraProvisionerSecretConfigured
   const signerReady = signerConfigured && signerMatchesAdapterOwner !== false
   const ovaultEligibilityReady = !solanaEnabledOnBatcher || (existingMintCompatible && depositEligible && redeemEligible)
@@ -546,6 +536,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ovaultEligibilityReady &&
         hasRouteSource &&
         remoteProvisionerReady &&
+        bridgeLivenessReady &&
         meteoraProvisionerReady &&
         blockers.length === 0))
 
@@ -573,9 +564,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     remoteProvisionerUrlConfigured,
     remoteProvisionerSecretConfigured,
     remoteProvisionerHealthUrlConfigured,
-    remoteProvisionerHealthProbeUrl: remoteProvisionerUrlConfigured
-      ? (remoteProvisionerHealthUrlConfigured ? remoteProvisionerHealthUrl : remoteProvisionerUrl)
-      : null,
+    remoteProvisionerHealthProbeUrl,
     remoteProvisionerReachable,
     remoteProvisionerStatusCode,
     remoteProvisionerHealthOk,
@@ -585,6 +574,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     remoteProvisionerPayerMinSol,
     remoteProvisionerPayerHealthy,
     remoteProvisionerPayerError,
+    canonicalBridgeTokenAllowlistConfigured: canonicalBridgeTokenAllowlist.size > 0,
+    canonicalBridgeTokenAllowlistSize: canonicalBridgeTokenAllowlist.size,
+    canonicalBridgeTokenAllowlistRequired,
+    defaultRouteBridgeTokenAllowlisted,
+    bridgeLivenessEnforced: bridgeLivenessPolicy.enforced,
+    bridgeLivenessMaxHealthAgeSeconds: bridgeLivenessApplies
+      ? bridgeLivenessPolicy.maxHealthAgeSeconds
+      : null,
+    bridgeLivenessHealthy: bridgeLivenessApplies ? bridgeLivenessEvaluation.healthy : null,
+    bridgeLivenessHealthAgeSeconds: bridgeLivenessApplies
+      ? bridgeLivenessEvaluation.healthAgeSeconds
+      : null,
+    bridgeLivenessBlockers: bridgeLivenessApplies ? bridgeLivenessEvaluation.blockers : [],
     meteoraProvisionerUrlConfigured,
     meteoraProvisionerSecretConfigured,
     internalRegistrationSecretConfigured,

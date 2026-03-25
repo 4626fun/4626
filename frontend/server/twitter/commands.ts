@@ -8,12 +8,16 @@ declare const process: { env: Record<string, string | undefined> }
 
 export type TwitterRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
+type TwitterCommandFailure = { ok: false; response: string; action?: any }
+
 export type TwitterCommandResult =
   | { ok: true; response: string; action?: any }
-  | { ok: false; response: string }
+  | TwitterCommandFailure
 
 const TWITTER_POST_COOLDOWN_MS = 60_000
+const TWITTER_POST_PREVIEW_TTL_SECONDS = 90
 const tweetRateLimits = new Map<string, number>()
+const DASH_PREFIX_RE = /^[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]+/
 
 function canPostTweet(groupId: string): boolean {
   const lastPost = tweetRateLimits.get(groupId)
@@ -54,6 +58,49 @@ function parseTwitterApiError(body: string): string | null {
   }
 }
 
+function normalizeTwitterFlagToken(value: string): string {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+
+  const prefix = raw.match(DASH_PREFIX_RE)?.[0] ?? ''
+  if (!prefix) return raw
+
+  const normalizedPrefix = prefix === '-' ? '-' : '--'
+  return `${normalizedPrefix}${raw.slice(prefix.length)}`
+}
+
+function isConfirmFlag(value: string): boolean {
+  return normalizeTwitterFlagToken(value).toLowerCase() === '--confirm'
+}
+
+function canWriteWithAccessLevel(accessLevel: string | null): boolean | null {
+  if (!accessLevel) return null
+  return /\bwrite\b/i.test(accessLevel)
+}
+
+function formatWritePermissionGuidance(params?: {
+  accessLevel?: string | null
+  screenName?: string | null
+}): string {
+  const lines = [
+    'Twitter posting is authenticated, but this X app does not have OAuth 1.0a write permission.',
+  ]
+
+  if (params?.screenName) {
+    lines.push(`- account: @${params.screenName}`)
+  }
+  if (params?.accessLevel) {
+    lines.push(`- oauth1 access-level: ${params.accessLevel}`)
+  }
+
+  lines.push('Set the app permissions to "Read and write" (or higher), then regenerate or re-authorize the access token and secret.')
+  return lines.join('\n')
+}
+
+function isOauth1WritePermissionError(detail: string | null): boolean {
+  return typeof detail === 'string' && /appropriate oauth1 app permissions/i.test(detail)
+}
+
 function formatHelp(): string {
   return [
     'Twitter/X commands',
@@ -69,11 +116,29 @@ function formatHelp(): string {
   ].join('\n')
 }
 
+function formatTwitterPostPreview(tweetText: string): string {
+  return [
+    'Twitter/X post preview',
+    '',
+    tweetText,
+    '',
+    `Tap Post below in Telegram, or rerun with \`/x post ${tweetText} --confirm\`.`,
+    `Preview expires in ${TWITTER_POST_PREVIEW_TTL_SECONDS}s.`,
+  ].join('\n')
+}
+
 type TwitterOauthConfig = {
   apiKey: string
   apiSecret: string
   accessToken: string
   accessSecret: string
+}
+
+type TwitterVerifiedAccount = {
+  screenName: string | null
+  userId: string | null
+  accessLevel: string | null
+  canWrite: boolean | null
 }
 
 function readTwitterOauthConfig(): { ok: true; config: TwitterOauthConfig } | { ok: false; response: string } {
@@ -163,7 +228,7 @@ function oauth1AuthorizationHeader(params: {
   return `OAuth ${authValue}`
 }
 
-async function verifyTwitterConfig(config: TwitterOauthConfig): Promise<TwitterCommandResult> {
+async function verifyTwitterAccount(config: TwitterOauthConfig): Promise<{ ok: true; account: TwitterVerifiedAccount } | TwitterCommandFailure> {
   const url = 'https://api.twitter.com/1.1/account/verify_credentials.json?include_entities=false&skip_status=true'
   try {
     const authHeader = oauth1AuthorizationHeader({
@@ -192,20 +257,51 @@ async function verifyTwitterConfig(config: TwitterOauthConfig): Promise<TwitterC
     const data = (await response.json()) as any
     const screenName = typeof data?.screen_name === 'string' ? data.screen_name : null
     const userId = typeof data?.id_str === 'string' ? data.id_str : typeof data?.id === 'number' ? String(data.id) : null
+    const accessLevel =
+      typeof response.headers?.get === 'function' ? response.headers.get('x-access-level')?.trim() || null : null
 
     return {
       ok: true,
-      response: [
-        'Twitter/X status',
-        '',
-        '- oauth1 user-context: ok',
-        `- account: ${screenName ? `@${screenName}` : 'unknown'}`,
-        `- userId: ${userId ?? 'unknown'}`,
-      ].join('\n'),
+      account: {
+        screenName,
+        userId,
+        accessLevel,
+        canWrite: canWriteWithAccessLevel(accessLevel),
+      },
     }
   } catch (error) {
     logger.error('[x/status] verify_credentials error', error)
     return { ok: false, response: 'Twitter config check failed due to a network/runtime error.' }
+  }
+}
+
+async function verifyTwitterConfig(config: TwitterOauthConfig): Promise<TwitterCommandResult> {
+  const verified = await verifyTwitterAccount(config)
+  if (!verified.ok) return verified
+
+  const { screenName, userId, accessLevel, canWrite } = verified.account
+  const lines = [
+    'Twitter/X status',
+    '',
+    '- oauth1 user-context: ok',
+    `- account: ${screenName ? `@${screenName}` : 'unknown'}`,
+    `- userId: ${userId ?? 'unknown'}`,
+    `- oauth1 access-level: ${accessLevel ?? 'unknown'}`,
+  ]
+
+  if (canWrite === false) {
+    lines.push('- post capability: blocked (app permissions are read-only)')
+    lines.push('', formatWritePermissionGuidance({ accessLevel, screenName }))
+    return {
+      ok: false,
+      response: lines.join('\n'),
+    }
+  }
+
+  lines.push(`- post capability: ${canWrite === true ? 'ok' : 'unknown'}`)
+  return {
+    ok: true,
+    response: lines.join('\n'),
   }
 }
 
@@ -229,6 +325,18 @@ async function postTweet(params: {
     return { ok: false, response: 'Tweet too long. Max 280 characters.' }
   }
 
+  const verified = await verifyTwitterAccount(cfg.config)
+  if (!verified.ok) return verified
+  if (verified.account.canWrite === false) {
+    return {
+      ok: false,
+      response: formatWritePermissionGuidance({
+        accessLevel: verified.account.accessLevel,
+        screenName: verified.account.screenName,
+      }),
+    }
+  }
+
   const url = 'https://api.twitter.com/2/tweets'
   try {
     const authHeader = oauth1AuthorizationHeader({
@@ -250,6 +358,15 @@ async function postTweet(params: {
       const errorBody = await response.text()
       const detail = parseTwitterApiError(errorBody)
       logger.error('[x/post] tweet failed', { status: response.status, detail })
+      if (response.status === 403 && isOauth1WritePermissionError(detail)) {
+        return {
+          ok: false,
+          response: formatWritePermissionGuidance({
+            accessLevel: verified.account.accessLevel,
+            screenName: verified.account.screenName,
+          }),
+        }
+      }
       return {
         ok: false,
         response: detail ? `Tweet failed (${response.status}): ${detail}` : `Tweet failed (${response.status}).`,
@@ -334,15 +451,20 @@ export async function handleTwitterCommand(params: {
         return { ok: false, response: 'Denied: ADMIN or OWNER only.' }
       }
 
-      const hasConfirm = args.some((arg) => arg.toLowerCase() === '--confirm')
-      const tweetText = args.filter((arg) => arg.toLowerCase() !== '--confirm').join(' ').trim()
+      const hasConfirm = args.some((arg) => isConfirmFlag(arg))
+      const tweetText = args.filter((arg) => !isConfirmFlag(arg)).join(' ').trim()
       if (!tweetText) {
         return { ok: false, response: 'Usage: /x post <message> --confirm' }
       }
       if (!hasConfirm) {
         return {
           ok: false,
-          response: `Confirmation required. Re-run with:\n/x post ${tweetText} --confirm`,
+          response: formatTwitterPostPreview(tweetText),
+          action: {
+            action: 'twitter.preview_post',
+            tweetText,
+            ttlSeconds: TWITTER_POST_PREVIEW_TTL_SECONDS,
+          },
         }
       }
 

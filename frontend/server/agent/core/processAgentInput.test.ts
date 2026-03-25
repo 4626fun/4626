@@ -36,7 +36,7 @@ describe('processTelegramAgentInput', () => {
     vi.clearAllMocks()
   })
 
-  it('routes telegram twitter commands through shared role resolution', async () => {
+  it('routes telegram twitter post commands through shared role resolution and strips typed confirm flags by default', async () => {
     resolveVaultAccessRoleByGroupIdMock.mockResolvedValue('OWNER')
     handleTwitterCommandMock.mockResolvedValue({ ok: true, response: 'tweet queued' })
 
@@ -58,10 +58,35 @@ describe('processTelegramAgentInput', () => {
     expect(handleTwitterCommandMock).toHaveBeenCalledWith({
       groupId: 'telegram:-1001',
       senderWallet: '0x1111111111111111111111111111111111111111',
-      text: '/x post hello --confirm',
+      text: '/x post hello',
       role: 'OWNER',
     })
     expect(result).toEqual({ responseText: 'tweet queued' })
+  })
+
+  it('allows direct twitter confirm execution only when explicitly enabled', async () => {
+    resolveVaultAccessRoleByGroupIdMock.mockResolvedValue('OWNER')
+    handleTwitterCommandMock.mockResolvedValue({ ok: true, response: 'tweet posted' })
+
+    const result = await processTelegramAgentInput({
+      text: '/x post hello --confirm',
+      chatId: '-1001',
+      userId: '123',
+      groupId: 'telegram:-1001',
+      senderWallet: '0x1111111111111111111111111111111111111111',
+      senderWalletSource: 'user_map',
+      isAdmin: false,
+      isPrivateChat: false,
+      twitterConfirmMode: 'allow_direct_confirm',
+    })
+
+    expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+      groupId: 'telegram:-1001',
+      senderWallet: '0x1111111111111111111111111111111111111111',
+      text: '/x post hello --confirm',
+      role: 'OWNER',
+    })
+    expect(result).toEqual({ responseText: 'tweet posted' })
   })
 
   it('blocks sensitive private-dm telegram commands', async () => {
@@ -135,6 +160,30 @@ describe('processTelegramAgentInput', () => {
     expect(result).toEqual({ responseText: 'admin tweet queued' })
   })
 
+  it('passes twitter action metadata through telegram processing', async () => {
+    handleTwitterCommandMock.mockResolvedValue({
+      ok: false,
+      response: 'preview ready',
+      action: { action: 'twitter.preview_post', tweetText: 'gm' },
+    })
+
+    const result = await processTelegramAgentInput({
+      text: '/x post gm',
+      chatId: '-1001',
+      userId: '123',
+      groupId: 'telegram:-1001',
+      senderWallet: '0x1111111111111111111111111111111111111111',
+      senderWalletSource: 'user_map',
+      isAdmin: true,
+      isPrivateChat: false,
+    })
+
+    expect(result).toEqual({
+      responseText: 'preview ready',
+      action: { action: 'twitter.preview_post', tweetText: 'gm' },
+    })
+  })
+
   it('falls back to MEMBER for telegram twitter commands without a mapped wallet', async () => {
     handleTwitterCommandMock.mockResolvedValue({ ok: true, response: 'member tweet queued' })
 
@@ -150,7 +199,30 @@ describe('processTelegramAgentInput', () => {
     })
 
     expect(resolveVaultAccessRoleByGroupIdMock).not.toHaveBeenCalled()
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith(expect.objectContaining({ role: 'MEMBER' }))
+    expect(handleTwitterCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'MEMBER',
+      text: '/tweet hello',
+    }))
+  })
+
+  it('strips repeated unicode confirm flags from telegram twitter post commands', async () => {
+    handleTwitterCommandMock.mockResolvedValue({ ok: false, response: 'preview ready' })
+
+    await processTelegramAgentInput({
+      text: '/x post gm —confirm --confirm —confirm',
+      chatId: '-1001',
+      userId: '123',
+      groupId: 'telegram:-1001',
+      senderWallet: '0x1111111111111111111111111111111111111111',
+      senderWalletSource: 'user_map',
+      isAdmin: true,
+      isPrivateChat: false,
+    })
+
+    expect(handleTwitterCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+      text: '/x post gm',
+      role: 'ADMIN',
+    }))
   })
 })
 

@@ -9,8 +9,6 @@ import {
   setNoStore,
 } from '../../../../server/auth/_shared.js'
 import { getKeeprVaultByGroupId } from '../../../../server/_lib/keeprRegistry.js'
-import { isBankrWriteCommandText } from '../../../../server/bankr/agentSkills.js'
-import { probeBankrCanonicalWalletMatch } from '../../../../server/bankr/probe.js'
 import { isCreWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
 
 type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
@@ -58,9 +56,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const senderWallet = String(body?.senderWallet ?? '').trim().toLowerCase()
   const command = String(body?.command ?? '').trim()
 
-  const isBankrWrite = isBankrWriteCommandText(command)
   const isCreWrite = isCreWriteCommandText(command)
-  if (!isBankrWrite && !isCreWrite) {
+  if (!isCreWrite) {
     return res.status(200).json(ok({
       allowed: true,
       reason: 'read_or_non_mutating_command',
@@ -139,29 +136,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         guardCategory: 'role_denied',
         role,
         walletMatch: null,
-      }))
-    }
-
-    if (isBankrWrite) {
-      const probe = await probeBankrCanonicalWalletMatch({
-        canonicalWallet: owner || null,
-        signerWallet: senderWallet,
-      })
-      if (!probe.walletMatch) {
-        return res.status(200).json(ok({
-          allowed: false,
-          reason: `bankr_wallet_mismatch:${probe.reason}`,
-          guardCategory: 'wallet_mismatch',
-          role,
-          walletMatch: false,
-        }))
-      }
-      return res.status(200).json(ok({
-        allowed: true,
-        reason: 'ok',
-        guardCategory: 'none',
-        role,
-        walletMatch: true,
       }))
     }
 

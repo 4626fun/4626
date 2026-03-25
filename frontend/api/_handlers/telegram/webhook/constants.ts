@@ -1,69 +1,22 @@
+import {
+  TELEGRAM_COMMAND_HEADS as SHARED_TELEGRAM_COMMAND_HEADS,
+  TELEGRAM_COMMAND_HEADS_PATTERN as SHARED_TELEGRAM_COMMAND_HEADS_PATTERN,
+  TELEGRAM_NATIVE_COMMAND_HEADS,
+  buildTelegramBotCommands,
+  type TelegramBotMenuCommand,
+} from '../../../../server/commands/registry.js'
+
 import type { DeployCurrencyInput } from './types.js'
 
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 
-export const TELEGRAM_NATIVE_COMMANDS = new Set([
-  'start',
-  'id',
-  'getid',
-  'get_id',
-  'link',
-  'linked',
-  'unlink',
-  'zora',
-  'vaultdeploy',
-  'deploy',
-  'join',
-  'rooms',
-  'eligibility',
-  'wallet',
-  'vaults',
-  'list',
-  'auctions',
-  'mybids',
-  'signals',
-  'buy',
-  'sell',
-  'bid',
-  'tip',
-])
+export { type TelegramBotMenuCommand }
 
-export const TELEGRAM_COMMAND_HEADS = [
-  'start',
-  'id',
-  'getid',
-  'get_id',
-  'help',
-  'keepr',
-  'link',
-  'linked',
-  'unlink',
-  'zora',
-  'vaultdeploy',
-  'deploy',
-  'join',
-  'rooms',
-  'eligibility',
-  'wallet',
-  'vaults',
-  'list',
-  'auctions',
-  'mybids',
-  'signals',
-  'buy',
-  'sell',
-  'bid',
-  'tip',
-  'inline',
-  'shortcuts',
-  'x',
-  'tweet',
-  'ai',
-  'mkt',
-  'coin',
-] as const
+export const TELEGRAM_NATIVE_COMMANDS = new Set(TELEGRAM_NATIVE_COMMAND_HEADS)
 
-export const TELEGRAM_COMMAND_HEADS_PATTERN = TELEGRAM_COMMAND_HEADS.join('|')
+export const TELEGRAM_COMMAND_HEADS = SHARED_TELEGRAM_COMMAND_HEADS
+
+export const TELEGRAM_COMMAND_HEADS_PATTERN = SHARED_TELEGRAM_COMMAND_HEADS_PATTERN
 
 export const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string }> = [
   {
@@ -96,46 +49,11 @@ export const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string
   },
 ]
 
-export type TelegramBotMenuCommand = {
-  command: string
-  description: string
-}
+export const TELEGRAM_PRIVATE_BOT_COMMANDS: TelegramBotMenuCommand[] = buildTelegramBotCommands('private')
 
-export const TELEGRAM_PRIVATE_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: connect, trade, wallet' },
-  { command: 'id', description: 'Pick a user, group, or channel ID' },
-  { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
-  { command: 'linked', description: 'Check wallet link status' },
-  { command: 'vaults', description: 'Browse vaults' },
-  { command: 'buy', description: 'Guided buy flow' },
-  { command: 'sell', description: 'Guided sell flow' },
-  { command: 'bid', description: 'Guided bid flow' },
-  { command: 'wallet', description: 'Your wallet, positions, and actions' },
-  { command: 'signals', description: 'Recent trade feed' },
-]
+export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = buildTelegramBotCommands('group')
 
-export const TELEGRAM_GROUP_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: connect and trade' },
-  { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
-  { command: 'vaults', description: 'Vaults in this chat' },
-  { command: 'buy', description: 'Guided buy flow' },
-  { command: 'sell', description: 'Guided sell flow' },
-  { command: 'bid', description: 'Guided bid flow' },
-  { command: 'signals', description: 'Recent trade feed' },
-]
-
-export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = [
-  { command: 'help', description: 'Start here: admin quick actions' },
-  { command: 'id', description: 'Pick a user, group, or channel ID' },
-  { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
-  { command: 'vaults', description: 'Vaults in this chat' },
-  { command: 'buy', description: 'Guided buy flow' },
-  { command: 'sell', description: 'Guided sell flow' },
-  { command: 'bid', description: 'Guided bid flow' },
-  { command: 'wallet', description: 'Linked wallet activity' },
-  { command: 'signals', description: 'Recent trade feed' },
-  { command: 'deploy', description: 'Deploy a vault' },
-]
+export const TELEGRAM_ADMIN_BOT_COMMANDS: TelegramBotMenuCommand[] = buildTelegramBotCommands('admin')
 
 export const DEPLOY_CURRENCY_VALUES: DeployCurrencyInput[] = ['ETH', 'ZORA', 'CREATOR_COIN', 'CONTENT_COIN']
 
