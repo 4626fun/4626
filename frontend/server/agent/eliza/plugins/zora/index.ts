@@ -17,6 +17,7 @@ import type {
 } from '@elizaos/core'
 
 import { handleCoinCommand } from '../../../../zora/commands.js'
+import { matchesCommandFamily } from '../../../../commands/registry.js'
 import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 
@@ -25,8 +26,7 @@ import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 // ---------------------------------------------------------------------------
 
 function isCoinCommand(text: string): boolean {
-  const t = text.trim().toLowerCase()
-  return t.startsWith('/coin') || t.startsWith('coin ')
+  return matchesCommandFamily(text, 'coin')
 }
 
 // ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ import type {
 import { executeDeterministicCommand } from '../../../core/executeDeterministicCommand.js'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 import { assertTeeAttestationOrThrow } from '../../../../_lib/teeAttestationGate.js'
+import { matchesAnyCommandFamily, matchesCommandFamily } from '../../../../commands/registry.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'
 
 // ---------------------------------------------------------------------------
@@ -36,29 +37,7 @@ import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'
  * check in the production agent runtime.
  */
 function isKeeprCommand(text: string): boolean {
-  const t = text.trim().toLowerCase()
-  return (
-    t.startsWith('/keepr') ||
-    t.startsWith('keepr') ||
-    t.startsWith('/whois') ||
-    t === 'whois' ||
-    t.startsWith('whois ') ||
-    t.startsWith('/mkt') ||
-    t.startsWith('mkt ') ||
-    t === 'mkt' ||
-    t.startsWith('/send') ||
-    t.startsWith('send ') ||
-    t.startsWith('/x') ||
-    t === 'x' ||
-    t.startsWith('x ') ||
-    t.startsWith('/tweet') ||
-    t === 'tweet' ||
-    t.startsWith('tweet ') ||
-    t.startsWith('/coin') ||
-    t.startsWith('coin ') ||
-    t === '/help' ||
-    t === 'help'
-  )
+  return matchesAnyCommandFamily(text, ['keepr', 'whois', 'market', 'send', 'twitter', 'coin', 'help'])
 }
 
 function isKeeprStatusCommand(text: string): boolean {
@@ -68,8 +47,8 @@ function isKeeprStatusCommand(text: string): boolean {
 
 function isPrivilegedKeeprCommand(text: string): boolean {
   const t = text.trim().toLowerCase()
-  if (t.startsWith('/send') || t.startsWith('send ')) return true
-  if (t.startsWith('/coin') || t.startsWith('coin ')) return true
+  if (matchesCommandFamily(text, 'send')) return true
+  if (matchesCommandFamily(text, 'coin')) return true
   if (t.startsWith('/cre') || t.startsWith('cre ')) {
     return (
       t.includes(' tend') ||

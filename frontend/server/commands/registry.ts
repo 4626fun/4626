@@ -1,0 +1,260 @@
+export type CommandScope = 'private' | 'group' | 'admin'
+
+export type TelegramBotMenuCommand = {
+  command: string
+  description: string
+}
+
+type CommandFamily =
+  | 'start'
+  | 'help'
+  | 'keepr'
+  | 'id'
+  | 'whois'
+  | 'link'
+  | 'linked'
+  | 'unlink'
+  | 'zora'
+  | 'deploy'
+  | 'vaultdeploy'
+  | 'join'
+  | 'rooms'
+  | 'eligibility'
+  | 'wallet'
+  | 'vaults'
+  | 'list'
+  | 'auctions'
+  | 'mybids'
+  | 'signals'
+  | 'buy'
+  | 'sell'
+  | 'bid'
+  | 'tip'
+  | 'inline'
+  | 'twitter'
+  | 'ai'
+  | 'market'
+  | 'coin'
+  | 'send'
+
+type CommandDefinition = {
+  head: string
+  family: CommandFamily
+  aliases?: readonly string[]
+  telegramNative?: boolean
+  botMenu?: Partial<Record<CommandScope, string>>
+}
+
+const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
+  { head: 'start', family: 'start', telegramNative: true },
+  {
+    head: 'id',
+    family: 'id',
+    aliases: ['getid', 'get_id'],
+    telegramNative: true,
+    botMenu: {
+      private: 'Pick a user, group, or channel ID',
+      admin: 'Pick a user, group, or channel ID',
+    },
+  },
+  {
+    head: 'help',
+    family: 'help',
+    botMenu: {
+      private: 'Start here: connect, trade, wallet',
+      group: 'Start here: connect and trade',
+      admin: 'Start here: admin quick actions',
+    },
+  },
+  { head: 'keepr', family: 'keepr' },
+  { head: 'whois', family: 'whois' },
+  {
+    head: 'link',
+    family: 'link',
+    telegramNative: true,
+    botMenu: {
+      private: 'Connect Telegram to 4626 Privy + Zora CSW',
+      group: 'Connect Telegram to 4626 Privy + Zora CSW',
+      admin: 'Connect Telegram to 4626 Privy + Zora CSW',
+    },
+  },
+  {
+    head: 'linked',
+    family: 'linked',
+    telegramNative: true,
+    botMenu: {
+      private: 'Check wallet link status',
+    },
+  },
+  { head: 'unlink', family: 'unlink', telegramNative: true },
+  { head: 'zora', family: 'zora', telegramNative: true },
+  {
+    head: 'vaultdeploy',
+    family: 'vaultdeploy',
+    telegramNative: true,
+  },
+  {
+    head: 'deploy',
+    family: 'deploy',
+    telegramNative: true,
+    botMenu: {
+      admin: 'Deploy a vault',
+    },
+  },
+  { head: 'join', family: 'join', telegramNative: true },
+  { head: 'rooms', family: 'rooms', telegramNative: true },
+  { head: 'eligibility', family: 'eligibility', telegramNative: true },
+  {
+    head: 'wallet',
+    family: 'wallet',
+    telegramNative: true,
+    botMenu: {
+      private: 'Your wallet, positions, and actions',
+      admin: 'Linked wallet activity',
+    },
+  },
+  {
+    head: 'vaults',
+    family: 'vaults',
+    telegramNative: true,
+    botMenu: {
+      private: 'Browse vaults',
+      group: 'Vaults in this chat',
+      admin: 'Vaults in this chat',
+    },
+  },
+  { head: 'list', family: 'list', telegramNative: true },
+  { head: 'auctions', family: 'auctions', telegramNative: true },
+  { head: 'mybids', family: 'mybids', telegramNative: true },
+  {
+    head: 'signals',
+    family: 'signals',
+    telegramNative: true,
+    botMenu: {
+      private: 'Recent trade feed',
+      group: 'Recent trade feed',
+      admin: 'Recent trade feed',
+    },
+  },
+  {
+    head: 'buy',
+    family: 'buy',
+    telegramNative: true,
+    botMenu: {
+      private: 'Guided buy flow',
+      group: 'Guided buy flow',
+      admin: 'Guided buy flow',
+    },
+  },
+  {
+    head: 'sell',
+    family: 'sell',
+    telegramNative: true,
+    botMenu: {
+      private: 'Guided sell flow',
+      group: 'Guided sell flow',
+      admin: 'Guided sell flow',
+    },
+  },
+  {
+    head: 'bid',
+    family: 'bid',
+    telegramNative: true,
+    botMenu: {
+      private: 'Guided bid flow',
+      group: 'Guided bid flow',
+      admin: 'Guided bid flow',
+    },
+  },
+  { head: 'tip', family: 'tip', telegramNative: true },
+  { head: 'inline', family: 'inline', aliases: ['shortcuts'] },
+  { head: 'x', family: 'twitter', aliases: ['tweet'] },
+  { head: 'ai', family: 'ai' },
+  { head: 'mkt', family: 'market' },
+  { head: 'coin', family: 'coin' },
+  { head: 'send', family: 'send' },
+] as const
+
+const BOT_MENU_ORDER: Record<CommandScope, readonly string[]> = {
+  private: ['help', 'id', 'link', 'linked', 'vaults', 'buy', 'sell', 'bid', 'wallet', 'signals'],
+  group: ['help', 'link', 'vaults', 'buy', 'sell', 'bid', 'signals'],
+  admin: ['help', 'id', 'link', 'vaults', 'buy', 'sell', 'bid', 'wallet', 'signals', 'deploy'],
+} as const
+
+type ResolvedCommandDefinition = CommandDefinition & {
+  token: string
+  isAlias: boolean
+}
+
+function normalizeCommandToken(rawText: string): string {
+  const token = String(rawText ?? '').trim().split(/\s+/g)[0] ?? ''
+  return token.replace(/^\//, '').replace(/@[\w_]+$/, '').toLowerCase()
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+const resolvedCommandDefinitions: ResolvedCommandDefinition[] = COMMAND_DEFINITIONS.flatMap((definition) => [
+  {
+    ...definition,
+    token: definition.head,
+    isAlias: false,
+  },
+  ...((definition.aliases ?? []).map((alias) => ({
+    ...definition,
+    token: alias,
+    isAlias: true,
+  }))),
+])
+
+const commandDefinitionByToken = new Map<string, ResolvedCommandDefinition>(
+  resolvedCommandDefinitions.map((definition) => [definition.token, definition]),
+)
+
+const telegramNativeHeads = resolvedCommandDefinitions
+  .filter((definition) => definition.telegramNative)
+  .map((definition) => definition.token)
+
+const telegramCommandHeads = resolvedCommandDefinitions.map((definition) => definition.token)
+
+export type { CommandFamily }
+
+export function getCommandHead(rawText: string): string {
+  return normalizeCommandToken(rawText)
+}
+
+export function resolveCommandDefinition(rawText: string): ResolvedCommandDefinition | null {
+  const token = normalizeCommandToken(rawText)
+  return commandDefinitionByToken.get(token) ?? null
+}
+
+export function getCommandFamily(rawText: string): CommandFamily | null {
+  return resolveCommandDefinition(rawText)?.family ?? null
+}
+
+export function matchesCommandFamily(rawText: string, family: CommandFamily): boolean {
+  return getCommandFamily(rawText) === family
+}
+
+export function matchesAnyCommandFamily(rawText: string, families: readonly CommandFamily[]): boolean {
+  const family = getCommandFamily(rawText)
+  return family ? families.includes(family) : false
+}
+
+export function isKnownTelegramCommandHead(head: string): boolean {
+  return telegramCommandHeads.includes(head)
+}
+
+export function buildTelegramBotCommands(scope: CommandScope): TelegramBotMenuCommand[] {
+  return BOT_MENU_ORDER[scope].flatMap((head) => {
+    const definition = COMMAND_DEFINITIONS.find((candidate) => candidate.head === head)
+    const description = definition?.botMenu?.[scope]
+    if (!definition || !description) return []
+    return [{ command: definition.head, description }]
+  })
+}
+
+export const TELEGRAM_NATIVE_COMMAND_HEADS = telegramNativeHeads
+export const TELEGRAM_COMMAND_HEADS = telegramCommandHeads
+export const TELEGRAM_COMMAND_HEADS_PATTERN = TELEGRAM_COMMAND_HEADS.map((head) => escapeRegex(head)).join('|')

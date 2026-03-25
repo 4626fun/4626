@@ -19,6 +19,7 @@
     "server/auth/**/*.ts",
     "server/debank/**/*.ts",
     "server/dexscreener/**/*.ts",
+    "server/commands/**/*.ts",
     "server/twitter/**/*.ts",
     "server/zora/**/*.ts",
     "server/uniswap/**/*.ts",

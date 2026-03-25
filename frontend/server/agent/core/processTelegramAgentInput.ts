@@ -1,4 +1,5 @@
 import { handleTwitterCommand, type TwitterRole } from '../../twitter/commands.js'
+import { matchesCommandFamily } from '../../commands/registry.js'
 import { executeDeterministicCommand } from './executeDeterministicCommand.js'
 import { resolveVaultAccessRoleByGroupId, type VaultAccessRole } from './resolveVaultRole.js'
 import type { TelegramSenderWalletSource } from './resolveIdentityContext.js'
@@ -22,11 +23,6 @@ export type ProcessTelegramAgentInputParams = {
   isPrivateChat: boolean
   twitterConfirmMode?: 'preview_only' | 'allow_direct_confirm'
   emptyResponseFallback?: string
-}
-
-function isTwitterCommand(rawText: string): boolean {
-  const lower = String(rawText ?? '').trim().toLowerCase()
-  return /^(\/x|x)(\s|$)/.test(lower) || /^(\/tweet|tweet)(\s|$)/.test(lower)
 }
 
 function isSensitiveDmCommand(text: string): boolean {
@@ -77,7 +73,7 @@ async function resolveTwitterRole(params: {
 export async function processTelegramAgentInput(
   params: ProcessTelegramAgentInputParams,
 ): Promise<TelegramAgentInputResult> {
-  if (isTwitterCommand(params.text)) {
+  if (matchesCommandFamily(params.text, 'twitter')) {
     const twitterConfirmMode = params.twitterConfirmMode ?? 'preview_only'
     const role = await resolveTwitterRole({
       isAdmin: params.isAdmin,

@@ -158,6 +158,15 @@ import {
 import { normalizeCallbackQuery } from './webhook/updates/callbackQuery.js'
 import { extractSharedSelection, extractUpdateMessage as extractUpdateMessageShared, normalizeMessageContext } from './webhook/updates/message.js'
 import { handleChosenInlineResultUpdate } from './webhook/updates/chosenInlineResult.js'
+import {
+  appendCommandMicroHints as appendCommandMicroHintsShared,
+  getCommandHead as getCommandHeadShared,
+  isHelpCategoryCommand as isHelpCategoryCommandShared,
+  isHelpCommand as isHelpCommandShared,
+  isInlineLauncherCommand as isInlineLauncherCommandShared,
+  isLikelyCommandText as isLikelyCommandTextShared,
+  wrapCommandListingsWithBackticks as wrapCommandListingsWithBackticksShared,
+} from './webhook/utils.js'
 import { handleInlineQueryUpdate } from './webhook/updates/inlineQuery.js'
 import { handlePreCheckoutUpdate } from './webhook/updates/preCheckout.js'
 import { handleSuccessfulPaymentUpdate } from './webhook/updates/successfulPayment.js'
@@ -462,75 +471,16 @@ function splitTelegramMessage(text: string, maxLen = 3500): string[] {
 }
 
 function isInlineLauncherCommand(rawText: string): boolean {
-  const lower = asTrimmed(rawText).toLowerCase()
-  return /^(\/inline|inline|\/shortcuts|shortcuts)(\s|$)/.test(lower)
+  return isInlineLauncherCommandShared(rawText)
 }
 
 function isHelpCommand(rawText: string): boolean {
-  const text = asTrimmed(rawText)
-  return /^\/?help(?:\s+\S+)?\s*$/i.test(text) || /^\/?keepr\s+help(?:\s+\S+)?\s*$/i.test(text)
+  return isHelpCommandShared(rawText)
 }
 
 function isHelpCategoryCommand(rawText: string): boolean {
-  const text = asTrimmed(rawText)
-  return /^\/?help\s+\S+\s*$/i.test(text) || /^\/?keepr\s+help\s+\S+\s*$/i.test(text)
+  return isHelpCategoryCommandShared(rawText)
 }
-
-const TELEGRAM_NATIVE_COMMANDS = new Set([
-  'start',
-  'link',
-  'linked',
-  'unlink',
-  'zora',
-  'deploy',
-  'vaultdeploy',
-  'join',
-  'rooms',
-  'eligibility',
-  'wallet',
-  'vaults',
-  'list',
-  'auctions',
-  'mybids',
-  'signals',
-  'buy',
-  'sell',
-  'bid',
-  'tip',
-])
-
-const TELEGRAM_COMMAND_HEADS = [
-  'start',
-  'help',
-  'keepr',
-  'link',
-  'linked',
-  'unlink',
-  'zora',
-  'deploy',
-  'vaultdeploy',
-  'join',
-  'rooms',
-  'eligibility',
-  'wallet',
-  'vaults',
-  'list',
-  'auctions',
-  'mybids',
-  'signals',
-  'buy',
-  'sell',
-  'bid',
-  'tip',
-  'inline',
-  'shortcuts',
-  'x',
-  'tweet',
-  'ai',
-  'mkt',
-  'coin',
-] as const
-const TELEGRAM_COMMAND_HEADS_PATTERN = TELEGRAM_COMMAND_HEADS.join('|')
 
 type TelegramCommandResponse = {
   text: string
@@ -550,128 +500,11 @@ type TelegramCommandResponse = {
 }
 
 function wrapCommandListingsWithBackticks(text: string): string {
-  const splitCommandSuffix = (command: string): { commandPart: string; suffix: string } => {
-    const separators = [' — ', ' – ', ' - ', ' | ', ' -> ']
-    let hitIndex = -1
-    for (const separator of separators) {
-      const idx = command.indexOf(separator)
-      if (idx > 0 && (hitIndex < 0 || idx < hitIndex)) {
-        hitIndex = idx
-      }
-    }
-    if (hitIndex <= 0) return { commandPart: command, suffix: '' }
-    return {
-      commandPart: command.slice(0, hitIndex).trimEnd(),
-      suffix: command.slice(hitIndex),
-    }
-  }
-
-  const formatCommandForBackticks = (rawCommand: string): string => {
-    const command = asTrimmed(rawCommand)
-    if (!command || command.includes('`')) return command
-    const { commandPart, suffix } = splitCommandSuffix(command)
-    const tokens = commandPart.split(/\s+/g).filter(Boolean)
-    if (tokens.length === 0) return command
-
-    const hasPlaceholder = tokens.some((token) => /^<[^>]+>$/.test(token) || /^\$<[^>]+>$/.test(token))
-    if (!hasPlaceholder) return `\`${commandPart}\`${suffix}`
-
-    const head: string[] = []
-    for (const token of tokens) {
-      if (head.length === 0) {
-        head.push(token)
-        continue
-      }
-      if (/^<[^>]+>$/.test(token) || /^\$<[^>]+>$/.test(token)) break
-      if (/^--/.test(token)) break
-      if (/^0x[a-fA-F0-9]{6,}$/.test(token)) break
-      if (/^\d+(?:\.\d+)?$/.test(token)) break
-      if (/^\$\d+(?:\.\d+)?$/.test(token)) break
-      if (head.length >= 2) break
-      head.push(token)
-    }
-
-    const remainder = tokens.slice(head.length).join(' ')
-    if (head.length === 0) return `\`${commandPart}\`${suffix}`
-    const formatted = remainder ? `\`${head.join(' ')}\` ${remainder}` : `\`${head.join(' ')}\``
-    return `${formatted}${suffix}`
-  }
-
-  const bulletCommandPattern = new RegExp(`^(\\s*[-*]\\s*)(\\/(?:${TELEGRAM_COMMAND_HEADS_PATTERN})\\b.*)$`, 'i')
-  const commandAfterColonPattern = new RegExp(`^(.*?:\\s+)(\\/(?:${TELEGRAM_COMMAND_HEADS_PATTERN})\\b.*)$`, 'i')
-  const inlineCommandPattern = new RegExp(
-    `(^|\\s)(\\/(?:${TELEGRAM_COMMAND_HEADS_PATTERN})\\b(?:\\s+[a-z0-9_<>$:./-]+(?:\\s+[a-z0-9_<>$:./-]+)*)?)`,
-    'gi',
-  )
-
-  return text
-    .split('\n')
-    .map((line) => {
-      if (!line || line.includes('`')) return line
-      const bulletMatch = line.match(bulletCommandPattern)
-      if (bulletMatch) {
-        return `${bulletMatch[1]}${formatCommandForBackticks(bulletMatch[2])}`
-      }
-      const colonMatch = line.match(commandAfterColonPattern)
-      if (colonMatch) {
-        return `${colonMatch[1]}${formatCommandForBackticks(colonMatch[2])}`
-      }
-      return line.replace(inlineCommandPattern, (_full, prefix: string, cmd: string) => {
-        return `${prefix}${formatCommandForBackticks(String(cmd))}`
-      })
-    })
-    .join('\n')
+  return wrapCommandListingsWithBackticksShared(text)
 }
 
-const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string }> = [
-  {
-    pattern: /\/coin\s+create\s+<name>\s+<symbol>\s+<(?:uri|url)>/i,
-    hint: 'name: 1-24 chars, symbol: 2-6 chars, url: https://...',
-  },
-  {
-    pattern: /\/mkt\s+quote\s+<symbol>/i,
-    hint: 'symbol: ticker, e.g. BTC',
-  },
-  {
-    pattern: /\/buy\b/i,
-    hint: 'interactive: pick vault, choose size, then Accept',
-  },
-  {
-    pattern: /\/sell\b/i,
-    hint: 'interactive: pick vault, choose size, then Accept',
-  },
-  {
-    pattern: /\/bid\b/i,
-    hint: 'interactive: pick vault, choose ETH %, then Accept',
-  },
-  {
-    pattern: /\/join\s+<vault\|ticker>/i,
-    hint: 'vault|ticker: scoped vault address or symbol',
-  },
-  {
-    pattern: /\/eligibility\s+<vault\|ticker>/i,
-    hint: 'checks holder-room threshold for a scoped vault',
-  },
-]
-
 function appendCommandMicroHints(text: string): string {
-  const lines = text.split('\n')
-  const nextLines = lines.slice(1)
-  const output: string[] = []
-  for (let idx = 0; idx < lines.length; idx += 1) {
-    const line = lines[idx] ?? ''
-    output.push(line)
-    if (!line) continue
-    const nextLine = nextLines[idx] ?? ''
-    if (nextLine.includes('↳')) continue
-    for (const rule of TELEGRAM_COMMAND_MICRO_HINTS) {
-      if (rule.pattern.test(line)) {
-        output.push(`  ↳ ${rule.hint}`)
-        break
-      }
-    }
-  }
-  return output.join('\n')
+  return appendCommandMicroHintsShared(text)
 }
 
 type ParsedTelegramTradeIntent =
@@ -882,12 +715,11 @@ const UINT128_MAX = (1n << 128n) - 1n
 const Q96 = 2n ** 96n
 
 function getCommandHead(rawText: string): string {
-  const token = asTrimmed(rawText).split(/\s+/g)[0] ?? ''
-  return token.replace(/^\//, '').toLowerCase()
+  return getCommandHeadShared(rawText)
 }
 
 function isLikelyCommandText(rawText: string): boolean {
-  return TELEGRAM_COMMAND_HEADS.includes(getCommandHead(rawText) as (typeof TELEGRAM_COMMAND_HEADS)[number])
+  return isLikelyCommandTextShared(rawText)
 }
 
 function isTelegramAiFollowupEnabled(): boolean {

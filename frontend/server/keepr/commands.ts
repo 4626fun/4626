@@ -17,6 +17,7 @@ import {
 } from '../_lib/openbbClient.js'
 import { handleTwitterCommand } from '../twitter/commands.js'
 import { handleCoinCommand } from '../zora/commands.js'
+import { matchesCommandFamily } from '../commands/registry.js'
 import { handleSendCommand } from './sendCommand.js'
 import { handleWhoisCommand } from './whoisCommand.js'
 import { executeConversationalFallback } from '../agent/core/executeConversationalFallback.js'
@@ -896,8 +897,7 @@ export async function handleKeeprCommand(params: {
   }
 
   // Handle Twitter/X commands (/x, x, /tweet, tweet)
-  const looksLikeX = /^(\/x|x)(\s|$)/.test(rawLower) || /^(\/tweet|tweet)(\s|$)/.test(rawLower)
-  if (looksLikeX) {
+  if (matchesCommandFamily(raw, 'twitter')) {
     const v = await getKeeprVaultByGroupId(params.groupId)
     let role: KeeprRole = 'MEMBER'
     if (v) {
@@ -912,8 +912,7 @@ export async function handleKeeprCommand(params: {
   }
 
   // Handle /send command
-  const looksLikeSend = raw.toLowerCase().startsWith('/send') || raw.toLowerCase().startsWith('send ')
-  if (looksLikeSend) {
+  if (matchesCommandFamily(raw, 'send')) {
     const sv = await getKeeprVaultByGroupId(params.groupId)
     if (!sv) return { ok: false, response: formatAssistantOnlyBlocked('/send') }
     const sRole = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: sv })
@@ -927,8 +926,7 @@ export async function handleKeeprCommand(params: {
   }
 
   // Handle /coin command (Zora Coins)
-  const looksLikeCoin = raw.toLowerCase().startsWith('/coin') || raw.toLowerCase().startsWith('coin ')
-  if (looksLikeCoin) {
+  if (matchesCommandFamily(raw, 'coin')) {
     const cv = await getKeeprVaultByGroupId(params.groupId)
     if (!cv) return { ok: false, response: formatAssistantOnlyBlocked('/coin') }
     const cRole = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: cv })

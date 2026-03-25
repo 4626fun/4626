@@ -8,9 +8,11 @@ declare const process: { env: Record<string, string | undefined> }
 
 export type TwitterRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
+type TwitterCommandFailure = { ok: false; response: string; action?: any }
+
 export type TwitterCommandResult =
   | { ok: true; response: string; action?: any }
-  | { ok: false; response: string }
+  | TwitterCommandFailure
 
 const TWITTER_POST_COOLDOWN_MS = 60_000
 const TWITTER_POST_PREVIEW_TTL_SECONDS = 90
@@ -226,7 +228,7 @@ function oauth1AuthorizationHeader(params: {
   return `OAuth ${authValue}`
 }
 
-async function verifyTwitterAccount(config: TwitterOauthConfig): Promise<{ ok: true; account: TwitterVerifiedAccount } | TwitterCommandResult> {
+async function verifyTwitterAccount(config: TwitterOauthConfig): Promise<{ ok: true; account: TwitterVerifiedAccount } | TwitterCommandFailure> {
   const url = 'https://api.twitter.com/1.1/account/verify_credentials.json?include_entities=false&skip_status=true'
   try {
     const authHeader = oauth1AuthorizationHeader({

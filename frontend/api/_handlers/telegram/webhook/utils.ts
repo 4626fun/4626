@@ -1,7 +1,12 @@
 import type { VercelRequest } from '@vercel/node'
 import { formatUnits } from 'viem'
 
-import { SUPPORTED_METADATA_URI_PREFIXES, TELEGRAM_COMMAND_HEADS, TELEGRAM_COMMAND_HEADS_PATTERN, TELEGRAM_COMMAND_MICRO_HINTS } from './constants.js'
+import {
+  getCommandHead as getSharedCommandHead,
+  isKnownTelegramCommandHead,
+  matchesCommandFamily,
+} from '../../../../server/commands/registry.js'
+import { SUPPORTED_METADATA_URI_PREFIXES, TELEGRAM_COMMAND_HEADS_PATTERN, TELEGRAM_COMMAND_MICRO_HINTS } from './constants.js'
 
 export function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -130,8 +135,7 @@ export function splitTelegramMessage(text: string, maxLen = 3500): string[] {
 }
 
 export function isTwitterCommand(rawText: string): boolean {
-  const lower = asTrimmed(rawText).toLowerCase()
-  return /^(\/x|x)(\s|$)/.test(lower) || /^(\/tweet|tweet)(\s|$)/.test(lower)
+  return matchesCommandFamily(rawText, 'twitter')
 }
 
 export function isInlineLauncherCommand(rawText: string): boolean {
@@ -275,12 +279,11 @@ export function buildDefaultCoinMetadataUri(params: { coinType: 'content' | 'cre
 }
 
 export function getCommandHead(rawText: string): string {
-  const token = asTrimmed(rawText).split(/\s+/g)[0] ?? ''
-  return token.replace(/^\//, '').toLowerCase()
+  return getSharedCommandHead(rawText)
 }
 
 export function isLikelyCommandText(rawText: string): boolean {
-  return TELEGRAM_COMMAND_HEADS.includes(getCommandHead(rawText) as (typeof TELEGRAM_COMMAND_HEADS)[number])
+  return isKnownTelegramCommandHead(getCommandHead(rawText))
 }
 
 export function normalizeTelegramCommand(rawText: string): string {
