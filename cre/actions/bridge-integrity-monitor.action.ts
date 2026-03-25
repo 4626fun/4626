@@ -135,7 +135,7 @@ function parseOptionalBigInt(raw: unknown): bigint | null {
 
 function readCanonicalAllowlistFromEnv(): Set<`0x${string}`> {
   const explicit = String(process.env.SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST ?? '').trim();
-  if (!explicit) return new Set<`0x${string}>();
+  if (!explicit) return new Set<`0x${string}`>();
   return parseAddressSet(explicit);
 }
 
@@ -214,13 +214,21 @@ function parseSignerOverlapFindings(): { critical: string[]; warnings: string[];
 async function fetchSolanaInfraStatus(): Promise<SolanaInfraStatusData> {
   const apiBaseUrl = String(process.env.KEEPR_API_BASE_URL ?? '').trim().replace(/\/$/, '');
   const apiKey = String(process.env.KEEPR_API_KEY ?? '').trim();
+  const internalSecret = String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  if (internalSecret) headers['x-cv-solana-registration-secret'] = internalSecret;
 
   const response = await fetch(`${apiBaseUrl}/deploy/solanaInfraStatus`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     signal: AbortSignal.timeout(12_000),
   });
 
@@ -342,9 +350,14 @@ export async function executeBridgeIntegrityMonitor(): Promise<BridgeIntegrityMo
   try {
     const apiBaseUrl = String(process.env.KEEPR_API_BASE_URL ?? '').trim();
     const apiKey = String(process.env.KEEPR_API_KEY ?? '').trim();
-    if (!apiBaseUrl || !apiKey) {
+    const internalSecret = String(
+      process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+        process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+        '',
+    ).trim();
+    if (!apiBaseUrl || (!apiKey && !internalSecret)) {
       warningFindings.push(
-        'Bridge integrity monitor skipped: KEEPR_API_BASE_URL and KEEPR_API_KEY are required.',
+        'Bridge integrity monitor skipped: KEEPR_API_BASE_URL and at least one auth secret are required.',
       );
       await alertWarning(WORKFLOW_NAME, 'Bridge integrity monitor skipped', {
         warningFindings,

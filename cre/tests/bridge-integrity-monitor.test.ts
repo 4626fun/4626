@@ -29,6 +29,8 @@ const ENV_KEYS = [
   'SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS',
   'SOLANA_BRIDGE_MONITOR_MAX_HEALTH_AGE_SECONDS',
   'BASE_SOLANA_BRIDGE_ADDRESS',
+  'DEPLOY_SOLANA_REGISTRATION_SECRET',
+  'SOLANA_REGISTRATION_INTERNAL_SECRET',
 ] as const;
 
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]])) as Record<
@@ -86,6 +88,8 @@ describe('bridge integrity monitor', () => {
     setEnv('SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS', '');
     setEnv('SOLANA_BRIDGE_MONITOR_MAX_HEALTH_AGE_SECONDS', undefined);
     setEnv('BASE_SOLANA_BRIDGE_ADDRESS', undefined);
+    setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', undefined);
+    setEnv('SOLANA_REGISTRATION_INTERNAL_SECRET', undefined);
   });
 
   afterEach(() => {
@@ -173,8 +177,32 @@ describe('bridge integrity monitor', () => {
     expect(alertCriticalMock).not.toHaveBeenCalled();
   });
 
+  it('uses the internal registration secret header when no KEEPR_API_KEY is configured', async () => {
+    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
+    mockInfraStatusResponse();
+
+    const result = await executeBridgeIntegrityMonitor();
+
+    expect(result.status).toBe('warning');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.test/deploy/solanaInfraStatus',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'x-cv-solana-registration-secret': 'internal-secret',
+        }),
+      }),
+    );
+    const headers = (fetchMock.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined)?.headers ?? {};
+    expect(headers.Authorization).toBeUndefined();
+  });
+
   it('skips monitoring when API credentials are missing', async () => {
     setEnv('KEEPR_API_KEY', undefined);
+    setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', undefined);
+    setEnv('SOLANA_REGISTRATION_INTERNAL_SECRET', undefined);
 
     const result = await executeBridgeIntegrityMonitor();
 
