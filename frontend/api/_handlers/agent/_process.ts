@@ -23,13 +23,13 @@ import path from 'node:path'
 import { isDbConfigured, getDb } from '../../../server/_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../../server/_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../../server/_lib/privyXmtpSigner.js'
-import { handleKeeprCommand } from '../../../server/keepr/commands.js'
+import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
 import { logger } from '../../../server/_lib/logger.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-type FallbackCommandResult = { ok: boolean; response?: string | null }
+type FallbackCommandResult = { ok: boolean; response?: string | null; rawResponseText?: string | null }
 
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
 const XMTP_DB_ENCRYPTION_KEY = (() => {
@@ -182,7 +182,7 @@ export function resolveFallbackCommandReply(params: {
   text: string
   result: FallbackCommandResult
 }): { replyText: string; fallbackGenerated: boolean } {
-  const upstreamReply = String(params.result?.response ?? '').trim()
+  const upstreamReply = String(params.result?.rawResponseText ?? params.result?.response ?? '').trim()
   if (upstreamReply) {
     return {
       replyText: upstreamReply,
@@ -589,7 +589,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               })
               let shouldRetainClaim = false
               try {
-                const result = await handleKeeprCommand({
+                const result = await executeDeterministicCommand({
                   groupId: convo.id,
                   senderWallet: senderAddr.toLowerCase() as Address,
                   text: content.trim(),

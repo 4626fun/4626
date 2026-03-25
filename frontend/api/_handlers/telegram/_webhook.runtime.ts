@@ -21,6 +21,7 @@ import {
   resolveTelegramIdentityContext,
   type TelegramSenderWalletSource as SenderWalletSource,
 } from '../../../server/agent/core/resolveIdentityContext.js'
+import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
 import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
 import {
   clearTelegramActiveMessage,
@@ -60,7 +61,6 @@ import {
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { handleKeeprCommand } from '../../../server/keepr/commands.js'
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import {
   areHolderRoomsEnabled as areHolderRoomsEnabledShared,
@@ -5647,7 +5647,7 @@ async function handleTelegramDeployCallback(params: {
     }
   }
 
-  const execution = await handleKeeprCommand({
+  const execution = await executeDeterministicCommand({
     groupId: params.groupId,
     senderWallet: canonicalSenderWallet,
     text: deployBuild.commandText,
@@ -5670,14 +5670,14 @@ async function handleTelegramDeployCallback(params: {
       commandText: deployBuild.commandText,
     },
     status,
-    errorMessage: execution.ok ? null : asTrimmed(execution.response),
+    errorMessage: execution.ok ? null : asTrimmed(execution.rawResponseText),
   })
   if (execution.ok) {
     return {
       text: [
         `Deploy sent • ${deployBuild.deployLabel}`,
         '',
-        execution.response,
+        execution.responseText,
       ].join('\n'),
       callbackToast: 'Deploy sent',
     }
@@ -5686,7 +5686,7 @@ async function handleTelegramDeployCallback(params: {
     text: [
       `Deploy failed • ${deployBuild.deployLabel}`,
       '',
-      execution.response || 'Execution failed. Retry with a fresh deploy preview.',
+      execution.responseText || 'Execution failed. Retry with a fresh deploy preview.',
     ].join('\n'),
     callbackToast: 'Deploy failed',
     replyMarkup: buildDeployMenuReplyMarkup(),
@@ -6172,7 +6172,7 @@ async function handleTelegramTradeCallback(params: {
       token: callback.token,
     })
     const commandText = `/coin ${actionTypeSafe} ${creatorCoinAddress} ${amountInput}`
-    const execution = await handleKeeprCommand({
+    const execution = await executeDeterministicCommand({
       groupId: params.groupId,
       senderWallet: canonicalSenderWallet,
       text: commandText,
@@ -6198,7 +6198,7 @@ async function handleTelegramTradeCallback(params: {
         commandText,
       },
       status,
-      errorMessage: execution.ok ? null : asTrimmed(execution.response),
+      errorMessage: execution.ok ? null : asTrimmed(execution.rawResponseText),
     })
     if (execution.ok) {
       emitTelegramFunnelEvent({
@@ -6215,7 +6215,7 @@ async function handleTelegramTradeCallback(params: {
         text: [
           `Confirmed ${actionTypeSafe.toUpperCase()} request`,
           '',
-          execution.response,
+          execution.responseText,
         ].join('\n'),
         signalText: buildTradeSignalText({
           actionType: actionTypeSafe,
@@ -6248,7 +6248,7 @@ async function handleTelegramTradeCallback(params: {
       text: [
         `Failed ${actionTypeSafe.toUpperCase()} execution`,
         '',
-        execution.response || 'Execution failed. Retry with a fresh preview.',
+        execution.responseText || 'Execution failed. Retry with a fresh preview.',
       ].join('\n'),
       callbackToast: `${actionTypeSafe.toUpperCase()} failed`,
     }

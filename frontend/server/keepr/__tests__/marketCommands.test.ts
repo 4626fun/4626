@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv } from '../../../api/__tests__/helpers'
 
-import { handleKeeprCommand } from '../commands.ts'
+import { executeCommand } from '../../commands/execute.ts'
 
 function mockFetchJsonOnce(payload: any) {
   const res = {
@@ -48,7 +48,7 @@ describe('/mkt commands', () => {
   })
 
   it('returns help text', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/mkt help',
@@ -63,7 +63,7 @@ describe('/mkt commands', () => {
   it('returns a clear message when OpenBB is not configured', async () => {
     const restore = applyEnv({ OPENBB_API_BASE_URL: undefined })
     try {
-      const result = await handleKeeprCommand({
+      const result = await executeCommand({
         groupId: 'group-1',
         senderWallet: '0x00000000000000000000000000000000000000aa',
         text: '/mkt quote AAPL',
@@ -78,7 +78,7 @@ describe('/mkt commands', () => {
   })
 
   it('rejects invalid symbols', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/mkt quote !!!',
@@ -108,7 +108,7 @@ describe('/mkt commands', () => {
       provider: 'yfinance',
     })
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/mkt quote AAPL',
@@ -134,7 +134,7 @@ describe('/mkt commands', () => {
       provider: 'yfinance',
     })
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/mkt news AAPL 2',
@@ -156,7 +156,7 @@ describe('/mkt commands', () => {
       provider: 'yfinance',
     })
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/mkt chart AAPL 1w',
@@ -187,7 +187,7 @@ describe('/mkt commands', () => {
       provider: 'fmp',
     })
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/mkt calendar today',
@@ -207,7 +207,7 @@ describe('/mkt commands', () => {
       statusText: 'Bad Request',
     })
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/mkt ratios AAPL',
@@ -218,4 +218,3 @@ describe('/mkt commands', () => {
     expect(result.response).toContain('Missing API key')
   })
 })
-

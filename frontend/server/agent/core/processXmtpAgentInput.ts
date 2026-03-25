@@ -1,7 +1,11 @@
 import type { SharedConversationalRuntimeContext } from '../../ai/chat.js'
 import { formatNumberedCommandFallback } from '../../_lib/chatCommandFallback.js'
 import { executeConversationalFallback } from './executeConversationalFallback.js'
-import { isConversationalAgentInput, normalizeConversationalPrompt } from './conversationalInput.js'
+import {
+  EMPTY_CONVERSATIONAL_PROMPT_RESPONSE,
+  isConversationalAgentInput,
+  resolveConversationalPrompt,
+} from './conversationalInput.js'
 
 export type ProcessXmtpAgentInputParams = {
   text: string
@@ -25,14 +29,15 @@ export async function processXmtpAgentInput(
     }
   }
 
-  if (!normalizeConversationalPrompt(params.text)) {
-    return { responseText: 'Ask me anything about this vault or DeFi on Base.' }
+  const resolvedPrompt = resolveConversationalPrompt(params.text)
+  if (resolvedPrompt.kind === 'empty') {
+    return { responseText: EMPTY_CONVERSATIONAL_PROMPT_RESPONSE }
   }
 
   const result = await executeConversationalFallback({
     groupId: params.groupId,
     senderWallet: params.senderWallet,
-    text: params.text,
+    text: resolvedPrompt.prompt,
     runtimeContext: params.runtimeContext,
     allowActionExecution: false,
   })

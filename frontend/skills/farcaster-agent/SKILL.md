@@ -244,12 +244,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 ## Integration with Keepr
 
-To integrate Farcaster commands with the existing Keepr agent, update `frontend/server/keepr/commands.ts`:
+To integrate Farcaster commands with the shared deterministic command executor, update `frontend/server/commands/execute.ts`:
 
 ```typescript
 import { handleFarcasterCommand } from '../farcaster/commands.js'
 
-// In handleKeeprCommand, add before the final return:
+// In executeCommand, add before the final fallback:
 if (raw.toLowerCase().startsWith('/fc') || raw.toLowerCase().startsWith('fc ')) {
   return handleFarcasterCommand({
     groupId: params.groupId,

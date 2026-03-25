@@ -1,8 +1,8 @@
-import { handleTwitterCommand, type TwitterRole } from '../../twitter/commands.js'
 import { matchesCommandFamily } from '../../commands/registry.js'
 import { executeDeterministicCommand } from './executeDeterministicCommand.js'
 import { resolveVaultAccessRoleByGroupId, type VaultAccessRole } from './resolveVaultRole.js'
 import type { TelegramSenderWalletSource } from './resolveIdentityContext.js'
+import type { KeeprRole } from '../../commands/types.js'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 const SENSITIVE_DM_COMMAND_PREFIXES = ['/send', 'send ', '/lock', '/unlock', '/coin create', '/coin deploy'] as const
@@ -48,7 +48,7 @@ async function resolveTwitterRole(params: {
   groupId: string
   senderWallet: `0x${string}`
   senderWalletSource: TelegramSenderWalletSource
-}): Promise<TwitterRole> {
+}): Promise<KeeprRole> {
   if (params.isAdmin) return 'ADMIN'
   if (params.senderWalletSource !== 'user_map') return 'MEMBER'
 
@@ -85,14 +85,17 @@ export async function processTelegramAgentInput(
       twitterConfirmMode === 'preview_only' && isTelegramTwitterPostCommand(params.text)
         ? stripTwitterConfirmFlags(params.text)
         : params.text
-    const result = await handleTwitterCommand({
+    const result = await executeDeterministicCommand({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
       text,
-      role,
+      chatId: params.chatId,
+      userId: params.userId,
+      emptyResponseFallback: params.emptyResponseFallback,
+      roleOverrides: { twitter: role },
     })
     return {
-      responseText: String(result.response ?? '').trim(),
+      responseText: result.responseText,
       ...('action' in result ? { action: result.action } : {}),
     }
   }

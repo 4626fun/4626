@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { handleKeeprCommand } from '../commands.ts'
+import { executeCommand } from '../../commands/execute.ts'
 
 const TEST_WALLET = '0x00000000000000000000000000000000000000aa' as const
 
 describe('keepr help commands', () => {
   it('returns compact quick help by default', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-help-1',
       senderWallet: TEST_WALLET,
       text: '/help',
@@ -24,7 +24,7 @@ describe('keepr help commands', () => {
   })
 
   it('returns market topic help from /help market', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-help-2',
       senderWallet: TEST_WALLET,
       text: '/help market',
@@ -37,7 +37,7 @@ describe('keepr help commands', () => {
   })
 
   it('treats removed arena help as an unknown topic', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-help-2b',
       senderWallet: TEST_WALLET,
       text: '/help arena',
@@ -49,7 +49,7 @@ describe('keepr help commands', () => {
   })
 
   it('returns ops topic help with canonical Solana action names', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-help-2c',
       senderWallet: TEST_WALLET,
       text: '/help ops',
@@ -62,7 +62,7 @@ describe('keepr help commands', () => {
   })
 
   it('returns full help with /help all', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-help-3',
       senderWallet: TEST_WALLET,
       text: '/help all',
@@ -86,7 +86,7 @@ describe('keepr help commands', () => {
   })
 
   it('falls back to quick help with an unknown topic', async () => {
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'group-help-4',
       senderWallet: TEST_WALLET,
       text: '/help bananas',

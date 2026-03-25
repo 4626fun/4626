@@ -1,23 +1,19 @@
 import { getKeeprVaultByGroupId } from '../_lib/keeprRegistry.js'
-import { executeConversationalFallback } from '../agent/core/executeConversationalFallback.js'
-import { isConversationalAgentInput, normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
 import { resolveVaultAccessRoleFromVault } from '../agent/core/resolveVaultRole.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
-import { handleWhoisCommand } from '../keepr/whoisCommand.js'
-import { handleSendCommand } from '../keepr/sendCommand.js'
-import { handleTwitterCommand } from '../twitter/commands.js'
-import { handleCoinCommand } from '../zora/commands.js'
-import { matchesCommandFamily } from './registry.js'
+import { getCommandFamily } from './registry.js'
 import type { ExecuteCommandParams, KeeprCommandResult, KeeprRole } from './types.js'
+import { executeCoinCommandFamily } from './families/coin.js'
+import { executeConversationalCommandFamily, looksLikeConversationalCommand } from './families/conversation.js'
+import { executeHelpCommandFamily } from './families/help.js'
 import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
-  formatGroupConnectGuidance,
-  formatKeeprHelp,
-  handleMarketCommand,
-  isMarketCommand,
-  looksLikeGroupConnectIntent,
 } from './families/keepr.js'
+import { executeMarketCommandFamily, matchesMarketCommand } from './families/market.js'
+import { executeSendCommandFamily } from './families/send.js'
+import { executeTwitterCommandFamily } from './families/twitter.js'
+import { executeWhoisCommandFamily } from './families/whois.js'
 
 function resolveVaultRole(params: {
   senderWallet: ExecuteCommandParams['senderWallet']
@@ -34,80 +30,81 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
   const raw = (params.text ?? '').trim()
 
   try {
-    const rawLower = raw.toLowerCase()
-    const globalHelpMatch = raw.match(/^\/?help(?:\s+(\S+))?\s*$/i)
-    if (globalHelpMatch) {
-      return { ok: true, response: formatKeeprHelp(globalHelpMatch[1] ?? null) }
-    }
-
-    if (matchesCommandFamily(raw, 'whois')) {
-      return handleWhoisCommand({ text: raw })
-    }
-
-    const looksLikeAi = isConversationalAgentInput(raw) && (/^\/ai\b/i.test(raw) || /^@(keepr|bot)\b/i.test(raw))
-    if (looksLikeAi) {
-      const aiText = normalizeConversationalPrompt(raw)
-      if (!aiText) {
-        return { ok: true, response: 'Ask me anything about this vault or DeFi on Base.' }
+    const family = getCommandFamily(raw)
+    let vaultPromise: Promise<Awaited<ReturnType<typeof getKeeprVaultByGroupId>>> | null = null
+    const getVault = () => {
+      if (!vaultPromise) {
+        vaultPromise = getKeeprVaultByGroupId(params.groupId)
       }
-      const vault = await getKeeprVaultByGroupId(params.groupId)
-      if (!vault && looksLikeGroupConnectIntent(aiText)) {
-        return { ok: true, response: formatGroupConnectGuidance(params.groupId) }
+      return vaultPromise
+    }
+    const getRole = async (override?: KeeprRole) => {
+      if (override) return override
+      const vault = await getVault()
+      return resolveVaultRole({ senderWallet: params.senderWallet, vault })
+    }
+
+    const helpResult = executeHelpCommandFamily(raw)
+    if (helpResult) {
+      return helpResult
+    }
+
+    if (family === 'whois') {
+      return executeWhoisCommandFamily({ text: raw })
+    }
+
+    if (looksLikeConversationalCommand(raw)) {
+      return executeConversationalCommandFamily({
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        text: raw,
+        vault: await getVault(),
+      })
+    }
+
+    if (matchesMarketCommand(raw)) {
+      return executeMarketCommandFamily({ text: raw })
+    }
+
+    switch (family) {
+      case 'twitter':
+        return executeTwitterCommandFamily({
+          groupId: params.groupId,
+          senderWallet: params.senderWallet,
+          text: raw,
+          role: await getRole(params.roleOverrides?.twitter),
+        })
+      case 'send': {
+        const vault = await getVault()
+        if (!vault) return { ok: false, response: formatAssistantOnlyBlocked('/send') }
+        return executeSendCommandFamily({
+          groupId: params.groupId,
+          senderWallet: params.senderWallet,
+          text: raw,
+          role: await getRole(params.roleOverrides?.send),
+          vault,
+        })
       }
-      const aiResult = await executeConversationalFallback({
-        groupId: params.groupId,
-        senderWallet: params.senderWallet,
-        text: aiText,
-        vault,
-      })
-      return { ok: aiResult.ok, response: aiResult.responseText }
+      case 'coin': {
+        const vault = await getVault()
+        if (!vault) return { ok: false, response: formatAssistantOnlyBlocked('/coin') }
+        return executeCoinCommandFamily({
+          groupId: params.groupId,
+          senderWallet: params.senderWallet,
+          text: raw,
+          role: await getRole(params.roleOverrides?.coin),
+          vault,
+        })
+      }
     }
 
-    if (isMarketCommand(rawLower)) {
-      return handleMarketCommand(raw)
-    }
-
-    if (matchesCommandFamily(raw, 'twitter')) {
-      const vault = await getKeeprVaultByGroupId(params.groupId)
-      return handleTwitterCommand({
-        groupId: params.groupId,
-        senderWallet: params.senderWallet,
-        text: raw,
-        role: resolveVaultRole({ senderWallet: params.senderWallet, vault }),
-      })
-    }
-
-    if (matchesCommandFamily(raw, 'send')) {
-      const vault = await getKeeprVaultByGroupId(params.groupId)
-      if (!vault) return { ok: false, response: formatAssistantOnlyBlocked('/send') }
-      return handleSendCommand({
-        groupId: params.groupId,
-        senderWallet: params.senderWallet,
-        text: raw,
-        role: resolveVaultRole({ senderWallet: params.senderWallet, vault }),
-        vault,
-      })
-    }
-
-    if (matchesCommandFamily(raw, 'coin')) {
-      const vault = await getKeeprVaultByGroupId(params.groupId)
-      if (!vault) return { ok: false, response: formatAssistantOnlyBlocked('/coin') }
-      return handleCoinCommand({
-        groupId: params.groupId,
-        senderWallet: params.senderWallet,
-        text: raw,
-        role: resolveVaultRole({ senderWallet: params.senderWallet, vault }),
-        vault,
-      })
-    }
-
-    const vault = await getKeeprVaultByGroupId(params.groupId)
+    const vault = await getVault()
     return executeKeeprCommandFamily({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
       text: raw,
       vault,
-      role: resolveVaultRole({ senderWallet: params.senderWallet, vault }),
+      role: await getRole(),
     })
   } catch (error) {
     const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'Keepr command failed')
