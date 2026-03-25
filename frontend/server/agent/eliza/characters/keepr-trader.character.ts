@@ -33,7 +33,6 @@ Operating rules:
     '@4626/plugin-uniswap',
     '@4626/plugin-zora',
     '@4626/plugin-wallet-intel',
-    '@4626/plugin-bankr',
   ],
 
   settings: {

@@ -1337,12 +1337,9 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
       [
         { text: 'Social', callback_data: 'help:social' },
         { text: 'Ops', callback_data: 'help:ops' },
-        { text: 'Bankr', callback_data: 'help:bankr' },
-      ],
-      [
         { text: menuLabel('wallet'), callback_data: 'help:wallet' },
-        { text: 'Help', callback_data: 'help:all' },
       ],
+      [{ text: 'Help', callback_data: 'help:all' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -1645,7 +1642,7 @@ function buildFocusedHelpText(): string {
     '<code>/vaults</code> — browse vaults',
     '',
     '<u>Need more?</u>',
-    '<code>/help coin|market|social|ops|bankr|wallet</code> — focused guides',
+    '<code>/help coin|market|social|ops|wallet</code> — focused guides',
     '<code>/help all</code> — complete command catalog',
     'Tap <b>CRE Ops</b> or <b>Solana</b> below for one-tap keeper actions.',
   ].join('\n')

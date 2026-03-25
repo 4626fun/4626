@@ -17,7 +17,6 @@ import {
 } from '../_lib/openbbClient.js'
 import { handleTwitterCommand } from '../twitter/commands.js'
 import { handleCoinCommand } from '../zora/commands.js'
-import { handleBankrCommand } from '../bankr/commands.js'
 import { handleSendCommand } from './sendCommand.js'
 import { handleWhoisCommand } from './whoisCommand.js'
 import { executeConversationalFallback } from '../agent/core/executeConversationalFallback.js'
@@ -32,7 +31,7 @@ export type KeeprCommandResult =
   | { ok: true; response: string; action?: any }
   | { ok: false; response: string }
 
-type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 'ops' | 'bankr' | 'wallet'
+type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 'ops' | 'wallet'
 
 function formatHelpCommandRow(command: string, description: string, permission?: 'OWNER' | 'ADMIN/OWNER'): string {
   const safeCommand = escapeTelegramHtml(command)
@@ -54,9 +53,7 @@ function escapeTelegramHtml(value: string): string {
 }
 
 function formatKeeprHelpTopics(): string[] {
-  return [
-    '<blockquote>Need more? <code>/help core|coin|market|social|ops|bankr|wallet</code> • <code>/help all</code></blockquote>',
-  ]
+  return ['<blockquote>Need more? <code>/help core|coin|market|social|ops|wallet</code> • <code>/help all</code></blockquote>']
 }
 
 function formatTelegramQuote(content: string, options?: { expandable?: boolean }): string {
@@ -123,13 +120,6 @@ function formatKeeprHelpFull(): string {
       formatHelpCommandRow('/coin create <name> <symbol> <uri>', 'create content coin', 'ADMIN/OWNER'),
       formatHelpCommandRow('/coin buy | /coin sell | /coin balance | /coin info', 'coin ops'),
       formatHelpCommandRow('/cre auction | /cre solana | /cre tend | /cre report | /cre settle-fees | /cre relay-entries', 'keeper ops'),
-      formatHelpCommandRow('/bankr status | /bankr me | /bankr balances', 'Bankr status + balances'),
-      formatHelpCommandRow('/bankr ask <question>', 'ask Bankr'),
-      formatHelpCommandRow('/bankr exec <instruction> --confirm', 'execute instruction', 'ADMIN/OWNER'),
-      '<b>Create requirements</b>',
-      'name: 1–24 chars',
-      'symbol: 2–6 chars',
-      'uri: full <code>https://...</code> URL',
       'Telegram tip: tap <b>CRE Ops</b> or <b>Solana</b> in the bot menu for one-tap operator actions.',
     ]),
     ...formatHelpSection('permissions', [
@@ -142,7 +132,7 @@ function formatKeeprHelpFull(): string {
       '<code>/help mkt</code> — market data commands',
       '<code>/help x</code> — X / Twitter commands',
       '<code>/help cre</code> — CRE Keeper commands',
-      '<code>/help bankr</code> — Bankr commands',
+      '<code>/help wallet</code> — wallet and identity commands',
     ]),
     '<blockquote>Tip: keep short help in groups, and use full help in DMs/admin flows.</blockquote>',
   ].join('\n');
@@ -207,8 +197,6 @@ function resolveKeeprHelpTopic(rawTopic: string | null | undefined): { topic: Ke
     case 'cre':
     case 'keeper':
       return { topic: 'ops', unknownTopic: null }
-    case 'bankr':
-      return { topic: 'bankr', unknownTopic: null }
     case 'wallet':
     case 'identity':
     case 'reputation':
@@ -300,20 +288,6 @@ function formatKeeprHelp(rawTopic: string | null = null): string {
     ].join('\n')
   }
 
-  if (topic === 'bankr') {
-    return [
-      '<b>Keepr — bankr</b>',
-      '',
-      formatHelpCommandRow('/bankr status', 'show Bankr status'),
-      formatHelpCommandRow('/bankr me', 'show your Bankr profile'),
-      formatHelpCommandRow('/bankr balances [base,solana]', 'check balances by chain'),
-      formatHelpCommandRow('/bankr ask <question>', 'ask Bankr'),
-      formatHelpCommandRow('/bankr exec <instruction> --confirm', 'execute instruction', 'ADMIN/OWNER'),
-      '',
-      '<blockquote>Need everything? <code>/help all</code></blockquote>',
-    ].join('\n')
-  }
-
   return [
     '<b>Keepr — wallet</b>',
     '',
@@ -364,7 +338,7 @@ function formatAssistantOnlyBlocked(command: string): string {
     'Assistant-only mode',
     '',
     `- ${command} is disabled until this group is connected to a 4626 vault`,
-    '- You can still use /ai, /help, /mkt, /whois, and /bankr status',
+    '- You can still use /ai, /help, /mkt, /whois, and /wallet',
     '- To enable full actions: run /link, verify /linked, scope a vault, then confirm with /keepr status',
   ].join('\n')
 }
@@ -934,24 +908,6 @@ export async function handleKeeprCommand(params: {
       senderWallet: params.senderWallet,
       text: raw,
       role,
-    })
-  }
-
-  const looksLikeBankr = raw.toLowerCase().startsWith('/bankr') || raw.toLowerCase().startsWith('bankr ')
-  if (looksLikeBankr) {
-    const v = await getKeeprVaultByGroupId(params.groupId)
-    let role: KeeprRole = 'MEMBER'
-    let canonicalOwnerAddress: string | null = null
-    if (v) {
-      role = resolveVaultAccessRoleFromVault({ wallet: params.senderWallet, vault: v })
-      canonicalOwnerAddress = v.canonicalOwnerAddress
-    }
-    return handleBankrCommand({
-      groupId: params.groupId,
-      senderWallet: params.senderWallet,
-      text: raw,
-      role,
-      canonicalOwnerAddress,
     })
   }
 

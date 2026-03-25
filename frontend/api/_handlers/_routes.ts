@@ -69,9 +69,6 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 
-  'bankr/status': () => import('./bankr/_status.js'),
-  'bankr/profile': () => import('./bankr/_profile.js'),
-
   'health': () => import('./_health.js'),
 
   'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),

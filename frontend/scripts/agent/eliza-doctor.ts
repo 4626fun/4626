@@ -237,7 +237,7 @@ function main(): void {
 
   printSection('Enabled Channels', [configuredChannels().join(', ')])
   printSection('Core Plugins', [
-    'keepr, lens, walletIntel, reputation, cre, zora, uniswap, knowledge, bankr',
+    'keepr, lens, walletIntel, reputation, cre, zora, uniswap, knowledge',
   ])
 
   console.log('\nChecks')

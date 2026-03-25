@@ -259,7 +259,6 @@ function normalizeEvidence(evidence, params) {
 
   const erc8004 = isObject(liveProofs.erc8004) ? liveProofs.erc8004 : {}
   const uniswap = isObject(liveProofs.uniswap) ? liveProofs.uniswap : {}
-  const bankr = isObject(liveProofs.bankr) ? liveProofs.bankr : {}
   const ens = isObject(liveProofs.ens) ? liveProofs.ens : {}
   const x402 = isObject(liveProofs.x402) ? liveProofs.x402 : {}
   const autonomousTrading = isObject(liveProofs.autonomousTrading) ? liveProofs.autonomousTrading : {}
@@ -271,7 +270,7 @@ function normalizeEvidence(evidence, params) {
         '4626 is an ERC-8004-registered Base agent that discovers a task, plans a solution, executes onchain actions, verifies outcomes, and publishes receipts.',
       narrative:
         toOptionalString(flagshipDemo.narrative) ||
-        'The flagship demo is one canonical autonomous deployment run on Base, then the same agent identity is reused for ERC-8004 reviews, Uniswap execution, Bankr wallet-gated commands, and ENS/Basename-first communication.',
+        'The flagship demo is one canonical autonomous deployment run on Base, then the same agent identity is reused for ERC-8004 reviews, Uniswap execution, and ENS/Basename-first communication.',
       videoUrl: toOptionalString(flagshipDemo.videoUrl),
     },
     links: {
@@ -304,13 +303,6 @@ function normalizeEvidence(evidence, params) {
         quoteRequestId: toOptionalString(uniswap.quoteRequestId),
         description: toOptionalString(uniswap.description),
       },
-      bankr: {
-        jobId: toOptionalString(bankr.jobId),
-        proofUrl: toOptionalString(bankr.proofUrl),
-        walletMatch:
-          typeof bankr.walletMatch === 'boolean' ? bankr.walletMatch : null,
-        description: toOptionalString(bankr.description),
-      },
       ens: {
         primaryName: toOptionalString(ens.primaryName),
         proofUrls: toStringArray(ens.proofUrls),
@@ -332,7 +324,6 @@ function normalizeEvidence(evidence, params) {
       letTheAgentCook: toOptionalString(judgeNotes.letTheAgentCook),
       agentsWithReceipts: toOptionalString(judgeNotes.agentsWithReceipts),
       uniswap: toOptionalString(judgeNotes.uniswap),
-      bankr: toOptionalString(judgeNotes.bankr),
       ensIdentity: toOptionalString(judgeNotes.ensIdentity),
       ensOpenIntegration: toOptionalString(judgeNotes.ensOpenIntegration),
       ensCommunication: toOptionalString(judgeNotes.ensCommunication),
@@ -366,9 +357,6 @@ function buildTrackBundle(params) {
   const hasUniswapProof =
     Boolean(normalizedEvidence.liveProofs.uniswap.txHash) ||
     Boolean(normalizedEvidence.liveProofs.uniswap.explorerUrl)
-  const hasBankrProof =
-    Boolean(normalizedEvidence.liveProofs.bankr.jobId) ||
-    Boolean(normalizedEvidence.liveProofs.bankr.proofUrl)
   const hasEnsSurface =
     Boolean(normalizedEvidence.links.walletIntelligenceUrl) &&
     Boolean(normalizedEvidence.links.xmtpUrl)
@@ -471,22 +459,6 @@ function buildTrackBundle(params) {
         !hasUniswapProof ? 'attach one explorer-visible Uniswap transaction hash from the flagship demo wallet' : '',
       ],
       judgeNote: normalizedEvidence.judgeNotes.uniswap,
-    }),
-    finalizeTrack({
-      id: 'bankr-best-llm-gateway-use',
-      name: 'Best Bankr LLM Gateway Use',
-      summary:
-        '4626 already hard-gates Bankr writes by canonical wallet match, exposes read/write Bankr commands through the agent, and includes a profile/listing runbook.',
-      whyItFits: 'The repo’s Bankr integration is not cosmetic: it enforces wallet-match guardrails before any mutating action.',
-      evidence: [
-        './agent.json',
-        normalizedEvidence.liveProofs.bankr.proofUrl,
-        normalizedEvidence.liveProofs.bankr.jobId,
-      ],
-      missingProofs: [
-        !hasBankrProof ? 'capture a successful Bankr job result or proof URL from the same flagship identity' : '',
-      ],
-      judgeNote: normalizedEvidence.judgeNotes.bankr,
     }),
     finalizeTrack({
       id: 'ens-identity',
@@ -597,7 +569,7 @@ function buildSubmissionMetadata(params) {
       name: projectName || '4626 Agentic Vault Launch Operator',
       tagline:
         tagline ||
-        'One flagship Base agent submission that reuses the same ERC-8004 identity across autonomous execution, receipts, Uniswap, Bankr, and ENS/Basename surfaces.',
+        'One flagship Base agent submission that reuses the same ERC-8004 identity across autonomous execution, receipts, Uniswap, and ENS/Basename surfaces.',
     },
     flagshipDemo: normalizedEvidence.flagshipDemo,
     targetTracks: tracks.coreTracks.map((track) => track.name),
