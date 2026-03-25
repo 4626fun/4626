@@ -7,7 +7,7 @@ import { assertTeeAttestationOrThrow } from '../_lib/teeAttestationGate.js'
 import { checkDurableRateLimit } from '../_lib/durableRateLimit.js'
 import { getDb, isDbConfigured } from '../_lib/postgres.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
-import type { KeeprRole, KeeprCommandResult } from './commands.js'
+import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
 // ---------------------------------------------------------------------------
 // Supported tokens on Base

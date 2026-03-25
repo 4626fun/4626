@@ -5,7 +5,7 @@ import { base } from 'viem/chains'
 import { logger } from '../_lib/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
-import type { KeeprRole, KeeprCommandResult } from '../keepr/commands.js'
+import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
