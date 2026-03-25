@@ -22,7 +22,6 @@
     "server/twitter/**/*.ts",
     "server/zora/**/*.ts",
     "server/uniswap/**/*.ts",
-    "server/bankr/**/*.ts",
     "server/keepr/**/*.ts",
     "server/ai/**/*.ts",
     "server/agent/**/*.ts",

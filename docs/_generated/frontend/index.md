@@ -57,8 +57,6 @@
 - [api/\_handlers/auth/\_nonce](api/_handlers/auth/_nonce.md)
 - [api/\_handlers/auth/\_privy](api/_handlers/auth/_privy.md)
 - [api/\_handlers/auth/\_verify](api/_handlers/auth/_verify.md)
-- [api/\_handlers/bankr/\_profile](api/_handlers/bankr/_profile.md)
-- [api/\_handlers/bankr/\_status](api/_handlers/bankr/_status.md)
 - [api/\_handlers/cre/keeper/\_aiAssess](api/_handlers/cre/keeper/_aiAssess.md)
 - [api/\_handlers/cre/keeper/\_alert](api/_handlers/cre/keeper/_alert.md)
 - [api/\_handlers/cre/keeper/\_markSettled](api/_handlers/cre/keeper/_markSettled.md)
