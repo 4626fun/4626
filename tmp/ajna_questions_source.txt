@@ -1,0 +1,220 @@
+SPECIFIC QUESTIONS YOU MUST ANSWER
+--------------------------------------------------
+
+Answer each question directly and cite the specific file/function/logic path you used.
+
+### A. Architecture and Capital Flow
+1. What is the exact end-to-end flow for:
+   - deposit
+   - mint
+   - withdraw
+   - redeem
+   - rebalance
+   - emergency pause / recovery
+
+2. What assets are actually held where at each stage?
+   - user wallet
+   - vault
+   - buffer
+   - Ajna buckets
+   - any other helper contract
+
+3. Which components are onchain and which are offchain?
+
+4. Which parts are safety-critical for users to exit?
+
+5. Is this strategy fundamentally “automated but non-custodial,” or does user safety depend on an operator-like liveness assumption?
+
+### B. ERC-4626 Accounting and Share Integrity
+6. How is `totalAssets()` computed?
+   - Does it reflect realizable exit value or only accounting value?
+   - Can it overstate value during illiquidity, auction lock, bad debt, or stale keeper operation?
+
+7. Are there rounding, preview, inflation, donation, or first-depositor edge cases?
+   - Check `deposit`, `mint`, `withdraw`, `redeem`, previews, conversions, fee math, and share issuance.
+   - Would a sophisticated attacker be able to manipulate share price or mint/redeem fairness?
+
+8. Is there any mismatch between:
+   - assets counted in `totalAssets()`
+   - assets actually liquid/withdrawable now
+   - assets withdrawable only after keeper action
+   - assets exposed to Ajna bucket insolvency or lockups
+
+9. Could a user receive an economically unfair share price if:
+   - buffer is low,
+   - Ajna positions are stale,
+   - bucket values drift,
+   - interest accrues between accounting reads and actions,
+   - or rebalancing is delayed?
+
+10. Does the buffer-only withdrawal design create structural redemption unfairness between:
+   - early withdrawers,
+   - late withdrawers,
+   - large users,
+   - and users redeeming during stress?
+
+### C. Buffer Design and Exit Liquidity
+11. Is the configured Buffer ratio sufficient in realistic stress scenarios?
+12. What happens if many users redeem before the next keeper run?
+13. Does the strategy create a bank-run dynamic where first exits are honored and later exits revert?
+14. Is that merely a UX issue, or a material economic/safety issue?
+15. Can an attacker intentionally drain or pin the buffer to grief other users?
+16. Are there any edge cases where buffer accounting can drift from true economic value?
+
+### D. Ajna-Specific Economic and Market Structure Risk
+17. How does Ajna bucket placement affect real yield vs apparent yield?
+18. What assumptions does the strategy make about:
+   - LUP
+   - HTP
+   - bucket bankruptcy
+   - auction states
+   - range validity
+   - out-of-range deposits
+19. Are these assumptions valid under fast price moves, toxic flow, or stressed collateral?
+20. Does the strategy systematically expose depositors to adverse selection from borrowers?
+21. Could the “optimal bucket” logic increase concentration in the wrong place at the wrong time?
+22. Could the strategy chase yield into buckets that are economically fragile or difficult to exit?
+23. Are there scenarios where liquidity appears productive but is practically trapped?
+
+### E. Keeper Correctness and Operational Risk
+24. What exact decisions does the keeper make?
+25. Which keeper configuration values are safety-critical?
+26. Which keeper inputs are trusted?
+27. What happens when:
+   - the keeper is offline,
+   - the subgraph fails,
+   - price data is stale,
+   - the wrong oracle mode is selected,
+   - a fixed price is misconfigured,
+   - bad debt is present,
+   - auctions are live,
+   - or gas estimation fails?
+
+28. Are there failure modes where the keeper safely halts?
+29. Are there failure modes where the keeper continues but makes economically bad moves?
+30. Could keeper delays alone cause material user harm?
+31. Does a 12-hour cadence create meaningful latency risk during volatility?
+32. Does the keeper’s target-bucket logic introduce path dependency or deterministic predictability that can be exploited?
+33. Could someone manipulate conditions around keeper timing to induce bad rebalances?
+34. Are there race conditions between state read, decision, and transaction inclusion?
+
+### F. Oracle / Price Source / Data Dependency Risk
+35. Even though Ajna is described as oracle-less, where does this implementation reintroduce oracle dependence?
+36. Compare the risk of:
+   - CoinGecko/API path
+   - Chronicle/onchain oracle path
+   - fixed price path
+   - CRE + Chainlink feed path
+37. Which path is safest?
+38. Which path is easiest to misconfigure?
+39. Which path is most robust to latency, outages, and manipulation?
+40. Could stale but valid-looking prices cause systematically wrong bucket placement?
+41. Could oracle disagreement or feed/API drift create oscillation or bad rebalancing?
+42. Is there an attack where a stale/reference price causes the vault to move liquidity out of a safe bucket into a fragile one?
+
+### G. Smart Contract Safety
+43. Identify all privileged roles and what they can do.
+44. Can admin, keeper, or swapper permissions directly or indirectly cause loss?
+45. Review:
+   - pause/unpause,
+   - cap changes,
+   - fee changes,
+   - min bucket index,
+   - move functions,
+   - buffer operations,
+   - any rescue/emergency paths.
+46. Are there reentrancy, ordering, access control, stale-state, or partial-state-update risks?
+47. Are there hidden assumptions in helper libraries or Buffer/VaultAuth interactions?
+48. Does any contract rely on optimistic assumptions about Ajna pool behavior that should be treated as unsafe?
+
+### H. Adversarial Scenarios
+For each scenario, provide:
+- attack path,
+- required preconditions,
+- concrete exploit sequence,
+- economic impact,
+- whether loss is temporary, permanent, or liveness-only,
+- detection signal,
+- mitigation.
+
+Analyze at minimum:
+49. Share price manipulation
+50. Donation / inflation attack
+51. Sandwiching around deposit/redeem
+52. Strategic buffer exhaustion
+53. Keeper timing exploitation
+54. Wrong-bucket reallocation via stale oracle/reference data
+55. Griefing through small/dust bucket states
+56. Borrower-side toxic flow / adverse selection
+57. Auction / bankruptcy state trapping liquidity
+58. Operator key compromise
+59. Misconfigured buffer ratio
+60. Misconfigured fixed price
+61. CRE workflow bug causing repeated or skipped operational actions
+62. AI advisory path influencing operations incorrectly
+63. Replay / duplication / double-execution risk in CRE-triggered workflows
+64. Divergence between deterministic checks and advisory AI outputs
+
+### I. CRE-Specific Design Review
+65. Can CRE safely replace the existing keeper loop, or should it only supervise / gate / queue keeper actions?
+66. Which keeper responsibilities are good candidates for CRE?
+67. Which responsibilities should remain deterministic and minimal?
+68. Which responsibilities should never rely on AI?
+69. How should CRE be used:
+   - as a scheduler,
+   - as a monitor,
+   - as a policy engine,
+   - as a transaction orchestrator,
+   - as a human-in-the-loop escalation layer?
+
+70. Review the Converge workflows and determine:
+   - what is already relevant to keeper supervision,
+   - what is reusable,
+   - what is only hackathon/demo quality,
+   - what would need hardening for production.
+
+71. Evaluate whether CRE adds:
+   - better determinism,
+   - better observability,
+   - better replay protection,
+   - better state checkpointing,
+   - or just more complexity.
+
+72. Evaluate CRE-specific risks:
+   - workflow misconfiguration,
+   - secrets handling,
+   - trigger duplication,
+   - external HTTP dependency,
+   - runtime persistence mismatch,
+   - unsafe onchain write authority,
+   - deployment model risk,
+   - early-access platform risk.
+
+73. Distinguish sharply between:
+   - simulation confidence,
+   - production readiness,
+   - and institutional-grade operational resilience.
+
+### J. Stress Tests
+Model and discuss the system under:
+74. 20%, 35%, and 50% collateral price shocks
+75. rapid borrower deleveraging
+76. active liquidation auctions
+77. bad debt emergence
+78. 25%, 50%, and 80% of vault TVL trying to redeem before next rebalance
+79. stale oracle / bad price selection
+80. keeper offline for 12h / 24h / 72h
+81. subgraph failure
+82. admin mistake
+83. CRE workflow outage
+84. CRE workflow duplicated trigger
+85. AI advisory endpoint returning nonsense while deterministic checks still pass
+
+For each, explain:
+- what users observe,
+- what breaks first,
+- whether losses are mark-to-market, realized, or liveness-only,
+- who bears the cost,
+- whether recovery is automatic, operator-dependent, or impossible.
+
+--------------------------------------------------

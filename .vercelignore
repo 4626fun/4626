@@ -56,3 +56,6 @@ target
 .xmtp-data
 **/.xmtp-data
 
+# Archived design media moved out of frontend/public to avoid shipping it.
+design/base-brand-archive
+design/public-asset-archive

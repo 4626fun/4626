@@ -20,13 +20,19 @@ function normalizePrefix(prefix: string): string {
   return `${trimmed}/`
 }
 
+function normalizeSubpath(value: string): string {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed) return ''
+  return trimmed.replace(/^\/+/, '').replace(/\/+$/, '')
+}
+
 function getApiSubpath(req: VercelRequest, prefixes: string[]): string {
   const query = (req as any)?.query
   const hasExplicitQueryPath =
     query != null &&
     typeof query === 'object' &&
     Object.prototype.hasOwnProperty.call(query, 'path')
-  const qp = firstQueryPathSegment(query?.path)
+  const qp = normalizeSubpath(firstQueryPathSegment(query?.path))
   if (qp || hasExplicitQueryPath) return qp
 
   const rawUrl = typeof req.url === 'string' ? req.url : ''
@@ -36,11 +42,11 @@ function getApiSubpath(req: VercelRequest, prefixes: string[]): string {
   for (const prefix of prefixes.map(normalizePrefix)) {
     const exact = prefix.slice(0, -1)
     if (pathname === exact || pathname === `${exact}/`) return ''
-    if (pathname.startsWith(prefix)) return pathname.slice(prefix.length)
+    if (pathname.startsWith(prefix)) return normalizeSubpath(pathname.slice(prefix.length))
   }
 
-  if (pathname.startsWith('/')) return pathname.slice(1)
-  return pathname
+  if (pathname.startsWith('/')) return normalizeSubpath(pathname.slice(1))
+  return normalizeSubpath(pathname)
 }
 
 function isSafeSubpath(p: string): boolean {

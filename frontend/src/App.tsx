@@ -15,7 +15,9 @@ import { AppLoadingState } from '@/components/AppLoadingState'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { getHostMode, getMarketingBaseUrl, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
+import { PrivyClientProvider } from '@/lib/privy/client'
 import { AccountContextProvider } from '@/wallet/accountContext'
+import { WalletProviders } from './web3/Web3Providers'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type CreatorAllowlistMode = 'disabled' | 'enforced'
@@ -274,9 +276,51 @@ export function useAccessContext(): AccessState {
   return value
 }
 
+function useOptionalAccessContext(): AccessState | null {
+  return useContext(AccessContext)
+}
+
 function AccessStateProvider(props: { children: ReactNode }) {
   const value = useResolvedAccessState()
   return <AccessContext.Provider value={value}>{props.children}</AccessContext.Provider>
+}
+
+function AppAuthProviders(props: { children: ReactNode }) {
+  return (
+    <PrivyClientProvider>
+      <WalletProviders>{props.children}</WalletProviders>
+    </PrivyClientProvider>
+  )
+}
+
+function AppWalletShell() {
+  return (
+    <WalletProviders>
+      <Outlet />
+    </WalletProviders>
+  )
+}
+
+function AppAuthShell() {
+  return (
+    <AppAuthProviders>
+      <Outlet />
+    </AppAuthProviders>
+  )
+}
+
+function AppAccessShell() {
+  return (
+    <AppAuthProviders>
+      <AccessStateProvider>
+        <Outlet />
+      </AccessStateProvider>
+    </AppAuthProviders>
+  )
+}
+
+function LayoutOnly() {
+  return <Layout interactive={false} />
 }
 
 function LayoutWithAccountContext() {
@@ -528,9 +572,24 @@ const TelegramMenu = lazy(async () => {
 
 function NotFoundPage() {
   const location = useLocation()
-  const access = useAccessContext()
+  const access = useOptionalAccessContext()
+  const genericCta = useMemo(() => {
+    if (getHostMode() === 'marketing') {
+      return {
+        href: waitlistEntryHref(getMarketingBaseUrl(), 'needs-session'),
+        label: 'Join Waitlist',
+        hint: 'Start from the canonical waitlist entry.',
+      }
+    }
+    return {
+      href: withReason('/swap', 'not-found'),
+      label: 'Go To Trade',
+      hint: 'Continue to the canonical app landing route.',
+    }
+  }, [])
 
   const appCta = useMemo(() => {
+    if (!access) return genericCta
     if (!access.sessionValid) {
       return {
         href: waitlistEntryHref(access.marketingUrl, 'needs-session'),
@@ -547,7 +606,7 @@ function NotFoundPage() {
     }
     const tradeHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/swap' : withReason('/swap', 'not-found')
     return { href: tradeHref, label: 'Go To Trade', hint: 'Your session is valid. Continue to the canonical app landing route.' }
-  }, [access.accepted, access.sessionValid, access.hostMode, access.marketingUrl])
+  }, [access, genericCta])
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -574,37 +633,20 @@ function NotFoundPage() {
 
 function App() {
   return (
-    <AccessStateProvider>
-      <Routes>
-        <Route
-          element={
-            <>
-              <HostGuard />
-              <Outlet />
-            </>
-          }
-        >
-          <Route
-            path="/telegram/menu"
-            element={
-              <RequireTelegramMiniAppEntry>
-                <TelegramMenu />
-              </RequireTelegramMiniAppEntry>
-            }
-          />
-          <Route
-            path="/telegram/link"
-            element={
-              <RequireTelegramMiniAppEntry>
-                <TelegramLink />
-              </RequireTelegramMiniAppEntry>
-            }
-          />
-          <Route element={<LayoutWithAccountContext />}>
-          {/* Public routes (no session required) */}
-          <Route path="/" element={<Home />} />
-          <Route path="/404" element={<NotFoundPage />} />
-          <Route path="/waitlist" element={<WaitlistEntryRoute />} />
+    <Routes>
+      <Route
+        element={
+          <>
+            <HostGuard />
+            <Outlet />
+          </>
+        }
+      >
+        <Route path="/" element={<Home />} />
+        <Route path="/404" element={<NotFoundPage />} />
+        <Route path="/waitlist" element={<WaitlistEntryRoute />} />
+
+        <Route element={<LayoutOnly />}>
           <Route
             path="/faq"
             element={
@@ -621,88 +663,118 @@ function App() {
               </MarketingOnlyRoute>
             }
           />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+        </Route>
+
+        <Route element={<AppWalletShell />}>
+          <Route element={<LayoutOnly />}>
+            <Route
+              path="/status"
+              element={
+                <MarketingOnlyRoute>
+                  <Status />
+                </MarketingOnlyRoute>
+              }
+            />
+          </Route>
+        </Route>
+
+        <Route element={<AppAuthShell />}>
+          <Route element={<LayoutWithAccountContext />}>
+            <Route path="/continue" element={<AppContinue />} />
+            <Route path="/accounts" element={<AccountsPage />} />
+            <Route path="/account" element={<AccountsPage />} />
+          </Route>
+        </Route>
+
+        <Route element={<AppAccessShell />}>
           <Route
-            path="/status"
+            path="/telegram/menu"
             element={
-              <MarketingOnlyRoute>
-                <Status />
-              </MarketingOnlyRoute>
+              <RequireTelegramMiniAppEntry>
+                <TelegramMenu />
+              </RequireTelegramMiniAppEntry>
             }
           />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/continue" element={<AppContinue />} />
-          <Route path="/accounts" element={<AccountsPage />} />
-          <Route path="/account" element={<AccountsPage />} />
+          <Route
+            path="/telegram/link"
+            element={
+              <RequireTelegramMiniAppEntry>
+                <TelegramLink />
+              </RequireTelegramMiniAppEntry>
+            }
+          />
 
-          {/* Session-gated routes */}
-          <Route element={<RequireSession />}>
-            <Route element={<RequireAccepted />}>
-              <Route path="/explore/creators" element={<ExploreCreators />} />
-              <Route path="/explore/content" element={<ExploreContent />} />
-              <Route path="/explore/trends" element={<ExploreTrends />} />
-              <Route path="/explore/transactions" element={<ExploreTransactions />} />
-              <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
-              <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
-              <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
-              <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
-              <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-              <Route path="/swap" element={<Swap />} />
-              <Route path="/positions" element={<Positions />} />
-              <Route path="/portfolio" element={<Portfolio />} />
-              <Route path="/portfolio/:address" element={<Portfolio />} />
-              <Route
-                path="/deploy"
-                element={
-                  <WithSmartWallets>
-                    <DeployVault />
-                  </WithSmartWallets>
-                }
-              />
-              <Route path="/coin/:address/manage" element={<CoinManage />} />
-              <Route path="/creator/earnings" element={<CreatorEarnings />} />
-              <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-              <Route path="/vote" element={<GaugeVoting />} />
-              <Route path="/auction/bid/:address" element={<AuctionBid />} />
-              <Route path="/complete-auction" element={<CompleteAuction />} />
-              <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-              <Route path="/vault/:address" element={<Vault />} />
-              <Route path="/agents" element={<AgentDirectory />} />
-              <Route path="/agents/register" element={<AgentRegister />} />
-              <Route path="/agents/uri-service" element={<AgentUriService />} />
-              <Route path="/auction-demo" element={<AuctionDemo />} />
-            </Route>
-
-            <Route element={<RequireAdmin />}>
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="/admin/waitlist" replace />} />
-                <Route path="creator-access" element={<AdminCreatorAccess />} />
-                <Route path="waitlist" element={<AdminWaitlist />} />
-                <Route path="agent-setup" element={<AdminAgentSetup />} />
-                <Route path="imagegen" element={<AdminImageGeneration />} />
+          <Route element={<LayoutWithAccountContext />}>
+            <Route element={<RequireSession />}>
+              <Route element={<RequireAccepted />}>
+                <Route path="/explore/creators" element={<ExploreCreators />} />
+                <Route path="/explore/content" element={<ExploreContent />} />
+                <Route path="/explore/trends" element={<ExploreTrends />} />
+                <Route path="/explore/transactions" element={<ExploreTransactions />} />
+                <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
+                <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
+                <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
+                <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
+                <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
+                <Route path="/swap" element={<Swap />} />
+                <Route path="/positions" element={<Positions />} />
+                <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/portfolio/:address" element={<Portfolio />} />
                 <Route
-                  path="ops"
+                  path="/deploy"
                   element={
                     <WithSmartWallets>
-                      <AdminOps />
+                      <DeployVault />
                     </WithSmartWallets>
                   }
                 />
-                <Route
-                  path="deploy-strategies"
-                  element={
-                    <WithSmartWallets>
-                      <AdminDeployStrategies />
-                    </WithSmartWallets>
-                  }
-                />
+                <Route path="/coin/:address/manage" element={<CoinManage />} />
+                <Route path="/creator/earnings" element={<CreatorEarnings />} />
+                <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
+                <Route path="/vote" element={<GaugeVoting />} />
+                <Route path="/auction/bid/:address" element={<AuctionBid />} />
+                <Route path="/complete-auction" element={<CompleteAuction />} />
+                <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
+                <Route path="/vault/:address" element={<Vault />} />
+                <Route path="/agents" element={<AgentDirectory />} />
+                <Route path="/agents/register" element={<AgentRegister />} />
+                <Route path="/agents/uri-service" element={<AgentUriService />} />
+                <Route path="/auction-demo" element={<AuctionDemo />} />
+              </Route>
+
+              <Route element={<RequireAdmin />}>
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Navigate to="/admin/waitlist" replace />} />
+                  <Route path="creator-access" element={<AdminCreatorAccess />} />
+                  <Route path="waitlist" element={<AdminWaitlist />} />
+                  <Route path="agent-setup" element={<AdminAgentSetup />} />
+                  <Route path="imagegen" element={<AdminImageGeneration />} />
+                  <Route
+                    path="ops"
+                    element={
+                      <WithSmartWallets>
+                        <AdminOps />
+                      </WithSmartWallets>
+                    }
+                  />
+                  <Route
+                    path="deploy-strategies"
+                    element={
+                      <WithSmartWallets>
+                        <AdminDeployStrategies />
+                      </WithSmartWallets>
+                    }
+                  />
+                </Route>
               </Route>
             </Route>
           </Route>
-          </Route>
-          <Route path="*" element={<NotFoundPage />} />
         </Route>
-      </Routes>
-    </AccessStateProvider>
+
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   )
 }
 

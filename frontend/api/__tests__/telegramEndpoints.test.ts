@@ -341,6 +341,7 @@ describe('telegram endpoint handlers', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
+    expect(ensureWaitlistSchemaMock).not.toHaveBeenCalled()
     expect(claimTelegramMiniAppReplayNonceMock).toHaveBeenCalledTimes(1)
     expect(createTelegramMiniAppSessionMock).toHaveBeenCalledTimes(1)
     expect(res.body?.data?.sessionToken).toBe('mini-session-token')

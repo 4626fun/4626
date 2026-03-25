@@ -3,22 +3,40 @@
 
 # Dependencies
 node_modules
+**/node_modules
 
 # Build output / caches
 dist
+**/dist
 coverage
+**/coverage
 .cache
 .eslintcache
 .next
+**/.next
 .turbo
+**/.turbo
 .vite
+**/.vite
 .vercel
+**/.vercel
 .xmtp-data
+**/.xmtp-data
 playwright-report
+**/playwright-report
 test-results
+**/test-results
 tmp
 *.log
 *.tsbuildinfo
+
+# Tooling-only workspaces / test assets not needed for Vercel builds
+v4-subgraph
+docs
+**/docs
+**/__tests__
+**/*.test.*
+**/*.spec.*
 
 # Local env / secrets
 .env

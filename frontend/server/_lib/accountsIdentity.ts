@@ -92,6 +92,7 @@ const LINK_POINTS: Partial<Record<AccountLinkProvider, number>> = {
 }
 
 let accountsIdentitySchemaEnsured = false
+let accountsIdentitySchemaEnsurePromise: Promise<void> | null = null
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -271,9 +272,11 @@ export function deriveLinkedMethodsFromPrivyUser(user: PrivyUserLike): Record<st
 
 export async function ensureAccountsIdentitySchema(db: Db): Promise<void> {
   if (accountsIdentitySchemaEnsured) return
-  try {
-    await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
-    await db.sql`
+  if (accountsIdentitySchemaEnsurePromise) return accountsIdentitySchemaEnsurePromise
+  accountsIdentitySchemaEnsurePromise = (async () => {
+    try {
+      await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
+      await db.sql`
       CREATE TABLE IF NOT EXISTS accounts (
         privy_user_id TEXT PRIMARY KEY,
         email TEXT NULL,
@@ -339,15 +342,19 @@ export async function ensureAccountsIdentitySchema(db: Db): Promise<void> {
         UNIQUE (privy_user_id, event_key)
       );
     `
-    await db.sql`
+      await db.sql`
       CREATE INDEX IF NOT EXISTS account_point_events_privy_created_idx
       ON account_point_events (privy_user_id, created_at DESC);
     `
-    accountsIdentitySchemaEnsured = true
-  } catch {
-    accountsIdentitySchemaEnsured = false
-    throw new Error('accounts_identity_schema_ensure_failed')
-  }
+      accountsIdentitySchemaEnsured = true
+    } catch {
+      accountsIdentitySchemaEnsured = false
+      throw new Error('accounts_identity_schema_ensure_failed')
+    } finally {
+      accountsIdentitySchemaEnsurePromise = null
+    }
+  })()
+  return accountsIdentitySchemaEnsurePromise
 }
 
 export async function upsertAccount(params: {

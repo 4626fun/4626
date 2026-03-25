@@ -33,13 +33,11 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: NavIt
   const pathname = location.pathname
   const hash = location.hash ?? ''
 
-  // Hash links (e.g. "/#waitlist") are active only when both match.
   if (item.to.includes('#')) {
     const [toPath, toHash = ''] = item.to.split('#')
     const wantPath = toPath || '/'
     const wantHash = `#${toHash}`
     if (pathname === wantPath && hash === wantHash) return true
-    // Back-compat: allow `/waitlist` route to count as active for the waitlist item.
     const prefixes = item.activePrefixes && item.activePrefixes.length > 0 ? item.activePrefixes : [item.to]
     return prefixes.includes('/waitlist') && pathname === '/waitlist'
   }
@@ -49,16 +47,25 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: NavIt
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
-export function VaultNavBar() {
+function useSafeAdminStatus() {
+  try {
+    return useAdminStatus()
+  } catch {
+    return { isAdmin: false }
+  }
+}
+
+export function VaultNavBar(props: { interactive?: boolean }) {
+  const interactive = props.interactive ?? true
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
-  const { isAdmin } = useAdminStatus()
+  const { isAdmin } = useSafeAdminStatus()
   const [brandHovered, setBrandHovered] = useState(false)
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
-  const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
+  const items = interactive && isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const brandHref = hostMode === 'marketing' ? '/' : '/swap'
-  const showConnect = !publicMode && hostMode !== 'marketing'
+  const showConnect = interactive && !publicMode && hostMode !== 'marketing'
 
   const renderNavLinks = () =>
     items.map((item) => {

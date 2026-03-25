@@ -1063,6 +1063,118 @@ describe('telegram webhook handler', () => {
     expect(editButtons.some((button: any) => String(button?.callback_data ?? '').startsWith('message:delete:99'))).toBe(true)
   })
 
+  it('sends a fresh /help reply in private DM even when a tracked active message exists', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    const restorePrivateDmEnv = applyEnv({
+      TELEGRAM_ALLOW_PRIVATE_DMS: 'true',
+    })
+    getTelegramActiveMessageMock.mockResolvedValueOnce({
+      chatId: '7726886643',
+      ownerTelegramUserId: '999',
+      messageId: 701,
+      createdAt: null,
+      updatedAt: null,
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+        body: {
+          update_id: 3_0_1_3,
+          message: { message_id: 403, text: '/help', chat: { id: 7726886643 }, from: { id: 999 } },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect((fetch as any).mock.calls.length).toBe(1)
+      expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+      const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+      expect(String(payload.text ?? '')).toContain('4626 Command Guide')
+      expect(payload.reply_to_message_id).toBe(403)
+      expect(clearTelegramActiveMessageMock).toHaveBeenCalledWith(expect.objectContaining({
+        chatId: '7726886643',
+        ownerTelegramUserId: '999',
+        messageId: 701,
+      }))
+    } finally {
+      restorePrivateDmEnv()
+    }
+  })
+
+  it('sends a fresh /start reply in private DM even when a tracked active message exists', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramActiveMessageMock.mockResolvedValueOnce({
+      chatId: '7726886643',
+      ownerTelegramUserId: '42',
+      messageId: 702,
+      createdAt: null,
+      updatedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_2,
+        message: { message_id: 92, text: '/start', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Welcome to 4626.fun on Telegram')
+    expect(payload.reply_to_message_id).toBe(92)
+    expect(clearTelegramActiveMessageMock).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: '7726886643',
+      ownerTelegramUserId: '42',
+      messageId: 702,
+    }))
+  })
+
+  it('sends a fresh private DM reply for slash commands beyond /help and /start', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramActiveMessageMock.mockResolvedValueOnce({
+      chatId: '7726886643',
+      ownerTelegramUserId: '42',
+      messageId: 703,
+      createdAt: null,
+      updatedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 3_1_3,
+        message: { message_id: 93, text: '/wallet', chat: { id: 7726886643 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(payload.reply_to_message_id).toBe(93)
+    expect(clearTelegramActiveMessageMock).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: '7726886643',
+      ownerTelegramUserId: '42',
+      messageId: 703,
+    }))
+  })
+
   it('handles /start in DM as onboarding welcome with a single Start inline CTA', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 

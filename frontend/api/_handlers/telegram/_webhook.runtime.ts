@@ -1533,6 +1533,18 @@ function isDefaultHelpCommand(rawText: string): boolean {
   return isHelpCommand(rawText) && !isHelpCategoryCommand(rawText)
 }
 
+function shouldSendFreshPrivateDmCommandReply(params: {
+  chatId: string
+  normalizedText: string
+}): boolean {
+  if (!isPrivateChatId(params.chatId)) return false
+  const normalized = asTrimmed(params.normalizedText)
+  if (normalized.startsWith('/')) return true
+  if (isDefaultHelpCommand(params.normalizedText)) return true
+  const commandToken = tokenizeTelegramCommand(params.normalizedText)[0]?.toLowerCase() ?? ''
+  return commandToken === '/start' || commandToken === 'start'
+}
+
 function buildOnboardingWelcomeText(): string {
   return [
     '<b>Welcome to 4626.fun on Telegram</b>',
@@ -7566,6 +7578,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     chatId,
     ownerUserId: userId,
   })
+  const shouldSendFreshReply = shouldSendFreshPrivateDmCommandReply({
+    chatId,
+    normalizedText,
+  })
   if (response.media) {
     const mediaCaption = asTrimmed(response.media.caption ?? response.text)
     const sentPhoto = await sendTelegramPhoto({
@@ -7617,7 +7633,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const firstChunk = chunks[0] ?? ''
     let trackedMessageId: number | null = null
     if (firstChunk) {
-      if (deliveryState.activeMessageId) {
+      if (shouldSendFreshReply) {
+        await clearTelegramActiveMessageState({
+          db: deliveryState.db,
+          chatId,
+          ownerUserId: userId,
+          messageId: deliveryState.activeMessageId,
+        }).catch(() => {})
+        const sent = await sendTelegramMessage({
+          botToken,
+          chatId,
+          text: firstChunk,
+          replyToMessageId: message.message_id,
+          replyMarkup: helpMarkup,
+          dismissOwnerUserId: deliveryState.dismissOwnerUserId,
+        })
+        trackedMessageId = sent.messageId
+      } else if (deliveryState.activeMessageId) {
         const replaced = await replaceTelegramMenuMessage({
           botToken,
           chatId,

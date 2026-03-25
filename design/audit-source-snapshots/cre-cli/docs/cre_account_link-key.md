@@ -1,0 +1,35 @@
+## cre account link-key
+
+Link a public key address to your account
+
+### Synopsis
+
+Link a public key address to your account for workflow operations.
+
+```
+cre account link-key [optional flags]
+```
+
+### Options
+
+```
+  -h, --help                 help for link-key
+  -l, --owner-label string   Label for the workflow owner
+      --unsigned             If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
+      --yes                  If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
+```
+
+### Options inherited from parent commands
+
+```
+  -e, --env string            Path to .env file which contains sensitive info
+  -R, --project-root string   Path to the project root
+  -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
+  -T, --target string         Use target settings from YAML config
+  -v, --verbose               Run command in VERBOSE mode
+```
+
+### SEE ALSO
+
+* [cre account](cre_account.md)	 - Manage account and request deploy access
+

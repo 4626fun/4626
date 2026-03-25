@@ -1,13 +1,10 @@
 import App from './App'
-import { Web3Providers } from './web3/Web3Providers'
-import { PrivyClientProvider } from '@/lib/privy/client'
+import { AppQueryProvider } from './web3/Web3Providers'
 
 export default function ProtectedApp() {
   return (
-    <PrivyClientProvider>
-      <Web3Providers>
+    <AppQueryProvider>
         <App />
-      </Web3Providers>
-    </PrivyClientProvider>
+    </AppQueryProvider>
   )
 }

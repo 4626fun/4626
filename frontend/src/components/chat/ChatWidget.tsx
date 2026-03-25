@@ -634,10 +634,11 @@ function ChatWidgetInner() {
  * Self-contained chat widget — wraps itself in the XMTP provider.
  * Drop this into any layout to get the full chat experience.
  */
-export function ChatWidget() {
+export function ChatWidget(props: { initiallyActivated?: boolean } = {}) {
   const location = useLocation()
   const hasDeepLinkActivation = hasChatDeepLinkSearch(location.search)
-  const [chatActivated, setChatActivated] = useState(() => hasDeepLinkActivation)
+  const initiallyActivated = props.initiallyActivated === true
+  const [chatActivated, setChatActivated] = useState(() => initiallyActivated || hasDeepLinkActivation)
 
   useEffect(() => {
     if (!hasDeepLinkActivation) return

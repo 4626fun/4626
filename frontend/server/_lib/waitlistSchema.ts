@@ -5,12 +5,15 @@ import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 let waitlistSchemaEnsured = false
+let waitlistSchemaEnsurePromise: Promise<void> | null = null
 
 export async function ensureWaitlistSchema(db: Db): Promise<void> {
   if (waitlistSchemaEnsured) return
-  try {
-    // Create a minimal, durable waitlist schema. Safe to run repeatedly.
-    await db.sql`
+  if (waitlistSchemaEnsurePromise) return waitlistSchemaEnsurePromise
+  waitlistSchemaEnsurePromise = (async () => {
+    try {
+      // Create a minimal, durable waitlist schema. Safe to run repeatedly.
+      await db.sql`
       CREATE TABLE IF NOT EXISTS profiles (
         id BIGSERIAL PRIMARY KEY,
         email TEXT UNIQUE,
@@ -86,21 +89,25 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       // ignore (older Postgres or restricted perms)
     }
 
-    await db.sql`CREATE INDEX IF NOT EXISTS profiles_created_at_idx ON profiles (created_at DESC);`
-    await db.sql`CREATE INDEX IF NOT EXISTS profiles_csw_idx ON profiles (csw_address) WHERE csw_address IS NOT NULL;`
+      await db.sql`CREATE INDEX IF NOT EXISTS profiles_created_at_idx ON profiles (created_at DESC);`
+      await db.sql`CREATE INDEX IF NOT EXISTS profiles_csw_idx ON profiles (csw_address) WHERE csw_address IS NOT NULL;`
 
-    // Referral schema depends on profiles existing.
-    await ensureReferralsSchema(db)
+      // Referral schema depends on profiles existing.
+      await ensureReferralsSchema(db)
 
-    // Points + profile completion schema.
-    await ensureWaitlistPointsSchema(db)
+      // Points + profile completion schema.
+      await ensureWaitlistPointsSchema(db)
 
-    // Canonical wallet graph + provenance fields.
-    await ensureCanonicalWalletsSchema(db)
+      // Canonical wallet graph + provenance fields.
+      await ensureCanonicalWalletsSchema(db)
 
-    waitlistSchemaEnsured = true
-  } catch {
-    waitlistSchemaEnsured = false
-    throw new Error('waitlist_schema_ensure_failed')
-  }
+      waitlistSchemaEnsured = true
+    } catch {
+      waitlistSchemaEnsured = false
+      throw new Error('waitlist_schema_ensure_failed')
+    } finally {
+      waitlistSchemaEnsurePromise = null
+    }
+  })()
+  return waitlistSchemaEnsurePromise
 }

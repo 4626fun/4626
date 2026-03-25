@@ -343,6 +343,8 @@ export function TelegramLink() {
   const { sendCode, loginWithCode } = useLoginWithEmail()
   const getAccessToken = typeof privy.getAccessToken === 'function' ? privy.getAccessToken.bind(privy) : null
   const stateRef = useRef(state)
+  const sendCodeRef = useRef(sendCode)
+  const loginWithCodeRef = useRef(loginWithCode)
   const emailInputRef = useRef<HTMLInputElement | null>(null)
   const flowIdRef = useRef(createTelegramLinkFlowId())
   const flowStartedAtRef = useRef(Date.now())
@@ -351,6 +353,9 @@ export function TelegramLink() {
   const emailSubmitGestureLockRef = useRef(false)
   const emailSubmitGestureResetTimerRef = useRef<number | null>(null)
   const telegramMainButtonHandlerRef = useRef<(() => void) | null>(null)
+  const emailSendExecutionKeyRef = useRef<string | null>(null)
+  const codeVerifyExecutionKeyRef = useRef<string | null>(null)
+  const bindExecutionKeyRef = useRef<string | null>(null)
   const [telegramUiReady, setTelegramUiReady] = useState(false)
   const privySnapshotRef = useRef({
     ready: Boolean(privy.ready),
@@ -368,6 +373,14 @@ export function TelegramLink() {
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  useEffect(() => {
+    sendCodeRef.current = sendCode
+  }, [sendCode])
+
+  useEffect(() => {
+    loginWithCodeRef.current = loginWithCode
+  }, [loginWithCode])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -393,6 +406,18 @@ export function TelegramLink() {
         window.clearTimeout(emailSubmitGestureResetTimerRef.current)
         emailSubmitGestureResetTimerRef.current = null
       }
+    }
+  }, [state.tag])
+
+  useEffect(() => {
+    if (state.tag !== 'sending_email_code') {
+      emailSendExecutionKeyRef.current = null
+    }
+    if (state.tag !== 'verifying_email_code') {
+      codeVerifyExecutionKeyRef.current = null
+    }
+    if (state.tag !== 'bind_telegram') {
+      bindExecutionKeyRef.current = null
     }
   }, [state.tag])
 
@@ -450,6 +475,11 @@ export function TelegramLink() {
       })
     },
   })
+  const linkTelegramRef = useRef(linkTelegram)
+
+  useEffect(() => {
+    linkTelegramRef.current = linkTelegram
+  }, [linkTelegram])
 
   useEffect(() => {
     let active = true
@@ -611,6 +641,10 @@ export function TelegramLink() {
   useEffect(() => {
     if (state.tag !== 'sending_email_code') return
 
+    const executionKey = `${state.proof.sessionToken}:${normalizeEmailCandidate(state.email)}`
+    if (emailSendExecutionKeyRef.current === executionKey) return
+    emailSendExecutionKeyRef.current = executionKey
+
     let cancelled = false
     void (async () => {
       const startedAt = Date.now()
@@ -642,7 +676,7 @@ export function TelegramLink() {
         let timeoutId: number | null = null
         try {
           await Promise.race([
-            sendCode({ email: normalized }),
+            sendCodeRef.current({ email: normalized }),
             new Promise<never>((_, reject) => {
               timeoutId = window.setTimeout(() => {
                 reject(new Error('telegram_link_send_code_timeout'))
@@ -687,10 +721,14 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [emitTelemetry, sendCode, state])
+  }, [emitTelemetry, state])
 
   useEffect(() => {
     if (state.tag !== 'verifying_email_code') return
+
+    const executionKey = `${state.proof.sessionToken}:${state.code.trim()}`
+    if (codeVerifyExecutionKeyRef.current === executionKey) return
+    codeVerifyExecutionKeyRef.current = executionKey
 
     let cancelled = false
     void (async () => {
@@ -720,7 +758,7 @@ export function TelegramLink() {
       }
 
       try {
-        await loginWithCode({ code: normalizedCode })
+        await loginWithCodeRef.current({ code: normalizedCode })
         if (cancelled) return
         emitTelemetry('telegram_link_email_code_verify_succeeded', {
           status: 'succeeded',
@@ -746,7 +784,7 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [emitTelemetry, loginWithCode, state])
+  }, [emitTelemetry, state])
 
   useEffect(() => {
     if (state.tag !== 'wait_for_privy_sync') return
@@ -844,6 +882,10 @@ export function TelegramLink() {
   useEffect(() => {
     if (state.tag !== 'bind_telegram' || state.step !== 'ensure_privy_link') return
 
+    const executionKey = `${state.proof.sessionToken}:${state.account.privyUserId}:${state.step}`
+    if (bindExecutionKeyRef.current === executionKey) return
+    bindExecutionKeyRef.current = executionKey
+
     const snapshot = privySnapshotRef.current
     if (hasMatchingPrivyTelegramAccount(snapshot.user, state.proof)) {
       emitTelemetry('telegram_link_privy_link_skipped', {
@@ -873,12 +915,12 @@ export function TelegramLink() {
       status: 'started',
       privyUserId: state.account.privyUserId,
     })
-    linkTelegram({
+    linkTelegramRef.current({
       launchParams: {
         initDataRaw: state.proof.initDataRaw,
       },
     })
-  }, [emitTelemetry, linkTelegram, state])
+  }, [emitTelemetry, state])
 
   useEffect(() => {
     if (state.tag !== 'bind_telegram' || state.step !== 'complete_backend') return

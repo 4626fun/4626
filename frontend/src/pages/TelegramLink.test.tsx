@@ -86,8 +86,8 @@ vi.mock('@/lib/telegramLinkTelemetry', () => ({
 
 vi.mock('@privy-io/react-auth', () => ({
   useLoginWithEmail: () => ({
-    sendCode: sendCodeMock,
-    loginWithCode: loginWithCodeMock,
+    sendCode: (...args: any[]) => sendCodeMock(...args),
+    loginWithCode: (...args: any[]) => loginWithCodeMock(...args),
     state: 'idle',
   }),
   usePrivy: () => privyState,
@@ -305,6 +305,52 @@ describe('TelegramLink UI flow', () => {
       expect(document.querySelector('[data-flow-state="sending_email_code"]')).toBeTruthy()
     })
     expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
+
+    await act(async () => {
+      sendCodeDeferred.resolve()
+      await sendCodeDeferred.promise
+    })
+  })
+
+  it('does not re-send or re-emit started telemetry when the component rerenders during sending_email_code', async () => {
+    const user = userEvent.setup()
+    const sendCodeDeferred = deferred<void>()
+    sendCodeMock.mockImplementationOnce(() => sendCodeDeferred.promise)
+
+    function Harness(props: { tick: number }) {
+      return (
+        <MemoryRouter initialEntries={['/telegram/link?tgEntry=link&tgLinkToken=link-token-123&tgChatId=-100123']}>
+          <div data-tick={props.tick}>
+            <TelegramLink />
+          </div>
+        </MemoryRouter>
+      )
+    }
+
+    const view = render(<Harness tick={0} />)
+
+    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-flow-state="sending_email_code"]')).toBeTruthy()
+    })
+    expect(sendCodeMock).toHaveBeenCalledTimes(1)
+    expect(
+      trackTelegramLinkTelemetryEventMock.mock.calls.filter(
+        ([payload]) => payload?.event === 'telegram_link_email_code_send_started',
+      ),
+    ).toHaveLength(1)
+
+    view.rerender(<Harness tick={1} />)
+    view.rerender(<Harness tick={2} />)
+
+    expect(sendCodeMock).toHaveBeenCalledTimes(1)
+    expect(
+      trackTelegramLinkTelemetryEventMock.mock.calls.filter(
+        ([payload]) => payload?.event === 'telegram_link_email_code_send_started',
+      ),
+    ).toHaveLength(1)
 
     await act(async () => {
       sendCodeDeferred.resolve()
