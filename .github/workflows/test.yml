@@ -104,6 +104,10 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             tail -10 test-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "(no output)">> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Frontend footprint summary
+        if: always()
+        run: pnpm --dir frontend report:footprint
           fi
 
       - name: Verify production agent registration endpoint

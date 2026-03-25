@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs --out public",
+    "report:footprint": "node scripts/report-footprint.mjs",
     "capture:app-screens": "node scripts/capture-app-screenshots.mjs",
     "docs": "pnpm exec typedoc",
     "test": "vitest run",

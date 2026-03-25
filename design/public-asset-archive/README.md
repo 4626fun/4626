@@ -6,6 +6,7 @@ Archived here:
 - legacy social/export image variants
 - unused screenshot source art
 - unused token art exports
+- unused Base brand pack exports
 
 If any of these need to become runtime assets again, move only the required
 file back into `frontend/public` and add a real app reference for it.
