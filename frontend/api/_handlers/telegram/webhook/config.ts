@@ -8,6 +8,7 @@ const RawTelegramWebhookEnvSchema = z
   .object({
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+    TELEGRAM_WEBHOOK_URL: z.string().optional(),
     TELEGRAM_TARGET_CHAT_ID: z.string().optional(),
     TELEGRAM_ALLOWED_CHAT_IDS: z.string().optional(),
     TELEGRAM_ADMIN_USER_IDS: z.string().optional(),
@@ -61,6 +62,7 @@ const RawTelegramWebhookEnvSchema = z
 export type TelegramWebhookConfig = {
   botToken: string
   webhookSecret: string
+  webhookUrl: string
   targetChatId: string
   allowedChatIdsRaw: string
   adminUserIdsRaw: string
@@ -145,6 +147,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   return {
     botToken,
     webhookSecret: asTrimmed(raw.TELEGRAM_WEBHOOK_SECRET ?? ''),
+    webhookUrl: asTrimmed(raw.TELEGRAM_WEBHOOK_URL ?? ''),
     targetChatId,
     allowedChatIdsRaw,
     adminUserIdsRaw: asTrimmed(raw.TELEGRAM_ADMIN_USER_IDS ?? ''),

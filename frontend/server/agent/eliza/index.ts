@@ -2145,6 +2145,27 @@ async function main() {
     consumeXmtp: AGENT_CONSUME_XMTP,
     agentsRunning: runningAgents.size,
   })
+  {
+    const xmtpStates = [...runningAgents.values()].map((agent) => agent.xmtp.getHealth())
+    const xmtpReady = xmtpStates.every((entry) => entry.running)
+    const ready = Boolean(
+      agentBooted &&
+      latestEnvValidation.errors.length === 0 &&
+      (dbRequiredForRuntime && isDbConfigured() ? getDbInitError() === null : true) &&
+      (AGENT_CONSUME_XMTP && runningAgents.size > 0 ? xmtpReady : true),
+    )
+    logger.info('[eliza] startup summary', {
+      ready,
+      runtimeRole: AGENT_RUNTIME_ROLE,
+      consumeXmtp: AGENT_CONSUME_XMTP,
+      agentsRunning: runningAgents.size,
+      xmtpReady,
+      healthcheck: {
+        livenessPath: '/healthz',
+        readinessPath: '/readyz',
+      },
+    })
+  }
   logger.info('[eliza] Runtime ready. Press Ctrl+C to stop.')
 }
 
