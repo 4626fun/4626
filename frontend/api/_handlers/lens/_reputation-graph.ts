@@ -34,6 +34,21 @@ type ReputationGraphRequest = {
   store?: boolean
 }
 
+function buildReputationGraphDiscovery() {
+  return {
+    endpoint: '/api/lens/reputation-graph',
+    methods: ['GET', 'POST'],
+    requiredQuery: ['agentId'],
+    optionalQuery: {
+      tag1: 'string',
+      tag2: 'string',
+      includeRevoked: 'true|false',
+      store: 'true|false',
+    },
+    example: '/api/lens/reputation-graph?agentId=1&store=false',
+  } as const
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -49,6 +64,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = req.method === 'POST' ? (await readJsonBody<ReputationGraphRequest>(req)) ?? {} : {}
   const agentIdRaw = String(body.agentId ?? req.query.agentId ?? '').trim()
 
+  if (req.method === 'GET' && !agentIdRaw) {
+    return res.status(200).json({
+      success: true,
+      data: buildReputationGraphDiscovery(),
+    } satisfies ApiEnvelope<ReturnType<typeof buildReputationGraphDiscovery>>)
+  }
+
   if (!agentIdRaw || !/^\d+$/.test(agentIdRaw)) {
     return res.status(400).json({
       success: false,
@@ -60,7 +82,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const tag1 = String(body.tag1 ?? req.query.tag1 ?? '').trim()
   const tag2 = String(body.tag2 ?? req.query.tag2 ?? '').trim()
   const includeRevoked = body.includeRevoked !== false && String(req.query.includeRevoked ?? '').trim() !== 'false'
-  const shouldStore = body.store !== false && String(req.query.store ?? '').trim() !== 'false'
+  const storeQueryRaw = String(req.query.store ?? '').trim().toLowerCase()
+  const shouldStore = req.method === 'POST'
+    ? body.store !== false
+    : storeQueryRaw === 'true'
 
   const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
   if (shouldStore && !hasAuthPrincipal) {

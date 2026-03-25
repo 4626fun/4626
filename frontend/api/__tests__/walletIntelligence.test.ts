@@ -179,9 +179,20 @@ describe('wallet-intelligence API handler', () => {
     vi.restoreAllMocks()
   })
 
-  it('returns 400 when address is missing', async () => {
+  it('returns discovery metadata for bare GET requests', async () => {
     const { default: handler } = await import('../_handlers/v1/agents/_wallet-intelligence')
     const req = mockReq({ query: {} })
+    const res = mockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.endpoint).toBe('/api/v1/agents/wallet-intelligence')
+    expect(res.body.data.requiredQuery).toContain('address')
+  })
+
+  it('returns 400 when POST address is missing', async () => {
+    const { default: handler } = await import('../_handlers/v1/agents/_wallet-intelligence')
+    const req = mockReq({ method: 'POST', body: {}, query: {} })
     const res = mockRes()
     await handler(req, res)
     expect(res.statusCode).toBe(400)

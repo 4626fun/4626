@@ -10,6 +10,25 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 const MAX_CHAIN_IDS = 5
 const SUPPORTED_CHAIN_IDS = new Set<number>([1, 10, 137, 8453, 42161])
 
+function buildWalletIntelligenceDiscovery() {
+  return {
+    endpoint: '/api/v1/agents/wallet-intelligence',
+    method: 'GET',
+    requiredQuery: ['address'],
+    optionalQuery: {
+      hops: 'number',
+      chains: 'comma-separated chain ids',
+      store: 'true|false',
+      portfolio: 'true|false',
+      ens: 'true|false',
+      lens: 'true|false',
+      labels: 'true|false',
+      noCache: 'true|false',
+    },
+    example: '/api/v1/agents/wallet-intelligence?address=0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18',
+  } as const
+}
+
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
@@ -53,6 +72,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: 'Method not allowed. Use GET or POST /api/v1/agents/wallet-intelligence.',
     } satisfies ApiEnvelope<never>)
+  }
+
+  const queryAddress = typeof req.query.address === 'string' ? req.query.address.trim() : ''
+  if (req.method === 'GET' && !queryAddress) {
+    return res.status(200).json({
+      success: true,
+      data: buildWalletIntelligenceDiscovery(),
+    } satisfies ApiEnvelope<ReturnType<typeof buildWalletIntelligenceDiscovery>>)
   }
 
   // Rate limit

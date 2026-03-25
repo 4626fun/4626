@@ -1,4 +1,3 @@
-import { Attribution } from 'ox/erc8021'
 import type { Hex } from 'viem'
 
 /**
@@ -19,6 +18,7 @@ type EnvLike = Record<string, unknown>
 const BASE_MAINNET_CHAIN_ID = 8453
 const BASE_SEPOLIA_CHAIN_ID = 84532
 const ERC_8021_REPEATING_MARKER_HEX = '8021'.repeat(8)
+const ERC_8021_SCHEMA_ID_0_HEX = '00'
 const MISSING_ENV_WARNING =
   '[BuilderCodes] Missing builder code config. Set VITE_BASE_BUILDER_CODES (preferred) or VITE_BASE_DATA_SUFFIX.'
 
@@ -67,6 +67,31 @@ function normalizeHex(rawHex: string): Hex {
   return prefixed as Hex
 }
 
+function byteToHex(value: number): string {
+  return value.toString(16).padStart(2, '0')
+}
+
+function asciiToHex(value: string): string {
+  let result = ''
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.charCodeAt(index)
+    if (codePoint > 0x7f) {
+      throw new Error('[BuilderCodes] Builder codes must be ASCII strings.')
+    }
+    result += byteToHex(codePoint)
+  }
+  return result
+}
+
+function encodeBuilderCodesDataSuffix(codes: readonly string[]): Hex {
+  const codesHex = asciiToHex(codes.join(','))
+  const codesByteLength = codesHex.length / 2
+  if (codesByteLength > 0xff) {
+    throw new Error('[BuilderCodes] Builder code suffix exceeds ERC-8021 schema-0 length limit.')
+  }
+  return `0x${codesHex}${byteToHex(codesByteLength)}${ERC_8021_SCHEMA_ID_0_HEX}${ERC_8021_REPEATING_MARKER_HEX}` as Hex
+}
+
 export function parseBuilderCodes(raw: string | null | undefined): string[] {
   return String(raw ?? '')
     .split(',')
@@ -85,7 +110,7 @@ export function resolveDataSuffix(envInput: unknown = import.meta.env): Hex | un
   const env = asEnvRecord(envInput)
   const codes = resolveBuilderCodes(env)
   if (codes.length > 0) {
-    return Attribution.toDataSuffix({ codes }) as Hex
+    return encodeBuilderCodesDataSuffix(codes)
   }
 
   const precomputed = readEnvString(env, 'VITE_BASE_DATA_SUFFIX')

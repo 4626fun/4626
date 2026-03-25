@@ -33,10 +33,47 @@ type FeedbackPayloadRequest = Partial<FeedbackPayload> & {
   store?: boolean
 }
 
+function buildFeedbackPayloadDiscovery() {
+  return {
+    endpoint: '/api/lens/feedback-payload',
+    method: 'POST',
+    requiredBody: ['agentId', 'value', 'valueDecimals'],
+    optionalBody: [
+      'store',
+      'clientAddress',
+      'reasoning',
+      'reproducible',
+      'tag1',
+      'tag2',
+      'attachments',
+      'proofOfPayment',
+      'skill',
+      'domain',
+      'context',
+      'capability',
+      'name',
+      'endpoint',
+    ],
+    example: {
+      agentId: 1,
+      value: '5',
+      valueDecimals: 0,
+      store: false,
+    },
+  } as const
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
   if (handleOptions(req, res)) return
+
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      success: true,
+      data: buildFeedbackPayloadDiscovery(),
+    } satisfies ApiEnvelope<ReturnType<typeof buildFeedbackPayloadDiscovery>>)
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({

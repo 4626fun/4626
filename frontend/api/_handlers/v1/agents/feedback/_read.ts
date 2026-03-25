@@ -41,6 +41,27 @@ function setCache(res: VercelResponse, seconds: number = 30) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 5}`)
 }
 
+function buildFeedbackDiscovery() {
+  return {
+    endpoint: '/api/v1/agents/feedback',
+    method: 'GET',
+    requiredQuery: ['agentId'],
+    optionalQuery: {
+      client: '0x-address',
+      tag1: 'string',
+      tag2: 'string',
+      includeRevoked: 'true|false',
+      mode: 'summary|all|single|indexed',
+      feedbackIndex: 'required when mode=single',
+      limit: 'indexed mode only',
+      offset: 'indexed mode only',
+      orderBy: 'indexed mode only',
+      order: 'indexed mode only',
+    },
+    example: '/api/v1/agents/feedback?agentId=1&mode=summary',
+  } as const
+}
+
 // Typed as `any` end-to-end to avoid TS2589 with viem OP Stack chains on TS 5.9.
 let _client: any = null
 function getClient(): any {
@@ -60,11 +81,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
+  const agentIdRaw = String(req.query.agentId ?? '').trim()
+  if (!agentIdRaw) {
+    return res.status(200).json({
+      success: true,
+      data: buildFeedbackDiscovery(),
+    })
+  }
+
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/feedback', kind: 'read' })
   if (!g.ok) return
 
-  const agentIdRaw = String(req.query.agentId ?? '').trim()
-  if (!agentIdRaw || !/^\d+$/.test(agentIdRaw)) {
+  if (!/^\d+$/.test(agentIdRaw)) {
     return res.status(400).json({
       success: false,
       error: 'agentId is required (non-negative integer). Example: /api/v1/agents/feedback?agentId=1&mode=summary.',
