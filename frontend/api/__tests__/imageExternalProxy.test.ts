@@ -17,8 +17,12 @@ describe('image external proxy route registration', () => {
     lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
   })
 
-  it('registers the standalone image external proxy route', async () => {
-    await expect(import('../image/external.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+  it('registers the image external proxy route through the image family catch-all', async () => {
+    const catchAllMod = await import('../image/[...path].ts')
+    const routesMod = await import('../_handlers/_routes.image.ts')
+
+    expect(catchAllMod).toMatchObject({ default: expect.any(Function) })
+    await expect(routesMod.getImageApiHandler('external')).resolves.toBeTypeOf('function')
   })
 })
 
@@ -28,6 +32,58 @@ describe('GET /api/image/external', () => {
     vi.resetModules()
     vi.unstubAllGlobals()
     lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
+  })
+
+  it('routes through image catch-all when subpath comes from request URL', async () => {
+    const payload = new Uint8Array([137, 80, 78, 71])
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(payload, {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const familyMod = await import('../image/[...path].ts')
+    const familyHandler = familyMod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { url: 'https://cdn.example.com/token.png' },
+      url: '/api/image/external',
+    })
+    const res = createMockRes()
+
+    await familyHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.getHeader('content-type')).toBe('image/png')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('routes through image catch-all when request URL has trailing slash', async () => {
+    const payload = new Uint8Array([137, 80, 78, 71])
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(payload, {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const familyMod = await import('../image/[...path].ts')
+    const familyHandler = familyMod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { url: 'https://cdn.example.com/token.png' },
+      url: '/api/image/external/',
+    })
+    const res = createMockRes()
+
+    await familyHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.getHeader('content-type')).toBe('image/png')
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 
   it('rejects non-GET methods', async () => {

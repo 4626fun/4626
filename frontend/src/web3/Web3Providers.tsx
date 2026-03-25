@@ -30,15 +30,29 @@ const queryClient = new QueryClient({
   },
 })
 
+export function AppQueryProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  )
+}
+
+export function WalletProviders({ children }: { children: ReactNode }) {
+  return (
+    <WagmiProvider config={wagmiConfig}>
+      {children}
+    </WagmiProvider>
+  )
+}
+
 /**
- * Shared Web3 provider stack for app + waitlist routes.
+ * Shared query + wallet stack for routes that need both.
  */
 export function Web3Providers({ children }: { children: ReactNode }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <WagmiProvider config={wagmiConfig}>
-        {children}
-      </WagmiProvider>
-    </QueryClientProvider>
+    <AppQueryProvider>
+      <WalletProviders>{children}</WalletProviders>
+    </AppQueryProvider>
   )
 }

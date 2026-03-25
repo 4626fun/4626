@@ -1,13 +1,30 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
-import { VaultNavBar } from './brand/VaultNavBar'
-import { ChatWidget } from './chat/ChatWidget'
-import { AccountModeIndicator } from './account/AccountModeIndicator'
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
+
+const LazyVaultNavBar = lazy(async () => {
+  const mod = await import('./brand/VaultNavBar')
+  return { default: mod.VaultNavBar }
+})
+
+const LazyVaultNavBarPublic = lazy(async () => {
+  const mod = await import('./brand/VaultNavBarPublic')
+  return { default: mod.VaultNavBarPublic }
+})
+
+const LazyChatWidgetShell = lazy(async () => {
+  const mod = await import('./chat/ChatWidgetShell')
+  return { default: mod.ChatWidgetShell }
+})
+
+const LazyAccountModeIndicator = lazy(async () => {
+  const mod = await import('./account/AccountModeIndicator')
+  return { default: mod.AccountModeIndicator }
+})
 
 type MobileNavItem = {
   label: string
@@ -46,7 +63,8 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: Mobil
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
-export function Layout() {
+export function Layout(props: { interactive?: boolean }) {
+  const interactive = props.interactive ?? true
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
@@ -55,6 +73,7 @@ export function Layout() {
   const isAdminRoute = location.pathname.startsWith('/admin')
   const showTopNavBar = hostMode !== 'marketing'
   const showAccountMode =
+    interactive &&
     hostMode !== 'marketing' &&
     !publicMode &&
     (
@@ -88,8 +107,16 @@ export function Layout() {
         <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_-10%,rgba(255,255,255,0.06),transparent_62%)]" />
       </div>
       <div aria-hidden="true" className="noise-overlay" />
-      {showTopNavBar ? <VaultNavBar /> : null}
-      {showAccountMode ? <AccountModeIndicator /> : null}
+      {showTopNavBar ? (
+        <Suspense fallback={null}>
+          {interactive ? <LazyVaultNavBar /> : <LazyVaultNavBarPublic />}
+        </Suspense>
+      ) : null}
+      {showAccountMode ? (
+        <Suspense fallback={null}>
+          <LazyAccountModeIndicator />
+        </Suspense>
+      ) : null}
 
       {/* Skip to content link */}
       <a
@@ -116,7 +143,11 @@ export function Layout() {
       </main>
 
       {/* Chat widget — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
-      {hostMode === 'app' ? <ChatWidget /> : null}
+      {interactive && hostMode === 'app' ? (
+        <Suspense fallback={null}>
+          <LazyChatWidgetShell />
+        </Suspense>
+      ) : null}
 
       {/* Mobile Nav - Minimal */}
       <nav
