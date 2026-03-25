@@ -66,6 +66,7 @@ EXPOSE 8080
 # XMTP database persistence
 ENV XMTP_DB_DIRECTORY=/data/.xmtp-data
 
-# Entrypoint: fix volume permissions (Railway mounts as root), then drop to node
-# Runs as root → chown volume → exec as node user via gosu
-CMD ["sh", "-c", "chown -R node:node /data/.xmtp-data && exec gosu node npx tsx server/agent/eliza/index.ts"]
+# Entrypoint: fix volume permissions (Railway mounts as root), then drop to node.
+# Use a bash wrapper so we can filter known non-fatal native SQLCipher noise that
+# bypasses Node's process.stderr monkeypatching.
+CMD ["bash", "-lc", "chown -R node:node /data/.xmtp-data && exec gosu node bash server/agent/eliza/run-agent.sh"]

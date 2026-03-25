@@ -10,7 +10,6 @@ import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
 } from './families/keepr.js'
-import { executeMarketCommandFamily, matchesMarketCommand } from './families/market.js'
 import { executeSendCommandFamily } from './families/send.js'
 import { executeTwitterCommandFamily } from './families/twitter.js'
 import { executeWhoisCommandFamily } from './families/whois.js'
@@ -60,10 +59,6 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         text: raw,
         vault: await getVault(),
       })
-    }
-
-    if (matchesMarketCommand(raw)) {
-      return executeMarketCommandFamily({ text: raw })
     }
 
     switch (family) {

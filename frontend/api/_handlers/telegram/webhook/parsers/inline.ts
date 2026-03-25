@@ -9,7 +9,7 @@ import {
 import { asTrimmed, isAddressLike, truncateAddress } from '../utils.js'
 import { parseTelegramTradeIntent } from './trade.js'
 
-export type InlineQueryClass = 'trade' | 'market' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general' | 'token_analysis'
+export type InlineQueryClass = 'trade' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general' | 'token_analysis'
 
 export type InlineMediaAsset = {
   photoUrl?: string
@@ -79,11 +79,6 @@ function normalizeInlineDraft(rawQuery: string): string {
   return truncated || 'your update here'
 }
 
-function inferMarketSymbol(rawQuery: string): string {
-  const token = asTrimmed(rawQuery).split(/\s+/g)[0] ?? ''
-  return /^[a-zA-Z]{1,10}$/.test(token) ? token.toUpperCase() : 'BTC'
-}
-
 function parseInlineOffset(rawOffset: string): number {
   const parsed = Number(asTrimmed(rawOffset))
   if (!Number.isFinite(parsed) || parsed < 0) return 0
@@ -111,11 +106,11 @@ export function classifyInlineQuery(rawQuery: string): InlineQueryClass {
   const query = trimmed.toLowerCase()
   if (parseTelegramTradeIntent(query.startsWith('/') ? query : `/${query}`)) return 'trade'
   if (/\b(buy|sell|bid|trade)\b/.test(query)) return 'trade'
-  if (/\b(mkt|market|quote|price|btc|eth|sol)\b/.test(query)) return 'market'
+  if (/\b(mkt|market|quote|price)\b/.test(query)) return 'ai'
   if (/\b(ai|assistant|prompt|question|analyze)\b/.test(query)) return 'ai'
   if (/\b(link|wallet|connect)\b/.test(query)) return 'link'
   if (/\b(deploy|launch|create)\b/.test(query)) return 'deploy'
-  if (/\b(vault|auction|signal|wallet)\b/.test(query)) return 'discovery'
+  if (/\b(vault|auction|wallet)\b/.test(query)) return 'discovery'
   return 'general'
 }
 
@@ -235,8 +230,6 @@ function buildCommonCopy(growthMode: boolean): {
   xPostDescription: string
   aiTitle: string
   aiDescription: string
-  marketTitle: string
-  marketDescription: string
 } {
   if (growthMode) {
     return {
@@ -252,8 +245,6 @@ function buildCommonCopy(growthMode: boolean): {
       xPostDescription: 'Template ready to send',
       aiTitle: 'Ask AI',
       aiDescription: 'Get one clear next action',
-      marketTitle: 'Market quote',
-      marketDescription: 'Fast BTC, ETH, SOL',
     }
   }
 
@@ -270,8 +261,6 @@ function buildCommonCopy(growthMode: boolean): {
     xPostDescription: 'Pre-filled with callback confirm',
     aiTitle: 'Ask AI',
     aiDescription: 'Get next actions in plain English',
-    marketTitle: 'Market quote',
-    marketDescription: 'Fast quote for BTC/ETH and more',
   }
 }
 
@@ -289,15 +278,12 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const tradeFlowHint = '3 taps • vault • size • accept'
   const xPostCommand = `/x post ${normalizeInlineDraft(normalizedQuery)}`
   const aiPrompt = normalizedQuery ? `/ai ${normalizedQuery}` : '/ai What should I do next?'
-  const marketQuote = `/mkt quote ${inferMarketSymbol(normalizedQuery)}`
   const copy = buildCommonCopy(growthMode)
   const lowerQuery = normalizedQuery.toLowerCase()
   const wantsDeploy = queryClass === 'deploy' || /\b(deploy|launch|create)\b/.test(lowerQuery)
   const wantsStatus = /\b(status|health|permissions)\b/.test(lowerQuery)
   const wantsSocial = /\b(x|tweet|post)\b/.test(lowerQuery)
   const wantsAi = queryClass === 'ai'
-  const wantsMarket = queryClass === 'market'
-  const wantsSignals = /\b(signal|signals|feed|live)\b/.test(lowerQuery) || queryClass === 'discovery'
   const approvedScopedVaults = filterTelegramApprovedTradeVaults(params.scopedVaults)
 
   const templates: InlineResultTemplate[] = []
@@ -356,25 +342,6 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
     })
   })
 
-  if (wantsSignals) {
-    pushTemplate({
-      key: 'signals-live',
-      title: 'Signals Live',
-      description: 'Auto-updating trade feed',
-      command: '/signals',
-      inputMessageText: 'Loading live signals…',
-      replyMarkup: {
-        inline_keyboard: [[
-          { text: 'Refresh', callback_data: 'livefeed:signals:refresh' },
-          { text: 'Pause', callback_data: 'livefeed:signals:pause' },
-          { text: 'Close', callback_data: 'livefeed:signals:close' },
-        ]],
-      },
-      baseScore: 96,
-      intentTags: ['discovery', 'trade', 'general'],
-      mediaKey: 'card:signals',
-    })
-  }
   // Keep inline discovery focused on link + approved-token trading.
   // Only show the broader utility surfaces when the query explicitly asks for them.
   if (wantsStatus) {
@@ -417,19 +384,8 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       description: copy.aiDescription,
       command: aiPrompt,
       baseScore: 67,
-      intentTags: ['ai', 'general', 'market'],
+      intentTags: ['ai', 'general'],
       mediaKey: 'card:ai',
-    })
-  }
-  if (wantsMarket) {
-    pushTemplate({
-      key: 'market',
-      title: copy.marketTitle,
-      description: copy.marketDescription,
-      command: marketQuote,
-      baseScore: 66,
-      intentTags: ['market', 'general'],
-      mediaKey: 'card:market',
     })
   }
   if (wantsDeploy) {

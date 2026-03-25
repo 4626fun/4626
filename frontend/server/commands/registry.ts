@@ -22,18 +22,13 @@ type CommandFamily =
   | 'eligibility'
   | 'wallet'
   | 'vaults'
-  | 'list'
   | 'auctions'
   | 'mybids'
-  | 'signals'
   | 'buy'
   | 'sell'
   | 'bid'
-  | 'tip'
-  | 'inline'
   | 'twitter'
   | 'ai'
-  | 'market'
   | 'coin'
   | 'send'
 
@@ -123,19 +118,8 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
       admin: 'Vaults in this chat',
     },
   },
-  { head: 'list', family: 'list', telegramNative: true },
   { head: 'auctions', family: 'auctions', telegramNative: true },
   { head: 'mybids', family: 'mybids', telegramNative: true },
-  {
-    head: 'signals',
-    family: 'signals',
-    telegramNative: true,
-    botMenu: {
-      private: 'Recent trade feed',
-      group: 'Recent trade feed',
-      admin: 'Recent trade feed',
-    },
-  },
   {
     head: 'buy',
     family: 'buy',
@@ -166,19 +150,16 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
       admin: 'Guided bid flow',
     },
   },
-  { head: 'tip', family: 'tip', telegramNative: true },
-  { head: 'inline', family: 'inline', aliases: ['shortcuts'] },
   { head: 'x', family: 'twitter', aliases: ['tweet'] },
   { head: 'ai', family: 'ai' },
-  { head: 'mkt', family: 'market' },
   { head: 'coin', family: 'coin' },
   { head: 'send', family: 'send' },
 ] as const
 
 const BOT_MENU_ORDER: Record<CommandScope, readonly string[]> = {
-  private: ['help', 'id', 'link', 'linked', 'vaults', 'buy', 'sell', 'bid', 'wallet', 'signals'],
-  group: ['help', 'link', 'vaults', 'buy', 'sell', 'bid', 'signals'],
-  admin: ['help', 'id', 'link', 'vaults', 'buy', 'sell', 'bid', 'wallet', 'signals', 'deploy'],
+  private: ['help', 'id', 'link', 'linked', 'vaults', 'buy', 'sell', 'bid', 'wallet'],
+  group: ['help', 'link', 'vaults', 'buy', 'sell', 'bid'],
+  admin: ['help', 'id', 'link', 'vaults', 'buy', 'sell', 'bid', 'wallet', 'deploy'],
 } as const
 
 type ResolvedCommandDefinition = CommandDefinition & {

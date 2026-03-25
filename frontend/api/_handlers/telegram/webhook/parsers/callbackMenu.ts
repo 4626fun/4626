@@ -12,7 +12,6 @@ const MENU_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
   vaults: '/vaults',
   auctions: '/auctions',
   mybids: '/mybids',
-  signals: '/signals',
   deploy: '/deploy',
   vaultdeploy: '/vaultdeploy akita v1.6.1',
   zora: '/zora',
@@ -37,7 +36,6 @@ const HELP_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
 const HELP_TOPIC_ACTIONS = new Set([
   'core',
   'coin',
-  'market',
   'social',
   'ops',
   'wallet',
@@ -55,7 +53,6 @@ const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
   'menu:vaults': 'Vaults ready',
   'menu:auctions': 'Auctions ready',
   'menu:mybids': 'Bids ready',
-  'menu:signals': 'Signals ready',
   'menu:buy': 'Buy flow',
   'menu:sell': 'Sell flow',
   'menu:bid': 'Bid flow',

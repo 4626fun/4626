@@ -1,8 +1,8 @@
 import { TELEGRAM_NATIVE_COMMANDS } from '../constants.js'
 import type { TelegramMessage } from '../types.js'
-import { asTrimmed, getCommandHead, isHelpCategoryCommand, isHelpCommand, isInlineLauncherCommand, isLikelyCommandText, isTwitterCommand, normalizeTelegramCommand } from '../utils.js'
+import { asTrimmed, getCommandHead, isHelpCategoryCommand, isHelpCommand, isLikelyCommandText, isTwitterCommand, normalizeTelegramCommand } from '../utils.js'
 
-export { getCommandHead, isLikelyCommandText, isTwitterCommand, isInlineLauncherCommand, isHelpCommand, isHelpCategoryCommand, normalizeTelegramCommand }
+export { getCommandHead, isLikelyCommandText, isTwitterCommand, isHelpCommand, isHelpCategoryCommand, normalizeTelegramCommand }
 
 export function isTelegramNativeCommand(rawText: string): boolean {
   return TELEGRAM_NATIVE_COMMANDS.has(getCommandHead(rawText))

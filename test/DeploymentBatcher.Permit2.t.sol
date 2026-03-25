@@ -229,7 +229,8 @@ contract DeploymentBatcherPermit2Test is Test {
         IDeploymentBatcherPermit2(address(batcher)).finalizePhase2WithPermit2(params, permit, hex"abcd");
 
         bytes32 baseSalt = keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
-        (address pendingShareOFT, address pendingCca, uint256 pendingAmount) = batcher.pendingAuctions(baseSalt);
+        (address pendingShareOFT, address pendingCca, uint256 pendingAmount, uint256 pendingLpReserveAmount) =
+            batcher.pendingAuctions(baseSalt);
 
         assertEq(permit2.lastOwner(), ownerAddr);
         assertEq(permit2.lastTo(), address(batcher));
@@ -237,7 +238,8 @@ contract DeploymentBatcherPermit2Test is Test {
         assertEq(creatorToken.balanceOf(address(wrapper)), depositAmount);
         assertEq(pendingShareOFT, address(shareOFT));
         assertEq(pendingCca, address(cca));
-        assertEq(pendingAmount, depositAmount / 2);
+        assertEq(pendingAmount, (depositAmount * 40) / 100);
+        assertEq(pendingLpReserveAmount, (depositAmount * 20) / 100);
     }
 
     function _permit(uint256 amount) internal view returns (ISignatureTransfer.PermitTransferFrom memory permit) {

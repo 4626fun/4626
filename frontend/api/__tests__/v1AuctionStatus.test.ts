@@ -47,6 +47,36 @@ describe('v1 auction status handler', () => {
       switch (functionName) {
         case 'getAuctionStatus':
           return [AUCTION, true, false, 123n, 456n]
+        case 'getLifecycleStatus':
+          return {
+            phase: 1,
+            auction: AUCTION,
+            isGraduated: false,
+            auctionWindowOpen: true,
+            claimOpen: false,
+            currencySwept: false,
+            unsoldSwept: false,
+            migrated: false,
+            failedFinalized: false,
+            startBlock: 1000n,
+            endBlock: 2000n,
+            claimBlock: 2100n,
+            migrationBlock: 2001n,
+            sweepBlock: 2500n,
+            lpReserveAmount: 789n,
+            clearingPrice: 123n,
+            currencyRaised: 456n,
+          }
+        case 'getBackingTelemetry':
+          return {
+            vault: '0x4444444444444444444444444444444444444444',
+            launchTotalAssets: 1_000n,
+            launchTotalSupply: 10_000n,
+            currentTotalAssets: 1_250n,
+            currentTotalSupply: 10_000n,
+            assetsDelta: 250n,
+            supplyDelta: 0n,
+          }
         case 'currency':
           return CURRENCY
         case 'auctionToken':
@@ -98,6 +128,14 @@ describe('v1 auction status handler', () => {
       auctionTokenSymbol: 'SHARE',
       auctionTokenDecimals: 18,
       currencyDecimals: 6,
+      lifecyclePhase: 1,
+      lifecycleAuctionWindowOpen: true,
+      lifecycleClaimOpen: false,
+      lifecycleMigrated: false,
+      lifecycleFailedFinalized: false,
+      lifecycleLpReserveAmount: '789',
+      assetsDelta: '250',
+      supplyDelta: '0',
       auctionTokenImagePath: `/api/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`,
       auctionTokenImageUrl: `https://api.4626.fun/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`,
     })

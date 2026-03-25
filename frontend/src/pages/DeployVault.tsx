@@ -126,6 +126,18 @@ const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
     ],
     stateMutability: 'view',
   },
+  {
+    name: 'previewLaunchPricing',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      { name: 'floorPriceQ96', type: 'uint256' },
+      { name: 'tickSpacingQ96', type: 'uint256' },
+      { name: 'creatorUsdPrice', type: 'uint256' },
+      { name: 'ethUsdPrice', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
 ] as const
 
 type DeployMode = 'default' | 'no_eoa_strict'
@@ -3225,9 +3237,9 @@ function DeployVaultBatcher({
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
-      if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
-        throw new Error('Market floor price not available. Wait for pricing to load.')
-      }
+      // Compatibility-only placeholder. CCA strategy now derives launch floor onchain from oracle data.
+      const floorPriceQ96ForBatcher =
+        floorPriceQ96Aligned && floorPriceQ96Aligned > 0n ? floorPriceQ96Aligned : 1n
       if (strictNoEoaEnforced) {
         logger.info('[DeployVault] deploy_mode=no_eoa_strict', {
           deploy_mode: 'no_eoa_strict',
@@ -3605,7 +3617,7 @@ function DeployVaultBatcher({
           shareOFT: expected.shareOFT,
           shareSymbol,
           version: deploymentVersion,
-          floorPriceQ96: floorPriceQ96Aligned,
+          floorPriceQ96: floorPriceQ96ForBatcher,
         } as const
 
         const phase2FinalizeParams = {
@@ -3620,7 +3632,7 @@ function DeployVaultBatcher({
           version: deploymentVersion,
           depositAmount,
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
-          floorPriceQ96: floorPriceQ96Aligned,
+          floorPriceQ96: floorPriceQ96ForBatcher,
           auctionSteps,
           meteoraAlphaVault: ZERO_BYTES32 as `0x${string}`,
           solanaIxs: [],
@@ -4060,7 +4072,7 @@ function DeployVaultBatcher({
                   owner,
                   shareOFT: phase2CoreParams.shareOFT,
                   version: deploymentVersion,
-                  floorPriceQ96: floorPriceQ96Aligned,
+                  floorPriceQ96: floorPriceQ96ForBatcher,
                   requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
                   auctionSteps,
                 },
@@ -5201,6 +5213,19 @@ function DeployVaultBatcher({
             const msg = pendingErr instanceof Error ? pendingErr.message : String(pendingErr)
             throw new Error(`Phase 4 precheck failed: ${msg}`)
           }
+          try {
+            await publicClient.readContract({
+              address: expected.ccaStrategy,
+              abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+              functionName: 'previewLaunchPricing',
+            })
+          } catch (pricingErr) {
+            const raw = pricingErr instanceof Error ? pricingErr.message : String(pricingErr ?? '')
+            throw new Error(
+              `Phase 4 pricing precheck failed: ${raw}. ` +
+                'Launch floor is enforced onchain from oracle data; refresh oracle state before launching auction.',
+            )
+          }
           setPhase('phase4')
           await sendPhaseCalls(phase4Calls, 'phase4')
         }
@@ -5500,7 +5525,7 @@ function DeployVaultBatcher({
                 </div>
                 {marketFloorText ? (
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">CCA floor</div>
+                    <div className="text-zinc-500">CCA floor (reference)</div>
                     <div className="text-zinc-200/90">{marketFloorText}</div>
                   </div>
                 ) : null}
@@ -5638,7 +5663,11 @@ function DeployVaultBatcher({
         <div className="text-[11px] text-amber-300/80">{disabledReason}</div>
       ) : null}
 
-      {marketFloorText ? <div className="text-[11px] text-zinc-500">Market floor: {marketFloorText}</div> : null}
+      {marketFloorText ? (
+        <div className="text-[11px] text-zinc-500">
+          Market floor (reference): {marketFloorText}. Final auction floor is enforced onchain from oracle data.
+        </div>
+      ) : null}
 
       {error ? (
         <div className="space-y-2">
@@ -5885,13 +5914,24 @@ function DeployVaultMain() {
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
   const minFirstDepositTokens = useMemo(() => {
+    // DeploymentBatcher enforces an exact 50M creator-token first deposit onchain.
+    // Keep UI/runtime locked to that value so query/env overrides cannot drift and fail late.
     const env = parsePositiveTokenAmount(
       (import.meta.env.VITE_MIN_FIRST_DEPOSIT_TOKENS as string | undefined) ?? '',
     )
-    if (typeof window === 'undefined') return env ?? DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
-    const params = new URLSearchParams(window.location.search)
-    const query = parsePositiveTokenAmount(params.get('minFirstDepositTokens'))
-    return query ?? env ?? DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+    let requested: bigint | null = env
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const query = parsePositiveTokenAmount(params.get('minFirstDepositTokens'))
+      requested = query ?? env
+    }
+    if (requested !== null && requested !== DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) {
+      logger.warn('[DeployVault] ignoring minFirstDepositTokens override; enforcing 50M policy', {
+        requested: requested.toString(),
+        enforced: DEFAULT_MIN_FIRST_DEPOSIT_TOKENS.toString(),
+      })
+    }
+    return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
   }, [])
   const shareOftSaltOverride = useMemo(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SHARE_OFT_SALT_OVERRIDE as string | undefined)
@@ -6821,13 +6861,6 @@ function DeployVaultMain() {
     retry: 0,
   })
 
-  const marketFloorOk = Boolean(
-    marketFloorQuery.isSuccess &&
-      marketFloorQuery.data &&
-      typeof marketFloorQuery.data.floorPriceQ96Aligned === 'bigint' &&
-      marketFloorQuery.data.floorPriceQ96Aligned > 0n,
-  )
-
   const creatorVaultBatcherAddress = (() => {
     const v = String((CONTRACTS as any).creatorVaultBatcher ?? '')
     return isAddress(v) ? (v as Address) : null
@@ -7218,7 +7251,6 @@ function DeployVaultMain() {
     isCreatorCoin &&
     canonicalIdentityType === 'contract' &&
     coinAgeOk &&
-    marketFloorOk &&
     isAuthorizedDeployerOrOperator &&
     creatorAllowlistQuery.isSuccess &&
     passesCreatorAllowlist &&
@@ -7326,8 +7358,8 @@ function DeployVaultMain() {
         : 'not authorized',
     },
     {
-      label: 'Market floor price',
-      ok: marketFloorOk,
+      label: 'Market floor reference (UI only)',
+      ok: true,
       hint: marketFloorQuery.isFetching
         ? 'computing'
         : marketFloorQuery.isError
@@ -7388,13 +7420,7 @@ function DeployVaultMain() {
                         ? (bytecodeInfraQuery.error as any)?.message || 'Deployment bytecode check failed.'
                         : !bytecodeInfraOk
                           ? bytecodeInfraBlocker || 'Deployment infra is not ready.'
-                        : marketFloorQuery.isFetching
-                          ? 'Computing market floor price…'
-                          : marketFloorQuery.isError
-                            ? (marketFloorQuery.error as any)?.message || 'Could not compute market floor price.'
-                            : !marketFloorOk
-                              ? 'Market floor price is required to deploy.'
-                              : null
+                          : null
 
   const hasPrimaryDeployAuthAction = Boolean(
     privyReady &&

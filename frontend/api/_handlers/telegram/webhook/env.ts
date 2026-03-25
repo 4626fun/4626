@@ -1,6 +1,6 @@
 import { ZERO_ADDRESS } from './constants.js'
 import { getBundlerAndPaymasterUrlFromConfig, getTelegramWebhookConfig } from './config.js'
-import { asTrimmed, isAddressLike, parseDelimitedSet, parseJsonObject, parseOptionalPositiveInteger } from './utils.js'
+import { asTrimmed, isAddressLike, parseJsonObject, parseOptionalPositiveInteger } from './utils.js'
 
 export type TelegramInlineMediaAsset = {
   photoUrl?: string
@@ -40,18 +40,6 @@ export function parseAllowedChatIds(): Set<string> {
 
 export function isTelegramPrivateDmEnabled(): boolean {
   return getTelegramWebhookConfig().allowPrivateDms
-}
-
-export function areStarsTipsEnabled(): boolean {
-  return getTelegramWebhookConfig().starsTipsEnabled
-}
-
-export function isStarsTipsEnabledForChat(chatId: string): boolean {
-  if (!areStarsTipsEnabled()) return false
-  const allowedRaw = getTelegramWebhookConfig().starsTipsAllowedChatIdsRaw
-  if (!allowedRaw) return true
-  const allowed = parseDelimitedSet(allowedRaw)
-  return allowed.has(chatId)
 }
 
 export function resolveSignalsDestination(sourceChatId: string): { chatId: string; messageThreadId?: number } {

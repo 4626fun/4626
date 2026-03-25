@@ -4,10 +4,13 @@ import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import fs from 'fs'
 import path from 'path'
+import { createRequire } from 'module'
 import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
 import { classifyManualChunk } from './src/lib/viteManualChunks'
+
+const nodeRequire = createRequire(import.meta.url)
 
 function loadDotEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return
@@ -359,6 +362,17 @@ function localApiRoutesPlugin(): Plugin {
   }
 }
 
+function resolveOxCjsPlugin(): Plugin {
+  return {
+    name: '4626-resolve-ox-cjs',
+    enforce: 'pre',
+    resolveId(source) {
+      if (source !== 'ox' && !source.startsWith('ox/')) return null
+      return nodeRequire.resolve(source, { paths: [__dirname] })
+    },
+  }
+}
+
 export default defineConfig(({ command }) => {
   const enableSourcemap = (() => {
     const raw = (process.env.VITE_BUILD_SOURCEMAP ?? '').trim().toLowerCase()
@@ -380,7 +394,7 @@ export default defineConfig(({ command }) => {
   })()
 
   return {
-    plugins: [react(), tailwindcss(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
+    plugins: [resolveOxCjsPlugin(), react(), tailwindcss(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
     // Default localhost-only. Set VITE_DEV_SERVER_HOST=true (or 0.0.0.0) to expose on LAN/WSL.
     server: {
       host: devServerHost,
@@ -388,11 +402,11 @@ export default defineConfig(({ command }) => {
       strictPort: true,
     },
   resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
+    alias: [
+      { find: '@', replacement: resolve(__dirname, './src') },
       // Wallet SDKs expect `buffer` to exist; map Node built-in to the browser shim.
-      buffer: 'buffer/',
-    },
+      { find: 'buffer', replacement: 'buffer/' },
+    ],
     // pnpm can result in multiple copies of a package being bundled, which breaks React context
     // based libraries like Privy (provider + hooks must resolve to the same module instance).
     dedupe: ['@privy-io/react-auth', '@privy-io/wagmi'],

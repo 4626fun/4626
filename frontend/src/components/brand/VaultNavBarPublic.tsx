@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
-import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import {
+  buildCanonicalMarketingWaitlistUrl,
+  getCanonicalMarketingWaitlistPath,
+  isMarketingWaitlistEntryLocation,
+} from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
-import { getHostMode } from '@/lib/host'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { Logo } from './Logo'
 import { TextScramble } from './TextScramble'
 
@@ -22,7 +25,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
-  { label: 'Waitlist', to: '/#waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
+  { label: 'Waitlist', to: getCanonicalMarketingWaitlistPath() },
 ]
 
 function isActiveLink(location: { pathname: string; hash?: string }, item: NavItem): boolean {
@@ -30,12 +33,7 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: NavIt
   const hash = location.hash ?? ''
 
   if (item.to.includes('#')) {
-    const [toPath, toHash = ''] = item.to.split('#')
-    const wantPath = toPath || '/'
-    const wantHash = `#${toHash}`
-    if (pathname === wantPath && hash === wantHash) return true
-    const prefixes = item.activePrefixes && item.activePrefixes.length > 0 ? item.activePrefixes : [item.to]
-    return prefixes.includes('/waitlist') && pathname === '/waitlist'
+    return isMarketingWaitlistEntryLocation({ pathname, hash })
   }
 
   if (item.to === '/') return pathname === '/'
@@ -47,6 +45,10 @@ export function VaultNavBarPublic() {
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
+  const canonicalMarketingWaitlistHref =
+    hostMode === 'marketing'
+      ? getCanonicalMarketingWaitlistPath()
+      : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [brandHovered, setBrandHovered] = useState(false)
   const items = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const brandHref = hostMode === 'marketing' ? '/' : '/swap'
@@ -75,22 +77,39 @@ export function VaultNavBarPublic() {
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
             {items.map((item) => {
               const active = isActiveLink(location, item)
-              if (item.to === '/#waitlist') {
-                return (
-                  <JoinWaitlistCta
-                    key={item.to}
-                    className="group relative inline-flex h-8 items-center justify-center rounded-xl border-0 px-2.5 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25"
-                    showArrow={false}
-                    onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
+              if (item.to === getCanonicalMarketingWaitlistPath()) {
+                const className =
+                  'group relative inline-flex h-8 items-center justify-center rounded-xl border-0 px-2.5 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25'
+                const content = (
+                  <span
+                    className={`relative z-10 text-[10px] font-medium tracking-[0.01em] ${
+                      active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'
+                    }`}
                   >
-                    <span
-                      className={`relative z-10 text-[10px] font-medium tracking-[0.01em] ${
-                        active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'
-                      }`}
+                    {item.label}
+                  </span>
+                )
+                if (hostMode === 'marketing') {
+                  return (
+                    <Link
+                      key={item.to}
+                      to={canonicalMarketingWaitlistHref}
+                      aria-current={active ? 'page' : undefined}
+                      className={className}
                     >
-                      {item.label}
-                    </span>
-                  </JoinWaitlistCta>
+                      {content}
+                    </Link>
+                  )
+                }
+                return (
+                  <a
+                    key={item.to}
+                    href={canonicalMarketingWaitlistHref}
+                    aria-current={active ? 'page' : undefined}
+                    className={className}
+                  >
+                    {content}
+                  </a>
                 )
               }
               return (

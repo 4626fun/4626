@@ -37,7 +37,7 @@ import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'
  * check in the production agent runtime.
  */
 function isKeeprCommand(text: string): boolean {
-  return matchesAnyCommandFamily(text, ['keepr', 'whois', 'market', 'send', 'twitter', 'coin', 'help'])
+  return matchesAnyCommandFamily(text, ['keepr', 'whois', 'send', 'twitter', 'coin', 'help'])
 }
 
 function isKeeprStatusCommand(text: string): boolean {

@@ -24,10 +24,6 @@ export const TELEGRAM_COMMAND_MICRO_HINTS: Array<{ pattern: RegExp; hint: string
     hint: 'name: 1-24 chars, symbol: 2-6 chars, url: https://...',
   },
   {
-    pattern: /\/mkt\s+quote\s+<symbol>/i,
-    hint: 'symbol: ticker, e.g. BTC',
-  },
-  {
     pattern: /\/buy\b/i,
     hint: 'interactive: pick vault, choose size, then Accept',
   },

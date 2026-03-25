@@ -1,10 +1,13 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import {
+  buildCanonicalMarketingWaitlistUrl,
+  getCanonicalMarketingWaitlistPath,
+  isMarketingWaitlistEntryLocation,
+} from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
-import { getHostMode } from '@/lib/host'
-import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 
 const LazyVaultNavBar = lazy(async () => {
   const mod = await import('./brand/VaultNavBar')
@@ -41,7 +44,7 @@ const navItems: MobileNavItem[] = [
 ]
 
 const navItemsPublic: MobileNavItem[] = [
-  { path: '/#waitlist', icon: Mail, label: 'Waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
+  { path: getCanonicalMarketingWaitlistPath(), icon: Mail, label: 'Waitlist' },
 ]
 
 const adminNavItem: MobileNavItem = { path: '/admin/waitlist', icon: ShieldCheck, label: 'Admin', activePrefixes: ['/admin'] }
@@ -51,11 +54,7 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: Mobil
   const hash = location.hash ?? ''
 
   if (item.path.includes('#')) {
-    const [toPath, toHash = ''] = item.path.split('#')
-    const wantPath = toPath || '/'
-    const wantHash = `#${toHash}`
-    if (pathname === wantPath && hash === wantHash) return true
-    return item.activePrefixes?.includes('/waitlist') ? pathname === '/waitlist' : false
+    return isMarketingWaitlistEntryLocation({ pathname, hash })
   }
 
   if (item.path === '/') return pathname === '/'
@@ -69,6 +68,10 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
+  const canonicalMarketingWaitlistHref =
+    hostMode === 'marketing'
+      ? getCanonicalMarketingWaitlistPath()
+      : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
@@ -161,31 +164,47 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
-            if (path === '/#waitlist') {
-              return (
-                <JoinWaitlistCta
+            if (path === getCanonicalMarketingWaitlistPath()) {
+              const content = (
+                <>
+                  <Icon
+                    aria-hidden="true"
+                    className={`h-4 w-4 transition-colors ${
+                      isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
+                    }`}
+                  />
+                  <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
+                    {label}
+                  </span>
+                </>
+              )
+              const className = `flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
+                isActive
+                  ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
+                  : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
+              }`
+              return hostMode === 'marketing' ? (
+                <Link
                   key={path}
-                  className={`flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
-                    isActive
-                      ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
-                      : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
-                  }`}
-                  showArrow={false}
-                  ariaLabel={label}
-                  onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
+                  to={canonicalMarketingWaitlistHref}
+                  aria-label={label}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={className}
+                  role="listitem"
                 >
-                  <>
-                    <Icon
-                      aria-hidden="true"
-                      className={`h-4 w-4 transition-colors ${
-                        isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
-                      }`}
-                    />
-                    <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                      {label}
-                    </span>
-                  </>
-                </JoinWaitlistCta>
+                  {content}
+                </Link>
+              ) : (
+                <a
+                  key={path}
+                  href={canonicalMarketingWaitlistHref}
+                  aria-label={label}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={className}
+                  role="listitem"
+                >
+                  {content}
+                </a>
               )
             }
             return (

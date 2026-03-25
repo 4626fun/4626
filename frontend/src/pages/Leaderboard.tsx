@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/Alert'
 import { apiFetch } from '@/lib/apiBase'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
-import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
 type PointsType = 'invite' | 'total' | 'agent'
 
@@ -123,13 +123,12 @@ export function Leaderboard() {
             </div>
             {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
           </div>
-          <JoinWaitlistCta
+          <Link
+            to={getCanonicalMarketingWaitlistPath()}
             className="btn-accent btn-compact h-fit inline-flex items-center"
-            showArrow={false}
-            onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
           >
             Invite friends
-          </JoinWaitlistCta>
+          </Link>
         </div>
 
         <div className="mt-8 flex items-center gap-2">

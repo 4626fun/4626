@@ -16,12 +16,12 @@ describe('siweAuthCrossApp', () => {
       safePath: '/',
       shouldSanitize: true,
     })
-    expect(getCrossAppSafeRedirectPath({ pathname: '/waitlist', search: '?ref=abc', hash: '' })).toEqual({
-      safePath: '/waitlist',
+    expect(getCrossAppSafeRedirectPath({ pathname: '/continue', search: '?from=waitlist&autologin=1', hash: '' })).toEqual({
+      safePath: '/continue',
       shouldSanitize: true,
     })
-    expect(getCrossAppSafeRedirectPath({ pathname: '/waitlist', search: '', hash: '' })).toEqual({
-      safePath: '/waitlist',
+    expect(getCrossAppSafeRedirectPath({ pathname: '/continue', search: '', hash: '' })).toEqual({
+      safePath: '/continue',
       shouldSanitize: false,
     })
   })

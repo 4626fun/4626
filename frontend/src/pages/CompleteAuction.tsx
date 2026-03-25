@@ -39,7 +39,44 @@ const CCA_STRATEGY_ABI = [
     stateMutability: 'view',
   },
   {
+    name: 'getLifecycleStatus',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'phase', type: 'uint8' },
+          { name: 'auction', type: 'address' },
+          { name: 'isGraduated', type: 'bool' },
+          { name: 'auctionWindowOpen', type: 'bool' },
+          { name: 'claimOpen', type: 'bool' },
+          { name: 'currencySwept', type: 'bool' },
+          { name: 'unsoldSwept', type: 'bool' },
+          { name: 'migrated', type: 'bool' },
+          { name: 'failedFinalized', type: 'bool' },
+          { name: 'startBlock', type: 'uint64' },
+          { name: 'endBlock', type: 'uint64' },
+          { name: 'claimBlock', type: 'uint64' },
+          { name: 'migrationBlock', type: 'uint64' },
+          { name: 'sweepBlock', type: 'uint64' },
+          { name: 'lpReserveAmount', type: 'uint256' },
+          { name: 'clearingPrice', type: 'uint256' },
+          { name: 'currencyRaised', type: 'uint256' },
+        ],
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
     name: 'sweepCurrency',
+    type: 'function',
+    inputs: [],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'migrate',
     type: 'function',
     inputs: [],
     outputs: [],
@@ -97,7 +134,7 @@ const TAX_HOOK_ABI = [
   },
 ] as const
 
-type Step = 'check' | 'sweep' | 'configure' | 'complete'
+type Step = 'check' | 'sweep' | 'migrate' | 'configure' | 'complete'
 
 const VAULT_ABI = [
   { name: 'deployToStrategies', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' },
@@ -122,6 +159,11 @@ export function CompleteAuction() {
     address: strategyAddress,
     abi: CCA_STRATEGY_ABI,
     functionName: 'getAuctionStatus',
+  })
+  const { data: lifecycleStatus } = useReadContract({
+    address: strategyAddress,
+    abi: CCA_STRATEGY_ABI,
+    functionName: 'getLifecycleStatus',
   })
 
   // Read token address
@@ -167,7 +209,7 @@ export function CompleteAuction() {
     functionName: 'taxRateBps',
   })
 
-  // Step 1: Sweep Currency (completes auction, configures oracle)
+  // Step 1: Sweep Currency (moves raised funds into strategy)
   const {
     writeContract: sweepCurrency,
     data: sweepTxHash,
@@ -178,7 +220,18 @@ export function CompleteAuction() {
     hash: sweepTxHash,
   })
 
-  // Step 2: Configure Tax Hook (6.9% fee)
+  // Step 2: Migrate to Uniswap v4 LP
+  const {
+    writeContract: migrateAuction,
+    data: migrateTxHash,
+    isPending: isMigrating,
+    error: migrateError,
+  } = useWriteContract()
+  const { isLoading: isMigrateConfirming, isSuccess: isMigrateSuccess } = useWaitForTransactionReceipt({
+    hash: migrateTxHash,
+  })
+
+  // Step 3: Configure Tax Hook (6.9% fee)
   const {
     writeContract: configureTaxHook,
     data: configTxHash,
@@ -223,7 +276,10 @@ export function CompleteAuction() {
   const hasAuction = Boolean(auctionStatus?.[0] && auctionStatus?.[0] !== ZERO_ADDRESS)
   const isActive = Boolean(auctionStatus?.[1])
   const isGraduated = Boolean(auctionStatus?.[2])
-  const isFailed = hasAuction && !isActive && !isGraduated
+  const lifecyclePhase = Number((lifecycleStatus as any)?.phase ?? (lifecycleStatus as any)?.[0] ?? -1)
+  const lifecycleFailedFinalized = Boolean((lifecycleStatus as any)?.failedFinalized ?? (lifecycleStatus as any)?.[8] ?? false)
+  const hasLifecycle = lifecyclePhase >= 0
+  const isFailed = hasLifecycle ? lifecyclePhase === 6 || lifecycleFailedFinalized : hasAuction && !isActive && !isGraduated
   const currencyRaised = auctionStatus?.[4]
   const failedRecoveryComplete = isUnsoldSuccess && isStrategySweepSuccess
 
@@ -235,12 +291,14 @@ export function CompleteAuction() {
       }
       return
     }
-    if (isSweepSuccess && !isConfigSuccess) {
+    if (isSweepSuccess && !isMigrateSuccess) {
+      setCurrentStep('migrate')
+    } else if (isMigrateSuccess && !isConfigSuccess) {
       setCurrentStep('configure')
     } else if (isConfigSuccess) {
       setCurrentStep('complete')
     }
-  }, [isFailed, failedRecoveryComplete, isSweepSuccess, isConfigSuccess])
+  }, [isFailed, failedRecoveryComplete, isSweepSuccess, isMigrateSuccess, isConfigSuccess])
 
   const handleSweepCurrency = () => {
     setError(null)
@@ -248,6 +306,15 @@ export function CompleteAuction() {
       address: strategyAddress,
       abi: CCA_STRATEGY_ABI,
       functionName: 'sweepCurrency',
+    })
+  }
+
+  const handleMigrate = () => {
+    setError(null)
+    migrateAuction({
+      address: strategyAddress,
+      abi: CCA_STRATEGY_ABI,
+      functionName: 'migrate',
     })
   }
 
@@ -547,9 +614,9 @@ export function CompleteAuction() {
                   <div className="flex-1">
                     <h4 className="font-semibold">Complete Auction</h4>
                     <p className="text-surface-400 text-sm mt-1">
-                      Sweep raised ETH to vault and configure the price oracle.
+                      Sweep raised currency to the strategy before LP migration.
                     </p>
-                    {!isSweepSuccess && currentStep !== 'configure' && currentStep !== 'complete' && (
+                    {!isSweepSuccess && currentStep !== 'migrate' && currentStep !== 'configure' && currentStep !== 'complete' && (
                       <button
                         onClick={handleSweepCurrency}
                         disabled={isSweeping || isSweepConfirming}
@@ -582,7 +649,69 @@ export function CompleteAuction() {
                 </div>
               </div>
 
-              {/* Step 2: Configure Tax Hook */}
+              {/* Step 2: Migrate Liquidity */}
+              <div className={`p-4 rounded-xl border ${
+                currentStep === 'migrate'
+                  ? 'bg-brand-500/5 border-brand-500/30'
+                  : isMigrateSuccess
+                  ? 'bg-green-500/5 border-green-500/30'
+                  : 'bg-surface-900/30 border-surface-800'
+              }`}>
+                <div className="flex items-start gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    isMigrateSuccess
+                      ? 'bg-green-500/20 text-green-400'
+                      : currentStep === 'migrate'
+                      ? 'bg-brand-500/20 text-brand-400'
+                      : 'bg-surface-800 text-surface-500'
+                  }`}>
+                    {isMigrating || isMigrateConfirming ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : isMigrateSuccess ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <span className="font-bold">2</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold">Migrate to Uniswap v4 LP</h4>
+                    <p className="text-surface-400 text-sm mt-1">
+                      Initialize the pool and mint the strategy LP position.
+                    </p>
+                    {currentStep === 'migrate' && !isMigrateSuccess && (
+                      <button
+                        onClick={handleMigrate}
+                        disabled={isMigrating || isMigrateConfirming}
+                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                      >
+                        {isMigrating || isMigrateConfirming ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {isMigrating ? 'Confirming...' : 'Migrating...'}
+                          </>
+                        ) : (
+                          <>
+                            Migrate
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {migrateTxHash && (
+                      <a
+                        href={`https://basescan.org/tx/${migrateTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
+                      >
+                        View transaction <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Configure Tax Hook */}
               <div className={`p-4 rounded-xl border ${
                 currentStep === 'configure'
                   ? 'bg-brand-500/5 border-brand-500/30'
@@ -603,7 +732,7 @@ export function CompleteAuction() {
                     ) : isConfigSuccess ? (
                       <CheckCircle2 className="w-5 h-5" />
                     ) : (
-                      <span className="font-bold">2</span>
+                      <span className="font-bold">3</span>
                     )}
                   </div>
                   <div className="flex-1">
@@ -661,14 +790,20 @@ export function CompleteAuction() {
           )}
 
           {/* Errors */}
-          {(sweepError || configError || activateError || unsoldSweepError || strategySweepError || error) && (
+          {(sweepError || migrateError || configError || activateError || unsoldSweepError || strategySweepError || error) && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
                 <span className="font-medium">Error</span>
               </div>
               <p className="text-sm mt-1">
-                {error || sweepError?.message || configError?.message || unsoldSweepError?.message || strategySweepError?.message || activateError?.message}
+                {error ||
+                  sweepError?.message ||
+                  migrateError?.message ||
+                  configError?.message ||
+                  unsoldSweepError?.message ||
+                  strategySweepError?.message ||
+                  activateError?.message}
               </p>
             </div>
           )}
