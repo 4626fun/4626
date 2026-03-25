@@ -13,11 +13,11 @@ dockerfilePath = "frontend/Dockerfile.agent"
 # Number of replicas (only 1 — this repo assumes a single Railway primary)
 numReplicas = 1
 
-# Health check: use strict readiness to avoid routing
-# traffic before the runtime has fully initialized.
-healthcheckPath = "/readyz"
+# Health check: worker-style runtime (no user HTTP traffic), so use liveness
+# to avoid deploy flaps during long XMTP cold starts / installation sync.
+healthcheckPath = "/healthz"
 # XMTP cold starts + first-run installation sync can exceed 2 minutes.
-# Keep strict readiness, but allow enough warmup to avoid deploy flapping.
+# Keep a generous warmup window for first-run XMTP initialization.
 healthcheckTimeout = 300
 
 # Restart on failure

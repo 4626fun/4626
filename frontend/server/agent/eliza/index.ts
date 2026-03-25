@@ -163,9 +163,14 @@ const XMTP_DB_PLAINTEXT_ONLY = (() => {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 })()
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM ?? '').trim().toLowerCase()
+const XMTP_DB_AUTO_ENCRYPTED_MIGRATION = parseEnvBoolean(
+  process.env.XMTP_DB_AUTO_ENCRYPTED_MIGRATION,
+  isRailwayRuntime(),
+)
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION =
-  XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED &&
-  XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM === 'rotate-db'
+  (XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED &&
+    XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM === 'rotate-db') ||
+  (XMTP_DB_AUTO_ENCRYPTED_MIGRATION && XMTP_DB_ENCRYPTION_KEY !== undefined)
 const ELIZA_GROVE_UPLOAD_MODE = (() => {
   const raw = (process.env.ELIZA_GROVE_UPLOAD_MODE ?? 'on-change').trim().toLowerCase()
   if (raw === 'off' || raw === 'disabled' || raw === 'false' || raw === '0') return 'off' as const
@@ -365,7 +370,11 @@ function checkDbPersistence(): DbPersistenceCheckResult {
       logger.warn(
         '[xmtp] Forced encrypted migration requested but NOT confirmed.\n' +
         '    To run migration intentionally, set XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db.\n' +
-        '    Startup will fail if legacy plaintext DB files are present.',
+        '    Startup will fail if legacy plaintext DB files are present unless auto migration is enabled.',
+      )
+    } else if (XMTP_DB_AUTO_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
+      logger.warn(
+        '[xmtp] Legacy plaintext XMTP DB detected; auto encrypted migration is enabled and will rotate plaintext DB files.',
       )
     } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
       errors.push(
@@ -1871,6 +1880,7 @@ async function uploadRegistrationToGrove(): Promise<void> {
 }
 
 let agentBooted = false
+let lastReadinessLogKey: string | null = null
 
 async function main() {
   // Suppress known non-fatal native/runtime noise that causes alert fatigue.
@@ -1973,6 +1983,7 @@ async function main() {
     for (const error of persistenceCheck.errors) {
       logger.error('[xmtp] startup persistence policy failure', { error })
     }
+    await releaseRuntimeLease()
     process.exit(1)
     return
   }
@@ -2111,6 +2122,7 @@ async function main() {
       '  2. XMTP_AGENT_PRIVATE_KEY (EOA mode — dev/testing)\n' +
       '  3. XMTP_AGENT_KEY_ENCRYPTION_KEY + DATABASE_URL (multi-agent mode)',
     )
+    await releaseRuntimeLease()
     process.exit(1)
   }
 
@@ -2169,14 +2181,13 @@ function startHealthServer() {
     if (requiresXmtp && agentCount === 0) readinessReasons.push('no_agents')
     if (latestEnvValidation.errors.length > 0) readinessReasons.push('env_validation_failed')
     if (shouldCheckDb && db === null) readinessReasons.push('db_unavailable')
-    if (requiresXmtp && !xmtpReady) readinessReasons.push('xmtp_not_running')
+    if (requiresXmtp && agentCount > 0 && !xmtpReady) readinessReasons.push('xmtp_not_running')
     if ((queueStats?.staleProcessing ?? 0) > 0) readinessReasons.push('queue_stale_leases')
     const ready = Boolean(
       agentBooted &&
-      (requiresXmtp ? agentCount > 0 : true) &&
       latestEnvValidation.errors.length === 0 &&
       (shouldCheckDb ? db !== null : true) &&
-      (requiresXmtp ? xmtpReady : true),
+      (requiresXmtp && agentCount > 0 ? xmtpReady : true),
     )
     const status =
       requiresXmtp && !agentBooted
@@ -2190,6 +2201,19 @@ function startHealthServer() {
           : agentCount === 0
             ? 'no_agents'
             : 'degraded'
+    const readinessLogKey = `${ready ? 'ready' : 'not_ready'}:${readinessReasons.join(',') || 'none'}`
+    if (readinessLogKey !== lastReadinessLogKey) {
+      lastReadinessLogKey = readinessLogKey
+      logger.info('[eliza] readiness state changed', {
+        ready,
+        status,
+        reasons: readinessReasons,
+        agentBooted,
+        agentCount,
+        requiresXmtp,
+        xmtpReady,
+      })
+    }
     const probePath = url as '/healthz' | '/readyz'
     const detailedHealthAccess = hasDetailedHealthAccess(_req)
     const statusCode = getHealthProbeStatusCode({
