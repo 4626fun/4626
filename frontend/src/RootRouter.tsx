@@ -4,12 +4,16 @@ import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode } from '@/lib/host'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AppLoadingState } from '@/components/AppLoadingState'
+<<<<<<< HEAD
 import { Layout } from '@/components/Layout'
+=======
+>>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
 
 const Home = lazy(async () => {
   const m = await import('./pages/Home')
   return { default: m.Home }
 })
+<<<<<<< HEAD
 const WaitlistInviteEntry = lazy(async () => {
   const m = await import('./pages/WaitlistInviteEntry')
   return { default: m.WaitlistInviteEntry }
@@ -42,6 +46,13 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
 
   return <AppLoadingState />
 }
+=======
+const ProtectedApp = lazy(async () => import('./ProtectedApp'))
+const TelegramMenuEntryRoute = lazy(async () => {
+  const m = await import('./pages/TelegramMenuEntry')
+  return { default: m.TelegramMenuEntryRoute }
+})
+>>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
 
 export function RootRouter() {
   const location = useLocation()
@@ -71,6 +82,7 @@ export function RootRouter() {
       />
       <Routes>
         <Route
+<<<<<<< HEAD
           element={<Layout interactive={false} chatEnabled={false} />}
         >
           <Route
@@ -97,6 +109,22 @@ export function RootRouter() {
         <Route
           path="/telegram/menu"
           element={<StandaloneDocumentRedirect htmlPath="/telegram-link.html" />}
+=======
+          path="/"
+          element={
+            <Suspense fallback={<AppLoadingState />}>
+              <Home />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/telegram/menu"
+          element={
+            <Suspense fallback={<AppLoadingState />}>
+              <TelegramMenuEntryRoute />
+            </Suspense>
+          }
+>>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
         />
         <Route
           path="*"

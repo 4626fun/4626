@@ -18,7 +18,6 @@ const {
   loginWithCodeMock,
   linkTelegramMock,
   privyState,
-  linkAccountCallbacksRef,
   trackTelegramLinkTelemetryEventMock,
   createTelegramLinkFlowIdMock,
 } = vi.hoisted(() => ({
@@ -58,8 +57,8 @@ const {
       linkedAccounts: [],
     } as any,
     getAccessToken: vi.fn(async () => 'privy-access-token'),
+    linkTelegram: vi.fn(),
   },
-  linkAccountCallbacksRef: { current: null as any },
   trackTelegramLinkTelemetryEventMock: vi.fn(),
   createTelegramLinkFlowIdMock: vi.fn(() => 'flow-telemetry-1'),
 }))
@@ -101,12 +100,6 @@ vi.mock('@privy-io/react-auth', () => ({
     state: 'idle',
   }),
   usePrivy: () => privyState,
-  useLinkAccount: (callbacks?: any) => {
-    linkAccountCallbacksRef.current = callbacks ?? null
-    return {
-      linkTelegram: (...args: any[]) => linkTelegramMock(...args),
-    }
-  },
 }))
 
 import { TelegramLink } from './TelegramLink'
@@ -161,19 +154,10 @@ beforeEach(() => {
   privyState.authenticated = true
   privyState.user = { id: 'did:privy:user-1', linkedAccounts: [] }
   privyState.getAccessToken = vi.fn(async () => 'privy-access-token')
+  privyState.linkTelegram = (...args: any[]) => linkTelegramMock(...args)
   sendCodeMock.mockResolvedValue(undefined)
   loginWithCodeMock.mockResolvedValue(undefined)
-  linkTelegramMock.mockImplementation(() => {
-    linkAccountCallbacksRef.current?.onSuccess?.({
-      linkMethod: 'telegram',
-      user: privyState.user,
-      linkedAccount: {
-        type: 'telegram',
-        telegramUserId: '42',
-        username: 'akita',
-      },
-    })
-  })
+  linkTelegramMock.mockResolvedValue(undefined)
   apiFetchMock.mockImplementation(async (path: string) => {
     if (path === '/api/telegram/link/ready') {
       return {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, ShieldCheck, ShieldX, Unplug, X } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useLinkAccount, useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
+import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { apiFetch } from '@/lib/apiBase'
@@ -39,6 +39,16 @@ type TelegramLinkReadyData = {
 type TelegramLinkCompleteData = {
   link: TelegramLinkResult
   account: unknown
+}
+
+type LinkTelegramParams = {
+  launchParams?: {
+    initDataRaw?: string
+  }
+}
+
+type PrivyWithTelegramLink = ReturnType<typeof usePrivy> & {
+  linkTelegram?: (params?: LinkTelegramParams) => Promise<unknown> | unknown
 }
 
 const OTP_RESEND_DELAY_MS = 30_000
@@ -386,7 +396,7 @@ export function TelegramLink() {
   )
   const [nowMs, setNowMs] = useState(() => Date.now())
 
-  const privy = usePrivy()
+  const privy = usePrivy() as PrivyWithTelegramLink
   const { sendCode, loginWithCode } = useLoginWithEmail()
   const getAccessToken = typeof privy.getAccessToken === 'function' ? privy.getAccessToken.bind(privy) : null
   const stateRef = useRef(state)
@@ -410,6 +420,7 @@ export function TelegramLink() {
     authenticated: Boolean(privy.authenticated),
     user: privy.user ?? null,
     getAccessToken,
+    linkTelegram: typeof privy.linkTelegram === 'function' ? privy.linkTelegram.bind(privy) : null,
   })
   const {
     disabledReason: emailSubmitDisabledReason,
@@ -477,8 +488,9 @@ export function TelegramLink() {
       authenticated: Boolean(privy.authenticated),
       user: privy.user ?? null,
       getAccessToken,
+      linkTelegram: typeof privy.linkTelegram === 'function' ? privy.linkTelegram.bind(privy) : null,
     }
-  }, [getAccessToken, privy.authenticated, privy.ready, privy.user])
+  }, [getAccessToken, privy, privy.authenticated, privy.linkTelegram, privy.ready, privy.user])
 
   const emitTelemetry = useCallback((
     event: string,
@@ -497,39 +509,6 @@ export function TelegramLink() {
       ...payload,
     })
   }, [])
-
-  const { linkTelegram } = useLinkAccount({
-    onSuccess: ({ linkMethod, user }) => {
-      if (linkMethod !== 'telegram') return
-      if (stateRef.current.tag !== 'bind_telegram' || stateRef.current.step !== 'ensure_privy_link') return
-      emitTelemetry('telegram_link_privy_link_succeeded', {
-        status: 'succeeded',
-        privyUserId: typeof (user as { id?: unknown } | null)?.id === 'string' ? String((user as any).id) : null,
-      })
-      dispatch({ type: 'PRIVY_TELEGRAM_LINK_SUCCEEDED' })
-    },
-    onError: (errorCode, details) => {
-      if (details?.linkMethod !== 'telegram') return
-      if (stateRef.current.tag !== 'bind_telegram' || stateRef.current.step !== 'ensure_privy_link') return
-      const error = isTelegramLaunchParamError(String(errorCode))
-        ? buildLaunchParamFailure()
-        : buildBindFailure(coerceErrorMessage(errorCode, 'Telegram link failed.'), true)
-      emitTelemetry('telegram_link_privy_link_failed', {
-        status: 'failed',
-        errorCode: error.code,
-        recoverable: error.recoverable,
-      })
-      dispatch({
-        type: 'PRIVY_TELEGRAM_LINK_FAILED',
-        error,
-      })
-    },
-  })
-  const linkTelegramRef = useRef(linkTelegram)
-
-  useEffect(() => {
-    linkTelegramRef.current = linkTelegram
-  }, [linkTelegram])
 
   useEffect(() => {
     let active = true
@@ -941,40 +920,86 @@ export function TelegramLink() {
     if (bindExecutionKeyRef.current === executionKey) return
     bindExecutionKeyRef.current = executionKey
 
-    const snapshot = privySnapshotRef.current
-    if (hasMatchingPrivyTelegramAccount(snapshot.user, state.proof)) {
-      emitTelemetry('telegram_link_privy_link_skipped', {
-        status: 'skipped',
-        privyUserId: state.account.privyUserId,
-        reason: 'already_linked_to_privy_user',
-      })
-      dispatch({ type: 'PRIVY_TELEGRAM_LINK_SKIPPED' })
-      return
-    }
+    let cancelled = false
+    void (async () => {
+      const snapshot = privySnapshotRef.current
+      if (hasMatchingPrivyTelegramAccount(snapshot.user, state.proof)) {
+        emitTelemetry('telegram_link_privy_link_skipped', {
+          status: 'skipped',
+          privyUserId: state.account.privyUserId,
+          reason: 'already_linked_to_privy_user',
+        })
+        dispatch({ type: 'PRIVY_TELEGRAM_LINK_SKIPPED' })
+        return
+      }
 
-    if (!snapshot.ready || !snapshot.authenticated) {
-      emitTelemetry('telegram_link_privy_link_failed', {
-        status: 'failed',
-        errorCode: 'BIND_TELEGRAM_FAILED',
-        privyUserId: state.account.privyUserId,
-        reason: 'privy_session_not_ready',
-      })
-      dispatch({
-        type: 'PRIVY_TELEGRAM_LINK_FAILED',
-        error: buildBindFailure('Privy session was not ready for Telegram linking.', true),
-      })
-      return
-    }
+      if (!snapshot.ready || !snapshot.authenticated) {
+        emitTelemetry('telegram_link_privy_link_failed', {
+          status: 'failed',
+          errorCode: 'BIND_TELEGRAM_FAILED',
+          privyUserId: state.account.privyUserId,
+          reason: 'privy_session_not_ready',
+        })
+        dispatch({
+          type: 'PRIVY_TELEGRAM_LINK_FAILED',
+          error: buildBindFailure('Privy session was not ready for Telegram linking.', true),
+        })
+        return
+      }
 
-    emitTelemetry('telegram_link_privy_link_started', {
-      status: 'started',
-      privyUserId: state.account.privyUserId,
-    })
-    linkTelegramRef.current({
-      launchParams: {
-        initDataRaw: state.proof.initDataRaw,
-      },
-    })
+      if (typeof snapshot.linkTelegram !== 'function') {
+        emitTelemetry('telegram_link_privy_link_failed', {
+          status: 'failed',
+          errorCode: 'BIND_TELEGRAM_FAILED',
+          privyUserId: state.account.privyUserId,
+          reason: 'link_telegram_unavailable',
+        })
+        dispatch({
+          type: 'PRIVY_TELEGRAM_LINK_FAILED',
+          error: buildBindFailure('Privy Telegram linking is unavailable in this session.', true),
+        })
+        return
+      }
+
+      emitTelemetry('telegram_link_privy_link_started', {
+        status: 'started',
+        privyUserId: state.account.privyUserId,
+        reason: 'link_telegram_requested',
+      })
+
+      try {
+        await snapshot.linkTelegram({
+          launchParams: {
+            initDataRaw: state.proof.initDataRaw,
+          },
+        })
+        if (cancelled) return
+        emitTelemetry('telegram_link_privy_link_succeeded', {
+          status: 'succeeded',
+          privyUserId: state.account.privyUserId,
+        })
+        dispatch({ type: 'PRIVY_TELEGRAM_LINK_SUCCEEDED' })
+      } catch (error) {
+        if (cancelled) return
+        const flowError = isTelegramLaunchParamError(coerceErrorMessage(error, ''))
+          ? buildLaunchParamFailure()
+          : buildBindFailure(coerceErrorMessage(error, 'Telegram link failed.'), true)
+        emitTelemetry('telegram_link_privy_link_failed', {
+          status: 'failed',
+          errorCode: flowError.code,
+          recoverable: flowError.recoverable,
+          privyUserId: state.account.privyUserId,
+        })
+        dispatch({
+          type: 'PRIVY_TELEGRAM_LINK_FAILED',
+          error: flowError,
+        })
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [emitTelemetry, state])
 
   useEffect(() => {
