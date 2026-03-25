@@ -20,7 +20,7 @@ The working outcome is not "Telegram linked somehow." The working outcome is:
 1. Telegram Mini App proof is fresh and verified.
 2. Email OTP happens inline inside Telegram WebView.
 3. The verified email resolves the canonical 4626 account.
-4. The Privy user and embedded EOA for that account are hydrated.
+4. The active Privy session resolves to the verified-email 4626 account.
 5. Telegram is linked to that Privy user and persisted in app storage.
 6. The account keeps its canonical CSW / embedded-EOA model.
 
@@ -35,15 +35,22 @@ Telegram must never become the canonical recovery key or replace verified email.
 Authoritative files:
 
 - `frontend/src/App.tsx`
+- `frontend/src/app/AppPrivyShell.tsx`
 - `frontend/src/app/accessRuntime.tsx`
 - `frontend/src/app/accessShared.tsx`
+- `frontend/src/lib/telegramMiniAppLink.ts`
 - `frontend/src/pages/TelegramLink.tsx`
 
 Required behavior:
 
 - valid Telegram Mini App context or Telegram link query context is enough to
   enter the flow
+- route admission is allowed to use async Telegram bootstrap helpers before the
+  reducer starts, as long as those helpers do not mutate machine state
 - general waitlist gating must not take control once the Telegram flow starts
+- query-derived/stored `tgLinkToken` context must survive until Telegram proof
+  is captured into reducer-owned state
+- Telegram query params must only be stripped after that proof capture succeeds
 - route/provider simplification must not remount the flow or reset its state
 
 ### 2. Fresh Telegram Mini App proof
@@ -95,7 +102,7 @@ hydration before attempting any Telegram bind.
 Authoritative files:
 
 - `frontend/src/pages/TelegramLink.tsx`
-- `frontend/api/_handlers/accounts/_me.ts`
+- `frontend/api/_handlers/telegram/_link-ready.ts`
 - `frontend/server/_lib/accountsIdentity.ts`
 
 Current behavior:
@@ -103,9 +110,12 @@ Current behavior:
 - the frontend enters `wait_for_privy_sync`
 - it waits for `privy.ready`, `privy.authenticated`, `privy.user`, and a usable
   access token
-- it polls `GET /api/accounts/me`
-- it only proceeds once the payload matches the verified email and represents a
-  canonical ready account
+- it polls `POST /api/telegram/link/ready` with the verified email
+- the backend verifies the Privy bearer, runs `syncEmailIdentity`, and returns
+  a narrow readiness payload only when the active Privy session resolves to
+  that verified email
+- this state does **not** prove canonical wallet execution readiness or embedded
+  EOA owner confirmation
 
 This explicit wait state is one of the reasons the flow currently works. Do not
 collapse it into a hidden background assumption.
@@ -156,6 +166,14 @@ Current behavior in `POST /api/telegram/link/complete`:
 - finalizes link-token consumption on success
 - returns both the Telegram link record and canonical account payload
 
+Important details:
+
+- `linkToken` is optional; the flow must still work when no link-start token is
+  present
+- same-user retries must remain idempotent
+- an already-consumed same-user token must be treated as success, not as a hard
+  failure
+
 This endpoint is the authoritative persistence boundary for Telegram link
 completion.
 
@@ -178,6 +196,8 @@ Current meaning:
   setup is complete
 - wallet-dependent features stay gated until canonical owner confirmation is
   complete
+- owner confirmation truth comes from the canonical delegation / confirm-owner
+  path, not from `wait_for_privy_sync` and not from link completion alone
 
 Do not make Telegram linkage depend on immediate CSW completion if the product
 still wants email-first account creation.
@@ -189,9 +209,13 @@ If one of these changes, review the whole chain:
 - `AGENTS.md`
 - `frontend/docs/account-auth-invariants.md`
 - `frontend/docs/telegram-miniapp-link-architecture.md`
+- `frontend/src/app/AppPrivyShell.tsx`
+- `frontend/src/app/accessShared.tsx`
 - `frontend/src/pages/TelegramLink.tsx`
 - `frontend/src/pages/telegramLinkFlow.ts`
+- `frontend/src/lib/telegramMiniAppLink.ts`
 - `frontend/src/lib/telegramWebApp.ts`
+- `frontend/api/_handlers/telegram/_link-ready.ts`
 - `frontend/api/_handlers/telegram/_miniapp-session.ts`
 - `frontend/api/_handlers/telegram/_link-complete.ts`
 - `frontend/server/_lib/telegramTrading.ts`
@@ -204,14 +228,20 @@ Keep these rules explicit during refactors:
 
 - preserve the single authoritative frontend state machine
 - preserve the explicit `wait_for_privy_sync` state
+- preserve the async Telegram route/bootstrap admission logic needed before the
+  reducer starts
 - preserve the two-step backend contract:
   - Mini App session verification
+  - verified-email readiness
   - backend completion
 - preserve single-use, claim-bound, consumed-on-success Telegram link tokens
+  when a link token is present
+- preserve same-user idempotency for already-linked / already-consumed retries
 - preserve conflict handling for Telegram identities already attached elsewhere
 - preserve telemetry for session verify, OTP send/verify, Privy sync, Privy
   Telegram link, token claim/consume, and backend completion
 - preserve `/telegram/link` as an isolated routing surface
+- preserve query-derived/stored Telegram link context until proof capture
 - do not move OTP out of the Mini App
 - do not replace verified email with Telegram as the canonical key
 
@@ -220,12 +250,11 @@ Keep these rules explicit during refactors:
 At minimum, keep these flows covered:
 
 - `frontend/src/pages/TelegramLink.test.tsx`
-- `frontend/src/pages/AppContinue.test.tsx`
+- `frontend/src/pages/telegramLinkFlow.test.ts`
+- `frontend/src/App.access.test.ts`
 - `frontend/api/__tests__/telegramEndpoints.test.ts`
+- `frontend/api/__tests__/telegramLinkReady.test.ts`
 - `frontend/api/__tests__/telegramLinkComplete.test.ts`
-- `frontend/api/__tests__/accountsMe.test.ts`
-- `frontend/api/__tests__/onboardingBootstrap.test.ts`
-- `frontend/api/__tests__/waitlistBootstrap.test.ts`
 
 ## What can be simplified safely
 
@@ -236,21 +265,21 @@ Safe simplifications:
 - reduce provider/shell scope around `/telegram/link`
 - consolidate frontend side-effect orchestration, as long as the reducer remains
   the single source of truth
-- remove duplicate route guards or bootstrap helpers
+- extract state-scoped effects into a dedicated hook without changing state
+  boundaries
 - narrow telemetry plumbing, as long as phase-level observability remains
 - replace polling implementation details, as long as the flow still waits for
-  canonical account readiness explicitly
+  verified-email account readiness explicitly
 
 ## What is the more efficient or optimal path?
 
-There is no better shortcut than the current semantic order. The optimal path is
-to keep the same identity guarantees while reducing coordination overhead.
+There is no better shortcut than the current semantic order. The optimal path
+is to keep the same identity guarantees while reducing coordination overhead.
 
-The main remaining optimization worth considering is:
+The current implementation already uses the preferred optimization:
 
-- replace the frontend `wait_for_privy_sync` polling loop over `/api/accounts/me`
-  with a narrower readiness endpoint or server-confirmed bootstrap that returns
-  "canonical account ready for this verified email" once Privy is hydrated
+- `wait_for_privy_sync` polls a narrow `POST /api/telegram/link/ready`
+  readiness endpoint instead of the broader `/api/accounts/me` payload
 
 But even if you do that, keep all of the following:
 
@@ -258,6 +287,6 @@ But even if you do that, keep all of the following:
 - inline email OTP
 - verified-email account resolution
 - Privy-side Telegram link
-- backend completion with token claim/consume and persistence
+- backend completion with optional token claim/consume and persistence
 
 Do not collapse the flow into one opaque call that hides these boundaries.

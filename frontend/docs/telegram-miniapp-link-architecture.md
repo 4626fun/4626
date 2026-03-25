@@ -77,7 +77,8 @@ Current implementation-preservation notes live in:
 ### `wait_for_privy_sync`
 
 - Explicit state
-- Waits for canonical account/session hydration
+- Waits for verified-email account readiness, not full wallet execution
+- Uses a dedicated readiness contract instead of the broader account payload
 - Must not regress silently
 
 ### `bind_telegram`
@@ -131,6 +132,8 @@ No shared mutable global state for these values.
 - `/telegram/link` must not be overridden by waitlist logic
 - Valid Telegram context bypasses app gating
 - Flow must not depend on general app session restoration
+- Async Telegram route/bootstrap helpers are allowed before the reducer starts
+- Query/stored Telegram link context must persist until proof capture succeeds
 
 ---
 
@@ -158,6 +161,7 @@ Do NOT:
 - derive verification state from multiple sources
 - reset form state on auth updates
 - remount flow due to auth changes
+- treat full `/api/accounts/me` hydration as the minimum readiness contract
 - hide retries
 - bounce between states implicitly
 
@@ -183,3 +187,4 @@ Before merging:
 - deterministic state transitions
 - no UI regression under async delays
 - stable behavior inside Telegram WebView assumptions
+- explicit coverage for Telegram route admission and wait-state readiness

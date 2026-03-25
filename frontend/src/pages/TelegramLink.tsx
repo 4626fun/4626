@@ -21,9 +21,9 @@ import {
   isTelegramLaunchParamError,
   normalizeEmailCandidate,
   telegramLinkReducer,
-  type CanonicalAccountReady,
   type FlowError,
   type TelegramLinkResult,
+  type TelegramLinkReadyAccount,
   type TelegramLinkState,
   type TelegramSessionProof,
 } from './telegramLinkFlow'
@@ -35,9 +35,14 @@ type ApiEnvelope<T> = {
   code?: string
 }
 
+type TelegramLinkReadyData = {
+  ready: boolean
+  account: TelegramLinkReadyAccount | null
+}
+
 type TelegramLinkCompleteData = {
   link: TelegramLinkResult
-  account: CanonicalAccountReady
+  account: unknown
 }
 
 const OTP_RESEND_DELAY_MS = 30_000
@@ -182,13 +187,24 @@ function buildLaunchParamFailure(): FlowError {
   })
 }
 
-function parseCanonicalAccount(data: unknown, expectedEmail: string): CanonicalAccountReady | null {
+function parseTelegramLinkReadyAccount(data: unknown, expectedEmail: string): TelegramLinkReadyAccount | null {
   if (!data || typeof data !== 'object') return null
   const record = data as Record<string, unknown>
   const email = normalizeEmailCandidate(typeof record.email === 'string' ? record.email : '')
   if (!email || email !== normalizeEmailCandidate(expectedEmail)) return null
   if (record.emailVerified !== true) return null
-  return record as unknown as CanonicalAccountReady
+  const canonicalCswAddress =
+    typeof record.canonicalCswAddress === 'string' && record.canonicalCswAddress.trim()
+      ? record.canonicalCswAddress.trim()
+      : null
+  const privyUserId = typeof record.privyUserId === 'string' ? record.privyUserId.trim() : ''
+  if (!privyUserId) return null
+  return {
+    privyUserId,
+    email,
+    emailVerified: true,
+    canonicalCswAddress,
+  }
 }
 
 function getFlowHeadline(tag: string): string {
@@ -800,7 +816,7 @@ export function TelegramLink() {
       const startedAt = Date.now()
       let pollCount = 0
       let accessTokenRetries = 0
-      let accountsFetchAttempts = 0
+      let readinessChecks = 0
       let lastSnapshot = privySnapshotRef.current
 
       emitTelemetry('telegram_link_privy_sync_started', {
@@ -831,23 +847,28 @@ export function TelegramLink() {
         }
 
         try {
-          accountsFetchAttempts += 1
-          const response = await apiFetch('/api/accounts/me', {
-            method: 'GET',
+          readinessChecks += 1
+          const response = await apiFetch('/api/telegram/link/ready', {
+            method: 'POST',
             headers: {
               Accept: 'application/json',
+              'Content-Type': 'application/json',
               Authorization: `Bearer ${accessToken}`,
             },
+            body: JSON.stringify({
+              email: expectedEmail,
+            }),
           })
-          const json = (await response.json().catch(() => null)) as ApiEnvelope<CanonicalAccountReady> | null
-          const account = response.ok ? parseCanonicalAccount(json?.data, expectedEmail) : null
+          const json = (await response.json().catch(() => null)) as ApiEnvelope<TelegramLinkReadyData> | null
+          const account =
+            response.ok && json?.data?.ready === true ? parseTelegramLinkReadyAccount(json.data.account, expectedEmail) : null
           if (account) {
             emitTelemetry('telegram_link_privy_sync_ready', {
               status: 'ready',
               durationMs: Date.now() - startedAt,
               pollCount,
               accessTokenRetries,
-              accountsFetchAttempts,
+              readinessChecks,
               privyUserId: account.privyUserId,
             })
             dispatch({ type: 'PRIVY_SYNC_READY', account })
@@ -866,7 +887,7 @@ export function TelegramLink() {
           durationMs: Date.now() - startedAt,
           pollCount,
           accessTokenRetries,
-          accountsFetchAttempts,
+          readinessChecks,
           privyReady: lastSnapshot.ready,
           privyAuthenticated: lastSnapshot.authenticated,
           errorCode: 'PRIVY_SYNC_FAILED',
@@ -1414,7 +1435,7 @@ export function TelegramLink() {
         )
 
       case 'success':
-        const canonicalCswAddress = state.link.canonicalCswAddress ?? state.account.accountSignals.canonicalCswAddress
+        const canonicalCswAddress = state.link.canonicalCswAddress ?? state.account.canonicalCswAddress
         return (
           <div className="space-y-4">
             <StatusBlock

@@ -194,13 +194,17 @@ The flow must be implemented as an explicit state machine with at least:
 - There must be a single source of truth for flow state.
 - UI must map 1:1 to state machine state.
 - Do not derive verification state from multiple async sources.
+- Multiple `useEffect`s are acceptable when they are keyed by explicit machine
+  state and guarded against re-entry.
+- Async Telegram route/bootstrap helpers may admit the flow, but they must not
+  mutate machine state mid-session.
 
 ### Verification Semantics
 
 - Email is not considered verified until:
   1. OTP is valid AND
-  2. canonical account is resolved AND
-  3. session is fully hydrated
+  2. the active Privy session resolves to the same verified email AND
+  3. the Telegram readiness check succeeds
 
 - “Verified” UI must not render before all conditions above are met.
 
@@ -241,13 +245,14 @@ This is the current working sequence that must survive simplification work:
    `POST /api/telegram/miniapp/session`.
 3. Email OTP runs inline through Privy `useLoginWithEmail()`.
 4. The flow enters explicit `wait_for_privy_sync` and does not proceed until
-   `/api/accounts/me` resolves the verified email to the canonical 4626
-   account.
+   `POST /api/telegram/link/ready` resolves the verified email to the active
+   Privy-backed 4626 account.
 5. If needed, the frontend links Telegram to the active Privy user through
    `useLinkAccount().linkTelegram(...)`.
 6. The frontend calls `POST /api/telegram/link/complete`, which re-validates
-   the Telegram Mini App session, syncs account/wallet identity, claims and
-   consumes the single-use link token, and persists `telegram_user_links`.
+   the Telegram Mini App session, syncs account/wallet identity, optionally
+   claims and consumes the single-use link token, and persists
+   `telegram_user_links`.
 7. Canonical CSW setup remains a separate concern from Telegram linkage; the
    link may complete before CSW setup is finished, but execution-gated features
    stay blocked until canonical owner confirmation succeeds.
@@ -260,8 +265,8 @@ The main acceptable optimization is structural:
 
 - reduce route/provider complexity around `/telegram/link`
 - keep one authoritative reducer/state machine
-- replace the current `/api/accounts/me` polling loop with a narrower canonical
-  readiness signal if desired
+- keep `wait_for_privy_sync` explicit even if the readiness transport changes
+- preserve query/stored Telegram link context until Mini App proof capture
 
 The following are not acceptable optimizations:
 

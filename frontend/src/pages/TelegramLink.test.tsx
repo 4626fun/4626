@@ -159,28 +159,19 @@ beforeEach(() => {
     })
   })
   apiFetchMock.mockImplementation(async (path: string) => {
-    if (path === '/api/accounts/me') {
+    if (path === '/api/telegram/link/ready') {
       return {
         ok: true,
         status: 200,
         json: async () => ({
           success: true,
           data: {
-            privyUserId: 'did:privy:user-1',
-            email: 'user@example.com',
-            emailVerified: true,
-            appAccessStatus: 'approved',
-            linkedMethods: { email: ['user@example.com'] },
-            accountSignals: {
-              linked: true,
+            ready: true,
+            account: {
+              privyUserId: 'did:privy:user-1',
+              email: 'user@example.com',
+              emailVerified: true,
               canonicalCswAddress: CANONICAL_CSW_ADDRESS,
-              creatorCoin: null,
-              zoraHandle: null,
-              lastResolvedAt: '2026-03-23T00:00:00.000Z',
-            },
-            score: {
-              points: 15,
-              tier: 1,
             },
           },
         }),
@@ -494,19 +485,13 @@ describe('TelegramLink UI flow', () => {
         json: async () => ({
           success: true,
           data: {
-            privyUserId: 'did:privy:user-1',
-            email: 'user@example.com',
-            emailVerified: true,
-            appAccessStatus: 'approved',
-            linkedMethods: { email: ['user@example.com'] },
-            accountSignals: {
-              linked: true,
+            ready: true,
+            account: {
+              privyUserId: 'did:privy:user-1',
+              email: 'user@example.com',
+              emailVerified: true,
               canonicalCswAddress: CANONICAL_CSW_ADDRESS,
-              creatorCoin: null,
-              zoraHandle: null,
-              lastResolvedAt: '2026-03-23T00:00:00.000Z',
             },
-            score: { points: 15, tier: 1 },
           },
         }),
       } as Response)
