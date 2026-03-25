@@ -7,6 +7,8 @@ import path from 'path'
 import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
+import { classifyManualChunk } from './src/lib/viteManualChunks'
+
 function loadDotEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return
   const raw = fs.readFileSync(filePath, 'utf8')
@@ -446,23 +448,7 @@ export default defineConfig(({ command }) => {
         // Route-level lazy imports already split page code well. The remaining
         // hotspots are shared SDK families that otherwise collapse into a few
         // oversized vendor chunks.
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined
-          const isPkg = (name: string) => id.includes(`/node_modules/${name}/`)
-          const matchesAny = (names: string[]) => names.some(isPkg)
-
-          if (isPkg('react') || isPkg('react-dom') || isPkg('react-router-dom')) return 'vendor'
-          if (isPkg('d3') || isPkg('recharts')) return 'charts'
-          if (matchesAny(['framer-motion', 'sonner'])) return 'ui-vendor'
-          if (matchesAny(['@privy-io/react-auth', '@privy-io/wagmi', '@coinbase/wallet-sdk', '@web3icons/react'])) return 'auth-wallet'
-          if (matchesAny(['wagmi', '@wagmi/core', 'viem', 'permissionless', 'ox'])) return 'web3-core'
-          if (matchesAny(['@safe-global/api-kit', '@safe-global/protocol-kit', '@safe-global/types-kit'])) return 'safe'
-          if (matchesAny(['@zoralabs/coins-sdk', '@zoralabs/protocol-deployments'])) return 'zora-sdk'
-          if (matchesAny(['@lens-protocol/client', '@lens-chain/storage-client'])) return 'lens'
-          if (isPkg('@xmtp/browser-sdk') || isPkg('@xmtp/content-type-primitives')) return 'xmtp'
-
-          return undefined
-        },
+        manualChunks: classifyManualChunk,
       },
     },
   },
