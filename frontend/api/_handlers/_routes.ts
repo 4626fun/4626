@@ -1,11 +1,31 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { authRouteLoaders } from './_routes.auth.js'
+import { creRouteLoaders } from './_routes.cre.js'
+import { deployRouteLoaders } from './_routes.deploy.js'
+import { imageRouteLoaders } from './_routes.image.js'
+import { keeprRouteLoaders } from './_routes.keepr.js'
+import { lensRouteLoaders } from './_routes.lens.js'
+import { telegramRouteLoaders } from './_routes.telegram.js'
+import { uniswapRouteLoaders } from './_routes.uniswap.js'
+import { getV1ApiHandler } from './_routes.v1.js'
+import { waitlistRouteLoaders } from './_routes.waitlist.js'
+import { walletSolanaRouteLoaders } from './_routes.wallet.solana.js'
+import { zoraRouteLoaders } from './_routes.zora.js'
 
 export type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 
 type ApiHandlerModule = { default?: ApiHandler }
+type ApiRouteLoaders = Record<string, () => Promise<ApiHandlerModule>>
 
-// The root catch-all should stay lean. Heavy or high-churn route families
-// are split into dedicated catch-alls under /api/<family>/[...path].ts.
+function prefixRouteLoaders(prefix: string, loaders: ApiRouteLoaders): ApiRouteLoaders {
+  return Object.fromEntries(
+    Object.entries(loaders).map(([subpath, loader]) => [subpath ? `${prefix}/${subpath}` : prefix, loader])
+  )
+}
+
+// Keep the root catch-all small enough to be practical, but fold the thinner
+// route families back into it so Vercel doesn't spend extra packaging passes
+// on wrappers that do not need runtime isolation.
 export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'analytics': () => import('./_analytics.js'),
   'agents': () => import('./_agents.js'),
@@ -14,6 +34,8 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   // agent/process is deployed as a standalone function (api/agent/process.ts)
   // to isolate the heavy @xmtp/node-bindings (~214 MB) from the catch-all bundle.
   // 'agent/process': () => import('./agent/_process.js'),
+  'token/image': () => import('./token/_image.js'),
+  'telegram/webhook': () => import('./telegram/_webhook.js'),
 
   'onboarding/bootstrap': () => import('./onboarding/_bootstrap.js'),
   'accounts/me': () => import('./accounts/_me.js'),
@@ -96,9 +118,24 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
   'admin/wallet/canonical-owner-link-status': () => import('./admin/wallet/_canonicalOwnerLinkStatus.js'),
   'admin/wallet/duplicate-principals': () => import('./admin/wallet/_duplicatePrincipals.js'),
+
+  ...prefixRouteLoaders('auth', authRouteLoaders),
+  ...prefixRouteLoaders('cre', creRouteLoaders),
+  ...prefixRouteLoaders('deploy', deployRouteLoaders),
+  ...prefixRouteLoaders('image', imageRouteLoaders),
+  ...prefixRouteLoaders('keepr', keeprRouteLoaders),
+  ...prefixRouteLoaders('lens', lensRouteLoaders),
+  ...prefixRouteLoaders('telegram', telegramRouteLoaders),
+  ...prefixRouteLoaders('uniswap', uniswapRouteLoaders),
+  ...prefixRouteLoaders('waitlist', waitlistRouteLoaders),
+  ...prefixRouteLoaders('wallet/solana', walletSolanaRouteLoaders),
+  ...prefixRouteLoaders('zora', zoraRouteLoaders),
 }
 
 export async function getApiHandler(subpath: string): Promise<ApiHandler | null> {
+  if (subpath === 'v1' || subpath.startsWith('v1/')) {
+    return getV1ApiHandler(subpath.slice(3))
+  }
   const loader = apiRouteLoaders[subpath]
   if (!loader) return null
   const mod = await loader()

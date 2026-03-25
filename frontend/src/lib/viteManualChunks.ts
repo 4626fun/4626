@@ -1,5 +1,6 @@
 const CHART_PACKAGES = ['d3', 'recharts'] as const
 const UI_VENDOR_PACKAGES = ['framer-motion', 'sonner'] as const
+const QUERY_VENDOR_PACKAGES = ['@tanstack/react-query', '@tanstack/query-core'] as const
 const WALLET_AUTH_PACKAGES = [
   '@privy-io/react-auth',
   '@privy-io/wagmi',
@@ -8,8 +9,6 @@ const WALLET_AUTH_PACKAGES = [
   'wagmi',
   '@wagmi/core',
   'viem',
-  'permissionless',
-  'ox',
 ] as const
 const SAFE_PACKAGES = ['@safe-global/api-kit', '@safe-global/protocol-kit', '@safe-global/types-kit'] as const
 const ZORA_PACKAGES = ['@zoralabs/coins-sdk', '@zoralabs/protocol-deployments'] as const
@@ -24,11 +23,13 @@ function matchesAny(id: string, packageNames: readonly string[]): boolean {
 }
 
 export function classifyManualChunk(id: string): string | undefined {
+  if (id.includes('vite/preload-helper')) return 'vendor'
   if (!id.includes('node_modules')) return undefined
 
   if (matchesPackage(id, 'react') || matchesPackage(id, 'react-dom') || matchesPackage(id, 'react-router-dom')) {
     return 'vendor'
   }
+  if (matchesAny(id, QUERY_VENDOR_PACKAGES)) return 'vendor'
   if (matchesAny(id, CHART_PACKAGES)) return 'charts'
   if (matchesAny(id, UI_VENDOR_PACKAGES)) return 'ui-vendor'
 

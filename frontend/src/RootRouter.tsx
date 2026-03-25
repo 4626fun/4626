@@ -4,9 +4,16 @@ import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode } from '@/lib/host'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AppLoadingState } from '@/components/AppLoadingState'
-import { Home } from './pages/Home'
 
+const Home = lazy(async () => {
+  const m = await import('./pages/Home')
+  return { default: m.Home }
+})
 const ProtectedApp = lazy(async () => import('./ProtectedApp'))
+const TelegramMenuEntryRoute = lazy(async () => {
+  const m = await import('./pages/TelegramMenuEntry')
+  return { default: m.TelegramMenuEntryRoute }
+})
 
 export function RootRouter() {
   const location = useLocation()
@@ -35,7 +42,22 @@ export function RootRouter() {
         }}
       />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route
+          path="/"
+          element={
+            <Suspense fallback={<AppLoadingState />}>
+              <Home />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/telegram/menu"
+          element={
+            <Suspense fallback={<AppLoadingState />}>
+              <TelegramMenuEntryRoute />
+            </Suspense>
+          }
+        />
         <Route
           path="*"
           element={

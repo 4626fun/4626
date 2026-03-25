@@ -1,221 +1,21 @@
-import { createContext, lazy, useContext, useMemo, type ReactNode } from 'react'
+import { Suspense, lazy, useMemo, type ReactNode } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { useAccount } from 'wagmi'
-import { useCreatorAllowlist } from '@/hooks'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
-import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
-import { buildWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
-import { readStoredTelegramMiniAppLinkContext, readTelegramMiniAppLinkContext } from '@/lib/telegramMiniAppLink'
-import { hasTelegramMiniAppEntrypointContext } from '@/lib/telegramWebApp'
 import { AdminLayout } from './components/AdminLayout'
 import { AppLoadingState } from '@/components/AppLoadingState'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { getHostMode, getMarketingBaseUrl, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
-import { PrivyClientProvider } from '@/lib/privy/client'
-import { AccountContextProvider } from '@/wallet/accountContext'
-import { WalletProviders } from './web3/Web3Providers'
+import { useOptionalAccessContext, waitlistEntryHref, withReason } from './app/accessShared'
 
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-type CreatorAllowlistMode = 'disabled' | 'enforced'
-
-type CreatorAllowlistStatus = {
-  address: string | null
-  coin: string | null
-  creator: string | null
-  payoutRecipient: string | null
-  mode: CreatorAllowlistMode
-  allowed: boolean
-}
-
-type RouteId = 'public' | 'session' | 'accepted' | 'creator' | 'admin'
-type AccessReason = 'ok' | 'loading' | 'needs-session' | 'needs-acceptance' | 'needs-admin' | 'needs-creator' | 'not-found'
-type AccessDecision = { allow: true; reason: 'ok' } | { allow: false; reason: Exclude<AccessReason, 'ok'>; redirectTo?: string }
-
-type AccessState = {
-  loading: boolean
-  walletConnected: boolean
-  sessionValid: boolean
-  accepted: boolean
-  creator: boolean
-  admin: boolean
-  allowlistEnforced: boolean
-  effectiveAddress: string | null
-  marketingUrl: string
-  hostMode: import('@/lib/host').HostMode
-}
-
-type ResolvedAllowlistMode = CreatorAllowlistMode | 'unknown'
-
-function isValidEvmAddress(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(value)
-}
-
-export function resolveAllowlistMode(params: {
-  modeFromGlobal?: CreatorAllowlistMode | null
-  modeFromAddress?: CreatorAllowlistMode | null
-}): ResolvedAllowlistMode {
-  if (params.modeFromGlobal === 'disabled' || params.modeFromGlobal === 'enforced') return params.modeFromGlobal
-  if (params.modeFromAddress === 'disabled' || params.modeFromAddress === 'enforced') return params.modeFromAddress
-  return 'unknown'
-}
-
-export function computeAcceptedFromAllowlist(params: {
-  mode: ResolvedAllowlistMode
-  allowlisted: boolean
-}): boolean {
-  if (params.mode === 'disabled') return true
-  if (params.mode === 'enforced') return params.allowlisted
-  return false
-}
-
-export function hasTelegramLinkQueryContext(search: string): boolean {
-  try {
-    return Boolean(readTelegramMiniAppLinkContext(new URLSearchParams(search)))
-  } catch {
-    return false
-  }
-}
-
-export function hasTelegramLinkEntryContext(search: string): boolean {
-  if (hasTelegramLinkQueryContext(search)) return true
-  try {
-    return Boolean(readStoredTelegramMiniAppLinkContext())
-  } catch {
-    return false
-  }
-}
-
-function withReason(to: string, reason: AccessReason | 'host-redirect' | 'external-redirect' | 'invalid-params'): string {
-  try {
-    const hashIdx = to.indexOf('#')
-    const hash = hashIdx >= 0 ? to.slice(hashIdx) : ''
-    const noHash = hashIdx >= 0 ? to.slice(0, hashIdx) : to
-
-    const qIdx = noHash.indexOf('?')
-    const path = qIdx >= 0 ? noHash.slice(0, qIdx) : noHash
-    const query = qIdx >= 0 ? noHash.slice(qIdx + 1) : ''
-    const qs = new URLSearchParams(query)
-    if (!qs.has('reason')) qs.set('reason', reason)
-    const nextQuery = qs.toString()
-    return `${path}${nextQuery ? `?${nextQuery}` : ''}${hash}`
-  } catch {
-    return to
-  }
-}
-
-function waitlistEntryHref(marketingUrl: string, reason: 'needs-session' | 'needs-acceptance'): string {
-  return buildWaitlistEntryUrl(marketingUrl, reason)
-}
-
-const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolean; creator?: boolean; admin?: boolean }> = {
-  public: {},
-  session: { session: true },
-  accepted: { session: true, accepted: true },
-  creator: { session: true, accepted: true, creator: true },
-  admin: { session: true, admin: true },
-}
-
-export function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
-  if (state.loading) return { allow: false, reason: 'loading' }
-  const req = ROUTE_REQUIREMENTS[routeId]
-  if (req.session && !state.sessionValid) {
-    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref(state.marketingUrl, 'needs-session') }
-  }
-  if (req.accepted && !state.accepted) {
-    return {
-      allow: false,
-      reason: 'needs-acceptance',
-      redirectTo: waitlistEntryHref(state.marketingUrl, 'needs-acceptance'),
-    }
-  }
-  if (req.creator && !state.creator) {
-    const deployPrefix = state.hostMode === 'marketing' ? APP_ORIGIN : ''
-    return { allow: false, reason: 'needs-creator', redirectTo: deployPrefix + withReason('/deploy', 'needs-creator') }
-  }
-  if (req.admin && !state.admin) {
-    return { allow: false, reason: 'needs-admin', redirectTo: withReason('/', 'needs-admin') }
-  }
-  return { allow: true, reason: 'ok' }
-}
-
-function useResolvedAccessState(): AccessState {
-  const location = useLocation()
-  const { address: connectedAddressRaw, isConnected } = useAccount()
-  const siwe = useSiweAuth()
-  const shouldLoadAdminStatus = location.pathname.startsWith('/admin')
-  const adminStatus = useAdminStatusFromSession({
-    authAddress: typeof siwe.authAddress === 'string' ? siwe.authAddress : null,
-    sessionHydrated: siwe.sessionHydrated,
-    enabled: shouldLoadAdminStatus,
-  })
-
-  const connectedAddress = useMemo(
-    () =>
-      typeof connectedAddressRaw === 'string' && connectedAddressRaw.startsWith('0x') ? connectedAddressRaw.toLowerCase() : null,
-    [connectedAddressRaw],
-  )
-  const siweAuthAddress = useMemo(() => {
-    const raw = typeof siwe.authAddress === 'string' ? siwe.authAddress : ''
-    return isValidEvmAddress(raw) ? raw.toLowerCase() : null
-  }, [siwe.authAddress])
-  // Use the actively connected wallet for allowlist checks, while still allowing
-  // a bearer/cookie-backed session to satisfy session gates.
-  const effectiveAddress = connectedAddress ?? siweAuthAddress
-  const hasSession = Boolean(siweAuthAddress)
-
-  const allowlistModeQuery = useQuery({
-    queryKey: ['creatorAllowlist', 'mode'],
-    queryFn: async (): Promise<CreatorAllowlistStatus> => {
-      const res = await apiFetch('/api/creator-allowlist', { method: 'GET' })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<CreatorAllowlistStatus> | null
-      if (!res.ok || !json) throw new Error('Allowlist check failed')
-      if (!json.success || !json.data) throw new Error(json.error || 'Allowlist check failed')
-      return json.data
-    },
-    staleTime: 30_000,
-    retry: 0,
-  })
-
-  const allowQuery = useCreatorAllowlist(effectiveAddress)
-  const allowlistMode = resolveAllowlistMode({
-    modeFromGlobal: allowlistModeQuery.data?.mode ?? null,
-    modeFromAddress: allowQuery.data?.mode ?? null,
-  })
-  const allowlistEnforced = allowlistMode !== 'disabled'
-  const allowlisted = allowQuery.data?.allowed === true
-  const accepted = computeAcceptedFromAllowlist({ mode: allowlistMode, allowlisted })
-  const allowlistModeLoading = allowlistModeQuery.isLoading || allowlistModeQuery.isFetching
-  const allowlistAddressLoading =
-    allowlistEnforced &&
-    !!effectiveAddress &&
-    (allowQuery.isLoading || allowQuery.isFetching)
-
-  const loading =
-    !siwe.sessionHydrated ||
-    siwe.busy ||
-    allowlistModeLoading ||
-    allowlistAddressLoading ||
-    (hasSession && adminStatus.isLoading)
-
-  return {
-    loading,
-    walletConnected: isConnected,
-    sessionValid: hasSession,
-    accepted,
-    creator: accepted,
-    admin: adminStatus.isAdmin,
-    allowlistEnforced,
-    effectiveAddress,
-    marketingUrl: getMarketingBaseUrl(),
-    hostMode: getHostMode(),
-  }
-}
-
-const AccessContext = createContext<AccessState | null>(null)
+export {
+  computeAcceptedFromAllowlist,
+  getInitialTelegramMiniAppEntryResolution,
+  hasTelegramLinkEntryContext,
+  hasTelegramLinkQueryContext,
+  resolveAllowlistMode,
+  resolveTelegramMiniAppEntryBootstrap,
+} from './app/accessShared'
 
 /** Redirect from 4626.fun to v1.4626.fun when user hits app-only routes. */
 function HostGuard() {
@@ -268,116 +68,38 @@ function MarketingOnlyRoute(props: { children: ReactNode }) {
   return null
 }
 
-export function useAccessContext(): AccessState {
-  const value = useContext(AccessContext)
-  if (!value) {
-    throw new Error('AccessContext is not available')
-  }
-  return value
-}
-
-function useOptionalAccessContext(): AccessState | null {
-  return useContext(AccessContext)
-}
-
-function AccessStateProvider(props: { children: ReactNode }) {
-  const value = useResolvedAccessState()
-  return <AccessContext.Provider value={value}>{props.children}</AccessContext.Provider>
-}
-
-function AppAuthProviders(props: { children: ReactNode }) {
-  return (
-    <PrivyClientProvider>
-      <WalletProviders>{props.children}</WalletProviders>
-    </PrivyClientProvider>
-  )
-}
-
-function AppWalletShell() {
-  return (
-    <WalletProviders>
-      <Outlet />
-    </WalletProviders>
-  )
-}
-
-function AppAuthShell() {
-  return (
-    <AppAuthProviders>
-      <Outlet />
-    </AppAuthProviders>
-  )
-}
-
-function AppAccessShell() {
-  return (
-    <AppAuthProviders>
-      <AccessStateProvider>
-        <Outlet />
-      </AccessStateProvider>
-    </AppAuthProviders>
-  )
-}
-
 function LayoutOnly() {
   return <Layout interactive={false} />
 }
 
-function LayoutWithAccountContext() {
-  return (
-    <AccountContextProvider>
-      <Layout />
-    </AccountContextProvider>
-  )
-}
+const LazyAppAuthShell = lazy(() => import('./app/AppAuthShell'))
 
-function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNode }) {
-  const access = useAccessContext()
-  const decision = resolveAccess(props.routeId, access)
-  if (!decision.allow) {
-    if (decision.reason === 'loading') return <AppLoadingState />
-    const to = decision.redirectTo ?? withReason('/', decision.reason)
-    if (to.startsWith('http://') || to.startsWith('https://')) {
-      if (typeof window !== 'undefined') window.location.replace(to)
-      return null
-    }
-    return <Navigate to={to} replace />
-  }
-  return props.children ? <>{props.children}</> : <Outlet />
-}
+const LazyAppAccessShell = lazy(() => import('./app/AppAccessShell'))
 
-function RequireSession(props: { children?: React.ReactNode }) {
-  return <RequireRouteAccess routeId="session">{props.children}</RequireRouteAccess>
-}
+const LazyLayoutWithAccountContext = lazy(() => import('./app/LayoutWithAccountContext'))
 
-function RequireAccepted(props: { children?: React.ReactNode }) {
-  return <RequireRouteAccess routeId="accepted">{props.children}</RequireRouteAccess>
-}
+const LazyRequireSession = lazy(async () => {
+  const m = await import('./app/accessRuntime')
+  return { default: m.RequireSession }
+})
 
-function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode }) {
-  const access = useAccessContext()
-  const location = useLocation()
-  const hasLinkEntryContext = hasTelegramLinkEntryContext(location.search)
+const LazyRequireAccepted = lazy(async () => {
+  const m = await import('./app/accessRuntime')
+  return { default: m.RequireAccepted }
+})
 
-  if (hasTelegramMiniAppEntrypointContext() || hasLinkEntryContext) {
-    return props.children ? <>{props.children}</> : <Outlet />
-  }
+const LazyRequireTelegramMiniAppEntry = lazy(async () => {
+  const m = await import('./app/accessRuntime')
+  return { default: m.RequireTelegramMiniAppEntry }
+})
 
-  const acceptedDecision = resolveAccess('accepted', access)
-  if (acceptedDecision.reason === 'loading') return <AppLoadingState />
-  if (acceptedDecision.allow) {
-    return <Navigate to="/swap" replace state={{ from: location.pathname }} />
-  }
-  const to = acceptedDecision.redirectTo ?? withReason('/', acceptedDecision.reason)
-  if (to.startsWith('http://') || to.startsWith('https://')) {
-    if (typeof window !== 'undefined') window.location.replace(to)
-    return null
-  }
-  return <Navigate to={to} replace />
-}
+const LazyRequireAdmin = lazy(async () => {
+  const m = await import('./app/accessRuntime')
+  return { default: m.RequireAdmin }
+})
 
-function RequireAdmin(props: { children?: React.ReactNode }) {
-  return <RequireRouteAccess routeId="admin">{props.children}</RequireRouteAccess>
+function LazyRouteBoundary(props: { children: ReactNode }) {
+  return <Suspense fallback={<AppLoadingState />}>{props.children}</Suspense>
 }
 
 const Vault = lazy(async () => {
@@ -664,50 +386,85 @@ function App() {
             }
           />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route
+            path="/status"
+            element={
+              <MarketingOnlyRoute>
+                <Status />
+              </MarketingOnlyRoute>
+            }
+          />
         </Route>
 
-        <Route element={<AppWalletShell />}>
-          <Route element={<LayoutOnly />}>
-            <Route
-              path="/status"
-              element={
-                <MarketingOnlyRoute>
-                  <Status />
-                </MarketingOnlyRoute>
-              }
-            />
-          </Route>
-        </Route>
-
-        <Route element={<AppAuthShell />}>
-          <Route element={<LayoutWithAccountContext />}>
+        <Route
+          element={
+            <LazyRouteBoundary>
+              <LazyAppAuthShell />
+            </LazyRouteBoundary>
+          }
+        >
+          <Route
+            element={
+              <LazyRouteBoundary>
+                <LazyLayoutWithAccountContext />
+              </LazyRouteBoundary>
+            }
+          >
             <Route path="/continue" element={<AppContinue />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account" element={<AccountsPage />} />
           </Route>
         </Route>
 
-        <Route element={<AppAccessShell />}>
+        <Route
+          element={
+            <LazyRouteBoundary>
+              <LazyAppAccessShell />
+            </LazyRouteBoundary>
+          }
+        >
           <Route
             path="/telegram/menu"
             element={
-              <RequireTelegramMiniAppEntry>
-                <TelegramMenu />
-              </RequireTelegramMiniAppEntry>
+              <LazyRouteBoundary>
+                <LazyRequireTelegramMiniAppEntry>
+                  <TelegramMenu />
+                </LazyRequireTelegramMiniAppEntry>
+              </LazyRouteBoundary>
             }
           />
           <Route
             path="/telegram/link"
             element={
-              <RequireTelegramMiniAppEntry>
-                <TelegramLink />
-              </RequireTelegramMiniAppEntry>
+              <LazyRouteBoundary>
+                <LazyRequireTelegramMiniAppEntry>
+                  <TelegramLink />
+                </LazyRequireTelegramMiniAppEntry>
+              </LazyRouteBoundary>
             }
           />
 
-          <Route element={<LayoutWithAccountContext />}>
-            <Route element={<RequireSession />}>
-              <Route element={<RequireAccepted />}>
+          <Route
+            element={
+              <LazyRouteBoundary>
+                <LazyLayoutWithAccountContext />
+              </LazyRouteBoundary>
+            }
+          >
+            <Route
+              element={
+                <LazyRouteBoundary>
+                  <LazyRequireSession />
+                </LazyRouteBoundary>
+              }
+            >
+              <Route
+                element={
+                  <LazyRouteBoundary>
+                    <LazyRequireAccepted />
+                  </LazyRouteBoundary>
+                }
+              >
                 <Route path="/explore/creators" element={<ExploreCreators />} />
                 <Route path="/explore/content" element={<ExploreContent />} />
                 <Route path="/explore/trends" element={<ExploreTrends />} />
@@ -743,7 +500,13 @@ function App() {
                 <Route path="/auction-demo" element={<AuctionDemo />} />
               </Route>
 
-              <Route element={<RequireAdmin />}>
+              <Route
+                element={
+                  <LazyRouteBoundary>
+                    <LazyRequireAdmin />
+                  </LazyRouteBoundary>
+                }
+              >
                 <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<Navigate to="/admin/waitlist" replace />} />
                   <Route path="creator-access" element={<AdminCreatorAccess />} />

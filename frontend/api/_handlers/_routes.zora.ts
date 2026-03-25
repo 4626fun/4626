@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const zoraRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const zoraRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'coin': () => import('./zora/_coin.js'),
   'explore': () => import('./zora/_explore.js'),
   'link/status': () => import('./zora/link/_status.js'),

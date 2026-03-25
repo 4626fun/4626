@@ -118,8 +118,8 @@ describe('image generation route registration', () => {
     resolveAuthorizedRequestPrincipalMock.mockResolvedValue(null)
   })
 
-  it('registers image generation routes through the image family catch-all', async () => {
-    const catchAllMod = await import('../image/[...path].ts')
+  it('registers image generation routes through the root api catch-all', async () => {
+    const catchAllMod = await import('../[...path].ts')
     const routesMod = await import('../_handlers/_routes.image.ts')
 
     expect(catchAllMod).toMatchObject({ default: expect.any(Function) })

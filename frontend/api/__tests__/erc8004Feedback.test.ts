@@ -211,13 +211,15 @@ describe('v1/agents/feedback (read)', () => {
     expect(res.statusCode).toBe(405)
   })
 
-  it('returns 400 for missing agentId', async () => {
+  it('returns discovery metadata for missing agentId', async () => {
     const mod = await import('../_handlers/v1/agents/feedback/_read.ts')
     const req = createMockReq({ method: 'GET', query: {} })
     const res = createMockRes()
     await mod.default(req, res)
-    expect(res.statusCode).toBe(400)
-    expect(res.body.error).toContain('agentId')
+    expect(res.statusCode).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.endpoint).toBe('/api/v1/agents/feedback')
+    expect(res.body.data.requiredQuery).toContain('agentId')
   })
 
   it('returns 400 for non-numeric agentId', async () => {
@@ -245,11 +247,14 @@ describe('lens/feedback-payload', () => {
     handler = mod.default
   })
 
-  it('returns 405 for GET', async () => {
+  it('returns discovery metadata for GET', async () => {
     const req = createMockReq({ method: 'GET' })
     const res = createMockRes()
     await handler(req, res)
-    expect(res.statusCode).toBe(405)
+    expect(res.statusCode).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.endpoint).toBe('/api/lens/feedback-payload')
+    expect(res.body.data.method).toBe('POST')
   })
 
   it('returns 400 for missing agentId', async () => {
@@ -364,7 +369,17 @@ describe('lens/reputation-graph', () => {
     expect(res.statusCode).toBe(405)
   })
 
-  it('returns 400 for missing agentId', async () => {
+  it('returns discovery metadata for GET without agentId', async () => {
+    const req = createMockReq({ method: 'GET', query: {} })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.endpoint).toBe('/api/lens/reputation-graph')
+    expect(res.body.data.requiredQuery).toContain('agentId')
+  })
+
+  it('returns 400 for missing agentId on POST', async () => {
     const req = createMockReq({ method: 'POST', body: {} })
     const res = createMockRes()
     await handler(req, res)
@@ -409,16 +424,17 @@ describe('lens/reputation-graph', () => {
     expect(tryUploadMock).not.toHaveBeenCalled()
   })
 
-  it('supports GET with query params', async () => {
+  it('supports GET with query params and defaults to read-only', async () => {
     const req = createMockReq({
       method: 'GET',
-      query: { agentId: '1', tag1: 'fast', includeRevoked: 'false', store: 'false' },
+      query: { agentId: '1', tag1: 'fast', includeRevoked: 'false' },
     })
     const res = createMockRes()
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
     expect(res.body.data.groveStatus).toBe('skipped')
+    expect(res.body.data.provenance.storeRequested).toBe(false)
     expect(buildReputationGraphMock).toHaveBeenCalledWith({
       agentId: 1,
       tag1Filter: 'fast',

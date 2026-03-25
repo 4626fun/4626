@@ -25,6 +25,12 @@ describe('baseBuilderCodes', () => {
     expect(hasErc8021RepeatingMarker(suffix as Hex)).toBe(true)
   })
 
+  it('matches the canonical schema-0 suffix encoding for a known builder code', () => {
+    expect(resolveDataSuffix(envWithBuilderCode)).toBe(
+      '0x62635f62376b33703964610b0080218021802180218021802180218021',
+    )
+  })
+
   it('merges singular and plural builder code env vars', () => {
     const codes = resolveBuilderCodes({
       VITE_BASE_BUILDER_CODES: 'bc_alpha,bc_beta',

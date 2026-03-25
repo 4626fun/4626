@@ -39,9 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const storeQueryRaw = typeof req.query.store === 'string' ? req.query.store.trim().toLowerCase() : ''
   const shouldStore = req.method === 'POST'
     ? body.store !== false
-    : storeQueryRaw
-      ? storeQueryRaw !== 'false'
-      : true
+    : storeQueryRaw === 'true'
 
   const principal = readRequestPrincipal(req)
   const hasAuthPrincipal = Boolean(principal)

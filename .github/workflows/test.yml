@@ -106,6 +106,10 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Frontend footprint summary
+        if: always()
+        run: pnpm --dir frontend report:footprint
+
       - name: Verify production agent registration endpoint
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: pnpm --dir frontend check:agent-registration

@@ -1,13 +1,21 @@
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { buildWaitlistEntryUrl, getMarketingWaitlistEntryUrl, type WaitlistEntryReason } from '@/lib/auth/waitlistEntry'
 import { getHostMode, getMarketingBaseUrl, type HostMode } from '@/lib/host'
-import { useEffect, useMemo, useState } from 'react'
-import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
-import { JoinWaitlistCtaWithProvider } from '@/components/waitlist/JoinWaitlistCta'
 import { PageMeta } from '@/components/seo/PageMeta'
+
+const LazyWaitlistModal = lazy(async () => {
+  const mod = await import('@/components/waitlist/WaitlistModal')
+  return { default: mod.WaitlistModal }
+})
+
+const LazyJoinWaitlistCtaWithProvider = lazy(async () => {
+  const mod = await import('@/components/waitlist/JoinWaitlistCta')
+  return { default: mod.JoinWaitlistCtaWithProvider }
+})
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
@@ -196,6 +204,8 @@ export function Home() {
     }
   }
 
+  const fallbackWaitlistHref = getMarketingWaitlistEntryUrl('needs-session')
+
   return (
     <div className="relative">
       <PageMeta
@@ -256,10 +266,23 @@ export function Home() {
               transition={{ duration: 0.8, delay: 1.12 }}
               className="pt-4 sm:pt-6"
             >
-              <JoinWaitlistCtaWithProvider
-                className={heroCtaClass}
-                onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
-              />
+              <Suspense
+                fallback={
+                  <button
+                    type="button"
+                    className={heroCtaClass}
+                    onClick={() => window.location.assign(fallbackWaitlistHref)}
+                  >
+                    Join waitlist
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                }
+              >
+                <LazyJoinWaitlistCtaWithProvider
+                  className={heroCtaClass}
+                  onPrivyDisabled={() => window.location.assign(fallbackWaitlistHref)}
+                />
+              </Suspense>
             </motion.div>
           ) : null}
           {showExploreCreatorsCta ? (
@@ -494,8 +517,11 @@ export function Home() {
           </motion.div>
         </div>
       </section>
-
-      <WaitlistModal open={waitlistOpen} onClose={closeWaitlistModal} />
+      {waitlistOpen ? (
+        <Suspense fallback={null}>
+          <LazyWaitlistModal open={waitlistOpen} onClose={closeWaitlistModal} />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

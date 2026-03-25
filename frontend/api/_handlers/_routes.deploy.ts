@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const deployRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const deployRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'solanaInfraStatus': () => import('./deploy/_solanaInfraStatus.js'),
   'provisionSolanaRoute': () => import('./deploy/_provisionSolanaRoute.js'),
   'registerSolanaBridgeToken': () => import('./deploy/_registerSolanaBridgeToken.js'),

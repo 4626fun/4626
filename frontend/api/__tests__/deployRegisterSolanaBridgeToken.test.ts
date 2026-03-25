@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import familyHandler from '../deploy/[...path].ts'
+import catchAllHandler from '../[...path].ts'
 import handler from '../_handlers/deploy/_registerSolanaBridgeToken.ts'
 import { getDeployApiHandler } from '../_handlers/_routes.deploy.ts'
 import { getApiHandler } from '../_handlers/_routes.ts'
@@ -92,10 +92,10 @@ vi.mock('viem/accounts', async () => {
 })
 
 describe('deploy registerSolanaBridgeToken handler', () => {
-  it('is isolated from the root catch-all and dispatched through the deploy family route', async () => {
-    expect(familyHandler).toBeTypeOf('function')
+  it('is dispatched through the root catch-all with the deploy-prefixed route key', async () => {
+    expect(catchAllHandler).toBeTypeOf('function')
     await expect(getDeployApiHandler('registerSolanaBridgeToken')).resolves.toBeTypeOf('function')
-    await expect(getApiHandler('deploy/registerSolanaBridgeToken')).resolves.toBeNull()
+    await expect(getApiHandler('deploy/registerSolanaBridgeToken')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('deploy/setupSolanaOvaultMesh')).resolves.toBeNull()
   })
 

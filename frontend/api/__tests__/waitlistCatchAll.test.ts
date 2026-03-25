@@ -4,7 +4,7 @@ import { createMockReq, createMockRes } from './helpers'
 
 describe('waitlist catch-all routing', () => {
   it('routes /api/waitlist to the root waitlist handler instead of returning 404', async () => {
-    const mod = await import('../waitlist/[...path].ts')
+    const mod = await import('../[...path].ts')
     const handler = mod.default
 
     const req = createMockReq({

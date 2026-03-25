@@ -1,92 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
-import { base } from 'wagmi/chains'
-import { CheckCircle, XCircle, AlertTriangle, Loader2, ExternalLink, ShieldCheck, Wrench } from 'lucide-react'
-import { AKITA, CONTRACTS } from '@/config/contracts'
+import { CheckCircle, XCircle, AlertTriangle, Loader2, ExternalLink, ShieldCheck } from 'lucide-react'
+import { AKITA } from '@/config/contracts'
+import {
+  basescanAddressHref,
+  countPotentialVaultFixes,
+  isAddressLike,
+  resolveStatusFixContext,
+  summarize,
+  type CheckSection,
+  type CheckStatus,
+  type ProtocolReportResponse,
+  type VaultReportResponse,
+} from './statusShared'
 
-type CheckStatus = 'pass' | 'fail' | 'warn' | 'info'
-
-type Check = {
-  id: string
-  label: string
-  status: CheckStatus
-  details?: string
-  href?: string
-}
-
-type CheckSection = {
-  id: string
-  title: string
-  description?: string
-  checks: Check[]
-}
-
-type ProtocolReportResponse = {
-  chainId: number
-  generatedAt: string
-  sections: CheckSection[]
-}
-
-type VaultReportResponse = {
-  chainId: number
-  generatedAt: string
-  sections: CheckSection[]
-  context?: Record<string, unknown>
-}
-
-type VaultFixContext = {
-  vault?: string
-  vaultOwner?: string
-  owner?: string
-  creatorToken?: string
-  shareOFTAddress?: string
-  shareOftOwner?: string | null
-  shareVault?: string | null
-  shareGaugeController?: string | null
-  shareMinterOk?: boolean | null
-  wrapperAddress?: string
-  wrapperOwner?: string | null
-  wrapperWhitelisted?: boolean | null
-  gaugeAddress?: string
-  oracleAddress?: string | null
-  oracleOwner?: string | null
-  oracleV3PoolConfigured?: boolean | null
-  oracleV3Pool?: string | null
-  v3PoolAddress?: string | null
-  v3ObservationCardinalityNext?: string | null
-  ajnaAdapterAddress?: string | null
-  ajnaAdapterOwner?: string | null
-  ajnaInnerVaultAddress?: string | null
-  ajnaAuthAddress?: string | null
-  ajnaAuthAdmin?: string | null
-  ajnaBufferRatioBps?: string | null
-  ajnaMinBucketIndex?: string | null
-  ajnaPaused?: boolean | null
-  ajnaSuggestedBucketIndex?: string | null
-}
-
-function isAddressLike(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(value)
-}
-
-function summarize(sections: CheckSection[]) {
-  let pass = 0
-  let fail = 0
-  let warn = 0
-  let info = 0
-  for (const s of sections) {
-    for (const c of s.checks) {
-      if (c.status === 'pass') pass++
-      else if (c.status === 'fail') fail++
-      else if (c.status === 'warn') warn++
-      else info++
-    }
-  }
-  return { pass, fail, warn, info }
-}
+const LazyStatusFixPanel = lazy(() => import('./StatusFixPanelWithProviders'))
 
 function StatusPill({ status }: { status: CheckStatus }) {
   const styles =
@@ -178,84 +108,12 @@ async function fetchJson<T>(url: string): Promise<T> {
   return json.data as T
 }
 
-function basescanAddressHref(addr: string) {
-  return `https://basescan.org/address/${addr}`
-}
-
-const SHAREOFT_ADMIN_ABI = [
-  { type: 'function', name: 'setVault', stateMutability: 'nonpayable', inputs: [{ name: '_vault', type: 'address' }], outputs: [] },
-  { type: 'function', name: 'setGaugeController', stateMutability: 'nonpayable', inputs: [{ name: '_controller', type: 'address' }], outputs: [] },
-  {
-    type: 'function',
-    name: 'setMinter',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'minter', type: 'address' },
-      { name: 'status', type: 'bool' },
-    ],
-    outputs: [],
-  },
-] as const
-
-const VAULT_ADMIN_ABI = [
-  {
-    type: 'function',
-    name: 'setWhitelist',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: '_account', type: 'address' },
-      { name: '_status', type: 'bool' },
-    ],
-    outputs: [],
-  },
-] as const
-
-const ORACLE_ADMIN_ABI = [
-  {
-    type: 'function',
-    name: 'setV3Pool',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: '_pool', type: 'address' },
-      { name: '_creatorToken', type: 'address' },
-      { name: '_usdToken', type: 'address' },
-      { name: '_twapDuration', type: 'uint32' },
-    ],
-    outputs: [],
-  },
-] as const
-
-const AJNA_AUTH_ADMIN_ABI = [
-  {
-    type: 'function',
-    name: 'setMinBucketIndex',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'nextMinBucketIndex', type: 'uint256' }],
-    outputs: [],
-  },
-] as const
-
-const UNISWAP_V3_POOL_ORACLE_ABI = [
-  {
-    type: 'function',
-    name: 'increaseObservationCardinalityNext',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'observationCardinalityNext', type: 'uint16' }],
-    outputs: [],
-  },
-] as const
-
 export function Status() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { address, isConnected, chain } = useAccount()
-  const { writeContractAsync } = useWriteContract()
-  const [fixingId, setFixingId] = useState<string | null>(null)
-  const [fixError, setFixError] = useState<string | null>(null)
-  const [fixHash, setFixHash] = useState<`0x${string}` | null>(null)
-
   const vaultParam = useMemo(() => searchParams.get('vault') ?? '', [searchParams])
   const [vaultInput, setVaultInput] = useState<string>(vaultParam)
   const [runId, setRunId] = useState<number>(0)
+  const [showFixPanel, setShowFixPanel] = useState(false)
 
   useEffect(() => {
     setVaultInput(vaultParam)
@@ -300,26 +158,8 @@ export function Status() {
 
     // Always bump runId so we bypass CDN cache when the user explicitly runs checks.
     setRunId(Date.now())
+    setShowFixPanel(false)
   }
-
-  const txReceipt = useWaitForTransactionReceipt({
-    hash: fixHash ?? undefined,
-    chainId: base.id,
-  })
-
-  useEffect(() => {
-    if (!fixHash) return
-    if (txReceipt.isSuccess) {
-      setFixHash(null)
-      setFixingId(null)
-      setFixError(null)
-      // Re-run checks after a fix confirms.
-      setRunId(Date.now())
-    } else if (txReceipt.isError) {
-      setFixHash(null)
-      setFixingId(null)
-    }
-  }, [fixHash, txReceipt.isSuccess, txReceipt.isError])
 
   // SEO safety: diagnostic page + query variants.
   useEffect(() => {
@@ -344,285 +184,11 @@ export function Status() {
       ? vaultParamAddress
       : null
 
-  const ctx = (vaultQuery.data?.context ?? {}) as VaultFixContext
-  const vaultAddress = typeof ctx.vault === 'string' && isAddressLike(ctx.vault) ? ctx.vault : vaultParamAddress
-  const vaultOwnerRaw = typeof ctx.vaultOwner === 'string' ? ctx.vaultOwner : typeof ctx.owner === 'string' ? ctx.owner : null
-  const vaultOwner = vaultOwnerRaw && isAddressLike(vaultOwnerRaw) ? vaultOwnerRaw : null
-  const creatorToken = typeof ctx.creatorToken === 'string' && isAddressLike(ctx.creatorToken) ? ctx.creatorToken : null
-  const shareOFT = typeof ctx.shareOFTAddress === 'string' && isAddressLike(ctx.shareOFTAddress) ? ctx.shareOFTAddress : null
-  const shareOwner = typeof ctx.shareOftOwner === 'string' && isAddressLike(ctx.shareOftOwner) ? ctx.shareOftOwner : null
-  const shareVault = typeof ctx.shareVault === 'string' && isAddressLike(ctx.shareVault) ? ctx.shareVault : ctx.shareVault === null ? null : null
-  const shareGauge = typeof ctx.shareGaugeController === 'string' && isAddressLike(ctx.shareGaugeController) ? ctx.shareGaugeController : ctx.shareGaugeController === null ? null : null
-  const shareMinterOk = typeof ctx.shareMinterOk === 'boolean' ? ctx.shareMinterOk : null
-  const wrapper = typeof ctx.wrapperAddress === 'string' && isAddressLike(ctx.wrapperAddress) ? ctx.wrapperAddress : null
-  const wrapperWhitelisted = typeof ctx.wrapperWhitelisted === 'boolean' ? ctx.wrapperWhitelisted : null
-  const gauge = typeof ctx.gaugeAddress === 'string' && isAddressLike(ctx.gaugeAddress) ? ctx.gaugeAddress : null
-  const oracle = typeof ctx.oracleAddress === 'string' && isAddressLike(ctx.oracleAddress) ? ctx.oracleAddress : null
-  const oracleOwner = typeof ctx.oracleOwner === 'string' && isAddressLike(ctx.oracleOwner) ? ctx.oracleOwner : null
-  const oracleV3PoolConfigured = typeof ctx.oracleV3PoolConfigured === 'boolean' ? ctx.oracleV3PoolConfigured : null
-  const oracleV3Pool = typeof ctx.oracleV3Pool === 'string' && isAddressLike(ctx.oracleV3Pool) ? ctx.oracleV3Pool : null
-  const v3Pool = typeof ctx.v3PoolAddress === 'string' && isAddressLike(ctx.v3PoolAddress) ? ctx.v3PoolAddress : null
-  const v3ObsNext =
-    typeof ctx.v3ObservationCardinalityNext === 'string' && /^\d+$/.test(ctx.v3ObservationCardinalityNext)
-      ? Number(ctx.v3ObservationCardinalityNext)
-      : null
-  const ajnaInnerVault = typeof ctx.ajnaInnerVaultAddress === 'string' && isAddressLike(ctx.ajnaInnerVaultAddress) ? ctx.ajnaInnerVaultAddress : null
-  const ajnaAuth = typeof ctx.ajnaAuthAddress === 'string' && isAddressLike(ctx.ajnaAuthAddress) ? ctx.ajnaAuthAddress : null
-  const ajnaAuthAdmin = typeof ctx.ajnaAuthAdmin === 'string' && isAddressLike(ctx.ajnaAuthAdmin) ? ctx.ajnaAuthAdmin : null
-  const ajnaBufferRatioBps =
-    typeof ctx.ajnaBufferRatioBps === 'string' && /^\d+$/.test(ctx.ajnaBufferRatioBps) ? BigInt(ctx.ajnaBufferRatioBps) : null
-  const ajnaMinBucket =
-    typeof ctx.ajnaMinBucketIndex === 'string' && /^\d+$/.test(ctx.ajnaMinBucketIndex) ? BigInt(ctx.ajnaMinBucketIndex) : null
-  const ajnaPaused = typeof ctx.ajnaPaused === 'boolean' ? ctx.ajnaPaused : null
-  const ajnaSuggestedBucket =
-    typeof ctx.ajnaSuggestedBucketIndex === 'string' && /^\d+$/.test(ctx.ajnaSuggestedBucketIndex)
-      ? BigInt(ctx.ajnaSuggestedBucketIndex)
-      : null
-  const ajnaConfigOwner = ajnaAuthAdmin
-  const ajnaConfiguredBucket = ajnaMinBucket
-
-  const canFixShare = !!address && !!shareOwner && address.toLowerCase() === shareOwner.toLowerCase()
-  const canFixVault = !!address && !!vaultOwner && address.toLowerCase() === vaultOwner.toLowerCase()
-  const canFixOracle = !!address && !!oracleOwner && address.toLowerCase() === oracleOwner.toLowerCase()
-  const canFixAjna =
-    !!address && !!ajnaAuth && !!ajnaConfigOwner && address.toLowerCase() === ajnaConfigOwner.toLowerCase()
-  const isBase = (chain?.id ?? base.id) === base.id
-
-  const fixActions = useMemo(() => {
-    const actions: Array<{
-      id: string
-      title: string
-      description: string
-      requiredOwner?: string | null
-      canRun: boolean
-      onRun: () => Promise<void>
-    }> = []
-
-    if (shareOFT && vaultAddress && shareVault && shareVault.toLowerCase() !== vaultAddress.toLowerCase()) {
-      actions.push({
-        id: 'fix-share-vault',
-        title: 'Wire share token → vault',
-        description: 'Sets shareOFT.vault so conversions and integrations can reference the vault.',
-        requiredOwner: shareOwner,
-        canRun: !!isConnected && isBase && canFixShare,
-        onRun: async () => {
-          setFixError(null)
-          setFixingId('fix-share-vault')
-          const hash = await writeContractAsync({
-            address: shareOFT as `0x${string}`,
-            abi: SHAREOFT_ADMIN_ABI,
-            functionName: 'setVault',
-            args: [vaultAddress as `0x${string}`],
-            chainId: base.id,
-          })
-          setFixHash(hash)
-        },
-      })
-    }
-
-    if (shareOFT && vaultAddress && !shareVault) {
-      actions.push({
-        id: 'fix-share-vault',
-        title: 'Wire share token → vault',
-        description: 'Sets shareOFT.vault so conversions and integrations can reference the vault.',
-        requiredOwner: shareOwner,
-        canRun: !!isConnected && isBase && canFixShare,
-        onRun: async () => {
-          setFixError(null)
-          setFixingId('fix-share-vault')
-          const hash = await writeContractAsync({
-            address: shareOFT as `0x${string}`,
-            abi: SHAREOFT_ADMIN_ABI,
-            functionName: 'setVault',
-            args: [vaultAddress as `0x${string}`],
-            chainId: base.id,
-          })
-          setFixHash(hash)
-        },
-      })
-    }
-
-    if (shareOFT && gauge) {
-      const needsGauge = !shareGauge || shareGauge.toLowerCase() !== gauge.toLowerCase()
-      if (needsGauge) {
-        actions.push({
-          id: 'fix-share-gauge',
-          title: 'Wire share token → gauge',
-          description: 'Sets shareOFT.gaugeController so buy fees can route to the gauge controller.',
-          requiredOwner: shareOwner,
-          canRun: !!isConnected && isBase && canFixShare,
-          onRun: async () => {
-            setFixError(null)
-            setFixingId('fix-share-gauge')
-            const hash = await writeContractAsync({
-              address: shareOFT as `0x${string}`,
-              abi: SHAREOFT_ADMIN_ABI,
-              functionName: 'setGaugeController',
-              args: [gauge as `0x${string}`],
-              chainId: base.id,
-            })
-            setFixHash(hash)
-          },
-        })
-      }
-    }
-
-    if (shareOFT && wrapper && shareMinterOk === false) {
-      actions.push({
-        id: 'fix-share-minter',
-        title: 'Approve wrapper as share-token minter',
-        description: 'Sets shareOFT.setMinter(wrapper, true) so deposits can mint receipt tokens.',
-        requiredOwner: shareOwner,
-        canRun: !!isConnected && isBase && canFixShare,
-        onRun: async () => {
-          setFixError(null)
-          setFixingId('fix-share-minter')
-          const hash = await writeContractAsync({
-            address: shareOFT as `0x${string}`,
-            abi: SHAREOFT_ADMIN_ABI,
-            functionName: 'setMinter',
-            args: [wrapper as `0x${string}`, true],
-            chainId: base.id,
-          })
-          setFixHash(hash)
-        },
-      })
-    }
-
-    if (vaultAddress && wrapper && wrapperWhitelisted !== true) {
-      const isTry = wrapperWhitelisted == null
-      actions.push({
-        id: 'fix-vault-whitelist',
-        title: isTry ? 'Try whitelisting wrapper on vault' : 'Whitelist wrapper on vault',
-        description: isTry
-          ? 'Some vault versions don’t expose a readable whitelist. This will attempt to whitelist the wrapper (if supported).'
-          : 'Enables deposits/withdrawals through the wrapper when the vault whitelist is enforced.',
-        requiredOwner: vaultOwner,
-        canRun: !!isConnected && isBase && canFixVault,
-        onRun: async () => {
-          setFixError(null)
-          setFixingId('fix-vault-whitelist')
-          const hash = await writeContractAsync({
-            address: vaultAddress as `0x${string}`,
-            abi: VAULT_ADMIN_ABI,
-            functionName: 'setWhitelist',
-            args: [wrapper as `0x${string}`, true],
-            chainId: base.id,
-          })
-          setFixHash(hash)
-        },
-      })
-    }
-
-    if (oracle && v3Pool && creatorToken) {
-      const needsOracleV3 =
-        oracleV3PoolConfigured !== true || !oracleV3Pool || oracleV3Pool.toLowerCase() !== v3Pool.toLowerCase()
-      if (needsOracleV3) {
-        actions.push({
-          id: 'fix-oracle-v3',
-          title: 'Configure oracle → Uniswap V3 (CREATOR/USDC)',
-          description: 'Sets oracle.setV3Pool so the oracle can read CREATOR/USDC TWAP and suggest Ajna buckets onchain.',
-          requiredOwner: oracleOwner,
-          canRun: !!isConnected && isBase && canFixOracle,
-          onRun: async () => {
-            setFixError(null)
-            setFixingId('fix-oracle-v3')
-            const hash = await writeContractAsync({
-              address: oracle as `0x${string}`,
-              abi: ORACLE_ADMIN_ABI,
-              functionName: 'setV3Pool',
-              args: [v3Pool as `0x${string}`, creatorToken as `0x${string}`, CONTRACTS.usdc, 1800],
-              chainId: base.id,
-            })
-            setFixHash(hash)
-          },
-        })
-      }
-    }
-
-    if (
-      ajnaAuth &&
-      ajnaSuggestedBucket !== null &&
-      ajnaSuggestedBucket !== undefined &&
-      (ajnaConfiguredBucket === null || ajnaConfiguredBucket === undefined || ajnaConfiguredBucket !== ajnaSuggestedBucket)
-    ) {
-      actions.push({
-        id: 'fix-ajna-bucket',
-        title: 'Set Ajna min bucket (suggested)',
-        description: `Sets AjnaVaultAuth.minBucketIndex so the nested Ajna ERC-4626 vault only routes liquidity into buckets at or above the suggested floor.${ajnaInnerVault ? ` Inner vault: ${ajnaInnerVault}.` : ''}${ajnaBufferRatioBps !== null ? ` Buffer ratio: ${ajnaBufferRatioBps.toString()} bps.` : ''}${ajnaPaused === true ? ' Vault is currently paused.' : ''}`,
-        requiredOwner: ajnaConfigOwner,
-        canRun: !!isConnected && isBase && canFixAjna,
-        onRun: async () => {
-          setFixError(null)
-          setFixingId('fix-ajna-bucket')
-          const hash = await writeContractAsync({
-            address: ajnaAuth as `0x${string}`,
-            abi: AJNA_AUTH_ADMIN_ABI,
-            functionName: 'setMinBucketIndex',
-            args: [ajnaSuggestedBucket],
-            chainId: base.id,
-          })
-          setFixHash(hash)
-        },
-      })
-    }
-
-    if (v3Pool && (v3ObsNext == null || v3ObsNext < 64)) {
-      actions.push({
-        id: 'fix-v3-oracle-capacity',
-        title: 'Increase Uniswap V3 TWAP capacity',
-        description:
-          'Calls increaseObservationCardinalityNext(64) on the V3 pool so TWAP pricing has enough historical observations. This does not change price; it only increases oracle storage.',
-        canRun: !!isConnected && isBase,
-        onRun: async () => {
-          setFixError(null)
-          setFixingId('fix-v3-oracle-capacity')
-          const hash = await writeContractAsync({
-            address: v3Pool as `0x${string}`,
-            abi: UNISWAP_V3_POOL_ORACLE_ABI,
-            functionName: 'increaseObservationCardinalityNext',
-            args: [64],
-            chainId: base.id,
-          })
-          setFixHash(hash)
-        },
-      })
-    }
-
-    return actions
-  }, [
-    ajnaBufferRatioBps,
-    ajnaConfiguredBucket,
-    ajnaInnerVault,
-    ajnaAuth,
-    ajnaConfigOwner,
-    ajnaPaused,
-    ajnaSuggestedBucket,
-    canFixAjna,
-    canFixOracle,
-    canFixShare,
-    canFixVault,
-    creatorToken,
-    gauge,
-    isBase,
-    isConnected,
-    oracle,
-    oracleOwner,
-    oracleV3Pool,
-    oracleV3PoolConfigured,
-    shareGauge,
-    shareMinterOk,
-    shareOFT,
-    shareOwner,
-    shareVault,
-    vaultAddress,
-    vaultOwner,
-    v3Pool,
-    v3ObsNext,
-    wrapper,
-    wrapperWhitelisted,
-    writeContractAsync,
-  ])
+  const resolvedFixContext = useMemo(
+    () => resolveStatusFixContext(vaultQuery.data?.context, vaultParamAddress),
+    [vaultParamAddress, vaultQuery.data?.context],
+  )
+  const fixCount = useMemo(() => countPotentialVaultFixes(resolvedFixContext), [resolvedFixContext])
 
   return (
     <div className="relative">
@@ -734,69 +300,46 @@ export function Status() {
               </div>
             )}
 
-            {vaultQuery.data && fixActions.length > 0 ? (
+            {vaultQuery.data && fixCount > 0 ? (
               <div className="pt-4 border-t border-zinc-900/50 space-y-3">
                 <div className="flex items-center justify-between gap-4">
                   <div className="label">Fixes</div>
                   <div className="text-[10px] text-zinc-600">Owner-gated</div>
                 </div>
 
-                {!isBase ? (
-                  <div className="text-xs text-zinc-600">
-                    Switch to Base to apply fixes.
+                {!showFixPanel ? (
+                  <div className="space-y-3">
+                    <div className="text-xs text-zinc-600">
+                      The report above is read-only. Load owner fixes only if you want to connect a Base wallet and
+                      apply repairs for this vault.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowFixPanel(true)
+                      }}
+                      className="btn-accent btn-no-icon rounded-lg px-4 py-2 text-xs"
+                    >
+                      Load owner fixes ({fixCount})
+                    </button>
                   </div>
-                ) : null}
-
-                {fixError ? (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-200 text-xs">
-                    {fixError}
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
-                  {fixActions.map((a) => {
-                    const isBusy = fixingId === a.id || (!!fixHash && fixingId === a.id)
-                    const disabled = !a.canRun || isBusy || !!fixHash
-                    const ownerHint =
-                      a.requiredOwner && isAddressLike(a.requiredOwner)
-                        ? `Owner: ${a.requiredOwner.slice(0, 6)}…${a.requiredOwner.slice(-4)}`
-                        : null
-                    const canRun = a.canRun
-
-                    return (
-                      <div key={a.id} className="border border-zinc-900/50 rounded-lg bg-black/20 px-4 py-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="text-sm text-zinc-200 flex items-center gap-2">
-                              <Wrench className="w-4 h-4 text-zinc-500" />
-                              <span className="truncate">{a.title}</span>
-                            </div>
-                            <div className="text-xs text-zinc-600 mt-1">{a.description}</div>
-                            {!canRun && ownerHint ? (
-                              <div className="text-[10px] text-zinc-700 mt-1">{ownerHint}</div>
-                            ) : null}
-                          </div>
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            onClick={async () => {
-                              try {
-                                setFixError(null)
-                                await a.onRun()
-                              } catch (e: any) {
-                                setFixError(String(e?.shortMessage || e?.message || 'Fix failed'))
-                                setFixingId(null)
-                              }
-                            }}
-                            className="btn-accent btn-compact btn-no-icon px-4 py-2 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                          >
-                            {isBusy || txReceipt.isLoading ? 'Fixing…' : 'Fix'}
-                          </button>
-                        </div>
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading owner fixes…
                       </div>
-                    )
-                  })}
-                </div>
+                    }
+                  >
+                    <LazyStatusFixPanel
+                      context={resolvedFixContext}
+                      onApplied={() => {
+                        setRunId(Date.now())
+                      }}
+                    />
+                  </Suspense>
+                )}
               </div>
             ) : null}
 
@@ -859,4 +402,3 @@ export function Status() {
     </div>
   )
 }
-

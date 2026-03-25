@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const telegramRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const telegramRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'bot-config': () => import('./telegram/_bot-config.js'),
   'link/complete': () => import('./telegram/_link-complete.js'),
   'link/telemetry': () => import('./telegram/_link-telemetry.js'),

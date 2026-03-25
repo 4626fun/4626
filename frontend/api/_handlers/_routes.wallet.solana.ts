@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const walletSolanaRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const walletSolanaRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'setCanonical': () => import('./wallet/solana/_setCanonical.js'),
   'sweep/enqueue': () => import('./wallet/solana/sweep/_enqueue.js'),
   'sweep/process': () => import('./wallet/solana/sweep/_process.js'),

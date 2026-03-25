@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import standaloneWebhookHandler from '../telegram/webhook.ts'
+import webhookHandler from '../_handlers/telegram/_webhook.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const {
@@ -215,10 +215,10 @@ vi.mock('../_handlers/telegram/webhook/services/vaultDeploy.js', () => ({
 describe('telegram webhook handler', () => {
   let restoreEnv: (() => void) | null = null
 
-  it('is exposed through a standalone API route instead of the catch-all bundle', async () => {
-    expect(standaloneWebhookHandler).toBeTypeOf('function')
+  it('is exposed through the root API route map without a standalone wrapper', async () => {
+    expect(webhookHandler).toBeTypeOf('function')
     const { getApiHandler } = await import('../_handlers/_routes.ts')
-    await expect(getApiHandler('telegram/webhook')).resolves.toBeNull()
+    await expect(getApiHandler('telegram/webhook')).resolves.toBeTypeOf('function')
   })
 
   beforeEach(() => {
