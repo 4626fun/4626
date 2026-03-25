@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+import { timingSafeEqual } from 'node:crypto'
 import { existsSync } from 'node:fs'
 
 import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
@@ -202,6 +203,52 @@ function deriveDynamicProvisioningMode(params: {
   return 'misconfigured'
 }
 
+function requestHeader(req: VercelRequest, key: string): string {
+  const value = req.headers[key] as string | string[] | undefined
+  if (Array.isArray(value)) return String(value[0] ?? '').trim()
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function safeCompareSecret(provided: string, configured: string): boolean {
+  const expected = Buffer.from(configured)
+  const actual = Buffer.from(provided)
+  if (expected.length === 0 || actual.length !== expected.length) return false
+  return timingSafeEqual(actual, expected)
+}
+
+function readMachineMonitorAuth(req: VercelRequest): {
+  authorized: boolean
+  mode: 'keepr-api-key' | 'internal-registration-secret' | null
+} {
+  const bearer = requestHeader(req, 'authorization')
+    .replace(/^Bearer\s+/i, '')
+    .trim()
+  const internalHeader = requestHeader(req, 'x-cv-solana-registration-secret')
+
+  const keeprApiKey = String(process.env.KEEPR_API_KEY ?? '').trim()
+  if (keeprApiKey) {
+    if (bearer && safeCompareSecret(bearer, keeprApiKey)) {
+      return { authorized: true, mode: 'keepr-api-key' }
+    }
+  }
+
+  const internalSecret = String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim()
+  if (internalSecret) {
+    if (bearer && safeCompareSecret(bearer, internalSecret)) {
+      return { authorized: true, mode: 'internal-registration-secret' }
+    }
+    if (internalHeader && safeCompareSecret(internalHeader, internalSecret)) {
+      return { authorized: true, mode: 'internal-registration-secret' }
+    }
+  }
+
+  return { authorized: false, mode: null }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -212,10 +259,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const admin = getSessionAddress(req)
-  if (!admin) {
+  const adminAuthorized = !!admin && isAdminAddress(admin)
+  const machineAuth = readMachineMonitorAuth(req)
+
+  if (!adminAuthorized && !machineAuth.authorized && !admin) {
     return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
   }
-  if (!isAdminAddress(admin)) {
+  if (!adminAuthorized && !machineAuth.authorized) {
     return res.status(403).json({ success: false, error: 'Admin only' } satisfies ApiEnvelope<never>)
   }
 
@@ -541,7 +591,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         blockers.length === 0))
 
   const data: SolanaInfraStatusResponse = {
-    admin: getAddress(admin as Address),
+    admin: admin && isAddress(admin) ? getAddress(admin as Address) : ZERO_ADDRESS,
     creatorVaultBatcher: batcherAddress,
     solanaEnabledOnBatcher,
     batcherAdapter,

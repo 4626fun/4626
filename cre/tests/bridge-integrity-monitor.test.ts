@@ -31,6 +31,12 @@ const ENV_KEYS = [
   'BASE_SOLANA_BRIDGE_ADDRESS',
   'DEPLOY_SOLANA_REGISTRATION_SECRET',
   'SOLANA_REGISTRATION_INTERNAL_SECRET',
+  'SOLANA_DEFAULT_BRIDGE_TOKEN',
+  'SOLANA_BRIDGE_LIVENESS_ENFORCED',
+  'SOLANA_BRIDGE_LIVENESS_MAX_HEALTH_AGE_SECONDS',
+  'SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL',
+  'SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL',
+  'SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET',
 ] as const;
 
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]])) as Record<
@@ -90,6 +96,12 @@ describe('bridge integrity monitor', () => {
     setEnv('BASE_SOLANA_BRIDGE_ADDRESS', undefined);
     setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', undefined);
     setEnv('SOLANA_REGISTRATION_INTERNAL_SECRET', undefined);
+    setEnv('SOLANA_DEFAULT_BRIDGE_TOKEN', undefined);
+    setEnv('SOLANA_BRIDGE_LIVENESS_ENFORCED', undefined);
+    setEnv('SOLANA_BRIDGE_LIVENESS_MAX_HEALTH_AGE_SECONDS', undefined);
+    setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL', undefined);
+    setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL', undefined);
+    setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET', undefined);
   });
 
   afterEach(() => {
@@ -197,6 +209,182 @@ describe('bridge integrity monitor', () => {
     );
     const headers = (fetchMock.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined)?.headers ?? {};
     expect(headers.Authorization).toBeUndefined();
+  });
+
+  it('falls back to register build-only endpoint when status endpoint is session-gated', async () => {
+    setEnv(
+      'SOLANA_BRIDGE_BASE_ORACLE_SIGNERS',
+      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    );
+    setEnv(
+      'SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS',
+      '0xcccccccccccccccccccccccccccccccccccccccc,0xdddddddddddddddddddddddddddddddddddddddd',
+    );
+    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
+    setEnv('SOLANA_DEFAULT_BRIDGE_TOKEN', SAMPLE_BRIDGE_TOKEN);
+    setEnv(
+      'SOLANA_BRIDGE_MONITOR_ROUTES_JSON',
+      JSON.stringify({
+        [SAMPLE_MINT]: {
+          bridgeToken: SAMPLE_BRIDGE_TOKEN,
+          mappedToken: SAMPLE_MAPPED_TOKEN,
+          scalar: '1000000000',
+        },
+      }),
+    );
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              bridgeToken: SAMPLE_BRIDGE_TOKEN,
+              adapter: SAMPLE_ADAPTER,
+              solanaMint: SAMPLE_MINT,
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    readContractMock.mockResolvedValueOnce(SAMPLE_MAPPED_TOKEN).mockResolvedValueOnce(1000000000n);
+
+    const result = await executeBridgeIntegrityMonitor();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe('warning');
+    expect(result.criticalFindings).toHaveLength(0);
+    expect(result.warningFindings.join(' ')).toContain('build-only fallback');
+    expect(result.routeChecks).toHaveLength(1);
+  });
+
+  it('runs direct liveness probe in fallback mode when liveness is enforced', async () => {
+    setEnv(
+      'SOLANA_BRIDGE_BASE_ORACLE_SIGNERS',
+      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    );
+    setEnv(
+      'SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS',
+      '0xcccccccccccccccccccccccccccccccccccccccc,0xdddddddddddddddddddddddddddddddddddddddd',
+    );
+    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
+    setEnv('SOLANA_DEFAULT_BRIDGE_TOKEN', SAMPLE_BRIDGE_TOKEN);
+    setEnv('SOLANA_BRIDGE_LIVENESS_ENFORCED', 'true');
+    setEnv('SOLANA_BRIDGE_LIVENESS_MAX_HEALTH_AGE_SECONDS', '180');
+    setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL', 'https://provisioner.test/healthz');
+    setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET', 'provisioner-secret');
+    setEnv(
+      'SOLANA_BRIDGE_MONITOR_ROUTES_JSON',
+      JSON.stringify({
+        [SAMPLE_MINT]: {
+          bridgeToken: SAMPLE_BRIDGE_TOKEN,
+          mappedToken: SAMPLE_MAPPED_TOKEN,
+          scalar: '1000000000',
+        },
+      }),
+    );
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              bridgeToken: SAMPLE_BRIDGE_TOKEN,
+              adapter: SAMPLE_ADAPTER,
+              solanaMint: SAMPLE_MINT,
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            payerHealthy: true,
+            now: new Date().toISOString(),
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    readContractMock.mockResolvedValueOnce(SAMPLE_MAPPED_TOKEN).mockResolvedValueOnce(1000000000n);
+
+    const result = await executeBridgeIntegrityMonitor();
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result.status).toBe('warning');
+    expect(result.criticalFindings).toHaveLength(0);
+    expect(result.warningFindings.join(' ')).toContain('build-only fallback');
+    expect(result.warningFindings.join(' ')).not.toContain('liveness freshness checks are skipped');
+  });
+
+  it('raises critical in fallback mode when direct liveness probe is unhealthy', async () => {
+    setEnv(
+      'SOLANA_BRIDGE_BASE_ORACLE_SIGNERS',
+      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    );
+    setEnv(
+      'SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS',
+      '0xcccccccccccccccccccccccccccccccccccccccc,0xdddddddddddddddddddddddddddddddddddddddd',
+    );
+    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
+    setEnv('SOLANA_DEFAULT_BRIDGE_TOKEN', SAMPLE_BRIDGE_TOKEN);
+    setEnv('SOLANA_BRIDGE_LIVENESS_ENFORCED', 'true');
+    setEnv('SOLANA_BRIDGE_LIVENESS_MAX_HEALTH_AGE_SECONDS', '180');
+    setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL', 'https://provisioner.test/healthz');
+    setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET', 'provisioner-secret');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              bridgeToken: SAMPLE_BRIDGE_TOKEN,
+              adapter: SAMPLE_ADAPTER,
+              solanaMint: SAMPLE_MINT,
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: false,
+            payerHealthy: false,
+            now: new Date().toISOString(),
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+    const result = await executeBridgeIntegrityMonitor();
+
+    expect(result.status).toBe('critical');
+    expect(result.criticalFindings.join(' ')).toContain('Bridge liveness (fallback direct)');
   });
 
   it('skips monitoring when API credentials are missing', async () => {
