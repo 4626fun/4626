@@ -161,7 +161,7 @@ function localApiRoutesPlugin(): Plugin {
       // Vite's config TS project to type-check every function signature.
       const routes: Record<string, () => Promise<{ default: (req: any, res: any) => any }>> = {
         '/api/creator-allowlist': () => import('./api/_handlers/_creator-allowlist'),
-        '/api/waitlist': () => import('./api/waitlist/[...path]'),
+        '/api/waitlist': () => import('./api/[...path]'),
         '/api/waitlist/join': () => import('./api/_handlers/waitlist/_join'),
         '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),
         '/api/waitlist/csw-link': () => import('./api/_handlers/waitlist/_csw-link'),
@@ -225,15 +225,15 @@ function localApiRoutesPlugin(): Plugin {
         '/api/deploy/session/dry-run': () => import('./api/_handlers/deploy/session/_dryRun'),
         '/api/deploy/session/start': () => import('./api/_handlers/deploy/session/_start'),
         '/api/deploy/session/status': () => import('./api/_handlers/deploy/session/_status'),
-        '/api/deploy/solanaInfraStatus': () => import('./api/deploy/[...path]'),
-        '/api/deploy/provisionSolanaRoute': () => import('./api/deploy/[...path]'),
-        '/api/deploy/registerSolanaBridgeToken': () => import('./api/deploy/[...path]'),
+        '/api/deploy/solanaInfraStatus': () => import('./api/[...path]'),
+        '/api/deploy/provisionSolanaRoute': () => import('./api/[...path]'),
+        '/api/deploy/registerSolanaBridgeToken': () => import('./api/[...path]'),
         '/api/wallet/prepare-add-privy-owner': () => import('./api/_handlers/wallet/_prepare-add-privy-owner'),
         '/api/wallet/confirm-owner': () => import('./api/_handlers/wallet/_confirm-owner'),
         '/api/wallet/prepare-add-rabby-owner': () => import('./api/_handlers/wallet/_prepare-add-rabby-owner'),
-        '/api/wallet/solana/setCanonical': () => import('./api/wallet/solana/[...path]'),
-        '/api/wallet/solana/sweep/enqueue': () => import('./api/wallet/solana/[...path]'),
-        '/api/wallet/solana/sweep/process': () => import('./api/wallet/solana/[...path]'),
+        '/api/wallet/solana/setCanonical': () => import('./api/[...path]'),
+        '/api/wallet/solana/sweep/enqueue': () => import('./api/[...path]'),
+        '/api/wallet/solana/sweep/process': () => import('./api/[...path]'),
         '/api/telegram/webhook': () => import('./api/telegram/webhook'),
         '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
 
@@ -308,14 +308,9 @@ function localApiRoutesPlugin(): Plugin {
         load: () => Promise<{ default: (req: any, res: any) => any }>
       }> = [
         { prefix: '/api/v1/', load: () => import('./api/v1/[...path]') },
-        { prefix: '/api/auth/', load: () => import('./api/auth/[...path]') },
-        { prefix: '/api/waitlist/', load: () => import('./api/waitlist/[...path]') },
         { prefix: '/api/telegram/', load: () => import('./api/telegram/[...path]') },
         { prefix: '/api/uniswap/', load: () => import('./api/uniswap/[...path]') },
-        { prefix: '/api/zora/', load: () => import('./api/zora/[...path]') },
-        { prefix: '/api/lens/', load: () => import('./api/lens/[...path]') },
         { prefix: '/api/keepr/', load: () => import('./api/keepr/[...path]') },
-        { prefix: '/api/cre/', load: () => import('./api/cre/[...path]') },
       ]
       const catchAllApiRoute = () => import('./api/[...path]')
 

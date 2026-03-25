@@ -1,11 +1,26 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { authRouteLoaders } from './_routes.auth.js'
+import { creRouteLoaders } from './_routes.cre.js'
+import { deployRouteLoaders } from './_routes.deploy.js'
+import { lensRouteLoaders } from './_routes.lens.js'
+import { waitlistRouteLoaders } from './_routes.waitlist.js'
+import { walletSolanaRouteLoaders } from './_routes.wallet.solana.js'
+import { zoraRouteLoaders } from './_routes.zora.js'
 
 export type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 
 type ApiHandlerModule = { default?: ApiHandler }
+type ApiRouteLoaders = Record<string, () => Promise<ApiHandlerModule>>
 
-// The root catch-all should stay lean. Heavy or high-churn route families
-// are split into dedicated catch-alls under /api/<family>/[...path].ts.
+function prefixRouteLoaders(prefix: string, loaders: ApiRouteLoaders): ApiRouteLoaders {
+  return Object.fromEntries(
+    Object.entries(loaders).map(([subpath, loader]) => [subpath ? `${prefix}/${subpath}` : prefix, loader])
+  )
+}
+
+// Keep the root catch-all small enough to be practical, but fold the thinner
+// route families back into it so Vercel doesn't spend extra packaging passes
+// on wrappers that do not need runtime isolation.
 export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'analytics': () => import('./_analytics.js'),
   'agents': () => import('./_agents.js'),
@@ -96,6 +111,14 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
   'admin/wallet/canonical-owner-link-status': () => import('./admin/wallet/_canonicalOwnerLinkStatus.js'),
   'admin/wallet/duplicate-principals': () => import('./admin/wallet/_duplicatePrincipals.js'),
+
+  ...prefixRouteLoaders('auth', authRouteLoaders),
+  ...prefixRouteLoaders('cre', creRouteLoaders),
+  ...prefixRouteLoaders('deploy', deployRouteLoaders),
+  ...prefixRouteLoaders('lens', lensRouteLoaders),
+  ...prefixRouteLoaders('waitlist', waitlistRouteLoaders),
+  ...prefixRouteLoaders('wallet/solana', walletSolanaRouteLoaders),
+  ...prefixRouteLoaders('zora', zoraRouteLoaders),
 }
 
 export async function getApiHandler(subpath: string): Promise<ApiHandler | null> {

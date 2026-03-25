@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const authRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const authRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'admin': () => import('./auth/_admin.js'),
   'agent-nonce': () => import('./auth/_agent-nonce.js'),
   'agent-verify': () => import('./auth/_agent-verify.js'),

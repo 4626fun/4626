@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const lensRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const lensRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'mapping': () => import('./lens/_mapping.js'),
   'graph': () => import('./lens/_graph.js'),
   'share-token-metadata': () => import('./lens/_share-token-metadata.js'),

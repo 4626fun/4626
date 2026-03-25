@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const creRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const creRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'vaults/active': () => import('./cre/vaults/_active.js'),
   'keeper/tend': () => import('./cre/keeper/_tend.js'),
   'keeper/report': () => import('./cre/keeper/_report.js'),

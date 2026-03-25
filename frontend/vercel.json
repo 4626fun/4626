@@ -35,37 +35,16 @@
     "api/v1/[...path].ts": {
       "maxDuration": 60
     },
-    "api/auth/[...path].ts": {
-      "maxDuration": 60
-    },
-    "api/waitlist/[...path].ts": {
-      "maxDuration": 60
-    },
     "api/telegram/[...path].ts": {
       "maxDuration": 60
     },
     "api/uniswap/[...path].ts": {
       "maxDuration": 60
     },
-    "api/zora/[...path].ts": {
-      "maxDuration": 60
-    },
-    "api/lens/[...path].ts": {
-      "maxDuration": 60
-    },
     "api/keepr/[...path].ts": {
       "maxDuration": 60
     },
-    "api/cre/[...path].ts": {
-      "maxDuration": 60
-    },
     "api/telegram/webhook.ts": {
-      "maxDuration": 60
-    },
-    "api/deploy/[...path].ts": {
-      "maxDuration": 60
-    },
-    "api/wallet/solana/[...path].ts": {
       "maxDuration": 60
     },
     "api/[...path].ts": {
@@ -243,9 +222,6 @@
     { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/agent/process", "dest": "/api/agent/process" },
-    { "src": "/api/auth/(.*)", "dest": "/api/auth/[...path]?path=$1" },
-    { "src": "/api/waitlist", "dest": "/api/waitlist/[...path]?path=" },
-    { "src": "/api/waitlist/(.*)", "dest": "/api/waitlist/[...path]?path=$1" },
     { "src": "/api/token/image", "dest": "/api/token/image" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
@@ -253,15 +229,8 @@
     { "src": "/api/telegram/webhook", "dest": "/api/telegram/webhook" },
     { "src": "/api/telegram/(.*)", "dest": "/api/telegram/[...path]?path=$1" },
     { "src": "/api/uniswap/(.*)", "dest": "/api/uniswap/[...path]?path=$1" },
-    { "src": "/api/zora/(.*)", "dest": "/api/zora/[...path]?path=$1" },
-    { "src": "/api/lens/(.*)", "dest": "/api/lens/[...path]?path=$1" },
     { "src": "/api/keepr/(.*)", "dest": "/api/keepr/[...path]?path=$1" },
-    { "src": "/api/cre/(.*)", "dest": "/api/cre/[...path]?path=$1" },
     { "src": "/api/image/(.*)", "dest": "/api/image/[...path]?path=$1" },
-    { "src": "/api/deploy/solanaInfraStatus", "dest": "/api/deploy/[...path]?path=solanaInfraStatus" },
-    { "src": "/api/deploy/provisionSolanaRoute", "dest": "/api/deploy/[...path]?path=provisionSolanaRoute" },
-    { "src": "/api/deploy/registerSolanaBridgeToken", "dest": "/api/deploy/[...path]?path=registerSolanaBridgeToken" },
-    { "src": "/api/wallet/solana/(.*)", "dest": "/api/wallet/solana/[...path]?path=$1" },
     { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
     { "handle": "filesystem" },
     {
