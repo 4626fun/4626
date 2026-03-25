@@ -4,6 +4,8 @@ type ApiEnvelope<T> = {
   success: boolean
   data?: T
   error?: string
+  code?: string
+  retryable?: boolean
   needsEmbeddedWallet?: boolean
   needsBaseAppSetup?: boolean
   baseAppUrl?: string
@@ -64,6 +66,27 @@ function isRecoveryRequiredAuthFailure(params: {
     .trim()
     .toUpperCase()
   return code.includes('RECOVERY_REQUIRED')
+}
+
+function isTransientOnboardingBootstrapFailure(params: {
+  status: number
+  payload: ApiEnvelope<OnboardingBootstrapResponse> | null
+}): boolean {
+  if (params.status !== 503) return false
+
+  const code = String(params.payload?.code ?? '')
+    .trim()
+    .toUpperCase()
+  if (code.includes('ONBOARDING_BOOTSTRAP_UNAVAILABLE')) return true
+
+  const message = readApiError(params.payload, '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('service unavailable') ||
+    lower.includes('database unavailable') ||
+    lower.includes('max client connections reached') ||
+    lower.includes('failed to initialize postgres pool')
+  )
 }
 
 export async function runCanonicalizationPipeline(params: CanonicalizationParams): Promise<CanonicalizationResult> {
@@ -146,6 +169,19 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
     if (flags.needsBaseAppSetup) error.needsBaseAppSetup = true
     if (flags.baseAppUrl) error.baseAppUrl = flags.baseAppUrl
     throw error
+  }
+
+  if (isTransientOnboardingBootstrapFailure({ status: onboardingRes.status, payload: onboardingPayload })) {
+    return {
+      privySynced: true,
+      onboardingBootstrapped: false,
+      onboarding: null,
+      flags: {
+        needsEmbeddedWallet: false,
+        needsBaseAppSetup: false,
+        baseAppUrl: null,
+      },
+    }
   }
 
   // In non-strict mode we only tolerate actionable delegation flags.

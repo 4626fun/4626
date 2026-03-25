@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+import { getDb, getDbInitError } from '../../../server/_lib/postgres.js'
 import {
   bootstrapCanonicalDelegationState,
   extractDelegationFlags,
@@ -12,6 +12,14 @@ type BootstrapResponse = {
   canonicalCswAddress: string
   privyEmbeddedEoaAddress: string
   privyIsOwner: boolean
+}
+
+type BootstrapErrorEnvelope = ApiEnvelope<never> & {
+  code?: string
+  retryable?: boolean
+  needsEmbeddedWallet?: boolean
+  needsBaseAppSetup?: boolean
+  baseAppUrl?: string
 }
 
 function resolveStatusCode(error: unknown): number {
@@ -44,7 +52,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = await getDb()
   if (!db) {
-    return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
+    return res.status(503).json({
+      success: false,
+      error: getDbInitError() || 'Database unavailable',
+      code: 'ONBOARDING_BOOTSTRAP_UNAVAILABLE',
+      retryable: true,
+    } satisfies BootstrapErrorEnvelope)
   }
 
   try {
@@ -60,6 +73,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = error instanceof Error ? error.message : 'Onboarding bootstrap failed'
     return res
       .status(resolveStatusCode(error))
-      .json({ success: false, error: message, ...extractDelegationFlags(error) } satisfies ApiEnvelope<never>)
+      .json({ success: false, error: message, ...extractDelegationFlags(error) } satisfies BootstrapErrorEnvelope)
   }
 }

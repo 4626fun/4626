@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import handler from '../_handlers/onboarding/_bootstrap.ts'
 import { createMockReq, createMockRes } from './helpers'
 
-const { getDbMock, bootstrapCanonicalDelegationStateMock, extractDelegationFlagsMock } = vi.hoisted(() => ({
+const { getDbMock, getDbInitErrorMock, bootstrapCanonicalDelegationStateMock, extractDelegationFlagsMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
+  getDbInitErrorMock: vi.fn<() => string | null>(() => null),
   bootstrapCanonicalDelegationStateMock: vi.fn(),
   extractDelegationFlagsMock: vi.fn(() => ({})),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
   getDb: getDbMock,
+  getDbInitError: getDbInitErrorMock,
 }))
 
 vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
@@ -22,6 +24,7 @@ describe('POST /api/onboarding/bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
+    getDbInitErrorMock.mockReturnValue(null)
   })
 
   it('returns canonical CSW + embedded EOA status', async () => {
@@ -96,5 +99,23 @@ describe('POST /api/onboarding/bootstrap', () => {
     expect(res.statusCode).toBe(409)
     expect(res.body?.success).toBe(false)
     expect(res.body?.needsEmbeddedWallet).toBe(true)
+  })
+
+  it('returns a typed retryable 503 when the database is unavailable', async () => {
+    getDbMock.mockResolvedValue(null)
+    getDbInitErrorMock.mockReturnValue('Max client connections reached')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(503)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.error).toBe('Max client connections reached')
+    expect(res.body?.code).toBe('ONBOARDING_BOOTSTRAP_UNAVAILABLE')
+    expect(res.body?.retryable).toBe(true)
   })
 })

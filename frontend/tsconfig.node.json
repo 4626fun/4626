@@ -28,6 +28,7 @@
     "server/agent/**/*.ts",
     "src/config/contracts.defaults.ts",
     "src/deploy/**/*.ts",
+    "src/lib/viteManualChunks.ts",
     "src/wallet/canonicalWalletPolicy.ts"
   ]
 }
