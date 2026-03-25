@@ -1,5 +1,5 @@
 import { logger } from './logger.js'
-import { getDb } from './postgres.js'
+import { getDb, getDbInitError, isDbConfigured } from './postgres.js'
 
 type TelegramLinkTelemetryInput = {
   event: string
@@ -14,11 +14,60 @@ type TelegramLinkTelemetryInput = {
 }
 
 let schemaEnsured = false
+let dbPersistBackoffUntilMs = 0
+let lastBackoffReason: string | null = null
+
+const TELEMETRY_DB_SATURATION_BACKOFF_MS = 60_000
+const TELEMETRY_DB_UNAVAILABLE_BACKOFF_MS = 15_000
+
+function envBool(value: string | undefined): boolean | undefined {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return undefined
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no') return false
+  return undefined
+}
+
+function shouldPersistTelegramLinkTelemetry(): boolean {
+  const override = envBool(process.env.TELEGRAM_LINK_TELEMETRY_DB_PERSIST)
+  if (override !== undefined) return override
+  return !(process.env.VERCEL || process.env.VERCEL_ENV)
+}
 
 function asTrimmed(value: unknown, maxLength = 256): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
   if (!trimmed) return null
   return trimmed.slice(0, maxLength)
+}
+
+function messageIncludesDbSaturation(value: unknown): boolean {
+  const lc = String(value ?? '').toLowerCase()
+  if (!lc) return false
+  return (
+    lc.includes('max client connections reached') ||
+    lc.includes('maxclientsinsessionmode') ||
+    (lc.includes('max clients reached') && lc.includes('session mode'))
+  )
+}
+
+function inDbPersistBackoff(now = Date.now()): boolean {
+  return dbPersistBackoffUntilMs > now
+}
+
+function setDbPersistBackoff(params: { reason: string; durationMs: number }): void {
+  const nextUntil = Date.now() + Math.max(1_000, params.durationMs)
+  if (nextUntil <= dbPersistBackoffUntilMs && params.reason === lastBackoffReason) return
+  dbPersistBackoffUntilMs = nextUntil
+  lastBackoffReason = params.reason
+  logger.warn('[telegram/link-telemetry] db persistence paused', {
+    reason: params.reason,
+    resumeInMs: params.durationMs,
+  })
+}
+
+function clearDbPersistBackoff(): void {
+  dbPersistBackoffUntilMs = 0
+  lastBackoffReason = null
 }
 
 function sanitizeValue(value: unknown, depth = 0): unknown {
@@ -45,9 +94,8 @@ function sanitizePayload(payload: Record<string, unknown> | null | undefined): R
   return sanitizeValue(payload) as Record<string, unknown>
 }
 
-async function ensureSchema() {
+async function ensureSchema(db: Awaited<ReturnType<typeof getDb>> | null) {
   if (schemaEnsured) return
-  const db = await getDb()
   if (!db) return
 
   await db.sql`
@@ -128,10 +176,37 @@ export async function trackTelegramLinkEvent(input: TelegramLinkTelemetryInput):
 
   logger.info('[telegram/link-telemetry] event', row)
 
+  if (!shouldPersistTelegramLinkTelemetry()) return
+  if (!isDbConfigured()) return
+  if (inDbPersistBackoff()) return
+
+  const initError = getDbInitError()
+  if (messageIncludesDbSaturation(initError)) {
+    setDbPersistBackoff({
+      reason: 'postgres_session_mode_saturated',
+      durationMs: TELEMETRY_DB_SATURATION_BACKOFF_MS,
+    })
+    return
+  }
+
   try {
-    await ensureSchema()
     const db = await getDb()
-    if (!db) return
+    if (!db) {
+      const latestInitError = getDbInitError()
+      if (messageIncludesDbSaturation(latestInitError)) {
+        setDbPersistBackoff({
+          reason: 'postgres_session_mode_saturated',
+          durationMs: TELEMETRY_DB_SATURATION_BACKOFF_MS,
+        })
+      } else {
+        setDbPersistBackoff({
+          reason: 'postgres_unavailable',
+          durationMs: TELEMETRY_DB_UNAVAILABLE_BACKOFF_MS,
+        })
+      }
+      return
+    }
+    await ensureSchema(db)
     await db.sql`
       INSERT INTO telegram_link_telemetry_events (
         event,
@@ -156,7 +231,14 @@ export async function trackTelegramLinkEvent(input: TelegramLinkTelemetryInput):
         ${row.payload ? JSON.stringify(row.payload) : null}
       );
     `
+    clearDbPersistBackoff()
   } catch (error) {
+    if (messageIncludesDbSaturation(error instanceof Error ? error.message : String(error))) {
+      setDbPersistBackoff({
+        reason: 'postgres_session_mode_saturated',
+        durationMs: TELEMETRY_DB_SATURATION_BACKOFF_MS,
+      })
+    }
     logger.warn('[telegram/link-telemetry] persist failed', {
       event,
       error: error instanceof Error ? error.message : String(error),

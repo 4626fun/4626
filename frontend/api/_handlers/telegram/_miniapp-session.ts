@@ -9,7 +9,6 @@ import {
   ensureTelegramTradingSchema,
   findReusableTelegramMiniAppSession,
 } from '../../../server/_lib/telegramTrading.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import { resolveTelegramMiniAppVerificationStatusCode, verifyTelegramMiniAppInitData } from './webhook/miniAppAuth.js'
@@ -109,7 +108,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
-  await ensureWaitlistSchema(db as any)
   await ensureTelegramTradingSchema(db as any)
 
   const replayAccepted = await claimTelegramMiniAppReplayNonce({

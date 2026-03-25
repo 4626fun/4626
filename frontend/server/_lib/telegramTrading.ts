@@ -240,6 +240,7 @@ export type TelegramMiniAppSessionReadResult =
     }
 
 let telegramTradingSchemaEnsured = false
+let telegramTradingSchemaEnsurePromise: Promise<void> | null = null
 
 function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -1034,9 +1035,11 @@ export async function logTelegramFunnelEvent(params: {
 
 export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
   if (telegramTradingSchemaEnsured) return
-  try {
-    await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
-    await db.sql`
+  if (telegramTradingSchemaEnsurePromise) return telegramTradingSchemaEnsurePromise
+  telegramTradingSchemaEnsurePromise = (async () => {
+    try {
+      await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
+      await db.sql`
       CREATE TABLE IF NOT EXISTS telegram_user_links (
         telegram_user_id BIGINT PRIMARY KEY,
         telegram_username TEXT NULL,
@@ -1314,18 +1317,22 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       CREATE INDEX IF NOT EXISTS telegram_onboarding_sessions_expires_idx
       ON telegram_onboarding_sessions (expires_at);
     `
-    await db.sql`
+      await db.sql`
       CREATE TABLE IF NOT EXISTS telegram_private_dm_welcome_sent (
         telegram_user_id BIGINT PRIMARY KEY,
         sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
 
-    telegramTradingSchemaEnsured = true
-  } catch (error) {
-    telegramTradingSchemaEnsured = false
-    throw error
-  }
+      telegramTradingSchemaEnsured = true
+    } catch (error) {
+      telegramTradingSchemaEnsured = false
+      throw error
+    } finally {
+      telegramTradingSchemaEnsurePromise = null
+    }
+  })()
+  return telegramTradingSchemaEnsurePromise
 }
 
 export type TelegramOnboardingStep = 'welcome' | 'csw_fork' | 'branch_create' | 'branch_link'
