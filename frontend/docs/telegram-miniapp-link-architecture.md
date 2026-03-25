@@ -6,6 +6,11 @@ Define a deterministic, reliable architecture for Telegram Mini App onboarding a
 
 This flow must work inside Telegram WebView and preserve the 4626 identity model.
 
+Current implementation-preservation notes live in:
+
+- `docs/telegram-canonical-link-preservation.md`
+- `frontend/docs/account-auth-invariants.md`
+
 ---
 
 ## Core Invariants

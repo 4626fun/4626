@@ -998,6 +998,20 @@ function parseVaultDeployCallbackData(rawData: string):
   return parseVaultDeployCallbackDataShared(rawData)
 }
 
+function parseTwitterCallbackData(rawData: string):
+  | { kind: 'confirm' | 'decline'; token: string }
+  | null {
+  const data = asTrimmed(rawData)
+  const match = data.match(/^twitter:(confirm|decline):([a-zA-Z0-9._-]+)$/)
+  if (!match) return null
+  const token = asTrimmed(match[2] ?? '')
+  if (!token) return null
+  return {
+    kind: match[1] === 'confirm' ? 'confirm' : 'decline',
+    token,
+  }
+}
+
 function getPrivyServerAuth(): { appId: string; appSecret: string } {
   const config = getTelegramWebhookConfig()
   const appId = config.privyAppId
@@ -1170,6 +1184,41 @@ function buildTradePreviewReplyMarkup(params: {
         { text: 'Decline', callback_data: `trade:decline:${params.token}` },
       ],
     ],
+  }
+}
+
+function buildTwitterPostPreviewReplyMarkup(token: string): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Post', callback_data: `twitter:confirm:${token}` },
+        { text: 'Cancel', callback_data: `twitter:decline:${token}` },
+      ],
+    ],
+  }
+}
+
+function formatTwitterTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {
+  if (reason === 'expired') return 'X post confirmation expired. Start a new `/x post` preview.'
+  if (reason === 'consumed') return 'This X post preview was already used or cancelled.'
+  if (reason === 'scope_mismatch') return 'X post confirmation scope mismatch. Use a fresh preview from this chat.'
+  return 'X post confirmation token not found. Start a new `/x post` preview.'
+}
+
+function buildTwitterPostRecoveryReplyMarkup(tweetText?: string): Record<string, unknown> {
+  const rows: Array<Array<Record<string, unknown>>> = []
+  const draft = asTrimmed(tweetText ?? '')
+  if (draft) {
+    rows.push([buildReusableCommandButton('Reuse Draft', `/x post ${draft}`)])
+  } else {
+    rows.push([buildReusableCommandButton('Compose X Post', '/x post ')])
+  }
+  rows.push([
+    { text: 'X Help', callback_data: 'help:social' },
+    { text: 'Back', callback_data: 'menu:start' },
+  ])
+  return {
+    inline_keyboard: rows,
   }
 }
 
@@ -5880,6 +5929,45 @@ function resolveTelegramMediaFromAction(action: any): TelegramCommandResponse['m
   }
 }
 
+async function resolveTelegramReplyMarkupFromAction(params: {
+  action: unknown
+  chatId: string
+  userId: string
+}): Promise<Record<string, unknown> | undefined> {
+  const action = params.action as any
+  if (asTrimmed(action?.action ?? '') !== 'twitter.preview_post') return undefined
+
+  const tweetText = asTrimmed(action?.tweetText ?? '')
+  if (!tweetText) return buildTwitterPostRecoveryReplyMarkup()
+
+  const db = await getDb().catch(() => null)
+  if (!db) return buildTwitterPostRecoveryReplyMarkup(tweetText)
+
+  try {
+    await ensureTelegramTradingSchema(db as any)
+    const token = await createTelegramActionToken({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      actionType: 'twitter_post',
+      intentPayload: {
+        version: 1,
+        tweetText,
+        createdAt: new Date().toISOString(),
+      },
+      ttlSeconds: Math.max(30, Math.min(60 * 15, Math.floor(Number(action?.ttlSeconds ?? 90)))),
+    })
+    return buildTwitterPostPreviewReplyMarkup(token.token)
+  } catch (error) {
+    console.error('[telegram/webhook] failed to create twitter action token', {
+      chatId: params.chatId,
+      userId: params.userId,
+      err: error instanceof Error ? error.message : String(error),
+    })
+    return buildTwitterPostRecoveryReplyMarkup(tweetText)
+  }
+}
+
 async function executeTelegramCommand(params: {
   text: string
   chatId: string
@@ -5917,14 +6005,23 @@ async function executeTelegramCommand(params: {
     senderWalletSource: params.senderWalletSource,
     isAdmin: params.isAdmin,
     isPrivateChat: isPrivateChatId(params.chatId),
+    twitterConfirmMode: 'preview_only',
     emptyResponseFallback: 'Command received.',
   })
-  return buildTelegramProcessedCommandResponse({
+  const response: TelegramCommandResponse = buildTelegramProcessedCommandResponse({
     commandText: params.text,
     processed,
     buildObservedCommandText: buildPremiumObservedCommandText,
     resolveMediaFromAction: resolveTelegramMediaFromAction,
   })
+  if (!response.media?.replyMarkup) {
+    response.replyMarkup = await resolveTelegramReplyMarkupFromAction({
+      action: processed.action,
+      chatId: params.chatId,
+      userId: params.userId,
+    })
+  }
+  return response
 }
 
 function formatTradeTokenFailure(reason: 'not_found' | 'expired' | 'consumed' | 'scope_mismatch'): string {
@@ -6572,6 +6669,94 @@ async function handleTelegramTradeCallback(params: {
   }
 }
 
+async function handleTelegramTwitterCallback(params: {
+  callbackData: string
+  chatId: string
+  userId: string
+  groupId: string
+  senderWallet: `0x${string}`
+  senderWalletSource: SenderWalletSource
+  isAdmin: boolean
+}): Promise<TelegramCommandResponse | null> {
+  const callback = parseTwitterCallbackData(params.callbackData)
+  if (!callback) return null
+
+  const db = await getDb()
+  if (!db) {
+    return {
+      text: 'X post action unavailable while database is offline. Please retry in a few seconds.',
+      callbackToast: 'Temporarily unavailable',
+    }
+  }
+
+  await ensureTelegramTradingSchema(db as any)
+
+  const consumed = await consumeTelegramActionToken({
+    db: db as any,
+    token: callback.token,
+    telegramUserId: params.userId,
+    chatId: params.chatId,
+    actionType: 'twitter_post',
+  })
+  if (!consumed.ok) {
+    const callbackToast =
+      consumed.reason === 'expired'
+        ? 'Preview expired'
+        : consumed.reason === 'consumed'
+          ? 'Already used'
+          : consumed.reason === 'scope_mismatch'
+            ? 'Wrong chat scope'
+            : 'Preview missing'
+    return {
+      text: formatTwitterTokenFailure(consumed.reason),
+      callbackToast,
+      replyMarkup: buildTwitterPostRecoveryReplyMarkup(),
+    }
+  }
+
+  const intent = consumed.intentPayload ?? {}
+  const tweetText = asTrimmed(intent.tweetText ?? '')
+  if (!tweetText) {
+    return {
+      text: 'X post preview is missing its draft text. Start a new `/x post` preview.',
+      callbackToast: 'Invalid preview',
+      replyMarkup: buildTwitterPostRecoveryReplyMarkup(),
+    }
+  }
+
+  if (callback.kind === 'decline') {
+    return {
+      text: `Cancelled X post preview.\n\nDraft kept:\n${tweetText}`,
+      callbackToast: 'Post cancelled',
+      replyMarkup: buildTwitterPostRecoveryReplyMarkup(tweetText),
+    }
+  }
+
+  const processed = await processTelegramAgentInput({
+    text: `/x post ${tweetText} --confirm`,
+    chatId: params.chatId,
+    userId: params.userId,
+    groupId: params.groupId,
+    senderWallet: params.senderWallet,
+    senderWalletSource: params.senderWalletSource,
+    isAdmin: params.isAdmin,
+    isPrivateChat: isPrivateChatId(params.chatId),
+    twitterConfirmMode: 'allow_direct_confirm',
+    emptyResponseFallback: 'Command received.',
+  })
+
+  const response: TelegramCommandResponse = buildTelegramProcessedCommandResponse({
+    commandText: `/x post ${tweetText} --confirm`,
+    processed,
+    buildObservedCommandText: buildPremiumObservedCommandText,
+    resolveMediaFromAction: resolveTelegramMediaFromAction,
+  })
+  return {
+    ...response,
+    callbackToast: asTrimmed((processed.action as any)?.action) === 'twitter.posted' ? 'Post sent' : 'Post failed',
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -7147,6 +7332,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         messageId: callbackMessageId,
         groupId,
         senderWallet,
+      })) ??
+      (await handleTelegramTwitterCallback({
+        callbackData,
+        chatId,
+        userId,
+        groupId,
+        senderWallet,
+        senderWalletSource,
+        isAdmin,
       }))
     if (callbackResponse) {
       if (!callbackAcknowledged) {

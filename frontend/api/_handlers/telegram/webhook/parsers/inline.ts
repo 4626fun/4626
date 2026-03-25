@@ -267,7 +267,7 @@ function buildCommonCopy(growthMode: boolean): {
     statusTitle: 'Vault health check',
     statusDescription: 'Config, permissions, live status',
     xPostTitle: 'Draft X post',
-    xPostDescription: 'Pre-filled and confirm-ready',
+    xPostDescription: 'Pre-filled with callback confirm',
     aiTitle: 'Ask AI',
     aiDescription: 'Get next actions in plain English',
     marketTitle: 'Market quote',
@@ -287,7 +287,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const mediaByKey = params.mediaByKey ?? {}
   const tradeIntent = parseTelegramTradeIntent(normalizedQuery.startsWith('/') ? normalizedQuery : `/${normalizedQuery}`)
   const tradeFlowHint = '3 taps • vault • size • accept'
-  const xPostCommand = `/x post ${normalizeInlineDraft(normalizedQuery)} --confirm`
+  const xPostCommand = `/x post ${normalizeInlineDraft(normalizedQuery)}`
   const aiPrompt = normalizedQuery ? `/ai ${normalizedQuery}` : '/ai What should I do next?'
   const marketQuote = `/mkt quote ${inferMarketSymbol(normalizedQuery)}`
   const copy = buildCommonCopy(growthMode)

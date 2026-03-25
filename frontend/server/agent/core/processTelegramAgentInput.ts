@@ -20,6 +20,7 @@ export type ProcessTelegramAgentInputParams = {
   senderWalletSource: TelegramSenderWalletSource
   isAdmin: boolean
   isPrivateChat: boolean
+  twitterConfirmMode?: 'preview_only' | 'allow_direct_confirm'
   emptyResponseFallback?: string
 }
 
@@ -31,6 +32,19 @@ function isTwitterCommand(rawText: string): boolean {
 function isSensitiveDmCommand(text: string): boolean {
   const lower = String(text ?? '').trim().toLowerCase()
   return SENSITIVE_DM_COMMAND_PREFIXES.some((prefix) => lower.startsWith(prefix))
+}
+
+function isTelegramTwitterPostCommand(rawText: string): boolean {
+  const parts = String(rawText ?? '').trim().split(/\s+/g).filter(Boolean)
+  const head = String(parts[0] ?? '').toLowerCase()
+  if (head === '/tweet' || head === 'tweet') return parts.length >= 2
+  return (head === '/x' || head === 'x') && String(parts[1] ?? '').toLowerCase() === 'post'
+}
+
+function stripTwitterConfirmFlags(rawText: string): string {
+  const parts = String(rawText ?? '').trim().split(/\s+/g).filter(Boolean)
+  const kept = parts.filter((part) => !/^[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]+confirm$/i.test(part))
+  return kept.join(' ').trim()
 }
 
 async function resolveTwitterRole(params: {
@@ -64,19 +78,27 @@ export async function processTelegramAgentInput(
   params: ProcessTelegramAgentInputParams,
 ): Promise<TelegramAgentInputResult> {
   if (isTwitterCommand(params.text)) {
+    const twitterConfirmMode = params.twitterConfirmMode ?? 'preview_only'
     const role = await resolveTwitterRole({
       isAdmin: params.isAdmin,
       groupId: params.groupId,
       senderWallet: params.senderWallet,
       senderWalletSource: params.senderWalletSource,
     })
+    const text =
+      twitterConfirmMode === 'preview_only' && isTelegramTwitterPostCommand(params.text)
+        ? stripTwitterConfirmFlags(params.text)
+        : params.text
     const result = await handleTwitterCommand({
       groupId: params.groupId,
       senderWallet: params.senderWallet,
-      text: params.text,
+      text,
       role,
     })
-    return { responseText: String(result.response ?? '').trim() }
+    return {
+      responseText: String(result.response ?? '').trim(),
+      ...('action' in result ? { action: result.action } : {}),
+    }
   }
 
   if (params.isPrivateChat && isSensitiveDmCommand(params.text)) {

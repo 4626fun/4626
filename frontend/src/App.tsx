@@ -13,6 +13,7 @@ export {
   getInitialTelegramMiniAppEntryResolution,
   hasTelegramLinkEntryContext,
   hasTelegramLinkQueryContext,
+  resolveAccess,
   resolveAllowlistMode,
   resolveTelegramMiniAppEntryBootstrap,
 } from './app/accessShared'
@@ -74,9 +75,13 @@ function LayoutOnly() {
 
 const LazyAppAuthShell = lazy(() => import('./app/AppAuthShell'))
 
+const LazyAppPrivyShell = lazy(() => import('./app/AppPrivyShell'))
+
 const LazyAppAccessShell = lazy(() => import('./app/AppAccessShell'))
 
 const LazyLayoutWithAccountContext = lazy(() => import('./app/LayoutWithAccountContext'))
+
+const LazyLayoutWithoutAccountContext = lazy(() => import('./app/LayoutWithoutAccountContext'))
 
 const LazyRequireSession = lazy(async () => {
   const m = await import('./app/accessRuntime')
@@ -424,30 +429,38 @@ function App() {
           }
         >
           <Route
-            path="/telegram/menu"
             element={
               <LazyRouteBoundary>
-                <LazyRequireTelegramMiniAppEntry>
-                  <TelegramMenu />
-                </LazyRequireTelegramMiniAppEntry>
+                <LazyAppPrivyShell />
               </LazyRouteBoundary>
             }
-          />
-          <Route
-            path="/telegram/link"
-            element={
-              <LazyRouteBoundary>
-                <LazyRequireTelegramMiniAppEntry>
-                  <TelegramLink />
-                </LazyRequireTelegramMiniAppEntry>
-              </LazyRouteBoundary>
-            }
-          />
+          >
+            <Route
+              path="/telegram/menu"
+              element={
+                <LazyRouteBoundary>
+                  <LazyRequireTelegramMiniAppEntry>
+                    <TelegramMenu />
+                  </LazyRequireTelegramMiniAppEntry>
+                </LazyRouteBoundary>
+              }
+            />
+            <Route
+              path="/telegram/link"
+              element={
+                <LazyRouteBoundary>
+                  <LazyRequireTelegramMiniAppEntry>
+                    <TelegramLink />
+                  </LazyRequireTelegramMiniAppEntry>
+                </LazyRouteBoundary>
+              }
+            />
+          </Route>
 
           <Route
             element={
               <LazyRouteBoundary>
-                <LazyLayoutWithAccountContext />
+                <LazyLayoutWithoutAccountContext />
               </LazyRouteBoundary>
             }
           >
@@ -474,61 +487,94 @@ function App() {
                 <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
                 <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
                 <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-                <Route path="/swap" element={<Swap />} />
                 <Route path="/positions" element={<Positions />} />
-                <Route path="/portfolio" element={<Portfolio />} />
-                <Route path="/portfolio/:address" element={<Portfolio />} />
-                <Route
-                  path="/deploy"
-                  element={
-                    <WithSmartWallets>
-                      <DeployVault />
-                    </WithSmartWallets>
-                  }
-                />
-                <Route path="/coin/:address/manage" element={<CoinManage />} />
-                <Route path="/creator/earnings" element={<CreatorEarnings />} />
-                <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-                <Route path="/vote" element={<GaugeVoting />} />
-                <Route path="/auction/bid/:address" element={<AuctionBid />} />
-                <Route path="/complete-auction" element={<CompleteAuction />} />
-                <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-                <Route path="/vault/:address" element={<Vault />} />
-                <Route path="/agents" element={<AgentDirectory />} />
-                <Route path="/agents/register" element={<AgentRegister />} />
-                <Route path="/agents/uri-service" element={<AgentUriService />} />
-                <Route path="/auction-demo" element={<AuctionDemo />} />
               </Route>
+            </Route>
+          </Route>
 
+          <Route
+            element={
+              <LazyRouteBoundary>
+                <LazyAppPrivyShell />
+              </LazyRouteBoundary>
+            }
+          >
+            <Route
+              element={
+                <LazyRouteBoundary>
+                  <LazyLayoutWithAccountContext />
+                </LazyRouteBoundary>
+              }
+            >
               <Route
                 element={
                   <LazyRouteBoundary>
-                    <LazyRequireAdmin />
+                    <LazyRequireSession />
                   </LazyRouteBoundary>
                 }
               >
-                <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to="/admin/waitlist" replace />} />
-                  <Route path="creator-access" element={<AdminCreatorAccess />} />
-                  <Route path="waitlist" element={<AdminWaitlist />} />
-                  <Route path="agent-setup" element={<AdminAgentSetup />} />
-                  <Route path="imagegen" element={<AdminImageGeneration />} />
+                <Route
+                  element={
+                    <LazyRouteBoundary>
+                      <LazyRequireAccepted />
+                    </LazyRouteBoundary>
+                  }
+                >
+                  <Route path="/swap" element={<Swap />} />
+                  <Route path="/portfolio" element={<Portfolio />} />
+                  <Route path="/portfolio/:address" element={<Portfolio />} />
                   <Route
-                    path="ops"
+                    path="/deploy"
                     element={
                       <WithSmartWallets>
-                        <AdminOps />
+                        <DeployVault />
                       </WithSmartWallets>
                     }
                   />
-                  <Route
-                    path="deploy-strategies"
-                    element={
-                      <WithSmartWallets>
-                        <AdminDeployStrategies />
-                      </WithSmartWallets>
-                    }
-                  />
+                  <Route path="/coin/:address/manage" element={<CoinManage />} />
+                  <Route path="/creator/earnings" element={<CreatorEarnings />} />
+                  <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
+                  <Route path="/vote" element={<GaugeVoting />} />
+                  <Route path="/auction/bid/:address" element={<AuctionBid />} />
+                  <Route path="/complete-auction" element={<CompleteAuction />} />
+                  <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
+                  <Route path="/vault/:address" element={<Vault />} />
+                  <Route path="/agents" element={<AgentDirectory />} />
+                  <Route path="/agents/register" element={<AgentRegister />} />
+                  <Route path="/agents/uri-service" element={<AgentUriService />} />
+                  <Route path="/auction-demo" element={<AuctionDemo />} />
+                </Route>
+
+                <Route
+                  element={
+                    <LazyRouteBoundary>
+                      <LazyRequireAdmin />
+                    </LazyRouteBoundary>
+                  }
+                >
+                  <Route path="/admin" element={<AdminLayout />}>
+                    <Route index element={<Navigate to="/admin/waitlist" replace />} />
+                    <Route path="creator-access" element={<AdminCreatorAccess />} />
+                    <Route path="waitlist" element={<AdminWaitlist />} />
+                    <Route path="agent-setup" element={<AdminAgentSetup />} />
+                    <Route path="imagegen" element={<AdminImageGeneration />} />
+                    <Route
+                      path="ops"
+                      element={
+                        <WithSmartWallets>
+                          <AdminOps />
+                        </WithSmartWallets>
+                      }
+                    />
+                    <Route
+                      path="deploy-strategies"
+                      element={
+                        <WithSmartWallets>
+                          <AdminDeployStrategies />
+                        </WithSmartWallets>
+                      }
+                    />
+                  </Route>
                 </Route>
               </Route>
             </Route>

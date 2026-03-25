@@ -63,8 +63,9 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: Mobil
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
-export function Layout(props: { interactive?: boolean }) {
+export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) {
   const interactive = props.interactive ?? true
+  const chatEnabled = props.chatEnabled ?? true
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
@@ -143,7 +144,7 @@ export function Layout(props: { interactive?: boolean }) {
       </main>
 
       {/* Chat widget — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
-      {interactive && hostMode === 'app' ? (
+      {interactive && chatEnabled && hostMode === 'app' ? (
         <Suspense fallback={null}>
           <LazyChatWidgetShell />
         </Suspense>

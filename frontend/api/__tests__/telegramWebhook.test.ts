@@ -427,7 +427,7 @@ describe('telegram webhook handler', () => {
     }
   })
 
-  it('routes /x commands to twitter handler and sends telegram reply', async () => {
+  it('routes typed telegram /x post confirms through the preview path and sends telegram reply', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
 
@@ -448,13 +448,141 @@ describe('telegram webhook handler', () => {
     expect(handleTwitterCommandMock).toHaveBeenCalledWith({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
-      text: '/x post hello --confirm',
+      text: '/x post hello',
       role: 'ADMIN',
     })
     expect(handleKeeprCommandMock).not.toHaveBeenCalled()
 
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
+  })
+
+  it('renders /x post preview with inline post and cancel callbacks', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    handleTwitterCommandMock.mockResolvedValueOnce({
+      ok: false,
+      response: [
+        'Twitter/X post preview',
+        '',
+        'gm',
+        '',
+        'Tap Post below in Telegram, or rerun with `/x post gm --confirm`.',
+        'Preview expires in 90s.',
+      ].join('\n'),
+      action: {
+        action: 'twitter.preview_post',
+        tweetText: 'gm',
+        ttlSeconds: 90,
+      },
+    })
+    createTelegramActionTokenMock.mockResolvedValueOnce({
+      token: 'twitter-post-token-1',
+      expiresAt: '2026-03-13T00:01:30.000Z',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 2_0_1,
+        message: { message_id: 8_1, text: '/x post gm', chat: { id: -100123 }, from: { id: 42 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
+    expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
+    expect(createTelegramActionTokenMock).toHaveBeenCalledWith(expect.objectContaining({
+      telegramUserId: '42',
+      chatId: '-100123',
+      actionType: 'twitter_post',
+      intentPayload: expect.objectContaining({
+        tweetText: 'gm',
+      }),
+      ttlSeconds: 90,
+    }))
+    expect((fetch as any).mock.calls.length).toBe(1)
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Twitter/X post preview')
+    const keyboard = payload.reply_markup?.inline_keyboard ?? []
+    const primaryButtons = (keyboard?.[0] ?? []) as Array<any>
+    expect(primaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Post')).toBe(true)
+    expect(primaryButtons.some((button: any) => String(button?.text ?? '').trim() === 'Cancel')).toBe(true)
+    expect(String(primaryButtons?.[0]?.callback_data ?? '')).toContain('twitter:confirm:twitter-post-token-1')
+    expect(String(primaryButtons?.[1]?.callback_data ?? '')).toContain('twitter:decline:twitter-post-token-1')
+  })
+
+  it('confirms /x post preview via inline callback', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    consumeTelegramActionTokenMock.mockResolvedValueOnce({
+      ok: true,
+      actionType: 'twitter_post',
+      intentPayload: {
+        tweetText: 'gm',
+      },
+      expiresAt: '2026-03-13T00:01:30.000Z',
+      consumedAt: '2026-03-13T00:00:32.000Z',
+    })
+    handleTwitterCommandMock.mockResolvedValueOnce({
+      ok: true,
+      response: 'Tweet posted.',
+      action: {
+        action: 'twitter.posted',
+        tweetId: '1899999999999999999',
+      },
+    })
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 2_0_2,
+        callback_query: {
+          id: 'cbq-x-confirm',
+          data: 'twitter:confirm:twitter-post-token-1',
+          from: { id: 42 },
+          message: { message_id: 88, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(consumeTelegramActionTokenMock).toHaveBeenCalledWith(expect.objectContaining({
+      token: 'twitter-post-token-1',
+      telegramUserId: '42',
+      chatId: '-100123',
+      actionType: 'twitter_post',
+    }))
+    expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+      groupId: 'xmtp-group-1',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/x post gm --confirm',
+      role: 'ADMIN',
+    })
+    expect((fetch as any).mock.calls.length).toBe(2)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
+    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('Tweet posted.')
   })
 
   it('allows /x post for vault owner when sender wallet is explicitly mapped to Telegram user', async () => {
@@ -515,7 +643,7 @@ describe('telegram webhook handler', () => {
       expect(handleTwitterCommandMock).toHaveBeenCalledWith({
         groupId: 'xmtp-group-1',
         senderWallet: ownerWallet,
-        text: '/x post owner tweet --confirm',
+        text: '/x post owner tweet',
         role: 'OWNER',
       })
     } finally {
@@ -582,7 +710,7 @@ describe('telegram webhook handler', () => {
       expect(handleTwitterCommandMock).toHaveBeenCalledWith({
         groupId: 'xmtp-group-1',
         senderWallet: adminWallet,
-        text: '/x post admin tweet --confirm',
+        text: '/x post admin tweet',
         role: 'ADMIN',
       })
     } finally {
@@ -649,7 +777,7 @@ describe('telegram webhook handler', () => {
       expect(handleTwitterCommandMock).toHaveBeenCalledWith({
         groupId: 'xmtp-group-1',
         senderWallet: ownerWallet,
-        text: '/x post fallback tweet --confirm',
+        text: '/x post fallback tweet',
         role: 'MEMBER',
       })
     } finally {
