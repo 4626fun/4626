@@ -177,7 +177,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/onchain/coinMarketRewardsCurrency': () => import('./api/_handlers/onchain/_coinMarketRewardsCurrency'),
         '/api/onchain/coinTradeRewardsBatch': () => import('./api/_handlers/onchain/_coinTradeRewardsBatch'),
         '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
-        '/api/token/image': () => import('./api/token/image'),
+        '/api/token/image': () => import('./api/_handlers/token/_image'),
         '/api/zora/coin': () => import('./api/_handlers/zora/_coin'),
         '/api/zora/explore': () => import('./api/_handlers/zora/_explore'),
         '/api/zora/link/status': () => import('./api/_handlers/zora/link/_status'),
@@ -234,7 +234,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/wallet/solana/setCanonical': () => import('./api/[...path]'),
         '/api/wallet/solana/sweep/enqueue': () => import('./api/[...path]'),
         '/api/wallet/solana/sweep/process': () => import('./api/[...path]'),
-        '/api/telegram/webhook': () => import('./api/telegram/webhook'),
+        '/api/telegram/webhook': () => import('./api/_handlers/telegram/_webhook'),
         '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
 
         // Keepr (local dev)
@@ -286,7 +286,7 @@ function localApiRoutesPlugin(): Plugin {
       }> = [
         {
           pattern: /^\/api\/v1\/token\/([a-fA-F0-9x]+)\/image$/,
-          load: () => import('./api/token/image'),
+          load: () => import('./api/_handlers/token/_image'),
           applyQuery: (match, req) => {
             req.query = req.query ?? Object.create(null)
             if (!req.query.address) req.query.address = match[1]
@@ -294,7 +294,7 @@ function localApiRoutesPlugin(): Plugin {
         },
         {
           pattern: /^\/api\/v1\/token\/([a-fA-F0-9x]+)\/logo\.(png|svg)$/,
-          load: () => import('./api/token/image'),
+          load: () => import('./api/_handlers/token/_image'),
           applyQuery: (match, req) => {
             req.query = req.query ?? Object.create(null)
             if (!req.query.address) req.query.address = match[1]
@@ -302,12 +302,6 @@ function localApiRoutesPlugin(): Plugin {
             if (!req.query.size) req.query.size = '64'
           },
         },
-      ]
-      const familyCatchAllRoutes: Array<{
-        prefix: string
-        load: () => Promise<{ default: (req: any, res: any) => any }>
-      }> = [
-        { prefix: '/api/v1/', load: () => import('./api/v1/[...path]') },
       ]
       const catchAllApiRoute = () => import('./api/[...path]')
 
@@ -321,7 +315,6 @@ function localApiRoutesPlugin(): Plugin {
           let loader = routes[pathname]
           let patternMatch: RegExpMatchArray | null = null
           let patternRoute = null as (typeof patternRoutes)[number] | null
-          let familyCatchAllRoute = null as (typeof familyCatchAllRoutes)[number] | null
           if (!loader) {
             for (const candidate of patternRoutes) {
               const match = pathname.match(candidate.pattern)
@@ -329,14 +322,6 @@ function localApiRoutesPlugin(): Plugin {
               loader = candidate.load
               patternMatch = match
               patternRoute = candidate
-              break
-            }
-          }
-          if (!loader && isApiPath) {
-            for (const candidate of familyCatchAllRoutes) {
-              if (!pathname.startsWith(candidate.prefix)) continue
-              familyCatchAllRoute = candidate
-              loader = candidate.load
               break
             }
           }
@@ -353,11 +338,7 @@ function localApiRoutesPlugin(): Plugin {
           if (patternRoute && patternMatch) {
             patternRoute.applyQuery(patternMatch, compatReq)
           }
-          if (familyCatchAllRoute) {
-            const subpath = pathname.slice(familyCatchAllRoute.prefix.length)
-            compatReq.query = compatReq.query ?? Object.create(null)
-            compatReq.query.path = subpath ? subpath.split('/').filter(Boolean) : []
-          } else if (useCatchAll) {
+          if (useCatchAll) {
             const subpath = pathname === '/api' ? '' : pathname.slice('/api/'.length)
             compatReq.query = compatReq.query ?? Object.create(null)
             compatReq.query.path = subpath ? subpath.split('/').filter(Boolean) : []

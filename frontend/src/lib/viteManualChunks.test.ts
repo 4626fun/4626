@@ -22,6 +22,8 @@ describe('classifyManualChunk', () => {
 
   it('still classifies the other vendor families consistently', () => {
     expect(classifyManualChunk('/repo/node_modules/react/index.js')).toBe('vendor')
+    expect(classifyManualChunk('/repo/node_modules/@tanstack/react-query/build/modern/index.js')).toBe('vendor')
+    expect(classifyManualChunk('/repo/node_modules/@tanstack/query-core/build/modern/index.js')).toBe('vendor')
     expect(classifyManualChunk('/repo/node_modules/recharts/index.js')).toBe('charts')
     expect(classifyManualChunk('/repo/node_modules/framer-motion/dist/index.js')).toBe('ui-vendor')
     expect(classifyManualChunk('/repo/node_modules/@safe-global/api-kit/dist/index.js')).toBe('safe')

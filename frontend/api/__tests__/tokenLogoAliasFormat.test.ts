@@ -54,7 +54,7 @@ describe('token logo alias formatting', () => {
   })
 
   it('serves v1 logo.png alias as a 64x64 PNG by default', async () => {
-    const handler = (await import('../token/image.ts')).default
+    const handler = (await import('../_handlers/token/_image.ts')).default
     expect(handler).toBeTypeOf('function')
 
     const req = createMockReq({
@@ -73,7 +73,7 @@ describe('token logo alias formatting', () => {
   })
 
   it('serves v1 logo.svg alias as an SVG payload by default', async () => {
-    const handler = (await import('../token/image.ts')).default
+    const handler = (await import('../_handlers/token/_image.ts')).default
     expect(handler).toBeTypeOf('function')
 
     const req = createMockReq({

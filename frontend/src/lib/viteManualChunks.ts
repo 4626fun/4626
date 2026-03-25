@@ -1,5 +1,6 @@
 const CHART_PACKAGES = ['d3', 'recharts'] as const
 const UI_VENDOR_PACKAGES = ['framer-motion', 'sonner'] as const
+const QUERY_VENDOR_PACKAGES = ['@tanstack/react-query', '@tanstack/query-core'] as const
 const WALLET_AUTH_PACKAGES = [
   '@privy-io/react-auth',
   '@privy-io/wagmi',
@@ -28,6 +29,7 @@ export function classifyManualChunk(id: string): string | undefined {
   if (matchesPackage(id, 'react') || matchesPackage(id, 'react-dom') || matchesPackage(id, 'react-router-dom')) {
     return 'vendor'
   }
+  if (matchesAny(id, QUERY_VENDOR_PACKAGES)) return 'vendor'
   if (matchesAny(id, CHART_PACKAGES)) return 'charts'
   if (matchesAny(id, UI_VENDOR_PACKAGES)) return 'ui-vendor'
 

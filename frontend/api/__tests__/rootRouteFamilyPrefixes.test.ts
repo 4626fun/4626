@@ -14,6 +14,9 @@ describe('root api route family prefixes', () => {
     const imageHandler = vi.fn()
     const telegramHandler = vi.fn()
     const keeprHandler = vi.fn()
+    const tokenImageHandler = vi.fn()
+    const telegramWebhookHandler = vi.fn()
+    const v1Handler = vi.fn()
 
     vi.doMock('../_handlers/_routes.uniswap.js', () => ({
       uniswapRouteLoaders: {
@@ -35,6 +38,15 @@ describe('root api route family prefixes', () => {
         nonce: async () => ({ default: keeprHandler }),
       },
     }))
+    vi.doMock('../_handlers/token/_image.js', () => ({
+      default: tokenImageHandler,
+    }))
+    vi.doMock('../_handlers/telegram/_webhook.js', () => ({
+      default: telegramWebhookHandler,
+    }))
+    vi.doMock('../_handlers/_routes.v1.js', () => ({
+      getV1ApiHandler: vi.fn(async (subpath: string) => (subpath === 'spec.json' ? v1Handler : null)),
+    }))
 
     const { getApiHandler } = await import('../_handlers/_routes.ts')
 
@@ -42,5 +54,8 @@ describe('root api route family prefixes', () => {
     expect(await getApiHandler('image/external')).toBe(imageHandler)
     expect(await getApiHandler('telegram/miniapp/session')).toBe(telegramHandler)
     expect(await getApiHandler('keepr/nonce')).toBe(keeprHandler)
+    expect(await getApiHandler('token/image')).toBe(tokenImageHandler)
+    expect(await getApiHandler('telegram/webhook')).toBe(telegramWebhookHandler)
+    expect(await getApiHandler('v1/spec.json')).toBe(v1Handler)
   })
 })

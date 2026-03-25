@@ -26,15 +26,6 @@
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
-    "api/token/image.ts": {
-      "maxDuration": 60
-    },
-    "api/v1/[...path].ts": {
-      "maxDuration": 60
-    },
-    "api/telegram/webhook.ts": {
-      "maxDuration": 60
-    },
     "api/[...path].ts": {
       "maxDuration": 60
     }
@@ -210,11 +201,8 @@
     { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/agent/process", "dest": "/api/agent/process" },
-    { "src": "/api/token/image", "dest": "/api/token/image" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
-    { "src": "/api/v1/(.*)", "dest": "/api/v1/[...path]?path=$1" },
-    { "src": "/api/telegram/webhook", "dest": "/api/telegram/webhook" },
     { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
     { "handle": "filesystem" },
     {

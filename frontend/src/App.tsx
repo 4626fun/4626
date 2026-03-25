@@ -72,25 +72,11 @@ function LayoutOnly() {
   return <Layout interactive={false} />
 }
 
-const LazyAppWalletShell = lazy(async () => {
-  const m = await import('./app/providerShells')
-  return { default: m.AppWalletShell }
-})
+const LazyAppAuthShell = lazy(() => import('./app/AppAuthShell'))
 
-const LazyAppAuthShell = lazy(async () => {
-  const m = await import('./app/providerShells')
-  return { default: m.AppAuthShell }
-})
+const LazyAppAccessShell = lazy(() => import('./app/AppAccessShell'))
 
-const LazyAppAccessShell = lazy(async () => {
-  const m = await import('./app/providerShells')
-  return { default: m.AppAccessShell }
-})
-
-const LazyLayoutWithAccountContext = lazy(async () => {
-  const m = await import('./app/providerShells')
-  return { default: m.LayoutWithAccountContext }
-})
+const LazyLayoutWithAccountContext = lazy(() => import('./app/LayoutWithAccountContext'))
 
 const LazyRequireSession = lazy(async () => {
   const m = await import('./app/accessRuntime')
@@ -400,25 +386,14 @@ function App() {
             }
           />
           <Route path="/leaderboard" element={<Leaderboard />} />
-        </Route>
-
-        <Route
-          element={
-            <LazyRouteBoundary>
-              <LazyAppWalletShell />
-            </LazyRouteBoundary>
-          }
-        >
-          <Route element={<LayoutOnly />}>
-            <Route
-              path="/status"
-              element={
-                <MarketingOnlyRoute>
-                  <Status />
-                </MarketingOnlyRoute>
-              }
-            />
-          </Route>
+          <Route
+            path="/status"
+            element={
+              <MarketingOnlyRoute>
+                <Status />
+              </MarketingOnlyRoute>
+            }
+          />
         </Route>
 
         <Route
