@@ -576,10 +576,10 @@ describe('premium token icon renderer', () => {
     expect(topDiff).toBeLessThan(8)
   })
 
-  it('renders visible above-frame breakout for prepared hero cutout masks', async () => {
+  it('suppresses breakout for generic hero cutout (non-pixelArt)', async () => {
     const source = await createSource({ width: 900, height: 1200 })
     const heroCutout = await createPreparedHeroCutout({ width: 900, height: 1200 })
-    const withBreakout = await renderPremiumTokenIcon({
+    const withHeroCutout = await renderPremiumTokenIcon({
       size: 512,
       sourceImage: source,
       heroCutoutSourceImage: heroCutout,
@@ -594,14 +594,14 @@ describe('premium token icon renderer', () => {
     })
     const topDiff = await countRegionRgbDifference({
       a: contained,
-      b: withBreakout,
+      b: withHeroCutout,
       x0: 198,
       y0: 56,
       x1: 314,
       y1: 150,
       threshold: 28,
     })
-    expect(topDiff).toBeGreaterThan(30)
+    expect(topDiff).toBeLessThan(8)
   })
 
   it('gracefully ignores invalid hero cutout bytes without distorting chamber artwork', async () => {

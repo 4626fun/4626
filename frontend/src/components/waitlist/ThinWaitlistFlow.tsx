@@ -8,7 +8,7 @@ import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { ZORA_PRIVY_APP_ID, usePrivyClientStatus } from '@/lib/privy/client'
@@ -72,6 +72,60 @@ type ZoraResolveResponse = {
 type HandoffCreateResponse = {
   code: string
   expiresAt: string
+}
+
+type DashboardPointsType = 'invite' | 'total' | 'agent'
+
+type WaitlistPositionResponse = {
+  email: string | null
+  signupId: number
+  profileCompletedAt: string | null
+  referralCode: string | null
+  borderTier: number
+  points: {
+    total: number
+    invite: number
+    signup: number
+    tasks: number
+    csw: number
+    social: number
+    bonus: number
+  }
+  rank: {
+    invite: number | null
+    total: number | null
+  }
+  totalCount: number
+  totalAheadInvite: number | null
+  percentileInvite: number | null
+  referrals: {
+    qualifiedCount: number
+    pendingCount: number
+    pendingCountCapped: number
+    pendingCap: number
+  }
+}
+
+type DashboardLeaderboardRow = {
+  rank: number
+  signupId: number
+  display: string
+  referralCode: string | null
+  pointsTotal: number
+  pointsInvite: number
+  pointsAgent: number
+  borderTier: number
+}
+
+type DashboardLeaderboardResponse = {
+  page: number
+  limit: number
+  pointsType: DashboardPointsType
+  totalCount: number
+  totalPages: number
+  hasMore: boolean
+  leaderboard: DashboardLeaderboardRow[]
+  me: DashboardLeaderboardRow | null
 }
 
 type WaitlistStep = 'auth' | 'wallet' | 'done'
@@ -164,13 +218,59 @@ function shortAddress(value: string | null | undefined): string {
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
+function formatWholeNumber(value: number | null | undefined): string {
+  const n = typeof value === 'number' ? value : Number(value ?? 0)
+  return Number.isFinite(n) ? new Intl.NumberFormat('en-US').format(Math.floor(n)) : '0'
+}
+
+function formatRankLabel(value: number | null | undefined): string {
+  const n = typeof value === 'number' ? value : Number(value ?? NaN)
+  return Number.isFinite(n) && n > 0 ? `#${Math.floor(n)}` : 'Unranked'
+}
+
+function getLeaderboardPointsValue(pointsType: DashboardPointsType, row: DashboardLeaderboardRow): number {
+  if (pointsType === 'invite') return row.pointsInvite
+  if (pointsType === 'agent') return row.pointsAgent
+  return row.pointsTotal
+}
+
+function getAccessStatusMeta(status: string | null | undefined): {
+  label: string
+  tone: string
+  description: string
+} {
+  const normalized = String(status ?? '')
+    .trim()
+    .toLowerCase()
+  if (normalized === 'approved') {
+    return {
+      label: 'Approved',
+      tone: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200',
+      description: 'Admin approval is in. Finish wallet readiness to unlock the app.',
+    }
+  }
+  if (normalized === 'denied') {
+    return {
+      label: 'Not approved',
+      tone: 'border-rose-400/25 bg-rose-500/10 text-rose-200',
+      description: 'This account is not approved for app access right now.',
+    }
+  }
+  return {
+    label: 'Pending review',
+    tone: 'border-amber-400/25 bg-amber-500/10 text-amber-100',
+    description: 'Admin approval controls entry into v1. Use the actions below to strengthen your spot.',
+  }
+}
+
 export function resolveWaitlistStep(params: {
-  account: Pick<AccountsSummary, 'emailVerified' | 'accountSignals'>
+  account: Pick<AccountsSummary, 'emailVerified' | 'accountSignals' | 'appAccessStatus'>
   ownerDelegationVerified: boolean | null
 }): WaitlistStep {
   const { account, ownerDelegationVerified } = params
   if (!account.emailVerified) return 'auth'
-  if (account.accountSignals.canonicalCswAddress && ownerDelegationVerified === true) return 'done'
+  const appApproved = String(account.appAccessStatus ?? '').trim().toLowerCase() === 'approved'
+  if (appApproved && account.accountSignals.canonicalCswAddress && ownerDelegationVerified === true) return 'done'
   return 'wallet'
 }
 
@@ -329,9 +429,15 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const [embeddedEoaAddress, setEmbeddedEoaAddress] = useState<string | null>(null)
 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
+  const [dashboardBusy, setDashboardBusy] = useState(false)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
+  const [dashboardPointsType, setDashboardPointsType] = useState<DashboardPointsType>('total')
+  const [waitlistPosition, setWaitlistPosition] = useState<WaitlistPositionResponse | null>(null)
+  const [leaderboard, setLeaderboard] = useState<DashboardLeaderboardResponse | null>(null)
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const dashboardRequestSeqRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
   const isPage = variant === 'page'
@@ -341,9 +447,9 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
-  const redirectToPrivyCapableWaitlist = useCallback((reason: 'needs-session' | 'needs-acceptance' = 'needs-session') => {
+  const redirectToCanonicalWaitlist = useCallback((reason: 'needs-session' | 'needs-acceptance' = 'needs-session') => {
     if (typeof window === 'undefined') return false
-    const target = getPrivyCapableWaitlistEntryUrl(reason)
+    const target = getMarketingWaitlistEntryUrl(reason)
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return false
     window.location.assign(target)
@@ -421,6 +527,91 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     return nextAccount
   }, [getAccessToken])
 
+  const loadDashboard = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!privyAuthed || !account?.email) {
+        setWaitlistPosition(null)
+        setLeaderboard(null)
+        if (!opts?.silent) setDashboardBusy(false)
+        return
+      }
+
+      const requestSeq = ++dashboardRequestSeqRef.current
+      if (!opts?.silent) {
+        setDashboardBusy(true)
+        setDashboardError(null)
+      }
+
+      try {
+        const token = await getAccessToken().catch(() => null)
+        if (token) {
+          await apiFetch('/api/auth/privy', {
+            method: 'POST',
+            withCredentials: true,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          }).catch(() => null)
+        }
+
+        const [positionResult, leaderboardResult] = await Promise.allSettled([
+          apiFetch(`/api/waitlist/position?email=${encodeURIComponent(account.email)}`, {
+            method: 'GET',
+            withCredentials: true,
+            headers: { Accept: 'application/json' },
+          }),
+          apiFetch(`/api/waitlist/leaderboard?pointsType=${encodeURIComponent(dashboardPointsType)}&page=1&limit=6`, {
+            method: 'GET',
+            withCredentials: true,
+            headers: { Accept: 'application/json' },
+          }),
+        ])
+
+        if (dashboardRequestSeqRef.current !== requestSeq) return
+
+        let nextError: string | null = null
+
+        if (positionResult.status === 'fulfilled') {
+          const payload = (await positionResult.value.json().catch(() => null)) as ApiEnvelope<WaitlistPositionResponse | null> | null
+          if (positionResult.value.ok && payload?.success) {
+            setWaitlistPosition(payload.data ?? null)
+          } else {
+            nextError = readApiErrorMessage(payload, 'Failed to load your waitlist status.')
+            setWaitlistPosition(null)
+          }
+        } else {
+          nextError = positionResult.reason instanceof Error ? positionResult.reason.message : 'Failed to load your waitlist status.'
+          setWaitlistPosition(null)
+        }
+
+        if (leaderboardResult.status === 'fulfilled') {
+          const payload = (await leaderboardResult.value.json().catch(() => null)) as ApiEnvelope<DashboardLeaderboardResponse> | null
+          if (leaderboardResult.value.ok && payload?.success && payload.data) {
+            setLeaderboard(payload.data)
+          } else if (!nextError) {
+            nextError = readApiErrorMessage(payload, 'Failed to load the leaderboard.')
+          }
+        } else if (!nextError) {
+          nextError = leaderboardResult.reason instanceof Error ? leaderboardResult.reason.message : 'Failed to load the leaderboard.'
+        }
+
+        if (nextError && !opts?.silent) setDashboardError(nextError)
+        if (!nextError) setDashboardError(null)
+      } catch (dashboardLoadError: any) {
+        if (dashboardRequestSeqRef.current !== requestSeq) return
+        setDashboardError(
+          typeof dashboardLoadError?.message === 'string' ? dashboardLoadError.message : 'Failed to load waitlist insights.',
+        )
+      } finally {
+        if (dashboardRequestSeqRef.current === requestSeq && !opts?.silent) {
+          setDashboardBusy(false)
+        }
+      }
+    },
+    [account?.email, dashboardPointsType, getAccessToken, privyAuthed],
+  )
+
   const onContinueAuth = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
     authAttemptInFlightRef.current = true
@@ -429,7 +620,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setNotice(null)
     setRecoveryRequired(false)
     try {
-      if (!privyAuthed && privyClientStatus === 'disabled' && redirectToPrivyCapableWaitlist('needs-session')) {
+      if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist('needs-session')) {
         authAttemptInFlightRef.current = false
         setBusy(false)
         return
@@ -453,8 +644,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setError(
         isRecoveryRequired
           ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
-          : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToPrivyCapableWaitlist('needs-session')
-            ? 'Redirecting to the app sign-in flow…'
+          : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToCanonicalWaitlist('needs-session')
+            ? 'Redirecting back to the waitlist sign-in flow…'
           : typeof authError?.message === 'string'
             ? authError.message
             : 'Failed to start sign-in.',
@@ -462,7 +653,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToPrivyCapableWaitlist, runBootstrap])
+  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, runBootstrap])
 
   const onContinueWithBase = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -645,7 +836,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setNotice(null)
     setRecoveryRequired(false)
     try {
-      if (privyClientStatus === 'disabled' && redirectToPrivyCapableWaitlist('needs-session')) {
+      if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist('needs-session')) {
         authAttemptInFlightRef.current = false
         setBusy(false)
         return
@@ -653,8 +844,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
       await login(buildWaitlistRecoveryLoginOptions() as any)
     } catch (recoverError: any) {
-      if (isPrivyLoginBootstrapError(recoverError) && redirectToPrivyCapableWaitlist('needs-session')) {
-        setError('Redirecting to the app sign-in flow…')
+      if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist('needs-session')) {
+        setError('Redirecting back to the waitlist sign-in flow…')
         return
       }
       setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
@@ -663,7 +854,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privyClientStatus, redirectToPrivyCapableWaitlist])
+  }, [busy, login, privyClientStatus, redirectToCanonicalWaitlist])
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
     setEnterAppBusy(true)
@@ -785,16 +976,26 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     const refresh = () => {
       if (document.visibilityState && document.visibilityState !== 'visible') return
       void runBootstrap()
+      void loadDashboard({ silent: true })
     }
     const onFocus = () => refresh()
     const onVisibilityChange = () => refresh()
+    const interval = window.setInterval(() => {
+      refresh()
+    }, 30_000)
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
+      window.clearInterval(interval)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [privyAuthed, runBootstrap, step])
+  }, [loadDashboard, privyAuthed, runBootstrap, step])
+
+  useEffect(() => {
+    if (step !== 'wallet' || !privyAuthed) return
+    void loadDashboard()
+  }, [loadDashboard, privyAuthed, step])
 
   const authUi = deriveWaitlistAuthUi()
   const shouldAutoStartAuth = shouldAutoStartWaitlistAuth({
@@ -812,7 +1013,30 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     appAccessStatus: account?.appAccessStatus ?? null,
     tier: account?.score?.tier ?? 0,
   })
+  const appApproved = String(account?.appAccessStatus ?? '').trim().toLowerCase() === 'approved'
   const doneUi = deriveWaitlistDoneUi(canEnterApp)
+  const accessStatusMeta = getAccessStatusMeta(account?.appAccessStatus)
+  const leaderboardRows = leaderboard?.leaderboard ?? []
+  const leaderboardMe = leaderboard?.me ?? null
+  const leaderboardMeInTop = Boolean(leaderboardMe && leaderboardRows.some((row) => row.signupId === leaderboardMe.signupId))
+  const totalPoints = waitlistPosition?.points.total ?? account?.score.points ?? 0
+  const totalRank = waitlistPosition?.rank.total ?? leaderboardMe?.rank ?? null
+  const inviteRank = waitlistPosition?.rank.invite ?? null
+  const qualifiedReferrals = waitlistPosition?.referrals.qualifiedCount ?? 0
+  const pendingReferrals = waitlistPosition?.referrals.pendingCountCapped ?? waitlistPosition?.referrals.pendingCount ?? 0
+  const leaderboardTitle =
+    dashboardPointsType === 'invite'
+      ? 'Invite leaderboard'
+      : dashboardPointsType === 'agent'
+        ? 'Agent leaderboard'
+        : 'Total points leaderboard'
+  const dashboardSubtitle = appApproved
+    ? 'Admin approval is in. Finish wallet readiness and then the app handoff will unlock automatically.'
+    : ownerInstallNeeded
+      ? 'You are still on the waitlist. Finish 4626 signing on your canonical CSW and keep building points while admin review is pending.'
+      : walletSelectionNeeded
+        ? 'Your email is verified. Track your rank, build points, and optionally connect the wallet you want 4626 to recognize.'
+        : 'Your wallet is linked. Keep climbing the leaderboard while you wait for admin approval.'
 
   useEffect(() => {
     if (!shouldAutoStartAuth) return
@@ -830,11 +1054,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         | 'complete',
     },
     {
-      label: 'Wallet',
+      label: 'Waitlist',
       status: (step === 'wallet' ? 'active' : step === 'done' ? 'complete' : 'pending') as 'pending' | 'active' | 'complete',
     },
     {
-      label: 'Done',
+      label: 'App',
       status: (step === 'done' ? 'active' : 'pending') as 'pending' | 'active' | 'complete',
     },
   ]
@@ -901,7 +1125,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
           </motion.div>
         ) : null}
 
-        {/* Wallet setup step */}
+        {/* Waitlist dashboard step */}
         {step === 'wallet' ? (
           <motion.div
             key="step-wallet"
@@ -910,73 +1134,62 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="space-y-5"
           >
-            <div className="space-y-1">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">Set up your smart wallet</h2>
-              <p className="text-sm text-zinc-400">
-                {walletSelectionNeeded
-                  ? 'Your verified email created the account and your Privy signer. Next, choose the Coinbase Smart Wallet that 4626 should use.'
-                  : 'Your canonical Coinbase Smart Wallet is connected. Finish setup by enabling 4626 signing on that wallet.'}
-              </p>
+            <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(91,168,255,0.12)_0%,rgba(7,10,18,0.86)_100%)] p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-3">
+                  <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] ${accessStatusMeta.tone}`}>
+                    {accessStatusMeta.label}
+                  </div>
+                  <div className="space-y-1">
+                    <h2 className="text-2xl font-semibold tracking-tight text-white">Climb the waitlist</h2>
+                    <p className="max-w-xl text-sm text-zinc-300">{dashboardSubtitle}</p>
+                  </div>
+                  <p className="text-xs text-zinc-500">{accessStatusMeta.description}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]">
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Total points</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{formatWholeNumber(totalPoints)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Total rank</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{formatRankLabel(totalRank)}</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="grid gap-3 sm:grid-cols-2"
-            >
-              <div
-                className={`rounded-xl border p-4 space-y-2 ${
-                  walletSelectionNeeded
-                    ? 'border-brand-primary/35 bg-brand-primary/10'
-                    : 'border-emerald-500/25 bg-emerald-500/10'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Phase 1</span>
-                  <span
-                    className={`text-[10px] font-medium uppercase tracking-[0.18em] ${
-                      walletSelectionNeeded ? 'text-brand-primary' : 'text-emerald-300'
-                    }`}
-                  >
-                    {walletSelectionNeeded ? 'Active' : 'Complete'}
-                  </span>
-                </div>
-                <div className="text-sm font-medium text-white">Choose your CSW path</div>
-                <p className="text-xs text-zinc-400">
-                  Pick the Coinbase Smart Wallet you want 4626 to use, or create one in Base app.
-                </p>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Invite rank</div>
+                <div className="mt-2 text-xl font-semibold text-white">{formatRankLabel(inviteRank)}</div>
+                <div className="mt-1 text-xs text-zinc-500">Leaderboard position by referral momentum.</div>
               </div>
-
-              <div
-                className={`rounded-xl border p-4 space-y-2 ${
-                  ownerDelegationVerified
-                    ? 'border-emerald-500/25 bg-emerald-500/10'
-                    : walletSelectionNeeded
-                      ? 'border-white/10 bg-black/30'
-                      : 'border-brand-primary/35 bg-brand-primary/10'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Phase 2</span>
-                  <span
-                    className={`text-[10px] font-medium uppercase tracking-[0.18em] ${
-                      ownerDelegationVerified
-                        ? 'text-emerald-300'
-                        : walletSelectionNeeded
-                          ? 'text-zinc-500'
-                          : 'text-brand-primary'
-                    }`}
-                  >
-                    {ownerDelegationVerified ? 'Complete' : walletSelectionNeeded ? 'Pending' : 'Active'}
-                  </span>
-                </div>
-                <div className="text-sm font-medium text-white">Enable 4626 signing</div>
-                <p className="text-xs text-zinc-400">
-                  Install the Privy embedded signer as an owner so 4626 can act through that wallet.
-                </p>
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Qualified referrals</div>
+                <div className="mt-2 text-xl font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
+                <div className="mt-1 text-xs text-zinc-500">Friends who fully linked into the system.</div>
               </div>
-            </motion.div>
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Pending referrals</div>
+                <div className="mt-2 text-xl font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
+                <div className="mt-1 text-xs text-zinc-500">Signed up but not fully qualified yet.</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Wallet readiness</div>
+                <div className="mt-2 text-sm font-semibold text-white">
+                  {walletSelectionNeeded ? 'CSW not linked' : ownerInstallNeeded ? 'Signer install pending' : 'Ready'}
+                </div>
+                <div className="mt-1 text-xs text-zinc-500">
+                  {walletSelectionNeeded
+                    ? 'Connect the wallet you want 4626 to recognize.'
+                    : ownerInstallNeeded
+                      ? 'One owner-install transaction is still left.'
+                      : 'Your canonical wallet path is set.'}
+                </div>
+              </div>
+            </div>
 
             {notice ? (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
@@ -984,182 +1197,310 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
               </div>
             ) : null}
 
-            {walletSelectionNeeded ? (
-              <>
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <WalletPathCard
-                    eyebrow="Existing CSW"
-                    title="Link Base Smart Wallet"
-                    body="Use your existing Coinbase Smart Wallet from Base app and keep that wallet as the canonical CSW for 4626."
-                    bestFor="You already use Base app and want to keep that smart wallet."
-                    icon={<CoinbaseLogo className="h-6 w-6" />}
-                    busy={busy}
-                    busyLabel="Linking Base wallet..."
-                    label="Link Base Smart Wallet"
-                    onClick={() => void onContinueWithBase()}
-                  />
-                  <WalletPathCard
-                    eyebrow="Existing CSW"
-                    title="Link Zora Smart Wallet"
-                    body="Choose this when your canonical Coinbase Smart Wallet is already attached to your Zora account."
-                    bestFor="Your Zora account already resolves to the CSW you want 4626 to use."
-                    icon={<ZoraLogo className="h-6 w-6 rounded-full" />}
-                    busy={busy}
-                    busyLabel="Linking Zora wallet..."
-                    label="Link Zora Smart Wallet"
-                    onClick={() => void onContinueWithZora()}
-                  />
-                  <div className="lg:col-span-2">
-                    <WalletPathCard
-                      eyebrow="New Base wallet"
-                      title="Create new wallet in Base app"
-                      body="Start a new Coinbase Smart Wallet in Base app with the 4626 referral flow, then come back here and continue setup."
-                      bestFor="You do not have a CSW yet, or you want a fresh Base-native setup."
-                      icon={<CoinbaseLogo className="h-6 w-6" />}
-                      emphasized
-                      busy={busy}
-                      busyLabel="Opening Base app..."
-                      label="Create new wallet in Base app"
-                      onClick={onCreateInBaseApp}
-                    />
-                  </div>
-                </div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.24, delay: 0.04, ease: [0.4, 0, 0.2, 1] }}
-                  className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2"
-                >
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Quick guide</p>
-                  <div className="space-y-2 text-xs text-zinc-400">
-                    <div>
-                      Pick <span className="text-zinc-200">Link Base Smart Wallet</span> when you already use Base app and want that CSW to stay canonical.
-                    </div>
-                    <div>
-                      Pick <span className="text-zinc-200">Link Zora Smart Wallet</span> when Zora already resolves to the wallet you want 4626 to use.
-                    </div>
-                    <div>
-                      Pick <span className="text-zinc-200">Create new wallet in Base app</span> when you do not have a CSW yet or want a fresh Base-native setup.
-                    </div>
-                  </div>
-                </motion.div>
-
-                {ownerDelegationFlags ? (
-                  <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
-                    {ownerDelegationFlags.needsBaseAppSetup ? (
-                      <div>
-                        Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
-                        {ownerDelegationFlags.baseAppUrl ? (
-                          <>
-                            {' '}
-                            <a
-                              href={ownerDelegationFlags.baseAppUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="underline underline-offset-2"
-                            >
-                              Open Base app
-                            </a>
-                            .
-                          </>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {ownerDelegationFlags.needsEmbeddedWallet ? (
-                      <div>Privy embedded wallet provisioning is still settling. Retry in a moment.</div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-
-            {!walletSelectionNeeded ? (
-              <div className="space-y-4">
-                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <CoinbaseLogo className="h-4 w-4 shrink-0" />
-                    <span className="text-zinc-500">Canonical CSW</span>
-                    <span className="font-mono text-zinc-200">{shortAddress(canonicalCswAddress)}</span>
-                  </div>
-                  {embeddedEoaAddress ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-zinc-500">Privy embedded EOA</span>
-                      <span className="font-mono text-zinc-200">{shortAddress(embeddedEoaAddress)}</span>
-                    </div>
-                  ) : null}
-                  <div className={`text-xs ${ownerDelegationVerified ? 'text-emerald-300' : 'text-amber-200'}`}>
-                    {ownerDelegationVerified
-                      ? '4626 signing is enabled on this wallet.'
-                      : '4626 signing is not enabled yet. One owner-install transaction is still required.'}
-                  </div>
-                </div>
-
-                {ownerDelegationFlags ? (
-                  <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
-                    {ownerDelegationFlags.needsBaseAppSetup ? (
-                      <div>
-                        Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
-                        {ownerDelegationFlags.baseAppUrl ? (
-                          <>
-                            {' '}
-                            <a
-                              href={ownerDelegationFlags.baseAppUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="underline underline-offset-2"
-                            >
-                              Open Base app
-                            </a>
-                            .
-                          </>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {ownerDelegationFlags.needsEmbeddedWallet ? (
-                      <div>Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.</div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium">Enable 4626 signing</div>
-                    <span className={`text-[10px] font-medium uppercase tracking-[0.18em] ${ownerDelegationVerified ? 'text-emerald-300' : 'text-brand-primary'}`}>
-                      {ownerDelegationVerified ? 'Complete' : 'Required'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-500">
-                    This adds your Privy embedded signer as an owner on the canonical CSW. You will sign one transaction with the wallet that currently owns it.
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    If the current owner wallet is not connected in this browser yet, reconnect it first and then retry.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={busy || !ownerInstallNeeded}
-                    onClick={() => void onEnable4626Signing()}
-                    className="btn-secondary btn-no-icon inline-flex"
-                  >
-                    {busy ? 'Preparing…' : ownerDelegationVerified ? '4626 signing enabled' : 'Enable 4626 signing'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void runBootstrap()}
-                    className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
-                  >
-                    Refresh wallet status
-                  </button>
-                </div>
+            {dashboardError ? (
+              <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                {dashboardError}
               </div>
             ) : null}
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Points breakdown</div>
+                    <div className="mt-1 text-sm text-zinc-300">The mix that determines how far up the queue you show up.</div>
+                  </div>
+                  <Link to="/accounts" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
+                    Manage account
+                  </Link>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Signup</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.signup ?? 0)}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Invites</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.invite ?? 0)}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Social</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.social ?? 0)}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Wallet / CSW</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.csw ?? 0)}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/8 p-4">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-brand-primary">Priority move</div>
+                  <div className="mt-2 text-sm font-semibold text-white">
+                    {walletSelectionNeeded ? 'Link the CSW you want 4626 to recognize.' : 'Finish 4626 signing on your canonical CSW.'}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-300">
+                    {walletSelectionNeeded
+                      ? 'This is the clearest wallet signal you can give the system while admin approval is pending.'
+                      : ownerInstallNeeded
+                        ? 'Installing the embedded signer proves 4626 can actually act through your canonical wallet once you are approved.'
+                        : 'Your wallet setup already puts you in the strongest readiness bucket.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{leaderboardTitle}</div>
+                    <div className="mt-1 text-sm text-zinc-300">Live snapshot from the public leaderboard.</div>
+                  </div>
+                  <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
+                    Full board
+                  </Link>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {(['total', 'invite', 'agent'] as const).map((pointsType) => (
+                    <button
+                      key={pointsType}
+                      type="button"
+                      disabled={dashboardBusy}
+                      onClick={() => setDashboardPointsType(pointsType)}
+                      className={`rounded-full border px-3 py-1 text-[11px] ${
+                        dashboardPointsType === pointsType
+                          ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-100'
+                          : 'border-white/8 bg-white/[0.03] text-zinc-500'
+                      }`}
+                    >
+                      {pointsType === 'total' ? 'Total' : pointsType === 'invite' ? 'Invites' : 'Agent'}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
+                  {dashboardBusy && leaderboardRows.length === 0 ? (
+                    <div className="px-4 py-6 text-sm text-zinc-500">Loading leaderboard…</div>
+                  ) : leaderboardRows.length > 0 ? (
+                    <div>
+                      {leaderboardRows.map((row) => {
+                        const isMe = Boolean(leaderboardMe && leaderboardMe.signupId === row.signupId)
+                        return (
+                          <div
+                            key={`${row.rank}-${row.signupId}`}
+                            className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-4 py-3 last:border-b-0 ${
+                              isMe ? 'bg-brand-primary/6' : ''
+                            }`}
+                          >
+                            <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm text-white">{row.display}</div>
+                              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+                                {row.referralCode ? <span>{row.referralCode}</span> : null}
+                                {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
+                                {isMe ? <span className="text-brand-primary">You</span> : null}
+                              </div>
+                            </div>
+                            <div className="text-sm font-semibold tabular-nums text-zinc-100">
+                              {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, row))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-6 text-sm text-zinc-500">No ranked accounts yet.</div>
+                  )}
+                </div>
+
+                {!leaderboardMeInTop && leaderboardMe ? (
+                  <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-brand-primary">Your standing</div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
+                        <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
+                      </div>
+                      <div className="text-sm font-semibold tabular-nums text-zinc-100">
+                        {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, leaderboardMe))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Wallet actions</div>
+                  <div className="mt-1 text-sm text-zinc-300">
+                    Optional while you wait for approval, but these actions move your account closer to app-readiness.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    void runBootstrap()
+                    void loadDashboard({ silent: true })
+                  }}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Refresh status
+                </button>
+              </div>
+
+              {walletSelectionNeeded ? (
+                <>
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <WalletPathCard
+                      eyebrow="Existing CSW"
+                      title="Link Base Smart Wallet"
+                      body="Use your existing Coinbase Smart Wallet from Base app and keep that wallet as the canonical CSW for 4626."
+                      bestFor="You already use Base app and want to keep that smart wallet."
+                      icon={<CoinbaseLogo className="h-6 w-6" />}
+                      busy={busy}
+                      busyLabel="Linking Base wallet..."
+                      label="Link Base Smart Wallet"
+                      onClick={() => void onContinueWithBase()}
+                    />
+                    <WalletPathCard
+                      eyebrow="Existing CSW"
+                      title="Link Zora Smart Wallet"
+                      body="Choose this when your canonical Coinbase Smart Wallet is already attached to your Zora account."
+                      bestFor="Your Zora account already resolves to the CSW you want 4626 to use."
+                      icon={<ZoraLogo className="h-6 w-6 rounded-full" />}
+                      busy={busy}
+                      busyLabel="Linking Zora wallet..."
+                      label="Link Zora Smart Wallet"
+                      onClick={() => void onContinueWithZora()}
+                    />
+                    <div className="lg:col-span-2">
+                      <WalletPathCard
+                        eyebrow="New Base wallet"
+                        title="Create new wallet in Base app"
+                        body="Start a new Coinbase Smart Wallet in Base app with the 4626 referral flow, then come back here and continue setup."
+                        bestFor="You do not have a CSW yet, or you want a fresh Base-native setup."
+                        icon={<CoinbaseLogo className="h-6 w-6" />}
+                        emphasized
+                        busy={busy}
+                        busyLabel="Opening Base app..."
+                        label="Create new wallet in Base app"
+                        onClick={onCreateInBaseApp}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Quick guide</p>
+                    <div className="space-y-2 text-xs text-zinc-400">
+                      <div>
+                        Pick <span className="text-zinc-200">Link Base Smart Wallet</span> when you already use Base app and want that CSW to stay canonical.
+                      </div>
+                      <div>
+                        Pick <span className="text-zinc-200">Link Zora Smart Wallet</span> when Zora already resolves to the wallet you want 4626 to use.
+                      </div>
+                      <div>
+                        Pick <span className="text-zinc-200">Create new wallet in Base app</span> when you do not have a CSW yet or want a fresh Base-native setup.
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <CoinbaseLogo className="h-4 w-4 shrink-0" />
+                      <span className="text-zinc-500">Canonical CSW</span>
+                      <span className="font-mono text-zinc-200">{shortAddress(canonicalCswAddress)}</span>
+                    </div>
+                    {embeddedEoaAddress ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-zinc-500">Privy embedded EOA</span>
+                        <span className="font-mono text-zinc-200">{shortAddress(embeddedEoaAddress)}</span>
+                      </div>
+                    ) : null}
+                    <div className={`text-xs ${ownerDelegationVerified ? 'text-emerald-300' : 'text-amber-200'}`}>
+                      {ownerDelegationVerified
+                        ? '4626 signing is enabled on this wallet.'
+                        : '4626 signing is not enabled yet. One owner-install transaction is still required.'}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium">Enable 4626 signing</div>
+                      <span className={`text-[10px] font-medium uppercase tracking-[0.18em] ${ownerDelegationVerified ? 'text-emerald-300' : 'text-brand-primary'}`}>
+                        {ownerDelegationVerified ? 'Complete' : 'Recommended'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500">
+                      This adds your Privy embedded signer as an owner on the canonical CSW. You will sign one transaction with the wallet that currently owns it.
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      If the current owner wallet is not connected in this browser yet, reconnect it first and then retry.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy || !ownerInstallNeeded}
+                      onClick={() => void onEnable4626Signing()}
+                      className="btn-secondary btn-no-icon inline-flex"
+                    >
+                      {busy ? 'Preparing…' : ownerDelegationVerified ? '4626 signing enabled' : 'Enable 4626 signing'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {ownerDelegationFlags ? (
+                <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
+                  {ownerDelegationFlags.needsBaseAppSetup ? (
+                    <div>
+                      Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
+                      {ownerDelegationFlags.baseAppUrl ? (
+                        <>
+                          {' '}
+                          <a
+                            href={ownerDelegationFlags.baseAppUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline underline-offset-2"
+                          >
+                            Open Base app
+                          </a>
+                          .
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {ownerDelegationFlags.needsEmbeddedWallet ? (
+                    <div>Privy embedded wallet provisioning is still settling. Retry in a moment.</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
 
             {error ? (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
                 {error}
               </div>
             ) : null}
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                to="/accounts"
+                className="btn-accent btn-no-icon inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-medium sm:flex-1"
+              >
+                Go to accounts
+              </Link>
+              <Link
+                to="/leaderboard"
+                className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.04] sm:flex-1"
+              >
+                Open full leaderboard
+              </Link>
+            </div>
           </motion.div>
         ) : null}
 

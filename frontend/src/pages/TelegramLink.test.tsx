@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,8 @@ const {
   navigateMock,
   ensureSessionMock,
   setupUiMock,
+  telegramMainButtonMock,
+  telegramMainButtonState,
   apiFetchMock,
   sendCodeMock,
   loginWithCodeMock,
@@ -21,6 +23,25 @@ const {
   navigateMock: vi.fn(),
   ensureSessionMock: vi.fn(),
   setupUiMock: vi.fn(() => vi.fn()),
+  telegramMainButtonState: { clickHandler: null as null | (() => void) },
+  telegramMainButtonMock: {
+    show: vi.fn(),
+    hide: vi.fn(),
+    enable: vi.fn(),
+    disable: vi.fn(),
+    showProgress: vi.fn(),
+    hideProgress: vi.fn(),
+    setText: vi.fn(),
+    setParams: vi.fn(),
+    onClick: vi.fn((handler: () => void) => {
+      telegramMainButtonState.clickHandler = handler
+    }),
+    offClick: vi.fn((handler: () => void) => {
+      if (telegramMainButtonState.clickHandler === handler) {
+        telegramMainButtonState.clickHandler = null
+      }
+    }),
+  },
   apiFetchMock: vi.fn(),
   sendCodeMock: vi.fn(),
   loginWithCodeMock: vi.fn(),
@@ -49,6 +70,8 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/lib/telegramWebApp', () => ({
   ensureTelegramMiniAppSession: ensureSessionMock,
+  loadTelegramWebApp: vi.fn(async () => ({ MainButton: telegramMainButtonMock })),
+  readTelegramWebApp: () => ({ MainButton: telegramMainButtonMock }),
   setupTelegramMiniAppUi: setupUiMock,
 }))
 
@@ -114,6 +137,7 @@ function mockVerifiedSession() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  telegramMainButtonState.clickHandler = null
   mockVerifiedSession()
   privyState.ready = true
   privyState.authenticated = true
@@ -233,10 +257,12 @@ describe('TelegramLink UI flow', () => {
     const user = userEvent.setup()
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), ' USER@EXAMPLE.COM ')
+    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    await user.type(input, ' USER@EXAMPLE.COM ')
     const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
 
     expect(submitButton.disabled).toBe(false)
+    expect(document.activeElement).toBe(input)
 
     await user.click(submitButton)
 
@@ -244,6 +270,24 @@ describe('TelegramLink UI flow', () => {
       expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
     })
     await screen.findByLabelText('Email Verification Code')
+  })
+
+  it('submits from pointer activation while the email input is focused', async () => {
+    renderFlow()
+
+    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'user@example.com' } })
+    input.focus()
+    const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
+
+    expect(submitButton.disabled).toBe(false)
+    expect(document.activeElement).toBe(input)
+
+    fireEvent.pointerDown(submitButton)
+
+    await waitFor(() => {
+      expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
+    })
   })
 
   it('dispatches SUBMIT_EMAIL on click and leaves collect_email only after explicit submit', async () => {
@@ -268,13 +312,33 @@ describe('TelegramLink UI flow', () => {
     })
   })
 
-  it('keeps decorative overlays non-interactive', async () => {
+  it('exposes the same email submit path through Telegram MainButton', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+
+    expect(telegramMainButtonMock.show).toHaveBeenCalled()
+    expect(telegramMainButtonMock.enable).toHaveBeenCalled()
+    expect(telegramMainButtonState.clickHandler).toBeTypeOf('function')
+
+    await act(async () => {
+      telegramMainButtonState.clickHandler?.()
+    })
+
+    await waitFor(() => {
+      expect(sendCodeMock).toHaveBeenCalledWith({ email: 'user@example.com' })
+    })
+  })
+
+  it('renders the verify-email step without decorative overlays', async () => {
     renderFlow()
 
     await screen.findByLabelText('Verified Email')
-    const overlay = screen.getByTestId('telegram-link-decorative-overlay')
-
-    expect(overlay.className).toContain('pointer-events-none')
+    expect(screen.queryByTestId('telegram-link-decorative-overlay')).toBeNull()
+    expect(screen.getByText(/Telegram:/)).toBeTruthy()
+    expect(screen.getByText(/Chat:/)).toBeTruthy()
+    expect(screen.getByText(/Session:/)).toBeTruthy()
   })
 
   it('locks document scrolling for the Telegram shell', async () => {
@@ -285,7 +349,7 @@ describe('TelegramLink UI flow', () => {
     expect(document.documentElement.classList.contains('telegram-link-html-lock')).toBe(true)
     expect(document.body.classList.contains('telegram-link-body-lock')).toBe(true)
     expect(screen.getByTestId('telegram-link-shell').className).toContain('overflow-hidden')
-    expect(screen.getByTestId('telegram-link-panel').className).toContain('overflow-hidden')
+    expect(screen.getByTestId('telegram-link-panel').className).not.toContain('overflow-y-auto')
 
     view.unmount()
 
@@ -317,6 +381,30 @@ describe('TelegramLink UI flow', () => {
     await screen.findByText('Unable to send verification code.')
     expect(screen.getByText('Verify Email')).toBeTruthy()
     expect((screen.getByLabelText('Verified Email') as HTMLInputElement).value).toBe('user@example.com')
+  })
+
+  it('returns to collect_email with an inline error when sendCode hangs', async () => {
+    try {
+      const user = userEvent.setup()
+      sendCodeMock.mockImplementationOnce(() => new Promise(() => {}))
+      renderFlow()
+
+      await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'Send Code' }))
+
+      expect(document.querySelector('[data-flow-state="sending_email_code"]')).toBeTruthy()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(12_000)
+      })
+
+      expect(screen.getByText('Verification email took too long to start. Try again.')).toBeTruthy()
+      expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
+      expect((screen.getByRole('button', { name: 'Send Code' }) as HTMLButtonElement).disabled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the OTP input usable after send and on recoverable verify failures', async () => {

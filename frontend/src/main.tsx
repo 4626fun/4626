@@ -4,6 +4,13 @@ import { BrowserRouter } from 'react-router-dom'
 
 import { RootRouter } from './RootRouter'
 import { ThemeProvider } from '@/lib/theme'
+import {
+  getPrivyPasswordlessBackoffMs,
+  getPrivyPasswordlessFailureBackoffMs,
+  isPrivyPasswordlessFailure,
+  isPrivyPasswordlessInitRequest,
+  normalizeFetchMethod,
+} from '@/lib/privy/passwordlessFetchGuard'
 import '@4626/brand-kit/styles'
 import './index.css'
 
@@ -67,6 +74,8 @@ if (typeof window !== 'undefined') {
       params.get('privy_analytics') === '0' ||
       window.localStorage.getItem('cv:privy:analytics') === 'off' ||
       ['1', 'true', 'yes'].includes(String(import.meta.env.VITE_PRIVY_DISABLE_ANALYTICS ?? '').trim().toLowerCase())
+    let privyPasswordlessCooldownUntilMs = 0
+    let privyPasswordlessInFlight: Promise<Response> | null = null
     const needsRpcRewrite = true
     if ((debugEnabled || needsRpcRewrite) && !(window as any).__cvFetchPatched) {
       const originalFetch = window.fetch.bind(window)
@@ -79,8 +88,41 @@ if (typeof window !== 'undefined') {
       const safeBaseRpc = '/api/rpc?chain=base'
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+        const method = normalizeFetchMethod(init?.method ?? (input instanceof Request ? input.method : undefined))
         if (disablePrivyAnalytics && url.includes('https://auth.privy.io/api/v1/analytics_events')) {
           return Promise.resolve(new Response(null, { status: 204 }))
+        }
+        if (isPrivyPasswordlessInitRequest(url, method)) {
+          const now = Date.now()
+          if (privyPasswordlessCooldownUntilMs > now) {
+            const retryInSeconds = Math.max(1, Math.ceil((privyPasswordlessCooldownUntilMs - now) / 1_000))
+            return Promise.reject(
+              new Error(`Email verification is temporarily rate limited. Wait ${retryInSeconds}s and retry.`),
+            )
+          }
+          if (privyPasswordlessInFlight) {
+            return privyPasswordlessInFlight.then((response) => response.clone())
+          }
+
+          const request = originalFetch(input, init)
+            .then((response) => {
+              if (response.status === 429) {
+                privyPasswordlessCooldownUntilMs = Date.now() + getPrivyPasswordlessBackoffMs(response)
+              }
+              return response
+            })
+            .catch((error) => {
+              if (isPrivyPasswordlessFailure(error)) {
+                privyPasswordlessCooldownUntilMs = Date.now() + getPrivyPasswordlessFailureBackoffMs()
+              }
+              throw error
+            })
+            .finally(() => {
+              privyPasswordlessInFlight = null
+            })
+
+          privyPasswordlessInFlight = request
+          return request.then((response) => response.clone())
         }
         if (alchemyBaseRpc.test(url) || coinbaseDeveloperBaseRpc.test(url) || directBaseRpc.test(url)) {
           if (input instanceof Request) {

@@ -1,7 +1,30 @@
-# Vercel ignore file
-.env
-.env.local
-node_modules
-.next
+# Active Vercel root is `frontend/`.
+# Keep generated output, local caches, and secrets out of every upload.
 
-Build: 1760089688
+# Dependencies
+node_modules
+
+# Build output / caches
+dist
+coverage
+.cache
+.eslintcache
+.next
+.turbo
+.vite
+.vercel
+.xmtp-data
+playwright-report
+test-results
+tmp
+*.log
+*.tsbuildinfo
+
+# Local env / secrets
+.env
+.env.*
+.env.local
+.env*.local
+
+# Editor / OS noise
+.DS_Store

@@ -13,7 +13,7 @@ describe('deriveWaitlistAuthUi', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Get early access',
       subtitle:
-        'Sign in with your email (one-time code). After verification, continue directly into smart-wallet setup.',
+        'Sign in with your email (one-time code). After verification, track your points, climb the leaderboard, and keep building your account while approval is pending.',
       ctaLabel: '■ Continue with email',
       busyLabel: 'Opening email sign-in…',
     })
@@ -77,6 +77,18 @@ describe('deriveWaitlistZoraUi', () => {
   })
 })
 
+describe('canEnterAppFromAccountState', () => {
+  it('allows app entry when app access is approved even without points tier', () => {
+    expect(canEnterAppFromAccountState({ appAccessStatus: 'approved', tier: 0 })).toBe(true)
+  })
+
+  it('keeps app entry blocked until admin approval exists', () => {
+    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 0 })).toBe(false)
+    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 1 })).toBe(false)
+    expect(canEnterAppFromAccountState({ appAccessStatus: 'pending', tier: 10 })).toBe(false)
+  })
+})
+
 describe('deriveWaitlistDoneUi', () => {
   it('points accepted users toward app entry first', () => {
     expect(deriveWaitlistDoneUi(true)).toEqual({
@@ -87,23 +99,12 @@ describe('deriveWaitlistDoneUi', () => {
     })
   })
 
-  it('points unaccepted users toward accounts first', () => {
+  it('points unaccepted users toward accounts while they wait for approval', () => {
     expect(deriveWaitlistDoneUi(false)).toEqual({
       title: "You're in!",
-      subtitle: 'Visit accounts to manage connected identities, earn points, and track your status.',
+      subtitle: 'Visit accounts to manage connected identities, earn points, and wait for admin approval.',
       primaryLabel: '■ Go to accounts',
       secondaryLabel: null,
     })
-  })
-})
-
-describe('canEnterAppFromAccountState', () => {
-  it('allows app entry when app access is approved even without points tier', () => {
-    expect(canEnterAppFromAccountState({ appAccessStatus: 'approved', tier: 0 })).toBe(true)
-  })
-
-  it('falls back to tier when explicit app access status is absent', () => {
-    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 1 })).toBe(true)
-    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 0 })).toBe(false)
   })
 })

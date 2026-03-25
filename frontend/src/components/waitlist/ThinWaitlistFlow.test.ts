@@ -8,6 +8,7 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: false,
+          appAccessStatus: null,
           accountSignals: {
             linked: false,
             canonicalCswAddress: null,
@@ -26,6 +27,7 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: true,
+          appAccessStatus: null,
           accountSignals: {
             linked: false,
             canonicalCswAddress: null,
@@ -44,6 +46,7 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: true,
+          appAccessStatus: null,
           accountSignals: {
             linked: true,
             canonicalCswAddress: '0x123',
@@ -57,11 +60,12 @@ describe('resolveWaitlistStep', () => {
     ).toBe('wallet')
   })
 
-  it('routes fully linked accounts into done state', () => {
+  it('routes approved, fully linked accounts into done state', () => {
     expect(
       resolveWaitlistStep({
         account: {
           emailVerified: true,
+          appAccessStatus: 'approved',
           accountSignals: {
             linked: true,
             canonicalCswAddress: '0x123',
@@ -73,6 +77,42 @@ describe('resolveWaitlistStep', () => {
         ownerDelegationVerified: true,
       }),
     ).toBe('done')
+  })
+
+  it('keeps approved accounts in wallet until csw readiness is complete', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: 'approved',
+          accountSignals: {
+            linked: true,
+            canonicalCswAddress: null,
+            creatorCoin: null,
+            zoraHandle: null,
+            lastResolvedAt: null,
+          },
+        },
+        ownerDelegationVerified: null,
+      }),
+    ).toBe('wallet')
+
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: 'approved',
+          accountSignals: {
+            linked: true,
+            canonicalCswAddress: '0x123',
+            creatorCoin: null,
+            zoraHandle: null,
+            lastResolvedAt: null,
+          },
+        },
+        ownerDelegationVerified: false,
+      }),
+    ).toBe('wallet')
   })
 })
 

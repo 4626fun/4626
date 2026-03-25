@@ -118,14 +118,18 @@ describe('image generation route registration', () => {
     resolveAuthorizedRequestPrincipalMock.mockResolvedValue(null)
   })
 
-  it('exposes standalone entrypoints for image generation routes', async () => {
-    await expect(import('../image/projects/create.ts')).resolves.toMatchObject({ default: expect.any(Function) })
-    await expect(import('../image/projects/assets/upload.ts')).resolves.toMatchObject({ default: expect.any(Function) })
-    await expect(import('../image/projects/generate.ts')).resolves.toMatchObject({ default: expect.any(Function) })
-    await expect(import('../image/projects/refine.ts')).resolves.toMatchObject({ default: expect.any(Function) })
-    await expect(import('../image/jobs/status.ts')).resolves.toMatchObject({ default: expect.any(Function) })
-    await expect(import('../image/projects/get.ts')).resolves.toMatchObject({ default: expect.any(Function) })
-    await expect(import('../image/projects/associate-vault.ts')).resolves.toMatchObject({ default: expect.any(Function) })
+  it('registers image generation routes through the image family catch-all', async () => {
+    const catchAllMod = await import('../image/[...path].ts')
+    const routesMod = await import('../_handlers/_routes.image.ts')
+
+    expect(catchAllMod).toMatchObject({ default: expect.any(Function) })
+    await expect(routesMod.getImageApiHandler('projects/create')).resolves.toBeTypeOf('function')
+    await expect(routesMod.getImageApiHandler('projects/assets/upload')).resolves.toBeTypeOf('function')
+    await expect(routesMod.getImageApiHandler('projects/generate')).resolves.toBeTypeOf('function')
+    await expect(routesMod.getImageApiHandler('projects/refine')).resolves.toBeTypeOf('function')
+    await expect(routesMod.getImageApiHandler('jobs/status')).resolves.toBeTypeOf('function')
+    await expect(routesMod.getImageApiHandler('projects/get')).resolves.toBeTypeOf('function')
+    await expect(routesMod.getImageApiHandler('projects/associate-vault')).resolves.toBeTypeOf('function')
   })
 })
 

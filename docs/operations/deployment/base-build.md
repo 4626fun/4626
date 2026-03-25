@@ -61,3 +61,26 @@ If the `base:app_id` tag is present but the page still identifies itself as `htt
 3. Retry the Base Build verification flow after the app homepage returns the correct canonical and Open Graph URLs.
 
 Console noise from ad blockers, Datadog, Sentry, OneTrust, or Coinbase telemetry on `base.dev` is not a reliable signal for app ownership failures.
+
+## GitHub Deployments environment naming (Vercel)
+
+GitHub Deployments can show both generic and project-scoped environment names for the same repo, for example:
+
+- `Production` + `Preview`
+- `Production - 4626` + `Preview - 4626`
+
+This usually happens when Vercel integration mode changed over time (single-project naming vs project-scoped naming in a monorepo). Existing GitHub Deployment environment rows are historical metadata and can remain visible after naming changes.
+
+For this repo, `Production - 4626` / `Preview - 4626` are project-scoped names for the web app project, and `Production - 4626-docs` / `Preview - 4626-docs` are for docs. But the active names are whichever rows continue to receive fresh deployments in GitHub.
+
+Important: if any integration is still publishing to unsuffixed names, GitHub can recreate them on the next deployment. Verify recent deployment activity first, then delete only inactive legacy rows.
+
+### Safe delete rule (quick)
+
+Use **GitHub → Deployments**, click each environment row, and check the most recent deploy timestamp:
+
+- If latest app deploys land in `Production` and `Preview`, keep those and delete `Production - 4626` and `Preview - 4626`.
+- If latest app deploys land in `Production - 4626` and `Preview - 4626`, keep those and delete unsuffixed `Production` and `Preview`.
+- Keep docs rows (`Production - 4626-docs`, `Preview - 4626-docs`) if docs are still deployed from this repo.
+
+This means yes—you can delete two rows for the app once you confirm which pair is currently active.

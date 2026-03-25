@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
-import { getPrivyCapableWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -961,7 +961,7 @@ export function Faq() {
             </h2>
             <JoinWaitlistCta
               className="btn-accent inline-flex items-center"
-              onPrivyDisabled={() => window.location.assign(getPrivyCapableWaitlistEntryUrl('needs-session'))}
+              onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
             >
               Join waitlist <ArrowRight className="w-4 h-4 ml-2" />
             </JoinWaitlistCta>

@@ -1,3 +1,5 @@
+import { getHostMode, type HostMode } from '@/lib/host'
+
 export function isPublicSiteMode(): boolean {
   const v = String(import.meta.env.VITE_PUBLIC_SITE_MODE ?? '')
     .trim()
@@ -8,6 +10,7 @@ export function isPublicSiteMode(): boolean {
 const DEFAULT_PRIVY_APP_ID = 'cmk411efm034jl50cs618o8cy'
 const DEFAULT_PRIVY_ALLOWED_ORIGINS = new Set<string>([
   'https://4626.fun',
+  'https://app.4626.fun',
   'https://v1.4626.fun',
   'http://localhost:5173',
   'http://localhost:5174',
@@ -51,10 +54,19 @@ function isPrivyOriginAllowed(): boolean {
   return getPrivyAllowedOrigins().has(origin)
 }
 
+export function isPrivyHostModeAllowed(mode: HostMode): boolean {
+  return mode === 'marketing' || mode === 'app'
+}
+
 export function getPrivyAppId(): string | null {
   const appId = String(import.meta.env.VITE_PRIVY_APP_ID ?? '').trim()
   if (appId.length > 0) return appId
   return DEFAULT_PRIVY_APP_ID
+}
+
+export function getPrivyClientId(): string | null {
+  const clientId = String(import.meta.env.VITE_PRIVY_CLIENT_ID ?? '').trim()
+  return clientId.length > 0 ? clientId : null
 }
 
 export function isPrivyClientEnabled(): boolean {
@@ -62,6 +74,7 @@ export function isPrivyClientEnabled(): boolean {
   if (!isTruthyEnv(import.meta.env.VITE_PRIVY_ENABLED)) return false
   if (!getPrivyAppId()) return false
   if (!isPrivyOriginAllowed()) return false
+  if (typeof window !== 'undefined' && !isPrivyHostModeAllowed(getHostMode())) return false
   return true
 }
 

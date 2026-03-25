@@ -87,7 +87,12 @@ import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
 import { createHash } from 'node:crypto'
-import { listXmtpDb3FilesUnderRoot, resolveXmtpDbDirectory } from '../../_lib/xmtpDbDirectory.js'
+import {
+  findMountedAncestorPath,
+  hasDedicatedMount,
+  listXmtpDb3FilesUnderRoot,
+  resolveXmtpDbDirectory,
+} from '../../_lib/xmtpDbDirectory.js'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -803,6 +808,14 @@ function validateStartupEnv(): EnvValidationResult {
   ) {
     errors.push(
       `XMTP persistent storage policy is enabled but resolved XMTP DB directory is temporary (${XMTP_DB_DIR}). Mount durable storage and/or set XMTP_DB_DIRECTORY.`,
+    )
+  }
+  if (RUNNING_ON_RAILWAY && AGENT_CONSUME_XMTP && XMTP_REQUIRE_PERSISTENT_DB && !hasDedicatedMount(XMTP_DB_DIR)) {
+    const mountedAncestor = findMountedAncestorPath(XMTP_DB_DIR)
+    errors.push(
+      `Railway primary requires a dedicated mounted volume for XMTP DB storage at ${XMTP_DB_DIR}. ` +
+        `The path currently resolves onto the container root filesystem${mountedAncestor ? ` (closest mount: ${mountedAncestor})` : ''}. ` +
+        'Attach a Railway volume at the XMTP DB path and redeploy.',
     )
   }
 
