@@ -2,7 +2,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authRouteLoaders } from './_routes.auth.js'
 import { creRouteLoaders } from './_routes.cre.js'
 import { deployRouteLoaders } from './_routes.deploy.js'
+import { imageRouteLoaders } from './_routes.image.js'
+import { keeprRouteLoaders } from './_routes.keepr.js'
 import { lensRouteLoaders } from './_routes.lens.js'
+import { telegramRouteLoaders } from './_routes.telegram.js'
+import { uniswapRouteLoaders } from './_routes.uniswap.js'
 import { waitlistRouteLoaders } from './_routes.waitlist.js'
 import { walletSolanaRouteLoaders } from './_routes.wallet.solana.js'
 import { zoraRouteLoaders } from './_routes.zora.js'
@@ -115,7 +119,11 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   ...prefixRouteLoaders('auth', authRouteLoaders),
   ...prefixRouteLoaders('cre', creRouteLoaders),
   ...prefixRouteLoaders('deploy', deployRouteLoaders),
+  ...prefixRouteLoaders('image', imageRouteLoaders),
+  ...prefixRouteLoaders('keepr', keeprRouteLoaders),
   ...prefixRouteLoaders('lens', lensRouteLoaders),
+  ...prefixRouteLoaders('telegram', telegramRouteLoaders),
+  ...prefixRouteLoaders('uniswap', uniswapRouteLoaders),
   ...prefixRouteLoaders('waitlist', waitlistRouteLoaders),
   ...prefixRouteLoaders('wallet/solana', walletSolanaRouteLoaders),
   ...prefixRouteLoaders('zora', zoraRouteLoaders),

@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const imageRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const imageRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'external': () => import('./image/_external-proxy.js'),
   'jobs/status': () => import('./image/_jobs-status.js'),
   'projects/assets/upload': () => import('./image/_assets-upload.js'),

@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 type ApiHandlerModule = { default?: ApiHandler }
 
-const keeprRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const keeprRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'join': () => import('./keepr/_join.js'),
   'joinStatus': () => import('./keepr/_joinStatus.js'),
   'nonce': () => import('./keepr/_nonce.js'),

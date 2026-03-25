@@ -17,8 +17,8 @@ describe('image external proxy route registration', () => {
     lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
   })
 
-  it('registers the image external proxy route through the image family catch-all', async () => {
-    const catchAllMod = await import('../image/[...path].ts')
+  it('registers the image external proxy route through the root api catch-all', async () => {
+    const catchAllMod = await import('../[...path].ts')
     const routesMod = await import('../_handlers/_routes.image.ts')
 
     expect(catchAllMod).toMatchObject({ default: expect.any(Function) })
@@ -34,7 +34,7 @@ describe('GET /api/image/external', () => {
     lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
   })
 
-  it('routes through image catch-all when subpath comes from request URL', async () => {
+  it('routes through the root catch-all when subpath comes from request URL', async () => {
     const payload = new Uint8Array([137, 80, 78, 71])
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(payload, {
@@ -44,7 +44,7 @@ describe('GET /api/image/external', () => {
     )
     vi.stubGlobal('fetch', fetchMock as any)
 
-    const familyMod = await import('../image/[...path].ts')
+    const familyMod = await import('../[...path].ts')
     const familyHandler = familyMod.default
     const req = createMockReq({
       method: 'GET',
@@ -60,7 +60,7 @@ describe('GET /api/image/external', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
-  it('routes through image catch-all when request URL has trailing slash', async () => {
+  it('routes through the root catch-all when request URL has trailing slash', async () => {
     const payload = new Uint8Array([137, 80, 78, 71])
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(payload, {
@@ -70,7 +70,7 @@ describe('GET /api/image/external', () => {
     )
     vi.stubGlobal('fetch', fetchMock as any)
 
-    const familyMod = await import('../image/[...path].ts')
+    const familyMod = await import('../[...path].ts')
     const familyHandler = familyMod.default
     const req = createMockReq({
       method: 'GET',

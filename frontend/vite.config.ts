@@ -308,9 +308,6 @@ function localApiRoutesPlugin(): Plugin {
         load: () => Promise<{ default: (req: any, res: any) => any }>
       }> = [
         { prefix: '/api/v1/', load: () => import('./api/v1/[...path]') },
-        { prefix: '/api/telegram/', load: () => import('./api/telegram/[...path]') },
-        { prefix: '/api/uniswap/', load: () => import('./api/uniswap/[...path]') },
-        { prefix: '/api/keepr/', load: () => import('./api/keepr/[...path]') },
       ]
       const catchAllApiRoute = () => import('./api/[...path]')
 
