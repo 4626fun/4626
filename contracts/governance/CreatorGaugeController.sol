@@ -76,8 +76,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     uint256 public constant MAX_BPS = 10000;
-    uint256 public constant MAX_CREATOR_SHARE = 5000; // Max 50% to creator
-    uint256 public constant MAX_PROTOCOL_SHARE = 1000; // Max 10% to protocol
 
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
@@ -147,16 +145,16 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     /// @notice Percentage to burn (increases PPS for all holders)
-    uint256 public burnShareBps = 2139; // 21.39% - ve(3,3) passive value accrual
+    uint256 public constant BURN_SHARE_BPS = 2139; // 21.39% - ve(3,3) passive value accrual
 
     /// @notice Percentage to lottery reserve (jackpot)
-    uint256 public lotteryShareBps = 6900; // 69% - vote-directed probability pool
+    uint256 public constant LOTTERY_SHARE_BPS = 6900; // 69% - vote-directed probability pool
 
     /// @notice Percentage to creator treasury
-    uint256 public creatorShareBps = 0; // 0% - creators earn via appreciation + bribes
+    uint256 public constant CREATOR_SHARE_BPS = 0; // 0% - creators earn via appreciation + bribes
 
     /// @notice Percentage to protocol treasury (multisig)
-    uint256 public protocolShareBps = 961; // 9.61% - platform operations
+    uint256 public constant PROTOCOL_SHARE_BPS = 961; // 9.61% - platform operations
 
     // ================================
     // ACCUMULATION & DISTRIBUTION
@@ -241,7 +239,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     event CreatorTreasurySet(address indexed treasury);
     event ProtocolTreasurySet(address indexed treasury);
     event CreatorCoinSet(address indexed coin);
-    event FeeSplitUpdated(uint256 burnBps, uint256 lotteryBps, uint256 creatorBps, uint256 protocolBps);
     event ThresholdUpdated(uint256 newThreshold);
     event SwapConfigUpdated(uint24 feeTier, uint256 slippageBps);
     event OracleSet(address indexed oracle);
@@ -257,7 +254,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     error ZeroAddress();
-    error InvalidSplit();
     error NothingToDistribute();
     error TooSoon();
     error VaultNotSet();
@@ -612,9 +608,9 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         lastDistribution = block.timestamp;
 
         // Calculate splits (in vault shares)
-        uint256 toBurn = (vaultSharesReceived * burnShareBps) / MAX_BPS;
-        uint256 toLottery = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;
-        uint256 toCreator = (vaultSharesReceived * creatorShareBps) / MAX_BPS;
+        uint256 toBurn = (vaultSharesReceived * BURN_SHARE_BPS) / MAX_BPS;
+        uint256 toLottery = (vaultSharesReceived * LOTTERY_SHARE_BPS) / MAX_BPS;
+        uint256 toCreator = (vaultSharesReceived * CREATOR_SHARE_BPS) / MAX_BPS;
         uint256 toProtocol = vaultSharesReceived - toBurn - toLottery - toCreator;
 
         // Burn shares (increases PPS for all holders) - disabled by default
@@ -831,32 +827,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Update fee split
-     * @param _burnBps Percentage to burn (increases PPS)
-     * @param _lotteryBps Percentage to lottery (jackpot)
-     * @param _creatorBps Percentage to creator
-     * @param _protocolBps Percentage to protocol (multisig)
-     */
-    function setFeeSplit(uint256 _burnBps, uint256 _lotteryBps, uint256 _creatorBps, uint256 _protocolBps)
-        external
-        onlyOwner
-    {
-        // Validate totals to 100%
-        if (_burnBps + _lotteryBps + _creatorBps + _protocolBps != MAX_BPS) revert InvalidSplit();
-
-        // Enforce maximums for user protection
-        if (_creatorBps > MAX_CREATOR_SHARE) revert InvalidSplit();
-        if (_protocolBps > MAX_PROTOCOL_SHARE) revert InvalidSplit();
-
-        burnShareBps = _burnBps;
-        lotteryShareBps = _lotteryBps;
-        creatorShareBps = _creatorBps;
-        protocolShareBps = _protocolBps;
-
-        emit FeeSplitUpdated(_burnBps, _lotteryBps, _creatorBps, _protocolBps);
-    }
-
-    /**
      * @notice Set distribution threshold
      * @param _threshold Minimum OFT tokens before auto-distribution
      */
@@ -881,7 +851,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      * @notice Get current fee split configuration
      */
     function getFeeSplit() external view returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol) {
-        return (burnShareBps, lotteryShareBps, creatorShareBps, protocolShareBps);
+        return (BURN_SHARE_BPS, LOTTERY_SHARE_BPS, CREATOR_SHARE_BPS, PROTOCOL_SHARE_BPS);
     }
 
     /**
@@ -895,9 +865,9 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     {
         // Note: In reality, unwrap may have fees, so this is approximate
         uint256 estimatedShares = pendingFees; // 1:1 if no unwrap fee
-        toBurn = (estimatedShares * burnShareBps) / MAX_BPS;
-        toLottery = (estimatedShares * lotteryShareBps) / MAX_BPS;
-        toCreator = (estimatedShares * creatorShareBps) / MAX_BPS;
+        toBurn = (estimatedShares * BURN_SHARE_BPS) / MAX_BPS;
+        toLottery = (estimatedShares * LOTTERY_SHARE_BPS) / MAX_BPS;
+        toCreator = (estimatedShares * CREATOR_SHARE_BPS) / MAX_BPS;
         toProtocol = estimatedShares - toBurn - toLottery - toCreator;
     }
 
