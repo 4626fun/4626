@@ -75,7 +75,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
-  const showTopNavBar = hostMode !== 'marketing'
+  const showTopNavBar = true
   const showAccountMode =
     interactive &&
     hostMode !== 'marketing' &&

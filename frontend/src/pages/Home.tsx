@@ -240,8 +240,8 @@ export function Home() {
       </div>
 
       {/* Hero - Cinematic Letterbox */}
-      <section className="cinematic-section !py-12 sm:!py-24 lg:!py-32 min-h-[62vh] sm:min-h-[90vh] flex items-center justify-center">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center space-y-6 sm:space-y-16">
+      <section className="cinematic-section !py-16 sm:!py-24 lg:!py-28 min-h-[68vh] sm:min-h-[82vh] flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center space-y-8 sm:space-y-14">
           {/* Status Indicator */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -261,7 +261,7 @@ export function Home() {
             transition={{ duration: 0.8, delay: 0.428 }}
             className="space-y-4 sm:space-y-6"
           >
-            <h1 className="headline text-4xl sm:text-6xl md:text-7xl lg:text-9xl leading-[1.08]">
+            <h1 className="headline text-4xl sm:text-6xl md:text-7xl lg:text-[7.5rem] xl:text-[8.25rem] leading-[0.94] tracking-[-0.05em]">
               Turn Creator Coins
               <br />
               <span className="glow-brand">Into Earnings</span>
@@ -273,7 +273,7 @@ export function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.856 }}
-            className="text-base sm:text-xl text-zinc-500 font-light tracking-wide max-w-2xl mx-auto"
+            className="text-base sm:text-xl text-zinc-400 font-light tracking-wide max-w-2xl mx-auto"
           >
             Deposit tokens · Earn from trades · Grow together
           </motion.p>
@@ -400,7 +400,7 @@ export function Home() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="space-y-0"
             >
-              <div className="rounded-2xl border border-zinc-900/70 bg-black/30 backdrop-blur-sm p-4 sm:p-6">
+              <div className="rounded-3xl border border-white/8 bg-white/[0.035] shadow-[0_24px_80px_-44px_rgba(0,82,255,0.35)] backdrop-blur-sm p-5 sm:p-6">
                 <div className="text-[10px] font-medium text-zinc-600">Default launch mechanics</div>
 
                 <div className="mt-4 sm:mt-6 space-y-0">
@@ -454,13 +454,13 @@ export function Home() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 gap-px bg-vault-card/60 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-white/8 bg-white/[0.035] shadow-[0_24px_80px_-48px_rgba(0,82,255,0.28)] sm:grid-cols-2 lg:grid-cols-4">
             <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <div className="inline-flex items-center gap-1.5">
                 <img
@@ -482,7 +482,7 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <div className="inline-flex items-center gap-1.5">
                 <img
@@ -504,7 +504,7 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <div className="inline-flex items-center gap-1.5">
                 <img
@@ -526,7 +526,7 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.3 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <span className="label text-[9px] sm:text-[10px]">Idle Buffer</span>
               <div className="value mono text-xl sm:text-3xl lg:text-4xl">10%</div>

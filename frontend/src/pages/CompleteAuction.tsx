@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
 import {
   useAccount,
+  usePublicClient,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -22,6 +24,7 @@ import {
   Flame,
 } from 'lucide-react'
 import { CONTRACTS, AKITA } from '../config/contracts'
+import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 
 // CCA Strategy ABI
 const CCA_STRATEGY_ABI = [
@@ -148,6 +151,7 @@ export function CompleteAuction() {
   const { strategy } = useParams()
   const navigate = useNavigate()
   const { address } = useAccount()
+  const publicClient = usePublicClient()
   const [currentStep, setCurrentStep] = useState<Step>('check')
   const [error, setError] = useState<string | null>(null)
 
@@ -182,6 +186,22 @@ export function CompleteAuction() {
   const vaultAddress = (fundsRecipient && typeof fundsRecipient === 'string' ? fundsRecipient : null) as
     | `0x${string}`
     | null
+  const tradeTokenSourceAddress =
+    vaultAddress ??
+    ((tokenAddress && typeof tokenAddress === 'string' ? tokenAddress : null) as `0x${string}` | null)
+  const tradeTokenQuery = useQuery({
+    queryKey: ['complete-auction', 'trade-token', tradeTokenSourceAddress ?? ''],
+    enabled: Boolean(publicClient && tradeTokenSourceAddress),
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60,
+    queryFn: async () => {
+      if (!publicClient || !tradeTokenSourceAddress) return null
+      return await resolveCreatorTradeTokenAddress(publicClient as any, tradeTokenSourceAddress)
+    },
+  })
+  const tradeTokenAddress =
+    tradeTokenQuery.data ??
+    ((tradeTokenQuery.isFetched || tradeTokenQuery.isError || !publicClient) ? tradeTokenSourceAddress : null)
 
   const { data: vaultOwner } = useReadContract({
     address: (vaultAddress ?? ZERO_ADDRESS) as `0x${string}`,
@@ -867,7 +887,8 @@ export function CompleteAuction() {
                     )}
                   </button>
                   <button
-                    onClick={() => navigate(`/swap?token=${tokenAddress}`)}
+                    onClick={() => tradeTokenAddress && navigate(`/swap?token=${tradeTokenAddress}`)}
+                    disabled={!tradeTokenAddress}
                     className="btn-secondary flex items-center justify-center gap-2"
                   >
                     Trade on 4626 Swap
