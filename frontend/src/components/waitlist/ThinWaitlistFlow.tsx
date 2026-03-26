@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
 import { Check, CheckCircle2, Copy, Loader2 } from 'lucide-react'
@@ -9,10 +9,11 @@ import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import {
+  clearStoredWaitlistReferralCode,
   getMarketingWaitlistEntryUrl,
   getMarketingWaitlistReferralUrl,
-  readWaitlistEntryReferralCode,
-  WAITLIST_REFERRAL_CODE_STORAGE_KEY,
+  readStoredWaitlistReferralCode,
+  storeWaitlistReferralCode,
 } from '@/lib/auth/waitlistEntry'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
@@ -137,7 +138,6 @@ type WaitlistStep = 'auth' | 'wallet' | 'done'
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
-const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -147,21 +147,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       .catch(reject)
       .finally(() => clearTimeout(t))
   })
-}
-
-function readStoredWaitlistReferralCode(): string | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const stored = window.sessionStorage.getItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
-    const normalized = String(stored ?? '')
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 16)
-    return normalized.length > 0 ? normalized : null
-  } catch {
-    return null
-  }
 }
 
 function readApiErrorMessage(payload: unknown, fallback: string): string {
@@ -419,7 +404,6 @@ function WalletPathCard(props: {
 export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
-  const location = useLocation()
 
   const privy = useSafePrivy()
   const privyClientStatus = usePrivyClientStatus()
@@ -468,24 +452,16 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const innerClass = isPage
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
-  const activeReferralCode = useMemo(
-    () =>
-      readWaitlistEntryReferralCode({
-        pathname: location.pathname,
-        search: location.search,
-        hash: location.hash,
-      }) ?? readStoredWaitlistReferralCode(),
-    [location.hash, location.pathname, location.search],
-  )
+  const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
   const redirectToCanonicalWaitlist = useCallback(() => {
     if (typeof window === 'undefined') return false
-    const target = activeReferralCode ? getMarketingWaitlistReferralUrl(activeReferralCode) : getMarketingWaitlistEntryUrl()
+    const target = getMarketingWaitlistEntryUrl()
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return false
     window.location.assign(target)
     return true
-  }, [activeReferralCode])
+  }, [])
 
   useEffect(() => {
     if (typeof privy?.logout === 'function') {
@@ -498,12 +474,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   }, [privy])
 
   useEffect(() => {
-    if (!activeReferralCode || typeof window === 'undefined') return
-    try {
-      window.sessionStorage.setItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY, activeReferralCode)
-    } catch {
-      // ignore
-    }
+    if (!activeReferralCode) return
+    storeWaitlistReferralCode(activeReferralCode)
   }, [activeReferralCode])
 
   useEffect(() => {
@@ -564,13 +536,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     const nextAccount = payload.data
     setAccount(nextAccount)
     setRecoveryRequired(false)
-    if (activeReferralCode && typeof window !== 'undefined') {
-      try {
-        window.sessionStorage.removeItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
-      } catch {
-        // ignore
-      }
-    }
+    if (activeReferralCode) clearStoredWaitlistReferralCode()
     if (!nextAccount.emailVerified) {
       setStep('auth')
       setError('Verify your email with 4626 to finish creating this account.')
@@ -673,7 +639,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setNotice(null)
     setRecoveryRequired(false)
     try {
-      if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist('needs-session')) {
+      if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         authAttemptInFlightRef.current = false
         setBusy(false)
         return
@@ -703,7 +669,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setError(
         isRecoveryRequired
           ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
-          : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToCanonicalWaitlist('needs-session')
+          : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToCanonicalWaitlist()
             ? 'Redirecting back to the waitlist sign-in flow…'
           : typeof authError?.message === 'string'
             ? authError.message
@@ -793,11 +759,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const onCreateInBaseApp = useCallback(() => {
     if (typeof window === 'undefined') return
-    try {
-      window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
-    } catch {
-      // ignore
-    }
     window.location.assign(ownerDelegationFlags?.baseAppUrl ?? resolveBaseAppInviteUrl())
   }, [ownerDelegationFlags?.baseAppUrl])
 
@@ -901,7 +862,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setWaitlistPosition(null)
     setLeaderboard(null)
     try {
-      if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist('needs-session')) {
+      if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         authAttemptInFlightRef.current = false
         setBusy(false)
         return
@@ -909,7 +870,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
       await login(buildWaitlistRecoveryLoginOptions() as any)
     } catch (recoverError: any) {
-      if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist('needs-session')) {
+      if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
         setError('Redirecting back to the waitlist sign-in flow…')
         return
       }

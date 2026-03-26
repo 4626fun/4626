@@ -2,27 +2,9 @@
 
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-
-vi.mock('framer-motion', () => ({
-  motion: new Proxy(
-    {},
-    {
-      get: (_, tag: string) =>
-        ({
-          children,
-          initial: _initial,
-          animate: _animate,
-          transition: _transition,
-          whileInView: _whileInView,
-          viewport: _viewport,
-          ...props
-        }: any) => React.createElement(tag, props, children),
-    },
-  ),
-}))
 
 vi.mock('@/components/seo/PageMeta', () => ({
   PageMeta: () => null,
@@ -41,11 +23,14 @@ vi.mock('@/components/waitlist/WaitlistFlowWithProviders', () => ({
 vi.mock('@/components/waitlist/PublicWaitlistOverview', () => ({
   PublicWaitlistOverview: ({
     onContinueWithEmail,
+    referralCode,
   }: {
     onContinueWithEmail: () => void
+    referralCode: string | null
   }) => (
     <div>
       <div>Quiet sign-in, live waitlist context</div>
+      <div>{referralCode ? `invite:${referralCode}` : 'invite:none'}</div>
       <button type="button" onClick={onContinueWithEmail}>
         Continue with email
       </button>
@@ -53,24 +38,20 @@ vi.mock('@/components/waitlist/PublicWaitlistOverview', () => ({
   ),
 }))
 
-import { Home } from './Home'
+import { WaitlistInviteEntry } from './WaitlistInviteEntry'
+import { WaitlistPage } from './WaitlistPage'
 
-describe('Home inline waitlist gating', () => {
+describe('WaitlistPage', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
-    HTMLElement.prototype.scrollIntoView = vi.fn()
   })
 
-  function renderHome(entry = '/waitlist') {
-    return render(
-      <MemoryRouter initialEntries={[entry]}>
-        <Home />
+  it('keeps the provider-backed waitlist flow dormant on initial render', () => {
+    render(
+      <MemoryRouter initialEntries={['/waitlist']}>
+        <WaitlistPage />
       </MemoryRouter>,
     )
-  }
-
-  it('keeps the provider-backed waitlist flow dormant on initial render', () => {
-    renderHome()
 
     expect(screen.getByText('Quiet sign-in, live waitlist context')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Continue with email' })).toBeTruthy()
@@ -80,11 +61,30 @@ describe('Home inline waitlist gating', () => {
 
   it('mounts the provider-backed waitlist flow only after explicit user intent', async () => {
     const user = userEvent.setup()
-    renderHome()
+    render(
+      <MemoryRouter initialEntries={['/waitlist']}>
+        <WaitlistPage />
+      </MemoryRouter>,
+    )
 
     await user.click(screen.getByRole('button', { name: 'Continue with email' }))
 
     expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
     expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBe('1')
+  })
+
+  it('captures invite routes and forwards into the single waitlist page', async () => {
+    render(
+      <MemoryRouter initialEntries={['/r/friend-42']}>
+        <Routes>
+          <Route path="/r/:referralCode" element={<WaitlistInviteEntry />} />
+          <Route path="/waitlist" element={<WaitlistPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Quiet sign-in, live waitlist context')).toBeTruthy()
+    expect(screen.getByText('invite:FRIEND42')).toBeTruthy()
+    expect(window.sessionStorage.getItem('cv:waitlist:referral_code')).toBe('FRIEND42')
   })
 })

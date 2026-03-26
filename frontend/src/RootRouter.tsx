@@ -9,6 +9,14 @@ const Home = lazy(async () => {
   const m = await import('./pages/Home')
   return { default: m.Home }
 })
+const WaitlistPage = lazy(async () => {
+  const m = await import('./pages/WaitlistPage')
+  return { default: m.WaitlistPage }
+})
+const WaitlistInviteEntry = lazy(async () => {
+  const m = await import('./pages/WaitlistInviteEntry')
+  return { default: m.WaitlistInviteEntry }
+})
 const LayoutWithoutAccountContext = lazy(async () => import('./app/LayoutWithoutAccountContext'))
 const ProtectedApp = lazy(async () => import('./ProtectedApp'))
 const TelegramMenuEntryRoute = lazy(async () => {
@@ -62,7 +70,7 @@ export function RootRouter() {
             path="/waitlist"
             element={
               <Suspense fallback={<AppLoadingState />}>
-                <Home />
+                <WaitlistPage />
               </Suspense>
             }
           />
@@ -70,7 +78,7 @@ export function RootRouter() {
             path="/r/:referralCode"
             element={
               <Suspense fallback={<AppLoadingState />}>
-                <Home />
+                <WaitlistInviteEntry />
               </Suspense>
             }
           />

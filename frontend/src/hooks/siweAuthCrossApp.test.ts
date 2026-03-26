@@ -12,8 +12,8 @@ describe('siweAuthCrossApp', () => {
   })
 
   it('derives a safe redirect path for cross-app auth', () => {
-    expect(getCrossAppSafeRedirectPath({ pathname: '/', search: '', hash: '#waitlist' })).toEqual({
-      safePath: '/',
+    expect(getCrossAppSafeRedirectPath({ pathname: '/faq', search: '', hash: '#intro' })).toEqual({
+      safePath: '/faq',
       shouldSanitize: true,
     })
     expect(getCrossAppSafeRedirectPath({ pathname: '/r/FRIEND42', search: '?foo=bar', hash: '' })).toEqual({

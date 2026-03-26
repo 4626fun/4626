@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   buildCanonicalMarketingWaitlistUrl,
@@ -6,13 +8,20 @@ import {
   buildWaitlistEntryUrl,
   buildWaitlistReferralPath,
   buildWaitlistReferralUrl,
+  clearStoredWaitlistReferralCode,
   getCanonicalMarketingWaitlistPath,
   isMarketingWaitlistEntryLocation,
   normalizeWaitlistReferralCode,
+  readStoredWaitlistReferralCode,
   readWaitlistEntryReferralCode,
+  storeWaitlistReferralCode,
 } from './waitlistEntry'
 
 describe('waitlistEntry', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear()
+  })
+
   it('builds the canonical waitlist entry path as a clean route', () => {
     expect(buildWaitlistEntryPath()).toBe('/waitlist')
   })
@@ -37,15 +46,23 @@ describe('waitlistEntry', () => {
     expect(buildWaitlistReferralUrl('https://4626.fun', 'friend-42')).toBe('https://4626.fun/r/FRIEND42')
   })
 
-  it('reads referral codes from clean routes and legacy query params', () => {
+  it('reads referral codes from clean invite routes', () => {
     expect(readWaitlistEntryReferralCode({ pathname: '/r/friend-42' })).toBe('FRIEND42')
-    expect(readWaitlistEntryReferralCode({ pathname: '/', search: '?ref=friend-42' })).toBe('FRIEND42')
+    expect(readWaitlistEntryReferralCode({ pathname: '/waitlist' })).toBeNull()
   })
 
-  it('treats the clean waitlist route and referral routes as live marketing waitlist entry surfaces', () => {
+  it('treats only the dedicated waitlist route as the live marketing waitlist surface', () => {
     expect(isMarketingWaitlistEntryLocation({ pathname: '/waitlist' })).toBe(true)
-    expect(isMarketingWaitlistEntryLocation({ pathname: '/r/FRIEND42' })).toBe(true)
+    expect(isMarketingWaitlistEntryLocation({ pathname: '/r/FRIEND42' })).toBe(false)
     expect(isMarketingWaitlistEntryLocation({ pathname: '/' })).toBe(false)
     expect(isMarketingWaitlistEntryLocation({ pathname: '/faq' })).toBe(false)
+  })
+
+  it('stores and clears referral codes in session storage', () => {
+    expect(readStoredWaitlistReferralCode()).toBeNull()
+    storeWaitlistReferralCode('friend-42')
+    expect(readStoredWaitlistReferralCode()).toBe('FRIEND42')
+    clearStoredWaitlistReferralCode()
+    expect(readStoredWaitlistReferralCode()).toBeNull()
   })
 })

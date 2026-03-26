@@ -1,7 +1,3 @@
-import { isMarketingWaitlistEntryLocation } from '@/lib/auth/waitlistEntry'
-
-const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
-
 export function isPrivyRedirectUrlNotAllowedError(error: unknown): boolean {
   const message =
     typeof error === 'string'
@@ -47,14 +43,6 @@ export function sanitizeCrossAppRedirectUrlForAuth(): (() => void) | null {
   const restorePath = `${pathname || '/'}${search || ''}${hash || ''}`
   const { safePath, shouldSanitize } = getCrossAppSafeRedirectPath({ pathname, search, hash })
   if (!shouldSanitize) return null
-
-  if (isMarketingWaitlistEntryLocation({ pathname, search, hash }) || hash === '#waitlist') {
-    try {
-      window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
-    } catch {
-      // ignore
-    }
-  }
 
   try {
     window.history.replaceState(window.history.state, document.title, safePath)

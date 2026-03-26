@@ -4,9 +4,9 @@ import { ArrowRight, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import {
+  storeWaitlistReferralCode,
   getCanonicalMarketingWaitlistPath,
   WAITLIST_REFERRAL_CLICK_SESSION_KEY,
-  WAITLIST_REFERRAL_CODE_STORAGE_KEY,
 } from '@/lib/auth/waitlistEntry'
 
 type DashboardPointsType = 'invite' | 'total' | 'agent'
@@ -107,27 +107,16 @@ export function PublicWaitlistOverview(props: {
         void fetchLeaderboard({ silent: true })
       }
     }
-    const intervalId = window.setInterval(refresh, 30_000)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
     return () => {
-      window.clearInterval(intervalId)
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', refresh)
     }
   }, [fetchLeaderboard])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      if (referralCode) {
-        window.sessionStorage.setItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY, referralCode)
-      } else {
-        window.sessionStorage.removeItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
-      }
-    } catch {
-      // ignore
-    }
+    storeWaitlistReferralCode(referralCode)
   }, [referralCode])
 
   useEffect(() => {

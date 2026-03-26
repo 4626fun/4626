@@ -8,8 +8,6 @@ export const WAITLIST_REFERRAL_CLICK_SESSION_KEY = 'cv:waitlist:referral_click_s
 
 type WaitlistEntryLocation = {
   pathname?: string | null
-  search?: string | null
-  hash?: string | null
 }
 
 export function getCanonicalMarketingWaitlistPath(): string {
@@ -57,20 +55,12 @@ export function readWaitlistEntryReferralCode(location: WaitlistEntryLocation): 
     const candidate = pathname.slice(`${WAITLIST_REFERRAL_PATH_PREFIX}/`.length)
     if (!candidate.includes('/')) return normalizeWaitlistReferralCode(candidate)
   }
-
-  if (pathname !== '/' && pathname !== CANONICAL_MARKETING_WAITLIST_PATH) return null
-
-  try {
-    const params = new URLSearchParams(String(location.search ?? ''))
-    return normalizeWaitlistReferralCode(params.get('ref'))
-  } catch {
-    return null
-  }
+  return null
 }
 
 export function isMarketingWaitlistEntryLocation(location: WaitlistEntryLocation): boolean {
   const pathname = normalizePathname(location.pathname)
-  return pathname === CANONICAL_MARKETING_WAITLIST_PATH || readWaitlistEntryReferralCode(location) !== null
+  return pathname === CANONICAL_MARKETING_WAITLIST_PATH
 }
 
 export function buildWaitlistEntryPath(): string {
@@ -88,4 +78,33 @@ export function getPrivyCapableWaitlistEntryUrl(): string {
 
 export function getMarketingWaitlistEntryUrl(): string {
   return buildWaitlistEntryUrl(getMarketingBaseUrl())
+}
+
+export function readStoredWaitlistReferralCode(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return normalizeWaitlistReferralCode(window.sessionStorage.getItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY))
+  } catch {
+    return null
+  }
+}
+
+export function storeWaitlistReferralCode(referralCode: string | null | undefined): void {
+  if (typeof window === 'undefined') return
+  const normalized = normalizeWaitlistReferralCode(referralCode)
+  try {
+    if (normalized) window.sessionStorage.setItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY, normalized)
+    else window.sessionStorage.removeItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+export function clearStoredWaitlistReferralCode(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
 }
