@@ -13,6 +13,7 @@ import {
   storeRuntimeRecord,
 } from "../../../../server/_lib/cre/runtimeBridge.js"
 import { logger } from "../../../../server/_lib/logger.js"
+import { normalizeRuntimeRecordForWorkspace } from "../../../../server/_lib/workspace/normalizer.js"
 
 type IngestBody = {
   workflow?: string
@@ -119,6 +120,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       source: nonEmptyString(body.source) ?? "cre",
       correlationId: auth.correlationId,
     })
+
+    if (stored.inserted) {
+      await normalizeRuntimeRecordForWorkspace({
+        record: stored.record,
+      }).catch((error) => {
+        logger.warn("Workspace runtime record normalization failed", {
+          workflow,
+          kind,
+          idempotencyKey,
+          correlationId: auth.correlationId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
 
     logger.info("CRE ingest stored", {
       workflow,

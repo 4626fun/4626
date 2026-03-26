@@ -7,6 +7,14 @@ const v1RouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'spec.json': () => import('./v1/_spec.js'),
   'vault/report': () => import('./v1/vault/_report.js'),
   'vault/strategies': () => import('./v1/vault/_strategies.js'),
+  'workspace/summary': () => import('./v1/workspace/_summary.js'),
+  'workspace/strategies': () => import('./v1/workspace/_strategies.js'),
+  'workspace/monitoring': () => import('./v1/workspace/_monitoring.js'),
+  'workspace/activity': () => import('./v1/workspace/_activity.js'),
+  'workspace/rooms': () => import('./v1/workspace/_rooms.js'),
+  'workspace/tasks': () => import('./v1/workspace/_tasks.js'),
+  'workspace/settings': () => import('./v1/workspace/_settings.js'),
+  'workspace/actions': () => import('./v1/workspace/_actions.js'),
   'auction/status': () => import('./v1/auction/_status.js'),
   'auction/activity': () => import('./v1/auction/_activity.js'),
   'auction/recentBids': () => import('./v1/auction/_recentBids.js'),
@@ -69,6 +77,7 @@ const v1RouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
 
 const TOKEN_PATTERN = /^token\/([a-fA-F0-9x]+)\/(metadata|tokenlist)$/
 const VAULT_PATTERN = /^vault\/([a-fA-F0-9x]+)\/(report|strategies)$/
+const WORKSPACE_PATTERN = /^workspace\/([a-fA-F0-9x]+)\/(summary|strategies|monitoring|activity|rooms|tasks|settings|actions)$/
 const AUCTION_PATTERN = /^auction\/([a-fA-F0-9x]+)\/(status|activity|recentBids)$/
 const LOTTERY_CREATOR_PATTERN = /^lottery\/creator\/([a-fA-F0-9x]+)$/
 const GAUGE_USER_PATTERN = /^gauge\/user\/([a-fA-F0-9x]+)$/
@@ -112,6 +121,18 @@ export async function getV1ApiHandler(subpath: string): Promise<ApiHandler | nul
   if (vaultMatch) {
     const [, address, action] = vaultMatch
     const baseHandler = await loadExact(`vault/${action}`)
+    if (baseHandler) {
+      return withInjectedQuery(baseHandler, (req) => {
+        if (!req.query.address) req.query.address = address
+        if (!req.query.vault) req.query.vault = address
+      })
+    }
+  }
+
+  const workspaceMatch = subpath.match(WORKSPACE_PATTERN)
+  if (workspaceMatch) {
+    const [, address, action] = workspaceMatch
+    const baseHandler = await loadExact(`workspace/${action}`)
     if (baseHandler) {
       return withInjectedQuery(baseHandler, (req) => {
         if (!req.query.address) req.query.address = address
