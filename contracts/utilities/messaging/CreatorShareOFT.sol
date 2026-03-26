@@ -711,7 +711,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
             buyer,
             address(this), // tokenIn (this ShareOFT)
             amount,
-            uint32(block.chainid), // sourceChainId for winner callback routing
+            uint32(block.chainid), // sourceChainId metadata (callback routing uses _origin.srcEid on hub)
             buyerCurrentShareBalance // coverage input on the hub lottery manager
         );
 
