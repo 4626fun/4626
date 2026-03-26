@@ -27,7 +27,7 @@
  *     gaugeControllerAddress?: string,
  *     burnStreamAddress?: string,
  *     payoutRouterAddress?: string,
- *     externalRevenueRecipientMode?: 'gauge' | 'payout_router'
+ *     payoutRecipientMode?: 'gauge' | 'payout_router'
  *   }
  * }
  */
@@ -89,7 +89,7 @@ const CCA_STRATEGY_ABI = [
   { type: 'function', name: 'sweepUnsoldTokens', inputs: [], outputs: [], stateMutability: 'nonpayable' },
 ] as const
 
-const CREATOR_COIN_ABI = [
+const CREATOR_COIN_PAYOUT_RECIPIENT_ABI = [
   {
     type: 'function',
     name: 'payoutRecipient',
@@ -150,7 +150,7 @@ type CompletionStage =
   | 'invariant_failed'
   | 'in_progress'
 
-type ExternalRevenueRecipientMode = 'gauge' | 'payout_router'
+type PayoutRecipientMode = 'gauge' | 'payout_router'
 
 type CompletionInvariantInput = {
   creatorCoinAddress: `0x${string}` | null
@@ -158,7 +158,7 @@ type CompletionInvariantInput = {
   gaugeControllerAddress: `0x${string}` | null
   burnStreamAddress: `0x${string}` | null
   payoutRouterAddress: `0x${string}` | null
-  externalRevenueRecipientMode: ExternalRevenueRecipientMode
+  payoutRecipientMode: PayoutRecipientMode
 }
 
 type InvariantViolation = {
@@ -215,7 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       gaugeControllerAddress?: string
       burnStreamAddress?: string
       payoutRouterAddress?: string
-      externalRevenueRecipientMode?: ExternalRevenueRecipientMode
+      payoutRecipientMode?: PayoutRecipientMode
     }
   }
   if (!ccaStrategyAddress || !ccaStrategyAddress.startsWith('0x') || ccaStrategyAddress.length !== 42) {
@@ -228,8 +228,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     gaugeControllerAddress: normalizeAddress(invariants?.gaugeControllerAddress),
     burnStreamAddress: normalizeAddress(invariants?.burnStreamAddress),
     payoutRouterAddress: normalizeAddress(invariants?.payoutRouterAddress),
-    externalRevenueRecipientMode:
-      invariants?.externalRevenueRecipientMode === 'payout_router' ? 'payout_router' : 'gauge',
+    payoutRecipientMode:
+      invariants?.payoutRecipientMode === 'payout_router' ? 'payout_router' : 'gauge',
   }
 
   const keeperPk = process.env.KEEPR_PRIVATE_KEY
@@ -314,28 +314,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (expectedCreatorCoin && expectedGauge) {
-        const payoutRecipient = (await publicClient.readContract({
+        const creatorCoinPayoutRecipient = (await publicClient.readContract({
           address: expectedCreatorCoin,
-          abi: CREATOR_COIN_ABI as unknown as Abi,
+          abi: CREATOR_COIN_PAYOUT_RECIPIENT_ABI as unknown as Abi,
           functionName: 'payoutRecipient',
         }) as `0x${string}`).toLowerCase()
         invariantChecksRun++
 
-        const expectedRecipient =
-          invariantInput.externalRevenueRecipientMode === 'payout_router'
-            ? invariantInput.payoutRouterAddress
-            : expectedGauge
+        const expectedRecipient = invariantInput.payoutRecipientMode === 'payout_router'
+          ? invariantInput.payoutRouterAddress
+          : expectedGauge
         if (!expectedRecipient) {
           recordInvariantViolation(
             'missing_expected_external_revenue_recipient',
-            'Cannot resolve expected externalRevenueRecipient from completion invariants',
+            'Cannot resolve expected CreatorCoin payoutRecipient from completion invariants',
           )
-        } else if (payoutRecipient !== expectedRecipient) {
+        } else if (creatorCoinPayoutRecipient !== expectedRecipient) {
           recordInvariantViolation(
             'external_revenue_recipient_mismatch',
-            'Creator Coin payoutRecipient does not match expected external revenue lane',
+            'Creator Coin payoutRecipient does not match expected lane',
             expectedRecipient,
-            payoutRecipient,
+            creatorCoinPayoutRecipient,
           )
         }
       }
@@ -383,7 +382,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      if (invariantInput.externalRevenueRecipientMode === 'payout_router') {
+      if (invariantInput.payoutRecipientMode === 'payout_router') {
         if (!invariantInput.payoutRouterAddress) {
           recordInvariantViolation(
             'missing_expected_payout_router',

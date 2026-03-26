@@ -150,7 +150,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ success: false, error: 'Coin not found' } satisfies ApiEnvelope<never>)
   }
 
-  // Some coins expose an Ownable-style `owner()` that may not equal `creator()` or `payoutRecipient()`.
+  // Some coins expose an Ownable-style `owner()` that may not equal `creator()` or
+  // CreatorCoin `payoutRecipient`.
   // We treat `owner` as a valid "creator" claimant.
   let role: WalletRole | null = wallet === creator ? 'creator' : wallet === payoutRecipient ? 'payout' : wallet === owner ? 'creator' : null
   let matchSource: MatchSource = 'direct'
@@ -177,7 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!role) {
     return res.status(403).json({
       success: false,
-      error: 'Wallet does not match creator/payout and is not an owner of the linked smart wallet',
+      error: 'Wallet does not match creator/payoutRecipient and is not an owner of the linked smart wallet',
     } satisfies ApiEnvelope<never>)
   }
 

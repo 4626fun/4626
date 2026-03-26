@@ -1059,7 +1059,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /**
      * @notice ERC-7572 contract-level metadata URI
      * @dev ERC-7572 is contract-level metadata for fungible tokens (not ERC-721 tokenURI).
-     *      If `_contractURI` is explicitly set, return it as-is for backward compatibility.
+     *      If `_contractURI` is explicitly set, return it as-is.
      *      Otherwise, return the canonical HTTPS metadata endpoint for this token so that
      *      Uniswap, DEX aggregators, and wallets can fetch the JSON over HTTP and display
      *      the token image. A `data:application/json;base64,...` default was the previous
@@ -1157,29 +1157,27 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     // ================================
-    // PAYOUT RECIPIENT (for external hooks, hub-only)
+    // TRADE FEE COLLECTOR
     // ================================
 
     /**
-     * @notice Returns the address that should receive trade fees
-     * @dev Called by external tax hooks (for example, a configured v4 sell-hook path)
-     *      to determine where to send collected trade fees. Returns the current
-     *      trade-fee collector domain (GaugeController if set, else owner fallback).
-     *      Downstream split behavior is governed by GaugeController config.
+     * @notice Returns the canonical trade-fee collector address.
+     * @dev Canonical terminology: `tradeFeeCollector`.
+     *      Returns GaugeController when configured, otherwise owner fallback.
      *
      * @return The gauge controller address, or owner if not set
      */
-    function payoutRecipient() external view returns (address) {
+    function tradeFeeCollector() public view returns (address) {
         return gaugeController != address(0) ? gaugeController : owner();
     }
 
     /**
-     * @notice Check if caller is the payout recipient (for Zora compatibility)
+     * @notice Helper used by integrations that check ownership-style access.
      * @param account Address to check
-     * @return True if account is the payout recipient
+     * @return True if account is owner or current trade-fee collector
      */
     function isOwner(address account) external view returns (bool) {
-        return account == owner() || (gaugeController != address(0) && account == gaugeController);
+        return account == owner() || account == tradeFeeCollector();
     }
 
     // ================================

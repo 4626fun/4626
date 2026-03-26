@@ -65,9 +65,9 @@ const CREATOR_COIN_ABI = [
 ] as const
 
 /**
- * Resolve CreatorCoin externalRevenueRecipient (legacy onchain name: payoutRecipient)
+ * Resolve CreatorCoin payoutRecipient.
  */
-export async function getPayoutRecipient(coinAddress: Address): Promise<Address | null> {
+export async function getCreatorCoinPayoutRecipient(coinAddress: Address): Promise<Address | null> {
   try {
     const recipient = await publicClient.readContract({
       address: coinAddress,
@@ -75,10 +75,10 @@ export async function getPayoutRecipient(coinAddress: Address): Promise<Address 
       functionName: 'payoutRecipient',
     })
     
-    if (CREATOR_COIN_DEBUG) logger.debug('[CreatorCoin] Payout recipient', { recipient })
+    if (CREATOR_COIN_DEBUG) logger.debug('[CreatorCoin] payoutRecipient', { recipient })
     return recipient as Address
   } catch (error) {
-    logger.error('[CreatorCoin] Failed to get payout recipient', error)
+    logger.error('[CreatorCoin] Failed to get payoutRecipient', error)
     return null
   }
 }
@@ -139,7 +139,7 @@ export async function getAllOwners(coinAddress: Address): Promise<Address[]> {
 /**
  * Resolve a CreatorCoin address to the creator's main wallet
  * Priority:
- * 1. Payout recipient (most reliable)
+ * 1. payoutRecipient (most reliable)
  * 2. Owner at index 2 (main EOA)
  * 3. Fallback to the contract address itself
  */
@@ -147,10 +147,10 @@ export async function resolveCreatorAddress(addressOrCoin: Address): Promise<Add
   if (CREATOR_COIN_DEBUG) logger.debug('[CreatorCoin] Resolving address', { addressOrCoin })
   
   try {
-    // First try to get payout recipient
-    const payoutRecipient = await getPayoutRecipient(addressOrCoin)
+    // First try to resolve CreatorCoin payoutRecipient.
+    const payoutRecipient = await getCreatorCoinPayoutRecipient(addressOrCoin)
     if (payoutRecipient && payoutRecipient !== ZERO_ADDRESS) {
-      if (CREATOR_COIN_DEBUG) logger.debug('[CreatorCoin] Using payout recipient', { payoutRecipient })
+      if (CREATOR_COIN_DEBUG) logger.debug('[CreatorCoin] Using payoutRecipient', { payoutRecipient })
       return payoutRecipient
     }
     
@@ -162,7 +162,7 @@ export async function resolveCreatorAddress(addressOrCoin: Address): Promise<Add
     }
     
     // If all else fails, return the original address
-    if (CREATOR_COIN_DEBUG) logger.debug('[CreatorCoin] Using original address (not a CreatorCoin or no payout recipient)')
+    if (CREATOR_COIN_DEBUG) logger.debug('[CreatorCoin] Using original address (not a CreatorCoin or no payoutRecipient)')
     return addressOrCoin
   } catch (error) {
     logger.error('[CreatorCoin] Error resolving address, using original', error)
@@ -175,7 +175,7 @@ export async function resolveCreatorAddress(addressOrCoin: Address): Promise<Add
  */
 export async function isCreatorCoin(address: Address): Promise<boolean> {
   try {
-    // Try to call payoutRecipient - if it works, it's a CreatorCoin
+    // Try to call payoutRecipient getter - if it works, it's a CreatorCoin.
     await publicClient.readContract({
       address,
       abi: CREATOR_COIN_ABI,

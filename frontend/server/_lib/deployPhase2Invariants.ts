@@ -92,7 +92,7 @@ const SHARE_OFT_GAUGE_VIEW_ABI = [
   },
 ] as const
 
-const CREATOR_COIN_PAYOUT_VIEW_ABI = [
+const CREATOR_COIN_PAYOUT_RECIPIENT_VIEW_ABI = [
   {
     type: 'function',
     name: 'payoutRecipient',
@@ -145,8 +145,8 @@ type VerifyPhase2InvariantsParams = {
   publicClient: MinimalPublicClient
   phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
   payload: Record<string, any>
-  defaultExternalRevenueMode?: 'gauge' | 'payout_router'
-  defaultExternalRevenueRecipient?: Address | null
+  defaultPayoutRecipientMode?: 'gauge' | 'payout_router'
+  defaultPayoutRecipient?: Address | null
 }
 
 export type VerifyPhase2InvariantsResult = {
@@ -159,8 +159,8 @@ export type VerifyPhase2InvariantsResult = {
     gaugeController: Address
     ccaStrategy: Address
     expectedTradeFeeCollector: Address
-    expectedExternalRevenueRecipient: Address | null
-    externalRevenueMode: 'gauge' | 'payout_router'
+    expectedPayoutRecipient: Address | null
+    payoutRecipientMode: 'gauge' | 'payout_router'
   } | null
 }
 
@@ -226,13 +226,13 @@ export async function verifyDeployPhase2Invariants(
     normalizeAddress(payload?.expectedTradeFeeCollector) ?? info.gaugeController
 
   const mode = resolveMode(
-    payload?.expectedExternalRevenueRecipientMode,
-    params.defaultExternalRevenueMode === 'payout_router' ? 'payout_router' : 'gauge',
+    payload?.expectedPayoutRecipientMode,
+    params.defaultPayoutRecipientMode === 'payout_router' ? 'payout_router' : 'gauge',
   )
 
-  const expectedExternalRevenueRecipient =
-    normalizeAddress(payload?.expectedExternalRevenueRecipient) ??
-    params.defaultExternalRevenueRecipient ??
+  const expectedPayoutRecipient =
+    normalizeAddress(payload?.expectedPayoutRecipient) ??
+    params.defaultPayoutRecipient ??
     (mode === 'gauge' ? info.gaugeController : null)
 
   const recordViolation = (
@@ -283,27 +283,30 @@ export async function verifyDeployPhase2Invariants(
     )
   }
 
-  const payoutRecipient = normalizeAddress(
+  const creatorCoinPayoutRecipient = normalizeAddress(
     await params.publicClient.readContract({
       address: info.creatorToken,
-      abi: CREATOR_COIN_PAYOUT_VIEW_ABI,
+      abi: CREATOR_COIN_PAYOUT_RECIPIENT_VIEW_ABI,
       functionName: 'payoutRecipient',
     }),
   )
   checksRun++
-  if (!expectedExternalRevenueRecipient) {
+  if (!expectedPayoutRecipient) {
     recordViolation(
       'external_revenue_recipient_unresolved',
-      `Cannot resolve expected externalRevenueRecipient for mode=${mode}`,
+      `Cannot resolve expected CreatorCoin payoutRecipient for mode=${mode}`,
       null,
-      payoutRecipient,
+      creatorCoinPayoutRecipient,
     )
-  } else if (!payoutRecipient || payoutRecipient.toLowerCase() !== expectedExternalRevenueRecipient.toLowerCase()) {
+  } else if (
+    !creatorCoinPayoutRecipient ||
+    creatorCoinPayoutRecipient.toLowerCase() !== expectedPayoutRecipient.toLowerCase()
+  ) {
     recordViolation(
       'external_revenue_recipient_mismatch',
-      'Creator Coin payoutRecipient does not match expected external revenue recipient',
-      expectedExternalRevenueRecipient,
-      payoutRecipient,
+      'Creator Coin payoutRecipient does not match expected recipient',
+      expectedPayoutRecipient,
+      creatorCoinPayoutRecipient,
     )
   }
 
@@ -341,8 +344,8 @@ export async function verifyDeployPhase2Invariants(
       gaugeController: info.gaugeController,
       ccaStrategy: info.ccaStrategy,
       expectedTradeFeeCollector,
-      expectedExternalRevenueRecipient,
-      externalRevenueMode: mode,
+      expectedPayoutRecipient,
+      payoutRecipientMode: mode,
     },
   }
 }

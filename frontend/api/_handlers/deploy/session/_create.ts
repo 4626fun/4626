@@ -70,8 +70,8 @@ export type CreateDeploySessionRequest = {
   version?: string
   // Optional per-session invariant expectations (preferred over env defaults).
   expectedTradeFeeCollector?: Address
-  expectedExternalRevenueRecipientMode?: 'gauge' | 'payout_router'
-  expectedExternalRevenueRecipient?: Address
+  expectedPayoutRecipientMode?: 'gauge' | 'payout_router'
+  expectedPayoutRecipient?: Address
 }
 
 type CreateDeploySessionResponse = {
@@ -83,8 +83,8 @@ type CreateDeploySessionResponse = {
 
 type DeployPhase2InvariantExpectations = {
   expectedTradeFeeCollector?: Address
-  expectedExternalRevenueRecipientMode?: 'gauge' | 'payout_router'
-  expectedExternalRevenueRecipient?: Address
+  expectedPayoutRecipientMode?: 'gauge' | 'payout_router'
+  expectedPayoutRecipient?: Address
 }
 
 export class DeploySessionRequestError extends Error {
@@ -349,7 +349,7 @@ function normalizeAddressOrNull(value: unknown): Address | null {
   return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
 }
 
-function inferExternalRevenueMode(value: unknown): 'gauge' | 'payout_router' | null {
+function inferPayoutRecipientMode(value: unknown): 'gauge' | 'payout_router' | null {
   if (value === 'gauge' || value === 'payout_router') return value
   return null
 }
@@ -1107,8 +1107,8 @@ export async function validateDeploySessionRequest(params: {
   const solanaOvault = normalizeSolanaOvaultConfig(params.body.solanaOvault)
   const hasPhase2Finalize = phase2FinalizeCalls.length > 0
   const version = String(params.body.version ?? '').trim()
-  const requestedExternalMode = inferExternalRevenueMode(params.body.expectedExternalRevenueRecipientMode)
-  const requestedExternalRevenueRecipient = normalizeAddressOrNull(params.body.expectedExternalRevenueRecipient)
+  const requestedExternalMode = inferPayoutRecipientMode(params.body.expectedPayoutRecipientMode)
+  const requestedPayoutRecipient = normalizeAddressOrNull(params.body.expectedPayoutRecipient)
   const requestedTradeFeeCollector = normalizeAddressOrNull(params.body.expectedTradeFeeCollector)
   const phase2CoreInvariantInfo =
     phase2CoreCalls
@@ -1119,27 +1119,27 @@ export async function validateDeploySessionRequest(params: {
       .map((call) => extractFinalizePhase2InvariantInfo(call.data))
       .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
   const inferredTradeFeeCollector = phase2FinalizeInvariantInfo?.gaugeController ?? null
-  const inferredExternalRevenueRecipient = phase2CoreInvariantInfo?.payoutRecipient ?? null
+  const inferredPayoutRecipient = phase2CoreInvariantInfo?.payoutRecipient ?? null
   const resolvedTradeFeeCollector = requestedTradeFeeCollector ?? inferredTradeFeeCollector
   let resolvedExternalMode: 'gauge' | 'payout_router' = requestedExternalMode ?? 'gauge'
   if (
     !requestedExternalMode &&
-    inferredExternalRevenueRecipient &&
+    inferredPayoutRecipient &&
     resolvedTradeFeeCollector &&
-    inferredExternalRevenueRecipient.toLowerCase() !== resolvedTradeFeeCollector.toLowerCase()
+    inferredPayoutRecipient.toLowerCase() !== resolvedTradeFeeCollector.toLowerCase()
   ) {
     resolvedExternalMode = 'payout_router'
   }
-  const resolvedExternalRevenueRecipient =
-    requestedExternalRevenueRecipient ??
-    inferredExternalRevenueRecipient ??
+  const resolvedPayoutRecipient =
+    requestedPayoutRecipient ??
+    inferredPayoutRecipient ??
     (resolvedExternalMode === 'gauge' ? resolvedTradeFeeCollector : null)
   const phase2InvariantExpectations: DeployPhase2InvariantExpectations | null = hasPhase2Finalize
     ? {
         ...(resolvedTradeFeeCollector ? { expectedTradeFeeCollector: resolvedTradeFeeCollector } : {}),
-        expectedExternalRevenueRecipientMode: resolvedExternalMode,
-        ...(resolvedExternalRevenueRecipient
-          ? { expectedExternalRevenueRecipient: resolvedExternalRevenueRecipient }
+        expectedPayoutRecipientMode: resolvedExternalMode,
+        ...(resolvedPayoutRecipient
+          ? { expectedPayoutRecipient: resolvedPayoutRecipient }
           : {}),
       }
     : null

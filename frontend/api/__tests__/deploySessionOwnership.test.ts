@@ -597,8 +597,8 @@ describe('deploy session ownership guardrails', () => {
     expect(String(insertArgs.payload?.expectedTradeFeeCollector ?? '').toLowerCase()).toBe(
       '0x0000000000000000000000000000000000000104',
     )
-    expect(insertArgs.payload?.expectedExternalRevenueRecipientMode).toBe('payout_router')
-    expect(String(insertArgs.payload?.expectedExternalRevenueRecipient ?? '').toLowerCase()).toBe(
+    expect(insertArgs.payload?.expectedPayoutRecipientMode).toBe('payout_router')
+    expect(String(insertArgs.payload?.expectedPayoutRecipient ?? '').toLowerCase()).toBe(
       payoutRecipient.toLowerCase(),
     )
   })

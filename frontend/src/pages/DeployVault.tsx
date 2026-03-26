@@ -3263,9 +3263,9 @@ function DeployVaultBatcher({
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
-      // Safety: The deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
-      // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
-      // We always pass `address(0)` to the batcher and, when needed, set payoutRecipient from the identity wallet separately.
+      // Safety: the deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
+      // Zora Creator Coins restrict that setter to the coin owner, so the batcher-side internal call reverts (msg.sender=batcher).
+      // We always pass `address(0)` to the batcher and, when needed, set CreatorCoin payoutRecipient from the identity wallet separately.
       const payoutForDeploy = ZERO_ADDRESS as Address
 
       const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
@@ -5474,7 +5474,7 @@ function DeployVaultBatcher({
 
       {payoutMismatch ? (
         <div className="text-[11px] text-amber-300/80">
-          Payout recipient will update to{' '}
+          External revenue recipient will update to{' '}
           <span className="font-mono text-amber-200">{shortAddress(expectedGauge!)}</span> during deploy. Continue only if this is
           intended.
         </div>
@@ -6363,7 +6363,7 @@ function DeployVaultMain() {
     return toShareName(underlyingSymbolUpper, baseName)
   }, [underlyingSymbolUpper, baseName])
 
-  // Onchain read of payoutRecipient (immediate after tx, no indexer delay).
+  // Onchain read of CreatorCoin payoutRecipient.
   const { data: onchainPayoutRecipient } = useReadContract({
     address: tokenIsValid ? (creatorToken as `0x${string}`) : undefined,
     abi: coinABI,
@@ -6372,7 +6372,7 @@ function DeployVaultMain() {
   })
 
   const payoutRecipient = useMemo(() => {
-    // Prefer onchain value (instant). Fall back to Zora indexed value.
+    // Prefer onchain value (instant). Fall back to indexed value.
     const onchain = typeof onchainPayoutRecipient === 'string' ? onchainPayoutRecipient : ''
     if (isAddress(onchain)) return onchain as Address
     const r = zoraCoin?.payoutRecipientAddress ? String(zoraCoin.payoutRecipientAddress) : ''
@@ -7395,7 +7395,7 @@ function DeployVaultMain() {
                 : !creatorVaultBatcherConfigured
                   ? 'Deployment not configured (missing deployment batcher).'
                   : !isAuthorizedDeployerOrOperator
-                    ? 'Connect the creator or payout recipient wallet.'
+                    ? 'Connect the creator or CreatorCoin payout recipient wallet.'
                     : !fundingGateOk
                       ? `Needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
                       : strictNoEoaEnforced && !strictNoEoaEligibility
@@ -7721,7 +7721,7 @@ function DeployVaultMain() {
                     <div className="space-y-0">
                       {payoutRecipient && (
                         <div className="data-row">
-                          <div className="label">Payout recipient</div>
+                          <div className="label">External revenue recipient</div>
                           <div className="text-xs text-zinc-300 font-mono">{shortAddress(payoutRecipient)}</div>
                         </div>
                       )}

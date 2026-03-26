@@ -23,6 +23,7 @@ interface IUniversalBytecodeStore {
 }
 
 interface ICreatorCoin {
+    /// @dev CreatorCoin payout-recipient setter.
     function setPayoutRecipient(address _recipient) external;
 }
 
@@ -200,7 +201,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address creatorToken;
         address owner;
         address creatorTreasury;
-        address payoutRecipient;
+        address payoutRecipient; // CreatorCoin payout recipient.
         address vault;
         address wrapper;
         address shareOFT;
@@ -208,7 +209,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         string version;
         uint256 depositAmount;
         uint128 requiredRaise;
-        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
+        uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
         bytes auctionSteps;
     }
 
@@ -216,13 +217,13 @@ contract DeploymentBatcher is ReentrancyGuard {
         address creatorToken;
         address owner;
         address creatorTreasury;
-        address payoutRecipient;
+        address payoutRecipient; // CreatorCoin payout recipient.
         address vault;
         address wrapper;
         address shareOFT;
         string shareSymbol;
         string version;
-        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
+        uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
     }
 
     struct Phase2FinalizeParams {
@@ -237,7 +238,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         string version;
         uint256 depositAmount;
         uint128 requiredRaise;
-        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
+        uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
         bytes auctionSteps;
         bytes32 meteoraAlphaVault;
         IBaseSolanaBridge.Ix[] solanaIxs;
@@ -281,7 +282,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address owner;
         address shareOFT;
         string version;
-        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
+        uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
         uint128 requiredRaise;
         bytes auctionSteps;
     }
@@ -786,6 +787,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         out.oracle = create2Deployer.deploy(oracleSalt, codeIds.oracle, oracleArgs);
 
         if (params.payoutRecipient != address(0)) {
+            // Configure the CreatorCoin payout recipient.
             ICreatorCoin(params.creatorToken).setPayoutRecipient(params.payoutRecipient);
         }
 

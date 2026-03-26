@@ -49,7 +49,7 @@ type Config = {
   rotationIntervalSeconds?: number
   enableKeeperHookConfig?: boolean
   enforceCompletionInvariants?: boolean
-  expectedExternalRevenueRecipientMode?: "gauge" | "payout_router"
+  expectedPayoutRecipientMode?: "gauge" | "payout_router"
   nativeWriteEnabled?: boolean
   nativeReceiver?: `0x${string}`
   nativeEncoderName?: string
@@ -103,7 +103,7 @@ type CompletionInvariantPayload = {
   gaugeControllerAddress?: string
   burnStreamAddress?: string
   payoutRouterAddress?: string
-  externalRevenueRecipientMode?: "gauge" | "payout_router"
+  payoutRecipientMode?: "gauge" | "payout_router"
 }
 
 // ---------------------------------------------------------------------------
@@ -336,8 +336,7 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
       ...(vault.gaugeControllerAddress ? { gaugeControllerAddress: vault.gaugeControllerAddress } : {}),
       ...(vault.burnStreamAddress ? { burnStreamAddress: vault.burnStreamAddress } : {}),
       ...(vault.payoutRouterAddress ? { payoutRouterAddress: vault.payoutRouterAddress } : {}),
-      externalRevenueRecipientMode:
-        runtime.config.expectedExternalRevenueRecipientMode === "payout_router" ? "payout_router" : "gauge",
+      payoutRecipientMode: runtime.config.expectedPayoutRecipientMode === "payout_router" ? "payout_router" : "gauge",
     }
 
     completion = runtime.runInNodeMode(

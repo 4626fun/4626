@@ -327,8 +327,8 @@ describe('deploy session optimistic concurrency', () => {
         gaugeController: '0x3000000000000000000000000000000000000003',
         ccaStrategy: '0x4000000000000000000000000000000000000004',
         expectedTradeFeeCollector: '0x3000000000000000000000000000000000000003',
-        expectedExternalRevenueRecipient: '0x3000000000000000000000000000000000000003',
-        externalRevenueMode: 'gauge' as const,
+        expectedPayoutRecipient: '0x3000000000000000000000000000000000000003',
+        payoutRecipientMode: 'gauge' as const,
       },
     }
     verifyDeployPhase2InvariantsMock.mockResolvedValueOnce(gateResult)
@@ -375,7 +375,7 @@ describe('deploy session optimistic concurrency', () => {
       violations: [
         {
           code: 'external_revenue_recipient_mismatch',
-          message: 'Creator Coin payoutRecipient does not match expected external revenue recipient',
+          message: 'Creator Coin payoutRecipient does not match expected recipient',
         },
       ],
       expectations: {
@@ -384,8 +384,8 @@ describe('deploy session optimistic concurrency', () => {
         gaugeController: '0x3000000000000000000000000000000000000003',
         ccaStrategy: '0x4000000000000000000000000000000000000004',
         expectedTradeFeeCollector: '0x3000000000000000000000000000000000000003',
-        expectedExternalRevenueRecipient: '0x5000000000000000000000000000000000000005',
-        externalRevenueMode: 'payout_router' as const,
+        expectedPayoutRecipient: '0x5000000000000000000000000000000000000005',
+        payoutRecipientMode: 'payout_router' as const,
       },
     }
     verifyDeployPhase2InvariantsMock.mockResolvedValueOnce(gateResult)

@@ -73,7 +73,7 @@ function makeFinalizePhase2Data(params?: {
 }
 
 describe('verifyDeployPhase2Invariants', () => {
-  it('passes when strategy, share collector, and payout recipient all match the gauge collector', async () => {
+  it('passes when strategy, share collector, and CreatorCoin payoutRecipient all match the gauge collector', async () => {
     const gaugeController = '0x0000000000000000000000000000000000000104'
     const readContract = async ({ functionName }: { functionName: string }) => {
       switch (functionName) {
@@ -108,11 +108,11 @@ describe('verifyDeployPhase2Invariants', () => {
     expect(result.checksRun).toBe(5)
     expect(result.violations).toEqual([])
     expect(result.expectations?.expectedTradeFeeCollector).toBe(gaugeController)
-    expect(result.expectations?.expectedExternalRevenueRecipient).toBe(gaugeController)
-    expect(result.expectations?.externalRevenueMode).toBe('gauge')
+    expect(result.expectations?.expectedPayoutRecipient).toBe(gaugeController)
+    expect(result.expectations?.payoutRecipientMode).toBe('gauge')
   })
 
-  it('flags unresolved payout-router mode when no explicit external revenue recipient is available', async () => {
+  it('flags unresolved payout-router mode when no explicit CreatorCoin payout recipient is available', async () => {
     const gaugeController = '0x0000000000000000000000000000000000000104'
     const readContract = async ({ functionName }: { functionName: string }) => {
       switch (functionName) {
@@ -141,13 +141,13 @@ describe('verifyDeployPhase2Invariants', () => {
         },
       ],
       payload: {
-        expectedExternalRevenueRecipientMode: 'payout_router',
+        expectedPayoutRecipientMode: 'payout_router',
       },
     })
 
     expect(result.checked).toBe(true)
     expect(result.violations.map((entry) => entry.code)).toContain('external_revenue_recipient_unresolved')
-    expect(result.expectations?.externalRevenueMode).toBe('payout_router')
-    expect(result.expectations?.expectedExternalRevenueRecipient).toBeNull()
+    expect(result.expectations?.payoutRecipientMode).toBe('payout_router')
+    expect(result.expectations?.expectedPayoutRecipient).toBeNull()
   })
 })

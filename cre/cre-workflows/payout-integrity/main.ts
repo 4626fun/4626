@@ -3,7 +3,7 @@
  *
  * Runs every 30 minutes and verifies the full fee pipeline for each vault:
  *
- *   1. externalRevenueRecipient check — Creator Coin payoutRecipient matches configured lane mode
+ *   1. CreatorCoin payoutRecipient check — matches configured lane mode
  *   2. tradeFeeCollector check — ShareOFT.gaugeController matches expected collector
  *   3. Router mode wiring — payoutRouter.burnStream matches expected burn stream and keeper is configured
  *   4. GaugeController BPS config — burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000
@@ -16,7 +16,8 @@
  *
  * CRE Quota Budget per execution (1 vault):
  *   - 1 HTTP (fetch vaults)
- *   - ~15 EVM reads (payoutRecipient, shareOFT.gaugeController, payoutRouter.burnStream, payoutRouter.keeper,
+ *   - ~15 EVM reads (creatorCoin payoutRecipient, shareOFT.gaugeController,
+ *     payoutRouter.burnStream, payoutRouter.keeper,
  *     BPS x4, creatorTreasury, vault, lastDistribution, burnStream x3, balanceOf)
  *   - 1 HTTP (alert if needed)
  *   Total: max 2 HTTP + 15 EVM reads
@@ -64,8 +65,8 @@ type Config = {
   expectedProtocolShareBps: number
   staleThresholdSeconds: number
   rotationIntervalSeconds?: number
-  expectedExternalRevenueRecipientMode?: "gauge" | "payout_router"
-  expectedExternalRevenueRecipient?: string
+  expectedPayoutRecipientMode?: "gauge" | "payout_router"
+  expectedPayoutRecipient?: string
   expectedTradeFeeCollector?: string
   enforceTradeFeeCollectorAlignment?: boolean
 }
@@ -292,20 +293,20 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   const evmClient = createEvmClientForChain(runtime.config.chainName)
   const pendingAlerts: AlertInfo[] = []
   let checksRun = 0
-  const expectedExternalMode = runtime.config.expectedExternalRevenueRecipientMode === "payout_router" ? "payout_router" : "gauge"
+  const expectedPayoutMode = runtime.config.expectedPayoutRecipientMode === "payout_router" ? "payout_router" : "gauge"
 
   // -----------------------------------------------------------------------
-  // Check 1: externalRevenueRecipient mode check
+  // Check 1: CreatorCoin payoutRecipient mode check
   // -----------------------------------------------------------------------
   try {
     const data = evmRead(runtime, evmClient, coinAddr, CreatorCoinABI, "payoutRecipient")
-    const payoutRecipient = decodeAddress(CreatorCoinABI, "payoutRecipient", data).toLowerCase()
+    const creatorCoinPayoutRecipient = decodeAddress(CreatorCoinABI, "payoutRecipient", data).toLowerCase()
     checksRun++
 
-    const mode = expectedExternalMode
-    const configuredExpected = runtime.config.expectedExternalRevenueRecipient?.toLowerCase()
+    const mode = expectedPayoutMode
+    const configuredExpected = runtime.config.expectedPayoutRecipient?.toLowerCase()
     const modeExpected = mode === "payout_router" ? vault.payoutRouterAddress?.toLowerCase() : gaugeAddr.toLowerCase()
-    const expectedExternalRevenueRecipient = configuredExpected ?? modeExpected
+    const expectedPayoutRecipient = configuredExpected ?? modeExpected
 
     if (mode === "payout_router" && !vault.payoutRouterAddress) {
       pendingAlerts.push({
@@ -334,12 +335,12 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
           gaugeControllerAddress: gaugeAddr,
         },
       })
-    } else if (!expectedExternalRevenueRecipient) {
+    } else if (!expectedPayoutRecipient) {
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: "external_revenue_recipient_unresolved",
         severity: "critical",
-        message: `Cannot resolve expected externalRevenueRecipient for mode=${mode}`,
+        message: `Cannot resolve expected CreatorCoin payoutRecipient for mode=${mode}`,
         details: {
           mode,
           configuredExpected: configuredExpected ?? null,
@@ -347,25 +348,25 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
           gaugeControllerAddress: gaugeAddr,
         },
       })
-    } else if (payoutRecipient !== expectedExternalRevenueRecipient) {
+    } else if (creatorCoinPayoutRecipient !== expectedPayoutRecipient) {
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: "external_revenue_recipient_mismatch",
         severity: "critical",
-        message: `Creator Coin externalRevenueRecipient (${payoutRecipient}) != expected (${expectedExternalRevenueRecipient})`,
+        message: `Creator Coin payoutRecipient (${creatorCoinPayoutRecipient}) != expected (${expectedPayoutRecipient})`,
         details: {
           mode,
-          payoutRecipient,
-          expected: expectedExternalRevenueRecipient,
+          payoutRecipient: creatorCoinPayoutRecipient,
+          expected: expectedPayoutRecipient,
           gaugeControllerAddress: gaugeAddr,
           payoutRouterAddress: vault.payoutRouterAddress ?? null,
         },
       })
     } else {
-      runtime.log(`Check 1 PASS: externalRevenueRecipient matches mode=${mode}`)
+      runtime.log(`Check 1 PASS: payoutRecipient matches mode=${mode}`)
     }
   } catch {
-    runtime.log("Check 1 ERROR: failed to read CreatorCoin externalRevenueRecipient")
+    runtime.log("Check 1 ERROR: failed to read CreatorCoin payoutRecipient")
   }
 
   // -----------------------------------------------------------------------
@@ -404,7 +405,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   // -----------------------------------------------------------------------
   // Check 3: Router mode wiring (payout router burn stream + keeper)
   // -----------------------------------------------------------------------
-  if (expectedExternalMode === "payout_router" && vault.payoutRouterAddress) {
+  if (expectedPayoutMode === "payout_router" && vault.payoutRouterAddress) {
     try {
       const payoutRouter = vault.payoutRouterAddress
       const burnStreamData = evmRead(runtime, evmClient, payoutRouter, PayoutRouterABI, "burnStream")

@@ -113,6 +113,7 @@ type QueueAgentRow = {
   groupId: string
   canonicalOwnerAddress: string
   creatorAddress: string | null
+  xmtpAgentAddress: string | null
   agentType: string | null
   privyWalletId: string | null
   cswAddress: string | null
@@ -172,8 +173,9 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
 
 /**
  * Build a stable dbPath for the queue executor so Agent.create() reuses
- * the same installation across invocations instead of registering a new one
- * every time (which burns through the 10-installation limit).
+ * the same installation across invocations. The key must be derived from the
+ * agent identity, not a vault address, otherwise one inbox fans out into
+ * multiple DBs and multiple XMTP installations.
  */
 const KEEPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED = (() => {
@@ -239,10 +241,21 @@ function getEffectiveDbEncryptionKeyForPath(filePath: string): `0x${string}` | u
   return encKey
 }
 
-function makeKeeprDbPath(vaultAddress: string): string {
+function resolveKeeprDbIdentityKey(row: QueueAgentRow): string {
+  const candidates =
+    row.agentType === 'csw'
+      ? [row.cswAddress, row.xmtpAgentAddress, row.creatorAddress, row.canonicalOwnerAddress, row.vaultAddress]
+      : [row.xmtpAgentAddress, row.creatorAddress, row.canonicalOwnerAddress, row.vaultAddress]
+  for (const candidate of candidates) {
+    if (isAddressLike(candidate)) return candidate.toLowerCase()
+  }
+  return row.vaultAddress.toLowerCase()
+}
+
+function makeKeeprDbPath(identityKey: string): string {
   fs.mkdirSync(KEEPR_XMTP_DB_DIR, { recursive: true, mode: 0o700 })
   const env = parseXmtpEnv()
-  const safe = vaultAddress.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const safe = identityKey.toLowerCase().replace(/[^a-z0-9]/g, '')
   const p = path.join(KEEPR_XMTP_DB_DIR, `keepr-${env}-${safe}.db3`)
   rotateLegacyPlaintextDbIfNeeded(p)
   logger.info(`[keepr/xmtp-queue] Using local database: ${p}`)
@@ -494,6 +507,7 @@ async function loadQueueAgentRow(vaultAddress: `0x${string}`): Promise<QueueAgen
       v.group_id,
       v.canonical_owner_address,
       a.creator_address,
+      a.xmtp_agent_address,
       a.agent_type,
       a.privy_wallet_id,
       a.csw_address,
@@ -515,6 +529,7 @@ async function loadQueueAgentRow(vaultAddress: `0x${string}`): Promise<QueueAgen
     groupId: String(row.group_id),
     canonicalOwnerAddress: String(row.canonical_owner_address).toLowerCase(),
     creatorAddress: row.creator_address ? String(row.creator_address).toLowerCase() : null,
+    xmtpAgentAddress: row.xmtp_agent_address ? String(row.xmtp_agent_address).toLowerCase() : null,
     agentType: row.agent_type ? String(row.agent_type).toLowerCase() : null,
     privyWalletId: row.privy_wallet_id ? String(row.privy_wallet_id) : null,
     cswAddress: row.csw_address ? String(row.csw_address).toLowerCase() : null,
@@ -1017,7 +1032,7 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
       signer = createSigner(createUser(privKey))
     }
 
-    const dbPath = makeKeeprDbPath(normalizedVaultAddress)
+    const dbPath = makeKeeprDbPath(resolveKeeprDbIdentityKey(row))
     const encKey = getEffectiveDbEncryptionKeyForPath(dbPath)
     agent = await Agent.create(signer, {
       env: parseXmtpEnv(),

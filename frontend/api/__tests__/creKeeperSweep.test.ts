@@ -116,7 +116,7 @@ describe('cre keeper sweep handler', () => {
             gaugeControllerAddress: GAUGE,
             burnStreamAddress: EXPECTED_BURN_STREAM,
             payoutRouterAddress: PAYOUT_ROUTER,
-            externalRevenueRecipientMode: 'payout_router',
+            payoutRecipientMode: 'payout_router',
           },
         },
       })
@@ -192,7 +192,7 @@ describe('cre keeper sweep handler', () => {
             gaugeControllerAddress: GAUGE,
             burnStreamAddress: EXPECTED_BURN_STREAM,
             payoutRouterAddress: PAYOUT_ROUTER,
-            externalRevenueRecipientMode: 'payout_router',
+            payoutRecipientMode: 'payout_router',
           },
         },
       })

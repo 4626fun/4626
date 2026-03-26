@@ -62,7 +62,7 @@ export function resolveCreatorIdentity(params: {
   if (zoraCoinCreator) {
     const canonical = zoraCoinCreator
 
-    // If Privy smart wallet matches the creator address OR the payout recipient, allow it
+    // If Privy smart wallet matches the creator address OR CreatorCoin payoutRecipient, allow it.
     if (privyWallet) {
       const privyLc = privyWallet.toLowerCase()
       const isCreator = canonical.toLowerCase() === privyLc

@@ -83,7 +83,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      *      1. Prevents dust manipulation attacks
      *      2. Ensures creator launches have real liquidity
      *
-     * @custom:security Prevents "dust deposit → inflate → drain" attack vector
+     * @custom:security Prevents "dust deposit → inflate → value-extraction" attack vector
      * @custom:economics TEMP: 50M tokens = 5% of typical 1B supply
      */
     uint256 public constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18; // TEMP: 50,000,000 tokens minimum

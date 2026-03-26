@@ -23,6 +23,11 @@ import path from 'node:path'
 import { isDbConfigured, getDb } from '../../../server/_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../../server/_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../../server/_lib/privyXmtpSigner.js'
+import {
+  findMountedAncestorPath,
+  hasDedicatedMount,
+  resolveXmtpDbDirectory,
+} from '../../../server/_lib/xmtpDbDirectory.js'
 import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
 import { logger } from '../../../server/_lib/logger.js'
 
@@ -37,7 +42,7 @@ const XMTP_DB_ENCRYPTION_KEY = (() => {
   if (!raw) return undefined
   return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
 })()
-const XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join('/tmp', '.xmtp-data')
+const XMTP_DB_DIR = resolveXmtpDbDirectory()
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '10') // Lower limit for serverless
 const MAX_MESSAGES_PER_AGENT = 20 // Process at most N messages per invocation
 export const MAX_MESSAGES_PER_CONVERSATION = 50
@@ -90,7 +95,63 @@ export function readStrictUnsupportedRetryEnabled(raw = process.env.AGENT_PROCES
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
+export function readAgentProcessRequirePersistentDb(raw = process.env.XMTP_REQUIRE_PERSISTENT_DB): boolean {
+  const normalized = String(raw ?? '').trim().toLowerCase()
+  if (!normalized) return true
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+export function isAgentProcessServerlessRuntime(env: Record<string, string | undefined> = process.env): boolean {
+  return Boolean(
+    env.VERCEL ||
+    env.AWS_LAMBDA_FUNCTION_NAME ||
+    env.AWS_EXECUTION_ENV ||
+    env.NETLIFY ||
+    env.FUNCTIONS_WORKER_RUNTIME,
+  )
+}
+
+export function resolveAgentProcessXmtpPersistenceError(input: {
+  configuredDbDir?: string
+  resolvedDbDir: string
+  requirePersistentDb: boolean
+  isServerless: boolean
+  hasDedicatedMountResult?: boolean
+  mountedAncestor?: string | null
+}): string | null {
+  const configuredDbDir = String(input.configuredDbDir ?? '').trim()
+  const resolvedDbDir = path.resolve(input.resolvedDbDir)
+
+  if (configuredDbDir && path.resolve(configuredDbDir) !== resolvedDbDir) {
+    return (
+      `XMTP_DB_DIRECTORY (${configuredDbDir}) is not writable/usable; ` +
+      `agent/process resolved fallback ${resolvedDbDir}. Refusing to create XMTP installations on a fallback path.`
+    )
+  }
+
+  if (!input.requirePersistentDb) return null
+
+  if (resolvedDbDir === '/tmp' || resolvedDbDir.startsWith('/tmp/')) {
+    return (
+      `agent/process requires persistent XMTP storage, but the resolved DB directory is temporary (${resolvedDbDir}). ` +
+      'Refusing to create or reopen XMTP agents on ephemeral storage.'
+    )
+  }
+
+  if (input.isServerless && input.hasDedicatedMountResult === false) {
+    const mountedAncestor = input.mountedAncestor ? ` (closest mount: ${input.mountedAncestor})` : ''
+    return (
+      `agent/process requires a dedicated mounted XMTP volume at ${resolvedDbDir}${mountedAncestor}. ` +
+      'Refusing to create XMTP agents on a serverless root filesystem.'
+    )
+  }
+
+  return null
+}
+
 const AGENT_PROCESS_STRICT_UNSUPPORTED_RETRY = readStrictUnsupportedRetryEnabled()
+const XMTP_REQUIRE_PERSISTENT_DB = readAgentProcessRequirePersistentDb()
+const AGENT_PROCESS_IS_SERVERLESS = isAgentProcessServerlessRuntime()
 
 export function getCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): number {
   if (lastProcessedAt) {
@@ -413,6 +474,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const encKey = (process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
   if (!encKey) {
     return res.status(503).json({ success: false, error: 'XMTP_AGENT_KEY_ENCRYPTION_KEY not configured' } satisfies ApiEnvelope<never>)
+  }
+
+  const xmtpPersistenceError = resolveAgentProcessXmtpPersistenceError({
+    configuredDbDir: (process.env.XMTP_DB_DIRECTORY ?? '').trim(),
+    resolvedDbDir: XMTP_DB_DIR,
+    requirePersistentDb: XMTP_REQUIRE_PERSISTENT_DB,
+    isServerless: AGENT_PROCESS_IS_SERVERLESS,
+    hasDedicatedMountResult: hasDedicatedMount(XMTP_DB_DIR),
+    mountedAncestor: findMountedAncestorPath(XMTP_DB_DIR),
+  })
+  if (xmtpPersistenceError) {
+    logger.warn('[agent/process] refusing XMTP startup without durable storage', {
+      dbDir: XMTP_DB_DIR,
+      reason: xmtpPersistenceError,
+    })
+    return res.status(503).json({ success: false, error: xmtpPersistenceError } satisfies ApiEnvelope<never>)
   }
 
   const startTime = Date.now()

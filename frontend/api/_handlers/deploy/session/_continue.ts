@@ -752,14 +752,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const hasPostPhase2 = hasPhase3 || hasPhase4
     const hasOvaultMeshStage = solanaOvaultConfig.enabled === true && hasPostPhase2
     const enforcePhase2InvariantGate = isTruthyEnv(process.env.DEPLOY_ENFORCE_PHASE2_INVARIANTS, true)
-    const defaultExternalRevenueMode =
-      String(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT_MODE ?? '').trim().toLowerCase() === 'payout_router'
+    const defaultPayoutRecipientMode =
+      String(process.env.DEPLOY_EXPECT_PAYOUT_RECIPIENT_MODE ?? '').trim().toLowerCase() === 'payout_router'
         ? 'payout_router'
         : 'gauge'
-    const defaultExternalRevenueRecipient =
-      typeof process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT === 'string' &&
-      isAddress(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT)
-        ? getAddress(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT as Address)
+    const defaultPayoutRecipient =
+      typeof process.env.DEPLOY_EXPECT_PAYOUT_RECIPIENT === 'string' &&
+      isAddress(process.env.DEPLOY_EXPECT_PAYOUT_RECIPIENT)
+        ? getAddress(process.env.DEPLOY_EXPECT_PAYOUT_RECIPIENT as Address)
         : null
     const phase2ReplayState =
       phase2CoreCalls.length > 0 || hasPhase2Finalize
@@ -800,8 +800,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         publicClient,
         phase2FinalizeCalls,
         payload,
-        defaultExternalRevenueMode,
-        defaultExternalRevenueRecipient,
+        defaultPayoutRecipientMode,
+        defaultPayoutRecipient,
       })
       const gatePatch = {
         [PHASE2_INVARIANT_GATE_CHECKED_AT_KEY]: new Date().toISOString(),
