@@ -25,6 +25,10 @@ contract MockRegistry {
     function getLayerZeroEndpoint(uint256) external pure returns (address) {
         return address(0x1a44076050125825900e736c501f859c50fE728c);
     }
+
+    function getEidForChainId(uint256) external pure returns (uint32) {
+        return 30184;
+    }
 }
 
 // Mock Gauge Controller that accepts fee deposits

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWaitlistCloseTarget, getHomeWaitlistRedirectTarget, shouldOpenWaitlistModal, shouldRedirectHomeToSwap } from './Home'
+import { buildWaitlistCloseTarget, getHomeWaitlistRedirectTarget, shouldRedirectHomeToSwap, shouldShowWaitlistEntry } from './Home'
 
 describe('shouldRedirectHomeToSwap', () => {
   it('redirects app home traffic to /swap by default', () => {
@@ -44,7 +44,7 @@ describe('shouldRedirectHomeToSwap', () => {
   })
 })
 
-describe('waitlist modal URL helpers', () => {
+describe('waitlist entry URL helpers', () => {
   it('redirects app-host waitlist URLs back to the marketing waitlist entry', () => {
     expect(
       getHomeWaitlistRedirectTarget({
@@ -78,9 +78,9 @@ describe('waitlist modal URL helpers', () => {
     ).toBeNull()
   })
 
-  it('opens modal for sticky session flag', () => {
+  it('shows the inline waitlist entry for the sticky session flag', () => {
     expect(
-      shouldOpenWaitlistModal({
+      shouldShowWaitlistEntry({
         hash: '',
         search: '',
         stickyOpen: true,
@@ -96,7 +96,7 @@ describe('waitlist modal URL helpers', () => {
         hash: '#waitlist',
       }),
     ).toEqual({
-      path: '/?reason=needs-acceptance',
+      path: '/',
       changed: true,
     })
   })

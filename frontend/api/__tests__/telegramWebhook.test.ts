@@ -6,7 +6,7 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 const AKITA_TOKEN_ADDRESS = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
 
 const {
-  handleKeeprCommandMock,
+  executeDeterministicCommandMock,
   handleTwitterCommandMock,
   getDbMock,
   ensureWaitlistSchemaMock,
@@ -53,7 +53,7 @@ const {
   startAkitaVaultDeployFromTelegramMock,
   fetchVaultDeployStatusFromTelegramMock,
 } = vi.hoisted(() => ({
-  handleKeeprCommandMock: vi.fn(),
+  executeDeterministicCommandMock: vi.fn(),
   handleTwitterCommandMock: vi.fn(),
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(),
@@ -122,8 +122,18 @@ vi.mock('../../server/_lib/privyCoinbaseSmartWallet.js', () => ({
   sendPrivyCoinbaseSmartWalletUserOperation: sendPrivyCoinbaseSmartWalletUserOperationMock,
 }))
 
-vi.mock('../../server/keepr/commands.js', () => ({
-  handleKeeprCommand: handleKeeprCommandMock,
+vi.mock('../../server/agent/core/executeDeterministicCommand.js', () => ({
+  executeDeterministicCommand: async (...args: any[]) => {
+    const result = await executeDeterministicCommandMock(...args)
+    if (result && typeof result === 'object' && 'responseText' in result) return result
+    const rawResponseText = typeof result?.response === 'string' ? result.response.trim() : ''
+    return {
+      ok: Boolean(result?.ok),
+      responseText: rawResponseText || 'Command received.',
+      rawResponseText,
+      ...('action' in (result ?? {}) ? { action: result.action } : {}),
+    }
+  },
 }))
 
 vi.mock('../../server/twitter/commands.js', () => ({
@@ -226,7 +236,7 @@ describe('telegram webhook handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) }))
-    handleKeeprCommandMock.mockResolvedValue({ ok: true, response: 'Command received.' })
+    executeDeterministicCommandMock.mockResolvedValue({ ok: true, response: 'Command received.' })
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
     ensureWaitlistSchemaMock.mockResolvedValue(undefined)
     ensureKeeprSchemaMock.mockResolvedValue(undefined)
@@ -396,7 +406,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(401)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(0)
   })
@@ -420,7 +430,7 @@ describe('telegram webhook handler', () => {
 
       expect(res.statusCode).toBe(503)
       expect(String(res.body?.error ?? '')).toContain('webhook secret')
-      expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+      expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
       expect((fetch as any).mock.calls.length).toBe(0)
     } finally {
       restoreWebhookSecret()
@@ -429,7 +439,7 @@ describe('telegram webhook handler', () => {
 
   it('routes typed telegram /x post confirms through the preview path and sends telegram reply', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
 
     const req = createMockReq({
       method: 'POST',
@@ -444,14 +454,17 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/x post hello',
-      role: 'ADMIN',
+      chatId: '-100123',
+      userId: '42',
+      emptyResponseFallback: 'Command received.',
+      roleOverrides: { twitter: 'ADMIN' },
     })
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(handleTwitterCommandMock).not.toHaveBeenCalled()
 
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
@@ -459,7 +472,7 @@ describe('telegram webhook handler', () => {
 
   it('renders /x post preview with inline post and cancel callbacks', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleTwitterCommandMock.mockResolvedValueOnce({
+    executeDeterministicCommandMock.mockResolvedValueOnce({
       ok: false,
       response: [
         'Twitter/X post preview',
@@ -493,7 +506,16 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
+      groupId: 'xmtp-group-1',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/x post gm',
+      chatId: '-100123',
+      userId: '42',
+      emptyResponseFallback: 'Command received.',
+      roleOverrides: { twitter: 'ADMIN' },
+    })
     expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
     expect(createTelegramActionTokenMock).toHaveBeenCalledWith(expect.objectContaining({
       telegramUserId: '42',
@@ -526,7 +548,7 @@ describe('telegram webhook handler', () => {
       expiresAt: '2026-03-13T00:01:30.000Z',
       consumedAt: '2026-03-13T00:00:32.000Z',
     })
-    handleTwitterCommandMock.mockResolvedValueOnce({
+    executeDeterministicCommandMock.mockResolvedValueOnce({
       ok: true,
       response: 'Tweet posted.',
       action: {
@@ -572,11 +594,14 @@ describe('telegram webhook handler', () => {
       chatId: '-100123',
       actionType: 'twitter_post',
     }))
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/x post gm --confirm',
-      role: 'ADMIN',
+      chatId: '-100123',
+      userId: '42',
+      emptyResponseFallback: 'Command received.',
+      roleOverrides: { twitter: 'ADMIN' },
     })
     expect((fetch as any).mock.calls.length).toBe(2)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
@@ -623,7 +648,7 @@ describe('telegram webhook handler', () => {
       return { rows: [] }
     })
     getDbMock.mockResolvedValue({ sql })
-    handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
 
     try {
       const req = createMockReq({
@@ -639,12 +664,15 @@ describe('telegram webhook handler', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
-      expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+      expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+      expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
         groupId: 'xmtp-group-1',
         senderWallet: ownerWallet,
         text: '/x post owner tweet',
-        role: 'OWNER',
+        chatId: '-100123',
+        userId: '99',
+        emptyResponseFallback: 'Command received.',
+        roleOverrides: { twitter: 'OWNER' },
       })
     } finally {
       restoreWalletMap()
@@ -690,7 +718,7 @@ describe('telegram webhook handler', () => {
       return { rows: [] }
     })
     getDbMock.mockResolvedValue({ sql })
-    handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Tweet posted.' })
 
     try {
       const req = createMockReq({
@@ -706,12 +734,15 @@ describe('telegram webhook handler', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
-      expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+      expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+      expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
         groupId: 'xmtp-group-1',
         senderWallet: adminWallet,
         text: '/x post admin tweet',
-        role: 'ADMIN',
+        chatId: '-100123',
+        userId: '99',
+        emptyResponseFallback: 'Command received.',
+        roleOverrides: { twitter: 'ADMIN' },
       })
     } finally {
       restoreWalletMap()
@@ -757,7 +788,7 @@ describe('telegram webhook handler', () => {
       return { rows: [] }
     })
     getDbMock.mockResolvedValue({ sql })
-    handleTwitterCommandMock.mockResolvedValueOnce({ ok: true, response: 'Denied: ADMIN or OWNER only.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Denied: ADMIN or OWNER only.' })
 
     try {
       const req = createMockReq({
@@ -773,12 +804,15 @@ describe('telegram webhook handler', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(handleTwitterCommandMock).toHaveBeenCalledTimes(1)
-      expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+      expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+      expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
         groupId: 'xmtp-group-1',
         senderWallet: ownerWallet,
         text: '/x post fallback tweet',
-        role: 'MEMBER',
+        chatId: '-100123',
+        userId: '99',
+        emptyResponseFallback: 'Command received.',
+        roleOverrides: { twitter: 'MEMBER' },
       })
     } finally {
       restoreWalletDefaults()
@@ -787,7 +821,7 @@ describe('telegram webhook handler', () => {
 
   it('routes normal commands to keepr handler', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
 
     const req = createMockReq({
       method: 'POST',
@@ -802,8 +836,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/help',
@@ -841,7 +875,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(payload.text).toContain('<code>/id</code>')
@@ -869,7 +903,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(Array.isArray(payload.reply_markup?.keyboard)).toBe(true)
@@ -900,7 +934,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(payload.text).toContain('<b>AKITA | CREATOR</b>')
@@ -1029,7 +1063,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(payload.text).toContain('<b>Chat ID</b>')
@@ -1041,9 +1075,9 @@ describe('telegram webhook handler', () => {
 
   it('sends a Telegram photo card when a command returns media metadata', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({
+    executeDeterministicCommandMock.mockResolvedValueOnce({
       ok: true,
-      response: 'Chart — BTC (1m)',
+      response: 'AI chart summary ready',
       action: {
         telegramMedia: {
           kind: 'photo',
@@ -1061,7 +1095,7 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 3_0_0,
-        message: { message_id: 9_1, text: '/mkt chart BTC 1m', chat: { id: -100123 }, from: { id: 99 } },
+        message: { message_id: 9_1, text: '/ai show me a BTC chart', chat: { id: -100123 }, from: { id: 99 } },
       },
     })
     const res = createMockRes()
@@ -1069,7 +1103,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/sendPhoto')
     const form = (fetch as any).mock.calls[0][1]?.body as FormData
@@ -1084,7 +1118,7 @@ describe('telegram webhook handler', () => {
 
   it('backticks only the command and not the help description', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({
+    executeDeterministicCommandMock.mockResolvedValueOnce({
       ok: true,
       response: ['Keepr quick help', '', 'Most used:', '- /keepr status — vault status and config'].join('\n'),
     })
@@ -1110,7 +1144,7 @@ describe('telegram webhook handler', () => {
 
   it('renders /cre status with premium chrome and collapsed details', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({
+    executeDeterministicCommandMock.mockResolvedValueOnce({
       ok: true,
       response: ['CRE Status', '', '- vaults: 2', '- idleFunds: 0.42 ETH', '- reportsPending: 1'].join('\n'),
     })
@@ -1195,7 +1229,7 @@ describe('telegram webhook handler', () => {
 
   it('sends a fresh /help reply in private DM even when a tracked active message exists', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
     const restorePrivateDmEnv = applyEnv({
       TELEGRAM_ALLOW_PRIVATE_DMS: 'true',
     })
@@ -1321,7 +1355,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.parse_mode ?? '')).toBe('HTML')
@@ -1380,7 +1414,7 @@ describe('telegram webhook handler', () => {
 
   it('normalizes /help@botname to /help and still returns help menu keyboard', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr quick help' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr quick help' })
 
     const req = createMockReq({
       method: 'POST',
@@ -1395,8 +1429,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'telegram:7726886643',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/help',
@@ -1407,7 +1441,7 @@ describe('telegram webhook handler', () => {
 
   it('returns the help menu keyboard for /keepr help too', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr quick help' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr quick help' })
 
     const req = createMockReq({
       method: 'POST',
@@ -1422,8 +1456,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/keepr help',
@@ -1454,7 +1488,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(0)
   })
@@ -1479,7 +1513,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerInlineQuery')
@@ -1597,7 +1631,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(listTelegramScopedVaultsMock).not.toHaveBeenCalled()
 
     const payload = JSON.parse(String((fetch as any).mock.calls.at(-1)?.[1]?.body ?? '{}'))
@@ -1968,202 +2002,9 @@ describe('telegram webhook handler', () => {
     )
   })
 
-  it('activates and renders a live signals inline card when chosen', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    listTelegramSignalsMock.mockResolvedValueOnce([
-      {
-        telegramUserId: '777',
-        actionType: 'buy',
-        status: 'confirmed',
-        txHash: '0x1234567890123456789012345678901234567890',
-        createdAt: '2026-03-21T18:00:00.000Z',
-      },
-    ])
-    upsertTelegramInlineSignalFeedMock.mockResolvedValueOnce({
-      inlineMessageId: 'inline-msg-live',
-      sourceChatId: '-100123',
-      ownerTelegramUserId: '777',
-      paused: false,
-      closedAt: null,
-      lastRenderHash: null,
-      lastPushedAt: null,
-      createdAt: '2026-03-21T18:00:00.000Z',
-      updatedAt: '2026-03-21T18:00:00.000Z',
-    })
-    getTelegramInlineSignalFeedByInlineMessageIdMock.mockResolvedValueOnce({
-      inlineMessageId: 'inline-msg-live',
-      sourceChatId: '-100123',
-      ownerTelegramUserId: '777',
-      paused: false,
-      closedAt: null,
-      lastRenderHash: null,
-      lastPushedAt: null,
-      createdAt: '2026-03-21T18:00:00.000Z',
-      updatedAt: '2026-03-21T18:00:00.000Z',
-    })
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-      body: {
-        update_id: 5_41,
-        chosen_inline_result: {
-          result_id: 'r0:article:signals-live',
-          from: { id: 777 },
-          query: 'signals live',
-          inline_message_id: 'inline-msg-live',
-        },
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(upsertTelegramInlineSignalFeedMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        inlineMessageId: 'inline-msg-live',
-        sourceChatId: '-100123',
-        ownerTelegramUserId: '777',
-      }),
-    )
-    expect(String((fetch as any).mock.calls[0][0])).toContain('/editMessageText')
-    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(payload.inline_message_id).toBe('inline-msg-live')
-    expect(String(payload.text ?? '')).toContain('AKITA | SIGNALS LIVE')
-  })
-
-  it('refreshes a live signals inline card from an inline callback', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    getTelegramInlineSignalFeedByInlineMessageIdMock
-      .mockResolvedValueOnce({
-        inlineMessageId: 'inline-msg-live',
-        sourceChatId: '-100123',
-        ownerTelegramUserId: '777',
-        paused: false,
-        closedAt: null,
-        lastRenderHash: null,
-        lastPushedAt: null,
-        createdAt: '2026-03-21T18:00:00.000Z',
-        updatedAt: '2026-03-21T18:00:00.000Z',
-      })
-      .mockResolvedValueOnce({
-      inlineMessageId: 'inline-msg-live',
-      sourceChatId: '-100123',
-      ownerTelegramUserId: '777',
-      paused: false,
-      closedAt: null,
-      lastRenderHash: null,
-      lastPushedAt: null,
-      createdAt: '2026-03-21T18:00:00.000Z',
-      updatedAt: '2026-03-21T18:00:00.000Z',
-      })
-    listTelegramSignalsMock.mockResolvedValueOnce([
-      {
-        telegramUserId: '777',
-        actionType: 'sell',
-        status: 'submitted',
-        txHash: '0x1234567890123456789012345678901234567890',
-        createdAt: '2026-03-21T18:01:00.000Z',
-      },
-    ])
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-      body: {
-        update_id: 5_42,
-        callback_query: {
-          id: 'cbq-live-refresh',
-          data: 'livefeed:signals:refresh',
-          from: { id: 777 },
-          inline_message_id: 'inline-msg-live',
-        },
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(String((fetch as any).mock.calls[0][0])).toContain('/editMessageText')
-    expect(String((fetch as any).mock.calls[1][0])).toContain('/answerCallbackQuery')
-  })
-
-  it('blocks live signals refresh for non-owners', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    getTelegramInlineSignalFeedByInlineMessageIdMock.mockResolvedValueOnce({
-      inlineMessageId: 'inline-msg-live',
-      sourceChatId: '-100123',
-      ownerTelegramUserId: '777',
-      paused: false,
-      closedAt: null,
-      lastRenderHash: null,
-      lastPushedAt: null,
-      createdAt: '2026-03-21T18:00:00.000Z',
-      updatedAt: '2026-03-21T18:00:00.000Z',
-    })
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-      body: {
-        update_id: 5_43,
-        callback_query: {
-          id: 'cbq-live-refresh-denied',
-          data: 'livefeed:signals:refresh',
-          from: { id: 999 },
-          inline_message_id: 'inline-msg-live',
-        },
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect((fetch as any).mock.calls).toHaveLength(1)
-    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
-    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('Only the owner can refresh this feed')
-  })
-
-  it('returns inline shortcut launcher with prefill buttons', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-      body: {
-        update_id: 6,
-        message: {
-          message_id: 11,
-          text: '/inline',
-          chat: { id: -100123 },
-          from: { id: 99 },
-        },
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
-    expect(handleTwitterCommandMock).not.toHaveBeenCalled()
-    expect((fetch as any).mock.calls.length).toBe(1)
-    expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
-    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(payload.reply_markup?.inline_keyboard?.length).toBeGreaterThan(0)
-    const allButtons = payload.reply_markup.inline_keyboard.flat()
-    expect(allButtons.some((button: any) => typeof button.switch_inline_query_current_chat === 'string')).toBe(true)
-    expect(allButtons.some((button: any) => typeof button.switch_inline_query === 'string')).toBe(false)
-    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
-  })
-
   it('allows admin private DM even when target chat is set', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
 
     const req = createMockReq({
       method: 'POST',
@@ -2183,14 +2024,14 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/sendMessage')
   })
 
   it('allows non-admin private DM when TELEGRAM_ALLOW_PRIVATE_DMS is enabled', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
     const restorePrivateDmEnv = applyEnv({
       TELEGRAM_ALLOW_PRIVATE_DMS: 'true',
     })
@@ -2214,8 +2055,8 @@ describe('telegram webhook handler', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-      expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+      expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+      expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
         groupId: 'telegram:7726886643',
         senderWallet: '0x0000000000000000000000000000000000000000',
         text: '/help',
@@ -2229,7 +2070,7 @@ describe('telegram webhook handler', () => {
 
   it('blocks non-admin private DM by default when private-dm flags are unset', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
     const restorePrivateDmEnv = applyEnv({
       TELEGRAM_ALLOW_PRIVATE_DMS: undefined,
       TELEGRAM_ALLOW_ALL_PRIVATE_DMS: undefined,
@@ -2254,7 +2095,7 @@ describe('telegram webhook handler', () => {
       await handler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+      expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
       expect((fetch as any).mock.calls.length).toBe(0)
     } finally {
       restorePrivateDmEnv()
@@ -2282,7 +2123,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(tryInsertTelegramPrivateDmWelcomeSentMock).toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
@@ -2320,7 +2161,7 @@ describe('telegram webhook handler', () => {
 
   it('keeps plain private-chat followups as normal command text once linked', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
     getTelegramLinkByUserIdMock.mockResolvedValueOnce({
       telegramUserId: '42',
       telegramUsername: 'akita',
@@ -2355,8 +2196,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'telegram:7726886643',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: 'Why?',
@@ -2365,7 +2206,7 @@ describe('telegram webhook handler', () => {
 
   it('auto-routes private-chat mentions into /ai', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
 
     const req = createMockReq({
       method: 'POST',
@@ -2385,8 +2226,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'telegram:7726886643',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/ai @keepr Why?',
@@ -2395,7 +2236,7 @@ describe('telegram webhook handler', () => {
 
   it('auto-routes plain replies to bot messages into /ai in groups', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'AI follow-up reply' })
 
     const req = createMockReq({
       method: 'POST',
@@ -2419,8 +2260,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/ai Why?',
@@ -2429,7 +2270,7 @@ describe('telegram webhook handler', () => {
 
   it('keeps plain group chat text as-is when not replying to the bot', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'No auto-route' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'No auto-route' })
 
     const req = createMockReq({
       method: 'POST',
@@ -2449,8 +2290,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: 'Why?',
@@ -2478,7 +2319,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(0)
     expect(res.body?.data?.ignored).toBe(true)
@@ -2486,7 +2327,7 @@ describe('telegram webhook handler', () => {
 
   it('retries sendMessage without reply target when Telegram rejects reply_to_message_id', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr commands...' })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -2529,7 +2370,7 @@ describe('telegram webhook handler', () => {
 
   it('handles callback query for help topic and responds with topic help', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr help - market\n- /mkt quote <symbol>' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr — ops\n- /cre status\n- /cre health' })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -2566,7 +2407,7 @@ describe('telegram webhook handler', () => {
         update_id: 10,
         callback_query: {
           id: 'cbq-1',
-          data: 'help:market',
+          data: 'help:ops',
           from: { id: 99 },
           message: { message_id: 14, chat: { id: -100123 } },
         },
@@ -2578,19 +2419,19 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
-      text: '/help market',
+      text: '/help ops',
     }))
 
     expect((fetch as any).mock.calls.length).toBe(2)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('- `/mkt quote` <symbol>')
-    expect(String(payload.text ?? '')).toContain('symbol: ticker, e.g. BTC')
+    expect(String(payload.text ?? '')).toContain('/cre status')
+    expect(String(payload.text ?? '')).toContain('/cre health')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(true)
   })
@@ -2624,7 +2465,7 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.ignored).toBe(true)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
@@ -2632,103 +2473,6 @@ describe('telegram webhook handler', () => {
     expect(payload.callback_query_id).toBe('cbq-disallowed')
     expect(String(payload.text ?? '')).toContain('not enabled')
     expect(payload.show_alert).toBe(true)
-  })
-
-  it('does not route deprecated help:inline callback to inline launcher', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-
-    ;(fetch as any).mockReset()
-    ;(fetch as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      })
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-      body: {
-        update_id: 11,
-        callback_query: {
-          id: 'cbq-2',
-          data: 'help:inline',
-          from: { id: 99 },
-          message: { message_id: 15, chat: { id: -100123 } },
-        },
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
-    expect(handleTwitterCommandMock).not.toHaveBeenCalled()
-    expect((fetch as any).mock.calls.length).toBe(2)
-    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
-    expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
-    const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-    const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
-    expect(allButtons.some((button: any) => typeof button.switch_inline_query_current_chat === 'string')).toBe(false)
-    expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(false)
-  })
-
-  it('renders a focused inline launcher with approved-token shortcuts only', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-
-    const req = createMockReq({
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-      body: {
-        update_id: 11_0_1,
-        message: {
-          message_id: 16,
-          text: '/inline',
-          chat: { id: -100123 },
-          from: { id: 99 },
-        },
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Analyze $AKITA')).toBe(true)
-    expect(
-      allButtons.some(
-        (button: any) =>
-          String(button?.text ?? '') === 'Analyze $AKITA'
-          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
-      ),
-    ).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Buy $AKITA')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Draft X post')).toBe(false)
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Ask AI')).toBe(false)
   })
 
   it('handles callback query for more tools menu and returns secondary actions', async () => {
@@ -2821,7 +2565,7 @@ describe('telegram webhook handler', () => {
     const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Vaults')).toBe(true)
     expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Auctions')).toBe(true)
-    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Signals')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.text ?? '') === 'Signals')).toBe(false)
     expect(allButtons.some((button: any) => String(button?.text ?? '').includes('⇢'))).toBe(false)
   })
 
@@ -2923,7 +2667,7 @@ describe('telegram webhook handler', () => {
 
   it('routes Solana action callbacks to the existing CRE command backend and keeps the Solana menu attached', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Fee settlement submitted.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Fee settlement submitted.' })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -2956,8 +2700,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
       text: '/cre settle-fees',
@@ -2987,7 +2731,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
@@ -3061,7 +2805,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
@@ -3327,7 +3071,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(2)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/deleteMessage')
@@ -3475,7 +3219,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
@@ -3745,7 +3489,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(2)
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
@@ -4060,7 +3804,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
     expect(getDbMock).toHaveBeenCalledTimes(1)
     expect(clearTelegramTradePercentPromptMock).toHaveBeenCalledWith({
@@ -4164,7 +3908,7 @@ describe('telegram webhook handler', () => {
       lastFailureReason: null,
       unlinkRequestedAt: null,
     })
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin buy submitted.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin buy submitted.' })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -4202,8 +3946,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       text: '/coin buy 0x2222222222222222222222222222222222222222 0.05',
@@ -4233,87 +3977,7 @@ describe('telegram webhook handler', () => {
       ),
     ).toBe(true)
     expect(signalButtons.some((button: any) => String(button?.text ?? '').trim() === 'View Vault')).toBe(false)
-  })
-
-  it('adds Stars tip buttons to signal posts when tips are enabled', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    const restoreTipEnv = applyEnv({
-      TELEGRAM_STARS_TIPS_ENABLED: 'true',
-      TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS: '-100123',
-    })
-    try {
-      consumeTelegramActionTokenMock.mockResolvedValueOnce({
-        ok: true,
-        actionType: 'buy',
-        intentPayload: {
-          creatorCoinAddress: '0x2222222222222222222222222222222222222222',
-          amountInput: '0.05',
-          amountEth: 0.05,
-          usdEstimate: 150,
-        },
-        expiresAt: '2026-03-13T00:01:30.000Z',
-        consumedAt: '2026-03-13T00:00:32.000Z',
-      })
-      getTelegramLinkByUserIdMock.mockResolvedValueOnce({
-        telegramUserId: '99',
-        telegramUsername: 'akita',
-        profileId: 7,
-        privyUserId: 'did:privy:7',
-        canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        ownerVerified: true,
-        linkStatus: 'active',
-        linkedAt: '2026-03-13T00:00:00.000Z',
-        lastVerifiedAt: '2026-03-13T00:00:00.000Z',
-        revokedAt: null,
-        failureCount: 0,
-        lastFailureReason: null,
-        unlinkRequestedAt: null,
-      })
-      handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin buy submitted.' })
-
-      ;(fetch as any).mockReset()
-      ;(fetch as any)
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ ok: true }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ ok: true }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ ok: true }),
-        })
-
-      const req = createMockReq({
-        method: 'POST',
-        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-        body: {
-          update_id: 16_03,
-          callback_query: {
-            id: 'cbq-buy-confirm-tip-buttons',
-            data: 'trade:accept:trade-token-tip',
-            from: { id: 99 },
-            message: { message_id: 20, chat: { id: -100123 } },
-          },
-        },
-      })
-      const res = createMockRes()
-
-      await handler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      const signalPayload = JSON.parse(String((fetch as any).mock.calls[2][1]?.body ?? '{}'))
-      const signalButtons = signalPayload.reply_markup?.inline_keyboard?.flat?.() ?? []
-      expect(signalButtons.some((button: any) => String(button?.callback_data ?? '') === 'tip:1:signal-buy')).toBe(true)
-      expect(signalButtons.some((button: any) => String(button?.callback_data ?? '') === 'tip:5:signal-buy')).toBe(true)
-    } finally {
-      restoreTipEnv()
-    }
+    expect(signalButtons.some((button: any) => String(button?.callback_data ?? '').startsWith('tip:'))).toBe(false)
   })
 
   it('blocks buy callback when canonical wallet is missing', async () => {
@@ -4377,7 +4041,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '').toLowerCase()).toContain('canonical wallet')
@@ -4415,7 +4079,7 @@ describe('telegram webhook handler', () => {
         lastFailureReason: null,
         unlinkRequestedAt: null,
       })
-      handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin buy submitted.' })
+      executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin buy submitted.' })
 
       ;(fetch as any).mockReset()
       ;(fetch as any)
@@ -4497,7 +4161,7 @@ describe('telegram webhook handler', () => {
       lastFailureReason: null,
       unlinkRequestedAt: null,
     })
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin sell submitted.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin sell submitted.' })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -4535,8 +4199,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       text: '/coin sell 0x2222222222222222222222222222222222222222 1200',
@@ -4561,164 +4225,6 @@ describe('telegram webhook handler', () => {
     ).toBe(false)
   })
 
-  it('handles tip callback by sending a Telegram Stars invoice', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    const restoreTipEnv = applyEnv({
-      TELEGRAM_STARS_TIPS_ENABLED: 'true',
-      TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS: '-100123',
-    })
-    try {
-      ;(fetch as any).mockReset()
-      ;(fetch as any)
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ ok: true }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ ok: true }),
-        })
-
-      const req = createMockReq({
-        method: 'POST',
-        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-        body: {
-          update_id: 16_04,
-          callback_query: {
-            id: 'cbq-tip-stars',
-            data: 'tip:5:signal-buy',
-            from: { id: 99 },
-            message: { message_id: 25, chat: { id: -100123 } },
-          },
-        },
-      })
-      const res = createMockRes()
-
-      await handler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect((fetch as any).mock.calls.length).toBe(2)
-      expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
-      expect(String((fetch as any).mock.calls[1][0])).toContain('/sendInvoice')
-      const invoicePayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-      expect(invoicePayload.currency).toBe('XTR')
-      expect(Array.isArray(invoicePayload.prices)).toBe(true)
-      expect(invoicePayload.prices[0]?.amount).toBe(5)
-    } finally {
-      restoreTipEnv()
-    }
-  })
-
-  it('answers pre-checkout queries for Stars tips', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    const restoreTipEnv = applyEnv({
-      TELEGRAM_STARS_TIPS_ENABLED: 'true',
-      TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS: '-100123',
-    })
-    try {
-      ;(fetch as any).mockReset()
-      ;(fetch as any).mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      })
-
-      const req = createMockReq({
-        method: 'POST',
-        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-        body: {
-          update_id: 16_05,
-          pre_checkout_query: {
-            id: 'pcq-tip-1',
-            from: { id: 99 },
-            currency: 'XTR',
-            total_amount: 5,
-            invoice_payload: 'tip:5:signal-buy',
-          },
-        },
-      })
-      const res = createMockRes()
-
-      await handler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect((fetch as any).mock.calls.length).toBe(1)
-      expect(String((fetch as any).mock.calls[0][0])).toContain('/answerPreCheckoutQuery')
-      const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-      expect(payload.pre_checkout_query_id).toBe('pcq-tip-1')
-      expect(payload.ok).toBe(true)
-    } finally {
-      restoreTipEnv()
-    }
-  })
-
-  it('logs Stars tip payment events from successful_payment updates', async () => {
-    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    const restoreTipEnv = applyEnv({
-      TELEGRAM_STARS_TIPS_ENABLED: 'true',
-      TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS: '-100123',
-    })
-    try {
-      getTelegramLinkByUserIdMock.mockResolvedValueOnce({
-        telegramUserId: '99',
-        telegramUsername: 'akita',
-        profileId: 7,
-        privyUserId: 'did:privy:7',
-        canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        ownerVerified: true,
-        linkStatus: 'active',
-        linkedAt: '2026-03-13T00:00:00.000Z',
-        lastVerifiedAt: '2026-03-13T00:00:00.000Z',
-        revokedAt: null,
-        failureCount: 0,
-        lastFailureReason: null,
-        unlinkRequestedAt: null,
-      })
-
-      ;(fetch as any).mockReset()
-      ;(fetch as any).mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      })
-
-      const req = createMockReq({
-        method: 'POST',
-        headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
-        body: {
-          update_id: 16_06,
-          message: {
-            message_id: 26,
-            chat: { id: -100123 },
-            from: { id: 99 },
-            successful_payment: {
-              currency: 'XTR',
-              total_amount: 5,
-              invoice_payload: 'tip:5:signal-buy',
-              telegram_payment_charge_id: 'tg-charge-1',
-              provider_payment_charge_id: 'provider-charge-1',
-            },
-          },
-        },
-      })
-      const res = createMockRes()
-
-      await handler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(logTelegramActionAuditMock).toHaveBeenCalled()
-      const auditCall = logTelegramActionAuditMock.mock.calls[0]?.[0] ?? {}
-      expect(String(auditCall.actionType ?? '')).toBe('tip')
-      expect(String(auditCall.status ?? '')).toBe('paid')
-      expect((fetch as any).mock.calls.length).toBe(1)
-      const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-      expect(String(payload.text ?? '').toLowerCase()).toContain('thanks for the tip')
-    } finally {
-      restoreTipEnv()
-    }
-  })
 
   it('routes signal follow-up into configured Signals topic thread', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
@@ -4754,7 +4260,7 @@ describe('telegram webhook handler', () => {
         lastFailureReason: null,
         unlinkRequestedAt: null,
       })
-      handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin buy submitted.' })
+      executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Coin buy submitted.' })
 
       ;(fetch as any).mockReset()
       ;(fetch as any)
@@ -4891,7 +4397,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(resolvePrivyCoinbaseSmartWalletOwnerContextMock).toHaveBeenCalledTimes(1)
     expect(sendPrivyCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
     expect(logTelegramActionAuditMock).toHaveBeenCalled()
@@ -5025,7 +4531,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('already confirmed')
@@ -5392,7 +4898,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Deploy')
@@ -5524,7 +5030,7 @@ describe('telegram webhook handler', () => {
       lastFailureReason: null,
       unlinkRequestedAt: null,
     })
-    handleKeeprCommandMock.mockResolvedValueOnce({ ok: true, response: 'Trend reserved + deployed.' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Trend reserved + deployed.' })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -5557,8 +5063,8 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).toHaveBeenCalledTimes(1)
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       text: '/coin trend reserve BASEAI',
@@ -5628,7 +5134,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '').toLowerCase()).toContain('canonical wallet')
@@ -5831,7 +5337,7 @@ describe('telegram webhook handler', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(handleKeeprCommandMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Zora')

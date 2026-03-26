@@ -50,14 +50,81 @@ describe('deploy solana infra status handler', () => {
   })
 
   it('returns 401 when session is missing', async () => {
-    getSessionAddressMock.mockReturnValueOnce(null)
-    const req = createMockReq({ method: 'GET' })
-    const res = createMockRes()
+    const restoreEnv = applyEnv({
+      KEEPR_API_KEY: undefined,
+      DEPLOY_SOLANA_REGISTRATION_SECRET: undefined,
+      SOLANA_REGISTRATION_INTERNAL_SECRET: undefined,
+    })
+    try {
+      getSessionAddressMock.mockReturnValueOnce(null)
+      const req = createMockReq({ method: 'GET' })
+      const res = createMockRes()
 
-    await handler(req, res)
+      await handler(req, res)
 
-    expect(res.statusCode).toBe(401)
-    expect(String(res.body?.error ?? '')).toContain('Sign in required')
+      expect(res.statusCode).toBe(401)
+      expect(String(res.body?.error ?? '')).toContain('Sign in required')
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('allows machine auth via KEEPR_API_KEY when session is missing', async () => {
+    const restoreEnv = applyEnv({
+      KEEPR_API_KEY: 'test-keepr-key',
+      DEPLOY_SOLANA_REGISTRATION_SECRET: undefined,
+      SOLANA_REGISTRATION_INTERNAL_SECRET: undefined,
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '0',
+      SOLANA_BRIDGE_CLI_DIR: undefined,
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: undefined,
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: undefined,
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32:
+        '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      SOLANA_DEFAULT_BRIDGE_TOKEN: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+      SOLANA_OVAULT_ASSET_MINT_ORIGIN: 'existing',
+      SOLANA_OVAULT_TOKEN_PROGRAM: 'spl-token',
+      SOLANA_OVAULT_TRANSFER_HOOK_DETECTED: 'false',
+      SOLANA_OVAULT_AUTHORITY_COMPATIBLE: 'true',
+      SOLANA_OVAULT_RENT_LAMPORTS: '2039280',
+    })
+    try {
+      getSessionAddressMock.mockReturnValueOnce(null)
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'owner':
+              return '0x8f53f8df6cf1f5be111111111111111111111111'
+            case 'solanaMintToToken':
+              return '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba'
+            case 'scalars':
+              return 1n
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer test-keepr-key' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.admin).toBe('0x0000000000000000000000000000000000000000')
+    } finally {
+      restoreEnv()
+    }
   })
 
   it('reports dynamic runner misconfiguration and invalid signer key', async () => {

@@ -16,9 +16,8 @@ import type {
   HandlerCallback,
 } from '@elizaos/core'
 
-import { handleCoinCommand } from '../../../../zora/commands.js'
 import { matchesCommandFamily } from '../../../../commands/registry.js'
-import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
+import { executeDeterministicCommand } from '../../../core/executeDeterministicCommand.js'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
 
 // ---------------------------------------------------------------------------
@@ -79,22 +78,17 @@ const zoraCoinAction: Action = {
       return
     }
 
-    const role = resolveVaultAccessRoleFromVault({ wallet: senderAddress, vault })
-
     try {
-      const result = await handleCoinCommand({
+      const result = await executeDeterministicCommand({
         groupId: conversationId,
         senderWallet: senderAddress as `0x${string}`,
         text,
-        role,
-        vault,
+        emptyResponseFallback: 'Coin command is temporarily unavailable. Please try again shortly.',
       })
 
-      if (result.response) {
-        await callback?.({ text: result.response } as Content)
-      }
+      await callback?.({ text: result.responseText } as Content)
     } catch (err: any) {
-      console.error('[zora-plugin] handleCoinCommand error:', err)
+      console.error('[zora-plugin] executeDeterministicCommand error:', err)
       await callback?.({
         text: `Coin command failed: ${err.message ?? 'unknown error'}`,
       } as Content)

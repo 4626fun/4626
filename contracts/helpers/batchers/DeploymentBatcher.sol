@@ -45,10 +45,27 @@ interface ICreatorShareOFT {
 interface ICCALaunchStrategy {
     function setApprovedLauncher(address launcher, bool approved) external;
     function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient) external;
-    function setDefaultTickSpacing(uint256 _spacing) external;
+    function setLaunchDiscountBps(uint16 _discountBps) external;
+    function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external;
+    function setRecipients(address _fundsRecipient, address _tokensRecipient) external;
+    function setBackingVault(address _backingVault) external;
+    function setMigrationConfig(
+        address _positionManager,
+        address _positionRecipient,
+        address _operator,
+        uint64 _migrationDelayBlocks,
+        uint64 _sweepDelayBlocks
+    ) external;
     function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise, bytes calldata auctionSteps)
         external
         returns (address auction);
+    function launchAuctionWithReserve(
+        uint256 amount,
+        uint256 lpReserveAmount,
+        uint256 floorPrice,
+        uint128 requiredRaise,
+        bytes calldata auctionSteps
+    ) external returns (address auction);
     function transferOwnership(address newOwner) external;
 }
 
@@ -143,15 +160,21 @@ contract DeploymentBatcher is ReentrancyGuard {
     address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
     address internal constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
 
-    // ── Fixed Two-Way Split Constants ────────────────────────────────
+    // ── Fixed Three-Way Split Constants ──────────────────────────────
     /// @notice Minimum deposit amount (50M tokens, 18 decimals)
     uint256 public constant MIN_DEPOSIT = 50_000_000e18;
     /// @notice Maximum deposit amount (50M tokens, 18 decimals)
     uint256 public constant MAX_DEPOSIT = 50_000_000e18;
     /// @notice Percentage of ■TOKENs allocated to CCA auction
-    uint8 public constant AUCTION_PERCENT = 50;
+    uint8 public constant AUCTION_PERCENT = 40;
     /// @notice Percentage of ■TOKENs vested to the creator
-    uint8 public constant VESTING_PERCENT = 50;
+    uint8 public constant VESTING_PERCENT = 40;
+    /// @notice Percentage of ■TOKENs reserved on strategy for LP migration
+    uint8 public constant LP_RESERVE_PERCENT = 20;
+    /// @notice Default launch discount (80% of oracle-derived reference price).
+    uint16 public constant DEFAULT_LAUNCH_DISCOUNT_BPS = 8_000;
+    /// @notice Default launch tick spacing (1% of derived floor price).
+    uint16 public constant DEFAULT_LAUNCH_TICK_SPACING_BPS = 100;
 
     struct CodeIds {
         bytes32 vault;
@@ -185,7 +208,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         string version;
         uint256 depositAmount;
         uint128 requiredRaise;
-        uint256 floorPriceQ96;
+        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
         bytes auctionSteps;
     }
 
@@ -199,7 +222,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address shareOFT;
         string shareSymbol;
         string version;
-        uint256 floorPriceQ96;
+        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
     }
 
     struct Phase2FinalizeParams {
@@ -214,7 +237,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         string version;
         uint256 depositAmount;
         uint128 requiredRaise;
-        uint256 floorPriceQ96;
+        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
         bytes auctionSteps;
         bytes32 meteoraAlphaVault;
         IBaseSolanaBridge.Ix[] solanaIxs;
@@ -250,6 +273,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address shareOFT;
         address ccaStrategy;
         uint256 amount;
+        uint256 lpReserveAmount;
     }
 
     struct DeferredAuctionParams {
@@ -257,7 +281,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address owner;
         address shareOFT;
         string version;
-        uint256 floorPriceQ96;
+        uint256 floorPriceQ96; // Deprecated compatibility input; strategy derives launch floor onchain.
         uint128 requiredRaise;
         bytes auctionSteps;
     }
@@ -410,7 +434,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         address indexed owner,
         address indexed shareOFT,
         address ccaStrategy,
-        uint256 amount
+        uint256 amount,
+        uint256 lpReserveAmount
     );
 
     event AuctionLaunchedDeferred(
@@ -715,8 +740,9 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (IERC20(params.shareOFT).balanceOf(address(this)) < pending.amount) revert AuctionAmountMismatch();
 
         IERC20(params.shareOFT).forceApprove(pending.ccaStrategy, pending.amount);
-        auction = ICCALaunchStrategy(pending.ccaStrategy)
-            .launchAuction(pending.amount, params.floorPriceQ96, params.requiredRaise, params.auctionSteps);
+        auction = ICCALaunchStrategy(pending.ccaStrategy).launchAuctionWithReserve(
+            pending.amount, pending.lpReserveAmount, params.floorPriceQ96, params.requiredRaise, params.auctionSteps
+        );
 
         delete pendingAuctions[baseSalt];
 
@@ -780,8 +806,15 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (vaultActivationBatcher != address(0)) {
             ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(vaultActivationBatcher, true);
         }
+        // Route raise + unsold auction flows back to strategy so migration can be deterministic.
+        ICCALaunchStrategy(out.ccaStrategy).setRecipients(out.ccaStrategy, out.ccaStrategy);
+        ICCALaunchStrategy(out.ccaStrategy).setBackingVault(params.vault);
+        // Position manager can be set later by governance if not known at deploy-time.
+        ICCALaunchStrategy(out.ccaStrategy).setMigrationConfig(address(0), params.owner, protocolTreasury, 1, 14_400);
         ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
-        ICCALaunchStrategy(out.ccaStrategy).setDefaultTickSpacing(_defaultTickSpacingQ96(params.floorPriceQ96));
+        // Launch floor/tick are derived onchain from oracle data; wire explicit defaults here.
+        ICCALaunchStrategy(out.ccaStrategy).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
+        ICCALaunchStrategy(out.ccaStrategy).setLaunchTickSpacingBps(DEFAULT_LAUNCH_TICK_SPACING_BPS);
 
         emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
     }
@@ -822,18 +855,30 @@ contract DeploymentBatcher is ReentrancyGuard {
         IERC20(params.creatorToken).forceApprove(params.wrapper, params.depositAmount);
         uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).deposit(params.depositAmount);
 
-        // ── Fixed Two-Way Split: 50% CCA / 50% creator vesting ──
-        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 50%
-        uint256 vestingAmount = shareTokens - auctionAmount; // 50% (remainder)
+        // ── Fixed Three-Way Split: 40% CCA / 40% creator vesting / 20% LP reserve ──
+        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 40%
+        uint256 vestingAmount = (shareTokens * VESTING_PERCENT) / 100; // 40%
+        uint256 lpReserveAmount = shareTokens - auctionAmount - vestingAmount; // 20% remainder
         if (auctionAmount > 0) {
             PendingAuction storage pending = pendingAuctions[baseSalt];
             if (pending.amount != 0) revert AuctionAlreadyPending();
-            pendingAuctions[baseSalt] =
-                PendingAuction({shareOFT: params.shareOFT, ccaStrategy: params.ccaStrategy, amount: auctionAmount});
-            emit AuctionDeferred(params.creatorToken, params.owner, params.shareOFT, params.ccaStrategy, auctionAmount);
+            pendingAuctions[baseSalt] = PendingAuction({
+                shareOFT: params.shareOFT,
+                ccaStrategy: params.ccaStrategy,
+                amount: auctionAmount,
+                lpReserveAmount: lpReserveAmount
+            });
+            emit AuctionDeferred(
+                params.creatorToken, params.owner, params.shareOFT, params.ccaStrategy, auctionAmount, lpReserveAmount
+            );
         }
 
-        // 2. Creator vesting
+        // 2. Strategy LP reserve
+        if (lpReserveAmount > 0) {
+            IERC20(params.shareOFT).safeTransfer(params.ccaStrategy, lpReserveAmount);
+        }
+
+        // 3. Creator vesting
         if (vestingAmount > 0) {
             // Vest the creator’s ShareOFT allocation to reduce immediate sell pressure.
             // Default: linear over 365 days, no cliff, starting now.
@@ -1158,11 +1203,6 @@ contract DeploymentBatcher is ReentrancyGuard {
     {
         bytes32 base = keccak256(abi.encodePacked(owner, shareSymbolLower));
         return keccak256(abi.encodePacked(base, "CreatorShareOFT:", version));
-    }
-
-    function _defaultTickSpacingQ96(uint256 floorPriceQ96) internal pure returns (uint256) {
-        uint256 spacing = floorPriceQ96 / 100;
-        return spacing > 1 ? spacing : 2;
     }
 
     function _toLower(string memory input) internal pure returns (string memory) {

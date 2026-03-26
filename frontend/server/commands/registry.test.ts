@@ -41,7 +41,6 @@ describe('command registry', () => {
       { command: 'sell', description: 'Guided sell flow' },
       { command: 'bid', description: 'Guided bid flow' },
       { command: 'wallet', description: 'Your wallet, positions, and actions' },
-      { command: 'signals', description: 'Recent trade feed' },
     ])
   })
 

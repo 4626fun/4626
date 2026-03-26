@@ -38,11 +38,6 @@ const QUICK_ACTIONS: QuickAction[] = [
     query: 'ai What should I do next?',
   },
   {
-    label: 'Market',
-    hint: 'Start with a quote',
-    query: 'mkt quote BTC',
-  },
-  {
     label: 'CRE',
     hint: 'Operator snapshot',
     query: 'ai summarize current CRE status, auctions, health, and next operator actions',

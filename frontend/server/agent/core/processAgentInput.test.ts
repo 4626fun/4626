@@ -3,12 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   executeDeterministicCommandMock,
   executeConversationalFallbackMock,
-  handleTwitterCommandMock,
   resolveVaultAccessRoleByGroupIdMock,
 } = vi.hoisted(() => ({
   executeDeterministicCommandMock: vi.fn(),
   executeConversationalFallbackMock: vi.fn(),
-  handleTwitterCommandMock: vi.fn(),
   resolveVaultAccessRoleByGroupIdMock: vi.fn(),
 }))
 
@@ -18,10 +16,6 @@ vi.mock('./executeDeterministicCommand.js', () => ({
 
 vi.mock('./executeConversationalFallback.js', () => ({
   executeConversationalFallback: executeConversationalFallbackMock,
-}))
-
-vi.mock('../../twitter/commands.js', () => ({
-  handleTwitterCommand: handleTwitterCommandMock,
 }))
 
 vi.mock('./resolveVaultRole.js', () => ({
@@ -38,7 +32,11 @@ describe('processTelegramAgentInput', () => {
 
   it('routes telegram twitter post commands through shared role resolution and strips typed confirm flags by default', async () => {
     resolveVaultAccessRoleByGroupIdMock.mockResolvedValue('OWNER')
-    handleTwitterCommandMock.mockResolvedValue({ ok: true, response: 'tweet queued' })
+    executeDeterministicCommandMock.mockResolvedValue({
+      ok: true,
+      responseText: 'tweet queued',
+      rawResponseText: 'tweet queued',
+    })
 
     const result = await processTelegramAgentInput({
       text: '/x post hello --confirm',
@@ -55,18 +53,24 @@ describe('processTelegramAgentInput', () => {
       groupId: 'telegram:-1001',
       wallet: '0x1111111111111111111111111111111111111111',
     })
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
       groupId: 'telegram:-1001',
       senderWallet: '0x1111111111111111111111111111111111111111',
       text: '/x post hello',
-      role: 'OWNER',
+      chatId: '-1001',
+      userId: '123',
+      roleOverrides: { twitter: 'OWNER' },
     })
     expect(result).toEqual({ responseText: 'tweet queued' })
   })
 
   it('allows direct twitter confirm execution only when explicitly enabled', async () => {
     resolveVaultAccessRoleByGroupIdMock.mockResolvedValue('OWNER')
-    handleTwitterCommandMock.mockResolvedValue({ ok: true, response: 'tweet posted' })
+    executeDeterministicCommandMock.mockResolvedValue({
+      ok: true,
+      responseText: 'tweet posted',
+      rawResponseText: 'tweet posted',
+    })
 
     const result = await processTelegramAgentInput({
       text: '/x post hello --confirm',
@@ -80,11 +84,13 @@ describe('processTelegramAgentInput', () => {
       twitterConfirmMode: 'allow_direct_confirm',
     })
 
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
       groupId: 'telegram:-1001',
       senderWallet: '0x1111111111111111111111111111111111111111',
       text: '/x post hello --confirm',
-      role: 'OWNER',
+      chatId: '-1001',
+      userId: '123',
+      roleOverrides: { twitter: 'OWNER' },
     })
     expect(result).toEqual({ responseText: 'tweet posted' })
   })
@@ -142,7 +148,11 @@ describe('processTelegramAgentInput', () => {
   })
 
   it('lets admins bypass vault-role lookup for telegram twitter commands', async () => {
-    handleTwitterCommandMock.mockResolvedValue({ ok: true, response: 'admin tweet queued' })
+    executeDeterministicCommandMock.mockResolvedValue({
+      ok: true,
+      responseText: 'admin tweet queued',
+      rawResponseText: 'admin tweet queued',
+    })
 
     const result = await processTelegramAgentInput({
       text: '/x status',
@@ -156,14 +166,17 @@ describe('processTelegramAgentInput', () => {
     })
 
     expect(resolveVaultAccessRoleByGroupIdMock).not.toHaveBeenCalled()
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith(expect.objectContaining({ role: 'ADMIN' }))
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+      roleOverrides: { twitter: 'ADMIN' },
+    }))
     expect(result).toEqual({ responseText: 'admin tweet queued' })
   })
 
   it('passes twitter action metadata through telegram processing', async () => {
-    handleTwitterCommandMock.mockResolvedValue({
+    executeDeterministicCommandMock.mockResolvedValue({
       ok: false,
-      response: 'preview ready',
+      responseText: 'preview ready',
+      rawResponseText: 'preview ready',
       action: { action: 'twitter.preview_post', tweetText: 'gm' },
     })
 
@@ -185,7 +198,11 @@ describe('processTelegramAgentInput', () => {
   })
 
   it('falls back to MEMBER for telegram twitter commands without a mapped wallet', async () => {
-    handleTwitterCommandMock.mockResolvedValue({ ok: true, response: 'member tweet queued' })
+    executeDeterministicCommandMock.mockResolvedValue({
+      ok: true,
+      responseText: 'member tweet queued',
+      rawResponseText: 'member tweet queued',
+    })
 
     await processTelegramAgentInput({
       text: '/tweet hello --confirm',
@@ -199,14 +216,18 @@ describe('processTelegramAgentInput', () => {
     })
 
     expect(resolveVaultAccessRoleByGroupIdMock).not.toHaveBeenCalled()
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith(expect.objectContaining({
-      role: 'MEMBER',
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+      roleOverrides: { twitter: 'MEMBER' },
       text: '/tweet hello',
     }))
   })
 
   it('strips repeated unicode confirm flags from telegram twitter post commands', async () => {
-    handleTwitterCommandMock.mockResolvedValue({ ok: false, response: 'preview ready' })
+    executeDeterministicCommandMock.mockResolvedValue({
+      ok: false,
+      responseText: 'preview ready',
+      rawResponseText: 'preview ready',
+    })
 
     await processTelegramAgentInput({
       text: '/x post gm —confirm --confirm —confirm',
@@ -219,9 +240,9 @@ describe('processTelegramAgentInput', () => {
       isPrivateChat: false,
     })
 
-    expect(handleTwitterCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       text: '/x post gm',
-      role: 'ADMIN',
+      roleOverrides: { twitter: 'ADMIN' },
     }))
   })
 })
@@ -269,7 +290,7 @@ describe('processXmtpAgentInput', () => {
     expect(executeConversationalFallbackMock).toHaveBeenCalledWith({
       groupId: 'xmtp:conversation-2',
       senderWallet: '0x2222222222222222222222222222222222222222',
-      text: '@keepr what changed today?',
+      text: 'what changed today?',
       runtimeContext,
       allowActionExecution: false,
     })

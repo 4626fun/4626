@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getWaitlistEntryRouteTarget, resolveAccess } from './App'
+import { getGenericNotFoundCta, resolveAccess } from './App'
 import { buildAppEntryPath } from './lib/auth/appEntry'
 import { buildWaitlistEntryUrl } from './lib/auth/waitlistEntry'
 import { shouldNavigateAfterWaitlistHandoff } from './lib/auth/appContinueGate'
@@ -120,25 +120,36 @@ describe('waitlist to gated-app route regression', () => {
     })
   })
 
-  it('keeps waitlist entry local on marketing host and bounces app-host entry back to marketing', () => {
-    expect(
-      getWaitlistEntryRouteTarget({
-        hostMode: 'marketing',
-        search: '?reason=needs-acceptance',
-      }),
-    ).toEqual({
-      kind: 'internal',
-      to: '/?reason=needs-acceptance#waitlist',
+  it('uses the canonical public waitlist path for marketing-only recovery CTAs', () => {
+    expect(getGenericNotFoundCta('marketing')).toEqual({
+      href: '/#waitlist',
+      label: 'Join Waitlist',
+      hint: 'Start from the canonical waitlist entry.',
+    })
+
+    expect(getGenericNotFoundCta('app')).toEqual({
+      href: '/swap?reason=not-found',
+      label: 'Go To Trade',
+      hint: 'Continue to the canonical app landing route.',
     })
 
     expect(
-      getWaitlistEntryRouteTarget({
+      resolveAccess('accepted', {
+        loading: false,
+        walletConnected: false,
+        sessionValid: false,
+        accepted: false,
+        creator: false,
+        admin: false,
+        allowlistEnforced: true,
+        effectiveAddress: null,
+        marketingUrl: MARKETING_ORIGIN,
         hostMode: 'app',
-        search: '?reason=needs-acceptance',
       }),
     ).toEqual({
-      kind: 'external',
-      to: `${MARKETING_ORIGIN}/?reason=needs-acceptance#waitlist`,
+      allow: false,
+      reason: 'needs-session',
+      redirectTo: buildWaitlistEntryUrl(MARKETING_ORIGIN, 'needs-session'),
     })
   })
 })

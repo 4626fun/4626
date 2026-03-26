@@ -9,6 +9,7 @@ const Home = lazy(async () => {
   const m = await import('./pages/Home')
   return { default: m.Home }
 })
+const LayoutWithoutAccountContext = lazy(async () => import('./app/LayoutWithoutAccountContext'))
 const ProtectedApp = lazy(async () => import('./ProtectedApp'))
 const TelegramMenuEntryRoute = lazy(async () => {
   const m = await import('./pages/TelegramMenuEntry')
@@ -43,13 +44,21 @@ export function RootRouter() {
       />
       <Routes>
         <Route
-          path="/"
           element={
             <Suspense fallback={<AppLoadingState />}>
-              <Home />
+              <LayoutWithoutAccountContext />
             </Suspense>
           }
-        />
+        >
+          <Route
+            path="/"
+            element={
+              <Suspense fallback={<AppLoadingState />}>
+                <Home />
+              </Suspense>
+            }
+          />
+        </Route>
         <Route
           path="/telegram/menu"
           element={

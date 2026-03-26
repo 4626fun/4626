@@ -3,20 +3,22 @@
  *
  * Runs every 30 minutes and verifies the full fee pipeline for each vault:
  *
- *   1. payoutRecipient check — Creator Coin's payoutRecipient == GaugeController
- *   2. GaugeController BPS config — burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000
- *   3. GaugeController wiring — vault() matches the registered vault address
- *   4. Burn stream health — activeShares dripping, not stale
- *   5. GaugeController balance — holds vault shares, lastDistribution not stale
+ *   1. externalRevenueRecipient check — Creator Coin payoutRecipient matches configured lane mode
+ *   2. tradeFeeCollector check — ShareOFT.gaugeController matches expected collector
+ *   3. GaugeController BPS config — burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000
+ *   4. Creator treasury guard — if creatorShareBps > 0 then creatorTreasury must be non-zero
+ *   5. GaugeController wiring — vault() matches the registered vault address
+ *   6. Burn stream health — activeShares dripping, not stale
+ *   7. GaugeController balance — holds vault shares, lastDistribution not stale
  *
  * On failure: alerts via POST /cre/keeper/alert
  *
  * CRE Quota Budget per execution (1 vault):
  *   - 1 HTTP (fetch vaults)
- *   - ~10 EVM reads (payoutRecipient, BPS x4, vault, lastDistribution,
- *     burnStream x3, balanceOf)
+ *   - ~13 EVM reads (payoutRecipient, shareOFT.gaugeController, BPS x4, creatorTreasury, vault,
+ *     lastDistribution, burnStream x3, balanceOf)
  *   - 1 HTTP (alert if needed)
- *   Total: max 2 HTTP + 10 EVM reads
+ *   Total: max 2 HTTP + 13 EVM reads
  */
 
 import {
@@ -29,10 +31,11 @@ import {
   bytesToHex,
   consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk"
-import { decodeFunctionResult } from "viem"
+import { decodeFunctionResult, zeroAddress } from "viem"
 import { GaugeControllerABI } from "../contracts/abi/GaugeController"
 import { BurnStreamABI } from "../contracts/abi/BurnStream"
 import { CreatorCoinABI } from "../contracts/abi/CreatorCoin"
+import { ShareOFTABI } from "../contracts/abi/ShareOFT"
 import { ERC20ABI } from "../contracts/abi/ERC20"
 import {
   createAiFallbackResult,
@@ -59,6 +62,10 @@ type Config = {
   expectedProtocolShareBps: number
   staleThresholdSeconds: number
   rotationIntervalSeconds?: number
+  expectedExternalRevenueRecipientMode?: "gauge" | "payout_router"
+  expectedExternalRevenueRecipient?: string
+  expectedTradeFeeCollector?: string
+  enforceTradeFeeCollectorAlignment?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -69,8 +76,10 @@ type VaultInfo = {
   vaultAddress: string
   chainId: number
   creatorCoinAddress: string
+  shareTokenAddress?: string
   gaugeControllerAddress?: string
   burnStreamAddress?: string
+  payoutRouterAddress?: string
   groupId: string
 }
 
@@ -273,6 +282,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   const gaugeAddr = vault.gaugeControllerAddress
   const vaultAddr = vault.vaultAddress
   const coinAddr = vault.creatorCoinAddress
+  const shareTokenAddr = vault.shareTokenAddress
   const burnStreamAddr = vault.burnStreamAddress
 
   runtime.log(`Checking payout integrity for vault ${vaultAddr}`)
@@ -282,47 +292,135 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   let checksRun = 0
 
   // -----------------------------------------------------------------------
-  // Check 1: payoutRecipient on Creator Coin == GaugeController
+  // Check 1: externalRevenueRecipient mode check
   // -----------------------------------------------------------------------
   try {
     const data = evmRead(runtime, evmClient, coinAddr, CreatorCoinABI, "payoutRecipient")
     const payoutRecipient = decodeAddress(CreatorCoinABI, "payoutRecipient", data).toLowerCase()
     checksRun++
 
-    if (payoutRecipient !== gaugeAddr.toLowerCase()) {
+    const mode = runtime.config.expectedExternalRevenueRecipientMode === "payout_router" ? "payout_router" : "gauge"
+    const configuredExpected = runtime.config.expectedExternalRevenueRecipient?.toLowerCase()
+    const modeExpected = mode === "payout_router" ? vault.payoutRouterAddress?.toLowerCase() : gaugeAddr.toLowerCase()
+    const expectedExternalRevenueRecipient = configuredExpected ?? modeExpected
+
+    if (mode === "payout_router" && !vault.payoutRouterAddress) {
       pendingAlerts.push({
         vaultAddress: vaultAddr,
-        alertType: "payout_recipient_mismatch",
+        alertType: "external_revenue_mode_incomplete",
         severity: "critical",
-        message: `Creator Coin payoutRecipient (${payoutRecipient}) != GaugeController (${gaugeAddr})`,
-        details: { payoutRecipient, expected: gaugeAddr },
+        message: "Mode is payout_router but payoutRouterAddress is not configured for this vault",
+        details: {
+          mode,
+          configuredExpected: configuredExpected ?? null,
+          payoutRouterAddress: vault.payoutRouterAddress ?? null,
+          burnStreamAddress: burnStreamAddr ?? null,
+          gaugeControllerAddress: gaugeAddr,
+        },
+      })
+    } else if (mode === "payout_router" && !burnStreamAddr) {
+      pendingAlerts.push({
+        vaultAddress: vaultAddr,
+        alertType: "router_mode_burn_stream_missing",
+        severity: "critical",
+        message: "Mode is payout_router but burnStreamAddress is not configured for this vault",
+        details: {
+          mode,
+          payoutRouterAddress: vault.payoutRouterAddress ?? null,
+          burnStreamAddress: burnStreamAddr ?? null,
+          gaugeControllerAddress: gaugeAddr,
+        },
+      })
+    } else if (!expectedExternalRevenueRecipient) {
+      pendingAlerts.push({
+        vaultAddress: vaultAddr,
+        alertType: "external_revenue_recipient_unresolved",
+        severity: "critical",
+        message: `Cannot resolve expected externalRevenueRecipient for mode=${mode}`,
+        details: {
+          mode,
+          configuredExpected: configuredExpected ?? null,
+          payoutRouterAddress: vault.payoutRouterAddress ?? null,
+          gaugeControllerAddress: gaugeAddr,
+        },
+      })
+    } else if (payoutRecipient !== expectedExternalRevenueRecipient) {
+      pendingAlerts.push({
+        vaultAddress: vaultAddr,
+        alertType: "external_revenue_recipient_mismatch",
+        severity: "critical",
+        message: `Creator Coin externalRevenueRecipient (${payoutRecipient}) != expected (${expectedExternalRevenueRecipient})`,
+        details: {
+          mode,
+          payoutRecipient,
+          expected: expectedExternalRevenueRecipient,
+          gaugeControllerAddress: gaugeAddr,
+          payoutRouterAddress: vault.payoutRouterAddress ?? null,
+        },
       })
     } else {
-      runtime.log("Check 1 PASS: payoutRecipient matches GaugeController")
+      runtime.log(`Check 1 PASS: externalRevenueRecipient matches mode=${mode}`)
     }
   } catch {
-    runtime.log("Check 1 ERROR: failed to read payoutRecipient")
+    runtime.log("Check 1 ERROR: failed to read CreatorCoin externalRevenueRecipient")
   }
 
   // -----------------------------------------------------------------------
-  // Check 2: GaugeController BPS config
+  // Check 2: tradeFeeCollector alignment (ShareOFT.gaugeController)
+  // -----------------------------------------------------------------------
+  if (runtime.config.enforceTradeFeeCollectorAlignment !== false && shareTokenAddr) {
+    try {
+      const data = evmRead(runtime, evmClient, shareTokenAddr, ShareOFTABI, "gaugeController")
+      const shareTradeFeeCollector = decodeAddress(ShareOFTABI, "gaugeController", data).toLowerCase()
+      checksRun++
+
+      const expectedTradeFeeCollector = (runtime.config.expectedTradeFeeCollector ?? gaugeAddr).toLowerCase()
+      if (shareTradeFeeCollector !== expectedTradeFeeCollector) {
+        pendingAlerts.push({
+          vaultAddress: vaultAddr,
+          alertType: "trade_fee_collector_mismatch",
+          severity: "critical",
+          message: `ShareOFT tradeFeeCollector (${shareTradeFeeCollector}) != expected (${expectedTradeFeeCollector})`,
+          details: {
+            shareTokenAddress: shareTokenAddr,
+            shareTradeFeeCollector,
+            expectedTradeFeeCollector,
+            gaugeControllerAddress: gaugeAddr,
+          },
+        })
+      } else {
+        runtime.log("Check 2 PASS: tradeFeeCollector aligned on ShareOFT")
+      }
+    } catch {
+      runtime.log("Check 2 ERROR: failed to read ShareOFT.gaugeController")
+    }
+  } else {
+    runtime.log("Check 2 SKIP: tradeFeeCollector alignment disabled or share token unavailable")
+  }
+
+  // -----------------------------------------------------------------------
+  // Check 3: GaugeController BPS config + creator treasury invariant
   // -----------------------------------------------------------------------
   try {
     const burnData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "burnShareBps")
     const lotteryData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "lotteryShareBps")
     const creatorData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "creatorShareBps")
     const protocolData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "protocolShareBps")
+    const creatorTreasuryData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "creatorTreasury")
 
     const burnBps = Number(decodeBigInt(GaugeControllerABI, "burnShareBps", burnData))
     const lotteryBps = Number(decodeBigInt(GaugeControllerABI, "lotteryShareBps", lotteryData))
     const creatorBps = Number(decodeBigInt(GaugeControllerABI, "creatorShareBps", creatorData))
     const protocolBps = Number(decodeBigInt(GaugeControllerABI, "protocolShareBps", protocolData))
+    const creatorTreasury = decodeAddress(GaugeControllerABI, "creatorTreasury", creatorTreasuryData).toLowerCase()
     checksRun++
 
     const totalBps = burnBps + lotteryBps + creatorBps + protocolBps
     const cfg = runtime.config
+    let pass = true
 
     if (totalBps !== 10000) {
+      pass = false
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: "bps_sum_invalid",
@@ -336,6 +434,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
       creatorBps !== cfg.expectedCreatorShareBps ||
       protocolBps !== cfg.expectedProtocolShareBps
     ) {
+      pass = false
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: "bps_config_changed",
@@ -351,15 +450,26 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
           },
         },
       })
-    } else {
-      runtime.log("Check 2 PASS: BPS config correct")
     }
+
+    if (creatorBps > 0 && creatorTreasury === zeroAddress) {
+      pass = false
+      pendingAlerts.push({
+        vaultAddress: vaultAddr,
+        alertType: "creator_treasury_missing",
+        severity: "critical",
+        message: `creatorShareBps is ${creatorBps} but creatorTreasury is zero`,
+        details: { creatorBps, creatorTreasury },
+      })
+    }
+
+    if (pass) runtime.log("Check 3 PASS: BPS config and creator treasury invariant hold")
   } catch {
-    runtime.log("Check 2 ERROR: failed to read BPS config")
+    runtime.log("Check 3 ERROR: failed to read BPS config")
   }
 
   // -----------------------------------------------------------------------
-  // Check 3: GaugeController vault() wiring
+  // Check 4: GaugeController vault() wiring
   // -----------------------------------------------------------------------
   try {
     const data = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "vault")
@@ -375,14 +485,14 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
         details: { gaugeVault, expected: vaultAddr },
       })
     } else {
-      runtime.log("Check 3 PASS: GaugeController vault wiring correct")
+      runtime.log("Check 4 PASS: GaugeController vault wiring correct")
     }
   } catch {
-    runtime.log("Check 3 ERROR: failed to read GaugeController vault()")
+    runtime.log("Check 4 ERROR: failed to read GaugeController vault()")
   }
 
   // -----------------------------------------------------------------------
-  // Check 4: Burn stream health (if configured)
+  // Check 5: Burn stream health (if configured)
   // -----------------------------------------------------------------------
   if (burnStreamAddr) {
     try {
@@ -414,17 +524,17 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
           },
         })
       } else {
-        runtime.log("Check 4 PASS: Burn stream healthy")
+        runtime.log("Check 5 PASS: Burn stream healthy")
       }
     } catch {
-      runtime.log("Check 4 ERROR: failed to read burn stream state")
+      runtime.log("Check 5 ERROR: failed to read burn stream state")
     }
   } else {
-    runtime.log("Check 4 SKIP: No burn stream configured")
+    runtime.log("Check 5 SKIP: No burn stream configured")
   }
 
   // -----------------------------------------------------------------------
-  // Check 5: GaugeController balance + distribution freshness
+  // Check 6: GaugeController balance + distribution freshness
   // -----------------------------------------------------------------------
   try {
     // Read vault share balance of the GaugeController
@@ -452,10 +562,10 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
         },
       })
     } else {
-      runtime.log("Check 5 PASS: GaugeController balance/distribution OK")
+      runtime.log("Check 6 PASS: GaugeController balance/distribution OK")
     }
   } catch {
-    runtime.log("Check 5 ERROR: failed to read GaugeController balance")
+    runtime.log("Check 6 ERROR: failed to read GaugeController balance")
   }
 
   // -----------------------------------------------------------------------

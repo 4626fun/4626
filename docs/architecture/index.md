@@ -37,14 +37,15 @@ Onchain, 4626 consists of:
 ### 3. CreatorShareOFT (LayerZero V2 OFT)
 
 - **Omnichain fungible token** - same token on all chains
-- Collects **6.9% fee on all DEX trades** (buys and sells) via `setAddressType` for DEX pools
-- Routes fees to **CreatorGaugeController**
+- Native fee trigger is buy-side (`SwapOnly -> non-SwapOnly`) via `setAddressType` classification
+- Sell-side and additional fee behavior are hook-config dependent (not unconditional native OFT behavior)
+- Routes trade-fee flow to the **tradeFeeCollector** domain (typically `CreatorGaugeController`)
 - Triggers instant lottery roll for all traders (win or lose determined immediately)
 
 ### 4. CreatorGaugeController
 
 - Receives trading fees from all share tokens
-- Splits fees: **69% lottery**, **21.39% burn**, **9.61% voter rewards**
+- Splits fees by configurable bps (default: **69% lottery**, **21.39% burn**, **9.61% voter/protocol branch**, **0% creator**)
 - Unwraps fees into vault shares and routes them by configured splits
 
 ### 5. CreatorLotteryManager
@@ -52,14 +53,19 @@ Onchain, 4626 consists of:
 - **Shared service** (one per chain): triggered by approved swap contracts
 - Calculates instant win probability (percentage-based: $1 traded = 0.0004% chance)
 - Integrates **Chainlink VRF 2.5** for provably fair randomness on every qualifying trade
-- Winners receive 69% of jackpot reserve in **vault shares from ALL active creator vaults** (diversified prize!)
+- Winners receive configured payouts from jackpot reserve in **vault shares from active creator vaults** (diversified prize)
 - **Instant lottery** - each trade is an independent roll, winners paid immediately
 - Optional boosts via `ve4626BoostManager` and `VaultGaugeVoting`
+
+Important boundary:
+- `CreatorGaugeController` = jackpot custodian (`jackpotReserve`)
+- `CreatorLotteryManager` = jackpot payout authority (authorized caller), not custodian
 
 ### 6. CreatorCCAStrategy (Uniswap CCA Integration)
 
 - Allocates vault assets to **Uniswap Continuous Clearing Auction** for fair launch price discovery
-- After auction ends, migrates liquidity to Uniswap V4 pool for ongoing trading
+- After graduation/sweep, `migrate()` handles v4 pool initialization + LP position migration
+- Full launch completion still requires explicit hook config/alignment checks (separate operational step)
 
 ### 7. CreatorOracle (Price Oracle)
 
@@ -91,17 +97,20 @@ LayerZero V2 Messaging → Arbitrum, Ethereum, BSC, etc.
 ## Trading Fee Flow
 
 ```
-User trades ■AKITA on Uniswap V4 (buy or sell)
-   ↓ 6.9% fee deducted
-CreatorShareOFT.transfer hook
-   ↓ Send fee
-CreatorGaugeController
+User trades ■AKITA
+   ↓
+Two fee planes:
+  - Native OFT plane: buy-side transfer trigger
+  - Hook plane: sell-side/additional policy if hook configured
+   ↓
+tradeFeeCollector (typically CreatorGaugeController)
    ↓ Route by configured split:
      - 69% → Lottery prize pool
      - 21.39% → Burned (increases PPS)
-     - 9.61% → Voter rewards
-CreatorLotteryManager (prize pool)
+     - 9.61% → Voter/protocol branch
+CreatorGaugeController (jackpot custodian)
    ↓ Calculate percentage-based win chance ($1 = 0.0004%)
+CreatorLotteryManager (jackpot payout authority)
    ↓ Instant Chainlink VRF roll
    ↓ Winner (if lucky) receives 69% of prize pool in vault shares
 ```

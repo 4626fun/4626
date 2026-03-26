@@ -45,14 +45,24 @@ export interface AuctionState {
   currentAuction: `0x${string}`;
   hasActiveAuction: boolean;
   isGraduated: boolean;
+  endBlock: bigint;
+  migrationBlock: bigint;
+  currencySwept: boolean;
+  unsoldSwept: boolean;
+  migrated: boolean;
+  failedFinalized: boolean;
 }
 
 export interface SettlementResult {
   ccaStrategyAddress: `0x${string}`;
   swept: boolean;
   unsoldSwept: boolean;
+  migrated: boolean;
+  failedFinalized: boolean;
   sweepResult?: WriteResult;
   unsoldSweepResult?: WriteResult;
+  migrateResult?: WriteResult;
+  failedFinalizeResult?: WriteResult;
   skippedReason?: string;
 }
 
@@ -75,29 +85,28 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string
  * Read auction state for a specific CCA strategy address.
  */
 export async function readAuctionStateForAddress(ccaStrategyAddress: `0x${string}`): Promise<AuctionState> {
-  const currentAuction = await readContract<`0x${string}`>({
+  const lifecycle = await readContract<any>({
     address: ccaStrategyAddress,
     abi: CCA_STRATEGY_ABI,
-    functionName: 'currentAuction',
-  });
+    functionName: 'getLifecycleStatus',
+  }).catch(() => null);
 
+  const currentAuction = (lifecycle?.auction as `0x${string}` | undefined) ?? ZERO_ADDRESS;
   const hasActiveAuction = currentAuction !== ZERO_ADDRESS;
+  const isGraduated = Boolean(lifecycle?.isGraduated ?? false);
 
-  let isGraduated = false;
-  if (hasActiveAuction) {
-    try {
-      isGraduated = await readContract<boolean>({
-        address: currentAuction,
-        abi: CCA_AUCTION_ABI,
-        functionName: 'isGraduated',
-      });
-    } catch {
-      // If isGraduated() reverts, auction may be in an unusual state
-      isGraduated = false;
-    }
-  }
-
-  return { ccaStrategyAddress, currentAuction, hasActiveAuction, isGraduated };
+  return {
+    ccaStrategyAddress,
+    currentAuction,
+    hasActiveAuction,
+    isGraduated,
+    endBlock: BigInt(lifecycle?.endBlock ?? 0),
+    migrationBlock: BigInt(lifecycle?.migrationBlock ?? 0),
+    currencySwept: Boolean(lifecycle?.currencySwept ?? false),
+    unsoldSwept: Boolean(lifecycle?.unsoldSwept ?? false),
+    migrated: Boolean(lifecycle?.migrated ?? false),
+    failedFinalized: Boolean(lifecycle?.failedFinalized ?? false),
+  };
 }
 
 /**
@@ -127,7 +136,13 @@ export async function isAlreadySwept(auctionAddress: `0x${string}`): Promise<boo
 export async function executeSettlementForStrategy(ccaStrategyAddress: `0x${string}`): Promise<SettlementResult> {
   const state = await readAuctionStateForAddress(ccaStrategyAddress);
   const shortAddr = `${ccaStrategyAddress.slice(0, 6)}...${ccaStrategyAddress.slice(-4)}`;
-  const result: SettlementResult = { ccaStrategyAddress, swept: false, unsoldSwept: false };
+  const result: SettlementResult = {
+    ccaStrategyAddress,
+    swept: false,
+    unsoldSwept: false,
+    migrated: false,
+    failedFinalized: false,
+  };
 
   // Guard: no active auction
   if (!state.hasActiveAuction) {
@@ -136,66 +151,107 @@ export async function executeSettlementForStrategy(ccaStrategyAddress: `0x${stri
     return result;
   }
 
-  // Guard: auction not graduated yet
+  if (state.migrated || state.failedFinalized) {
+    console.log(`[${shortAddr}] Launch already finalized — skipping`);
+    result.skippedReason = state.migrated ? 'already_migrated' : 'already_failed_finalized';
+    return result;
+  }
+
+  // Failure path: end block reached with no graduation.
   if (!state.isGraduated) {
-    console.log(`[${shortAddr}] Auction not graduated — waiting`);
+    if (state.endBlock === 0n) {
+      console.log(`[${shortAddr}] Auction lifecycle missing endBlock — waiting`);
+      result.skippedReason = 'lifecycle_missing_end_block';
+      return result;
+    }
+
+    // We rely on strategy guardrails for exact end-block checks.
+    const failedFinalizeResult = await writeContract({
+      address: ccaStrategyAddress,
+      abi: CCA_STRATEGY_ABI,
+      functionName: 'finalizeFailedAuction',
+    });
+    result.failedFinalizeResult = failedFinalizeResult;
+    result.failedFinalized = failedFinalizeResult.success;
+
+    if (failedFinalizeResult.success) {
+      console.log(`[${shortAddr}] finalizeFailedAuction() succeeded — tx: ${failedFinalizeResult.txHash}`);
+      await alertWarning(WORKFLOW_NAME, `Failed auction finalized for ${shortAddr}`, {
+        ccaStrategyAddress,
+        auctionAddress: state.currentAuction,
+        txHash: failedFinalizeResult.txHash,
+      });
+      return result;
+    }
+
+    // If finalization failed (e.g. still live), wait.
+    console.log(`[${shortAddr}] Auction not graduated — waiting (${failedFinalizeResult.error ?? 'no_error'})`);
     result.skippedReason = 'not_graduated';
     return result;
   }
 
-  // Guard: already swept on-chain (sweepCurrencyBlock > 0)
-  const alreadySwept = await isAlreadySwept(state.currentAuction);
-  if (alreadySwept) {
-    console.log(`[${shortAddr}] Auction already swept on-chain — skipping`);
-    result.skippedReason = 'already_swept';
-    return result;
-  }
-
   // --- Step 1: sweepCurrency() ---
-  console.log(`[${shortAddr}] Auction graduated! Calling sweepCurrency()`);
-
-  const sweepResult = await writeContract({
-    address: ccaStrategyAddress,
-    abi: CCA_STRATEGY_ABI,
-    functionName: 'sweepCurrency',
-  });
-
-  result.swept = sweepResult.success;
-  result.sweepResult = sweepResult;
-
-  if (sweepResult.success) {
-    console.log(`[${shortAddr}] sweepCurrency() succeeded — tx: ${sweepResult.txHash}`);
-    await alertInfo(WORKFLOW_NAME, `Auction settled for ${shortAddr}`, {
-      ccaStrategyAddress,
-      auctionAddress: state.currentAuction,
-      txHash: sweepResult.txHash,
+  if (!state.currencySwept) {
+    console.log(`[${shortAddr}] Auction graduated; calling sweepCurrency()`);
+    const sweepResult = await writeContract({
+      address: ccaStrategyAddress,
+      abi: CCA_STRATEGY_ABI,
+      functionName: 'sweepCurrency',
     });
-  } else {
-    console.error(`[${shortAddr}] sweepCurrency() failed — ${sweepResult.error}`);
-    await alertCritical(WORKFLOW_NAME, `sweepCurrency() failed for ${shortAddr}`, {
-      ccaStrategyAddress,
-      error: sweepResult.error,
-    });
-    // Don't attempt unsold sweep if currency sweep failed
-    return result;
+    result.swept = sweepResult.success;
+    result.sweepResult = sweepResult;
+
+    if (sweepResult.success) {
+      console.log(`[${shortAddr}] sweepCurrency() succeeded — tx: ${sweepResult.txHash}`);
+      await alertInfo(WORKFLOW_NAME, `Auction currency swept for ${shortAddr}`, {
+        ccaStrategyAddress,
+        auctionAddress: state.currentAuction,
+        txHash: sweepResult.txHash,
+      });
+    } else {
+      console.error(`[${shortAddr}] sweepCurrency() failed — ${sweepResult.error}`);
+      await alertCritical(WORKFLOW_NAME, `sweepCurrency() failed for ${shortAddr}`, {
+        ccaStrategyAddress,
+        error: sweepResult.error,
+      });
+      return result;
+    }
   }
 
-  // --- Step 2: sweepUnsoldTokens() ---
-  console.log(`[${shortAddr}] Sweeping unsold tokens`);
+  // --- Step 2: migrate() ---
+  if (!state.migrated) {
+    const migrateResult = await writeContract({
+      address: ccaStrategyAddress,
+      abi: CCA_STRATEGY_ABI,
+      functionName: 'migrate',
+    });
+    result.migrateResult = migrateResult;
+    result.migrated = migrateResult.success;
 
-  const unsoldResult = await writeContract({
-    address: ccaStrategyAddress,
-    abi: CCA_STRATEGY_ABI,
-    functionName: 'sweepUnsoldTokens',
-  });
+    if (!migrateResult.success) {
+      console.warn(`[${shortAddr}] migrate() not executed yet — ${migrateResult.error}`);
+      return result;
+    }
+    console.log(`[${shortAddr}] migrate() succeeded — tx: ${migrateResult.txHash}`);
+  }
 
-  result.unsoldSwept = unsoldResult.success;
-  result.unsoldSweepResult = unsoldResult;
+  // --- Step 3: sweepUnsoldTokens() (best-effort, non-critical) ---
+  if (!state.unsoldSwept) {
+    console.log(`[${shortAddr}] Sweeping unsold tokens (best-effort)`);
+    const unsoldResult = await writeContract({
+      address: ccaStrategyAddress,
+      abi: CCA_STRATEGY_ABI,
+      functionName: 'sweepUnsoldTokens',
+    });
 
-  if (unsoldResult.success) {
-    console.log(`[${shortAddr}] sweepUnsoldTokens() succeeded — tx: ${unsoldResult.txHash}`);
-  } else {
-    console.warn(`[${shortAddr}] sweepUnsoldTokens() failed (non-critical) — ${unsoldResult.error}`);
+    result.unsoldSwept = unsoldResult.success;
+    result.unsoldSweepResult = unsoldResult;
+
+    if (unsoldResult.success) {
+      console.log(`[${shortAddr}] sweepUnsoldTokens() succeeded — tx: ${unsoldResult.txHash}`);
+    } else {
+      console.warn(`[${shortAddr}] sweepUnsoldTokens() failed (non-critical) — ${unsoldResult.error}`);
+    }
   }
 
   return result;
@@ -218,7 +274,7 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
     return {
       totalStrategies: 1,
       processed: 1,
-      settled: result.swept ? 1 : 0,
+      settled: result.swept || result.migrated || result.failedFinalized ? 1 : 0,
       skipped: result.skippedReason ? 1 : 0,
       errors: 0,
       results: [result],
@@ -275,6 +331,8 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
           ccaStrategyAddress: vault.ccaStrategyAddress,
           swept: false,
           unsoldSwept: false,
+          migrated: false,
+          failedFinalized: false,
           skippedReason: `registry_unverified: ${reason}`,
         });
         batchResult.processed++;
@@ -286,7 +344,7 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
       batchResult.results.push(result);
       batchResult.processed++;
 
-      if (result.swept) batchResult.settled++;
+      if (result.swept || result.migrated || result.failedFinalized) batchResult.settled++;
       if (result.skippedReason) batchResult.skipped++;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -296,6 +354,8 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
         ccaStrategyAddress: vault.ccaStrategyAddress,
         swept: false,
         unsoldSwept: false,
+        migrated: false,
+        failedFinalized: false,
         skippedReason: `error: ${message}`,
       });
     }

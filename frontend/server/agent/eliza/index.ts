@@ -92,6 +92,11 @@ import {
   listXmtpDb3FilesUnderRoot,
   resolveXmtpDbDirectory,
 } from '../../_lib/xmtpDbDirectory.js'
+import {
+  fileLooksLikePlainSqlite,
+  hasLegacyMigrationBackupForFile,
+  hasLegacyPlaintextDbInDir,
+} from '../../_lib/xmtpDbEncryption.js'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -182,79 +187,9 @@ const ELIZA_GROVE_UPLOAD_MODE = (() => {
   return 'on-change' as const
 })()
 
-const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
-
-function fileLooksLikePlainSqlite(filePath: string): boolean {
-  try {
-    if (!fs.existsSync(filePath)) return false
-    const fd = fs.openSync(filePath, 'r')
-    try {
-      const header = Buffer.alloc(SQLITE_HEADER.length)
-      const bytesRead = fs.readSync(fd, header, 0, header.length, 0)
-      if (bytesRead !== SQLITE_HEADER.length) return false
-      return header.equals(SQLITE_HEADER)
-    } finally {
-      fs.closeSync(fd)
-    }
-  } catch {
-    return false
-  }
-}
-
-function hasLegacyPlaintextDbInDir(): boolean {
-  try {
-    for (const p of listXmtpDb3FilesUnderRoot(XMTP_DB_DIR)) {
-      if (fileLooksLikePlainSqlite(p)) return true
-    }
-    return false
-  } catch {
-    return false
-  }
-}
-
-function hasLegacyMigrationBackupsInDir(): boolean {
-  try {
-    const files = fs.readdirSync(XMTP_DB_DIR)
-    return files.some((f: string) => f.includes('.legacy-unencrypted.'))
-  } catch {
-    return false
-  }
-}
-
-function hasLegacyMigrationBackupForFile(filePath: string): boolean {
-  try {
-    const dir = path.dirname(filePath)
-    const base = path.basename(filePath)
-    const prefix = `${base}.legacy-unencrypted.`
-    return fs.readdirSync(dir).some((f: string) => f.startsWith(prefix))
-  } catch {
-    return false
-  }
-}
-
 function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
   if (XMTP_DB_PLAINTEXT_ONLY) return undefined
   if (!XMTP_DB_ENCRYPTION_KEY) return undefined
-  if (
-    XMTP_DB_FORCE_ENCRYPTED_MIGRATION &&
-    hasLegacyPlaintextDbInDir() &&
-    hasLegacyMigrationBackupsInDir()
-  ) {
-    const message =
-      '[xmtp] Refusing startup: forced encrypted migration was already attempted but plaintext DB(s) still remain. ' +
-      'This usually means SQLCipher encryption is unavailable in this runtime, and retrying would churn installations. ' +
-      'Disable forced migration (XMTP_DB_FORCE_ENCRYPTED_MIGRATION=0) to reuse the existing DB.'
-    logger.error(message)
-    throw new Error(message)
-  }
-  if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
-    const message =
-      '[xmtp] Refusing startup: XMTP_DB_ENCRYPTION_KEY is configured but legacy plaintext DB file(s) were detected. ' +
-      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db ' +
-      'to rotate plaintext DBs before startup.'
-    logger.error(message)
-    throw new Error(message)
-  }
   return XMTP_DB_ENCRYPTION_KEY
 }
 
@@ -376,15 +311,14 @@ function checkDbPersistence(): DbPersistenceCheckResult {
         '    To run migration intentionally, set XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db.\n' +
         '    Startup will fail if legacy plaintext DB files are present unless auto migration is enabled.',
       )
-    } else if (XMTP_DB_AUTO_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
+    } else if (XMTP_DB_AUTO_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir(XMTP_DB_DIR)) {
       logger.warn(
         '[xmtp] Legacy plaintext XMTP DB detected; auto encrypted migration is enabled and will rotate plaintext DB files.',
       )
-    } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
-      errors.push(
-        '[xmtp] Legacy plaintext XMTP DB detected while encryption is configured. ' +
-          'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and ' +
-          'XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to rotate plaintext DB files.',
+    } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir(XMTP_DB_DIR)) {
+      logger.warn(
+        '[xmtp] Legacy plaintext XMTP DB detected elsewhere under the volume. ' +
+          'Startup will validate the active DB path before use, but stale historical DBs no longer block container boot.',
       )
     }
   } catch {

@@ -17,6 +17,10 @@ import { getKeeprVaultAutomationByVaultAddress } from '../_lib/keeprAutomation.j
 import { getDb } from '../_lib/postgres.js'
 import { logger } from '../_lib/logger.js'
 import { resolveXmtpDbDirectory } from '../_lib/xmtpDbDirectory.js'
+import {
+  fileLooksLikePlainSqlite,
+  hasLegacyMigrationBackupForFile,
+} from '../_lib/xmtpDbEncryption.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/creatorXmtpAgents.js'
 import {
   findCoinbaseSmartWalletOwnerIndex,
@@ -172,7 +176,6 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
  * every time (which burns through the 10-installation limit).
  */
 const KEEPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
-const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED = (() => {
   const raw = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes'
@@ -181,26 +184,6 @@ const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM = (process.env.XMTP_DB_FORCE_ENC
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION =
   XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED &&
   XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM === 'rotate-db'
-
-function fileLooksLikePlainSqlite(filePath: string): boolean {
-  try {
-    if (!fs.existsSync(filePath)) return false
-    // SQLCipher DBs managed by XMTP keep a sidecar salt file.
-    // If that file exists, this DB should be treated as encrypted.
-    if (fs.existsSync(`${filePath}.sqlcipher_salt`)) return false
-    const fd = fs.openSync(filePath, 'r')
-    try {
-      const header = Buffer.alloc(SQLITE_HEADER.length)
-      const bytesRead = fs.readSync(fd, header, 0, header.length, 0)
-      if (bytesRead !== SQLITE_HEADER.length) return false
-      return header.equals(SQLITE_HEADER)
-    } finally {
-      fs.closeSync(fd)
-    }
-  } catch {
-    return false
-  }
-}
 
 function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
   const encKey = getDbEncryptionKey()
@@ -225,17 +208,6 @@ function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
       filePath,
       error: String(err),
     })
-  }
-}
-
-function hasLegacyMigrationBackupForFile(filePath: string): boolean {
-  try {
-    const dir = path.dirname(filePath)
-    const base = path.basename(filePath)
-    const prefix = `${base}.legacy-unencrypted.`
-    return fs.readdirSync(dir).some((f) => f.startsWith(prefix))
-  } catch {
-    return false
   }
 }
 

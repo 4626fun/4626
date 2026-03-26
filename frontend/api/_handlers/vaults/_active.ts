@@ -22,6 +22,7 @@ export interface VaultConfig {
   groupId: string
   graduatedAt?: string | null
   settledAt?: string | null
+  settlementStage?: string | null
   automation: VaultAutomationConfig
 }
 
@@ -61,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (hasChainFilter && hasSettledFalse) {
       result = await db.sql`
         SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
-               graduated_at, settled_at
+               graduated_at, settled_at, settlement_stage
         FROM keepr_vaults
         WHERE chain_id = ${chainId} AND settled_at IS NULL
         ORDER BY created_at ASC;
@@ -69,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (hasChainFilter && hasSettledTrue) {
       result = await db.sql`
         SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
-               graduated_at, settled_at
+               graduated_at, settled_at, settlement_stage
         FROM keepr_vaults
         WHERE chain_id = ${chainId} AND settled_at IS NOT NULL
         ORDER BY created_at ASC;
@@ -77,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (hasChainFilter) {
       result = await db.sql`
         SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
-               graduated_at, settled_at
+               graduated_at, settled_at, settlement_stage
         FROM keepr_vaults
         WHERE chain_id = ${chainId}
         ORDER BY created_at ASC;
@@ -85,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (hasSettledFalse) {
       result = await db.sql`
         SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
-               graduated_at, settled_at
+               graduated_at, settled_at, settlement_stage
         FROM keepr_vaults
         WHERE settled_at IS NULL
         ORDER BY created_at ASC;
@@ -93,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (hasSettledTrue) {
       result = await db.sql`
         SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
-               graduated_at, settled_at
+               graduated_at, settled_at, settlement_stage
         FROM keepr_vaults
         WHERE settled_at IS NOT NULL
         ORDER BY created_at ASC;
@@ -101,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else {
       result = await db.sql`
         SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
-               graduated_at, settled_at
+               graduated_at, settled_at, settlement_stage
         FROM keepr_vaults
         ORDER BY created_at ASC;
       `
@@ -127,6 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         groupId: String(row.group_id),
         graduatedAt: row.graduated_at ? new Date(row.graduated_at).toISOString() : null,
         settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : null,
+        settlementStage: typeof row.settlement_stage === 'string' ? row.settlement_stage : null,
         automation: automation
           ? {
               automationEnabled: automation.automationEnabled,

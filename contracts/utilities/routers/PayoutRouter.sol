@@ -33,10 +33,10 @@ interface ISwapRouterV3 {
 /**
  * @title PayoutRouter
  * @author 0xakita.eth
- * @notice Receives creator earnings and routes value into the vault via an enforceable burn stream.
+ * @notice Receives external revenue and routes value into the vault via an enforceable burn stream.
  *
  * @dev Design goals:
- * - Safe `payoutRecipient`: never reverts on ERC20 transfers (no hooks needed).
+ * - Safe externalRevenueRecipient path: never reverts on ERC20 transfers (no hooks needed).
  * - Can accept ETH: wraps to WETH (kept until processed).
  * - Converts payout tokens → creator coin via Uniswap V3 (exactInput path), deposits into the vault,
  *   and queues the minted vault shares into a burn stream (dripped/burned over time).
@@ -176,7 +176,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Convert a payout token into creatorCoin and inject into the vault (PPS-only).
+     * @notice Convert external-revenue token into creatorCoin and inject into the vault (PPS-only).
      * @param tokenIn Payout token to convert (e.g. USDC, WETH, ZORA). Use creatorCoin to inject directly.
      * @param amountIn Amount of tokenIn to convert/inject (must already be held by this router).
      * @param minCreatorOut Minimum creatorCoin received from swap (slippage guard). Ignored when tokenIn==creatorCoin.

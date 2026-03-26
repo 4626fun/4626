@@ -30,6 +30,10 @@ contract MockRegistry {
         return address(0x1a44076050125825900e736c501f859c50fE728c);
     }
 
+    function getEidForChainId(uint256) external pure returns (uint32) {
+        return 30184;
+    }
+
     function setLotteryManager(address _mgr) external {
         lotteryManager = _mgr;
     }

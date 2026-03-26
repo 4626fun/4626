@@ -1,20 +1,19 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, X } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { buildWaitlistEntryUrl, getMarketingWaitlistEntryUrl, type WaitlistEntryReason } from '@/lib/auth/waitlistEntry'
+import {
+  buildWaitlistEntryUrl,
+  getCanonicalMarketingWaitlistPath,
+  type WaitlistEntryReason,
+} from '@/lib/auth/waitlistEntry'
 import { getHostMode, getMarketingBaseUrl, type HostMode } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
 
-const LazyWaitlistModal = lazy(async () => {
-  const mod = await import('@/components/waitlist/WaitlistModal')
-  return { default: mod.WaitlistModal }
-})
-
-const LazyJoinWaitlistCtaWithProvider = lazy(async () => {
-  const mod = await import('@/components/waitlist/JoinWaitlistCta')
-  return { default: mod.JoinWaitlistCtaWithProvider }
+const LazyWaitlistFlowWithProviders = lazy(async () => {
+  const mod = await import('@/components/waitlist/WaitlistFlowWithProviders')
+  return { default: mod.default }
 })
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
@@ -33,7 +32,7 @@ type HomeWaitlistRedirectInput = {
   hash: string
 }
 
-type WaitlistModalInput = {
+type WaitlistEntryVisibilityInput = {
   hash: string
   search: string
   stickyOpen: boolean
@@ -72,7 +71,7 @@ export function getHomeWaitlistRedirectTarget(input: HomeWaitlistRedirectInput):
   return null
 }
 
-export function shouldOpenWaitlistModal(input: WaitlistModalInput): boolean {
+export function shouldShowWaitlistEntry(input: WaitlistEntryVisibilityInput): boolean {
   if (input.hash === '#waitlist') return true
   const qs = new URLSearchParams(input.search)
   const wl = (qs.get('wl') ?? '').trim().toLowerCase()
@@ -85,18 +84,24 @@ export function shouldOpenWaitlistModal(input: WaitlistModalInput): boolean {
 export function buildWaitlistCloseTarget(input: WaitlistCloseTargetInput): { path: string; changed: boolean } {
   const qs = new URLSearchParams(input.search)
   let changed = false
+  const reason = String(qs.get('reason') ?? '').trim().toLowerCase()
+  const hasActiveWaitlistTrigger = input.hash === '#waitlist' || qs.has('wl') || qs.has('ref')
   if (qs.has('wl')) {
     qs.delete('wl')
     changed = true
   }
   // If user closes before the referral param is consumed, remove it
-  // so the modal doesn't immediately reopen.
+  // so the waitlist entry doesn't immediately reopen.
   if (qs.has('ref')) {
     qs.delete('ref')
     changed = true
   }
   const hash = input.hash === '#waitlist' ? '' : input.hash
   if (input.hash === '#waitlist') changed = true
+  if (hasActiveWaitlistTrigger && (reason === 'needs-session' || reason === 'needs-acceptance')) {
+    qs.delete('reason')
+    changed = true
+  }
   const query = qs.toString()
   return {
     path: `${input.pathname}${query ? `?${query}` : ''}${hash}`,
@@ -118,8 +123,8 @@ export function Home() {
     }
     return false
   }, [waitlistDismissVersion])
-  const waitlistOpen = useMemo(() => {
-    return shouldOpenWaitlistModal({
+  const waitlistVisible = useMemo(() => {
+    return shouldShowWaitlistEntry({
       hash: location.hash,
       search: location.search,
       stickyOpen: stickyWaitlistOpen,
@@ -142,18 +147,32 @@ export function Home() {
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
-  // Keep the waitlist modal open across full-page OAuth redirects (e.g. Privy <-> X).
+  // Keep the waitlist entry visible across full-page OAuth redirects (e.g. Privy <-> X).
   // We intentionally avoid encoding this state in query params, since OAuth redirect URLs
   // must match allowlists exactly (and query params can break that).
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      if (waitlistOpen) window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
+      if (waitlistVisible) window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
       else window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
     } catch {
       // ignore
     }
-  }, [waitlistOpen])
+  }, [waitlistVisible])
+
+  useEffect(() => {
+    if (hostMode === 'app') return
+    if (location.hash !== '#waitlist') return
+    if (!waitlistVisible) return
+
+    const el = document.getElementById('waitlist')
+    if (!el) return
+
+    const rafId = requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => cancelAnimationFrame(rafId)
+  }, [hostMode, location.hash, waitlistVisible])
 
   useEffect(() => {
     if (hostMode === 'app') return
@@ -184,7 +203,7 @@ export function Home() {
     return null
   }
 
-  const closeWaitlistModal = () => {
+  const closeWaitlistEntry = () => {
     try {
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
@@ -192,7 +211,7 @@ export function Home() {
     } catch {
       // ignore
     }
-    // Force a re-evaluation so sticky-open modals close immediately even when URL is unchanged.
+    // Force a re-evaluation so sticky-open waitlist entries close immediately even when the URL is unchanged.
     setWaitlistDismissVersion((v) => v + 1)
     const closeTarget = buildWaitlistCloseTarget({
       pathname: location.pathname,
@@ -204,7 +223,7 @@ export function Home() {
     }
   }
 
-  const fallbackWaitlistHref = getMarketingWaitlistEntryUrl('needs-session')
+  const canonicalWaitlistHref = getCanonicalMarketingWaitlistPath()
 
   return (
     <div className="relative">
@@ -221,8 +240,8 @@ export function Home() {
       </div>
 
       {/* Hero - Cinematic Letterbox */}
-      <section className="cinematic-section min-h-[75vh] sm:min-h-[90vh] flex items-center justify-center">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center space-y-8 sm:space-y-16">
+      <section className="cinematic-section !py-16 sm:!py-24 lg:!py-28 min-h-[68vh] sm:min-h-[82vh] flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center space-y-8 sm:space-y-14">
           {/* Status Indicator */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -240,9 +259,9 @@ export function Home() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.428 }}
-            className="space-y-6"
+            className="space-y-4 sm:space-y-6"
           >
-            <h1 className="headline text-4xl sm:text-6xl md:text-7xl lg:text-9xl leading-[1.08]">
+            <h1 className="headline text-4xl sm:text-6xl md:text-7xl lg:text-[7.5rem] xl:text-[8.25rem] leading-[0.94] tracking-[-0.05em]">
               Turn Creator Coins
               <br />
               <span className="glow-brand">Into Earnings</span>
@@ -254,7 +273,7 @@ export function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.856 }}
-            className="text-base sm:text-xl text-zinc-500 font-light tracking-wide max-w-2xl mx-auto"
+            className="text-base sm:text-xl text-zinc-400 font-light tracking-wide max-w-2xl mx-auto"
           >
             Deposit tokens · Earn from trades · Grow together
           </motion.p>
@@ -264,25 +283,12 @@ export function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-4 sm:pt-6"
+              className="pt-2 sm:pt-6"
             >
-              <Suspense
-                fallback={
-                  <button
-                    type="button"
-                    className={heroCtaClass}
-                    onClick={() => window.location.assign(fallbackWaitlistHref)}
-                  >
-                    Join waitlist
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                }
-              >
-                <LazyJoinWaitlistCtaWithProvider
-                  className={heroCtaClass}
-                  onPrivyDisabled={() => window.location.assign(fallbackWaitlistHref)}
-                />
-              </Suspense>
+              <Link to={canonicalWaitlistHref} className={heroCtaClass}>
+                Join waitlist
+                <ArrowRight className="w-4 h-4" />
+              </Link>
             </motion.div>
           ) : null}
           {showExploreCreatorsCta ? (
@@ -290,7 +296,7 @@ export function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-4 sm:pt-6"
+              className="pt-2 sm:pt-6"
             >
               <Link to="/explore/creators" className={heroCtaClass}>
                 Explore Creators
@@ -302,16 +308,55 @@ export function Home() {
         </div>
       </section>
 
+      {waitlistVisible ? (
+        <section className="cinematic-section !pt-0 !pb-8 sm:!pb-16">
+          <div id="waitlist" className="max-w-5xl mx-auto px-4 sm:px-6 scroll-mt-24">
+            <div className="rounded-[24px] border border-white/10 bg-black/40 p-3.5 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:rounded-[28px] sm:p-6 lg:p-8">
+              <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:pb-5">
+                <div className="space-y-2">
+                  <span className="label">Waitlist</span>
+                  <h2 className="headline text-2xl sm:text-3xl lg:text-4xl">Start access setup without leaving the page</h2>
+                  <p className="max-w-2xl text-sm text-zinc-400 sm:text-base">
+                    Verify email, track your place, and finish wallet readiness here. Keeping the waitlist flow inline avoids
+                    stacked auth popups fighting the landing page.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeWaitlistEntry}
+                  className="inline-flex items-center justify-center gap-2 self-start rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Hide
+                </button>
+              </div>
+
+              <div className="mt-5 sm:mt-6">
+                <Suspense
+                  fallback={
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
+                      Loading waitlist…
+                    </div>
+                  }
+                >
+                  <LazyWaitlistFlowWithProviders variant="page" sectionId="waitlist-flow" />
+                </Suspense>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {/* For Creators - Minimal CTA */}
-      <section className="cinematic-section py-12 sm:py-16 lg:py-24">
+      <section className="cinematic-section !py-10 sm:!py-16 lg:!py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="grid lg:grid-cols-2 gap-10 sm:gap-16 lg:gap-20 items-center">
+          <div className="grid items-start gap-8 sm:gap-16 lg:grid-cols-2 lg:gap-20 lg:items-center">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="space-y-5 sm:space-y-8"
+              className="space-y-4 sm:space-y-8"
             >
               <span className="label">For Creators</span>
               <h2 className="headline text-3xl sm:text-5xl lg:text-6xl leading-tight">
@@ -337,7 +382,7 @@ export function Home() {
                   this mints <span className="font-mono text-brand-primary">5,000,000 {SHARE_TOKEN}</span> and runs a{' '}
                   <span className="text-uniswap">Uniswap CCA</span> auction.
                 </p>
-                </div>
+              </div>
               {showDeployVaultCta ? (
                 <div>
                   <Link to="/deploy" className={heroCtaClass}>
@@ -355,7 +400,7 @@ export function Home() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="space-y-0"
             >
-              <div className="rounded-2xl border border-zinc-900/70 bg-black/30 backdrop-blur-sm p-4 sm:p-6">
+              <div className="rounded-3xl border border-white/8 bg-white/[0.035] shadow-[0_24px_80px_-44px_rgba(0,82,255,0.35)] backdrop-blur-sm p-5 sm:p-6">
                 <div className="text-[10px] font-medium text-zinc-600">Default launch mechanics</div>
 
                 <div className="mt-4 sm:mt-6 space-y-0">
@@ -392,14 +437,14 @@ export function Home() {
       </section>
 
       {/* Strategies - Terminal Display */}
-      <section className="cinematic-section bg-zinc-950/20">
+      <section className="cinematic-section bg-zinc-950/20 !py-10 sm:!py-24 lg:!py-32">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="mb-10 sm:mb-20"
+            className="mb-8 sm:mb-20"
           >
             <span className="label">Vault Strategies</span>
             <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-4 sm:mt-6">Default strategy allocation</h2>
@@ -409,13 +454,13 @@ export function Home() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-vault-card/60">
+          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-white/8 bg-white/[0.035] shadow-[0_24px_80px_-48px_rgba(0,82,255,0.28)] sm:grid-cols-2 lg:grid-cols-4">
             <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <div className="inline-flex items-center gap-1.5">
                 <img
@@ -437,7 +482,7 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <div className="inline-flex items-center gap-1.5">
                 <img
@@ -459,7 +504,7 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <div className="inline-flex items-center gap-1.5">
                 <img
@@ -481,7 +526,7 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.3 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+              className="bg-black/55 p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
               <span className="label text-[9px] sm:text-[10px]">Idle Buffer</span>
               <div className="value mono text-xl sm:text-3xl lg:text-4xl">10%</div>
@@ -495,7 +540,7 @@ export function Home() {
       </section>
 
       {/* FAQ Teaser */}
-      <section className="cinematic-section">
+      <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0 }}
@@ -517,11 +562,6 @@ export function Home() {
           </motion.div>
         </div>
       </section>
-      {waitlistOpen ? (
-        <Suspense fallback={null}>
-          <LazyWaitlistModal open={waitlistOpen} onClose={closeWaitlistModal} />
-        </Suspense>
-      ) : null}
     </div>
   )
 }

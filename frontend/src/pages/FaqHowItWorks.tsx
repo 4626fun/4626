@@ -4,11 +4,10 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useEffect } from 'react'
 import { TokenImage } from '@/components/TokenImage'
 import { AKITA } from '@/config/contracts'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
-import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 
@@ -136,13 +135,12 @@ export function FaqHowItWorks() {
                   New vaults can use a Uniswap Continuous Clearing Auction (CCA) to bootstrap fair price discovery and initial liquidity.
                 </p>
                 <div className="flex flex-col gap-2">
-                  <JoinWaitlistCta
+                  <Link
+                    to={getCanonicalMarketingWaitlistPath()}
                     className="text-brand-accent hover:text-brand-400 underline underline-offset-4 text-sm"
-                    showArrow={false}
-                    onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
                   >
                     Join waitlist
-                  </JoinWaitlistCta>
+                  </Link>
                 </div>
               </div>
             </div>

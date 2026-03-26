@@ -140,6 +140,18 @@ export async function resolveCreatorTokenFromAnyAddress<
   return null
 }
 
+export async function resolveCreatorTradeTokenAddress<
+  TTransport extends Transport = Transport,
+  TChain extends Chain | undefined = Chain | undefined,
+>(
+  publicClient: PublicClient<TTransport, TChain>,
+  addressLike: string,
+): Promise<Address | null> {
+  if (!isAddress(addressLike)) return null
+  const addr = getAddress(addressLike as Address)
+  return (await resolveCreatorTokenFromAnyAddress(publicClient, addr)) ?? addr
+}
+
 export async function fetchCreatorCoinInfo<
   TTransport extends Transport = Transport,
   TChain extends Chain | undefined = Chain | undefined,

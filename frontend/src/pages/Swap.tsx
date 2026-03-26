@@ -43,6 +43,7 @@ import {
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
+import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
 import { PageMeta } from '@/components/seo/PageMeta'
 
@@ -409,12 +410,43 @@ export function Swap() {
   const [lpPositionId, setLpPositionId] = useState<string>('')
   const [lpStatus, setLpStatus] = useState<string>('')
   const [lpError, setLpError] = useState<string>('')
+  const requestedTokenParam = (searchParams.get('token') ?? '').trim()
+  const requestedShareTokenParam = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
+  const normalizedRequestedToken = isAddress(requestedTokenParam)
+    ? getAddress(requestedTokenParam)
+    : null
+  const normalizedRequestedShareToken = isAddress(requestedShareTokenParam)
+    ? getAddress(requestedShareTokenParam)
+    : null
+  const requestedTradeTokenQuery = useQuery({
+    queryKey: ['swap', 'requested-trade-token', swapChainId, normalizedRequestedToken ?? ''],
+    enabled: Boolean(publicClient && swapChainId === BASE_CHAIN_ID && normalizedRequestedToken),
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60,
+    queryFn: async () => {
+      if (!publicClient || !normalizedRequestedToken) return null
+      return await resolveCreatorTradeTokenAddress(publicClient as any, normalizedRequestedToken)
+    },
+  })
+  const requestedTradeToken = useMemo(() => {
+    if (!normalizedRequestedToken) return null
+    if (swapChainId !== BASE_CHAIN_ID || !publicClient) return normalizedRequestedToken
+    if (requestedTradeTokenQuery.data) return requestedTradeTokenQuery.data
+    if (requestedTradeTokenQuery.isError || requestedTradeTokenQuery.isFetched) return normalizedRequestedToken
+    return null
+  }, [
+    normalizedRequestedToken,
+    publicClient,
+    requestedTradeTokenQuery.data,
+    requestedTradeTokenQuery.isError,
+    requestedTradeTokenQuery.isFetched,
+    swapChainId,
+  ])
 
   // ─── URL params ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const qToken = (searchParams.get('token') ?? '').trim()
-    if (isAddress(qToken)) setTokenOut(getAddress(qToken))
-  }, [searchParams, setTokenOut])
+    if (requestedTradeToken) setTokenOut(requestedTradeToken)
+  }, [requestedTradeToken, setTokenOut])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -728,15 +760,13 @@ export function Swap() {
   }, [swapChainId])
 
   const tokenOptions = useMemo<TokenOption[]>(() => {
-    const creatorCoin = (searchParams.get('token') ?? '').trim()
-    const shareCoin = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
     return buildTokenOptions({
       coreTokens: dynamicCoreTokens,
-      creatorCoin: swapChainId === BASE_CHAIN_ID ? creatorCoin : '',
-      shareCoin: swapChainId === BASE_CHAIN_ID ? shareCoin : '',
+      creatorCoin: swapChainId === BASE_CHAIN_ID ? requestedTradeToken : '',
+      shareCoin: swapChainId === BASE_CHAIN_ID ? normalizedRequestedShareToken : '',
       chainId: swapChainId,
     })
-  }, [searchParams, dynamicCoreTokens, swapChainId])
+  }, [dynamicCoreTokens, normalizedRequestedShareToken, requestedTradeToken, swapChainId])
 
   const allTokenOptions = useMemo<SwapTokenOption[]>(() => {
     return [...tokenOptions, ...extraTokenOptions]

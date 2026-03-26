@@ -78,7 +78,7 @@ Every 5 minutes, the unified `4626` workflow runs six tasks in sequence:
 | **Vault Keeper** | Deploy idle funds (`tend`), harvest yields (`report`) | Revenue |
 | **Ajna Bucket Manager** | Move Ajna liquidity buckets using oracle TWAP + local liquidity | Risk/Execution |
 | **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
-| **Auction Settlement** | Settle graduated CCA auctions (`sweepCurrency`, `sweepUnsoldTokens`) | Feature |
+| **Auction Settlement** | Attempt canonical completion for graduated CCA auctions (`sweepCurrency`, `migrate`, optional hook config, `sweepUnsoldTokens`) | Feature |
 | **Keepr Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
 | **Bridge Integrity Monitor** | Monitor bridge signer overlap, canonical route/scalar drift, and liveness freshness | Risk/Integrity |
 
@@ -128,8 +128,10 @@ A dedicated CRE workflow runs every 30 minutes to verify the full fee pipeline:
 
 | Check | What | Severity |
 |-------|------|----------|
-| **payoutRecipient** | Creator Coin's `payoutRecipient()` == GaugeController | Critical |
+| **externalRevenueRecipient** | Creator Coin `payoutRecipient()` matches configured lane mode (`payout_router` or `gauge`) | Critical |
+| **tradeFeeCollector** | ShareOFT `gaugeController()` matches expected collector (typically gauge) | Critical |
 | **BPS Config** | `burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000` | Critical |
+| **Creator Treasury Guard** | If `creatorShareBps > 0`, `creatorTreasury` must be non-zero | Critical |
 | **Vault Wiring** | GaugeController's `vault()` matches registered vault | Critical |
 | **Burn Stream** | Active epoch not stale (>24h without `drip()`) | Warning |
 | **Gauge Balance** | GaugeController holds shares and `lastDistribution` is fresh | Warning |
@@ -141,9 +143,10 @@ Alerts are sent to `POST /api/cre/keeper/alert` and forwarded to the configured 
 Auction settlement is a one-time event (~7 days after deployment). The system tracks:
 
 - `graduated_at` — when `isGraduated()` first returns true
-- `settled_at` — after successful `sweepCurrency()` + `sweepUnsoldTokens()`
+- `settlement_stage` — current completion phase (`graduated_detected`, `awaiting_migration_block`, `awaiting_owner_hook_config`, `completed`, ...)
+- `settled_at` — only after canonical completion (`sweepCurrency` + `migrate` + hook policy satisfied)
 
-Once settled, vaults are excluded from the auction-settlement workflow to avoid wasting CRE quota on redundant reads. The `sweepCurrencyBlock` on-chain check provides a secondary guard against double-sweeping.
+Once settled, vaults are excluded from the auction-settlement workflow to avoid redundant reads. The on-chain `sweepCurrencyBlock` check remains a secondary guard.
 ## Solana Workflows
 
 The Solana integration runs as separate workflows (cron-driven, independent from the unified 4626 runner):
@@ -296,8 +299,8 @@ Chainlink DON
     │
     └── payout-integrity (every 30m)
             ├── HTTPClient → GET /cre/vaults/active
-            ├── EVMClient → payoutRecipient, BPS x4, vault, lastDistribution,
-            │                burnStream x3, balanceOf
+            ├── EVMClient → externalRevenueRecipient, tradeFeeCollector, BPS x4,
+            │                vault, lastDistribution, burnStream x3, balanceOf
             └── HTTPClient → POST /cre/keeper/alert (on failure)
 ```
 
@@ -547,8 +550,8 @@ WantedBy=multi-user.target
 | `/api/cre/vaults/active` | GET | Returns all registered vaults (supports `?settled=false` filter) |
 | `/api/cre/keeper/tend` | POST | HTTP bridge — calls `tend()` on a vault |
 | `/api/cre/keeper/report` | POST | HTTP bridge — calls `report()` on a vault |
-| `/api/cre/keeper/sweep` | POST | HTTP bridge — calls `sweepCurrency()` + `sweepUnsoldTokens()` |
-| `/api/cre/keeper/mark-settled` | POST | Records `graduated_at` / `settled_at` timestamps in DB |
+| `/api/cre/keeper/sweep` | POST | HTTP bridge — canonical completion attempt (`sweepCurrency`, `migrate`, optional hook config, best-effort `sweepUnsoldTokens`) |
+| `/api/cre/keeper/mark-settled` | POST | Records `graduated_at`, `settled_at`, and `settlement_stage` in DB |
 | `/api/cre/keeper/alert` | POST | Receives alerts from CRE workflows, forwards to webhook |
 | `/api/cre/keeper/aiAssess` | POST | AI advisory classification endpoint for payout-integrity (deterministic checks remain authoritative) |
 | `/api/cre/runtime/ingest` | POST/GET | Receives runtime workflow outputs and returns latest indexed snapshots |
@@ -602,7 +605,7 @@ For local simulation, add these to `cre/cre-workflows/.env`.
 
 | Resource | Limit | Impact |
 |----------|-------|--------|
-| EVM reads | 10 per execution | vault-keeper: 1 vault per run; payout-integrity: 1 vault per run |
+| EVM reads | ~11 per execution | vault-keeper: 1 vault per run; payout-integrity: 1 vault per run |
 | HTTP calls | 5 per execution | keepr-queue: 2 actions per run |
 | Cron interval | 30s minimum | keepr-queue uses 30s; auction-settlement uses 1h |
 | Concurrent capabilities | 3 | Sequential reads within each workflow |
@@ -614,7 +617,7 @@ For local simulation, add these to `cre/cre-workflows/.env`.
 - 1 HTTP (fetch unsettled vaults) + 3 EVM reads (currentAuction, isGraduated, sweepCurrencyBlock) + 1 HTTP (sweep) + 1 HTTP (mark-settled) = 3 HTTP + 3 EVM reads
 
 **payout-integrity (every 30 min, 1 vault per run)**:
-- 1 HTTP (fetch vaults) + ~10 EVM reads (payoutRecipient, BPS x4, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 10 EVM reads
+- 1 HTTP (fetch vaults) + ~13 EVM reads (externalRevenueRecipient, tradeFeeCollector, BPS x4, creatorTreasury, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 13 EVM reads
 
 ### HTTP Bridge Pattern
 

@@ -217,7 +217,7 @@ describe('telegram webhook parsers', () => {
 
   it('classifies inline query intent for ranking', () => {
     expect(classifyInlineQuery('/buy vault 0.1')).toBe('trade')
-    expect(classifyInlineQuery('mkt quote btc')).toBe('market')
+    expect(classifyInlineQuery('mkt quote btc')).toBe('ai')
     expect(classifyInlineQuery('ask ai')).toBe('ai')
     expect(classifyInlineQuery('')).toBe('discovery')
     expect(classifyInlineQuery(`  ${exampleChecksumAddress}  `)).toBe('token_analysis')
@@ -275,7 +275,7 @@ describe('telegram webhook parsers', () => {
     ] as const
 
     const firstPage = buildInlineQueryAnswer({
-      rawQuery: 'start trading',
+      rawQuery: 'deploy status signal x',
       queryOffset: '',
       userId: '42',
       chatId: '-100123',
@@ -291,7 +291,7 @@ describe('telegram webhook parsers', () => {
     expect(firstPage.switchPmParameter).toMatch(/^inline_link_/)
 
     const secondPage = buildInlineQueryAnswer({
-      rawQuery: 'start trading',
+      rawQuery: 'deploy status signal x',
       queryOffset: firstPage.nextOffset,
       userId: '42',
       chatId: '-100123',
@@ -323,9 +323,9 @@ describe('telegram webhook parsers', () => {
           photoUrl: 'https://example.com/link.png',
           thumbnailUrl: 'https://example.com/thumb.png',
         },
-        'card:market': {
-          videoUrl: 'https://example.com/market.mp4',
-          thumbnailUrl: 'https://example.com/market.png',
+        'card:ai': {
+          videoUrl: 'https://example.com/ai.mp4',
+          thumbnailUrl: 'https://example.com/ai.png',
         },
       },
     })
@@ -372,33 +372,6 @@ describe('telegram webhook parsers', () => {
       web_app: { url: 'https://v1.4626.fun/telegram/menu' },
     })
     expect(linked.switchPmParameter).toBeUndefined()
-  })
-
-  it('includes a live signals inline card with inline controls', () => {
-    const answer = buildInlineQueryAnswer({
-      rawQuery: 'signals live',
-      queryOffset: '',
-      userId: '42',
-      chatId: '-100123',
-      isLinked: true,
-      scopedVaults: [],
-      inlineResultCap: 8,
-      growthMode: false,
-      enablePmHandoff: true,
-    })
-
-    const liveCard = answer.results.find((entry: any) => String(entry?.id ?? '').includes('signals-live')) as any
-    expect(liveCard).toBeTruthy()
-    expect(String(liveCard?.title ?? '')).toBe('Signals Live')
-    expect(String(liveCard?.input_message_content?.message_text ?? '')).toContain('Loading live signals')
-    const buttons = Array.isArray(liveCard?.reply_markup?.inline_keyboard)
-      ? liveCard.reply_markup.inline_keyboard.flat()
-      : []
-    expect(buttons.map((button: any) => String(button?.callback_data ?? ''))).toEqual([
-      'livefeed:signals:refresh',
-      'livefeed:signals:pause',
-      'livefeed:signals:close',
-    ])
   })
 
   it('builds token analysis cards in the required order with deterministic ids', () => {

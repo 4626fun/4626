@@ -1,0 +1,10 @@
+import type { KeeprCommandResult } from '../types.js'
+import { formatKeeprHelp } from './keepr.js'
+
+const GLOBAL_HELP_RE = /^\/?help(?:\s+(\S+))?\s*$/i
+
+export function executeHelpCommandFamily(text: string): KeeprCommandResult | null {
+  const match = String(text ?? '').match(GLOBAL_HELP_RE)
+  if (!match) return null
+  return { ok: true, response: formatKeeprHelp(match[1] ?? null) }
+}

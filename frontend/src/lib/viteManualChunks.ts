@@ -9,6 +9,8 @@ const WALLET_AUTH_PACKAGES = [
   'wagmi',
   '@wagmi/core',
   'viem',
+  'permissionless',
+  'ox',
 ] as const
 const SAFE_PACKAGES = ['@safe-global/api-kit', '@safe-global/protocol-kit', '@safe-global/types-kit'] as const
 const ZORA_PACKAGES = ['@zoralabs/coins-sdk', '@zoralabs/protocol-deployments'] as const
@@ -34,8 +36,9 @@ export function classifyManualChunk(id: string): string | undefined {
   if (matchesAny(id, UI_VENDOR_PACKAGES)) return 'ui-vendor'
 
   // Keep Privy + wallet orchestration packages in one chunk. Splitting the
-  // auth wrappers from the web3 core has produced circular initialization in
-  // production bundles, which blanks the Mini App before React can render.
+  // auth wrappers, AA helpers, and ox/viem core away from each other has
+  // produced circular initialization in production bundles, which blanks the
+  // app before React can render.
   if (matchesAny(id, WALLET_AUTH_PACKAGES)) return 'wallet-auth'
 
   if (matchesAny(id, SAFE_PACKAGES)) return 'safe'

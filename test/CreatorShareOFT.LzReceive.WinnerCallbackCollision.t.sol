@@ -18,6 +18,10 @@ contract MockRegistryForShareOFTLzReceive {
         return endpoint;
     }
 
+    function getEidForChainId(uint256) external pure returns (uint32) {
+        return 30184;
+    }
+
     // Unused in these tests but present on the real registry.
     function getLotteryManager(uint256) external pure returns (address) {
         return address(0);

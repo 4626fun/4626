@@ -227,6 +227,7 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     error ResponseNotReady();
     error ResponseAlreadySent();
     error RelayFeeMismatch(uint256 provided, uint256 expected);
+    error MissingLayerZeroEid(uint256 chainId);
     error InvalidRateLimitConfig();
 
     // ================================
@@ -246,7 +247,9 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
         if (_owner == address(0)) revert ZeroAddress();
 
         registry = ICreatorRegistry(_registry);
-        BASE_EID = registry.getEidForChainId(block.chainid);
+        uint32 baseEid = registry.getEidForChainId(block.chainid);
+        if (baseEid == 0) revert MissingLayerZeroEid(block.chainid);
+        BASE_EID = baseEid;
 
         // Enable owner for local requests
         authorizedLocalCallers[_owner] = true;

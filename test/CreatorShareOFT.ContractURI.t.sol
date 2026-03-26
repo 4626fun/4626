@@ -18,6 +18,30 @@ contract MockRegistryForShareOFTContractURI {
         return endpoint;
     }
 
+    function getEidForChainId(uint256) external pure returns (uint32) {
+        return 30184;
+    }
+
+    function getLotteryManager(uint256) external pure returns (address) {
+        return address(0);
+    }
+}
+
+contract MockRegistryForShareOFTContractURINoEid {
+    address public immutable endpoint;
+
+    constructor(address _endpoint) {
+        endpoint = _endpoint;
+    }
+
+    function getLayerZeroEndpoint(uint256) external view returns (address) {
+        return endpoint;
+    }
+
+    function getEidForChainId(uint256) external pure returns (uint32) {
+        return 0;
+    }
+
     function getLotteryManager(uint256) external pure returns (address) {
         return address(0);
     }
@@ -67,6 +91,17 @@ contract CreatorShareOFTContractURITest is Test {
         string memory uri = shareOFT.contractURI();
         string memory chainFragment = string.concat("?chain=", Strings.toString(block.chainid));
         assertTrue(LibString.contains(uri, chainFragment), "contractURI must include chain id");
+    }
+
+    function test_chainEid_usesLayerZeroEid() public view {
+        assertEq(shareOFT.chainEid(), 30184, "chainEid should be LayerZero EID");
+    }
+
+    function test_constructor_revertsWhenLzEidMissing() public {
+        MockRegistryForShareOFTContractURINoEid badRegistry = new MockRegistryForShareOFTContractURINoEid(LZ_ENDPOINT);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CreatorShareOFT.MissingLayerZeroEid.selector, block.chainid));
+        new CreatorShareOFT("Dog Share", "DOGE", address(badRegistry), owner);
     }
 
     function test_contractURI_defaultPointsToMetadataEndpoint() public view {

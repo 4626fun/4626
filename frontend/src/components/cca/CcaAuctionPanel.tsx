@@ -95,6 +95,9 @@ export function CcaAuctionPanel({
   const [localError, setLocalError] = useState<string | null>(null)
   const [auctionTokenImageUrl, setAuctionTokenImageUrl] = useState<string | null>(null)
   const [tokenImageBroken, setTokenImageBroken] = useState(false)
+  const [lifecyclePhase, setLifecyclePhase] = useState<number | null>(null)
+  const [assetsDelta, setAssetsDelta] = useState<bigint>(0n)
+  const [supplyDelta, setSupplyDelta] = useState<bigint>(0n)
 
   const { data: auctionStatus } = useReadContract({
     address: ccaStrategy,
@@ -163,6 +166,9 @@ export function CcaAuctionPanel({
           data?: {
             auctionTokenImageUrl?: string | null
             auctionTokenImagePath?: string | null
+            lifecyclePhase?: number
+            assetsDelta?: string
+            supplyDelta?: string
           }
         }
         const absoluteUrl =
@@ -173,9 +179,19 @@ export function CcaAuctionPanel({
           typeof json.data?.auctionTokenImagePath === 'string' && json.data.auctionTokenImagePath.trim()
             ? json.data.auctionTokenImagePath.trim()
             : null
-        if (!cancelled) setAuctionTokenImageUrl(absoluteUrl ?? relativePath ?? null)
+        if (!cancelled) {
+          setAuctionTokenImageUrl(absoluteUrl ?? relativePath ?? null)
+          setLifecyclePhase(typeof json.data?.lifecyclePhase === 'number' ? json.data.lifecyclePhase : null)
+          setAssetsDelta(BigInt(json.data?.assetsDelta ?? '0'))
+          setSupplyDelta(BigInt(json.data?.supplyDelta ?? '0'))
+        }
       } catch {
-        if (!cancelled) setAuctionTokenImageUrl(null)
+        if (!cancelled) {
+          setAuctionTokenImageUrl(null)
+          setLifecyclePhase(null)
+          setAssetsDelta(0n)
+          setSupplyDelta(0n)
+        }
       }
     })()
     return () => {
@@ -191,6 +207,10 @@ export function CcaAuctionPanel({
 
   const isEthAuction = (currencyAddress ?? ZERO_ADDRESS) === ZERO_ADDRESS
   const hasAuction = auctionAddress !== ZERO_ADDRESS
+  const showBackingDriftWarning =
+    hasAuction &&
+    lifecyclePhase === 1 &&
+    (assetsDelta !== 0n || supplyDelta !== 0n)
 
   const tokenImageSrc = useMemo(() => {
     if (auctionTokenImageUrl) return auctionTokenImageUrl
@@ -562,6 +582,19 @@ export function CcaAuctionPanel({
                     <span className="text-2xl">⏳</span>
                   </div>
                   Auction not yet launched. Check back soon.
+                </div>
+              </motion.div>
+            )}
+
+            {showBackingDriftWarning && (
+              <motion.div
+                className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                <div className="text-amber-200 text-sm">
+                  <span className="font-medium">Backing moved during auction.</span>{' '}
+                  Live vault economics are enabled; review current metrics before bidding.
                 </div>
               </motion.div>
             )}

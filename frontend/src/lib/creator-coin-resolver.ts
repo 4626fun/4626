@@ -65,7 +65,7 @@ const CREATOR_COIN_ABI = [
 ] as const
 
 /**
- * Get the payout recipient (creator's main address) from a CreatorCoin contract
+ * Resolve CreatorCoin externalRevenueRecipient (legacy onchain name: payoutRecipient)
  */
 export async function getPayoutRecipient(coinAddress: Address): Promise<Address | null> {
   try {

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleKeeprCommandMock } = vi.hoisted(() => ({
-  handleKeeprCommandMock: vi.fn(),
+const { executeCommandMock } = vi.hoisted(() => ({
+  executeCommandMock: vi.fn(),
 }))
 
-vi.mock('../../keepr/commands.js', () => ({
-  handleKeeprCommand: handleKeeprCommandMock,
+vi.mock('../../commands/execute.js', () => ({
+  executeCommand: executeCommandMock,
 }))
 
 import { executeDeterministicCommand, normalizeKeeprCommandResult } from './executeDeterministicCommand.ts'
@@ -17,7 +17,7 @@ describe('executeDeterministicCommand', () => {
 
   it('forwards deterministic keepr inputs and preserves action payloads', async () => {
     const action = { telegramMedia: { kind: 'photo', bytes: new Uint8Array([1, 2, 3]) } }
-    handleKeeprCommandMock.mockResolvedValue({
+    executeCommandMock.mockResolvedValue({
       ok: true,
       response: 'Vault status ok',
       action,
@@ -29,14 +29,16 @@ describe('executeDeterministicCommand', () => {
       text: '/keepr status',
       chatId: 'chat-1',
       userId: 'user-1',
+      roleOverrides: { twitter: 'ADMIN' },
     })
 
-    expect(handleKeeprCommandMock).toHaveBeenCalledWith({
+    expect(executeCommandMock).toHaveBeenCalledWith({
       groupId: 'group-1',
       senderWallet: '0x1111111111111111111111111111111111111111',
       text: '/keepr status',
       chatId: 'chat-1',
       userId: 'user-1',
+      roleOverrides: { twitter: 'ADMIN' },
     })
     expect(result).toEqual({
       ok: true,
@@ -47,7 +49,7 @@ describe('executeDeterministicCommand', () => {
   })
 
   it('uses the provided empty-response fallback', async () => {
-    handleKeeprCommandMock.mockResolvedValue({
+    executeCommandMock.mockResolvedValue({
       ok: false,
       response: '',
     })
