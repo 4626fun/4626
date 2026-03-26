@@ -271,6 +271,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     error HubNotConfigured();
     error NotHub();
     error InvalidCallback();
+    error MissingLayerZeroEid(uint256 chainId);
     error PendingLotteryEntryNotFound();
     error NotPendingLotteryEntryOwner();
     error InvalidLotteryEntryFee(uint256 provided, uint256 required);
@@ -311,7 +312,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (_registry == address(0)) revert ZeroAddress();
 
         registry = ICreatorRegistry(_registry);
-        chainEid = ICreatorRegistry(_registry).getEidForChainId(block.chainid);
+        uint32 resolvedChainEid = ICreatorRegistry(_registry).getEidForChainId(block.chainid);
+        if (resolvedChainEid == 0) revert MissingLayerZeroEid(block.chainid);
+        chainEid = resolvedChainEid;
         addressType[address(this)] = OperationType.NoFees;
     }
 
