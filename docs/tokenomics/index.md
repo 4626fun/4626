@@ -5,14 +5,14 @@ sidebar_position: 4
 
 # Tokenomics
 
-The 6.9% trading fee is the core incentive mechanism that powers 4626's lottery and holder rewards.
+The 6.9% fee policy is the core incentive mechanism powering lottery growth and holder PPS accretion, with lane behavior determined by native + hook configuration.
 
 ## Fee Structure
 
 | Action | Fee | Recipient | Notes |
 |--------|-----|-----------|-------|
-| **DEX Buy** (e.g., Uniswap V4) | **6.9%** | GaugeController | Applies to all token purchases on DEX pools |
-| **DEX Sell** (e.g., Uniswap V4) | **6.9%** | GaugeController | Applies to all token sales on DEX pools |
+| **DEX Buy** | **6.9%** (conditional) | tradeFeeCollector domain | Native `CreatorShareOFT` trigger when transfer matches `SwapOnly -> non-SwapOnly` |
+| **DEX Sell** | **6.9%** (conditional) | tradeFeeCollector domain | Hook-dependent; requires explicit hook activation/config |
 | **Vault Deposit** (akita → ▢AKITA) | **0%** | N/A | Direct deposits are free |
 | **Vault Withdrawal** (▢AKITA → akita) | **0%** | N/A | Withdrawals are free |
 | **Cross-Chain Bridge** (via LayerZero) | **0%** + gas | LayerZero relayers | Only pay LayerZero messaging fees (~$1-5 depending on chain) |
@@ -25,7 +25,7 @@ The 6.9% trading fee is distributed as follows:
 |------------|------------|-------------|
 | **Lottery Prize Pool** | 69% | Funds the instant lottery jackpot |
 | **Burn (PPS Increase)** | 21.39% | Shares burned to increase Price Per Share for all holders |
-| **Voter Rewards** | 9.61% | Distributed to ve4626 voters |
+| **Voter/Protocol Branch** | 9.61% | Distributed to voter rewards path when configured, protocol fallback otherwise |
 
 ### Example Distribution
 
@@ -37,15 +37,15 @@ For $1M daily trading volume:
 
 ## Key Details
 
-- **6.9% on buys AND sells** → Consistent fee on all trading activity
-- **Fee only on DEX trades** → Deposits, withdrawals, and cross-chain transfers are NOT taxed
+- **Buy/sell taxation is conditional** → Native and hook fee planes must both be configured and verified before claiming both sides are active
+- **Fee only on configured trade paths** → Deposits, withdrawals, and cross-chain transfers are NOT taxed
 - **6.9% choice** → Playful nod to meme culture while maintaining sustainability (lower than typical 10-15% meme coin fees)
 
 ## Lottery Mechanics
 
 ### Instant Win Chance (Percentage-Based)
 
-Every DEX trade (buy or sell) has an instant chance to win proportional to USD trade value.
+Every eligible fee-triggering trade has an instant chance to win proportional to USD trade value.
 
 **Win Formula**: For every **$1 traded** = **0.0004% instant win chance**
 
@@ -80,7 +80,7 @@ Each trade is an independent roll - win or lose is determined immediately.
 | **Traders** | Every trade triggers instant lottery roll (larger trades = higher win probability) → FOMO + gamification |
 | **Whales** | $10,000 trade = 4% chance to win → Incentivizes large trades while keeping small traders competitive |
 | **Holders** | Prize pool grows with trading volume → incentive to participate in ecosystem → every trade is a new chance to win |
-| **Platform** | Sustainable revenue via 6.9% trading fees → 69% lottery, 21.39% burn, 9.61% voter rewards (no direct platform take) |
+| **Platform** | Sustainable incentives via configurable gauge splits (default 69% lottery, 21.39% burn, 9.61% voter/protocol branch, 0% creator) |
 
 ## Prize Payout
 

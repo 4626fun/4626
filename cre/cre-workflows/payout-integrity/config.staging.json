@@ -6,6 +6,8 @@
   "expectedLotteryShareBps": 6900,
   "expectedCreatorShareBps": 0,
   "expectedProtocolShareBps": 961,
+  "expectedExternalRevenueRecipientMode": "payout_router",
+  "enforceTradeFeeCollectorAlignment": true,
   "staleThresholdSeconds": 86400,
   "rotationIntervalSeconds": 1800
 }

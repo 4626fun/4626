@@ -28,7 +28,9 @@ Batcher enforces 40/40/20 split
    ↓
 Auction runs
    ↓
-If graduated: sweepCurrency() → migrate() → pool live
+If graduated: sweepCurrency() → migrate() (v4 LP migration primitive)
+   ↓
+Hook config/alignment step (separate) before declaring launch complete
    ↓
 If failed: finalizeFailedAuction() / sweepUnsoldTokens() clears strategy state for relaunch
 ```
@@ -61,7 +63,7 @@ function previewLaunchPricing()
   view
   returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice);
 
-// Trigger v4 migration after graduation and sweep.
+// Trigger v4 LP migration after graduation/sweep readiness.
 function migrate() external;
 
 // Finalize failed auctions and unblock future launches.
@@ -75,6 +77,14 @@ function finalizeFailedAuction() external;
 - `operator`: residual sweep operator after `sweepBlock`.
 - `migrationDelayBlocks`: delay from auction end to migration eligibility.
 - `sweepDelayBlocks`: delay from claim readiness to residual sweeps.
+
+## Launch Completion Caveat
+
+- `migrate()` performs pool initialization and LP position migration, but does not itself finalize hook `setTaxConfig`.
+- Canonical launch completion should require:
+  - sweep success,
+  - migrate success,
+  - hook config active and aligned to the intended `tradeFeeCollector`.
 
 ## Launch Pricing (Hard Onchain)
 
