@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
-  isMarketingWaitlistEntryLocation,
 } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'

@@ -393,6 +393,15 @@ export default defineConfig(({ command }) => {
     // Allow explicit host values like 0.0.0.0 or localhost.
     return raw
   })()
+  const buildInputs: Record<string, string> = buildTelegramLinkStandalone
+    ? {
+        telegramLink: resolve(__dirname, 'telegram-link.html'),
+      }
+    : {
+        index: resolve(__dirname, 'index.html'),
+        app: resolve(__dirname, 'app.html'),
+        telegramMenu: resolve(__dirname, 'telegram-menu.html'),
+      }
 
   return {
     plugins: [resolveOxCjsPlugin(), react(), tailwindcss(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
@@ -433,15 +442,7 @@ export default defineConfig(({ command }) => {
     minify: buildTelegramLinkStandalone ? false : 'esbuild',
     sourcemap: enableSourcemap,
     rollupOptions: {
-      input: buildTelegramLinkStandalone
-        ? {
-            telegramLink: resolve(__dirname, 'telegram-link.html'),
-          }
-        : {
-            index: resolve(__dirname, 'index.html'),
-            app: resolve(__dirname, 'app.html'),
-            telegramMenu: resolve(__dirname, 'telegram-menu.html'),
-          },
+      input: buildInputs,
       output: {
         // Route-level lazy imports already split page code well. The remaining
         // hotspots are shared SDK families that otherwise collapse into a few

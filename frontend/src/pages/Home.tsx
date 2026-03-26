@@ -1,74 +1,48 @@
+import { Suspense, lazy, useCallback, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import {
-  getCanonicalMarketingWaitlistPath,
-  requestStoredWaitlistAuthAutoStart,
-  writeStoredWaitlistAuthArmed,
-} from '@/lib/auth/waitlistEntry'
+import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
+import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
+import { Modal } from '@/components/ui/Modal'
+import { clearStoredWaitlistAuthState } from '@/lib/auth/waitlistEntry'
 import { getHostMode } from '@/lib/host'
+import { PrivyClientProvider } from '@/lib/privy/client'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { Web3Providers } from '@/web3/Web3Providers'
+
+const LazyThinWaitlistFlow = lazy(async () => {
+  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
+  return { default: mod.ThinWaitlistFlow }
+})
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const DEFAULT_DEPOSIT_TOKENS = '50,000,000'
 const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
 const DEFAULT_AUCTION_WINDOW = '7 days'
 const DEFAULT_AUCTION_EPOCH = 'Thursday 00:00 UTC'
-const STRATEGY_CARDS = [
-  {
-    label: 'Charm',
-    percent: '30%',
-    description: 'CREATOR/USDC Uniswap V3 LP',
-    icon: '/protocols/charm.png',
-    iconAlt: 'Charm',
-    iconClassName: 'h-3.5 w-3.5 rounded-sm opacity-90',
-  },
-  {
-    label: 'Ajna',
-    percent: '30%',
-    description: 'Permissionless Lending',
-    icon: '/protocols/ajna.svg',
-    iconAlt: 'Ajna',
-    iconClassName: 'h-3.5 w-3.5 opacity-90',
-  },
-  {
-    label: 'Solana',
-    percent: '30%',
-    description: 'Reserved for Solana route flow',
-    icon: '/protocols/solana.svg',
-    iconAlt: 'Solana',
-    iconClassName: 'h-3.5 w-auto opacity-90',
-  },
-  {
-    label: 'Idle Buffer',
-    percent: '10%',
-    description: 'Kept liquid for operations and withdrawals',
-    icon: null,
-    iconAlt: null,
-    iconClassName: '',
-  },
-] as const
 const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
-const SHARE_DISTRIBUTION = [
-  '40% Uniswap CCA',
-  '40% creator vesting',
-  '20% LP reserve',
-] as const
 
 export function Home() {
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
+  const [waitlistModalOpen, setWaitlistModalOpen] = useState(false)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
-  const armWaitlistAuthEntry = () => {
-    writeStoredWaitlistAuthArmed(true)
-    requestStoredWaitlistAuthAutoStart()
-  }
+  const openWaitlistModal = useCallback(() => {
+    clearStoredWaitlistAuthState()
+    setWaitlistModalOpen(true)
+  }, [])
+
+  const closeWaitlistModal = useCallback(() => {
+    clearStoredWaitlistAuthState()
+    setWaitlistModalOpen(false)
+  }, [])
 
   if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
@@ -139,10 +113,10 @@ export function Home() {
               transition={{ duration: 0.8, delay: 1.12 }}
               className="pt-2 sm:pt-6"
             >
-              <Link to={getCanonicalMarketingWaitlistPath()} onClick={armWaitlistAuthEntry} className={heroCtaClass}>
+              <button type="button" onClick={openWaitlistModal} className={heroCtaClass}>
                 Join waitlist
                 <ArrowRight className="h-4 w-4" />
-              </Link>
+              </button>
             </motion.div>
           ) : null}
 
@@ -256,99 +230,9 @@ export function Home() {
         </div>
       </section>
 
-      <section className="cinematic-section bg-zinc-950/20 !py-10 sm:!py-24 lg:!py-32">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.55fr)] lg:gap-10">
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-              className="space-y-5 lg:pr-6"
-            >
-              <span className="label">Vault Strategies</span>
-              <div className="space-y-4">
-                <h2 className="headline text-3xl sm:text-4xl lg:text-5xl">Default strategy allocation</h2>
-                <p className="max-w-md text-[13px] font-light text-zinc-500 sm:text-sm">
-                  The launch vault does not dump everything into one venue. It splits the creator coin across three active
-                  strategy buckets and leaves 10% idle in the vault so redemptions stay flexible.
-                </p>
-              </div>
+      <StrategyAllocationSection depositTokens={DEFAULT_DEPOSIT_TOKENS} />
 
-              <div className="rounded-3xl border border-white/8 bg-white/[0.035] p-5 shadow-[0_24px_70px_-44px_rgba(0,82,255,0.26)] backdrop-blur-sm sm:p-6">
-                <div className="label text-[9px] sm:text-[10px]">Underlying Deposit</div>
-                <div className="mt-3 text-3xl sm:text-4xl">
-                  <span className="value mono">{DEFAULT_DEPOSIT_TOKENS}</span>{' '}
-                  <span className="value mono text-zinc-300">TOKEN</span>
-                </div>
-                <div className="mt-2 text-xs font-light text-zinc-500 sm:text-sm">
-                  Creator coin deposit routed into the strategy allocation shown on the right.
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-2 text-[11px] text-zinc-400 sm:text-xs">
-                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Charm LP</div>
-                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Ajna lending</div>
-                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Solana reserve</div>
-                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">10% idle buffer</div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-brand-primary/15 bg-brand-primary/[0.05] p-5 shadow-[0_24px_70px_-44px_rgba(0,82,255,0.3)] backdrop-blur-sm sm:p-6">
-                <div className="label text-[9px] sm:text-[10px]">Share Token Distribution</div>
-                <div className="mt-3 text-3xl sm:text-4xl">
-                  <span className="value mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span>
-                </div>
-                <div className="mt-2 text-xs font-light text-zinc-400 sm:text-sm">
-                  Freshly minted vault shares split across the launch distribution path.
-                </div>
-                <div className="mt-5 flex flex-wrap gap-2 text-[11px] text-zinc-200 sm:text-xs">
-                  {SHARE_DISTRIBUTION.map((item) => (
-                    <div key={item} className="rounded-2xl border border-white/10 bg-black/35 px-3 py-2">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 text-[11px] font-light text-zinc-500 sm:text-xs">
-                  Creator vesting is linear over 365 days. The current deployment batcher does not route this portion to protocol
-                  treasury.
-                </div>
-              </div>
-            </motion.div>
-
-            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-white/8 bg-white/[0.035] shadow-[0_24px_80px_-48px_rgba(0,82,255,0.28)] sm:grid-cols-2">
-              {STRATEGY_CARDS.map((card, index) => (
-                <motion.div
-                  key={card.label}
-                  initial={{ opacity: 0 }}
-                  whileInView={{ opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: index * 0.1 }}
-                  className="space-y-3 bg-black/55 p-5 sm:min-h-[190px] sm:space-y-4 sm:p-8"
-                >
-                  <div className="inline-flex items-center gap-1.5">
-                    {card.icon ? (
-                      <img
-                        src={card.icon}
-                        alt={card.iconAlt ?? card.label}
-                        width={16}
-                        height={16}
-                        className={card.iconClassName}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span className="inline-flex h-3.5 w-3.5 rounded-full border border-white/12 bg-white/[0.05]" aria-hidden="true" />
-                    )}
-                    <span className="label text-[9px] sm:text-[10px]">{card.label}</span>
-                  </div>
-                  <div className="value mono text-2xl sm:text-3xl lg:text-4xl">{card.percent}</div>
-                  <div className="max-w-[16rem] text-[11px] font-light leading-relaxed text-zinc-500 sm:text-xs">
-                    {card.description}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <ShareDistributionSection auctionEpoch={DEFAULT_AUCTION_EPOCH} shareTokens={DEFAULT_SHARE_TOKENS} />
 
       <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
@@ -395,6 +279,30 @@ export function Home() {
           </motion.div>
         </div>
       </section>
+
+      <Modal
+        open={waitlistModalOpen}
+        onClose={closeWaitlistModal}
+        title="Join waitlist"
+        description="Verify your email without leaving the homepage."
+        maxWidth="sm:max-w-4xl"
+        placement="center"
+        className="border border-white/10 bg-black/90"
+      >
+        <Suspense
+          fallback={
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
+              Loading waitlist…
+            </div>
+          }
+        >
+          <Web3Providers>
+            <PrivyClientProvider showWalletLoginFirst={false}>
+              <LazyThinWaitlistFlow variant="modal" sectionId="home-waitlist" />
+            </PrivyClientProvider>
+          </Web3Providers>
+        </Suspense>
+      </Modal>
     </div>
   )
 }

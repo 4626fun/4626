@@ -37,12 +37,19 @@ const {
     shareOFT: '0x7000000000000000000000000000000000000007',
   })),
   validateSponsoredSmartWalletCallsMock: vi.fn(async (..._args: unknown[]) => ({ expectedCreatorToken: null, mode: 'deploy' })),
-  verifyDeployPhase2InvariantsMock: vi.fn(async () => ({
-    checked: true,
-    checksRun: 0,
-    violations: [],
-    expectations: null,
-  })),
+  verifyDeployPhase2InvariantsMock: vi.fn(
+    async (): Promise<{
+      checked: boolean
+      checksRun: number
+      violations: Array<{ code: string; message: string }>
+      expectations: Record<string, unknown> | null
+    }> => ({
+      checked: true,
+      checksRun: 0,
+      violations: [],
+      expectations: null,
+    }),
+  ),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({

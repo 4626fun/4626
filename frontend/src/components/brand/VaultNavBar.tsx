@@ -6,7 +6,6 @@ import { useAdminStatus } from '@/hooks/useAdminStatus'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
-  isMarketingWaitlistEntryLocation,
 } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'

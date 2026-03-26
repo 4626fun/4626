@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
+import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { Loader2, Wrench } from 'lucide-react'
 
@@ -85,27 +85,29 @@ export default function StatusFixPanel(props: {
 }) {
   const { context, onApplied } = props
   const { address, isConnected, chain } = useAccount()
+  const publicClient = usePublicClient({ chainId: base.id })
   const { writeContractAsync } = useWriteContract()
   const [fixingId, setFixingId] = useState<string | null>(null)
   const [fixError, setFixError] = useState<string | null>(null)
   const [fixHash, setFixHash] = useState<`0x${string}` | null>(null)
-
-  const txReceipt = useWaitForTransactionReceipt({
-    hash: fixHash ?? undefined,
-    chainId: base.id,
-    query: {
-      onSuccess: () => {
+  const confirmFixTransaction = useCallback(
+    async (hash: `0x${string}`) => {
+      if (!publicClient) throw new Error('Base public client unavailable')
+      setFixHash(hash)
+      try {
+        await publicClient.waitForTransactionReceipt({ hash })
         setFixHash(null)
         setFixingId(null)
         setFixError(null)
         onApplied()
-      },
-      onError: () => {
+      } catch (error) {
         setFixHash(null)
         setFixingId(null)
-      },
+        throw error
+      }
     },
-  })
+    [onApplied, publicClient],
+  )
 
   const canFixShare = !!address && !!context.shareOwner && address.toLowerCase() === context.shareOwner.toLowerCase()
   const canFixVault = !!address && !!context.vaultOwner && address.toLowerCase() === context.vaultOwner.toLowerCase()
@@ -138,7 +140,7 @@ export default function StatusFixPanel(props: {
             args: [context.vaultAddress as `0x${string}`],
             chainId: base.id,
           })
-          setFixHash(hash)
+          await confirmFixTransaction(hash)
         },
       })
     }
@@ -164,7 +166,7 @@ export default function StatusFixPanel(props: {
             args: [context.gauge as `0x${string}`],
             chainId: base.id,
           })
-          setFixHash(hash)
+          await confirmFixTransaction(hash)
         },
       })
     }
@@ -186,7 +188,7 @@ export default function StatusFixPanel(props: {
             args: [context.wrapper as `0x${string}`, true],
             chainId: base.id,
           })
-          setFixHash(hash)
+          await confirmFixTransaction(hash)
         },
       })
     }
@@ -211,7 +213,7 @@ export default function StatusFixPanel(props: {
             args: [context.wrapper as `0x${string}`, true],
             chainId: base.id,
           })
-          setFixHash(hash)
+          await confirmFixTransaction(hash)
         },
       })
     }
@@ -240,7 +242,7 @@ export default function StatusFixPanel(props: {
             args: [context.v3Pool as `0x${string}`, context.creatorToken as `0x${string}`, CONTRACTS.usdc, 1800],
             chainId: base.id,
           })
-          setFixHash(hash)
+          await confirmFixTransaction(hash)
         },
       })
     }
@@ -270,7 +272,7 @@ export default function StatusFixPanel(props: {
             args: [suggestedBucket],
             chainId: base.id,
           })
-          setFixHash(hash)
+          await confirmFixTransaction(hash)
         },
       })
     }
@@ -292,13 +294,13 @@ export default function StatusFixPanel(props: {
             args: [64],
             chainId: base.id,
           })
-          setFixHash(hash)
+          await confirmFixTransaction(hash)
         },
       })
     }
 
     return actions
-  }, [canFixAjna, canFixOracle, canFixShare, canFixVault, context, isBase, isConnected, writeContractAsync])
+  }, [canFixAjna, canFixOracle, canFixShare, canFixVault, confirmFixTransaction, context, isBase, isConnected, writeContractAsync])
 
   return (
     <div className="space-y-3">
@@ -346,7 +348,7 @@ export default function StatusFixPanel(props: {
                   }}
                   className="btn-accent btn-compact btn-no-icon px-4 py-2 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
-                  {isBusy || txReceipt.isLoading ? 'Fixing…' : 'Fix'}
+                  {isBusy || !!fixHash ? 'Fixing…' : 'Fix'}
                 </button>
               </div>
             </div>
@@ -360,7 +362,7 @@ export default function StatusFixPanel(props: {
         </div>
       ) : null}
 
-      {txReceipt.isLoading ? (
+      {fixHash ? (
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <Loader2 className="w-4 h-4 animate-spin" />
           Waiting for transaction confirmation…
