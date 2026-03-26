@@ -12,6 +12,10 @@ import { getHostMode } from '@/lib/host'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
+const DEFAULT_DEPOSIT_TOKENS = '50,000,000'
+const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
+const DEFAULT_AUCTION_WINDOW = '7 days'
+const DEFAULT_AUCTION_EPOCH = 'Thursday 00:00 UTC'
 const STRATEGY_CARDS = [
   {
     label: 'Charm',
@@ -47,6 +51,11 @@ const STRATEGY_CARDS = [
   },
 ] as const
 const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
+const SHARE_DISTRIBUTION = [
+  '40% Uniswap CCA',
+  '40% creator vesting',
+  '20% LP reserve',
+] as const
 
 export function Home() {
   const hostMode = getHostMode()
@@ -183,9 +192,18 @@ export function Home() {
               </div>
               <div className="space-y-3 text-base font-light leading-relaxed text-zinc-500 sm:text-lg">
                 <p>
-                  Minimum deposit: <span className="font-mono text-zinc-200">5,000,000 TOKEN</span>. In the default launch, this
-                  mints <span className="font-mono text-brand-primary">5,000,000 {SHARE_TOKEN}</span> and runs a{' '}
+                  Minimum deposit: <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span>. In the default
+                  launch, this mints <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span> and runs a{' '}
                   <span className="text-uniswap">Uniswap CCA</span> auction.
+                </p>
+                <p>
+                  The auction opens on the weekly epoch reset at{' '}
+                  <span className="font-mono text-zinc-200">{DEFAULT_AUCTION_EPOCH}</span> and runs for {DEFAULT_AUCTION_WINDOW}.
+                </p>
+                <p>
+                  The deposited <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span> stays as the vault’s
+                  underlying asset base, while the newly minted <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span>{' '}
+                  gets split across launch distribution.
                 </p>
               </div>
               {showDeployVaultCta ? (
@@ -211,19 +229,25 @@ export function Home() {
                 <div className="mt-4 space-y-0 sm:mt-6">
                   <div className="data-row">
                     <span className="label">Minimum deposit</span>
-                    <div className="value mono text-sm sm:text-base">5,000,000 TOKEN</div>
+                    <div className="value mono text-sm sm:text-base">{DEFAULT_DEPOSIT_TOKENS} TOKEN</div>
                   </div>
                   <div className="data-row">
                     <span className="label">Minted shares</span>
-                    <div className="value mono text-sm sm:text-base">5,000,000 {SHARE_TOKEN}</div>
+                    <div className="value mono text-sm sm:text-base text-brand-primary">{DEFAULT_SHARE_TOKENS}</div>
                   </div>
                   <div className="data-row">
-                    <span className="label">Auction duration</span>
-                    <div className="value mono text-sm sm:text-base">24 hours</div>
+                    <span className="label">Auction window</span>
+                    <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_WINDOW}</div>
                   </div>
                   <div className="data-row">
-                    <span className="label">Settlement</span>
-                    <div className="value mono text-sm sm:text-base">Onchain</div>
+                    <span className="label">Launch epoch</span>
+                    <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_EPOCH}</div>
+                  </div>
+                  <div className="data-row">
+                    <span className="label">Share split</span>
+                    <div className="value mono text-right text-[11px] leading-relaxed text-sm sm:text-base">
+                      40 / 40 / 20
+                    </div>
                   </div>
                 </div>
               </div>
@@ -252,20 +276,40 @@ export function Home() {
               </div>
 
               <div className="rounded-3xl border border-white/8 bg-white/[0.035] p-5 shadow-[0_24px_70px_-44px_rgba(0,82,255,0.26)] backdrop-blur-sm sm:p-6">
-                <div className="label text-[9px] sm:text-[10px]">Launch Map</div>
-                <div className="mt-3 flex items-end gap-2">
-                  <div className="value mono text-3xl sm:text-4xl">90%</div>
-                  <div className="pb-1 text-xs font-light text-zinc-500">active strategy deployment</div>
+                <div className="label text-[9px] sm:text-[10px]">Underlying Deposit</div>
+                <div className="mt-3 text-3xl sm:text-4xl">
+                  <span className="value mono">{DEFAULT_DEPOSIT_TOKENS}</span>{' '}
+                  <span className="value mono text-zinc-300">TOKEN</span>
+                </div>
+                <div className="mt-2 text-xs font-light text-zinc-500 sm:text-sm">
+                  Creator coin deposit routed into the strategy allocation shown on the right.
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-2 text-[11px] text-zinc-400 sm:text-xs">
                   <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Charm LP</div>
                   <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Ajna lending</div>
                   <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Solana reserve</div>
-                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">10% idle in vault</div>
+                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">10% idle buffer</div>
                 </div>
-                <div className="mt-4 text-[11px] font-light text-zinc-600 sm:text-xs">
-                  <span className="font-mono text-zinc-400">TOKEN</span> is the creator coin. Strategy allocations deploy the
-                  underlying asset, not the <span className="font-mono text-zinc-400">{SHARE_TOKEN}</span> vault share token.
+              </div>
+
+              <div className="rounded-3xl border border-brand-primary/15 bg-brand-primary/[0.05] p-5 shadow-[0_24px_70px_-44px_rgba(0,82,255,0.3)] backdrop-blur-sm sm:p-6">
+                <div className="label text-[9px] sm:text-[10px]">Share Token Distribution</div>
+                <div className="mt-3 text-3xl sm:text-4xl">
+                  <span className="value mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span>
+                </div>
+                <div className="mt-2 text-xs font-light text-zinc-400 sm:text-sm">
+                  Freshly minted vault shares split across the launch distribution path.
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2 text-[11px] text-zinc-200 sm:text-xs">
+                  {SHARE_DISTRIBUTION.map((item) => (
+                    <div key={item} className="rounded-2xl border border-white/10 bg-black/35 px-3 py-2">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 text-[11px] font-light text-zinc-500 sm:text-xs">
+                  Creator vesting is linear over 365 days. The current deployment batcher does not route this portion to protocol
+                  treasury.
                 </div>
               </div>
             </motion.div>

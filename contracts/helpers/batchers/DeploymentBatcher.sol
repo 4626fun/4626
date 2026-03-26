@@ -48,6 +48,7 @@ interface ICCALaunchStrategy {
     function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient) external;
     function setLaunchDiscountBps(uint16 _discountBps) external;
     function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external;
+    function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external;
     function setRecipients(address _fundsRecipient, address _tokensRecipient) external;
     function setBackingVault(address _backingVault) external;
     function setMigrationConfig(
@@ -654,8 +655,9 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes memory shareOftArgs =
             abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, address(this));
         bytes32 shareOftInitCodeHash = _deriveInitCodeHash(codeIds.shareOFT, shareOftArgs);
-        try create2Deployer.deploy(state.shareOftSalt, codeIds.shareOFT, shareOftArgs) returns (address deployedShareOFT)
-        {
+        try create2Deployer.deploy(state.shareOftSalt, codeIds.shareOFT, shareOftArgs) returns (
+            address deployedShareOFT
+        ) {
             out.shareOFT = deployedShareOFT;
         } catch {
             // If ShareOFT is already deployed at the deterministic address, reuse it
@@ -741,9 +743,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (IERC20(params.shareOFT).balanceOf(address(this)) < pending.amount) revert AuctionAmountMismatch();
 
         IERC20(params.shareOFT).forceApprove(pending.ccaStrategy, pending.amount);
-        auction = ICCALaunchStrategy(pending.ccaStrategy).launchAuctionWithReserve(
-            pending.amount, pending.lpReserveAmount, params.floorPriceQ96, params.requiredRaise, params.auctionSteps
-        );
+        auction = ICCALaunchStrategy(pending.ccaStrategy)
+            .launchAuctionWithReserve(
+                pending.amount, pending.lpReserveAmount, params.floorPriceQ96, params.requiredRaise, params.auctionSteps
+            );
 
         delete pendingAuctions[baseSalt];
 
@@ -964,8 +967,9 @@ contract DeploymentBatcher is ReentrancyGuard {
         // NOTE: Using Charm's official factory ensures vault appears on their UI
         // Parameters: manager=protocolTreasury can rebalance, baseThreshold=3000 ticks,
         //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
-        out.charmVault = ICharmFactory(CHARM_FACTORY).createVault(
-            ICharmFactory.VaultParams({
+        out.charmVault = ICharmFactory(CHARM_FACTORY)
+            .createVault(
+                ICharmFactory.VaultParams({
                 pool: v3Pool,
                 manager: protocolTreasury, // manager (can call rebalance)
                 managerFee: 0,
@@ -981,7 +985,7 @@ contract DeploymentBatcher is ReentrancyGuard {
                 name: params.charmVaultName,
                 symbol: params.charmVaultSymbol
             })
-        );
+            );
         _enforceCharmVaultManager(out.charmVault, protocolTreasury);
 
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
@@ -1108,11 +1112,7 @@ contract DeploymentBatcher is ReentrancyGuard {
             if (_hubComposer == address(0)) revert ZeroAddress();
             if (_solanaEid == 0) revert InvalidSolanaEid();
         }
-        ovaultRuntimeConfig = OVaultRuntimeConfig({
-            hubComposer: _hubComposer,
-            solanaEid: _solanaEid,
-            enabled: _enabled
-        });
+        ovaultRuntimeConfig = OVaultRuntimeConfig({hubComposer: _hubComposer, solanaEid: _solanaEid, enabled: _enabled});
     }
 
     function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory) {

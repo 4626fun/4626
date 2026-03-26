@@ -124,6 +124,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     uint24 public constant VESTING_SPLIT_MPS = 4_000_000;
     /// @notice LP reserve allocation: 20%
     uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000;
+    /// @notice Unix epoch (1970-01-01 00:00 UTC) was a Thursday, so weekly boundaries align to Thursday 00:00 UTC.
+    uint256 internal constant THURSDAY_EPOCH_SECONDS = 7 days;
 
     enum LifecyclePhase {
         Idle,
@@ -132,7 +134,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         ClaimReady,
         PoolInitializing,
         PoolLive,
-        LaunchFailed
+        LaunchFailed,
+        AuctionScheduled
     }
 
     struct LaunchLifecycle {
@@ -247,6 +250,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     /// @notice Default claim delay after auction ends
     uint64 public defaultClaimDelay = 3600; // ~2 hours
+    /// @notice Average seconds per block used to convert Thursday UTC boundaries into CCA block schedules.
+    uint64 public launchBlockTimeSeconds = 2;
 
     /// @notice Default tick spacing in Q96 (recommended ~1% of floor price)
     /// @dev In Uniswap CCA, tickSpacing is a *price granularity* in Q96, not an ERC20/ETH amount.
@@ -465,16 +470,15 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * IMPORTANT: Do NOT call the external entrypoint via `this.launchAuction(...)` from within the contract.
      * That changes `msg.sender` (breaks auth) and also trips ReentrancyGuard (both entrypoints are nonReentrant).
      */
-    function _launchAuctionInternal(
-        uint256 amount,
-        uint256 lpReserveAmount,
-        uint128 requiredRaise
-    ) internal returns (address auction) {
+    function _launchAuctionInternal(uint256 amount, uint256 lpReserveAmount, uint128 requiredRaise)
+        internal
+        returns (address auction)
+    {
         _archiveIfFinished();
         if (amount == 0) revert ZeroAmount();
 
-        // Calculate blocks
-        uint64 startBlock = uint64(block.number + 100); // Start in ~100 blocks
+        // Schedule launches on the next Thursday 00:00 UTC weekly epoch.
+        uint64 startBlock = _deriveScheduledStartBlock();
         uint64 endBlock = startBlock + defaultDuration;
         uint64 claimBlock = endBlock + defaultClaimDelay;
         uint64 migrationBlock = endBlock + migrationDelayBlocks;
@@ -483,16 +487,13 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         // Strict launch policy: always use the strategy-owned schedule so
         // callers cannot accidentally deploy unsafe issuance curves.
         bytes memory auctionSteps = _createUniswapSafeDefaultSteps(defaultDuration);
-        (
-            uint256 floorPriceQ96,
-            uint256 tickSpacingQ96,
-            uint256 creatorUsdPrice,
-            uint256 ethUsdPrice
-        ) = _deriveLaunchPricing();
+        (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice) =
+            _deriveLaunchPricing();
 
         // Build auction parameters
-        bytes memory configData =
-            _encodeAuctionParams(floorPriceQ96, tickSpacingQ96, requiredRaise, startBlock, endBlock, claimBlock, auctionSteps);
+        bytes memory configData = _encodeAuctionParams(
+            floorPriceQ96, tickSpacingQ96, requiredRaise, startBlock, endBlock, claimBlock, auctionSteps
+        );
 
         // Transfer tokens to this contract for auction inventory.
         auctionToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -534,7 +535,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         _snapshotBackingTelemetry();
         _persistLifecycleSnapshot();
         lastSweepBlock = sweepBlock;
-        _setPhase(LifecyclePhase.AuctionLive);
+        _setPhase(block.number < startBlock ? LifecyclePhase.AuctionScheduled : LifecyclePhase.AuctionLive);
 
         emit AuctionCreated(auction, address(auctionToken), amount, startBlock, endBlock);
         emit LaunchPricingResolved(auction, floorPriceQ96, tickSpacingQ96, creatorUsdPrice, ethUsdPrice);
@@ -723,8 +724,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         });
 
         plan = plan.planFullRangePosition(
-            baseParams,
-            FullRangeParams({tokenAmount: fullRangeTokenAmount, currencyAmount: fullRangeCurrencyAmount})
+            baseParams, FullRangeParams({tokenAmount: fullRangeTokenAmount, currencyAmount: fullRangeCurrencyAmount})
         );
         plan = plan.planTakePair(baseParams);
         bytes memory encodedPlan = plan.encode();
@@ -915,6 +915,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (launchData.failedFinalized) return LifecyclePhase.LaunchFailed;
         if (launchData.migrated) return LifecyclePhase.PoolLive;
         if (launchData.currencySwept) return LifecyclePhase.ClaimReady;
+        if (block.number < launchData.startBlock) return LifecyclePhase.AuctionScheduled;
         if (isGraduated) return LifecyclePhase.AuctionEndedPending;
         if (block.number <= launchData.endBlock) return LifecyclePhase.AuctionLive;
         return LifecyclePhase.AuctionEndedPending;
@@ -933,6 +934,22 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         try IVaultTelemetry(backingVault).totalSupply() returns (uint256 supply) {
             currentLaunch.launchVaultTotalSupply = supply;
         } catch {}
+    }
+
+    function _deriveScheduledStartBlock() internal view returns (uint64 startBlock) {
+        uint256 nextThursdayStartTimestamp = _nextThursdayStartTimestamp(block.timestamp);
+        uint256 deltaBlocks;
+        if (nextThursdayStartTimestamp > block.timestamp) {
+            deltaBlocks = Math.ceilDiv(nextThursdayStartTimestamp - block.timestamp, uint256(launchBlockTimeSeconds));
+        }
+        if (deltaBlocks == 0) deltaBlocks = 1;
+        startBlock = uint64(block.number + deltaBlocks);
+    }
+
+    function _nextThursdayStartTimestamp(uint256 currentTimestamp) internal pure returns (uint256) {
+        uint256 remainder = currentTimestamp % THURSDAY_EPOCH_SECONDS;
+        if (remainder == 0) return currentTimestamp;
+        return currentTimestamp + (THURSDAY_EPOCH_SECONDS - remainder);
     }
 
     function _deriveLaunchPricing()
@@ -1127,6 +1144,15 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     function setDefaultClaimDelay(uint64 _delay) external onlyOwner {
         defaultClaimDelay = _delay;
         emit ConfigUpdated("claimDelay", _delay);
+    }
+
+    /**
+     * @notice Update the block-time estimate used for Thursday UTC launch alignment.
+     */
+    function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external onlyOwner {
+        if (_secondsPerBlock == 0) revert InvalidConfig();
+        launchBlockTimeSeconds = _secondsPerBlock;
+        emit ConfigUpdated("launchBlockTimeSeconds", _secondsPerBlock);
     }
 
     /**
@@ -1407,4 +1433,3 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     receive() external payable {}
 }
-

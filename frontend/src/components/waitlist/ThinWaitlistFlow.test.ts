@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveWaitlistStep, shouldAutoStartWaitlistAuth } from './ThinWaitlistFlow'
+import { resolveWaitlistStep, shouldAutoBootstrapWaitlistSession, shouldAutoStartWaitlistAuth } from './ThinWaitlistFlow'
 
 describe('resolveWaitlistStep', () => {
   it('keeps unverified accounts on auth', () => {
@@ -207,5 +207,33 @@ describe('shouldAutoStartWaitlistAuth', () => {
         error: null,
       }),
     ).toBe(true)
+  })
+})
+
+describe('shouldAutoBootstrapWaitlistSession', () => {
+  it('only bootstraps restored Privy auth after an explicit auth flow has started', () => {
+    expect(
+      shouldAutoBootstrapWaitlistSession({
+        step: 'auth',
+        privyAuthed: true,
+        authFlowStarted: true,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldAutoBootstrapWaitlistSession({
+        step: 'auth',
+        privyAuthed: true,
+        authFlowStarted: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldAutoBootstrapWaitlistSession({
+        step: 'wallet',
+        privyAuthed: true,
+        authFlowStarted: true,
+      }),
+    ).toBe(false)
   })
 })

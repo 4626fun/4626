@@ -13,6 +13,7 @@ interface ICCALaunchStrategy {
     function setBackingVault(address _backingVault) external;
     function setLaunchDiscountBps(uint16 _discountBps) external;
     function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external;
+    function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external;
     function setMigrationConfig(
         address _positionManager,
         address _positionRecipient,

@@ -59,4 +59,15 @@ describe('Home', () => {
     expect(screen.queryByText(/quiet sign-in, live waitlist context/i)).toBeNull()
     expect(screen.queryByText(/start access setup without leaving the page/i)).toBeNull()
   })
+
+  it('shows the current launch mechanics and token flow', () => {
+    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
+
+    expect(screen.getAllByText(/50,000,000 TOKEN/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/50,000,000 ■TOKEN/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/7 days/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Thursday 00:00 UTC/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/40% creator vesting/i)).toBeTruthy()
+    expect(screen.getByText(/20% LP reserve/i)).toBeTruthy()
+  })
 })

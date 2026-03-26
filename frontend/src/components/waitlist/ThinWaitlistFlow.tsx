@@ -299,6 +299,17 @@ export function shouldAutoStartWaitlistAuth(params: {
   return true
 }
 
+export function shouldAutoBootstrapWaitlistSession(params: {
+  step: WaitlistStep
+  privyAuthed: boolean
+  authFlowStarted: boolean
+}): boolean {
+  if (!params.authFlowStarted) return false
+  if (params.step !== 'auth') return false
+  if (!params.privyAuthed) return false
+  return true
+}
+
 function CoinbaseLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -446,6 +457,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const authFlowStartedRef = useRef(false)
   const dashboardRequestSeqRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
@@ -636,6 +648,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
 
   const onContinueAuth = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
+    authFlowStartedRef.current = true
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
@@ -678,6 +691,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
             ? authError.message
             : 'Failed to start sign-in.',
       )
+      authFlowStartedRef.current = false
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
@@ -853,6 +867,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
+    authFlowStartedRef.current = true
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
@@ -875,10 +890,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     } catch (recoverError: any) {
       if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
         setError('Redirecting back to the waitlist sign-in flow…')
+        authFlowStartedRef.current = false
         return
       }
       setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
       setRecoveryRequired(true)
+      authFlowStartedRef.current = false
     } finally {
       authAttemptInFlightRef.current = false
       setBusy(false)
@@ -941,7 +958,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   }, [enterAppBusy, enterAppUrl, getAccessToken, privyAuthed])
 
   useEffect(() => {
-    if (step !== 'auth' || !privyAuthed) {
+    if (
+      !shouldAutoBootstrapWaitlistSession({
+        step,
+        privyAuthed,
+        authFlowStarted: authFlowStartedRef.current,
+      })
+    ) {
       authBootstrapAutoAttemptedRef.current = false
       return
     }
@@ -1002,6 +1025,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
+      authFlowStartedRef.current = false
       setRecoveryRequired(false)
     }
   }, [step])
