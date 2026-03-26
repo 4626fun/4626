@@ -638,7 +638,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
         authAutoAttemptedRef.current = true
-        void runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+        setAccount(null)
+        setOwnerDelegationFlags(null)
+        setOwnerDelegationVerified(null)
+        setEmbeddedEoaAddress(null)
+        setWaitlistPosition(null)
+        setLeaderboard(null)
+        await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         setRecoveryRequired(true)
       }
       setError(
@@ -835,6 +841,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     setError(null)
     setNotice(null)
     setRecoveryRequired(false)
+    setAccount(null)
+    setOwnerDelegationFlags(null)
+    setOwnerDelegationVerified(null)
+    setEmbeddedEoaAddress(null)
+    setWaitlistPosition(null)
+    setLeaderboard(null)
     try {
       if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist('needs-session')) {
         authAttemptInFlightRef.current = false
@@ -941,7 +953,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
           authAutoAttemptedRef.current = true
         }
         if (isSessionMismatch || isRecoveryRequired) {
-          void runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+          setAccount(null)
+          setOwnerDelegationFlags(null)
+          setOwnerDelegationVerified(null)
+          setEmbeddedEoaAddress(null)
+          setWaitlistPosition(null)
+          setLeaderboard(null)
+          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         }
         if (!cancelled) {
           if (isRecoveryRequired) setRecoveryRequired(true)

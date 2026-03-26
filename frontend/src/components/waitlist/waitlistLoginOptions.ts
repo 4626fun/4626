@@ -18,5 +18,6 @@ export const WAITLIST_RECOVERY_LOGIN_METHODS = ['email'] as const
 export function buildWaitlistRecoveryLoginOptions() {
   return {
     loginMethods: [...WAITLIST_RECOVERY_LOGIN_METHODS],
+    disableSignup: true,
   } as const
 }
