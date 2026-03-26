@@ -68,6 +68,10 @@ export type CreateDeploySessionRequest = {
   solanaOvault?: SolanaOvaultRequest
   // Optional metadata for debugging/UI.
   version?: string
+  // Optional per-session invariant expectations (preferred over env defaults).
+  expectedTradeFeeCollector?: Address
+  expectedExternalRevenueRecipientMode?: 'gauge' | 'payout_router'
+  expectedExternalRevenueRecipient?: Address
 }
 
 type CreateDeploySessionResponse = {
@@ -75,6 +79,12 @@ type CreateDeploySessionResponse = {
   sessionSignerAddress: Address
   sessionSignerWalletId?: string
   expiresAt: string
+}
+
+type DeployPhase2InvariantExpectations = {
+  expectedTradeFeeCollector?: Address
+  expectedExternalRevenueRecipientMode?: 'gauge' | 'payout_router'
+  expectedExternalRevenueRecipient?: Address
 }
 
 export class DeploySessionRequestError extends Error {
@@ -101,6 +111,7 @@ export type ValidatedDeploySessionRequest = {
   solanaOvault: Record<string, unknown> | null
   hasPhase2Finalize: boolean
   version: string
+  phase2InvariantExpectations: DeployPhase2InvariantExpectations | null
 }
 
 type OwnershipCheck = {
@@ -193,6 +204,57 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
+const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase2Core',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'creatorTreasury', type: 'address' },
+          { name: 'payoutRecipient', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'auction', type: 'address' },
+        ],
+      },
+    ],
+  },
+] as const
+
 const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
   {
     type: 'function',
@@ -276,6 +338,70 @@ function parseBigIntLike(value: unknown): bigint | null {
       return parsed >= 0n ? parsed : null
     } catch {
       return null
+    }
+  }
+  return null
+}
+
+function normalizeAddressOrNull(value: unknown): Address | null {
+  if (typeof value !== 'string' || !isAddress(value)) return null
+  const addr = getAddress(value as Address)
+  return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
+}
+
+function inferExternalRevenueMode(value: unknown): 'gauge' | 'payout_router' | null {
+  if (value === 'gauge' || value === 'payout_router') return value
+  return null
+}
+
+function extractPhase2CoreInvariantInfo(data: Hex): {
+  creatorToken: Address
+  payoutRecipient: Address | null
+} | null {
+  try {
+    const decoded = decodeFunctionData({
+      abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+      data,
+    })
+    const params = (decoded.args?.[0] ?? null) as {
+      creatorToken?: string
+      payoutRecipient?: string
+    } | null
+    const creatorToken = normalizeAddressOrNull(params?.creatorToken)
+    if (!creatorToken) return null
+    return {
+      creatorToken,
+      payoutRecipient: normalizeAddressOrNull(params?.payoutRecipient),
+    }
+  } catch {
+    return null
+  }
+}
+
+function extractFinalizePhase2InvariantInfo(data: Hex): {
+  creatorToken: Address
+  shareToken: Address
+  gaugeController: Address
+} | null {
+  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+    try {
+      const decoded = decodeFunctionData({ abi, data })
+      const params = (decoded.args?.[0] ?? null) as {
+        creatorToken?: string
+        shareToken?: string
+        gaugeController?: string
+      } | null
+      const creatorToken = normalizeAddressOrNull(params?.creatorToken)
+      const shareToken = normalizeAddressOrNull(params?.shareToken)
+      const gaugeController = normalizeAddressOrNull(params?.gaugeController)
+      if (!creatorToken || !shareToken || !gaugeController) continue
+      return {
+        creatorToken,
+        shareToken,
+        gaugeController,
+      }
+    } catch {
+      continue
     }
   }
   return null
@@ -981,6 +1107,42 @@ export async function validateDeploySessionRequest(params: {
   const solanaOvault = normalizeSolanaOvaultConfig(params.body.solanaOvault)
   const hasPhase2Finalize = phase2FinalizeCalls.length > 0
   const version = String(params.body.version ?? '').trim()
+  const requestedExternalMode = inferExternalRevenueMode(params.body.expectedExternalRevenueRecipientMode)
+  const requestedExternalRevenueRecipient = normalizeAddressOrNull(params.body.expectedExternalRevenueRecipient)
+  const requestedTradeFeeCollector = normalizeAddressOrNull(params.body.expectedTradeFeeCollector)
+  const phase2CoreInvariantInfo =
+    phase2CoreCalls
+      .map((call) => extractPhase2CoreInvariantInfo(call.data))
+      .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
+  const phase2FinalizeInvariantInfo =
+    phase2FinalizeCalls
+      .map((call) => extractFinalizePhase2InvariantInfo(call.data))
+      .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
+  const inferredTradeFeeCollector = phase2FinalizeInvariantInfo?.gaugeController ?? null
+  const inferredExternalRevenueRecipient = phase2CoreInvariantInfo?.payoutRecipient ?? null
+  const resolvedTradeFeeCollector = requestedTradeFeeCollector ?? inferredTradeFeeCollector
+  let resolvedExternalMode: 'gauge' | 'payout_router' = requestedExternalMode ?? 'gauge'
+  if (
+    !requestedExternalMode &&
+    inferredExternalRevenueRecipient &&
+    resolvedTradeFeeCollector &&
+    inferredExternalRevenueRecipient.toLowerCase() !== resolvedTradeFeeCollector.toLowerCase()
+  ) {
+    resolvedExternalMode = 'payout_router'
+  }
+  const resolvedExternalRevenueRecipient =
+    requestedExternalRevenueRecipient ??
+    inferredExternalRevenueRecipient ??
+    (resolvedExternalMode === 'gauge' ? resolvedTradeFeeCollector : null)
+  const phase2InvariantExpectations: DeployPhase2InvariantExpectations | null = hasPhase2Finalize
+    ? {
+        ...(resolvedTradeFeeCollector ? { expectedTradeFeeCollector: resolvedTradeFeeCollector } : {}),
+        expectedExternalRevenueRecipientMode: resolvedExternalMode,
+        ...(resolvedExternalRevenueRecipient
+          ? { expectedExternalRevenueRecipient: resolvedExternalRevenueRecipient }
+          : {}),
+      }
+    : null
 
   if (params.requireCalls) {
     const allSubmittedCalls = [
@@ -1079,6 +1241,7 @@ export async function validateDeploySessionRequest(params: {
     solanaOvault,
     hasPhase2Finalize,
     version,
+    phase2InvariantExpectations,
   }
 }
 
@@ -1133,6 +1296,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       solanaOvault,
       hasPhase2Finalize,
       version,
+      phase2InvariantExpectations,
     } = await validateDeploySessionRequest({
       req,
       authAddress: getAddress(auth.address as Address),
@@ -1298,6 +1462,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2FinalizeCalls,
         phase3Calls,
         phase4Calls,
+        ...(phase2InvariantExpectations ? phase2InvariantExpectations : {}),
         ...(solanaOvault ? { solanaOvault } : null),
         erc7712Grant,
       },

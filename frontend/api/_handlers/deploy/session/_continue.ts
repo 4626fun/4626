@@ -14,6 +14,7 @@ import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { ensureLaunchImageReady } from '../../../../server/_lib/deployLaunchImage.js'
+import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deployPhase2Invariants.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession } from './_sessionAccess.js'
 
@@ -33,6 +34,8 @@ const REPLAY_SKIP_PHASE2_CORE_AT_KEY = 'replaySkipPhase2CoreAt'
 const REPLAY_SKIP_PHASE2_CORE_REASON_KEY = 'replaySkipPhase2CoreReason'
 const REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY = 'replaySkipPhase2FinalizeAt'
 const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
+const PHASE2_INVARIANT_GATE_KEY = 'phase2InvariantGate'
+const PHASE2_INVARIANT_GATE_CHECKED_AT_KEY = 'phase2InvariantGateCheckedAt'
 
 function isSessionExpired(expiresAt: unknown): boolean {
   if (typeof expiresAt !== 'string') return false
@@ -748,6 +751,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const hasPostPhase2 = hasPhase3 || hasPhase4
     const hasOvaultMeshStage = solanaOvaultConfig.enabled === true && hasPostPhase2
+    const enforcePhase2InvariantGate = isTruthyEnv(process.env.DEPLOY_ENFORCE_PHASE2_INVARIANTS, true)
+    const defaultExternalRevenueMode =
+      String(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT_MODE ?? '').trim().toLowerCase() === 'payout_router'
+        ? 'payout_router'
+        : 'gauge'
+    const defaultExternalRevenueRecipient =
+      typeof process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT === 'string' &&
+      isAddress(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT)
+        ? getAddress(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT as Address)
+        : null
     const phase2ReplayState =
       phase2CoreCalls.length > 0 || hasPhase2Finalize
         ? await readPhase2ReplayState({
@@ -779,6 +792,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       payload[atKey] = patch[atKey]
       payload[reasonKey] = reason
+    }
+
+    const assertPhase2InvariantGate = async (): Promise<void> => {
+      if (!enforcePhase2InvariantGate || !hasPhase2Finalize) return
+      const result = await verifyDeployPhase2Invariants({
+        publicClient,
+        phase2FinalizeCalls,
+        payload,
+        defaultExternalRevenueMode,
+        defaultExternalRevenueRecipient,
+      })
+      const gatePatch = {
+        [PHASE2_INVARIANT_GATE_CHECKED_AT_KEY]: new Date().toISOString(),
+        [PHASE2_INVARIANT_GATE_KEY]: result,
+      }
+      await updateDeploySession({
+        id: rec.id,
+        payloadPatch: gatePatch,
+      })
+      payload[PHASE2_INVARIANT_GATE_CHECKED_AT_KEY] = gatePatch[PHASE2_INVARIANT_GATE_CHECKED_AT_KEY]
+      payload[PHASE2_INVARIANT_GATE_KEY] = gatePatch[PHASE2_INVARIANT_GATE_KEY]
+      if (!result.checked || result.violations.length > 0) {
+        const summary = result.violations.map((entry) => entry.code).join(',')
+        throw new Error(`phase2_invariant_failed:${summary || 'unknown'}`)
+      }
     }
 
     const sendNextAfterPhase2 = () => {
@@ -936,6 +974,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const runAfterPhase2 = async (fromStep: string) => {
+      await assertPhase2InvariantGate()
       if (hasPostPhase2 && hasOvaultMeshStage && fromStep !== 'ovault_mesh_confirmed') {
         return runOvaultMeshGate(fromStep)
       }
@@ -1023,9 +1062,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (started) return started
     }
     if (rec.step === 'phase2_confirmed' && hasPostPhase2) {
-      const started = hasOvaultMeshStage
-        ? await runAfterPhase2('phase2_confirmed')
-        : await sendNextAfterPhase2()
+      const started = await runAfterPhase2('phase2_confirmed')
       if (started) return started
     }
     if (rec.step === 'phase2_confirmed' && !hasPostPhase2) {
@@ -1118,6 +1155,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<null>)
     }
     if (msg.startsWith('phase4 image gate failed:')) {
+      return res.status(409).json({
+        success: false,
+        error: msg,
+      } satisfies ApiEnvelope<null>)
+    }
+    if (msg.startsWith('phase2_invariant_failed:')) {
+      await persistFailure()
       return res.status(409).json({
         success: false,
         error: msg,
