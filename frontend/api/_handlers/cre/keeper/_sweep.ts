@@ -16,12 +16,25 @@
  *
  * Protected by KEEPR_API_KEY Bearer token.
  *
- * Request body: { ccaStrategyAddress: string, attemptHookConfig?: boolean }
+ * Request body:
+ * {
+ *   ccaStrategyAddress: string,
+ *   attemptHookConfig?: boolean,
+ *   enforceInvariants?: boolean,
+ *   invariants?: {
+ *     creatorCoinAddress?: string,
+ *     shareTokenAddress?: string,
+ *     gaugeControllerAddress?: string,
+ *     burnStreamAddress?: string,
+ *     payoutRouterAddress?: string,
+ *     externalRevenueRecipientMode?: 'gauge' | 'payout_router'
+ *   }
+ * }
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { createPublicClient, createWalletClient, http, type Abi } from 'viem'
+import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 
@@ -64,9 +77,63 @@ const CCA_STRATEGY_ABI = [
     ],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'feeRecipient',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
   { type: 'function', name: 'sweepCurrency', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'migrate', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'sweepUnsoldTokens', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+] as const
+
+const CREATOR_COIN_ABI = [
+  {
+    type: 'function',
+    name: 'payoutRecipient',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
+] as const
+
+const SHARE_OFT_ABI = [
+  {
+    type: 'function',
+    name: 'gaugeController',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
+] as const
+
+const GAUGE_CONTROLLER_ABI = [
+  {
+    type: 'function',
+    name: 'creatorShareBps',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'creatorTreasury',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
+] as const
+
+const PAYOUT_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'burnStream',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
 ] as const
 
 type LifecycleSnapshot = {
@@ -80,7 +147,26 @@ type CompletionStage =
   | 'completed'
   | 'awaiting_migration_block'
   | 'awaiting_owner_hook_config'
+  | 'invariant_failed'
   | 'in_progress'
+
+type ExternalRevenueRecipientMode = 'gauge' | 'payout_router'
+
+type CompletionInvariantInput = {
+  creatorCoinAddress: `0x${string}` | null
+  shareTokenAddress: `0x${string}` | null
+  gaugeControllerAddress: `0x${string}` | null
+  burnStreamAddress: `0x${string}` | null
+  payoutRouterAddress: `0x${string}` | null
+  externalRevenueRecipientMode: ExternalRevenueRecipientMode
+}
+
+type InvariantViolation = {
+  code: string
+  message: string
+  expected?: string | number | null
+  actual?: string | number | null
+}
 
 function parseLifecycleStatus(raw: unknown): LifecycleSnapshot {
   const lifecycle = raw as any
@@ -90,6 +176,13 @@ function parseLifecycleStatus(raw: unknown): LifecycleSnapshot {
     migrated: Boolean(lifecycle?.migrated ?? lifecycle?.[7] ?? false),
     migrationBlock: BigInt(lifecycle?.migrationBlock ?? lifecycle?.[12] ?? 0n),
   }
+}
+
+function normalizeAddress(value: unknown): `0x${string}` | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null
+  return normalized as `0x${string}`
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -112,12 +205,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const { ccaStrategyAddress, attemptHookConfig } = req.body as {
+  const { ccaStrategyAddress, attemptHookConfig, enforceInvariants, invariants } = req.body as {
     ccaStrategyAddress?: string
     attemptHookConfig?: boolean
+    enforceInvariants?: boolean
+    invariants?: {
+      creatorCoinAddress?: string
+      shareTokenAddress?: string
+      gaugeControllerAddress?: string
+      burnStreamAddress?: string
+      payoutRouterAddress?: string
+      externalRevenueRecipientMode?: ExternalRevenueRecipientMode
+    }
   }
   if (!ccaStrategyAddress || !ccaStrategyAddress.startsWith('0x') || ccaStrategyAddress.length !== 42) {
     return res.status(400).json({ success: false, error: 'Invalid ccaStrategyAddress' } satisfies ApiEnvelope<never>)
+  }
+
+  const invariantInput: CompletionInvariantInput = {
+    creatorCoinAddress: normalizeAddress(invariants?.creatorCoinAddress),
+    shareTokenAddress: normalizeAddress(invariants?.shareTokenAddress),
+    gaugeControllerAddress: normalizeAddress(invariants?.gaugeControllerAddress),
+    burnStreamAddress: normalizeAddress(invariants?.burnStreamAddress),
+    payoutRouterAddress: normalizeAddress(invariants?.payoutRouterAddress),
+    externalRevenueRecipientMode:
+      invariants?.externalRevenueRecipientMode === 'payout_router' ? 'payout_router' : 'gauge',
   }
 
   const keeperPk = process.env.KEEPR_PRIVATE_KEY
@@ -133,6 +245,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const hookFlagFromEnv = process.env.KEEPER_ENABLE_HOOK_CONFIG === 'true'
     const shouldAttemptHookConfig = typeof attemptHookConfig === 'boolean' ? attemptHookConfig : hookFlagFromEnv
+    const enforceCompletionInvariants =
+      typeof enforceInvariants === 'boolean'
+        ? enforceInvariants
+        : process.env.KEEPER_ENFORCE_COMPLETION_INVARIANTS !== 'false'
 
     let sweepTxHash: `0x${string}` | null = null
     let migrateTxHash: `0x${string}` | null = null
@@ -145,6 +261,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let unsoldStatus: 'skipped' | 'success' | 'reverted' | 'failed' = 'skipped'
     let completionStage: CompletionStage = 'in_progress'
     let hookConfigError: string | null = null
+    let invariantChecksRun = 0
+    const invariantViolations: InvariantViolation[] = []
 
     const readLifecycle = async (): Promise<LifecycleSnapshot> =>
       parseLifecycleStatus(await publicClient.readContract({
@@ -152,6 +270,150 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         abi: CCA_STRATEGY_ABI as unknown as Abi,
         functionName: 'getLifecycleStatus',
       }))
+
+    const recordInvariantViolation = (
+      code: string,
+      message: string,
+      expected?: string | number | null,
+      actual?: string | number | null,
+    ) => {
+      invariantViolations.push({ code, message, ...(expected !== undefined ? { expected } : {}), ...(actual !== undefined ? { actual } : {}) })
+    }
+
+    const runCompletionInvariants = async (): Promise<void> => {
+      const expectedGauge = invariantInput.gaugeControllerAddress
+      if (!expectedGauge) {
+        recordInvariantViolation('missing_expected_gauge', 'Missing expected gaugeControllerAddress for completion invariants')
+      }
+
+      const expectedCreatorCoin = invariantInput.creatorCoinAddress
+      if (!expectedCreatorCoin) {
+        recordInvariantViolation('missing_expected_creator_coin', 'Missing expected creatorCoinAddress for completion invariants')
+      }
+
+      const expectedShareToken = invariantInput.shareTokenAddress
+      if (!expectedShareToken) {
+        recordInvariantViolation('missing_expected_share_token', 'Missing expected shareTokenAddress for completion invariants')
+      }
+
+      if (expectedGauge) {
+        const strategyFeeRecipient = (await publicClient.readContract({
+          address: ccaStrategyAddress as `0x${string}`,
+          abi: CCA_STRATEGY_ABI as unknown as Abi,
+          functionName: 'feeRecipient',
+        }) as `0x${string}`).toLowerCase()
+        invariantChecksRun++
+        if (strategyFeeRecipient !== expectedGauge) {
+          recordInvariantViolation(
+            'strategy_fee_recipient_mismatch',
+            'CCA strategy feeRecipient does not match expected tradeFeeCollector',
+            expectedGauge,
+            strategyFeeRecipient,
+          )
+        }
+      }
+
+      if (expectedCreatorCoin && expectedGauge) {
+        const payoutRecipient = (await publicClient.readContract({
+          address: expectedCreatorCoin,
+          abi: CREATOR_COIN_ABI as unknown as Abi,
+          functionName: 'payoutRecipient',
+        }) as `0x${string}`).toLowerCase()
+        invariantChecksRun++
+
+        const expectedRecipient =
+          invariantInput.externalRevenueRecipientMode === 'payout_router'
+            ? invariantInput.payoutRouterAddress
+            : expectedGauge
+        if (!expectedRecipient) {
+          recordInvariantViolation(
+            'missing_expected_external_revenue_recipient',
+            'Cannot resolve expected externalRevenueRecipient from completion invariants',
+          )
+        } else if (payoutRecipient !== expectedRecipient) {
+          recordInvariantViolation(
+            'external_revenue_recipient_mismatch',
+            'Creator Coin payoutRecipient does not match expected external revenue lane',
+            expectedRecipient,
+            payoutRecipient,
+          )
+        }
+      }
+
+      if (expectedShareToken && expectedGauge) {
+        const shareGauge = (await publicClient.readContract({
+          address: expectedShareToken,
+          abi: SHARE_OFT_ABI as unknown as Abi,
+          functionName: 'gaugeController',
+        }) as `0x${string}`).toLowerCase()
+        invariantChecksRun++
+        if (shareGauge !== expectedGauge) {
+          recordInvariantViolation(
+            'trade_fee_collector_mismatch',
+            'ShareOFT gaugeController does not match expected tradeFeeCollector',
+            expectedGauge,
+            shareGauge,
+          )
+        }
+      }
+
+      if (expectedGauge) {
+        const [creatorShareBpsRaw, creatorTreasuryRaw] = await Promise.all([
+          publicClient.readContract({
+            address: expectedGauge,
+            abi: GAUGE_CONTROLLER_ABI as unknown as Abi,
+            functionName: 'creatorShareBps',
+          }),
+          publicClient.readContract({
+            address: expectedGauge,
+            abi: GAUGE_CONTROLLER_ABI as unknown as Abi,
+            functionName: 'creatorTreasury',
+          }),
+        ])
+        const creatorShareBps = Number(creatorShareBpsRaw as bigint)
+        const creatorTreasury = (creatorTreasuryRaw as `0x${string}`).toLowerCase()
+        invariantChecksRun += 2
+        if (creatorShareBps > 0 && creatorTreasury === zeroAddress) {
+          recordInvariantViolation(
+            'creator_treasury_missing',
+            'Gauge creatorShareBps is non-zero but creatorTreasury is unset',
+            'non-zero treasury address',
+            creatorTreasury,
+          )
+        }
+      }
+
+      if (invariantInput.externalRevenueRecipientMode === 'payout_router') {
+        if (!invariantInput.payoutRouterAddress) {
+          recordInvariantViolation(
+            'missing_expected_payout_router',
+            'Router mode selected but payoutRouterAddress is missing',
+          )
+        }
+        if (!invariantInput.burnStreamAddress) {
+          recordInvariantViolation(
+            'missing_expected_burn_stream',
+            'Router mode selected but burnStreamAddress is missing',
+          )
+        }
+        if (invariantInput.payoutRouterAddress && invariantInput.burnStreamAddress) {
+          const routerBurnStream = (await publicClient.readContract({
+            address: invariantInput.payoutRouterAddress,
+            abi: PAYOUT_ROUTER_ABI as unknown as Abi,
+            functionName: 'burnStream',
+          }) as `0x${string}`).toLowerCase()
+          invariantChecksRun++
+          if (routerBurnStream !== invariantInput.burnStreamAddress) {
+            recordInvariantViolation(
+              'router_burn_stream_mismatch',
+              'PayoutRouter burnStream does not match expected burn stream',
+              invariantInput.burnStreamAddress,
+              routerBurnStream,
+            )
+          }
+        }
+      }
+    }
 
     let lifecycle = await readLifecycle()
 
@@ -251,6 +513,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Step 3.5: completion invariants (hard gate when enabled).
+    if (lifecycle.migrated && enforceCompletionInvariants) {
+      try {
+        await runCompletionInvariants()
+      } catch (err) {
+        recordInvariantViolation(
+          'invariant_check_error',
+          'Invariant evaluation failed',
+          undefined,
+          err instanceof Error ? err.message : 'unknown_error',
+        )
+      }
+
+      if (invariantViolations.length > 0) {
+        completionStage = 'invariant_failed'
+      }
+    }
+
     // Step 4: sweepUnsoldTokens best-effort (non-critical).
     try {
       unsoldTxHash = await walletClient.writeContract({
@@ -270,6 +550,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const completed = completionStage === 'completed'
+    const invariantGateFailed = completionStage === 'invariant_failed'
     const currentBlock = await publicClient.getBlockNumber()
     if (!lifecycle.migrated && completionStage === 'in_progress') {
       completionStage = 'awaiting_migration_block'
@@ -278,25 +559,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       completionStage = 'awaiting_owner_hook_config'
     }
 
+    const responseData = {
+      sweepTxHash,
+      migrateTxHash,
+      hookConfigTxHash,
+      sweepStatus,
+      migrateStatus,
+      hookConfigStatus,
+      hookConfigAttempted: shouldAttemptHookConfig,
+      hookConfigError,
+      unsoldTxHash,
+      unsoldStatus,
+      completionStage,
+      completed,
+      lifecyclePhase: lifecycle.phase,
+      migrationBlock: lifecycle.migrationBlock.toString(),
+      currentBlock: currentBlock.toString(),
+      invariantsEnforced: enforceCompletionInvariants,
+      invariantChecksRun,
+      invariantViolations,
+    }
+
+    if (invariantGateFailed) {
+      return res.status(200).json({
+        success: false,
+        error: 'completion_invariant_failed',
+        data: responseData,
+      } satisfies ApiEnvelope<typeof responseData>)
+    }
+
     return res.status(200).json({
       success: true,
-      data: {
-        sweepTxHash,
-        migrateTxHash,
-        hookConfigTxHash,
-        sweepStatus,
-        migrateStatus,
-        hookConfigStatus,
-        hookConfigAttempted: shouldAttemptHookConfig,
-        hookConfigError,
-        unsoldTxHash,
-        unsoldStatus,
-        completionStage,
-        completed,
-        lifecyclePhase: lifecycle.phase,
-        migrationBlock: lifecycle.migrationBlock.toString(),
-        currentBlock: currentBlock.toString(),
-      },
+      data: responseData,
     } satisfies ApiEnvelope<{
       sweepTxHash: string | null
       migrateTxHash: string | null
@@ -313,6 +607,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lifecyclePhase: number
       migrationBlock: string
       currentBlock: string
+      invariantsEnforced: boolean
+      invariantChecksRun: number
+      invariantViolations: InvariantViolation[]
     }>)
   } catch (err) {
     console.error('[cre/keeper/sweep] Error:', err)

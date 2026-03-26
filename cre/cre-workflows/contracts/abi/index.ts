@@ -5,6 +5,7 @@ export { BurnStreamABI } from "./BurnStream"
 export { CreatorCoinABI } from "./CreatorCoin"
 export { ShareOFTABI } from "./ShareOFT"
 export { ERC20ABI } from "./ERC20"
+export { PayoutRouterABI } from "./PayoutRouter"
 export {
   VaultStrategyViewABI,
   OracleStrategyViewABI,

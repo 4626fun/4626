@@ -12,7 +12,7 @@ Fee splitter and gauge controller for creator vaults.
 The GaugeController:
 - Receives trading fees from ShareOFT
 - Splits fees according to configured percentages
-- Routes fees to lottery, burn, and voter rewards
+- Routes fees to lottery, burn, optional creator treasury, and voter/protocol branch
 - Manages jackpot reserve for lottery payouts
 
 ## Fee Split Configuration
@@ -88,7 +88,13 @@ function setFeeSplit(
     uint256 creatorBps,
     uint256 protocolBps
 ) external onlyOwner;
+
+// Update creator treasury (can be zero only when creatorShareBps == 0)
+function setCreatorTreasury(address treasury) external onlyOwner;
 ```
+
+Invariant guard:
+- If `creatorBps > 0`, creator treasury must be non-zero (`CreatorTreasuryRequired`).
 
 ## Distribution Flow
 
@@ -104,7 +110,8 @@ Unwrap OFT → vault shares
 Split according to configuration:
    - 69% → jackpotReserve
    - 21.39% → burn (increases PPS)
-   - 9.61% → voterRewardsDistributor
+   - creator% → creatorTreasury (if enabled)
+   - protocol/voter branch → voterRewardsDistributor, protocol treasury, or fallback (config-dependent)
 ```
 
 ## Events
