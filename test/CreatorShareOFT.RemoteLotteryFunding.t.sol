@@ -24,6 +24,10 @@ contract MockRemoteRegistry {
     function getLayerZeroEndpoint(uint256) external pure returns (address) {
         return address(0x1a44076050125825900e736c501f859c50fE728c);
     }
+
+    function getEidForChainId(uint256) external pure returns (uint32) {
+        return 30184;
+    }
 }
 
 contract MockRemoteLotteryManager {
@@ -83,7 +87,7 @@ contract CreatorShareOFTRemoteLotteryFundingTest is Test {
     address public attacker = address(0x3);
 
     address constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
-    uint32 constant HUB_EID = 8453;
+    uint32 constant HUB_EID = 30184;
     bytes32 constant HUB_PEER = bytes32(uint256(uint160(address(0xBEEF))));
 
     uint256 constant SWAP_AMOUNT = 100 ether;

@@ -311,7 +311,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (_registry == address(0)) revert ZeroAddress();
 
         registry = ICreatorRegistry(_registry);
-        chainEid = uint32(block.chainid);
+        chainEid = ICreatorRegistry(_registry).getEidForChainId(block.chainid);
         addressType[address(this)] = OperationType.NoFees;
     }
 
