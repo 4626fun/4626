@@ -1,4 +1,4 @@
-import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
+import { isMarketingWaitlistEntryLocation } from '@/lib/auth/waitlistEntry'
 
 const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
 
@@ -48,7 +48,7 @@ export function sanitizeCrossAppRedirectUrlForAuth(): (() => void) | null {
   const { safePath, shouldSanitize } = getCrossAppSafeRedirectPath({ pathname, search, hash })
   if (!shouldSanitize) return null
 
-  if (pathname === getCanonicalMarketingWaitlistPath() || hash === '#waitlist') {
+  if (isMarketingWaitlistEntryLocation({ pathname, search, hash }) || hash === '#waitlist') {
     try {
       window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
     } catch {

@@ -1,14 +1,19 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { Check, CheckCircle2, Copy, Loader2 } from 'lucide-react'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import {
+  getMarketingWaitlistEntryUrl,
+  getMarketingWaitlistReferralUrl,
+  readWaitlistEntryReferralCode,
+  WAITLIST_REFERRAL_CODE_STORAGE_KEY,
+} from '@/lib/auth/waitlistEntry'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { ZORA_PRIVY_APP_ID, usePrivyClientStatus } from '@/lib/privy/client'
@@ -142,6 +147,21 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       .catch(reject)
       .finally(() => clearTimeout(t))
   })
+}
+
+function readStoredWaitlistReferralCode(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const stored = window.sessionStorage.getItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
+    const normalized = String(stored ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 16)
+    return normalized.length > 0 ? normalized : null
+  } catch {
+    return null
+  }
 }
 
 function readApiErrorMessage(payload: unknown, fallback: string): string {
@@ -399,6 +419,7 @@ function WalletPathCard(props: {
 export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
+  const location = useLocation()
 
   const privy = useSafePrivy()
   const privyClientStatus = usePrivyClientStatus()
@@ -434,6 +455,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const [dashboardPointsType, setDashboardPointsType] = useState<DashboardPointsType>('total')
   const [waitlistPosition, setWaitlistPosition] = useState<WaitlistPositionResponse | null>(null)
   const [leaderboard, setLeaderboard] = useState<DashboardLeaderboardResponse | null>(null)
+  const [copiedReferralLink, setCopiedReferralLink] = useState(false)
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
@@ -442,19 +464,28 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const isPage = variant === 'page'
 
-  const wrapClass = isPage ? 'mx-auto w-full max-w-lg' : 'w-full'
+  const wrapClass = isPage ? 'mx-auto w-full max-w-4xl' : 'w-full'
   const innerClass = isPage
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
+  const activeReferralCode = useMemo(
+    () =>
+      readWaitlistEntryReferralCode({
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      }) ?? readStoredWaitlistReferralCode(),
+    [location.hash, location.pathname, location.search],
+  )
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
   const redirectToCanonicalWaitlist = useCallback(() => {
     if (typeof window === 'undefined') return false
-    const target = getMarketingWaitlistEntryUrl()
+    const target = activeReferralCode ? getMarketingWaitlistReferralUrl(activeReferralCode) : getMarketingWaitlistEntryUrl()
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return false
     window.location.assign(target)
     return true
-  }, [])
+  }, [activeReferralCode])
 
   useEffect(() => {
     if (typeof privy?.logout === 'function') {
@@ -465,6 +496,21 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
     privyLogoutRef.current = null
   }, [privy])
+
+  useEffect(() => {
+    if (!activeReferralCode || typeof window === 'undefined') return
+    try {
+      window.sessionStorage.setItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY, activeReferralCode)
+    } catch {
+      // ignore
+    }
+  }, [activeReferralCode])
+
+  useEffect(() => {
+    if (!copiedReferralLink || typeof window === 'undefined') return
+    const timeoutId = window.setTimeout(() => setCopiedReferralLink(false), 1600)
+    return () => window.clearTimeout(timeoutId)
+  }, [copiedReferralLink])
 
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
     const token = await getAccessToken()
@@ -490,7 +536,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     const response = await apiFetch('/api/waitlist/bootstrap', {
       method: 'POST',
       headers,
-      body: JSON.stringify({}),
+      body: JSON.stringify(activeReferralCode ? { referralCode: activeReferralCode } : {}),
     })
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
     if (!response.ok || !payload?.success || !payload.data) {
@@ -518,6 +564,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     const nextAccount = payload.data
     setAccount(nextAccount)
     setRecoveryRequired(false)
+    if (activeReferralCode && typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.removeItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
+      } catch {
+        // ignore
+      }
+    }
     if (!nextAccount.emailVerified) {
       setStep('auth')
       setError('Verify your email with 4626 to finish creating this account.')
@@ -525,7 +578,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
     setStep(resolveWaitlistStep({ account: nextAccount, ownerDelegationVerified: nextOwnerDelegationVerified }))
     return nextAccount
-  }, [getAccessToken])
+  }, [activeReferralCode, getAccessToken])
 
   const loadDashboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -1042,6 +1095,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const inviteRank = waitlistPosition?.rank.invite ?? null
   const qualifiedReferrals = waitlistPosition?.referrals.qualifiedCount ?? 0
   const pendingReferrals = waitlistPosition?.referrals.pendingCountCapped ?? waitlistPosition?.referrals.pendingCount ?? 0
+  const personalReferralCode = waitlistPosition?.referralCode ?? null
+  const personalReferralLink = useMemo(
+    () => (personalReferralCode ? getMarketingWaitlistReferralUrl(personalReferralCode) : null),
+    [personalReferralCode],
+  )
   const leaderboardTitle =
     dashboardPointsType === 'invite'
       ? 'Invite leaderboard'
@@ -1055,6 +1113,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       : walletSelectionNeeded
         ? 'Your email is verified. Track your rank, build points, and optionally connect the wallet you want 4626 to recognize.'
         : 'Your wallet is linked. Keep climbing the leaderboard while you wait for admin approval.'
+
+  const onCopyReferralLink = useCallback(async () => {
+    if (!personalReferralLink || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
+    await navigator.clipboard.writeText(personalReferralLink)
+    setCopiedReferralLink(true)
+  }, [personalReferralLink])
 
   useEffect(() => {
     if (!shouldAutoStartAuth) return
@@ -1267,84 +1331,147 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{leaderboardTitle}</div>
-                    <div className="mt-1 text-sm text-zinc-300">Live snapshot from the public leaderboard.</div>
-                  </div>
-                  <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
-                    Full board
-                  </Link>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {(['total', 'invite', 'agent'] as const).map((pointsType) => (
-                    <button
-                      key={pointsType}
-                      type="button"
-                      disabled={dashboardBusy}
-                      onClick={() => setDashboardPointsType(pointsType)}
-                      className={`rounded-full border px-3 py-1 text-[11px] ${
-                        dashboardPointsType === pointsType
-                          ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-100'
-                          : 'border-white/8 bg-white/[0.03] text-zinc-500'
-                      }`}
-                    >
-                      {pointsType === 'total' ? 'Total' : pointsType === 'invite' ? 'Invites' : 'Agent'}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
-                  {dashboardBusy && leaderboardRows.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-zinc-500">Loading leaderboard…</div>
-                  ) : leaderboardRows.length > 0 ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      {leaderboardRows.map((row) => {
-                        const isMe = Boolean(leaderboardMe && leaderboardMe.signupId === row.signupId)
-                        return (
-                          <div
-                            key={`${row.rank}-${row.signupId}`}
-                            className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-4 py-3 last:border-b-0 ${
-                              isMe ? 'bg-brand-primary/6' : ''
-                            }`}
-                          >
-                            <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
-                            <div className="min-w-0">
-                              <div className="truncate text-sm text-white">{row.display}</div>
-                              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
-                                {row.referralCode ? <span>{row.referralCode}</span> : null}
-                                {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
-                                {isMe ? <span className="text-brand-primary">You</span> : null}
-                              </div>
-                            </div>
-                            <div className="text-sm font-semibold tabular-nums text-zinc-100">
-                              {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, row))}
-                            </div>
-                          </div>
-                        )
-                      })}
+                      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Referral link</div>
+                      <div className="mt-1 text-sm text-zinc-300">Share one clean invite URL instead of sending people back through messy query strings.</div>
                     </div>
+                    {personalReferralCode ? (
+                      <div className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-brand-primary">
+                        {personalReferralCode}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {personalReferralLink ? (
+                    <>
+                      <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                        <div className="truncate font-mono text-sm text-zinc-100">{personalReferralLink}</div>
+                        <p className="mt-2 text-xs text-zinc-500">
+                          New signups land on the quiet waitlist shell, keep the referral attached, and can immediately see the live leaderboard.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Qualified</div>
+                          <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
+                          <div className="mt-1 text-xs text-zinc-500">Friends fully linked and counted.</div>
+                        </div>
+                        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Pending</div>
+                          <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
+                          <div className="mt-1 text-xs text-zinc-500">People who still need to finish setup.</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => void onCopyReferralLink()}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-100 transition hover:bg-white/[0.05] sm:flex-1"
+                        >
+                          {copiedReferralLink ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                          {copiedReferralLink ? 'Copied' : 'Copy invite link'}
+                        </button>
+                        <a
+                          href={personalReferralLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.05] sm:flex-1"
+                        >
+                          Open invite route
+                        </a>
+                      </div>
+                    </>
                   ) : (
-                    <div className="px-4 py-6 text-sm text-zinc-500">No ranked accounts yet.</div>
+                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                      Your invite code will appear here as soon as the waitlist profile finishes syncing.
+                    </div>
                   )}
                 </div>
 
-                {!leaderboardMeInTop && leaderboardMe ? (
-                  <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-brand-primary">Your standing</div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{leaderboardTitle}</div>
+                      <div className="mt-1 text-sm text-zinc-300">Live snapshot from the public leaderboard.</div>
+                    </div>
+                    <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
+                      Full board
+                    </Link>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(['total', 'invite', 'agent'] as const).map((pointsType) => (
+                      <button
+                        key={pointsType}
+                        type="button"
+                        disabled={dashboardBusy}
+                        onClick={() => setDashboardPointsType(pointsType)}
+                        className={`rounded-full border px-3 py-1 text-[11px] ${
+                          dashboardPointsType === pointsType
+                            ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-100'
+                            : 'border-white/8 bg-white/[0.03] text-zinc-500'
+                        }`}
+                      >
+                        {pointsType === 'total' ? 'Total' : pointsType === 'invite' ? 'Invites' : 'Agent'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
+                    {dashboardBusy && leaderboardRows.length === 0 ? (
+                      <div className="px-4 py-6 text-sm text-zinc-500">Loading leaderboard…</div>
+                    ) : leaderboardRows.length > 0 ? (
                       <div>
-                        <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
-                        <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
+                        {leaderboardRows.map((row) => {
+                          const isMe = Boolean(leaderboardMe && leaderboardMe.signupId === row.signupId)
+                          return (
+                            <div
+                              key={`${row.rank}-${row.signupId}`}
+                              className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-4 py-3 last:border-b-0 ${
+                                isMe ? 'bg-brand-primary/6' : ''
+                              }`}
+                            >
+                              <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
+                              <div className="min-w-0">
+                                <div className="truncate text-sm text-white">{row.display}</div>
+                                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+                                  {row.referralCode ? <span>{row.referralCode}</span> : null}
+                                  {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
+                                  {isMe ? <span className="text-brand-primary">You</span> : null}
+                                </div>
+                              </div>
+                              <div className="text-sm font-semibold tabular-nums text-zinc-100">
+                                {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, row))}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                      <div className="text-sm font-semibold tabular-nums text-zinc-100">
-                        {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, leaderboardMe))}
+                    ) : (
+                      <div className="px-4 py-6 text-sm text-zinc-500">No ranked accounts yet.</div>
+                    )}
+                  </div>
+
+                  {!leaderboardMeInTop && leaderboardMe ? (
+                    <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-brand-primary">Your standing</div>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
+                          <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
+                        </div>
+                        <div className="text-sm font-semibold tabular-nums text-zinc-100">
+                          {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, leaderboardMe))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
             </div>
 

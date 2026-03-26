@@ -1,9 +1,15 @@
-import { getMarketingBaseUrl } from '@/lib/host'
+import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
 
 const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
+const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
+
+export const WAITLIST_REFERRAL_CODE_STORAGE_KEY = 'cv:waitlist:referral_code'
+export const WAITLIST_REFERRAL_CLICK_SESSION_KEY = 'cv:waitlist:referral_click_session'
 
 type WaitlistEntryLocation = {
   pathname?: string | null
+  search?: string | null
+  hash?: string | null
 }
 
 export function getCanonicalMarketingWaitlistPath(): string {
@@ -15,10 +21,56 @@ export function buildCanonicalMarketingWaitlistUrl(baseUrl: string): string {
   return `${base}${CANONICAL_MARKETING_WAITLIST_PATH}`
 }
 
+function normalizePathname(pathname: string | null | undefined): string {
+  const rawPath = String(pathname ?? '').trim()
+  if (rawPath.length === 0) return '/'
+  return rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+}
+
+export function normalizeWaitlistReferralCode(value: string | null | undefined): string | null {
+  const normalized = String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 16)
+
+  return normalized.length > 0 ? normalized : null
+}
+
+export function buildWaitlistReferralPath(referralCode: string): string {
+  const normalized = normalizeWaitlistReferralCode(referralCode)
+  return normalized ? `${WAITLIST_REFERRAL_PATH_PREFIX}/${normalized}` : CANONICAL_MARKETING_WAITLIST_PATH
+}
+
+export function buildWaitlistReferralUrl(baseUrl: string, referralCode: string): string {
+  const base = String(baseUrl ?? '').replace(/\/+$/, '')
+  return `${base}${buildWaitlistReferralPath(referralCode)}`
+}
+
+export function getMarketingWaitlistReferralUrl(referralCode: string): string {
+  return buildWaitlistReferralUrl(getWaitlistReferralBaseUrl(), referralCode)
+}
+
+export function readWaitlistEntryReferralCode(location: WaitlistEntryLocation): string | null {
+  const pathname = normalizePathname(location.pathname)
+  if (pathname.startsWith(`${WAITLIST_REFERRAL_PATH_PREFIX}/`)) {
+    const candidate = pathname.slice(`${WAITLIST_REFERRAL_PATH_PREFIX}/`.length)
+    if (!candidate.includes('/')) return normalizeWaitlistReferralCode(candidate)
+  }
+
+  if (pathname !== '/' && pathname !== CANONICAL_MARKETING_WAITLIST_PATH) return null
+
+  try {
+    const params = new URLSearchParams(String(location.search ?? ''))
+    return normalizeWaitlistReferralCode(params.get('ref'))
+  } catch {
+    return null
+  }
+}
+
 export function isMarketingWaitlistEntryLocation(location: WaitlistEntryLocation): boolean {
-  const rawPath = String(location.pathname ?? '').trim()
-  const pathname = rawPath.length === 0 ? '/' : rawPath.startsWith('/') ? rawPath : `/${rawPath}`
-  return pathname === CANONICAL_MARKETING_WAITLIST_PATH
+  const pathname = normalizePathname(location.pathname)
+  return pathname === CANONICAL_MARKETING_WAITLIST_PATH || readWaitlistEntryReferralCode(location) !== null
 }
 
 export function buildWaitlistEntryPath(): string {

@@ -58,6 +58,22 @@ export function RootRouter() {
               </Suspense>
             }
           />
+          <Route
+            path="/waitlist"
+            element={
+              <Suspense fallback={<AppLoadingState />}>
+                <Home />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/r/:referralCode"
+            element={
+              <Suspense fallback={<AppLoadingState />}>
+                <Home />
+              </Suspense>
+            }
+          />
         </Route>
         <Route
           path="/telegram/menu"

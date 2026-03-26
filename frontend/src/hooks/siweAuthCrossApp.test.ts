@@ -16,6 +16,10 @@ describe('siweAuthCrossApp', () => {
       safePath: '/',
       shouldSanitize: true,
     })
+    expect(getCrossAppSafeRedirectPath({ pathname: '/r/FRIEND42', search: '?foo=bar', hash: '' })).toEqual({
+      safePath: '/r/FRIEND42',
+      shouldSanitize: true,
+    })
     expect(getCrossAppSafeRedirectPath({ pathname: '/continue', search: '?cv_handoff=handoff-123', hash: '' })).toEqual({
       safePath: '/continue',
       shouldSanitize: true,

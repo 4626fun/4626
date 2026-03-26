@@ -49,12 +49,17 @@ const navItemsPublic: MobileNavItem[] = [
 
 const adminNavItem: MobileNavItem = { path: '/admin/waitlist', icon: ShieldCheck, label: 'Admin', activePrefixes: ['/admin'] }
 
-function isActiveLink(location: { pathname: string; hash?: string }, item: MobileNavItem): boolean {
+function isActiveLink(location: { pathname: string; search?: string; hash?: string }, item: MobileNavItem): boolean {
   const pathname = location.pathname
+  const search = location.search ?? ''
   const hash = location.hash ?? ''
 
+  if (item.path === getCanonicalMarketingWaitlistPath()) {
+    return isMarketingWaitlistEntryLocation({ pathname, search, hash })
+  }
+
   if (item.path.includes('#')) {
-    return isMarketingWaitlistEntryLocation({ pathname, hash })
+    return isMarketingWaitlistEntryLocation({ pathname, search, hash })
   }
 
   if (item.path === '/') return pathname === '/'

@@ -3,7 +3,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import {
+  ensureReferralsSchema,
+  getClientIp,
+  getUserAgent,
+  hashForAttribution,
+  normalizeReferralCode,
+} from '../../../server/_lib/referrals.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
@@ -12,7 +20,7 @@ import {
   verifyPrivyForAccounts,
 } from '../../../server/_lib/accountsIdentity.js'
 
-type BootstrapBody = { email?: string }
+type BootstrapBody = { email?: string; referralCode?: string }
 type WaitlistBootstrapResponse =
   | {
       requiresPrivyAuth: true
@@ -29,6 +37,12 @@ function normalizeEmail(value: unknown): string | null {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : ''
   if (!email || !EMAIL_RE.test(email)) return null
   return email
+}
+
+function normalizeReferralCodeOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = normalizeReferralCode(value)
+  return normalized || null
 }
 
 function isPrivyUserIdUniqueViolation(error: unknown): boolean {
@@ -89,6 +103,105 @@ async function upsertBootstrapProfile(params: {
   throw new Error('waitlist_bootstrap_profile_upsert_failed')
 }
 
+async function readBootstrapProfile(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  privyUserId: string
+}): Promise<{ signupId: number | null; referralCode: string | null }> {
+  const profile = await params.db.sql`
+    SELECT id, referral_code
+    FROM profiles
+    WHERE privy_user_id = ${params.privyUserId}
+    LIMIT 1;
+  `
+  const signupId = typeof profile?.rows?.[0]?.id === 'number' ? (profile.rows[0].id as number) : null
+  const referralCode = typeof profile?.rows?.[0]?.referral_code === 'string' ? (profile.rows[0].referral_code as string) : null
+  return { signupId, referralCode }
+}
+
+async function ensureBootstrapReferralCode(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  signupId: number
+  referralCode: string | null
+}): Promise<string | null> {
+  if (params.referralCode) return params.referralCode
+  const desired = `C${Number(params.signupId).toString(36).toUpperCase()}`
+  try {
+    const updated = await params.db.sql`
+      UPDATE profiles
+      SET referral_code = ${desired}, referral_claimed_at = NOW()
+      WHERE id = ${params.signupId} AND referral_code IS NULL
+      RETURNING referral_code;
+    `
+    return typeof updated?.rows?.[0]?.referral_code === 'string' ? (updated.rows[0].referral_code as string) : null
+  } catch {
+    return params.referralCode
+  }
+}
+
+async function applyBootstrapReferral(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  signupId: number
+  referralCode: string
+  ipHash: string | null
+  uaHash: string | null
+}): Promise<void> {
+  const referrer = await params.db.sql`
+    SELECT id
+    FROM profiles
+    WHERE referral_code = ${params.referralCode}
+    LIMIT 1;
+  `
+  const referrerId = typeof referrer?.rows?.[0]?.id === 'number' ? (referrer.rows[0].id as number) : null
+  if (!referrerId || referrerId === params.signupId) return
+
+  await params.db.sql`
+    UPDATE profiles
+    SET referred_by_code = ${params.referralCode}, referred_by_signup_id = ${referrerId}
+    WHERE id = ${params.signupId} AND referred_by_signup_id IS NULL;
+  `
+
+  const conversionResult = await params.db.sql`
+    INSERT INTO referral_conversions (
+      referral_code,
+      referrer_signup_id,
+      invitee_signup_id,
+      ip_hash,
+      ua_hash,
+      session_id,
+      attribution,
+      is_valid,
+      invalid_reason,
+      status,
+      created_at
+    )
+    VALUES (
+      ${params.referralCode},
+      ${referrerId},
+      ${params.signupId},
+      ${params.ipHash},
+      ${params.uaHash},
+      NULL,
+      'last_click',
+      TRUE,
+      NULL,
+      'signed_up',
+      NOW()
+    )
+    ON CONFLICT (invitee_signup_id) DO NOTHING
+    RETURNING id;
+  `
+
+  if (conversionResult?.rows?.[0]?.id) {
+    await awardWaitlistPoints({
+      db: params.db as any,
+      signupId: referrerId,
+      source: 'referral_signup',
+      sourceId: `invitee:${params.signupId}`,
+      amount: WAITLIST_POINTS.referralSignup,
+    })
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -100,7 +213,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (await readJsonBody<BootstrapBody>(req).catch(() => null)) ?? (req.body as BootstrapBody | null) ?? {}
   const email = normalizeEmail(body?.email)
+  const referralCode = normalizeReferralCodeOrNull(body?.referralCode)
   const token = readPrivyToken(req)
+  const ipHash = hashForAttribution(getClientIp(req))
+  const uaHash = hashForAttribution(getUserAgent(req))
 
   const db = await getDb()
   if (!db) {
@@ -108,6 +224,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   await ensureWaitlistSchema(db as any)
+  await ensureWaitlistPointsSchema(db as any)
+  await ensureReferralsSchema(db as any)
 
   if (!token) {
     let waitlistEntryId: number | null = null
@@ -163,6 +281,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: privyEmail,
         privyUserId: context.privyUserId,
       })
+
+      const bootstrapProfile = await readBootstrapProfile({
+        db: db as any,
+        privyUserId: context.privyUserId,
+      })
+      if (bootstrapProfile.signupId) {
+        await ensureBootstrapReferralCode({
+          db: db as any,
+          signupId: bootstrapProfile.signupId,
+          referralCode: bootstrapProfile.referralCode,
+        })
+        if (referralCode) {
+          await applyBootstrapReferral({
+            db: db as any,
+            signupId: bootstrapProfile.signupId,
+            referralCode,
+            ipHash,
+            uaHash,
+          })
+        }
+      }
     }
 
     const me = await buildAccountsMePayload({

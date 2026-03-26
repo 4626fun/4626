@@ -3,9 +3,18 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight, X } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { buildCanonicalMarketingWaitlistUrl, getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
+import {
+  buildCanonicalMarketingWaitlistUrl,
+  buildWaitlistReferralPath,
+  buildWaitlistReferralUrl,
+  getCanonicalMarketingWaitlistPath,
+  isMarketingWaitlistEntryLocation,
+  readWaitlistEntryReferralCode,
+  WAITLIST_REFERRAL_CODE_STORAGE_KEY,
+} from '@/lib/auth/waitlistEntry'
 import { getHostMode, getMarketingBaseUrl, type HostMode } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { PublicWaitlistOverview } from '@/components/waitlist/PublicWaitlistOverview'
 
 const LazyWaitlistFlowWithProviders = lazy(async () => {
   const mod = await import('@/components/waitlist/WaitlistFlowWithProviders')
@@ -33,6 +42,8 @@ type HomeWaitlistRedirectInput = {
 
 type WaitlistEntryVisibilityInput = {
   pathname: string
+  search: string
+  hash: string
   stickyOpen: boolean
 }
 
@@ -58,33 +69,42 @@ function hasLegacyWaitlistUrlMarkers(search: string, hash: string): boolean {
   return false
 }
 
+function buildNormalizedWaitlistEntryPath(input: {
+  pathname: string
+  search: string
+  hash: string
+}): string {
+  const referralCode = readWaitlistEntryReferralCode(input)
+  if (referralCode) return buildWaitlistReferralPath(referralCode)
+  return getCanonicalMarketingWaitlistPath()
+}
+
 export function shouldRedirectHomeToSwap(input: HomeRedirectInput): boolean {
   if (input.hostMode !== 'app') return false
-  if (normalizePathname(input.pathname) === getCanonicalMarketingWaitlistPath()) return false
+  if (isMarketingWaitlistEntryLocation(input)) return false
   if (hasLegacyWaitlistUrlMarkers(input.search, input.hash)) return false
   return true
 }
 
 export function getHomeWaitlistRedirectTarget(input: HomeWaitlistRedirectInput): string | null {
   if (input.hostMode !== 'app') return null
-  if (normalizePathname(input.pathname) === getCanonicalMarketingWaitlistPath()) {
-    return buildCanonicalMarketingWaitlistUrl(input.marketingOrigin)
-  }
-  if (hasLegacyWaitlistUrlMarkers(input.search, input.hash)) {
-    return buildCanonicalMarketingWaitlistUrl(input.marketingOrigin)
+  if (isMarketingWaitlistEntryLocation(input) || hasLegacyWaitlistUrlMarkers(input.search, input.hash)) {
+    const referralCode = readWaitlistEntryReferralCode(input)
+    return referralCode
+      ? buildWaitlistReferralUrl(input.marketingOrigin, referralCode)
+      : buildCanonicalMarketingWaitlistUrl(input.marketingOrigin)
   }
   return null
 }
 
 export function shouldShowWaitlistEntry(input: WaitlistEntryVisibilityInput): boolean {
-  if (normalizePathname(input.pathname) === getCanonicalMarketingWaitlistPath()) return true
+  if (isMarketingWaitlistEntryLocation(input)) return true
   return input.stickyOpen
 }
 
 export function buildWaitlistCloseTarget(input: WaitlistCloseTargetInput): { path: string; changed: boolean } {
-  const canonicalWaitlistPath = getCanonicalMarketingWaitlistPath()
   const currentPath = normalizePathname(input.pathname)
-  const nextPath = currentPath === canonicalWaitlistPath ? '/' : currentPath
+  const nextPath = isMarketingWaitlistEntryLocation(input) ? '/' : currentPath
   const qs = new URLSearchParams(input.search)
   let changed = nextPath !== currentPath
   const reason = String(qs.get('reason') ?? '').trim().toLowerCase()
@@ -137,11 +157,22 @@ export function Home() {
   const waitlistVisible = useMemo(() => {
     return shouldShowWaitlistEntry({
       pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
       stickyOpen: stickyWaitlistOpen,
     })
-  }, [location.pathname, stickyWaitlistOpen])
+  }, [location.hash, location.pathname, location.search, stickyWaitlistOpen])
   const hostMode = getHostMode()
   const canonicalWaitlistHref = getCanonicalMarketingWaitlistPath()
+  const activeReferralCode = useMemo(
+    () =>
+      readWaitlistEntryReferralCode({
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      }),
+    [location.hash, location.pathname, location.search],
+  )
   const homeWaitlistRedirectTarget = useMemo(
     () =>
       getHomeWaitlistRedirectTarget({
@@ -157,8 +188,12 @@ export function Home() {
     if (hostMode !== 'marketing') return null
     if (normalizePathname(location.pathname) !== '/') return null
     if (!hasLegacyWaitlistUrlMarkers(location.search, location.hash)) return null
-    return canonicalWaitlistHref
-  }, [canonicalWaitlistHref, hostMode, location.hash, location.pathname, location.search])
+    return buildNormalizedWaitlistEntryPath({
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+    })
+  }, [hostMode, location.hash, location.pathname, location.search])
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
@@ -181,7 +216,15 @@ export function Home() {
   useEffect(() => {
     if (hostMode === 'app') return
     if (!waitlistVisible) return
-    if (normalizePathname(location.pathname) !== canonicalWaitlistHref && location.hash !== '#waitlist') return
+    if (
+      !isMarketingWaitlistEntryLocation({
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      })
+    ) {
+      return
+    }
 
     const el = document.getElementById('waitlist')
     if (!el) return
@@ -190,12 +233,19 @@ export function Home() {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
     return () => cancelAnimationFrame(rafId)
-  }, [canonicalWaitlistHref, hostMode, location.hash, location.pathname, waitlistVisible])
+  }, [hostMode, location.hash, location.pathname, location.search, waitlistVisible])
 
   useEffect(() => {
     if (hostMode === 'app') return
-    if (normalizePathname(location.pathname) === canonicalWaitlistHref) return
-    if (location.hash === '#waitlist') return
+    if (
+      isMarketingWaitlistEntryLocation({
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      })
+    ) {
+      return
+    }
 
     if (!location.hash) return
     const id = location.hash.replace('#', '').trim()
@@ -205,7 +255,7 @@ export function Home() {
     requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
-  }, [canonicalWaitlistHref, hostMode, location.hash, location.pathname])
+  }, [hostMode, location.hash, location.pathname, location.search])
 
   if (
     shouldRedirectHomeToSwap({
@@ -232,6 +282,7 @@ export function Home() {
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
         window.sessionStorage.removeItem(WAITLIST_AUTH_ARMED_KEY)
+        window.sessionStorage.removeItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY)
       }
     } catch {
       // ignore
@@ -254,6 +305,9 @@ export function Home() {
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
         window.sessionStorage.setItem(WAITLIST_AUTH_ARMED_KEY, '1')
+        if (activeReferralCode) {
+          window.sessionStorage.setItem(WAITLIST_REFERRAL_CODE_STORAGE_KEY, activeReferralCode)
+        }
       }
     } catch {
       // ignore
@@ -266,7 +320,15 @@ export function Home() {
       <PageMeta
         title="4626.fun - Creator Vaults"
         description="Deposit creator coins into vaults on Base. Earn from trading fees. Everyone earns together."
-        canonicalPath={normalizePathname(location.pathname) === canonicalWaitlistHref ? canonicalWaitlistHref : '/'}
+        canonicalPath={
+          isMarketingWaitlistEntryLocation({
+            pathname: location.pathname,
+            search: location.search,
+            hash: location.hash,
+          })
+            ? canonicalWaitlistHref
+            : '/'
+        }
       />
       {/* Subtle particle atmosphere */}
       <div className="particles">
@@ -379,24 +441,11 @@ export function Home() {
                     <LazyWaitlistFlowWithProviders variant="page" sectionId="waitlist-flow" />
                   </Suspense>
                 ) : (
-                  <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-semibold tracking-tight text-white">Keep homepage auth quiet until you need it</h3>
-                      <p className="text-sm text-zinc-400 sm:text-[15px]">
-                        The wallet and Privy stack stays dormant until you explicitly start sign-in. This keeps the landing
-                        page clean and avoids injected wallet/provider noise fighting the homepage shell.
-                      </p>
-                    </div>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <button type="button" onClick={openInlineWaitlistAuth} className={heroCtaClass}>
-                        Continue with email
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                      <p className="text-xs text-zinc-500 sm:text-sm">
-                        Nothing auth-related loads until you click this.
-                      </p>
-                    </div>
-                  </div>
+                  <PublicWaitlistOverview
+                    referralCode={activeReferralCode}
+                    onContinueWithEmail={openInlineWaitlistAuth}
+                    primaryButtonClassName={heroCtaClass}
+                  />
                 )}
               </div>
             </div>

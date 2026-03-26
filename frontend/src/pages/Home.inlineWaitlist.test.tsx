@@ -38,6 +38,21 @@ vi.mock('@/components/waitlist/WaitlistFlowWithProviders', () => ({
   default: ({ sectionId }: { sectionId?: string }) => <div data-testid="waitlist-flow">{sectionId ?? 'waitlist-flow'}</div>,
 }))
 
+vi.mock('@/components/waitlist/PublicWaitlistOverview', () => ({
+  PublicWaitlistOverview: ({
+    onContinueWithEmail,
+  }: {
+    onContinueWithEmail: () => void
+  }) => (
+    <div>
+      <div>Quiet sign-in, live waitlist context</div>
+      <button type="button" onClick={onContinueWithEmail}>
+        Continue with email
+      </button>
+    </div>
+  ),
+}))
+
 import { Home } from './Home'
 
 describe('Home inline waitlist gating', () => {
@@ -57,7 +72,7 @@ describe('Home inline waitlist gating', () => {
   it('keeps the provider-backed waitlist flow dormant on initial render', () => {
     renderHome()
 
-    expect(screen.getByText('Keep homepage auth quiet until you need it')).toBeTruthy()
+    expect(screen.getByText('Quiet sign-in, live waitlist context')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Continue with email' })).toBeTruthy()
     expect(screen.queryByTestId('waitlist-flow')).toBeNull()
     expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBeNull()

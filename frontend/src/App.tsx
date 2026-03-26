@@ -341,23 +341,15 @@ function NotFoundPage() {
 function App() {
   return (
     <Routes>
-      <Route
-        element={
-          <>
-            <HostGuard />
-            <Outlet />
-          </>
-        }
-      >
-        <Route path="/" element={<Home />} />
         <Route
-          path="/waitlist"
           element={
-            <MarketingOnlyRoute>
-              <Home />
-            </MarketingOnlyRoute>
+            <>
+              <HostGuard />
+              <Outlet />
+            </>
           }
-        />
+        >
+          <Route path="/" element={<Home />} />
         <Route path="/404" element={<NotFoundPage />} />
 
         <Route element={<LayoutOnly />}>
