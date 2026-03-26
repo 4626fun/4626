@@ -281,13 +281,16 @@ export function resolveWaitlistStep(params: {
 
 export function shouldAutoStartWaitlistAuth(params: {
   variant?: Variant
+  autoStartRequested?: boolean
   step: WaitlistStep
   privyAuthed: boolean
   privyClientStatus: 'disabled' | 'loading' | 'ready'
   recoveryRequired: boolean
   error: string | null
 }): boolean {
-  if ((params.variant ?? 'embedded') !== 'modal') return false
+  const variant = params.variant ?? 'embedded'
+  const autoStartAllowed = variant === 'modal' || params.autoStartRequested === true
+  if (!autoStartAllowed) return false
   if (params.step !== 'auth') return false
   if (params.privyAuthed) return false
   if (params.privyClientStatus !== 'ready') return false
@@ -401,7 +404,7 @@ function WalletPathCard(props: {
   )
 }
 
-export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
+export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string; autoStartAuth?: boolean }) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
 
@@ -1032,6 +1035,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const authUi = deriveWaitlistAuthUi()
   const shouldAutoStartAuth = shouldAutoStartWaitlistAuth({
     variant,
+    autoStartRequested: props.autoStartAuth === true,
     step,
     privyAuthed,
     privyClientStatus,

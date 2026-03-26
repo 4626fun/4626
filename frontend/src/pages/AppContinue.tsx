@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
-import { shouldNavigateAfterWaitlistHandoff } from '@/lib/auth/appContinueGate'
+import { shouldNavigateAfterAppEntryHandoff } from '@/lib/auth/appContinueGate'
 import { APP_ENTRY_DEFAULT_NEXT, readSafeNextPath } from '@/lib/auth/appEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
@@ -28,24 +28,20 @@ type AppContinueRetryDirective = {
 }
 
 type AppContinueReadyTimeoutInput = {
-  autoLogin: boolean
-  fromWaitlist: boolean
   handoffState: 'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'
   authAddress: string | null | undefined
 }
 
-type AppContinueAutologinDecisionInput = {
-  autoLogin: boolean
-  fromWaitlist: boolean
+type AppContinueHandoffDecisionInput = {
   handoffState: 'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'
   handoffCode: string
   handoffRedeemAttempted: boolean
   privyReady: boolean
   privyAuthenticated: boolean
-  autoLoginAttempted: boolean
+  loginAttempted: boolean
 }
 
-export type AppContinueAutologinDecision =
+export type AppContinueHandoffDecision =
   | 'skip'
   | 'redeem_handoff'
   | 'wait_for_privy'
@@ -64,7 +60,6 @@ export function getAppContinueRetryDirective(input: { privyAuthenticated: boolea
 }
 
 export function shouldScheduleReadyWithoutSessionTimeout(input: AppContinueReadyTimeoutInput): boolean {
-  if (!input.autoLogin || !input.fromWaitlist) return false
   if (input.handoffState !== 'ready') return false
   return !(typeof input.authAddress === 'string' && input.authAddress.trim().length > 0)
 }
@@ -76,15 +71,14 @@ export function shouldBootstrapTelegramMiniAppFlow(input: {
   return input.hasTelegramWebApp || input.nextPath.startsWith('/telegram/link')
 }
 
-export function resolveAppContinueAutologinDecision(
-  input: AppContinueAutologinDecisionInput,
-): AppContinueAutologinDecision {
-  if (!input.autoLogin || !input.fromWaitlist) return 'skip'
+export function resolveAppContinueHandoffDecision(
+  input: AppContinueHandoffDecisionInput,
+): AppContinueHandoffDecision {
   if (input.handoffState === 'ready' || input.handoffState === 'error') return 'skip'
   if (input.handoffCode.trim() && !input.handoffRedeemAttempted) return 'redeem_handoff'
   if (!input.privyReady) return 'wait_for_privy'
   if (!input.privyAuthenticated) {
-    return input.autoLoginAttempted ? 'wait_for_privy' : 'start_login'
+    return input.loginAttempted ? 'wait_for_privy' : 'start_login'
   }
   return 'bridge_existing_session'
 }
@@ -138,17 +132,11 @@ export function AppContinue() {
     [privy.logout],
   )
 
-  const [initialEntry] = useState(() => {
-    const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
-    const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
-    return {
-      nextPath: readSafeNextPath(searchParams.get('next') ?? APP_ENTRY_DEFAULT_NEXT),
-      autoLogin: autoLoginRaw ? autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes' : true,
-      fromWaitlist: fromRaw ? fromRaw === 'waitlist' : true,
-      handoffCode: (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim(),
-    }
-  })
-  const { nextPath, autoLogin, fromWaitlist, handoffCode } = initialEntry
+  const [initialEntry] = useState(() => ({
+    nextPath: readSafeNextPath(searchParams.get('next') ?? APP_ENTRY_DEFAULT_NEXT),
+    handoffCode: (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim(),
+  }))
+  const { nextPath, handoffCode } = initialEntry
   const likelyTelegramMiniAppFlow = useMemo(
     () =>
       shouldBootstrapTelegramMiniAppFlow({
@@ -167,20 +155,18 @@ export function AppContinue() {
 
   const canNavigate = useMemo(
     () =>
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin,
-        fromWaitlist,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: authAddress,
         privyClientStatus,
         privyReady,
         privyAuthenticated,
       }),
-    [authAddress, autoLogin, fromWaitlist, privyAuthenticated, privyClientStatus, privyReady],
+    [authAddress, privyAuthenticated, privyClientStatus, privyReady],
   )
 
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
   const [handoffError, setHandoffError] = useState<string | null>(null)
-  const autoLoginAttemptRef = useRef(false)
+  const loginAttemptRef = useRef(false)
   const autoHandoffRedeemAttemptRef = useRef(false)
 
   useEffect(() => {
@@ -202,7 +188,7 @@ export function AppContinue() {
 
   const restartHandoff = async () => {
     const retry = getAppContinueRetryDirective({ privyAuthenticated })
-    autoLoginAttemptRef.current = false
+    loginAttemptRef.current = false
     autoHandoffRedeemAttemptRef.current = false
     if (retry.clearError) setHandoffError(null)
     setHandoffState(retry.resetState)
@@ -224,7 +210,6 @@ export function AppContinue() {
   }, [authAddress, canNavigate, navigate, nextPath])
 
   useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
     if (handoffState === 'ready' || handoffState === 'error') return
 
     const failHandoff = (message: string) => {
@@ -254,10 +239,6 @@ export function AppContinue() {
           writeStoredSessionToken(sessionToken)
         }
 
-        // Bridge the Privy session from the marketing origin so the
-        // server resolves wallets and sets a richer cv_auth_session
-        // cookie (linked wallets, CSW, etc.).  Privy client-side
-        // auth is domain-specific so this is best-effort.
         const bridgedPrivyToken =
           json?.data && typeof json.data.privyToken === 'string' ? json.data.privyToken.trim() : ''
         if (bridgedPrivyToken) {
@@ -282,44 +263,40 @@ export function AppContinue() {
 
     void (async () => {
       if (handoffState === 'idle') setHandoffState('signingIn')
-      const decision = resolveAppContinueAutologinDecision({
-        autoLogin,
-        fromWaitlist,
+      const decision = resolveAppContinueHandoffDecision({
         handoffState,
         handoffCode,
         handoffRedeemAttempted: autoHandoffRedeemAttemptRef.current,
         privyReady,
         privyAuthenticated,
-        autoLoginAttempted: autoLoginAttemptRef.current,
+        loginAttempted: loginAttemptRef.current,
       })
 
       if (decision === 'skip' || decision === 'wait_for_privy') return
-      let nextDecision: AppContinueAutologinDecision = decision
+      let nextDecision: AppContinueHandoffDecision = decision
       if (decision === 'redeem_handoff') {
         const redeemed = await redeemOneTimeHandoff()
         if (redeemed) return
-        nextDecision = resolveAppContinueAutologinDecision({
-          autoLogin,
-          fromWaitlist,
+        nextDecision = resolveAppContinueHandoffDecision({
           handoffState,
           handoffCode,
           handoffRedeemAttempted: true,
           privyReady,
           privyAuthenticated,
-          autoLoginAttempted: autoLoginAttemptRef.current,
+          loginAttempted: loginAttemptRef.current,
         })
       }
 
       if (nextDecision === 'skip' || nextDecision === 'wait_for_privy') return
       if (nextDecision === 'start_login') {
-        autoLoginAttemptRef.current = true
+        loginAttemptRef.current = true
         try {
           setHandoffError(null)
           setHandoffState('signingIn')
           const retry = getAppContinueRetryDirective({ privyAuthenticated })
           await login(retry.loginOptions as any)
         } catch {
-          autoLoginAttemptRef.current = false
+          loginAttemptRef.current = false
           failHandoff('Account connection was cancelled. Click "Restore account connection" to continue.')
         }
         return
@@ -327,8 +304,6 @@ export function AppContinue() {
 
       if (nextDecision !== 'bridge_existing_session') return
 
-      // Privy is already authenticated on this domain (e.g. user had
-      // a prior session). Bridge into a server session.
       try {
         setHandoffError(null)
         setHandoffState('bridging')
@@ -349,13 +324,10 @@ export function AppContinue() {
       }
     })()
   }, [
-    autoLogin,
-    fromWaitlist,
     getAccessToken,
     handoffCode,
     handoffState,
     login,
-    logout,
     privyAuthenticated,
     privyReady,
     refreshSiweSession,
@@ -363,20 +335,17 @@ export function AppContinue() {
   ])
 
   useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
     if (handoffState !== 'signingIn' && handoffState !== 'bridging') return
     const t = window.setTimeout(() => {
       setHandoffState('error')
       setHandoffError('This is taking longer than expected. Click "Restore account connection" to continue.')
     }, 25_000)
     return () => window.clearTimeout(t)
-  }, [autoLogin, fromWaitlist, handoffState])
+  }, [handoffState])
 
   useEffect(() => {
     if (
       !shouldScheduleReadyWithoutSessionTimeout({
-        autoLogin,
-        fromWaitlist,
         handoffState,
         authAddress,
       })
@@ -388,11 +357,7 @@ export function AppContinue() {
       setHandoffError('Could not finish restoring your session. Click "Restore account connection" to continue.')
     }, READY_WITHOUT_SESSION_TIMEOUT_MS)
     return () => window.clearTimeout(t)
-  }, [authAddress, autoLogin, fromWaitlist, handoffState])
-
-  if (!autoLogin || !fromWaitlist) {
-    return <Navigate to={nextPath} replace />
-  }
+  }, [authAddress, handoffState])
 
   return (
     <div className="min-h-screen bg-black text-white">

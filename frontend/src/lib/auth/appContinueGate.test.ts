@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldNavigateAfterWaitlistHandoff, shouldWaitForPrivyRehydrationAfterHandoff } from './appContinueGate'
+import { shouldNavigateAfterAppEntryHandoff, shouldWaitForPrivyRehydrationAfterHandoff } from './appContinueGate'
 
-describe('shouldNavigateAfterWaitlistHandoff', () => {
+describe('shouldNavigateAfterAppEntryHandoff', () => {
   it('navigates once SIWE session is established, even if Privy is not authenticated', () => {
     expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: true,
-        fromWaitlist: true,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: '0x1234567890123456789012345678901234567890',
         privyClientStatus: 'ready',
         privyReady: true,
@@ -18,9 +16,7 @@ describe('shouldNavigateAfterWaitlistHandoff', () => {
 
   it('navigates when both SIWE and Privy are ready', () => {
     expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: true,
-        fromWaitlist: true,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: '0x1234567890123456789012345678901234567890',
         privyClientStatus: 'ready',
         privyReady: true,
@@ -31,9 +27,7 @@ describe('shouldNavigateAfterWaitlistHandoff', () => {
 
   it('does not block on Privy when the Privy client is disabled', () => {
     expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: true,
-        fromWaitlist: true,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: '0x1234567890123456789012345678901234567890',
         privyClientStatus: 'disabled',
         privyReady: false,
@@ -44,28 +38,13 @@ describe('shouldNavigateAfterWaitlistHandoff', () => {
 
   it('waits when SIWE session is not yet established', () => {
     expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: true,
-        fromWaitlist: true,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: null,
         privyClientStatus: 'ready',
         privyReady: true,
         privyAuthenticated: false,
       }),
     ).toBe(false)
-  })
-
-  it('always navigates when not a waitlist handoff', () => {
-    expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: false,
-        fromWaitlist: false,
-        siweAuthAddress: null,
-        privyClientStatus: 'ready',
-        privyReady: true,
-        privyAuthenticated: false,
-      }),
-    ).toBe(true)
   })
 })
 

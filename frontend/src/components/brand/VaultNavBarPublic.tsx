@@ -28,13 +28,8 @@ const NAV_ITEMS_PUBLIC: NavItem[] = [
   { label: 'Waitlist', to: getCanonicalMarketingWaitlistPath() },
 ]
 
-function isActiveLink(location: { pathname: string; hash?: string }, item: NavItem): boolean {
+function isActiveLink(location: { pathname: string }, item: NavItem): boolean {
   const pathname = location.pathname
-  const hash = location.hash ?? ''
-
-  if (item.to.includes('#')) {
-    return isMarketingWaitlistEntryLocation({ pathname, hash })
-  }
 
   if (item.to === '/') return pathname === '/'
   const prefixes = item.activePrefixes && item.activePrefixes.length > 0 ? item.activePrefixes : [item.to]

@@ -121,6 +121,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
@@ -134,6 +135,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'embedded',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
@@ -145,6 +147,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
@@ -156,6 +159,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
@@ -169,6 +173,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'loading',
@@ -180,6 +185,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: true,
         privyClientStatus: 'ready',
@@ -187,5 +193,19 @@ describe('shouldAutoStartWaitlistAuth', () => {
         error: null,
       }),
     ).toBe(false)
+  })
+
+  it('auto-starts auth for the dedicated page when the entry explicitly requested it', () => {
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'page',
+        autoStartRequested: true,
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(true)
   })
 })

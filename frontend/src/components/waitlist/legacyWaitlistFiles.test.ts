@@ -9,6 +9,7 @@ const testDir = path.dirname(fileURLToPath(import.meta.url))
 const LEGACY_WAITLIST_FILES = [
   'WaitlistFlow.tsx',
   'JoinWaitlistCta.tsx',
+  'WaitlistFlowWithProviders.tsx',
   'DeferredWaitlistFlow.tsx',
   'WaitlistDoneCelebrationBackground.tsx',
   'steps/DoneStep.tsx',

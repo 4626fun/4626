@@ -3,11 +3,50 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
+import {
+  getCanonicalMarketingWaitlistPath,
+  requestStoredWaitlistAuthAutoStart,
+  writeStoredWaitlistAuthArmed,
+} from '@/lib/auth/waitlistEntry'
 import { getHostMode } from '@/lib/host'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
+const STRATEGY_CARDS = [
+  {
+    label: 'Charm',
+    percent: '30%',
+    description: 'CREATOR/USDC Uniswap V3 LP',
+    icon: '/protocols/charm.png',
+    iconAlt: 'Charm',
+    iconClassName: 'h-3.5 w-3.5 rounded-sm opacity-90',
+  },
+  {
+    label: 'Ajna',
+    percent: '30%',
+    description: 'Permissionless Lending',
+    icon: '/protocols/ajna.svg',
+    iconAlt: 'Ajna',
+    iconClassName: 'h-3.5 w-3.5 opacity-90',
+  },
+  {
+    label: 'Solana',
+    percent: '30%',
+    description: 'Reserved for Solana route flow',
+    icon: '/protocols/solana.svg',
+    iconAlt: 'Solana',
+    iconClassName: 'h-3.5 w-auto opacity-90',
+  },
+  {
+    label: 'Idle Buffer',
+    percent: '10%',
+    description: 'Kept liquid for operations and withdrawals',
+    icon: null,
+    iconAlt: null,
+    iconClassName: '',
+  },
+] as const
+const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
 
 export function Home() {
   const hostMode = getHostMode()
@@ -16,6 +55,11 @@ export function Home() {
   const showDeployVaultCta = hostMode === 'app'
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
+
+  const armWaitlistAuthEntry = () => {
+    writeStoredWaitlistAuthArmed(true)
+    requestStoredWaitlistAuthAutoStart()
+  }
 
   if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
@@ -86,7 +130,7 @@ export function Home() {
               transition={{ duration: 0.8, delay: 1.12 }}
               className="pt-2 sm:pt-6"
             >
-              <Link to={getCanonicalMarketingWaitlistPath()} className={heroCtaClass}>
+              <Link to={getCanonicalMarketingWaitlistPath()} onClick={armWaitlistAuthEntry} className={heroCtaClass}>
                 Join waitlist
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -185,6 +229,126 @@ export function Home() {
               </div>
             </motion.div>
           </div>
+        </div>
+      </section>
+
+      <section className="cinematic-section bg-zinc-950/20 !py-10 sm:!py-24 lg:!py-32">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.55fr)] lg:gap-10">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="space-y-5 lg:pr-6"
+            >
+              <span className="label">Vault Strategies</span>
+              <div className="space-y-4">
+                <h2 className="headline text-3xl sm:text-4xl lg:text-5xl">Default strategy allocation</h2>
+                <p className="max-w-md text-[13px] font-light text-zinc-500 sm:text-sm">
+                  The launch vault does not dump everything into one venue. It splits the creator coin across three active
+                  strategy buckets and leaves 10% idle in the vault so redemptions stay flexible.
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-white/8 bg-white/[0.035] p-5 shadow-[0_24px_70px_-44px_rgba(0,82,255,0.26)] backdrop-blur-sm sm:p-6">
+                <div className="label text-[9px] sm:text-[10px]">Launch Map</div>
+                <div className="mt-3 flex items-end gap-2">
+                  <div className="value mono text-3xl sm:text-4xl">90%</div>
+                  <div className="pb-1 text-xs font-light text-zinc-500">active strategy deployment</div>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-2 text-[11px] text-zinc-400 sm:text-xs">
+                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Charm LP</div>
+                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Ajna lending</div>
+                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">30% Solana reserve</div>
+                  <div className="rounded-2xl border border-white/8 bg-black/40 px-3 py-2">10% idle in vault</div>
+                </div>
+                <div className="mt-4 text-[11px] font-light text-zinc-600 sm:text-xs">
+                  <span className="font-mono text-zinc-400">TOKEN</span> is the creator coin. Strategy allocations deploy the
+                  underlying asset, not the <span className="font-mono text-zinc-400">{SHARE_TOKEN}</span> vault share token.
+                </div>
+              </div>
+            </motion.div>
+
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-white/8 bg-white/[0.035] shadow-[0_24px_80px_-48px_rgba(0,82,255,0.28)] sm:grid-cols-2">
+              {STRATEGY_CARDS.map((card, index) => (
+                <motion.div
+                  key={card.label}
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: index * 0.1 }}
+                  className="space-y-3 bg-black/55 p-5 sm:min-h-[190px] sm:space-y-4 sm:p-8"
+                >
+                  <div className="inline-flex items-center gap-1.5">
+                    {card.icon ? (
+                      <img
+                        src={card.icon}
+                        alt={card.iconAlt ?? card.label}
+                        width={16}
+                        height={16}
+                        className={card.iconClassName}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="inline-flex h-3.5 w-3.5 rounded-full border border-white/12 bg-white/[0.05]" aria-hidden="true" />
+                    )}
+                    <span className="label text-[9px] sm:text-[10px]">{card.label}</span>
+                  </div>
+                  <div className="value mono text-2xl sm:text-3xl lg:text-4xl">{card.percent}</div>
+                  <div className="max-w-[16rem] text-[11px] font-light leading-relaxed text-zinc-500 sm:text-xs">
+                    {card.description}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="overflow-hidden rounded-[32px] border border-white/8 bg-linear-to-br from-white/[0.05] via-white/[0.025] to-transparent p-6 shadow-[0_28px_90px_-50px_rgba(0,82,255,0.32)] backdrop-blur-sm sm:p-8 lg:p-10"
+          >
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-end">
+              <div className="space-y-4 sm:space-y-6">
+                <span className="label">FAQ</span>
+                <h2 className="headline mt-2 text-3xl sm:text-4xl lg:text-5xl">See the full walkthrough</h2>
+                <p className="max-w-2xl text-[13px] font-light text-zinc-500 sm:text-sm">
+                  The FAQ now carries the whole launch sequence in one place, from deposit mechanics through CCA launch, strategy
+                  allocation, and redemption.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {WAITLIST_JOURNEY_STEPS.map((step) => (
+                    <span
+                      key={step}
+                      className="rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300 sm:text-[11px]"
+                    >
+                      {step}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-3xl border border-white/8 bg-black/35 p-5 sm:p-6">
+                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Read before launch</div>
+                <p className="text-sm font-light leading-relaxed text-zinc-400">
+                  If someone lands on the homepage and wants the full mechanics, this should be the bottom-of-page next step.
+                </p>
+                <div>
+                  <Link to="/faq/how-it-works" className="btn-primary inline-flex items-center">
+                    How it works
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
     </div>

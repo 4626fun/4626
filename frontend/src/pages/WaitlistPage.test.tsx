@@ -15,9 +15,20 @@ vi.mock('@/lib/host', () => ({
   getMarketingBaseUrl: () => 'https://4626.fun',
 }))
 
-vi.mock('@/components/waitlist/WaitlistFlowWithProviders', () => ({
-  __esModule: true,
-  default: ({ sectionId }: { sectionId?: string }) => <div data-testid="waitlist-flow">{sectionId ?? 'waitlist-flow'}</div>,
+vi.mock('@/web3/Web3Providers', () => ({
+  Web3Providers: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
+vi.mock('@/lib/privy/client', () => ({
+  PrivyClientProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
+vi.mock('@/components/waitlist/ThinWaitlistFlow', () => ({
+  ThinWaitlistFlow: ({ sectionId, autoStartAuth }: { sectionId?: string; autoStartAuth?: boolean }) => (
+    <div data-testid="waitlist-flow" data-auto-start={autoStartAuth ? 'yes' : 'no'}>
+      {sectionId ?? 'waitlist-flow'}
+    </div>
+  ),
 }))
 
 vi.mock('@/components/waitlist/PublicWaitlistOverview', () => ({
@@ -70,7 +81,23 @@ describe('WaitlistPage', () => {
     await user.click(screen.getByRole('button', { name: 'Continue with email' }))
 
     expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
     expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBe('1')
+  })
+
+  it('consumes one-shot auto-start intent when arriving from an armed entry', async () => {
+    window.sessionStorage.setItem('cv:waitlist:auth_armed', '1')
+    window.sessionStorage.setItem('cv:waitlist:auth_auto_start', '1')
+
+    render(
+      <MemoryRouter initialEntries={['/waitlist']}>
+        <WaitlistPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
+    expect(window.sessionStorage.getItem('cv:waitlist:auth_auto_start')).toBeNull()
   })
 
   it('captures invite routes and forwards into the single waitlist page', async () => {

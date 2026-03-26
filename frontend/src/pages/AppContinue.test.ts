@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getAppContinueRetryDirective,
-  resolveAppContinueAutologinDecision,
+  resolveAppContinueHandoffDecision,
   shouldBootstrapTelegramMiniAppFlow,
   shouldScheduleReadyWithoutSessionTimeout,
 } from './AppContinue'
 
 describe('getAppContinueRetryDirective', () => {
-  it('uses email-first Privy login for waitlist handoff recovery', () => {
+  it('uses email-first Privy login for handoff recovery', () => {
     expect(getAppContinueRetryDirective({ privyAuthenticated: false })).toEqual({
       resetState: 'idle',
       clearError: true,
@@ -31,8 +31,6 @@ describe('shouldScheduleReadyWithoutSessionTimeout', () => {
   it('schedules timeout when handoff is ready but session address is missing', () => {
     expect(
       shouldScheduleReadyWithoutSessionTimeout({
-        autoLogin: true,
-        fromWaitlist: true,
         handoffState: 'ready',
         authAddress: null,
       }),
@@ -42,20 +40,16 @@ describe('shouldScheduleReadyWithoutSessionTimeout', () => {
   it('does not schedule timeout when session address is present', () => {
     expect(
       shouldScheduleReadyWithoutSessionTimeout({
-        autoLogin: true,
-        fromWaitlist: true,
         handoffState: 'ready',
         authAddress: '0x1234567890123456789012345678901234567890',
       }),
     ).toBe(false)
   })
 
-  it('does not schedule timeout outside waitlist autologin flow', () => {
+  it('does not schedule timeout before handoff is ready', () => {
     expect(
       shouldScheduleReadyWithoutSessionTimeout({
-        autoLogin: false,
-        fromWaitlist: true,
-        handoffState: 'ready',
+        handoffState: 'bridging',
         authAddress: null,
       }),
     ).toBe(false)
@@ -73,76 +67,66 @@ describe('shouldBootstrapTelegramMiniAppFlow', () => {
   })
 })
 
-describe('resolveAppContinueAutologinDecision', () => {
+describe('resolveAppContinueHandoffDecision', () => {
   it('prefers redeeming a one-time handoff code before any Privy fallback', () => {
     expect(
-      resolveAppContinueAutologinDecision({
-        autoLogin: true,
-        fromWaitlist: true,
+      resolveAppContinueHandoffDecision({
         handoffState: 'idle',
         handoffCode: 'handoff-123',
         handoffRedeemAttempted: false,
         privyReady: false,
         privyAuthenticated: false,
-        autoLoginAttempted: false,
+        loginAttempted: false,
       }),
     ).toBe('redeem_handoff')
   })
 
   it('falls back to email-first Privy login after handoff redeem is exhausted', () => {
     expect(
-      resolveAppContinueAutologinDecision({
-        autoLogin: true,
-        fromWaitlist: true,
+      resolveAppContinueHandoffDecision({
         handoffState: 'signingIn',
         handoffCode: 'handoff-123',
         handoffRedeemAttempted: true,
         privyReady: true,
         privyAuthenticated: false,
-        autoLoginAttempted: false,
+        loginAttempted: false,
       }),
     ).toBe('start_login')
   })
 
   it('bridges an already-authenticated Privy session after handoff recovery', () => {
     expect(
-      resolveAppContinueAutologinDecision({
-        autoLogin: true,
-        fromWaitlist: true,
+      resolveAppContinueHandoffDecision({
         handoffState: 'bridging',
         handoffCode: '',
         handoffRedeemAttempted: true,
         privyReady: true,
         privyAuthenticated: true,
-        autoLoginAttempted: true,
+        loginAttempted: true,
       }),
     ).toBe('bridge_existing_session')
   })
 
   it('waits for Privy readiness instead of re-triggering login loops', () => {
     expect(
-      resolveAppContinueAutologinDecision({
-        autoLogin: true,
-        fromWaitlist: true,
+      resolveAppContinueHandoffDecision({
         handoffState: 'signingIn',
         handoffCode: '',
         handoffRedeemAttempted: true,
         privyReady: false,
         privyAuthenticated: false,
-        autoLoginAttempted: false,
+        loginAttempted: false,
       }),
     ).toBe('wait_for_privy')
 
     expect(
-      resolveAppContinueAutologinDecision({
-        autoLogin: true,
-        fromWaitlist: true,
+      resolveAppContinueHandoffDecision({
         handoffState: 'signingIn',
         handoffCode: '',
         handoffRedeemAttempted: true,
         privyReady: true,
         privyAuthenticated: false,
-        autoLoginAttempted: true,
+        loginAttempted: true,
       }),
     ).toBe('wait_for_privy')
   })

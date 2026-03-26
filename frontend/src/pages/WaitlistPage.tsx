@@ -6,43 +6,29 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { PublicWaitlistOverview } from '@/components/waitlist/PublicWaitlistOverview'
 import {
   buildCanonicalMarketingWaitlistUrl,
+  clearStoredWaitlistAuthState,
   clearStoredWaitlistReferralCode,
+  consumeStoredWaitlistAuthAutoStart,
   getCanonicalMarketingWaitlistPath,
   readStoredWaitlistReferralCode,
+  readStoredWaitlistAuthArmed,
+  writeStoredWaitlistAuthArmed,
 } from '@/lib/auth/waitlistEntry'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { PrivyClientProvider } from '@/lib/privy/client'
+import { Web3Providers } from '@/web3/Web3Providers'
 
-const LazyWaitlistFlowWithProviders = lazy(async () => {
-  const mod = await import('@/components/waitlist/WaitlistFlowWithProviders')
-  return { default: mod.default }
+const LazyThinWaitlistFlow = lazy(async () => {
+  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
+  return { default: mod.ThinWaitlistFlow }
 })
-
-const WAITLIST_AUTH_ARMED_KEY = 'cv:waitlist:auth_armed'
 const PRIMARY_BUTTON_CLASS =
   'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
-function readWaitlistAuthArmed(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.sessionStorage.getItem(WAITLIST_AUTH_ARMED_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-function writeWaitlistAuthArmed(value: boolean): void {
-  if (typeof window === 'undefined') return
-  try {
-    if (value) window.sessionStorage.setItem(WAITLIST_AUTH_ARMED_KEY, '1')
-    else window.sessionStorage.removeItem(WAITLIST_AUTH_ARMED_KEY)
-  } catch {
-    // ignore
-  }
-}
-
 export function WaitlistPage() {
   const hostMode = getHostMode()
-  const [waitlistAuthArmed, setWaitlistAuthArmed] = useState(() => readWaitlistAuthArmed())
+  const [waitlistAuthArmed, setWaitlistAuthArmed] = useState(() => readStoredWaitlistAuthArmed())
+  const [autoStartAuth, setAutoStartAuth] = useState(() => consumeStoredWaitlistAuthAutoStart())
   const activeReferralCode = readStoredWaitlistReferralCode()
 
   if (hostMode === 'app') {
@@ -53,14 +39,16 @@ export function WaitlistPage() {
   }
 
   const openWaitlistAuth = () => {
-    writeWaitlistAuthArmed(true)
+    writeStoredWaitlistAuthArmed(true)
     setWaitlistAuthArmed(true)
+    setAutoStartAuth(true)
   }
 
   const leaveWaitlist = () => {
-    writeWaitlistAuthArmed(false)
+    clearStoredWaitlistAuthState()
     clearStoredWaitlistReferralCode()
     setWaitlistAuthArmed(false)
+    setAutoStartAuth(false)
   }
 
   return (
@@ -105,7 +93,11 @@ export function WaitlistPage() {
                   </div>
                 }
               >
-                <LazyWaitlistFlowWithProviders variant="page" sectionId="waitlist-flow" />
+                <Web3Providers>
+                  <PrivyClientProvider showWalletLoginFirst={false}>
+                    <LazyThinWaitlistFlow variant="page" sectionId="waitlist-flow" autoStartAuth={autoStartAuth} />
+                  </PrivyClientProvider>
+                </Web3Providers>
               </Suspense>
             ) : (
               <PublicWaitlistOverview

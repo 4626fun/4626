@@ -5726,11 +5726,6 @@ function DeployVaultMain() {
   const [autoSmartWalletOwnerRetryTick, setAutoSmartWalletOwnerRetryTick] = useState(0)
   const autoSmartWalletOwnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoSmartWalletOwnerAttemptKeyRef = useRef<string | null>(null)
-  const autoLoginAttemptRef = useRef(false)
-  const autoBridgeAttemptRef = useRef(false)
-  const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
-  const [handoffError, setHandoffError] = useState<string | null>(null)
-  
   const privyCrossAppLinkedAccounts = useMemo(() => {
     const linked = Array.isArray(privyUser?.linkedAccounts)
       ? (privyUser.linkedAccounts as any[])
@@ -6010,10 +6005,6 @@ function DeployVaultMain() {
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
     const run = async () => {
-      setHandoffError(null)
-      setHandoffState('signingIn')
-      autoLoginAttemptRef.current = false
-      autoBridgeAttemptRef.current = false
       // If we're already authenticated, `login()` can no-op in some Privy configurations.
       // Force a re-auth flow so the user can switch to a wallet session if needed.
       try {
@@ -6026,8 +6017,7 @@ function DeployVaultMain() {
       try {
         await login({ loginMethods: ['email', 'wallet'] })
       } catch {
-        setHandoffState('error')
-        setHandoffError('Sign-in cancelled. Click “Restore account connection” to retry.')
+        // ignore
       }
     }
     return {
@@ -6057,31 +6047,23 @@ function DeployVaultMain() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQueryRef = useRef<{
     prefillToken: string
-    autoLogin: boolean
-    fromWaitlist: boolean
     debugEnabledFromQuery: boolean
   } | null>(null)
 
   if (!initialQueryRef.current) {
-    const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
-    const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
     initialQueryRef.current = {
       prefillToken: searchParams.get('token') ?? '',
-      autoLogin: autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes',
-      fromWaitlist: fromRaw === 'waitlist',
       debugEnabledFromQuery: (searchParams.get('debug') ?? '').trim() === '1',
     }
   }
 
   const prefillToken = initialQueryRef.current.prefillToken
-  const autoLogin = initialQueryRef.current.autoLogin
-  const fromWaitlist = initialQueryRef.current.fromWaitlist
   const debugEnabledFromQuery = initialQueryRef.current.debugEnabledFromQuery
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
     let changed = false
-    for (const key of ['autologin', 'auth', 'from', 'shareOftSaltOverride', 'debug']) {
+    for (const key of ['shareOftSaltOverride', 'debug']) {
       if (next.has(key)) {
         next.delete(key)
         changed = true
@@ -6104,90 +6086,6 @@ function DeployVaultMain() {
       return { ok: true, hint: 'configured' }
     }
   }, [cdpPaymasterUrl])
-
-  // Smooth waitlist -> deploy:
-  // If we arrived from the canonical app handoff, prompt email-first auth on app host
-  // and bridge into a 4626 session.
-  useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
-    if (!privyReady) return
-    if (handoffState === 'ready' || handoffState === 'error') return
-    if (handoffState === 'idle') setHandoffState('signingIn')
-
-    const failHandoff = (message: string) => {
-      autoBridgeAttemptRef.current = false
-      setHandoffState('error')
-      setHandoffError(message)
-    }
-
-    if (!privyAuthenticated) {
-      if (autoLoginAttemptRef.current) return
-      autoLoginAttemptRef.current = true
-      void (async () => {
-        try {
-          setHandoffError(null)
-          setHandoffState('signingIn')
-          const loginMethods = ['email', 'wallet'] as const
-          await login({ loginMethods: loginMethods as any })
-        } catch {
-          autoLoginAttemptRef.current = false
-          failHandoff('Sign-in cancelled. Click "Restore account connection" to continue.')
-        }
-      })()
-      return
-    }
-
-    if (autoBridgeAttemptRef.current) return
-    autoBridgeAttemptRef.current = true
-
-    if (typeof getAccessToken !== 'function') {
-      failHandoff('Privy token bridge is unavailable. Click "Restore account connection" to retry.')
-      return
-    }
-    void (async () => {
-      try {
-        setHandoffError(null)
-        setHandoffState('bridging')
-        const token = await getAccessToken()
-        if (!token) {
-          failHandoff('Could not read Privy access token. Click "Restore account connection" to retry.')
-          return
-        }
-        if (token) {
-          const addr = await siwe.signInWithPrivyToken(token)
-          if (!addr) {
-            failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
-            return
-          }
-          setHandoffState('ready')
-          setHandoffError(null)
-        }
-      } catch {
-        failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
-      }
-    })()
-  }, [autoLogin, fromWaitlist, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
-
-  // Mark handoff ready once we have an app session.
-  useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
-    if (handoffState === 'ready') return
-    if (typeof siwe.authAddress === 'string' && siwe.authAddress.length > 0) {
-      setHandoffState('ready')
-      setHandoffError(null)
-    }
-  }, [autoLogin, fromWaitlist, handoffState, siwe.authAddress])
-
-  // Safety timeout so users aren't stuck without feedback.
-  useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
-    if (handoffState !== 'signingIn' && handoffState !== 'bridging') return
-    const t = window.setTimeout(() => {
-      setHandoffState('error')
-      setHandoffError('This is taking longer than expected. Click "Restore account connection" to continue.')
-    }, 25_000)
-    return () => window.clearTimeout(t)
-  }, [autoLogin, fromWaitlist, handoffState])
 
   useEffect(() => {
     if (!prefillToken) return
@@ -7441,38 +7339,7 @@ function DeployVaultMain() {
                 <p className="text-zinc-600 text-sm font-light">
                   Deploy a vault for your Creator Coin on Base. Only the creator or current payout recipient can deploy.
                 </p>
-                {fromWaitlist ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18, ease: baseEase }}
-                    className="mt-3 rounded-xl border border-white/10 bg-linear-to-b from-white/8 to-white/3 px-4 py-3 text-[12px] text-zinc-400 backdrop-blur-sm"
-                  >
-                    <div className="text-zinc-200">From the waitlist</div>
-                    <div className="mt-1">
-                      {!autoLogin
-                        ? 'If you get blocked by wallet signing, use “Sign in with Privy”.'
-                        : handoffState === 'signingIn'
-                          ? 'Signing you in…'
-                          : handoffState === 'bridging'
-                            ? 'Finalizing session…'
-                            : handoffState === 'ready'
-                              ? 'Signed in. You can deploy when ready.'
-                              : handoffState === 'error'
-                                ? handoffError || 'Sign-in failed. Click “Sign in with Privy” to continue.'
-                                : 'We’ll prompt sign-in, then continue.'}
-                    </div>
-                    {autoLogin && handoffState === 'error' && switchAuthCta ? (
-                      <div className="mt-3">
-                        <button type="button" className="btn-primary" onClick={switchAuthCta.onClick}>
-                          {switchAuthCta.label}
-                        </button>
-                      </div>
-                    ) : null}
-                  </motion.div>
-                ) : null}
-
-                {fromWaitlist && privyReady && privyAuthenticated && !smartWalletCapabilityReady ? (
+                {privyReady && privyAuthenticated && !smartWalletCapabilityReady ? (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
