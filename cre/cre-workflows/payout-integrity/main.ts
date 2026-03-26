@@ -5,20 +5,21 @@
  *
  *   1. externalRevenueRecipient check — Creator Coin payoutRecipient matches configured lane mode
  *   2. tradeFeeCollector check — ShareOFT.gaugeController matches expected collector
- *   3. GaugeController BPS config — burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000
- *   4. Creator treasury guard — if creatorShareBps > 0 then creatorTreasury must be non-zero
- *   5. GaugeController wiring — vault() matches the registered vault address
- *   6. Burn stream health — activeShares dripping, not stale
- *   7. GaugeController balance — holds vault shares, lastDistribution not stale
+ *   3. Router mode wiring — payoutRouter.burnStream matches expected burn stream and keeper is configured
+ *   4. GaugeController BPS config — burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000
+ *   5. Creator treasury guard — if creatorShareBps > 0 then creatorTreasury must be non-zero
+ *   6. GaugeController wiring — vault() matches the registered vault address
+ *   7. Burn stream health — activeShares dripping, not stale
+ *   8. GaugeController balance — holds vault shares, lastDistribution not stale
  *
  * On failure: alerts via POST /cre/keeper/alert
  *
  * CRE Quota Budget per execution (1 vault):
  *   - 1 HTTP (fetch vaults)
- *   - ~13 EVM reads (payoutRecipient, shareOFT.gaugeController, BPS x4, creatorTreasury, vault,
- *     lastDistribution, burnStream x3, balanceOf)
+ *   - ~15 EVM reads (payoutRecipient, shareOFT.gaugeController, payoutRouter.burnStream, payoutRouter.keeper,
+ *     BPS x4, creatorTreasury, vault, lastDistribution, burnStream x3, balanceOf)
  *   - 1 HTTP (alert if needed)
- *   Total: max 2 HTTP + 13 EVM reads
+ *   Total: max 2 HTTP + 15 EVM reads
  */
 
 import {
@@ -36,6 +37,7 @@ import { GaugeControllerABI } from "../contracts/abi/GaugeController"
 import { BurnStreamABI } from "../contracts/abi/BurnStream"
 import { CreatorCoinABI } from "../contracts/abi/CreatorCoin"
 import { ShareOFTABI } from "../contracts/abi/ShareOFT"
+import { PayoutRouterABI } from "../contracts/abi/PayoutRouter"
 import { ERC20ABI } from "../contracts/abi/ERC20"
 import {
   createAiFallbackResult,
@@ -290,6 +292,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   const evmClient = createEvmClientForChain(runtime.config.chainName)
   const pendingAlerts: AlertInfo[] = []
   let checksRun = 0
+  const expectedExternalMode = runtime.config.expectedExternalRevenueRecipientMode === "payout_router" ? "payout_router" : "gauge"
 
   // -----------------------------------------------------------------------
   // Check 1: externalRevenueRecipient mode check
@@ -299,7 +302,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
     const payoutRecipient = decodeAddress(CreatorCoinABI, "payoutRecipient", data).toLowerCase()
     checksRun++
 
-    const mode = runtime.config.expectedExternalRevenueRecipientMode === "payout_router" ? "payout_router" : "gauge"
+    const mode = expectedExternalMode
     const configuredExpected = runtime.config.expectedExternalRevenueRecipient?.toLowerCase()
     const modeExpected = mode === "payout_router" ? vault.payoutRouterAddress?.toLowerCase() : gaugeAddr.toLowerCase()
     const expectedExternalRevenueRecipient = configuredExpected ?? modeExpected
@@ -399,7 +402,59 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   }
 
   // -----------------------------------------------------------------------
-  // Check 3: GaugeController BPS config + creator treasury invariant
+  // Check 3: Router mode wiring (payout router burn stream + keeper)
+  // -----------------------------------------------------------------------
+  if (expectedExternalMode === "payout_router" && vault.payoutRouterAddress) {
+    try {
+      const payoutRouter = vault.payoutRouterAddress
+      const burnStreamData = evmRead(runtime, evmClient, payoutRouter, PayoutRouterABI, "burnStream")
+      const keeperData = evmRead(runtime, evmClient, payoutRouter, PayoutRouterABI, "keeper")
+      const routerBurnStream = decodeAddress(PayoutRouterABI, "burnStream", burnStreamData).toLowerCase()
+      const routerKeeper = decodeAddress(PayoutRouterABI, "keeper", keeperData).toLowerCase()
+      checksRun++
+
+      const expectedBurnStream = burnStreamAddr?.toLowerCase()
+      let pass = true
+
+      if (!expectedBurnStream || routerBurnStream !== expectedBurnStream) {
+        pass = false
+        pendingAlerts.push({
+          vaultAddress: vaultAddr,
+          alertType: "router_burn_stream_mismatch",
+          severity: "critical",
+          message: `PayoutRouter burnStream (${routerBurnStream}) != expected (${expectedBurnStream ?? "unset"})`,
+          details: {
+            payoutRouterAddress: payoutRouter,
+            routerBurnStream,
+            expectedBurnStream: expectedBurnStream ?? null,
+          },
+        })
+      }
+
+      if (routerKeeper === zeroAddress) {
+        pass = false
+        pendingAlerts.push({
+          vaultAddress: vaultAddr,
+          alertType: "router_keeper_unset",
+          severity: "warning",
+          message: "PayoutRouter keeper is unset (owner-only processing path)",
+          details: {
+            payoutRouterAddress: payoutRouter,
+            routerKeeper,
+          },
+        })
+      }
+
+      if (pass) runtime.log("Check 3 PASS: Router mode wiring is complete")
+    } catch {
+      runtime.log("Check 3 ERROR: failed to read payout router wiring")
+    }
+  } else {
+    runtime.log("Check 3 SKIP: Router mode not enabled for this vault")
+  }
+
+  // -----------------------------------------------------------------------
+  // Check 4: GaugeController BPS config + creator treasury invariant
   // -----------------------------------------------------------------------
   try {
     const burnData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "burnShareBps")
@@ -469,7 +524,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   }
 
   // -----------------------------------------------------------------------
-  // Check 4: GaugeController vault() wiring
+  // Check 5: GaugeController vault() wiring
   // -----------------------------------------------------------------------
   try {
     const data = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "vault")
@@ -485,14 +540,14 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
         details: { gaugeVault, expected: vaultAddr },
       })
     } else {
-      runtime.log("Check 4 PASS: GaugeController vault wiring correct")
+      runtime.log("Check 5 PASS: GaugeController vault wiring correct")
     }
   } catch {
-    runtime.log("Check 4 ERROR: failed to read GaugeController vault()")
+    runtime.log("Check 5 ERROR: failed to read GaugeController vault()")
   }
 
   // -----------------------------------------------------------------------
-  // Check 5: Burn stream health (if configured)
+  // Check 6: Burn stream health (if configured)
   // -----------------------------------------------------------------------
   if (burnStreamAddr) {
     try {
@@ -524,17 +579,17 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
           },
         })
       } else {
-        runtime.log("Check 5 PASS: Burn stream healthy")
+        runtime.log("Check 6 PASS: Burn stream healthy")
       }
     } catch {
-      runtime.log("Check 5 ERROR: failed to read burn stream state")
+      runtime.log("Check 6 ERROR: failed to read burn stream state")
     }
   } else {
-    runtime.log("Check 5 SKIP: No burn stream configured")
+    runtime.log("Check 6 SKIP: No burn stream configured")
   }
 
   // -----------------------------------------------------------------------
-  // Check 6: GaugeController balance + distribution freshness
+  // Check 7: GaugeController balance + distribution freshness
   // -----------------------------------------------------------------------
   try {
     // Read vault share balance of the GaugeController
@@ -562,10 +617,10 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
         },
       })
     } else {
-      runtime.log("Check 6 PASS: GaugeController balance/distribution OK")
+      runtime.log("Check 7 PASS: GaugeController balance/distribution OK")
     }
   } catch {
-    runtime.log("Check 6 ERROR: failed to read GaugeController balance")
+    runtime.log("Check 7 ERROR: failed to read GaugeController balance")
   }
 
   // -----------------------------------------------------------------------

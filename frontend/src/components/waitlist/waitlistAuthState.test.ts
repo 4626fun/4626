@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { apiFetch } from '@/lib/apiBase'
+
 import { isRecoveryRequiredAuthError, runWaitlistPrivyLogout, shouldStopWaitlistAutoAuthRetry } from './waitlistAuthState'
+
+vi.mock('@/lib/apiBase', () => ({
+  apiFetch: vi.fn(async () => ({ ok: true })),
+}))
 
 describe('isRecoveryRequiredAuthError', () => {
   it('detects recovery-required from status, flags, code, and message', () => {
@@ -46,6 +52,8 @@ describe('shouldStopWaitlistAutoAuthRetry', () => {
 describe('runWaitlistPrivyLogout', () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.mocked(apiFetch).mockClear()
   })
 
   it('returns quickly when logout is unavailable or rejects', async () => {
@@ -70,5 +78,30 @@ describe('runWaitlistPrivyLogout', () => {
     await vi.advanceTimersByTimeAsync(75)
     await expect(promise).resolves.toBeUndefined()
     expect(neverResolvingLogout).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the app session before recovery retries', async () => {
+    const store = new Map<string, string>([['cv_siwe_session_token', 'token-123']])
+    vi.stubGlobal('sessionStorage', {
+      getItem: vi.fn((key: string) => store.get(key) ?? null),
+      removeItem: vi.fn((key: string) => {
+        store.delete(key)
+      }),
+    })
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() })
+    vi.stubGlobal(
+      'CustomEvent',
+      class {
+        constructor(public type: string) {}
+      },
+    )
+
+    await expect(runWaitlistPrivyLogout({ logout: null, timeoutMs: 20 })).resolves.toBeUndefined()
+
+    expect(store.get('cv_siwe_session_token')).toBeUndefined()
+    expect(apiFetch).toHaveBeenCalledWith('/api/auth/logout', {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    })
   })
 })

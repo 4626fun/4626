@@ -28,6 +28,7 @@ describe('waitlist Privy login options', () => {
     expect(WAITLIST_RECOVERY_LOGIN_METHODS).toEqual(['email'])
     expect(buildWaitlistRecoveryLoginOptions()).toEqual({
       loginMethods: ['email'],
+      disableSignup: true,
     })
   })
 })

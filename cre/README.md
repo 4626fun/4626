@@ -130,6 +130,7 @@ A dedicated CRE workflow runs every 30 minutes to verify the full fee pipeline:
 |-------|------|----------|
 | **externalRevenueRecipient** | Creator Coin `payoutRecipient()` matches configured lane mode (`payout_router` or `gauge`) | Critical |
 | **tradeFeeCollector** | ShareOFT `gaugeController()` matches expected collector (typically gauge) | Critical |
+| **Router Mode Wiring** | In `payout_router` mode, `PayoutRouter.burnStream()` must match expected burn stream and keeper should be configured | Critical/Warning |
 | **BPS Config** | `burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000` | Critical |
 | **Creator Treasury Guard** | If `creatorShareBps > 0`, `creatorTreasury` must be non-zero | Critical |
 | **Vault Wiring** | GaugeController's `vault()` matches registered vault | Critical |
@@ -143,8 +144,8 @@ Alerts are sent to `POST /api/cre/keeper/alert` and forwarded to the configured 
 Auction settlement is a one-time event (~7 days after deployment). The system tracks:
 
 - `graduated_at` — when `isGraduated()` first returns true
-- `settlement_stage` — current completion phase (`graduated_detected`, `awaiting_migration_block`, `awaiting_owner_hook_config`, `completed`, ...)
-- `settled_at` — only after canonical completion (`sweepCurrency` + `migrate` + hook policy satisfied)
+- `settlement_stage` — current completion phase (`graduated_detected`, `awaiting_migration_block`, `awaiting_owner_hook_config`, `invariant_failed`, `completed`, ...)
+- `settled_at` — only after canonical completion (`sweepCurrency` + `migrate` + hook policy + invariant gate satisfied)
 
 Once settled, vaults are excluded from the auction-settlement workflow to avoid redundant reads. The on-chain `sweepCurrencyBlock` check remains a secondary guard.
 ## Solana Workflows
@@ -617,7 +618,7 @@ For local simulation, add these to `cre/cre-workflows/.env`.
 - 1 HTTP (fetch unsettled vaults) + 3 EVM reads (currentAuction, isGraduated, sweepCurrencyBlock) + 1 HTTP (sweep) + 1 HTTP (mark-settled) = 3 HTTP + 3 EVM reads
 
 **payout-integrity (every 30 min, 1 vault per run)**:
-- 1 HTTP (fetch vaults) + ~13 EVM reads (externalRevenueRecipient, tradeFeeCollector, BPS x4, creatorTreasury, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 13 EVM reads
+- 1 HTTP (fetch vaults) + ~15 EVM reads (externalRevenueRecipient, tradeFeeCollector, payoutRouter.burnStream, payoutRouter.keeper, BPS x4, creatorTreasury, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 15 EVM reads
 
 ### HTTP Bridge Pattern
 

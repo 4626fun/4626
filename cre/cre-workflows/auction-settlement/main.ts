@@ -8,7 +8,7 @@
  * Flow:
  *   1. HTTP: GET /cre/vaults/active?settled=false&chainId=<configured-chain>
  *   2. EVM:  currentAuction(), isGraduated(), sweepCurrencyBlock()
- *   3. HTTP: POST /cre/keeper/sweep (canonical completion attempt)
+ *   3. HTTP: POST /cre/keeper/sweep (canonical completion attempt + invariant gate)
  *   4. HTTP: POST /cre/keeper/mark-settled (record timestamps + settlement stage)
  *
  * CRE Quota Budget per execution:
@@ -48,6 +48,8 @@ type Config = {
   maxVaultsPerExecution?: number
   rotationIntervalSeconds?: number
   enableKeeperHookConfig?: boolean
+  enforceCompletionInvariants?: boolean
+  expectedExternalRevenueRecipientMode?: "gauge" | "payout_router"
   nativeWriteEnabled?: boolean
   nativeReceiver?: `0x${string}`
   nativeEncoderName?: string
@@ -63,7 +65,12 @@ type Config = {
 type VaultInfo = {
   vaultAddress: string
   chainId: number
+  creatorCoinAddress?: string
+  shareTokenAddress?: string
   ccaStrategyAddress?: string
+  gaugeControllerAddress?: string
+  burnStreamAddress?: string
+  payoutRouterAddress?: string
   graduatedAt?: string | null
   settledAt?: string | null
 }
@@ -88,6 +95,15 @@ type SweepCompletionPayload = {
   hookConfigStatus?: string
   completionStage?: string
   completed?: boolean
+}
+
+type CompletionInvariantPayload = {
+  creatorCoinAddress?: string
+  shareTokenAddress?: string
+  gaugeControllerAddress?: string
+  burnStreamAddress?: string
+  payoutRouterAddress?: string
+  externalRevenueRecipientMode?: "gauge" | "payout_router"
 }
 
 // ---------------------------------------------------------------------------
@@ -134,13 +150,15 @@ function sendSweepRequest(
   apiKey: string,
   ccaStrategyAddress: string,
   attemptHookConfig: boolean,
+  enforceInvariants: boolean,
+  invariants: CompletionInvariantPayload,
 ): { ok: boolean; payload: SweepCompletionPayload } {
   const body = postJson<Config, { success: boolean; data?: SweepCompletionPayload }>(
     nodeRuntime,
     httpClient,
     apiKey,
     "/cre/keeper/sweep",
-    { ccaStrategyAddress, attemptHookConfig },
+    { ccaStrategyAddress, attemptHookConfig, enforceInvariants, invariants },
   )
   return {
     ok: body.success,
@@ -312,6 +330,16 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
 
   let completion
   try {
+    const completionInvariants: CompletionInvariantPayload = {
+      ...(vault.creatorCoinAddress ? { creatorCoinAddress: vault.creatorCoinAddress } : {}),
+      ...(vault.shareTokenAddress ? { shareTokenAddress: vault.shareTokenAddress } : {}),
+      ...(vault.gaugeControllerAddress ? { gaugeControllerAddress: vault.gaugeControllerAddress } : {}),
+      ...(vault.burnStreamAddress ? { burnStreamAddress: vault.burnStreamAddress } : {}),
+      ...(vault.payoutRouterAddress ? { payoutRouterAddress: vault.payoutRouterAddress } : {}),
+      externalRevenueRecipientMode:
+        runtime.config.expectedExternalRevenueRecipientMode === "payout_router" ? "payout_router" : "gauge",
+    }
+
     completion = runtime.runInNodeMode(
       (nr: NodeRuntime<Config>) =>
         sendSweepRequest(
@@ -320,6 +348,8 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
           apiKey,
           ccaAddr,
           Boolean(runtime.config.enableKeeperHookConfig),
+          runtime.config.enforceCompletionInvariants !== false,
+          completionInvariants,
         ),
       consensusIdenticalAggregation(),
     )().result()

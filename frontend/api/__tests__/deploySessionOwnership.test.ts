@@ -179,6 +179,85 @@ function makeFinalizePhase2Data() {
   })
 }
 
+function makeDeployPhase2CoreData(payoutRecipient: `0x${string}`) {
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'deployPhase2Core',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'creatorToken', type: 'address' },
+              { name: 'owner', type: 'address' },
+              { name: 'creatorTreasury', type: 'address' },
+              { name: 'payoutRecipient', type: 'address' },
+              { name: 'vault', type: 'address' },
+              { name: 'wrapper', type: 'address' },
+              { name: 'shareOFT', type: 'address' },
+              { name: 'shareSymbol', type: 'string' },
+              { name: 'version', type: 'string' },
+              { name: 'floorPriceQ96', type: 'uint256' },
+            ],
+          },
+          {
+            name: 'codeIds',
+            type: 'tuple',
+            components: [
+              { name: 'vault', type: 'bytes32' },
+              { name: 'wrapper', type: 'bytes32' },
+              { name: 'shareOFT', type: 'bytes32' },
+              { name: 'gauge', type: 'bytes32' },
+              { name: 'cca', type: 'bytes32' },
+              { name: 'oracle', type: 'bytes32' },
+              { name: 'oftBootstrap', type: 'bytes32' },
+            ],
+          },
+        ],
+        outputs: [
+          {
+            name: 'out',
+            type: 'tuple',
+            components: [
+              { name: 'gaugeController', type: 'address' },
+              { name: 'ccaStrategy', type: 'address' },
+              { name: 'oracle', type: 'address' },
+              { name: 'auction', type: 'address' },
+            ],
+          },
+        ],
+      },
+    ] as const,
+    functionName: 'deployPhase2Core',
+    args: [
+      {
+        creatorToken: '0x0000000000000000000000000000000000000003',
+        owner: '0x0000000000000000000000000000000000000002',
+        creatorTreasury: '0x00000000000000000000000000000000000000aa',
+        payoutRecipient,
+        vault: '0x0000000000000000000000000000000000000101',
+        wrapper: '0x0000000000000000000000000000000000000102',
+        shareOFT: '0x0000000000000000000000000000000000000103',
+        shareSymbol: 'SHARE',
+        version: 'vtest',
+        floorPriceQ96: 1n,
+      },
+      {
+        vault: `0x${'11'.repeat(32)}`,
+        wrapper: `0x${'22'.repeat(32)}`,
+        shareOFT: `0x${'33'.repeat(32)}`,
+        gauge: `0x${'44'.repeat(32)}`,
+        cca: `0x${'55'.repeat(32)}`,
+        oracle: `0x${'66'.repeat(32)}`,
+        oftBootstrap: `0x${'77'.repeat(32)}`,
+      },
+    ],
+  })
+}
+
 function makeCanonicalDb() {
   return {
     query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
@@ -483,6 +562,45 @@ describe('deploy session ownership guardrails', () => {
     expect(phase2FinalizeCalls.length).toBe(1)
     expect(String(phase2FinalizeCalls[0]?.data || '').toLowerCase()).toBe(finalizeData.toLowerCase())
     expect(() => JSON.stringify(insertArgs.payload)).not.toThrow()
+  })
+
+  it('persists inferred phase2 invariant expectations from phase2 core and finalize calls', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+    const finalizeData = makeFinalizePhase2Data()
+    const payoutRecipient = '0x0000000000000000000000000000000000000200' as const
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2CoreCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: makeDeployPhase2CoreData(payoutRecipient),
+          },
+        ],
+        phase2FinalizeCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: finalizeData,
+          },
+        ],
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    expect(String(insertArgs.payload?.expectedTradeFeeCollector ?? '').toLowerCase()).toBe(
+      '0x0000000000000000000000000000000000000104',
+    )
+    expect(insertArgs.payload?.expectedExternalRevenueRecipientMode).toBe('payout_router')
+    expect(String(insertArgs.payload?.expectedExternalRevenueRecipient ?? '').toLowerCase()).toBe(
+      payoutRecipient.toLowerCase(),
+    )
   })
 
   it('uses a 45-minute default deploy session TTL', async () => {

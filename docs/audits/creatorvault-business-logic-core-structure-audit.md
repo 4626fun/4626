@@ -210,7 +210,7 @@ The biggest operational/configuration risk is launch completion semantics under 
 | `addressType` (`SwapOnly`/`NoFees`) | `CreatorShareOFT.setAddressType(s)` | Determines whether native buy-fee trigger executes | Wrong classification causes untaxed trades or wrong taxed flows |
 | Hub routing (`isHub`, `hubEid`, `hubGaugeReceiver`) | `CreatorShareOFT.setHubConfig` | Controls remote fee accumulation/flush target | Remote fees never settle to hub gauge or settle to wrong receiver |
 | Hook recipient and tax config (`feeRecipient`, `taxRateBps`, pool key) | `CCALaunchStrategy.getTaxHookCalldata`, external hook call path | Activates hook fee plane and routes hook-collected fees | Sell-side (or hook side) inactive/misrouted; buy+sell policy claims invalid |
-| `creatorTreasury` | `CreatorGaugeController.setCreatorTreasury` | Enables direct creator ongoing lane when `creatorShareBps > 0` | Creator slice diverts to jackpot if treasury absent |
+| `creatorTreasury` | `CreatorGaugeController.setCreatorTreasury` | Enables direct creator ongoing lane when `creatorShareBps > 0` | Setter guard now reverts (`CreatorTreasuryRequired`) if trying to clear treasury while creator lane is active |
 | `lotteryManager` | `CreatorGaugeController.setLotteryManager` | Authorizes jackpot payout caller | Jackpot cannot be paid out if unset/wrong |
 | `voterRewardsDistributor` | `CreatorGaugeController.setVoterRewardsDistributor` | Routes voter/protocol branch to epoch claim system | Branch falls back to protocol treasury, then jackpot fallback if unavailable |
 | `protocolTreasury` | Constructor + `setProtocolTreasury` | Fallback sink for protocol/voter branch | If invalid/unusable, protocol branch can degrade to jackpot fallback behavior |
@@ -227,7 +227,7 @@ The biggest operational/configuration risk is launch completion semantics under 
 | Scenario | Preconditions | Failure path | User effect | Economic effect | Severity | Fix |
 |---|---|---|---|---|---|---|
 | 67. `creatorShareBps` left at 0 unintentionally | Creator expects ongoing treasury lane | Gauge computes `toCreator = 0` | Creator sees no direct ongoing payout | All post-fee value shifts to burn/jackpot/voter-protocol branch | Medium | Explicit deploy invariant and UI disclosure of live split |
-| 68. `creatorTreasury` unset with creator lane enabled | `creatorShareBps > 0`, treasury missing/cleared | `_distributeVaultShares` redirects `toCreator` into jackpot | Creator misses expected payouts | Creator branch becomes lottery funding | High | Enforce `creatorShareBps > 0 => creatorTreasury != 0` prelaunch |
+| 68. `creatorTreasury` unset with creator lane enabled | Owner attempts to enable creator lane without treasury, or clear treasury while creator lane active | `setFeeSplit` / `setCreatorTreasury` now revert with `CreatorTreasuryRequired` | Config tx fails (state unchanged) | Prevents silent creator-lane diversion | Informational | Keep contract guard and monitor for non-standard upgrade/storage-mutation paths |
 | 69. `voterRewardsDistributor` unset | Voter branch intended but distributor absent | Gauge fallback sends to protocol treasury (or jackpot fallback) | Voters cannot claim expected rewards | Governance incentive path changes silently | Medium | Require distributor config for voter mode or publish explicit fallback mode |
 | 70. `protocolTreasury` unset/wrong | Misconfiguration or legacy abnormal state | Protocol fallback path degraded | Protocol ops funding disrupted | Branch can be misallocated | Low | Constructor/setter already zero-guard; retain invariant checks and address monitoring |
 | 71. Jackpot assumed in lottery manager | Ops/docs blur custody | Manager queried/treated as reserve holder | Incorrect dashboards and incident handling | Payout operations misdiagnosed during outages | High | Treat custody vs authority as hard architectural boundary in docs/alerts |
@@ -329,13 +329,13 @@ Terminology rules:
 - Exploitability / misconfiguration path: Teams ship copy before hook verification.
 - Recommended fix: Publish fee-plane matrix and enforce "proof before claim" checks.
 
-### Finding H2: Creator ongoing revenue is optional and can be unintentionally disabled
+### Finding H2: Creator ongoing revenue is optional and must be explicitly enabled
 - Severity: High
 - Affected component: `CreatorGaugeController` split config
-- Evidence: `creatorShareBps` default is 0; `creatorTreasury` unset causes creator slice redirection to jackpot.
+- Evidence: `creatorShareBps` defaults to 0, and setters now enforce `CreatorTreasuryRequired` before any non-zero creator lane can be activated.
 - Why it matters: Creator incentive model may differ from intent without visible failure.
-- Exploitability / misconfiguration path: Split set without treasury validation.
-- Recommended fix: Deployment invariant `creatorShareBps > 0 => creatorTreasury set`.
+- Exploitability / misconfiguration path: Governance expects creator cash lane by default but leaves `creatorShareBps` at 0.
+- Recommended fix: Enforce explicit deployment intent for creator lane (`creatorShareBps` target + treasury address) and verify post-deploy state.
 
 ### Finding H3: UI/documentation drift can induce operational mistakes
 - Severity: High

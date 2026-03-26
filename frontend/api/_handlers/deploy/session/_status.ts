@@ -22,6 +22,7 @@ import {
   LAUNCH_IMAGE_VERIFIED_AT_KEY,
   LAUNCH_IMAGE_VERIFIED_BYTES_KEY,
 } from '../../../../server/_lib/deployLaunchImage.js'
+import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deployPhase2Invariants.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../token/_managedTokenList.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
@@ -47,6 +48,8 @@ const REPLAY_SKIP_PHASE2_CORE_REASON_KEY = 'replaySkipPhase2CoreReason'
 const REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY = 'replaySkipPhase2FinalizeAt'
 const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
 const PHASE3_AJNA_ADMIN_ALIGNMENT_KEY = 'phase3AjnaAdminAlignment'
+const PHASE2_INVARIANT_GATE_KEY = 'phase2InvariantGate'
+const PHASE2_INVARIANT_GATE_CHECKED_AT_KEY = 'phase2InvariantGateCheckedAt'
 
 type Phase3AjnaAdminAlignment = {
   ajnaAuthAddress: Address | null
@@ -1861,6 +1864,16 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const hasPostPhase2 = hasPhase3 || hasPhase4
   const solanaOvaultConfig = isPlainObject(payload.solanaOvault) ? payload.solanaOvault : {}
   const hasOvaultMeshStage = solanaOvaultConfig.enabled === true && hasPostPhase2
+  const enforcePhase2InvariantGate = isTruthyEnv(process.env.DEPLOY_ENFORCE_PHASE2_INVARIANTS, true)
+  const defaultExternalRevenueMode =
+    String(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT_MODE ?? '').trim().toLowerCase() === 'payout_router'
+      ? 'payout_router'
+      : 'gauge'
+  const defaultExternalRevenueRecipient =
+    typeof process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT === 'string' &&
+    isAddress(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT)
+      ? getAddress(process.env.DEPLOY_EXPECT_EXTERNAL_REVENUE_RECIPIENT as Address)
+      : null
   const phase2ReplayState =
     phase2CoreCalls.length > 0 || hasPhase2Finalize
       ? await readPhase2ReplayState({
@@ -1892,6 +1905,31 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     })
     payload[atKey] = patch[atKey]
     payload[reasonKey] = reason
+  }
+
+  const assertPhase2InvariantGate = async (): Promise<void> => {
+    if (!enforcePhase2InvariantGate || !hasPhase2Finalize) return
+    const result = await verifyDeployPhase2Invariants({
+      publicClient,
+      phase2FinalizeCalls,
+      payload,
+      defaultExternalRevenueMode,
+      defaultExternalRevenueRecipient,
+    })
+    const gatePatch = {
+      [PHASE2_INVARIANT_GATE_CHECKED_AT_KEY]: new Date().toISOString(),
+      [PHASE2_INVARIANT_GATE_KEY]: result,
+    }
+    await updateDeploySession({
+      id: rec.id,
+      payloadPatch: gatePatch,
+    })
+    payload[PHASE2_INVARIANT_GATE_CHECKED_AT_KEY] = gatePatch[PHASE2_INVARIANT_GATE_CHECKED_AT_KEY]
+    payload[PHASE2_INVARIANT_GATE_KEY] = gatePatch[PHASE2_INVARIANT_GATE_KEY]
+    if (!result.checked || result.violations.length > 0) {
+      const summary = result.violations.map((entry) => entry.code).join(',')
+      throw new Error(`phase2_invariant_failed:${summary || 'unknown'}`)
+    }
   }
 
   type AuthedCtx = {
@@ -2110,6 +2148,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   const startOrCompleteAfterPhase2 = async (fromStep: string): Promise<void> => {
+    await assertPhase2InvariantGate()
     if (hasPostPhase2) {
       if (hasOvaultMeshStage) {
         await runOvaultMeshGate(fromStep)
@@ -2561,6 +2600,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
         } satisfies ApiEnvelope<null>)
       }
+      if (err instanceof Error && err.message.startsWith('phase2_invariant_failed:')) {
+        try {
+          await updateDeploySession({
+            id: rec.id,
+            step: 'failed',
+            lastError: errMsg,
+          })
+          rec = (await getDeploySessionById(sessionId)) ?? rec
+        } catch {
+          rec = {
+            ...rec,
+            step: 'failed',
+            lastError: errMsg,
+          }
+        }
+      }
       try {
         let serializedErr = ''
         try {
@@ -2643,6 +2698,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (typeof rec?.payload?.deploySignerWalletId === 'string' && rec.payload.deploySignerWalletId.trim()) || null,
       diagnostics: buildSessionDiagnostics(rec),
       phase3AjnaAdminAlignment,
+      phase2InvariantGate:
+        isPlainObject(rec?.payload?.[PHASE2_INVARIANT_GATE_KEY]) ? rec.payload[PHASE2_INVARIANT_GATE_KEY] : null,
       launchImage,
       ovault: ovaultEnabled
         ? {
