@@ -181,8 +181,9 @@ Completion is a canonical 3-step process reflected in `CompleteAuction.tsx` and 
    - Configures oracle V4 pool reference when configured
 
 3. **Configure hook**: Call `TaxHook.setTaxConfig(...)` (token owner required unless keeper hook mode is explicitly enabled)
-   - Enables the 6.9% tax hook for ■AKITA/ETH trades
+   - Activates the hook fee plane for the intended pair/pool
    - Must align hook recipient with intended `tradeFeeCollector`
+   - Verify onchain: pool id/key, enabled flag, fee bps, and recipient address
 
 ### Optional (Operations)
 

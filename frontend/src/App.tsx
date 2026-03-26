@@ -4,6 +4,7 @@ import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AdminLayout } from './components/AdminLayout'
 import { AppLoadingState } from '@/components/AppLoadingState'
 import { Layout } from './components/Layout'
+import { Home } from './pages/Home'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { getHostMode, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
 import { useOptionalAccessContext, waitlistEntryHref, withReason } from './app/accessShared'
@@ -348,6 +349,7 @@ function App() {
           </>
         }
       >
+        <Route path="/" element={<Home />} />
         <Route path="/404" element={<NotFoundPage />} />
 
         <Route element={<LayoutOnly />}>

@@ -756,21 +756,21 @@ export function CompleteAuction() {
                     )}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold">Enable 6.9% Trade Fee</h4>
+                    <h4 className="font-semibold">Configure Hook Fee Plane</h4>
                     <p className="text-surface-400 text-sm mt-1">
-                      Configure the V4 hook to collect fees for jackpot & burns.
+                      Configure the V4 hook fee plane and align the recipient to the trade-fee collector.
                     </p>
 
-                    {/* Fee breakdown */}
+                    {/* Gauge default split (configurable onchain) */}
                     <div className="flex gap-4 mt-3 text-xs">
                       <span className="flex items-center gap-1 text-yellow-400">
                         <Trophy className="w-3 h-3" /> 69% Jackpot
                       </span>
                       <span className="flex items-center gap-1 text-red-400">
-                        <Flame className="w-3 h-3" /> 21% Burn
+                        <Flame className="w-3 h-3" /> 21.39% Burn
                       </span>
                       <span className="flex items-center gap-1 text-brand-400">
-                        <Zap className="w-3 h-3" /> 10% Treasury
+                        <Zap className="w-3 h-3" /> 9.61% Voter/Protocol
                       </span>
                     </div>
 
@@ -852,7 +852,7 @@ export function CompleteAuction() {
             <p className="text-surface-400">
               {isFailed
                 ? 'Unsold auction tokens were swept and strategy-deployed creator tokens were returned to the vault.'
-                : 'Your vault is now live on Uniswap V4 with 6.9% trade fees enabled. Qualifying buys can trigger lottery entries, and a no-purchase AMOE entry path is also available.'}
+                : 'Your vault is now live on Uniswap V4. Native and hook fee behavior is deployment-conditional; confirm active fee planes and recipient alignment before publishing buy+sell fee claims. Qualifying buys can trigger lottery entries, and a no-purchase AMOE entry path is also available.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button

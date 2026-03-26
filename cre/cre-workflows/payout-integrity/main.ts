@@ -6,18 +6,19 @@
  *   1. externalRevenueRecipient check — Creator Coin payoutRecipient matches configured lane mode
  *   2. tradeFeeCollector check — ShareOFT.gaugeController matches expected collector
  *   3. GaugeController BPS config — burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000
- *   4. GaugeController wiring — vault() matches the registered vault address
- *   5. Burn stream health — activeShares dripping, not stale
- *   6. GaugeController balance — holds vault shares, lastDistribution not stale
+ *   4. Creator treasury guard — if creatorShareBps > 0 then creatorTreasury must be non-zero
+ *   5. GaugeController wiring — vault() matches the registered vault address
+ *   6. Burn stream health — activeShares dripping, not stale
+ *   7. GaugeController balance — holds vault shares, lastDistribution not stale
  *
  * On failure: alerts via POST /cre/keeper/alert
  *
  * CRE Quota Budget per execution (1 vault):
  *   - 1 HTTP (fetch vaults)
- *   - ~11 EVM reads (payoutRecipient, shareOFT.gaugeController, BPS x4, vault, lastDistribution,
- *     burnStream x3, balanceOf)
+ *   - ~13 EVM reads (payoutRecipient, shareOFT.gaugeController, BPS x4, creatorTreasury, vault,
+ *     lastDistribution, burnStream x3, balanceOf)
  *   - 1 HTTP (alert if needed)
- *   Total: max 2 HTTP + 10 EVM reads
+ *   Total: max 2 HTTP + 13 EVM reads
  */
 
 import {
@@ -30,7 +31,7 @@ import {
   bytesToHex,
   consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk"
-import { decodeFunctionResult } from "viem"
+import { decodeFunctionResult, zeroAddress } from "viem"
 import { GaugeControllerABI } from "../contracts/abi/GaugeController"
 import { BurnStreamABI } from "../contracts/abi/BurnStream"
 import { CreatorCoinABI } from "../contracts/abi/CreatorCoin"
@@ -303,11 +304,38 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
     const modeExpected = mode === "payout_router" ? vault.payoutRouterAddress?.toLowerCase() : gaugeAddr.toLowerCase()
     const expectedExternalRevenueRecipient = configuredExpected ?? modeExpected
 
-    if (!expectedExternalRevenueRecipient) {
+    if (mode === "payout_router" && !vault.payoutRouterAddress) {
+      pendingAlerts.push({
+        vaultAddress: vaultAddr,
+        alertType: "external_revenue_mode_incomplete",
+        severity: "critical",
+        message: "Mode is payout_router but payoutRouterAddress is not configured for this vault",
+        details: {
+          mode,
+          configuredExpected: configuredExpected ?? null,
+          payoutRouterAddress: vault.payoutRouterAddress ?? null,
+          burnStreamAddress: burnStreamAddr ?? null,
+          gaugeControllerAddress: gaugeAddr,
+        },
+      })
+    } else if (mode === "payout_router" && !burnStreamAddr) {
+      pendingAlerts.push({
+        vaultAddress: vaultAddr,
+        alertType: "router_mode_burn_stream_missing",
+        severity: "critical",
+        message: "Mode is payout_router but burnStreamAddress is not configured for this vault",
+        details: {
+          mode,
+          payoutRouterAddress: vault.payoutRouterAddress ?? null,
+          burnStreamAddress: burnStreamAddr ?? null,
+          gaugeControllerAddress: gaugeAddr,
+        },
+      })
+    } else if (!expectedExternalRevenueRecipient) {
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: "external_revenue_recipient_unresolved",
-        severity: "warning",
+        severity: "critical",
         message: `Cannot resolve expected externalRevenueRecipient for mode=${mode}`,
         details: {
           mode,
@@ -371,24 +399,28 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   }
 
   // -----------------------------------------------------------------------
-  // Check 3: GaugeController BPS config
+  // Check 3: GaugeController BPS config + creator treasury invariant
   // -----------------------------------------------------------------------
   try {
     const burnData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "burnShareBps")
     const lotteryData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "lotteryShareBps")
     const creatorData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "creatorShareBps")
     const protocolData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "protocolShareBps")
+    const creatorTreasuryData = evmRead(runtime, evmClient, gaugeAddr, GaugeControllerABI, "creatorTreasury")
 
     const burnBps = Number(decodeBigInt(GaugeControllerABI, "burnShareBps", burnData))
     const lotteryBps = Number(decodeBigInt(GaugeControllerABI, "lotteryShareBps", lotteryData))
     const creatorBps = Number(decodeBigInt(GaugeControllerABI, "creatorShareBps", creatorData))
     const protocolBps = Number(decodeBigInt(GaugeControllerABI, "protocolShareBps", protocolData))
+    const creatorTreasury = decodeAddress(GaugeControllerABI, "creatorTreasury", creatorTreasuryData).toLowerCase()
     checksRun++
 
     const totalBps = burnBps + lotteryBps + creatorBps + protocolBps
     const cfg = runtime.config
+    let pass = true
 
     if (totalBps !== 10000) {
+      pass = false
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: "bps_sum_invalid",
@@ -402,6 +434,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
       creatorBps !== cfg.expectedCreatorShareBps ||
       protocolBps !== cfg.expectedProtocolShareBps
     ) {
+      pass = false
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: "bps_config_changed",
@@ -417,9 +450,20 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
           },
         },
       })
-    } else {
-      runtime.log("Check 3 PASS: BPS config correct")
     }
+
+    if (creatorBps > 0 && creatorTreasury === zeroAddress) {
+      pass = false
+      pendingAlerts.push({
+        vaultAddress: vaultAddr,
+        alertType: "creator_treasury_missing",
+        severity: "critical",
+        message: `creatorShareBps is ${creatorBps} but creatorTreasury is zero`,
+        details: { creatorBps, creatorTreasury },
+      })
+    }
+
+    if (pass) runtime.log("Check 3 PASS: BPS config and creator treasury invariant hold")
   } catch {
     runtime.log("Check 3 ERROR: failed to read BPS config")
   }

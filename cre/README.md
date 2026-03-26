@@ -131,6 +131,7 @@ A dedicated CRE workflow runs every 30 minutes to verify the full fee pipeline:
 | **externalRevenueRecipient** | Creator Coin `payoutRecipient()` matches configured lane mode (`payout_router` or `gauge`) | Critical |
 | **tradeFeeCollector** | ShareOFT `gaugeController()` matches expected collector (typically gauge) | Critical |
 | **BPS Config** | `burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000` | Critical |
+| **Creator Treasury Guard** | If `creatorShareBps > 0`, `creatorTreasury` must be non-zero | Critical |
 | **Vault Wiring** | GaugeController's `vault()` matches registered vault | Critical |
 | **Burn Stream** | Active epoch not stale (>24h without `drip()`) | Warning |
 | **Gauge Balance** | GaugeController holds shares and `lastDistribution` is fresh | Warning |
@@ -616,7 +617,7 @@ For local simulation, add these to `cre/cre-workflows/.env`.
 - 1 HTTP (fetch unsettled vaults) + 3 EVM reads (currentAuction, isGraduated, sweepCurrencyBlock) + 1 HTTP (sweep) + 1 HTTP (mark-settled) = 3 HTTP + 3 EVM reads
 
 **payout-integrity (every 30 min, 1 vault per run)**:
-- 1 HTTP (fetch vaults) + ~11 EVM reads (externalRevenueRecipient, tradeFeeCollector, BPS x4, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 11 EVM reads
+- 1 HTTP (fetch vaults) + ~13 EVM reads (externalRevenueRecipient, tradeFeeCollector, BPS x4, creatorTreasury, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 13 EVM reads
 
 ### HTTP Bridge Pattern
 

@@ -85,7 +85,7 @@ interface ICreatorOVaultAsset {
  *      - Buys (from SwapOnly → user) = 6.9% fee
  *      - Hub: fee → GaugeController → unwrap → distribute (21.39% burn, 69% lottery, 9.61% voter rewards)
  *      - Remote: fee → pendingFees → flushFees() bridges OFT back to Base gauge
- *      - Sells: taxed by SimpleSellTaxHook on Base only (V4 hook, not in this contract)
+ *      - Sells: can be taxed by a Base V4 hook when hook config is explicitly activated
  *
  * @dev BUILDS ON TOP OF ZORAS CREATOR COINS
  *      Each creator deploys their own ShareOFT (e.g., ■AKITA for AKITA vault)
@@ -1162,9 +1162,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /**
      * @notice Returns the address that should receive trade fees
-     * @dev Called by external tax hooks (like the 6.9% V4 sell hook on Base) to determine
-     *      where to send collected fees. Returns the GaugeController which handles
-     *      distribution (21.39% burn, 69% lottery, 9.61% voter rewards).
+     * @dev Called by external tax hooks (for example, a configured v4 sell-hook path)
+     *      to determine where to send collected trade fees. Returns the current
+     *      trade-fee collector domain (GaugeController if set, else owner fallback).
+     *      Downstream split behavior is governed by GaugeController config.
      *
      * @return The gauge controller address, or owner if not set
      */
