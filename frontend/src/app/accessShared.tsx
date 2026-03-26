@@ -84,47 +84,29 @@ export async function resolveTelegramMiniAppEntryBootstrap(params: {
   return hasTelegramMiniAppEntrypointContext() || hasTelegramLinkEntryContext(params.search)
 }
 
-export function withReason(to: string, reason: AccessReason | 'host-redirect' | 'external-redirect' | 'invalid-params'): string {
-  try {
-    const hashIdx = to.indexOf('#')
-    const hash = hashIdx >= 0 ? to.slice(hashIdx) : ''
-    const noHash = hashIdx >= 0 ? to.slice(0, hashIdx) : to
-
-    const qIdx = noHash.indexOf('?')
-    const path = qIdx >= 0 ? noHash.slice(0, qIdx) : noHash
-    const query = qIdx >= 0 ? noHash.slice(qIdx + 1) : ''
-    const qs = new URLSearchParams(query)
-    if (!qs.has('reason')) qs.set('reason', reason)
-    const nextQuery = qs.toString()
-    return `${path}${nextQuery ? `?${nextQuery}` : ''}${hash}`
-  } catch {
-    return to
-  }
-}
-
-export function waitlistEntryHref(marketingUrl: string, reason: 'needs-session' | 'needs-acceptance'): string {
-  return buildWaitlistEntryUrl(marketingUrl, reason)
+export function waitlistEntryHref(marketingUrl: string): string {
+  return buildWaitlistEntryUrl(marketingUrl)
 }
 
 export function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
   if (req.session && !state.sessionValid) {
-    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref(state.marketingUrl, 'needs-session') }
+    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref(state.marketingUrl) }
   }
   if (req.accepted && !state.accepted) {
     return {
       allow: false,
       reason: 'needs-acceptance',
-      redirectTo: waitlistEntryHref(state.marketingUrl, 'needs-acceptance'),
+      redirectTo: waitlistEntryHref(state.marketingUrl),
     }
   }
   if (req.creator && !state.creator) {
     const deployPrefix = state.hostMode === 'marketing' ? APP_ORIGIN : ''
-    return { allow: false, reason: 'needs-creator', redirectTo: deployPrefix + withReason('/deploy', 'needs-creator') }
+    return { allow: false, reason: 'needs-creator', redirectTo: `${deployPrefix}/deploy` }
   }
   if (req.admin && !state.admin) {
-    return { allow: false, reason: 'needs-admin', redirectTo: withReason('/', 'needs-admin') }
+    return { allow: false, reason: 'needs-admin', redirectTo: '/' }
   }
   return { allow: true, reason: 'ok' }
 }

@@ -7,6 +7,7 @@ describe('shouldRedirectHomeToSwap', () => {
     expect(
       shouldRedirectHomeToSwap({
         hostMode: 'app',
+        pathname: '/',
         search: '',
         hash: '',
       }),
@@ -17,27 +18,30 @@ describe('shouldRedirectHomeToSwap', () => {
     expect(
       shouldRedirectHomeToSwap({
         hostMode: 'marketing',
+        pathname: '/',
         search: '',
         hash: '',
       }),
     ).toBe(false)
   })
 
-  it('does not redirect app waitlist needs-session links', () => {
+  it('does not redirect the clean waitlist route on app host', () => {
     expect(
       shouldRedirectHomeToSwap({
         hostMode: 'app',
-        search: '?reason=needs-session',
-        hash: '#waitlist',
+        pathname: '/waitlist',
+        search: '',
+        hash: '',
       }),
     ).toBe(false)
   })
 
-  it('does not redirect app waitlist needs-acceptance links', () => {
+  it('does not redirect legacy waitlist-tagged app links before they are normalized', () => {
     expect(
       shouldRedirectHomeToSwap({
         hostMode: 'app',
-        search: '?reason=needs-acceptance',
+        pathname: '/',
+        search: '?reason=needs-acceptance&wl=1',
         hash: '#waitlist',
       }),
     ).toBe(false)
@@ -50,21 +54,23 @@ describe('waitlist entry URL helpers', () => {
       getHomeWaitlistRedirectTarget({
         hostMode: 'app',
         marketingOrigin: 'https://4626.fun',
+        pathname: '/',
         search: '?reason=needs-session',
         hash: '#waitlist',
       }),
-    ).toBe('https://4626.fun/?reason=needs-session#waitlist')
+    ).toBe('https://4626.fun/waitlist')
   })
 
-  it('redirects bare app-host waitlist hashes back to the marketing waitlist entry', () => {
+  it('redirects the clean app-host waitlist route back to the marketing waitlist entry', () => {
     expect(
       getHomeWaitlistRedirectTarget({
         hostMode: 'app',
         marketingOrigin: 'https://4626.fun',
+        pathname: '/waitlist',
         search: '',
-        hash: '#waitlist',
+        hash: '',
       }),
-    ).toBe('https://4626.fun/?reason=needs-session#waitlist')
+    ).toBe('https://4626.fun/waitlist')
   })
 
   it('keeps marketing-host waitlist URLs local', () => {
@@ -72,6 +78,7 @@ describe('waitlist entry URL helpers', () => {
       getHomeWaitlistRedirectTarget({
         hostMode: 'marketing',
         marketingOrigin: 'https://4626.fun',
+        pathname: '/',
         search: '?reason=needs-session',
         hash: '#waitlist',
       }),
@@ -81,19 +88,27 @@ describe('waitlist entry URL helpers', () => {
   it('shows the inline waitlist entry for the sticky session flag', () => {
     expect(
       shouldShowWaitlistEntry({
-        hash: '',
-        search: '',
+        pathname: '/',
         stickyOpen: true,
       }),
     ).toBe(true)
   })
 
-  it('builds close target by removing waitlist hash and query triggers', () => {
+  it('shows the inline waitlist entry on the canonical /waitlist route', () => {
+    expect(
+      shouldShowWaitlistEntry({
+        pathname: '/waitlist',
+        stickyOpen: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('builds close target by returning / from the canonical waitlist route', () => {
     expect(
       buildWaitlistCloseTarget({
-        pathname: '/',
-        search: '?reason=needs-acceptance&wl=1&ref=abc',
-        hash: '#waitlist',
+        pathname: '/waitlist',
+        search: '',
+        hash: '',
       }),
     ).toEqual({
       path: '/',
@@ -105,11 +120,11 @@ describe('waitlist entry URL helpers', () => {
     expect(
       buildWaitlistCloseTarget({
         pathname: '/',
-        search: '?reason=needs-session',
+        search: '',
         hash: '',
       }),
     ).toEqual({
-      path: '/?reason=needs-session',
+      path: '/',
       changed: false,
     })
   })

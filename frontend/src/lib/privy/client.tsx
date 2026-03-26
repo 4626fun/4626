@@ -118,9 +118,8 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   // verified email first, wallet-native Base second. Zora uses cross-app auth.
   const loginMethods = ['email', 'wallet'] as const
 
-  // Privy OAuth redirects are validated against an allowlist and must match exactly (no query params).
-  // Our marketing waitlist commonly adds `?wl=1` / `?ref=...`, so defaulting to `window.location.href`
-  // can cause OAuth init to fail with "Redirect URL is not allowed".
+  // Privy OAuth redirects are validated against an allowlist and must match exactly.
+  // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
   const customOAuthRedirectUrl = typeof window !== 'undefined' ? window.location.origin : null
 
   const baseConfig: PrivyProviderConfig = {

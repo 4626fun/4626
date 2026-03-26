@@ -633,7 +633,7 @@ export function AccountsPage(props: {
             <JoinWaitlistCta
               className="text-xs text-zinc-500 hover:text-zinc-300"
               showArrow={false}
-              onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
+              onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl())}
             >
               Back to waitlist
             </JoinWaitlistCta>

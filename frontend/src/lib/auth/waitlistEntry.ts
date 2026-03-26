@@ -1,12 +1,9 @@
 import { getMarketingBaseUrl } from '@/lib/host'
 
-export type WaitlistEntryReason = 'needs-session' | 'needs-acceptance'
-const CANONICAL_MARKETING_WAITLIST_HASH = '#waitlist'
-const CANONICAL_MARKETING_WAITLIST_PATH = `/${CANONICAL_MARKETING_WAITLIST_HASH}`
+const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 
 type WaitlistEntryLocation = {
   pathname?: string | null
-  hash?: string | null
 }
 
 export function getCanonicalMarketingWaitlistPath(): string {
@@ -21,24 +18,22 @@ export function buildCanonicalMarketingWaitlistUrl(baseUrl: string): string {
 export function isMarketingWaitlistEntryLocation(location: WaitlistEntryLocation): boolean {
   const rawPath = String(location.pathname ?? '').trim()
   const pathname = rawPath.length === 0 ? '/' : rawPath.startsWith('/') ? rawPath : `/${rawPath}`
-  const hash = String(location.hash ?? '').trim()
-  return pathname === '/' && hash === CANONICAL_MARKETING_WAITLIST_HASH
+  return pathname === CANONICAL_MARKETING_WAITLIST_PATH
 }
 
-export function buildWaitlistEntryPath(reason: WaitlistEntryReason): string {
-  const params = new URLSearchParams({ reason })
-  return `/?${params.toString()}${CANONICAL_MARKETING_WAITLIST_HASH}`
+export function buildWaitlistEntryPath(): string {
+  return CANONICAL_MARKETING_WAITLIST_PATH
 }
 
-export function buildWaitlistEntryUrl(baseUrl: string, reason: WaitlistEntryReason): string {
+export function buildWaitlistEntryUrl(baseUrl: string): string {
   const base = String(baseUrl ?? '').replace(/\/+$/, '')
-  return `${base}${buildWaitlistEntryPath(reason)}`
+  return `${base}${buildWaitlistEntryPath()}`
 }
 
-export function getPrivyCapableWaitlistEntryUrl(reason: WaitlistEntryReason): string {
-  return buildWaitlistEntryUrl(getMarketingBaseUrl(), reason)
+export function getPrivyCapableWaitlistEntryUrl(): string {
+  return buildWaitlistEntryUrl(getMarketingBaseUrl())
 }
 
-export function getMarketingWaitlistEntryUrl(reason: WaitlistEntryReason): string {
-  return buildWaitlistEntryUrl(getMarketingBaseUrl(), reason)
+export function getMarketingWaitlistEntryUrl(): string {
+  return buildWaitlistEntryUrl(getMarketingBaseUrl())
 }

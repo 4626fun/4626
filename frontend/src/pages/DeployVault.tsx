@@ -6106,7 +6106,7 @@ function DeployVaultMain() {
   }, [cdpPaymasterUrl])
 
   // Smooth waitlist -> deploy:
-  // If we arrived with `autologin=1&from=waitlist`, prompt email-first auth on app host
+  // If we arrived from the canonical app handoff, prompt email-first auth on app host
   // and bridge into a 4626 session.
   useEffect(() => {
     if (!autoLogin || !fromWaitlist) return

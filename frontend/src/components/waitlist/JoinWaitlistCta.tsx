@@ -119,7 +119,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
       return
     }
     if (typeof window === 'undefined') return
-    const target = getMarketingWaitlistEntryUrl('needs-session')
+    const target = getMarketingWaitlistEntryUrl()
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return
     window.location.assign(target)
@@ -234,7 +234,7 @@ function JoinWaitlistCtaInner(props: JoinWaitlistCtaProps) {
     if (typeof window === 'undefined') return
 
     if (ctaState === 'continue_setup') {
-      window.location.assign(getMarketingWaitlistEntryUrl('needs-acceptance'))
+      window.location.assign(getMarketingWaitlistEntryUrl())
       return
     }
 

@@ -7,7 +7,7 @@ import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { getHostMode, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
-import { useOptionalAccessContext, waitlistEntryHref, withReason } from './app/accessShared'
+import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
 
 export {
   computeAcceptedFromAllowlist,
@@ -60,7 +60,7 @@ export function getGenericNotFoundCta(hostMode: import('@/lib/host').HostMode): 
     }
   }
   return {
-    href: withReason('/swap', 'not-found'),
+    href: '/swap',
     label: 'Go To Trade',
     hint: 'Continue to the canonical app landing route.',
   }
@@ -299,19 +299,19 @@ function NotFoundPage() {
     if (!access) return genericCta
     if (!access.sessionValid) {
       return {
-        href: waitlistEntryHref(access.marketingUrl, 'needs-session'),
+        href: waitlistEntryHref(access.marketingUrl),
         label: 'Sign In',
         hint: 'Sign in to get started.',
       }
     }
     if (!access.accepted) {
       return {
-        href: waitlistEntryHref(access.marketingUrl, 'needs-acceptance'),
+        href: waitlistEntryHref(access.marketingUrl),
         label: 'Join Waitlist',
         hint: 'This route requires accepted app access.',
       }
     }
-    const tradeHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/swap' : withReason('/swap', 'not-found')
+    const tradeHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/swap' : '/swap'
     return { href: tradeHref, label: 'Go To Trade', hint: 'Your session is valid. Continue to the canonical app landing route.' }
   }, [access, genericCta])
 
@@ -350,6 +350,14 @@ function App() {
         }
       >
         <Route path="/" element={<Home />} />
+        <Route
+          path="/waitlist"
+          element={
+            <MarketingOnlyRoute>
+              <Home />
+            </MarketingOnlyRoute>
+          }
+        />
         <Route path="/404" element={<NotFoundPage />} />
 
         <Route element={<LayoutOnly />}>

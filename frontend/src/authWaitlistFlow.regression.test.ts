@@ -10,7 +10,7 @@ const SESSION_ADDRESS = '0x1234567890123456789012345678901234567890'
 
 describe('waitlist to gated-app route regression', () => {
   it('allows the canonical waitlist handoff into an accepted app route once the session is established', () => {
-    expect(buildAppEntryPath('/swap')).toBe('/continue?from=waitlist&autologin=1&next=%2Fswap')
+    expect(buildAppEntryPath('/swap')).toBe('/continue')
 
     expect(
       shouldNavigateAfterWaitlistHandoff({
@@ -78,7 +78,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-acceptance',
-      redirectTo: buildWaitlistEntryUrl('https://4626.fun', 'needs-acceptance'),
+      redirectTo: buildWaitlistEntryUrl('https://4626.fun'),
     })
   })
 
@@ -116,19 +116,19 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-session',
-      redirectTo: buildWaitlistEntryUrl('https://4626.fun', 'needs-session'),
+      redirectTo: buildWaitlistEntryUrl('https://4626.fun'),
     })
   })
 
   it('uses the canonical public waitlist path for marketing-only recovery CTAs', () => {
     expect(getGenericNotFoundCta('marketing')).toEqual({
-      href: '/#waitlist',
+      href: '/waitlist',
       label: 'Join Waitlist',
       hint: 'Start from the canonical waitlist entry.',
     })
 
     expect(getGenericNotFoundCta('app')).toEqual({
-      href: '/swap?reason=not-found',
+      href: '/swap',
       label: 'Go To Trade',
       hint: 'Continue to the canonical app landing route.',
     })
@@ -149,7 +149,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-session',
-      redirectTo: buildWaitlistEntryUrl(MARKETING_ORIGIN, 'needs-session'),
+      redirectTo: buildWaitlistEntryUrl(MARKETING_ORIGIN),
     })
   })
 })

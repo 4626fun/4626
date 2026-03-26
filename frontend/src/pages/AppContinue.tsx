@@ -4,7 +4,7 @@ import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
 import { shouldNavigateAfterWaitlistHandoff } from '@/lib/auth/appContinueGate'
-import { readSafeNextPath } from '@/lib/auth/appEntry'
+import { APP_ENTRY_DEFAULT_NEXT, readSafeNextPath } from '@/lib/auth/appEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -138,12 +138,17 @@ export function AppContinue() {
     [privy.logout],
   )
 
-  const nextPath = useMemo(() => readSafeNextPath(searchParams.get('next')), [searchParams])
-  const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
-  const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
-  const autoLogin = autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes'
-  const fromWaitlist = fromRaw === 'waitlist'
-  const handoffCode = (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim()
+  const [initialEntry] = useState(() => {
+    const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
+    const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
+    return {
+      nextPath: readSafeNextPath(searchParams.get('next') ?? APP_ENTRY_DEFAULT_NEXT),
+      autoLogin: autoLoginRaw ? autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes' : true,
+      fromWaitlist: fromRaw ? fromRaw === 'waitlist' : true,
+      handoffCode: (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim(),
+    }
+  })
+  const { nextPath, autoLogin, fromWaitlist, handoffCode } = initialEntry
   const likelyTelegramMiniAppFlow = useMemo(
     () =>
       shouldBootstrapTelegramMiniAppFlow({
@@ -152,6 +157,13 @@ export function AppContinue() {
       }),
     [nextPath],
   )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.location.search) return
+    const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`
+    window.history.replaceState(window.history.state, document.title, cleanUrl)
+  }, [])
 
   const canNavigate = useMemo(
     () =>

@@ -4,13 +4,16 @@ import { APP_ENTRY_DEFAULT_NEXT, buildAppEntryPath, buildAppEntryUrl, readSafeNe
 
 describe('appEntry helpers', () => {
   it('builds the canonical waitlist handoff path to the app landing route', () => {
-    expect(buildAppEntryPath()).toBe('/continue?from=waitlist&autologin=1&next=%2Fswap')
+    expect(buildAppEntryPath()).toBe('/continue')
   })
 
   it('builds a full app-entry URL from an origin', () => {
-    expect(buildAppEntryUrl('https://v1.4626.fun')).toBe(
-      'https://v1.4626.fun/continue?from=waitlist&autologin=1&next=%2Fswap',
-    )
+    expect(buildAppEntryUrl('https://v1.4626.fun')).toBe('https://v1.4626.fun/continue')
+  })
+
+  it('preserves an explicit non-default app destination with a minimal next query', () => {
+    expect(buildAppEntryPath('/accounts')).toBe('/continue?next=%2Faccounts')
+    expect(buildAppEntryUrl('https://v1.4626.fun', '/accounts')).toBe('https://v1.4626.fun/continue?next=%2Faccounts')
   })
 
   it('accepts safe internal paths for next routing', () => {

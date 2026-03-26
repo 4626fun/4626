@@ -447,9 +447,9 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
-  const redirectToCanonicalWaitlist = useCallback((reason: 'needs-session' | 'needs-acceptance' = 'needs-session') => {
+  const redirectToCanonicalWaitlist = useCallback(() => {
     if (typeof window === 'undefined') return false
-    const target = getMarketingWaitlistEntryUrl(reason)
+    const target = getMarketingWaitlistEntryUrl()
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return false
     window.location.assign(target)
