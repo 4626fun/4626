@@ -9,10 +9,6 @@ const Home = lazy(async () => {
   const m = await import('./pages/Home')
   return { default: m.Home }
 })
-const WaitlistPage = lazy(async () => {
-  const m = await import('./pages/WaitlistPage')
-  return { default: m.WaitlistPage }
-})
 const WaitlistInviteEntry = lazy(async () => {
   const m = await import('./pages/WaitlistInviteEntry')
   return { default: m.WaitlistInviteEntry }
@@ -70,14 +66,6 @@ export function RootRouter() {
             element={
               <Suspense fallback={<AppLoadingState />}>
                 <Home />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/waitlist"
-            element={
-              <Suspense fallback={<AppLoadingState />}>
-                <WaitlistPage />
               </Suspense>
             }
           />

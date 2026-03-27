@@ -663,6 +663,17 @@ export function ThinWaitlistFlow(props: {
     [account?.email, dashboardPointsType, getAccessToken, privyAuthed],
   )
 
+  const beginRecoverySignIn = useCallback(async () => {
+    setAccount(null)
+    setOwnerDelegationFlags(null)
+    setOwnerDelegationVerified(null)
+    setEmbeddedEoaAddress(null)
+    setWaitlistPosition(null)
+    setLeaderboard(null)
+    await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+    await login(buildWaitlistRecoveryLoginOptions() as any)
+  }, [login])
+
   const onContinueAuth = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
     authFlowStartedRef.current = true
@@ -940,17 +951,6 @@ export function ThinWaitlistFlow(props: {
       setBusy(false)
     }
   }, [busy, login, privyClientStatus, redirectToCanonicalWaitlist])
-
-  const beginRecoverySignIn = useCallback(async () => {
-    setAccount(null)
-    setOwnerDelegationFlags(null)
-    setOwnerDelegationVerified(null)
-    setEmbeddedEoaAddress(null)
-    setWaitlistPosition(null)
-    setLeaderboard(null)
-    await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
-    await login(buildWaitlistRecoveryLoginOptions() as any)
-  }, [login])
 
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return

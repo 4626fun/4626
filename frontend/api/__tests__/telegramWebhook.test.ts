@@ -854,7 +854,7 @@ describe('telegram webhook handler', () => {
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:explore')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:cre')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:solana')).toBe(true)
-    expect(callbackButtons.some((button: any) => typeof button?.switch_inline_query === 'string')).toBe(true)
+    expect(callbackButtons.some((button: any) => typeof button?.switch_inline_query === 'string')).toBe(false)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'help:market')).toBe(false)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:deploy')).toBe(false)
@@ -2518,7 +2518,7 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('More Tools')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
-    expect(allButtons.some((button: any) => typeof button?.switch_inline_query === 'string')).toBe(true)
+    expect(allButtons.some((button: any) => typeof button?.switch_inline_query === 'string')).toBe(false)
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:deploy')).toBe(true)
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:zora')).toBe(true)
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:cre')).toBe(true)

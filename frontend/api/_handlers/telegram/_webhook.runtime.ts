@@ -1482,7 +1482,6 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
-        [{ text: 'Share', switch_inline_query: 'ai ' }],
         ...operatorRow,
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
       ]
@@ -1492,7 +1491,6 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
-        [{ text: 'Share', switch_inline_query: 'ai ' }],
         ...operatorRow,
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
       ]
@@ -1546,11 +1544,7 @@ function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
         { text: 'Deploy Vault', callback_data: 'menu:vaultdeploy' },
         { text: 'Zora', callback_data: 'menu:zora' },
       ],
-      [
-        { text: 'Draft X Post', switch_inline_query_current_chat: 'x post your update here' },
-        { text: 'Help Topics', callback_data: 'menu:topics' },
-      ],
-      [{ text: 'Share', switch_inline_query: '' }],
+      [{ text: 'Help Topics', callback_data: 'menu:topics' }],
       [
         { text: menuLabel('cre'), callback_data: 'menu:cre' },
         { text: menuLabel('solana'), callback_data: 'menu:solana' },

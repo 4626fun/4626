@@ -67,17 +67,6 @@ export type BuildInlineQueryAnswerParams = {
   linkButtonUrl?: string
 }
 
-function normalizeInlineDraft(rawQuery: string): string {
-  const compact = asTrimmed(rawQuery).replace(/\s+/g, ' ')
-  const stripped = compact
-    .replace(/^\/?x\s+post\s+/i, '')
-    .replace(/^\/?tweet\s+/i, '')
-    .replace(/\s*--confirm\b/gi, '')
-    .trim()
-  const truncated = stripped.slice(0, 240).trim()
-  return truncated || 'your update here'
-}
-
 function parseInlineOffset(rawOffset: string): number {
   const parsed = Number(asTrimmed(rawOffset))
   if (!Number.isFinite(parsed) || parsed < 0) return 0
@@ -225,8 +214,6 @@ function buildCommonCopy(growthMode: boolean): {
   helpDescription: string
   statusTitle: string
   statusDescription: string
-  xPostTitle: string
-  xPostDescription: string
   aiTitle: string
   aiDescription: string
 } {
@@ -240,8 +227,6 @@ function buildCommonCopy(growthMode: boolean): {
       helpDescription: 'Shortcuts and starter flows',
       statusTitle: 'Vault health',
       statusDescription: 'Live config and permissions',
-      xPostTitle: 'Draft X post',
-      xPostDescription: 'Template ready to send',
       aiTitle: 'Ask AI',
       aiDescription: 'Get one clear next action',
     }
@@ -256,8 +241,6 @@ function buildCommonCopy(growthMode: boolean): {
     helpDescription: 'Starter commands and shortcuts',
     statusTitle: 'Vault health check',
     statusDescription: 'Config, permissions, live status',
-    xPostTitle: 'Draft X post',
-    xPostDescription: 'Pre-filled with callback confirm',
     aiTitle: 'Ask AI',
     aiDescription: 'Get next actions in plain English',
   }

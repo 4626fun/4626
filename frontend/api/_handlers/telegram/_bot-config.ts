@@ -29,8 +29,10 @@ type BotConfigBody = {
 
 function normalizeMenuText(value: string): string {
   const trimmed = asTrimmed(value)
-  if (!trimmed) return 'Open'
-  return trimmed.replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
+  if (!trimmed) return 'Connect'
+  return trimmed
+    .replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
+    .replace(/^open(?:\s+4626(?:\.fun)?)?$/i, 'Connect')
 }
 
 function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {

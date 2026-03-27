@@ -90,6 +90,31 @@ describe('Home', () => {
     expect(window.location.pathname).toBe('/')
   })
 
+  it('clears any stale referral code before opening the homepage waitlist flow', async () => {
+    const user = userEvent.setup()
+    window.sessionStorage.clear()
+    window.sessionStorage.setItem('cv:waitlist:referral_code', 'FRIEND42')
+
+    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
+
+    await user.click(screen.getByRole('button', { name: /join waitlist/i }))
+
+    expect(window.sessionStorage.getItem('cv:waitlist:referral_code')).toBeNull()
+  })
+
+  it('opens the homepage waitlist flow from stored auth intent', async () => {
+    window.sessionStorage.clear()
+    window.sessionStorage.setItem('cv:waitlist:auth_armed', '1')
+    window.sessionStorage.setItem('cv:waitlist:auth_auto_start', '1')
+
+    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
+
+    expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
+    expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBeNull()
+    expect(window.sessionStorage.getItem('cv:waitlist:auth_auto_start')).toBeNull()
+  })
+
   it('does not render the waitlist flow before explicit user intent', () => {
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 

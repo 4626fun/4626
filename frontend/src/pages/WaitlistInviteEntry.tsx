@@ -4,7 +4,9 @@ import {
   buildCanonicalMarketingWaitlistUrl,
   buildWaitlistReferralUrl,
   normalizeWaitlistReferralCode,
+  requestStoredWaitlistAuthAutoStart,
   storeWaitlistReferralCode,
+  writeStoredWaitlistAuthArmed,
 } from '@/lib/auth/waitlistEntry'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 
@@ -25,7 +27,9 @@ export function WaitlistInviteEntry() {
 
   if (normalizedReferralCode) {
     storeWaitlistReferralCode(normalizedReferralCode)
+    writeStoredWaitlistAuthArmed(true)
+    requestStoredWaitlistAuthAutoStart()
   }
 
-  return <Navigate to="/waitlist" replace />
+  return <Navigate to="/" replace />
 }

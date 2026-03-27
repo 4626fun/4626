@@ -579,13 +579,13 @@ describe('telegram endpoint handlers', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.menuText).toBe('Open 4626')
+    expect(res.body?.data?.menuText).toBe('Connect')
     expect(res.body?.data?.miniAppUrl).toBe('https://4626.fun/telegram/link')
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
       expect.objectContaining({
         menuButton: {
           type: 'web_app',
-          text: 'Open 4626',
+          text: 'Connect',
           web_app: { url: 'https://4626.fun/telegram/link' },
         },
       }),

@@ -116,7 +116,7 @@ describe('waitlist to gated-app route regression', () => {
 
   it('uses the canonical public waitlist path for marketing-only recovery CTAs', () => {
     expect(getGenericNotFoundCta('marketing')).toEqual({
-      href: '/waitlist',
+      href: '/',
       label: 'Join Waitlist',
       hint: 'Start from the canonical waitlist entry.',
     })

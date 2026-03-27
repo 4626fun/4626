@@ -21,10 +21,6 @@ vi.mock('./pages/Home', () => ({
   Home: () => <div data-testid="home-page">home</div>,
 }))
 
-vi.mock('./pages/WaitlistPage', () => ({
-  WaitlistPage: () => <div data-testid="waitlist-page">waitlist</div>,
-}))
-
 vi.mock('./pages/WaitlistInviteEntry', () => ({
   WaitlistInviteEntry: () => <div data-testid="waitlist-invite-entry">waitlist invite</div>,
 }))
@@ -58,14 +54,14 @@ describe('RootRouter', () => {
     expect(await screen.findByTestId('protected-app')).toBeTruthy()
   })
 
-  it('routes /waitlist through the dedicated waitlist page', async () => {
+  it('routes the root marketing path through Home', async () => {
     render(
-      <MemoryRouter initialEntries={['/waitlist']}>
+      <MemoryRouter initialEntries={['/']}>
         <RootRouter />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByTestId('waitlist-page')).toBeTruthy()
+    expect(await screen.findByTestId('home-page')).toBeTruthy()
     expect(screen.queryByTestId('protected-app')).toBeNull()
   })
 })

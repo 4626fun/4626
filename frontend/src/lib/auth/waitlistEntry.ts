@@ -1,6 +1,6 @@
 import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
 
-const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
+const CANONICAL_MARKETING_WAITLIST_PATH = '/'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
 
 export const WAITLIST_AUTH_ARMED_KEY = 'cv:waitlist:auth_armed'
@@ -86,6 +86,17 @@ export function readStoredWaitlistAuthArmed(): boolean {
   if (typeof window === 'undefined') return false
   try {
     return window.sessionStorage.getItem(WAITLIST_AUTH_ARMED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function consumeStoredWaitlistAuthArmed(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const armed = window.sessionStorage.getItem(WAITLIST_AUTH_ARMED_KEY) === '1'
+    window.sessionStorage.removeItem(WAITLIST_AUTH_ARMED_KEY)
+    return armed
   } catch {
     return false
   }

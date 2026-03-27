@@ -6,7 +6,12 @@ import { ArrowRight } from 'lucide-react'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
 import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
-import { clearStoredWaitlistAuthState } from '@/lib/auth/waitlistEntry'
+import {
+  clearStoredWaitlistAuthState,
+  clearStoredWaitlistReferralCode,
+  consumeStoredWaitlistAuthArmed,
+  consumeStoredWaitlistAuthAutoStart,
+} from '@/lib/auth/waitlistEntry'
 import { getHostMode } from '@/lib/host'
 import { PrivyClientProvider } from '@/lib/privy/client'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
@@ -29,12 +34,19 @@ export function Home() {
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
-  const [waitlistInlineOpen, setWaitlistInlineOpen] = useState(false)
+  const [initialWaitlistState] = useState(() => {
+    const autoStart = consumeStoredWaitlistAuthAutoStart()
+    const open = consumeStoredWaitlistAuthArmed() || autoStart
+    return { open, autoStart }
+  })
+  const [waitlistInlineOpen, setWaitlistInlineOpen] = useState(initialWaitlistState.open)
+  const [waitlistAutoStart] = useState(initialWaitlistState.autoStart)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
   const openWaitlistDirectAuth = () => {
     clearStoredWaitlistAuthState()
+    clearStoredWaitlistReferralCode()
     setWaitlistInlineOpen(true)
   }
 
@@ -146,7 +158,7 @@ export function Home() {
                     <LazyThinWaitlistFlow
                       variant="embedded"
                       sectionId="home-waitlist"
-                      autoStartAuth
+                      autoStartAuth={waitlistAutoStart || waitlistInlineOpen}
                       suppressAuthShell
                     />
                   </div>

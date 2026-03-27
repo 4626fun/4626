@@ -101,6 +101,12 @@ export type TelegramWebhookConfig = {
   copyTextButtons: boolean
 }
 
+function normalizeTelegramMenuButtonText(value: string): string {
+  const trimmed = asTrimmed(value)
+  if (!trimmed) return ''
+  return trimmed.replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
+}
+
 function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): TelegramWebhookConfig {
   const botToken = asTrimmed(raw.TELEGRAM_BOT_TOKEN ?? '')
   const targetChatId = asTrimmed(raw.TELEGRAM_TARGET_CHAT_ID ?? '')
@@ -169,7 +175,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     inlinePreparedEnabled: parseBoolean(raw.TELEGRAM_INLINE_PREPARED_ENABLED, true),
     miniAppUrl: asTrimmed(raw.TELEGRAM_MINI_APP_URL ?? ''),
     menuButtonMode,
-    menuButtonText: asTrimmed(raw.TELEGRAM_MENU_BUTTON_TEXT ?? ''),
+    menuButtonText: normalizeTelegramMenuButtonText(raw.TELEGRAM_MENU_BUTTON_TEXT ?? ''),
     botConfigSecret: asTrimmed(raw.TELEGRAM_BOT_CONFIG_SECRET ?? raw.TELEGRAM_LINK_API_SECRET ?? ''),
     linkApiSecret: asTrimmed(raw.TELEGRAM_LINK_API_SECRET ?? raw.TELEGRAM_BOT_CONFIG_SECRET ?? ''),
     miniAppSessionEnabled: parseBoolean(raw.TELEGRAM_MINIAPP_SESSION_ENABLED, true),
