@@ -2,6 +2,8 @@ import { getAddress, isAddress } from 'viem'
 
 import { asTrimmed } from './utils.js'
 
+const TELEGRAM_INLINE_QUERY_BOT_USERNAME = '@akitai_bot' as const
+
 export type TelegramApprovedInlineToken = {
   address: `0x${string}`
   symbol: string
@@ -63,6 +65,26 @@ export function resolveTelegramApprovedInlineTokenQuery(rawQuery: string): Teleg
 
 export function buildTelegramAnalyzeInlineDraft(token: TelegramApprovedInlineToken): string {
   return token.address
+}
+
+export function buildTelegramAnalyzeInlineCopyText(query: string): string {
+  const inlineQuery = asTrimmed(query).replace(/\s+/g, ' ')
+  return inlineQuery ? `${TELEGRAM_INLINE_QUERY_BOT_USERNAME} ${inlineQuery}` : TELEGRAM_INLINE_QUERY_BOT_USERNAME
+}
+
+export function buildTelegramAnalyzeInlineButtons(params: {
+  label: string
+  query: string
+  copyLabel?: string
+}): Array<Record<string, unknown>> {
+  const label = asTrimmed(params.label)
+  const query = asTrimmed(params.query).replace(/\s+/g, ' ')
+  if (!label || !query) return []
+  const copyLabel = asTrimmed(params.copyLabel) || 'Copy Query'
+  return [
+    { text: label, switch_inline_query_current_chat: query },
+    { text: copyLabel, copy_text: { text: buildTelegramAnalyzeInlineCopyText(query) } },
+  ]
 }
 
 export function filterTelegramApprovedTradeVaults<T extends { creatorCoinAddress: string }>(

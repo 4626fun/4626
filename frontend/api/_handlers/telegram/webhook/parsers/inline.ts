@@ -1,6 +1,7 @@
 import { getAddress, isAddress } from 'viem'
 
 import {
+  buildTelegramAnalyzeInlineButtons,
   buildTelegramAnalyzeInlineDraft,
   filterTelegramApprovedTradeVaults,
   resolveTelegramApprovedInlineTokenQuery,
@@ -334,7 +335,12 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       description,
       command: '/buy',
       replyMarkup: {
-        inline_keyboard: [[{ text: token.analyzeLabel, switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(token) }]],
+        inline_keyboard: [
+          buildTelegramAnalyzeInlineButtons({
+            label: token.analyzeLabel,
+            query: buildTelegramAnalyzeInlineDraft(token),
+          }),
+        ],
       },
       baseScore: 104 - index,
       intentTags: ['trade', 'discovery', 'general'],

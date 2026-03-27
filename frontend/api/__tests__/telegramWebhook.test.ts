@@ -1034,6 +1034,13 @@ describe('telegram webhook handler', () => {
           && button?.switch_inline_query_current_chat === AKITA_TOKEN_ADDRESS,
       ),
     ).toBe(true)
+    expect(
+      buttons.some(
+        (button: any) =>
+          button?.text === 'Copy Query'
+          && button?.copy_text?.text === `@akitai_bot ${AKITA_TOKEN_ADDRESS}`,
+      ),
+    ).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
   })
 
@@ -1901,6 +1908,13 @@ describe('telegram webhook handler', () => {
         (button: any) =>
           String(button?.text ?? '') === 'Analyze $AKITA'
           && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
+      ),
+    ).toBe(true)
+    expect(
+      buyAkita?.reply_markup?.inline_keyboard?.flat?.().some(
+        (button: any) =>
+          String(button?.text ?? '') === 'Copy Query'
+          && String(button?.copy_text?.text ?? '') === `@akitai_bot ${AKITA_TOKEN_ADDRESS}`,
       ),
     ).toBe(true)
     if (Object.prototype.hasOwnProperty.call(payload, 'next_offset')) {
@@ -4597,6 +4611,13 @@ describe('telegram webhook handler', () => {
         (button: any) =>
           String(button?.text ?? '') === 'Analyze $AKITA'
           && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
+      ),
+    ).toBe(true)
+    expect(
+      flat.some(
+        (button: any) =>
+          String(button?.text ?? '') === 'Copy Query'
+          && String(button?.copy_text?.text ?? '') === `@akitai_bot ${AKITA_TOKEN_ADDRESS}`,
       ),
     ).toBe(true)
     expect(clearTelegramTradePercentPromptMock).toHaveBeenCalledWith({

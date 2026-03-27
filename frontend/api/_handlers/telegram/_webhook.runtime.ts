@@ -94,6 +94,7 @@ import {
   parseVaultDeployCallbackData as parseVaultDeployCallbackDataShared,
 } from './webhook/parsers/vaultDeploy.js'
 import {
+  buildTelegramAnalyzeInlineButtons,
   buildTelegramAnalyzeInlineDraft,
   filterTelegramApprovedTradeVaults,
   getTelegramApprovedInlineTokenByAddress,
@@ -2430,12 +2431,19 @@ function buildTelegramPickedUserActionsReplyMarkup(profile: ResolvedTelegramPick
     },
   ]
   if (approvedToken) {
-    buttons.push({
-      text: approvedToken.analyzeLabel,
-      switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(approvedToken),
-    })
+    buttons.push(
+      ...buildTelegramAnalyzeInlineButtons({
+        label: approvedToken.analyzeLabel,
+        query: buildTelegramAnalyzeInlineDraft(approvedToken),
+      }),
+    )
   } else if (profile.creatorCoinAddress) {
-    buttons.push({ text: 'Analyze Token', switch_inline_query_current_chat: profile.creatorCoinAddress })
+    buttons.push(
+      ...buildTelegramAnalyzeInlineButtons({
+        label: 'Analyze Token',
+        query: profile.creatorCoinAddress,
+      }),
+    )
   }
   return {
     inline_keyboard: [buttons],
@@ -2812,10 +2820,10 @@ function buildTradeVaultPickerReplyMarkup(params: {
               text: vault.approvedToken.buyLabel,
               callback_data: `tradeflow:v:${params.actionType}:${vault.vaultAddress.toLowerCase()}`,
             },
-            {
-              text: vault.approvedToken.analyzeLabel,
-              switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(vault.approvedToken),
-            },
+            ...buildTelegramAnalyzeInlineButtons({
+              label: vault.approvedToken.analyzeLabel,
+              query: buildTelegramAnalyzeInlineDraft(vault.approvedToken),
+            }),
           ])),
           [{ text: 'Back', callback_data: 'menu:start' }],
         ],
