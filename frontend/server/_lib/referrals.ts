@@ -17,6 +17,26 @@ export function normalizeReferralCode(input: string): string {
   return cleaned.slice(0, 16)
 }
 
+export function referralCodeFromEmail(email: string | null | undefined): string | null {
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+  if (!normalizedEmail.includes('@')) return null
+  const localPart = normalizedEmail.split('@')[0] ?? ''
+  const code = normalizeReferralCode(localPart)
+  return code.length > 0 ? code : null
+}
+
+export function dedupeReferralCodeCandidates(values: Array<string | null | undefined>): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const normalized = normalizeReferralCode(String(value ?? ''))
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push(normalized)
+  }
+  return out
+}
+
 export function getClientIp(req: { headers?: Record<string, any> }): string {
   const h = req?.headers ?? {}
   const xf = h['x-forwarded-for']

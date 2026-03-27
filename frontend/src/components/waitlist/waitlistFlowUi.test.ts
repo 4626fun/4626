@@ -12,8 +12,7 @@ describe('deriveWaitlistAuthUi', () => {
   it('uses sign-in copy and black-square glyph (email only in Privy)', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Get early access',
-      subtitle:
-        'Sign in with your email (one-time code). After verification, track your points, climb the leaderboard, and keep building your account while approval is pending.',
+      subtitle: 'Verify your email to lock your spot and unlock your referral link.',
       ctaLabel: '■ Continue with email',
       busyLabel: 'Opening email sign-in…',
     })

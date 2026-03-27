@@ -5,8 +5,6 @@ import { apiFetch } from '@/lib/apiBase'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
 
-type PointsType = 'invite' | 'total' | 'agent'
-
 type LeaderboardRow = {
   rank: number
   signupId: number
@@ -21,7 +19,7 @@ type LeaderboardRow = {
 type LeaderboardResponse = {
   page: number
   limit: number
-  pointsType: PointsType
+  pointsType: 'total' | 'invite' | 'agent'
   totalCount: number
   totalPages: number
   hasMore: boolean
@@ -31,14 +29,20 @@ type LeaderboardResponse = {
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
+function formatWholeNumber(value: number | null | undefined): string {
+  const n = typeof value === 'number' ? value : Number(value ?? 0)
+  return Number.isFinite(n) ? new Intl.NumberFormat('en-US').format(Math.floor(n)) : '0'
+}
+
+function formatPointsTooltip(row: LeaderboardRow): string {
+  return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
+}
+
 export function Leaderboard() {
-  const [pointsType, setPointsType] = useState<PointsType>('total')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<LeaderboardResponse | null>(null)
   const inFlightRef = useRef(false)
-
-  const title = pointsType === 'invite' ? 'Invite points' : pointsType === 'agent' ? 'Agent points' : 'Total points'
 
   const fetchLeaderboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -49,7 +53,7 @@ export function Leaderboard() {
         setError(null)
       }
       try {
-        const res = await apiFetch(`/api/waitlist/leaderboard?pointsType=${encodeURIComponent(pointsType)}&page=1&limit=50`, {
+        const res = await apiFetch('/api/waitlist/leaderboard?pointsType=total&page=1&limit=50', {
           method: 'GET',
           headers: { Accept: 'application/json' },
         })
@@ -68,12 +72,12 @@ export function Leaderboard() {
         inFlightRef.current = false
       }
     },
-    [pointsType],
+    [],
   )
 
   useEffect(() => {
     void fetchLeaderboard()
-  }, [fetchLeaderboard, pointsType])
+  }, [fetchLeaderboard])
 
   useEffect(() => {
     const handleFocus = () => {
@@ -112,14 +116,14 @@ export function Leaderboard() {
 
   return (
     <section className="relative overflow-hidden bg-vault-bg text-white min-h-[calc(100vh-0px)]">
-      <PageMeta title="Leaderboard" description="See the top creators and contributors on 4626 ranked by invite, agent, and total points." canonicalPath="/leaderboard" />
+      <PageMeta title="Leaderboard" description="See the top creators and contributors on 4626 ranked by total points." canonicalPath="/leaderboard" />
       <div className="relative max-w-3xl mx-auto px-6 py-12">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-[10px] font-medium text-zinc-600 mb-2">4626</div>
             <div className="headline text-3xl sm:text-4xl leading-tight">Leaderboard</div>
             <div className="text-sm text-zinc-600 font-light mt-2">
-              Points-based. Earn points by joining, inviting, social actions, Lens/Grove identity sync, and ERC-8004 agent reputation/feedback.
+              Ranked by total points. Hover any score to see the invite and agent breakdown.
             </div>
             {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
           </div>
@@ -131,38 +135,11 @@ export function Leaderboard() {
           </Link>
         </div>
 
-        <div className="mt-8 flex items-center gap-2">
-          <button
-            type="button"
-            className={`rounded-full px-3 py-1 text-[12px] border ${
-              pointsType === 'invite' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/8 bg-vault-card/40 text-zinc-600'
-            }`}
-            onClick={() => setPointsType('invite')}
-            disabled={busy}
-          >
-            Invite points
-          </button>
-          <button
-            type="button"
-            className={`rounded-full px-3 py-1 text-[12px] border ${
-              pointsType === 'total' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/8 bg-vault-card/40 text-zinc-600'
-            }`}
-            onClick={() => setPointsType('total')}
-            disabled={busy}
-          >
+        <div className="mt-8 flex items-center justify-between gap-3">
+          <div className="rounded-full border border-brand-primary/30 bg-brand-primary/10 px-3 py-1 text-[12px] text-zinc-200">
             Total points
-          </button>
-          <button
-            type="button"
-            className={`rounded-full px-3 py-1 text-[12px] border ${
-              pointsType === 'agent' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/8 bg-vault-card/40 text-zinc-600'
-            }`}
-            onClick={() => setPointsType('agent')}
-            disabled={busy}
-          >
-            Agent points
-          </button>
-          <div className="text-[11px] text-zinc-700 ml-2">{busy ? 'Loading…' : title}</div>
+          </div>
+          <div className="text-[11px] text-zinc-700">{busy ? 'Loading…' : 'Hover any score for the breakdown'}</div>
         </div>
 
         {error ? (
@@ -210,7 +187,7 @@ export function Leaderboard() {
                     {r.referralCode ? <div className="text-[11px] text-zinc-700">code: {r.referralCode}</div> : null}
                   </div>
                   <div className="col-span-4 text-right text-sm text-zinc-200 tabular-nums">
-                    {pointsType === 'invite' ? r.pointsInvite : pointsType === 'agent' ? r.pointsAgent : r.pointsTotal}
+                    <span title={formatPointsTooltip(r)}>{formatWholeNumber(r.pointsTotal)}</span>
                   </div>
                 </div>
                 )
@@ -236,7 +213,7 @@ export function Leaderboard() {
                 {data.me.referralCode ? <div className="text-[11px] text-zinc-700">code: {data.me.referralCode}</div> : null}
               </div>
               <div className="col-span-4 text-right text-sm text-zinc-200 tabular-nums">
-                {pointsType === 'invite' ? data.me.pointsInvite : pointsType === 'agent' ? data.me.pointsAgent : data.me.pointsTotal}
+                <span title={formatPointsTooltip(data.me)}>{formatWholeNumber(data.me.pointsTotal)}</span>
               </div>
             </div>
           </div>

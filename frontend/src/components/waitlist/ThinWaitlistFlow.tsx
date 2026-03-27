@@ -1066,6 +1066,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     recoveryRequired,
     error,
   })
+  const useCompactModalAuthStart = variant === 'modal' && props.autoStartAuth === true && step === 'auth' && !error && !recoveryRequired
   const canonicalCswAddress = account?.accountSignals?.canonicalCswAddress ?? null
   const walletSelectionNeeded = !canonicalCswAddress
   const ownerInstallNeeded = Boolean(canonicalCswAddress && ownerDelegationVerified === false)
@@ -1137,8 +1138,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   return (
     <section id={sectionId} className={wrapClass}>
       <div className={innerClass}>
-        {/* Step progress indicator */}
-        <StepIndicator steps={indicatorSteps} />
+        {!useCompactModalAuthStart ? <StepIndicator steps={indicatorSteps} /> : null}
 
         {step === 'auth' ? (
           <motion.div
@@ -1148,6 +1148,15 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="space-y-5"
           >
+            {useCompactModalAuthStart ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                <div className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                  Opening secure email sign-in…
+                </div>
+              </div>
+            ) : (
+              <>
             <div className="space-y-1">
               <h2 className="text-2xl font-semibold tracking-tight text-white">{authUi.title}</h2>
               <p className="text-sm text-zinc-400">{authUi.subtitle}</p>
@@ -1176,6 +1185,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                   authUi.ctaLabel
                 )}
               </button>
+            )}
+              </>
             )}
 
             {error ? (

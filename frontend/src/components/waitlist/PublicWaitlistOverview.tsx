@@ -4,12 +4,9 @@ import { ArrowRight, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import {
-  storeWaitlistReferralCode,
-  getCanonicalMarketingWaitlistPath,
   WAITLIST_REFERRAL_CLICK_SESSION_KEY,
+  storeWaitlistReferralCode,
 } from '@/lib/auth/waitlistEntry'
-
-type DashboardPointsType = 'invite' | 'total' | 'agent'
 
 type LeaderboardRow = {
   rank: number
@@ -25,7 +22,7 @@ type LeaderboardRow = {
 type LeaderboardResponse = {
   page: number
   limit: number
-  pointsType: DashboardPointsType
+  pointsType: 'total' | 'invite' | 'agent'
   totalCount: number
   totalPages: number
   hasMore: boolean
@@ -40,10 +37,8 @@ function formatWholeNumber(value: number | null | undefined): string {
   return Number.isFinite(n) ? new Intl.NumberFormat('en-US').format(Math.floor(n)) : '0'
 }
 
-function getPointsValue(pointsType: DashboardPointsType, row: LeaderboardRow): number {
-  if (pointsType === 'invite') return row.pointsInvite
-  if (pointsType === 'agent') return row.pointsAgent
-  return row.pointsTotal
+function formatPointsTooltip(row: LeaderboardRow): string {
+  return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
 }
 
 function buildReferralClickSessionId(): string {
@@ -59,7 +54,6 @@ export function PublicWaitlistOverview(props: {
   primaryButtonClassName: string
 }) {
   const { referralCode, onContinueWithEmail, primaryButtonClassName } = props
-  const [pointsType, setPointsType] = useState<DashboardPointsType>('invite')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null)
@@ -74,7 +68,7 @@ export function PublicWaitlistOverview(props: {
         setError(null)
       }
       try {
-        const response = await apiFetch(`/api/waitlist/leaderboard?pointsType=${encodeURIComponent(pointsType)}&page=1&limit=5`, {
+        const response = await apiFetch('/api/waitlist/leaderboard?pointsType=total&page=1&limit=5', {
           method: 'GET',
           headers: { Accept: 'application/json' },
         })
@@ -93,7 +87,7 @@ export function PublicWaitlistOverview(props: {
         inFlightRef.current = false
       }
     },
-    [pointsType],
+    [],
   )
 
   useEffect(() => {
@@ -145,56 +139,40 @@ export function PublicWaitlistOverview(props: {
   }, [referralCode])
 
   const rows = leaderboard?.leaderboard ?? []
-  const title = pointsType === 'invite' ? 'Invite leaderboard' : pointsType === 'agent' ? 'Agent leaderboard' : 'Total points leaderboard'
   const subtitle = useMemo(() => {
     if (referralCode) {
-      return `Invited by ${referralCode}. Verify your email here and the referral will carry into your account setup.`
+      return `Invited by ${referralCode}. Verify your email to keep the invite attached and unlock your own referral link.`
     }
-    return 'Verify your email first. Your own referral link unlocks as soon as the waitlist account is ready.'
+    return 'Verify your email to lock your spot, unlock your referral link, and start showing up on the board.'
   }, [referralCode])
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
-        <div className="space-y-4">
-          <div className="space-y-2">
+        <div className="flex h-full flex-col gap-4">
+          <div className="space-y-3">
             {referralCode ? (
               <div className="inline-flex items-center rounded-full border border-brand-primary/25 bg-brand-primary/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-brand-primary">
                 Invite: {referralCode}
               </div>
             ) : null}
-            <h3 className="text-xl font-semibold tracking-tight text-white">Quiet sign-in, live waitlist context</h3>
-            <p className="text-sm text-zinc-300 sm:text-[15px]">{subtitle}</p>
+            <h3 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Email first. Leaderboard live.</h3>
+            <p className="max-w-md text-sm text-zinc-300 sm:text-[15px]">{subtitle}</p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">What comes back</div>
-              <div className="mt-2 text-sm font-medium text-white">Leaderboard and invite link</div>
-              <p className="mt-1 text-xs text-zinc-500">
-                Verify email once, then you can track rank and share a clean invite URL from the same surface.
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">What stays quiet</div>
-              <div className="mt-2 text-sm font-medium text-white">Wallet auth until click</div>
-              <p className="mt-1 text-xs text-zinc-500">
-                The heavy Privy and wallet stack still stays dormant until you intentionally begin sign-in.
-              </p>
-            </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+            Your invite stays attached. Wallet setup comes later.
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button type="button" onClick={onContinueWithEmail} className={primaryButtonClassName}>
+          <div className="mt-auto">
+            <button
+              type="button"
+              onClick={onContinueWithEmail}
+              className={`${primaryButtonClassName} w-full whitespace-nowrap sm:min-w-[288px]`}
+            >
               Continue with email
               <ArrowRight className="w-4 h-4" />
             </button>
-            <Link
-              to="/leaderboard"
-              className="inline-flex items-center justify-center rounded-full border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.05]"
-            >
-              Open leaderboard
-            </Link>
           </div>
         </div>
       </div>
@@ -202,7 +180,7 @@ export function PublicWaitlistOverview(props: {
       <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{title}</div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Total points leaderboard</div>
             <div className="mt-1 text-sm text-zinc-300">Live public snapshot from the waitlist board.</div>
           </div>
           {busy ? (
@@ -211,24 +189,6 @@ export function PublicWaitlistOverview(props: {
               Loading
             </div>
           ) : null}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {(['invite', 'total', 'agent'] as const).map((nextPointsType) => (
-            <button
-              key={nextPointsType}
-              type="button"
-              disabled={busy}
-              onClick={() => setPointsType(nextPointsType)}
-              className={`rounded-full border px-3 py-1 text-[11px] ${
-                pointsType === nextPointsType
-                  ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-100'
-                  : 'border-white/8 bg-white/[0.03] text-zinc-500'
-              }`}
-            >
-              {nextPointsType === 'invite' ? 'Invites' : nextPointsType === 'agent' ? 'Agent' : 'Total'}
-            </button>
-          ))}
         </div>
 
         <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
@@ -242,13 +202,13 @@ export function PublicWaitlistOverview(props: {
                   <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
                   <div className="min-w-0">
                     <div className="truncate text-sm text-white">{row.display}</div>
-                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
-                      {row.referralCode ? <span>{row.referralCode}</span> : null}
-                      {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
+                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+                        {row.referralCode ? <span>{row.referralCode}</span> : null}
+                        {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-sm font-semibold tabular-nums text-zinc-100">
-                    {formatWholeNumber(getPointsValue(pointsType, row))}
+                  <div className="text-sm font-semibold tabular-nums text-zinc-100" title={formatPointsTooltip(row)}>
+                    {formatWholeNumber(row.pointsTotal)}
                   </div>
                 </div>
               ))}
@@ -262,8 +222,8 @@ export function PublicWaitlistOverview(props: {
 
         <div className="flex items-center justify-between gap-3 text-xs text-zinc-500">
           <span>{leaderboard ? `${leaderboard.totalCount.toLocaleString()} ranked accounts live right now` : 'Waitlist board updates continuously.'}</span>
-          <Link to={getCanonicalMarketingWaitlistPath()} className="text-brand-primary hover:text-brand-300 transition-colors">
-            Waitlist entry
+          <Link to="/leaderboard" className="font-medium text-brand-primary transition-colors hover:text-brand-300">
+            Full leaderboard
           </Link>
         </div>
       </div>

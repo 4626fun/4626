@@ -51,7 +51,7 @@ export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
     title: 'Get early access',
     subtitle:
-      'Sign in with your email (one-time code). After verification, track your points, climb the leaderboard, and keep building your account while approval is pending.',
+      'Verify your email to lock your spot and unlock your referral link.',
     ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue with email`,
     busyLabel: 'Opening email sign-in…',
   }
