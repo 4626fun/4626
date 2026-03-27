@@ -86,6 +86,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'status/protocolReport': () => import('./status/_protocolReport.js'),
   'status/vaultReport': () => import('./status/_vaultReport.js'),
 
+  'sync-creator-metrics': () => import('./_sync-creator-metrics.js'),
   'sync-vault-data': () => import('./_sync-vault-data.js'),
   'referrals/click': () => import('./referrals/_click.js'),
   'referrals/me': () => import('./referrals/_me.js'),

@@ -81,7 +81,7 @@ vi.mock('@/components/waitlist/PublicWaitlistOverview', () => ({
     React.createElement(
       'div',
       { 'data-testid': 'public-waitlist-overview' },
-      React.createElement('div', null, 'Quiet sign-in, live waitlist context'),
+      React.createElement('div', null, 'Sign up for the waitlist by verifying your email address.'),
       React.createElement(
         'button',
         { type: 'button', onClick: onContinueWithEmail },
@@ -125,7 +125,7 @@ describe('Home', () => {
   it('does not render the embedded waitlist shell on the homepage anymore', () => {
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
-    expect(screen.queryByText(/quiet sign-in, live waitlist context/i)).toBeNull()
+    expect(screen.queryByText(/sign up for the waitlist by verifying your email address/i)).toBeNull()
     expect(screen.queryByText(/start access setup without leaving the page/i)).toBeNull()
     expect(screen.queryByTestId('waitlist-flow')).toBeNull()
   })

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -29,22 +29,37 @@ vi.mock('./pages/WaitlistInviteEntry', () => ({
   WaitlistInviteEntry: () => <div data-testid="waitlist-invite-entry">waitlist invite</div>,
 }))
 
-vi.mock('./pages/TelegramMenuEntry', () => ({
-  TelegramMenuEntryRoute: () => <div data-testid="telegram-menu-entry">telegram menu entry</div>,
-}))
-
 import { RootRouter } from './RootRouter'
 
 describe('RootRouter', () => {
-  it('routes telegram mini app menu directly without loading ProtectedApp', async () => {
+  it('redirects telegram menu requests to the standalone html without loading ProtectedApp', async () => {
+    const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
     render(
       <MemoryRouter initialEntries={['/telegram/menu']}>
         <RootRouter />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByTestId('telegram-menu-entry')).toBeTruthy()
+    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith('/telegram-menu.html'))
     expect(screen.queryByTestId('protected-app')).toBeNull()
+    replaceSpy.mockRestore()
+  })
+
+  it('redirects telegram link requests to the standalone html without loading ProtectedApp', async () => {
+    const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
+    render(
+      <MemoryRouter initialEntries={['/telegram/link?tgEntry=link&tgLinkToken=abc123#step=otp']}>
+        <RootRouter />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() =>
+      expect(replaceSpy).toHaveBeenCalledWith('/telegram-link.html?tgEntry=link&tgLinkToken=abc123#step=otp'),
+    )
+    expect(screen.queryByTestId('protected-app')).toBeNull()
+    replaceSpy.mockRestore()
   })
 
   it('keeps non-telegram routes on ProtectedApp', async () => {
@@ -55,7 +70,6 @@ describe('RootRouter', () => {
     )
 
     expect(await screen.findByTestId('protected-app')).toBeTruthy()
-    expect(screen.queryByTestId('telegram-menu-entry')).toBeNull()
   })
 
   it('routes /waitlist through the dedicated waitlist page', async () => {

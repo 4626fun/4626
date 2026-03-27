@@ -15,9 +15,6 @@
     "api/agent-registration.ts": {
       "includeFiles": "public/.well-known/agent-registration.json"
     },
-    "api/sync-creator-metrics.ts": {
-      "maxDuration": 60
-    },
     "api/keepr/actions/execute.ts": {
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
@@ -208,7 +205,6 @@
       "dest": "/app.html"
     },
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
-    { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/agent/process", "dest": "/api/agent/process" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },

@@ -55,7 +55,7 @@ export function WaitlistPage() {
     <div className="relative min-h-screen bg-black text-white">
       <PageMeta
         title="4626.fun - Waitlist"
-        description="Verify your email, keep your invite attached, and track leaderboard progress from one dedicated waitlist flow."
+        description="Sign up for the 4626 waitlist by verifying your email address."
         canonicalPath={getCanonicalMarketingWaitlistPath()}
       />
 
@@ -65,13 +65,12 @@ export function WaitlistPage() {
             <div className="space-y-3">
               <div className="label">Waitlist</div>
               <h1 className="headline text-3xl leading-tight sm:text-5xl lg:text-6xl">
-                One focused path
+                Sign up for
                 <br />
-                for access setup
+                the waitlist
               </h1>
               <p className="max-w-2xl text-sm text-zinc-400 sm:text-base">
-                Verify your email, keep your referral attached, and finish wallet readiness here. The homepage no longer mounts
-                the waitlist flow.
+                Verify your email here first. Your referral link and waitlist ranking unlock after signup is complete.
               </p>
             </div>
             <Link

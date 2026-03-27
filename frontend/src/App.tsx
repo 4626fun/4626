@@ -85,11 +85,6 @@ const LazyRequireAccepted = lazy(async () => {
   return { default: m.RequireAccepted }
 })
 
-const LazyRequireTelegramMiniAppEntry = lazy(async () => {
-  const m = await import('./app/accessRuntime')
-  return { default: m.RequireTelegramMiniAppEntry }
-})
-
 const LazyRequireAdmin = lazy(async () => {
   const m = await import('./app/accessRuntime')
   return { default: m.RequireAdmin }
@@ -279,16 +274,6 @@ const AppContinue = lazy(async () => {
   return { default: m.AppContinue }
 })
 
-const TelegramLink = lazy(async () => {
-  const m = await import('./pages/TelegramLink')
-  return { default: m.TelegramLink }
-})
-
-const TelegramMenu = lazy(async () => {
-  const m = await import('./pages/TelegramMenu')
-  return { default: m.TelegramMenu }
-})
-
 function NotFoundPage() {
   const location = useLocation()
   const access = useOptionalAccessContext()
@@ -405,35 +390,6 @@ function App() {
             </LazyRouteBoundary>
           }
         >
-          <Route
-            element={
-              <LazyRouteBoundary>
-                <LazyAppPrivyShell />
-              </LazyRouteBoundary>
-            }
-          >
-            <Route
-              path="/telegram/menu"
-              element={
-                <LazyRouteBoundary>
-                  <LazyRequireTelegramMiniAppEntry>
-                    <TelegramMenu />
-                  </LazyRequireTelegramMiniAppEntry>
-                </LazyRouteBoundary>
-              }
-            />
-            <Route
-              path="/telegram/link"
-              element={
-                <LazyRouteBoundary>
-                  <LazyRequireTelegramMiniAppEntry>
-                    <TelegramLink />
-                  </LazyRequireTelegramMiniAppEntry>
-                </LazyRouteBoundary>
-              }
-            />
-          </Route>
-
           <Route
             element={
               <LazyRouteBoundary>

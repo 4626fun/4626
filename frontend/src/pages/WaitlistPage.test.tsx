@@ -40,7 +40,7 @@ vi.mock('@/components/waitlist/PublicWaitlistOverview', () => ({
     referralCode: string | null
   }) => (
     <div>
-      <div>Quiet sign-in, live waitlist context</div>
+      <div>Sign up for the waitlist by verifying your email address.</div>
       <div>{referralCode ? `invite:${referralCode}` : 'invite:none'}</div>
       <button type="button" onClick={onContinueWithEmail}>
         Continue with email
@@ -64,7 +64,7 @@ describe('WaitlistPage', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Quiet sign-in, live waitlist context')).toBeTruthy()
+    expect(screen.getByText('Sign up for the waitlist by verifying your email address.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Continue with email' })).toBeTruthy()
     expect(screen.queryByTestId('waitlist-flow')).toBeNull()
     expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBeNull()
@@ -110,7 +110,7 @@ describe('WaitlistPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Quiet sign-in, live waitlist context')).toBeTruthy()
+    expect(await screen.findByText('Sign up for the waitlist by verifying your email address.')).toBeTruthy()
     expect(screen.getByText('invite:FRIEND42')).toBeTruthy()
     expect(window.sessionStorage.getItem('cv:waitlist:referral_code')).toBe('FRIEND42')
   })

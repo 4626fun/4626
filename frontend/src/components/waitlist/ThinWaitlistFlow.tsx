@@ -233,10 +233,8 @@ function formatRankLabel(value: number | null | undefined): string {
   return Number.isFinite(n) && n > 0 ? `#${Math.floor(n)}` : 'Unranked'
 }
 
-function getLeaderboardPointsValue(pointsType: DashboardPointsType, row: DashboardLeaderboardRow): number {
-  if (pointsType === 'invite') return row.pointsInvite
-  if (pointsType === 'agent') return row.pointsAgent
-  return row.pointsTotal
+function formatLeaderboardPointsTooltip(row: DashboardLeaderboardRow): string {
+  return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
 }
 
 function getAccessStatusMeta(status: string | null | undefined): {
@@ -449,7 +447,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [dashboardBusy, setDashboardBusy] = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
-  const [dashboardPointsType, setDashboardPointsType] = useState<DashboardPointsType>('total')
+  const dashboardPointsType: DashboardPointsType = 'total'
   const [waitlistPosition, setWaitlistPosition] = useState<WaitlistPositionResponse | null>(null)
   const [leaderboard, setLeaderboard] = useState<DashboardLeaderboardResponse | null>(null)
   const [copiedReferralLink, setCopiedReferralLink] = useState(false)
@@ -664,7 +662,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
         if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
         await runBootstrap()
       } else {
-        await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+        await runWaitlistPrivyLogout({ logout: null })
         await login(buildWaitlistEmailLoginOptions() as any)
       }
       authAttemptInFlightRef.current = false
@@ -1090,12 +1088,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     () => (personalReferralCode ? getMarketingWaitlistReferralUrl(personalReferralCode) : null),
     [personalReferralCode],
   )
-  const leaderboardTitle =
-    dashboardPointsType === 'invite'
-      ? 'Invite leaderboard'
-      : dashboardPointsType === 'agent'
-        ? 'Agent leaderboard'
-        : 'Total points leaderboard'
+  const leaderboardTitle = 'Waitlist leaderboard'
   const dashboardSubtitle = appApproved
     ? 'Admin approval is in. Finish wallet readiness and then the app handoff will unlock automatically.'
     : ownerInstallNeeded
@@ -1350,7 +1343,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                       <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
                         <div className="truncate font-mono text-sm text-zinc-100">{personalReferralLink}</div>
                         <p className="mt-2 text-xs text-zinc-500">
-                          New signups land on the quiet waitlist shell, keep the referral attached, and can immediately see the live leaderboard.
+                          New signups land on the waitlist signup flow first, then unlock their ranking and referral view after verification.
                         </p>
                       </div>
 
@@ -1397,29 +1390,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{leaderboardTitle}</div>
-                      <div className="mt-1 text-sm text-zinc-300">Live snapshot from the public leaderboard.</div>
+                      <div className="mt-1 text-sm text-zinc-300">Ranked by total points after verified signup.</div>
                     </div>
                     <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
                       Full board
                     </Link>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {(['total', 'invite', 'agent'] as const).map((pointsType) => (
-                      <button
-                        key={pointsType}
-                        type="button"
-                        disabled={dashboardBusy}
-                        onClick={() => setDashboardPointsType(pointsType)}
-                        className={`rounded-full border px-3 py-1 text-[11px] ${
-                          dashboardPointsType === pointsType
-                            ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-100'
-                            : 'border-white/8 bg-white/[0.03] text-zinc-500'
-                        }`}
-                      >
-                        {pointsType === 'total' ? 'Total' : pointsType === 'invite' ? 'Invites' : 'Agent'}
-                      </button>
-                    ))}
                   </div>
 
                   <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
@@ -1445,8 +1420,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                                   {isMe ? <span className="text-brand-primary">You</span> : null}
                                 </div>
                               </div>
-                              <div className="text-sm font-semibold tabular-nums text-zinc-100">
-                                {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, row))}
+                              <div
+                                className="text-sm font-semibold tabular-nums text-zinc-100"
+                                title={formatLeaderboardPointsTooltip(row)}
+                              >
+                                {formatWholeNumber(row.pointsTotal)}
                               </div>
                             </div>
                           )
@@ -1465,8 +1443,11 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                           <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
                           <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
                         </div>
-                        <div className="text-sm font-semibold tabular-nums text-zinc-100">
-                          {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, leaderboardMe))}
+                        <div
+                          className="text-sm font-semibold tabular-nums text-zinc-100"
+                          title={formatLeaderboardPointsTooltip(leaderboardMe)}
+                        >
+                          {formatWholeNumber(leaderboardMe.pointsTotal)}
                         </div>
                       </div>
                     </div>

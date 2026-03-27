@@ -293,8 +293,8 @@ export function Home() {
         open={waitlistModalOpen}
         onClose={closeWaitlistModal}
         title="Join waitlist"
-        description="Verify your email without leaving the homepage."
-        maxWidth="sm:max-w-4xl"
+        description="Sign up for the waitlist by verifying your email address."
+        maxWidth={waitlistAuthArmed ? 'sm:max-w-4xl' : 'sm:max-w-xl'}
         placement="center"
         className="border border-white/10 bg-black/90"
       >
