@@ -400,7 +400,6 @@ export default defineConfig(({ command }) => {
     : {
         index: resolve(__dirname, 'index.html'),
         app: resolve(__dirname, 'app.html'),
-        telegramMenu: resolve(__dirname, 'telegram-menu.html'),
       }
 
   return {

@@ -138,6 +138,8 @@ type WaitlistStep = 'auth' | 'wallet' | 'done'
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
+const CANONICALIZATION_TIMEOUT_MS = 20_000
+const WAITLIST_BOOTSTRAP_TIMEOUT_MS = 20_000
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -497,14 +499,22 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   }, [copiedReferralLink])
 
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
-    const token = await getAccessToken()
+    const token = await withTimeout(
+      getAccessToken(),
+      GET_ACCESS_TOKEN_TIMEOUT_MS,
+      'Sign-in token',
+    ).catch(() => null)
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     let nextOwnerDelegationVerified: boolean | null = null
     if (token) {
       headers['X-Privy-Token'] = token
-      const canonicalization = await runCanonicalizationPipeline({
-        privyToken: token,
-      })
+      const canonicalization = await withTimeout(
+        runCanonicalizationPipeline({
+          privyToken: token,
+        }),
+        CANONICALIZATION_TIMEOUT_MS,
+        'Account sync',
+      )
       if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
         setOwnerDelegationFlags(null)
         setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
@@ -517,11 +527,15 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
         setEmbeddedEoaAddress(null)
       }
     }
-    const response = await apiFetch('/api/waitlist/bootstrap', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(activeReferralCode ? { referralCode: activeReferralCode } : {}),
-    })
+    const response = await withTimeout(
+      apiFetch('/api/waitlist/bootstrap', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(activeReferralCode ? { referralCode: activeReferralCode } : {}),
+      }),
+      WAITLIST_BOOTSTRAP_TIMEOUT_MS,
+      'Waitlist bootstrap',
+    )
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
     if (!response.ok || !payload?.success || !payload.data) {
       const err = new Error(readApiErrorMessage(payload, 'Failed to bootstrap waitlist state.')) as Error & {

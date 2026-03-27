@@ -20,7 +20,7 @@ const WaitlistInviteEntry = lazy(async () => {
 const LayoutWithoutAccountContext = lazy(async () => import('./app/LayoutWithoutAccountContext'))
 const ProtectedApp = lazy(async () => import('./ProtectedApp'))
 
-function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' | '/telegram-menu.html' }) {
+function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) {
   const location = useLocation()
 
   useEffect(() => {
@@ -90,10 +90,6 @@ export function RootRouter() {
             }
           />
         </Route>
-        <Route
-          path="/telegram/menu"
-          element={<StandaloneDocumentRedirect htmlPath="/telegram-menu.html" />}
-        />
         <Route
           path="/telegram/link"
           element={<StandaloneDocumentRedirect htmlPath="/telegram-link.html" />}

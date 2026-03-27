@@ -94,7 +94,6 @@ import {
   parseVaultDeployCallbackData as parseVaultDeployCallbackDataShared,
 } from './webhook/parsers/vaultDeploy.js'
 import {
-  buildTelegramAnalyzeInlineButtons,
   buildTelegramAnalyzeInlineDraft,
   filterTelegramApprovedTradeVaults,
   getTelegramApprovedInlineTokenByAddress,
@@ -1140,10 +1139,6 @@ async function buildInlineQueryResults(params: {
     growthMode: isTelegramInlineGrowthModeEnabled(),
     enablePmHandoff: isTelegramInlinePmHandoffEnabled(),
     mediaByKey: readInlineMediaAssetMap(),
-    menuButtonUrl: buildTelegramMiniAppUrl({
-      baseUrl: resolveTelegramMiniAppUrl(),
-      pathname: '/telegram/menu',
-    }),
     linkButtonUrl: buildTelegramMiniAppUrl({
       baseUrl: resolveTelegramMiniAppUrl(),
       pathname: TELEGRAM_MINI_APP_LINK_PATH,
@@ -1460,7 +1455,7 @@ function buildFocusedHelpText(): string {
     '<code>/buy</code> — guided buy flow',
     '<code>/sell</code> — guided sell flow',
     '<code>/bid</code> — guided bid flow',
-    '<code>/vaultdeploy</code> — one-tap AKITA vault deploy preview',
+    '<code>/vaultdeploy</code> — one-tap AKITA deploy preview',
     '<code>/wallet</code> — wallet, positions, and actions',
     '<code>/vaults</code> — browse vaults',
     '',
@@ -2422,28 +2417,23 @@ function buildTelegramPickedUserProfileText(params: {
 }
 
 function buildTelegramPickedUserActionsReplyMarkup(profile: ResolvedTelegramPickerUserProfile | null): Record<string, unknown> | undefined {
-  if (!profile?.vaultAddress) return undefined
+  if (!profile?.vaultAddress && !profile?.creatorCoinAddress) return undefined
   const approvedToken = getTelegramApprovedInlineTokenByAddress(profile.creatorCoinAddress)
+  const buyTargetAddress = approvedToken?.address ?? profile.creatorCoinAddress ?? profile.vaultAddress
+  if (!buyTargetAddress) return undefined
   const buttons: Array<Record<string, unknown>> = [
     {
       text: approvedToken?.buyLabel ?? `Buy ${profile.creatorCoinSymbol ?? 'Creator'}`,
-      callback_data: `tradeflow:v:buy:${profile.vaultAddress}`,
+      callback_data: `tradeflow:v:buy:${buyTargetAddress}`,
     },
   ]
   if (approvedToken) {
-    buttons.push(
-      ...buildTelegramAnalyzeInlineButtons({
-        label: approvedToken.analyzeLabel,
-        query: buildTelegramAnalyzeInlineDraft(approvedToken),
-      }),
-    )
+    buttons.push({
+      text: approvedToken.analyzeLabel,
+      switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(approvedToken),
+    })
   } else if (profile.creatorCoinAddress) {
-    buttons.push(
-      ...buildTelegramAnalyzeInlineButtons({
-        label: 'Analyze Token',
-        query: profile.creatorCoinAddress,
-      }),
-    )
+    buttons.push({ text: 'Analyze Token', switch_inline_query_current_chat: profile.creatorCoinAddress })
   }
   return {
     inline_keyboard: [buttons],
@@ -2806,6 +2796,56 @@ function resolveScopedVaultByAddress(scopedVaults: ScopedVaultRow[], vaultAddres
   return scopedVaults.find((row) => row.vaultAddress.toLowerCase() === normalized) ?? null
 }
 
+function resolveTradeTargetAddress(params: {
+  actionType: InteractiveTradeAction
+  vault: ScopedVaultRow
+}): `0x${string}` {
+  if (params.actionType === 'buy' && isAddressLike(params.vault.creatorCoinAddress)) {
+    return params.vault.creatorCoinAddress
+  }
+  return params.vault.vaultAddress
+}
+
+function formatTradeTargetLabelFromVault(params: {
+  actionType: InteractiveTradeAction
+  vault: ScopedVaultRow
+}): string {
+  if (params.actionType === 'buy') {
+    const approvedToken = getTelegramApprovedInlineTokenByAddress(params.vault.creatorCoinAddress)
+    if (approvedToken) return `$${approvedToken.symbol}`
+    if (isAddressLike(params.vault.creatorCoinAddress)) return truncateAddress(params.vault.creatorCoinAddress)
+  }
+  return truncateAddress(params.vault.vaultAddress)
+}
+
+function formatTradeTargetLabelFromAddresses(params: {
+  actionType: 'buy' | 'sell' | 'bid'
+  creatorCoinAddress?: string | null
+  vaultAddress?: string | null
+}): string {
+  if (params.actionType === 'buy') {
+    const approvedToken = getTelegramApprovedInlineTokenByAddress(params.creatorCoinAddress)
+    if (approvedToken) return `$${approvedToken.symbol}`
+    if (isAddressLike(params.creatorCoinAddress)) return truncateAddress(params.creatorCoinAddress)
+  }
+  if (isAddressLike(params.vaultAddress)) return truncateAddress(params.vaultAddress)
+  if (isAddressLike(params.creatorCoinAddress)) return truncateAddress(params.creatorCoinAddress)
+  return 'vault'
+}
+
+function resolveTradeSignalTargetAddress(params: {
+  actionType: 'buy' | 'sell' | 'bid'
+  creatorCoinAddress?: string | null
+  vaultAddress?: string | null
+}): string | undefined {
+  if (params.actionType === 'buy' && isAddressLike(params.creatorCoinAddress)) {
+    return params.creatorCoinAddress.toLowerCase()
+  }
+  if (isAddressLike(params.vaultAddress)) return params.vaultAddress.toLowerCase()
+  if (isAddressLike(params.creatorCoinAddress)) return params.creatorCoinAddress.toLowerCase()
+  return undefined
+}
+
 function buildTradeVaultPickerReplyMarkup(params: {
   actionType: InteractiveTradeAction
   scopedVaults: ScopedVaultRow[]
@@ -2818,12 +2858,12 @@ function buildTradeVaultPickerReplyMarkup(params: {
           ...approvedVaults.map((vault) => ([
             {
               text: vault.approvedToken.buyLabel,
-              callback_data: `tradeflow:v:${params.actionType}:${vault.vaultAddress.toLowerCase()}`,
+              callback_data: `tradeflow:v:${params.actionType}:${vault.approvedToken.address}`,
             },
-            ...buildTelegramAnalyzeInlineButtons({
-              label: vault.approvedToken.analyzeLabel,
-              query: buildTelegramAnalyzeInlineDraft(vault.approvedToken),
-            }),
+            {
+              text: vault.approvedToken.analyzeLabel,
+              switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(vault.approvedToken),
+            },
           ])),
           [{ text: 'Back', callback_data: 'menu:start' }],
         ],
@@ -2946,7 +2986,10 @@ async function buildTradeIntentFromPercent(params: {
         ok: true,
         tradeIntent: {
           actionType: 'buy',
-          identifier: params.vault.vaultAddress,
+          identifier: resolveTradeTargetAddress({
+            actionType: 'buy',
+            vault: params.vault,
+          }),
           amountInput: amountEthText,
           amount: amountEth,
           amountUnit: 'ETH',
@@ -4073,6 +4116,11 @@ async function executeTelegramNativeCommand(params: {
       }
     }
 
+    const targetLabel = formatTradeTargetLabelFromVault({
+      actionType: tradeIntent.actionType,
+      vault: target,
+    })
+
     const ethUsd = readEthUsdPrice()
     const shareUsd = readShareUsdFallback()
     let amountEth = tradeIntent.actionType === 'buy' ? tradeIntent.amount : 0
@@ -4208,7 +4256,7 @@ async function executeTelegramNativeCommand(params: {
     return {
       text: formatTradePreviewText({
         actionType: tradeIntent.actionType,
-        targetLabel: truncateAddress(target.vaultAddress),
+        targetLabel,
         amountInput: tradeIntent.amountInput,
         amountEth,
         usdEstimate,
@@ -4262,8 +4310,8 @@ async function handleTelegramTradeFlowCallback(params: {
   await ensureTelegramTradingSchema(db as any)
 
   const scopedVaults = await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
-  let target = resolveScopedVaultByAddress(scopedVaults, callback.vaultAddress)
-  if (!target && isPrivateChatId(params.chatId)) {
+  let target = resolveTradeTarget(scopedVaults, callback.vaultAddress)
+  if (!target && callback.actionType !== 'buy' && isPrivateChatId(params.chatId)) {
     target = mapKeeprVaultRowToScopedVault(await getKeeprVaultByVaultAddress(callback.vaultAddress))
   }
   if (!target) {
@@ -4271,12 +4319,20 @@ async function handleTelegramTradeFlowCallback(params: {
       text: [
         'Trade flow',
         '',
-        '- selected vault is no longer available in this chat scope',
+        callback.actionType === 'buy'
+          ? '- selected token is no longer available in this chat scope'
+          : '- selected vault is no longer available in this chat scope',
         '- run /vaults and start again',
       ].join('\n'),
-      callbackToast: 'Vault unavailable',
+      callbackToast: callback.actionType === 'buy' ? 'Token unavailable' : 'Vault unavailable',
     }
   }
+
+  const targetLabel = formatTradeTargetLabelFromVault({
+    actionType: callback.actionType,
+    vault: target,
+  })
+  const targetNoun = callback.actionType === 'buy' ? 'Token' : 'Vault'
 
   if (callback.kind !== 'custom') {
     await clearTelegramTradePercentPrompt({
@@ -4299,7 +4355,7 @@ async function handleTelegramTradeFlowCallback(params: {
       }
     }
     return {
-      text: `Step 2/3 • Pick size for ${tradeFlowState.actionType.toUpperCase()} ${truncateAddress(target.vaultAddress)}`,
+      text: `Step 2/3 • Pick size for ${tradeFlowState.actionType.toUpperCase()} ${targetLabel}`,
       replyMarkup: buildTradePercentPickerReplyMarkup({
         actionType: tradeFlowState.actionType,
         vaultAddress: tradeFlowState.vaultAddress,
@@ -4337,7 +4393,7 @@ async function handleTelegramTradeFlowCallback(params: {
       text: [
         `Step 2/3 • Custom ${tradeFlowState.actionType.toUpperCase()} size`,
         '',
-        `Vault: ${truncateAddress(target.vaultAddress)}`,
+        `${targetNoun}: ${targetLabel}`,
         '- send a percent between 1 and 99.99 (example: 42%)',
       ].join('\n'),
       replyMarkup: buildTradeCustomPercentReplyMarkup({
@@ -4426,9 +4482,9 @@ async function handleTelegramTradeFlowCallback(params: {
     skipSchemaEnsure: true,
     tradePrefetch: {
       link,
-        scopedVaults: resolveScopedVaultByAddress(scopedVaults, callback.vaultAddress) ? scopedVaults : [target],
-      },
-    })
+      scopedVaults: resolveTradeTarget(scopedVaults, callback.vaultAddress) ? scopedVaults : [target],
+    },
+  })
   if (!previewResponse) {
     return {
       text: 'Trade preview unavailable. Please retry /buy, /sell, or /bid.',
@@ -4506,7 +4562,7 @@ async function maybeHandlePendingTradePercentInput(params: {
   }
 
   const scopedVaults = await listTelegramScopedVaults({ db: db as any, chatId: params.chatId, limit: 20 })
-  const target = resolveScopedVaultByAddress(scopedVaults, prompt.vaultAddress)
+  const target = resolveTradeTarget(scopedVaults, prompt.vaultAddress)
   if (!target) {
     await clearTelegramTradePercentPrompt({
       db: db as any,
@@ -4517,7 +4573,9 @@ async function maybeHandlePendingTradePercentInput(params: {
       text: [
         'Trade flow',
         '',
-        '- the selected vault is no longer available in this chat scope',
+        prompt.actionType === 'buy'
+          ? '- the selected token is no longer available in this chat scope'
+          : '- the selected vault is no longer available in this chat scope',
         '- run /vaults and start again',
       ].join('\n'),
     }
@@ -4882,7 +4940,7 @@ function formatVaultDeployContractRow(params: {
 
 function buildVaultDeployStatusCard(snapshot: VaultDeployStatusSnapshot): string {
   const lines = [
-    '<b>AKITA Vault Deploy</b>',
+    '<b>AKITA Deploy</b>',
     '',
     `Session: <code>${snapshot.sessionId}</code>`,
     `Step: <code>${snapshot.step}</code>`,
@@ -5146,7 +5204,7 @@ async function handleTelegramVaultDeployCallback(params: {
       status: 'cancelled',
     })
     return {
-      text: 'Declined AKITA vault deploy preview.',
+      text: 'Declined AKITA deploy preview.',
       callbackToast: 'Vault deploy declined',
     }
   }
@@ -5628,7 +5686,8 @@ function buildTradeSignalText(params: {
   usdEstimate?: number
   txHash?: string | null
 }): string {
-  const lines = [`✅ Trade Signal • ${params.actionType.toUpperCase()}`, '', `Vault: ${params.targetLabel}`]
+  const targetNoun = params.actionType === 'buy' ? 'Token' : 'Vault'
+  const lines = [`✅ Trade Signal • ${params.actionType.toUpperCase()}`, '', `${targetNoun}: ${params.targetLabel}`]
 
   if (params.actionType === 'buy') {
     lines.push(`Size: ${params.amountInput} ETH (~$${formatAmount(params.usdEstimate ?? 0, 2)})`)
@@ -5747,7 +5806,16 @@ async function handleTelegramTradeCallback(params: {
   const intent = consumed.intentPayload ?? {}
   const creatorCoinAddress = asTrimmed(intent.creatorCoinAddress ?? '').toLowerCase()
   const vaultAddress = asTrimmed(intent.vaultAddress ?? '').toLowerCase()
-  const targetLabel = truncateAddress(vaultAddress || creatorCoinAddress || 'vault')
+  const targetLabel = formatTradeTargetLabelFromAddresses({
+    actionType: actionTypeSafe,
+    creatorCoinAddress,
+    vaultAddress,
+  })
+  const targetAddress = resolveTradeSignalTargetAddress({
+    actionType: actionTypeSafe,
+    creatorCoinAddress,
+    vaultAddress,
+  })
   const amountInput = asTrimmed(intent.amountInput ?? '')
   const amountEth = Number(intent.amountEth ?? 0)
   const usdEstimate = Number(intent.usdEstimate ?? 0)
@@ -5951,14 +6019,14 @@ async function handleTelegramTradeCallback(params: {
         signalText: buildTradeSignalText({
           actionType: actionTypeSafe,
           targetLabel,
-          targetAddress: vaultAddress || creatorCoinAddress,
+          targetAddress,
           amountInput,
           amountEth,
           usdEstimate,
         }),
         signalReplyMarkup: buildTradeSignalReplyMarkup({
           actionType: actionTypeSafe,
-          targetAddress: vaultAddress || creatorCoinAddress,
+          targetAddress,
           amountInput,
         }),
         callbackToast: `${actionTypeSafe.toUpperCase()} sent`,
@@ -6165,7 +6233,7 @@ async function handleTelegramTradeCallback(params: {
         signalText: buildTradeSignalText({
           actionType: 'bid',
           targetLabel,
-          targetAddress: vaultAddress || creatorCoinAddress,
+          targetAddress,
           amountInput,
           amountEth: freshQuote.amountEth,
           usdEstimate: freshQuote.usdIntent,
@@ -6173,7 +6241,7 @@ async function handleTelegramTradeCallback(params: {
         }),
         signalReplyMarkup: buildTradeSignalReplyMarkup({
           actionType: 'bid',
-          targetAddress: vaultAddress || creatorCoinAddress,
+          targetAddress,
           amountInput,
         }),
         callbackToast: 'BID sent',

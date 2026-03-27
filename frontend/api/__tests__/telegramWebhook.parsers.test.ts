@@ -21,7 +21,6 @@ import { commandHasArguments, parseTelegramTradeIntent, parseTradeCallbackData, 
 
 describe('telegram webhook parsers', () => {
   const exampleChecksumAddress = getAddress('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913')
-  const akitaAddress = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
   const exampleToken: ResolvedInlineTokenAnalysis = {
     kind: 'resolved',
     normalizedAddress: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
@@ -366,55 +365,9 @@ describe('telegram webhook parsers', () => {
       inlineResultCap: 8,
       growthMode: false,
       enablePmHandoff: true,
-      menuButtonUrl: 'https://v1.4626.fun/telegram/menu',
     })
-    expect(linked.button).toEqual({
-      text: 'Open 4626',
-      web_app: { url: 'https://v1.4626.fun/telegram/menu' },
-    })
+    expect(linked.button).toBeUndefined()
     expect(linked.switchPmParameter).toBeUndefined()
-  })
-
-  it('adds a copy fallback next to analyze buttons on approved buy cards', () => {
-    const answer = buildInlineQueryAnswer({
-      rawQuery: 'akita',
-      queryOffset: '',
-      userId: '42',
-      chatId: '-100123',
-      isLinked: true,
-      scopedVaults: [
-        {
-          vaultAddress: '0x1111111111111111111111111111111111111111',
-          creatorCoinAddress: akitaAddress,
-          chainId: 8453,
-          groupId: 'g1',
-          isSettled: false,
-          ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
-        },
-      ],
-      inlineResultCap: 20,
-      growthMode: false,
-      enablePmHandoff: true,
-    })
-
-    const buyAkita = answer.results.find((entry: any) => String(entry?.title ?? '') === 'Buy $AKITA')
-    expect(buyAkita).toBeDefined()
-
-    const buttons = buyAkita?.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(
-      buttons.some(
-        (button: any) =>
-          String(button?.text ?? '') === 'Analyze $AKITA'
-          && String(button?.switch_inline_query_current_chat ?? '') === akitaAddress,
-      ),
-    ).toBe(true)
-    expect(
-      buttons.some(
-        (button: any) =>
-          String(button?.text ?? '') === 'Copy Query'
-          && String(button?.copy_text?.text ?? '') === `@akitai_bot ${akitaAddress}`,
-      ),
-    ).toBe(true)
   })
 
   it('builds token analysis cards in the required order with deterministic ids', () => {

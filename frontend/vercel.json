@@ -185,11 +185,6 @@
       "continue": true
     },
     {
-      "src": "/telegram-menu.html",
-      "headers": { "cache-control": "no-store" },
-      "continue": true
-    },
-    {
       "src": "/telegram-link.html",
       "headers": { "cache-control": "no-store" },
       "continue": true
@@ -210,7 +205,6 @@
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
     { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
-    { "src": "/telegram/menu", "dest": "/telegram-menu.html" },
     { "src": "/telegram/link", "dest": "/telegram-link.html" },
     { "handle": "filesystem" },
     {

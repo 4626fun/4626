@@ -34,6 +34,7 @@ type WaitlistBootstrapResponse =
     } & Awaited<ReturnType<typeof buildAccountsMePayload>>)
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS = 1_500
 
 function normalizeEmail(value: unknown): string | null {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -150,6 +151,23 @@ async function resolveCreatorCoinReferralCode(wallet: string | null | undefined)
   }
 }
 
+async function resolveCreatorCoinReferralCodeWithTimeout(wallet: string | null | undefined): Promise<string | null> {
+  const normalizedWallet = typeof wallet === 'string' ? wallet.trim() : ''
+  if (!normalizedWallet) return null
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race<string | null>([
+      resolveCreatorCoinReferralCode(normalizedWallet).catch(() => null),
+      new Promise<string | null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
 async function readCurrentBootstrapReferralCode(params: {
   db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
   signupId: number
@@ -173,7 +191,8 @@ async function ensureBootstrapReferralCode(params: {
 }): Promise<string | null> {
   if (params.referralCode) return params.referralCode
   const creatorCoinCode =
-    (await resolveCreatorCoinReferralCode(params.primaryWallet)) ?? (await resolveCreatorCoinReferralCode(params.embeddedWallet))
+    (await resolveCreatorCoinReferralCodeWithTimeout(params.primaryWallet)) ??
+    (await resolveCreatorCoinReferralCodeWithTimeout(params.embeddedWallet))
   const candidates = dedupeReferralCodeCandidates([
     creatorCoinCode,
     referralCodeFromEmail(params.email),

@@ -556,7 +556,7 @@ describe('telegram endpoint handlers', () => {
     expect(setTelegramMyCommandsMock).toHaveBeenCalledTimes(3)
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledTimes(1)
     expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.miniAppUrl).toBe('https://v1.4626.fun/telegram/menu')
+    expect(res.body?.data?.miniAppUrl).toBe('https://v1.4626.fun/telegram/link')
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
       expect.objectContaining({
         menuButton: { type: 'commands' },

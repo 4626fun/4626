@@ -1,7 +1,6 @@
 import { getAddress, isAddress } from 'viem'
 
 import {
-  buildTelegramAnalyzeInlineButtons,
   buildTelegramAnalyzeInlineDraft,
   filterTelegramApprovedTradeVaults,
   resolveTelegramApprovedInlineTokenQuery,
@@ -65,7 +64,6 @@ export type BuildInlineQueryAnswerParams = {
   growthMode: boolean
   enablePmHandoff: boolean
   mediaByKey?: Record<string, InlineMediaAsset>
-  menuButtonUrl?: string
   linkButtonUrl?: string
 }
 
@@ -335,12 +333,7 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
       description,
       command: '/buy',
       replyMarkup: {
-        inline_keyboard: [
-          buildTelegramAnalyzeInlineButtons({
-            label: token.analyzeLabel,
-            query: buildTelegramAnalyzeInlineDraft(token),
-          }),
-        ],
+        inline_keyboard: [[{ text: token.analyzeLabel, switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(token) }]],
       },
       baseScore: 104 - index,
       intentTags: ['trade', 'discovery', 'general'],
@@ -437,23 +430,17 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
 
   const shouldShowPmHandoff = params.enablePmHandoff && !params.isLinked
   const pmParameter = sanitizeStartParameter(`inline_link_${queryClass}`)
-  const button =
-    params.isLinked && params.menuButtonUrl
+  const button = shouldShowPmHandoff
+    ? params.linkButtonUrl
       ? {
-          text: 'Open 4626',
-          web_app: { url: params.menuButtonUrl },
+          text: 'Connect wallet',
+          web_app: { url: params.linkButtonUrl },
         }
-      : shouldShowPmHandoff
-        ? params.linkButtonUrl
-          ? {
-              text: 'Connect wallet',
-              web_app: { url: params.linkButtonUrl },
-            }
-          : {
-              text: 'Connect wallet',
-              start_parameter: pmParameter,
-            }
-        : undefined
+      : {
+          text: 'Connect wallet',
+          start_parameter: pmParameter,
+        }
+    : undefined
   return {
     results,
     offset,

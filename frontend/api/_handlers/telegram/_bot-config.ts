@@ -13,7 +13,7 @@ import {
   TELEGRAM_GROUP_BOT_COMMANDS,
   TELEGRAM_PRIVATE_BOT_COMMANDS,
 } from './webhook/constants.js'
-import { buildTelegramMiniAppUrl } from './webhook/miniApp.js'
+import { TELEGRAM_MINI_APP_LINK_PATH, buildTelegramMiniAppUrl } from './webhook/miniApp.js'
 import { verifyBotConfigSecret } from './webhook/services/access.js'
 import { asTrimmed } from './webhook/utils.js'
 
@@ -36,7 +36,7 @@ function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {
       : 'https://v1.4626.fun'
   return buildTelegramMiniAppUrl({
     baseUrl,
-    pathname: '/telegram/menu',
+    pathname: TELEGRAM_MINI_APP_LINK_PATH,
   })
 }
 

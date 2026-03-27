@@ -254,7 +254,7 @@ describe('telegram webhook handler', () => {
       chatId: '-100123',
       telegramUserId: '99',
       actionType: 'buy',
-      vaultAddress: '0x1111111111111111111111111111111111111111',
+      vaultAddress: AKITA_TOKEN_ADDRESS,
       expiresAt: '2026-03-13T00:03:00.000Z',
       consumedAt: null,
       createdAt: '2026-03-13T00:00:00.000Z',
@@ -1026,19 +1026,12 @@ describe('telegram webhook handler', () => {
     const actionPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(actionPayload.text).toContain('Trade creator coin from this card.')
     const buttons = actionPayload.reply_markup.inline_keyboard.flat()
-    expect(buttons.some((button: any) => button?.callback_data === 'tradeflow:v:buy:0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(buttons.some((button: any) => button?.callback_data === `tradeflow:v:buy:${AKITA_TOKEN_ADDRESS}`)).toBe(true)
     expect(
       buttons.some(
         (button: any) =>
           button?.text === 'Analyze $AKITA'
           && button?.switch_inline_query_current_chat === AKITA_TOKEN_ADDRESS,
-      ),
-    ).toBe(true)
-    expect(
-      buttons.some(
-        (button: any) =>
-          button?.text === 'Copy Query'
-          && button?.copy_text?.text === `@akitai_bot ${AKITA_TOKEN_ADDRESS}`,
       ),
     ).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
@@ -1898,8 +1891,7 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(Array.isArray(payload.results)).toBe(true)
     expect(payload.results.length).toBeLessThanOrEqual(8)
-    expect(String(payload.button?.text ?? '')).toBe('Open 4626')
-    expect(String(payload.button?.web_app?.url ?? '')).toContain('/telegram/menu')
+    expect(payload.button).toBeUndefined()
     expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Buy $AKITA')
     const buyAkita = payload.results.find((entry: any) => String(entry?.title ?? '') === 'Buy $AKITA')
     expect(String(buyAkita?.input_message_content?.message_text ?? '').trim()).toBe('/buy')
@@ -1908,13 +1900,6 @@ describe('telegram webhook handler', () => {
         (button: any) =>
           String(button?.text ?? '') === 'Analyze $AKITA'
           && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
-      ),
-    ).toBe(true)
-    expect(
-      buyAkita?.reply_markup?.inline_keyboard?.flat?.().some(
-        (button: any) =>
-          String(button?.text ?? '') === 'Copy Query'
-          && String(button?.copy_text?.text ?? '') === `@akitai_bot ${AKITA_TOKEN_ADDRESS}`,
       ),
     ).toBe(true)
     if (Object.prototype.hasOwnProperty.call(payload, 'next_offset')) {
@@ -4605,19 +4590,12 @@ describe('telegram webhook handler', () => {
     expect(Array.isArray(keyboard)).toBe(true)
     const flat = keyboard.flat()
     expect(flat.some((button: any) => String(button?.text ?? '') === 'Buy $AKITA')).toBe(true)
-    expect(flat.some((button: any) => String(button?.callback_data ?? '').startsWith('tradeflow:v:buy:'))).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === `tradeflow:v:buy:${AKITA_TOKEN_ADDRESS}`)).toBe(true)
     expect(
       flat.some(
         (button: any) =>
           String(button?.text ?? '') === 'Analyze $AKITA'
           && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
-      ),
-    ).toBe(true)
-    expect(
-      flat.some(
-        (button: any) =>
-          String(button?.text ?? '') === 'Copy Query'
-          && String(button?.copy_text?.text ?? '') === `@akitai_bot ${AKITA_TOKEN_ADDRESS}`,
       ),
     ).toBe(true)
     expect(clearTelegramTradePercentPromptMock).toHaveBeenCalledWith({
@@ -4694,7 +4672,7 @@ describe('telegram webhook handler', () => {
         update_id: 18_2,
         callback_query: {
           id: 'cbq-flow-vault-buy',
-          data: 'tradeflow:v:buy:0x1111111111111111111111111111111111111111',
+          data: `tradeflow:v:buy:${AKITA_TOKEN_ADDRESS}`,
           from: { id: 99 },
           message: { message_id: 31, chat: { id: -100123 } },
         },
@@ -4767,7 +4745,7 @@ describe('telegram webhook handler', () => {
         update_id: 18_4,
         callback_query: {
           id: 'cbq-flow-custom-buy',
-          data: 'tradeflow:c:buy:0x1111111111111111111111111111111111111111',
+          data: `tradeflow:c:buy:${AKITA_TOKEN_ADDRESS}`,
           from: { id: 99 },
           message: { message_id: 33, chat: { id: -100123 } },
         },
@@ -4784,7 +4762,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('1 and 99.99')
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     const flat = keyboard.flat()
-    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'tradeflow:v:buy:0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === `tradeflow:v:buy:${AKITA_TOKEN_ADDRESS}`)).toBe(true)
     expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
   })
 
@@ -4794,7 +4772,7 @@ describe('telegram webhook handler', () => {
       chatId: '-100123',
       telegramUserId: '99',
       actionType: 'buy',
-      vaultAddress: '0x1111111111111111111111111111111111111111',
+      vaultAddress: AKITA_TOKEN_ADDRESS,
       expiresAt: '2026-03-13T00:03:00.000Z',
       consumedAt: null,
       createdAt: '2026-03-13T00:00:00.000Z',
@@ -4825,7 +4803,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('between 1 and 99.99')
     const keyboard = payload.reply_markup?.inline_keyboard ?? []
     const flat = keyboard.flat()
-    expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'tradeflow:v:buy:0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(flat.some((button: any) => String(button?.callback_data ?? '') === `tradeflow:v:buy:${AKITA_TOKEN_ADDRESS}`)).toBe(true)
     expect(flat.some((button: any) => String(button?.callback_data ?? '') === 'menu:buy')).toBe(true)
   })
 
@@ -4835,7 +4813,7 @@ describe('telegram webhook handler', () => {
       chatId: '-100123',
       telegramUserId: '99',
       actionType: 'buy',
-      vaultAddress: '0x1111111111111111111111111111111111111111',
+      vaultAddress: AKITA_TOKEN_ADDRESS,
       expiresAt: '2026-03-13T00:03:00.000Z',
       consumedAt: null,
       createdAt: '2026-03-13T00:00:00.000Z',
@@ -4845,7 +4823,7 @@ describe('telegram webhook handler', () => {
       chatId: '-100123',
       telegramUserId: '99',
       actionType: 'buy',
-      vaultAddress: '0x1111111111111111111111111111111111111111',
+      vaultAddress: AKITA_TOKEN_ADDRESS,
       expiresAt: '2026-03-13T00:03:00.000Z',
       consumedAt: '2026-03-13T00:00:45.000Z',
       createdAt: '2026-03-13T00:00:00.000Z',
@@ -5329,7 +5307,7 @@ describe('telegram webhook handler', () => {
     const callbackAck = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(callbackAck.text ?? '')).toContain('Starting deployment')
     const editedPayload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-    expect(String(editedPayload.text ?? '')).toContain('<b>AKITA Vault Deploy</b>')
+    expect(String(editedPayload.text ?? '')).toContain('<b>AKITA Deploy</b>')
     expect(String(editedPayload.text ?? '')).toContain('✅ Phase 2 finalize')
     expect(String(editedPayload.text ?? '')).toContain('⬜ Deferred auction launch')
     expect(String(editedPayload.text ?? '')).toContain('https://basescan.org/address/0x1111111111111111111111111111111111111111')

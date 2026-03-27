@@ -1,23 +1,18 @@
-import { Suspense, lazy, useCallback, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
-import { PublicWaitlistOverview } from '@/components/waitlist/PublicWaitlistOverview'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
 import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
-import { Modal } from '@/components/ui/Modal'
-import { clearStoredWaitlistAuthState } from '@/lib/auth/waitlistEntry'
+import {
+  clearStoredWaitlistAuthState,
+  getCanonicalMarketingWaitlistPath,
+  requestStoredWaitlistAuthAutoStart,
+  writeStoredWaitlistAuthArmed,
+} from '@/lib/auth/waitlistEntry'
 import { getHostMode } from '@/lib/host'
-import { PrivyClientProvider } from '@/lib/privy/client'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { Web3Providers } from '@/web3/Web3Providers'
-
-const LazyThinWaitlistFlow = lazy(async () => {
-  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
-  return { default: mod.ThinWaitlistFlow }
-})
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const DEFAULT_DEPOSIT_TOKENS = '50,000,000'
@@ -27,31 +22,20 @@ const DEFAULT_AUCTION_EPOCH = 'Thursday 00:00 UTC'
 const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
 
 export function Home() {
+  const navigate = useNavigate()
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
-  const [waitlistModalOpen, setWaitlistModalOpen] = useState(false)
-  const [waitlistAuthArmed, setWaitlistAuthArmed] = useState(false)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
-  const openWaitlistModal = useCallback(() => {
+  const openWaitlistDirectAuth = () => {
     clearStoredWaitlistAuthState()
-    setWaitlistAuthArmed(false)
-    setWaitlistModalOpen(true)
-  }, [])
-
-  const closeWaitlistModal = useCallback(() => {
-    clearStoredWaitlistAuthState()
-    setWaitlistAuthArmed(false)
-    setWaitlistModalOpen(false)
-  }, [])
-
-  const openWaitlistEmailAuth = useCallback(() => {
-    clearStoredWaitlistAuthState()
-    setWaitlistAuthArmed(true)
-  }, [])
+    writeStoredWaitlistAuthArmed(true)
+    requestStoredWaitlistAuthAutoStart()
+    navigate(getCanonicalMarketingWaitlistPath())
+  }
 
   if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
@@ -119,10 +103,10 @@ export function Home() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-2 sm:pt-6"
-            >
-              <button type="button" onClick={openWaitlistModal} className={heroCtaClass}>
+            transition={{ duration: 0.8, delay: 1.12 }}
+            className="pt-2 sm:pt-6"
+          >
+              <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
                 Join waitlist
                 <ArrowRight className="h-4 w-4" />
               </button>
@@ -289,37 +273,6 @@ export function Home() {
         </div>
       </section>
 
-      <Modal
-        open={waitlistModalOpen}
-        onClose={closeWaitlistModal}
-        title="Join waitlist"
-        description="Sign up for the waitlist by verifying your email address."
-        maxWidth={waitlistAuthArmed ? 'sm:max-w-4xl' : 'sm:max-w-xl'}
-        placement="center"
-        className="border border-white/10 bg-black/90"
-      >
-        {waitlistAuthArmed ? (
-          <Suspense
-            fallback={
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
-                Loading waitlist…
-              </div>
-            }
-          >
-            <Web3Providers>
-              <PrivyClientProvider showWalletLoginFirst={false}>
-                <LazyThinWaitlistFlow variant="modal" sectionId="home-waitlist" autoStartAuth />
-              </PrivyClientProvider>
-            </Web3Providers>
-          </Suspense>
-        ) : (
-          <PublicWaitlistOverview
-            referralCode={null}
-            onContinueWithEmail={openWaitlistEmailAuth}
-            primaryButtonClassName={heroCtaClass}
-          />
-        )}
-      </Modal>
     </div>
   )
 }

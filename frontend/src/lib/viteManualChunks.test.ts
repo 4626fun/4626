@@ -33,6 +33,6 @@ describe('classifyManualChunk', () => {
   })
 
   it('does not force app code into a manual chunk', () => {
-    expect(classifyManualChunk('/repo/src/pages/TelegramMenu.tsx')).toBeUndefined()
+    expect(classifyManualChunk('/repo/src/pages/Home.tsx')).toBeUndefined()
   })
 })
