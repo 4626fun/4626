@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
+import { PublicWaitlistOverview } from '@/components/waitlist/PublicWaitlistOverview'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
 import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
@@ -31,17 +32,25 @@ export function Home() {
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
   const [waitlistModalOpen, setWaitlistModalOpen] = useState(false)
+  const [waitlistAuthArmed, setWaitlistAuthArmed] = useState(false)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
   const openWaitlistModal = useCallback(() => {
     clearStoredWaitlistAuthState()
+    setWaitlistAuthArmed(false)
     setWaitlistModalOpen(true)
   }, [])
 
   const closeWaitlistModal = useCallback(() => {
     clearStoredWaitlistAuthState()
+    setWaitlistAuthArmed(false)
     setWaitlistModalOpen(false)
+  }, [])
+
+  const openWaitlistEmailAuth = useCallback(() => {
+    clearStoredWaitlistAuthState()
+    setWaitlistAuthArmed(true)
   }, [])
 
   if (hostMode === 'app') {
@@ -289,19 +298,27 @@ export function Home() {
         placement="center"
         className="border border-white/10 bg-black/90"
       >
-        <Suspense
-          fallback={
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
-              Loading waitlist…
-            </div>
-          }
-        >
-          <Web3Providers>
-            <PrivyClientProvider showWalletLoginFirst={false}>
-              <LazyThinWaitlistFlow variant="modal" sectionId="home-waitlist" />
-            </PrivyClientProvider>
-          </Web3Providers>
-        </Suspense>
+        {waitlistAuthArmed ? (
+          <Suspense
+            fallback={
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
+                Loading waitlist…
+              </div>
+            }
+          >
+            <Web3Providers>
+              <PrivyClientProvider showWalletLoginFirst={false}>
+                <LazyThinWaitlistFlow variant="modal" sectionId="home-waitlist" autoStartAuth />
+              </PrivyClientProvider>
+            </Web3Providers>
+          </Suspense>
+        ) : (
+          <PublicWaitlistOverview
+            referralCode={null}
+            onContinueWithEmail={openWaitlistEmailAuth}
+            primaryButtonClassName={heroCtaClass}
+          />
+        )}
       </Modal>
     </div>
   )

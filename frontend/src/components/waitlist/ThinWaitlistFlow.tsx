@@ -288,8 +288,7 @@ export function shouldAutoStartWaitlistAuth(params: {
   recoveryRequired: boolean
   error: string | null
 }): boolean {
-  const variant = params.variant ?? 'embedded'
-  const autoStartAllowed = variant === 'modal' || params.autoStartRequested === true
+  const autoStartAllowed = params.autoStartRequested === true
   if (!autoStartAllowed) return false
   if (params.step !== 'auth') return false
   if (params.privyAuthed) return false
@@ -665,6 +664,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
         if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
         await runBootstrap()
       } else {
+        await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         await login(buildWaitlistEmailLoginOptions() as any)
       }
       authAttemptInFlightRef.current = false

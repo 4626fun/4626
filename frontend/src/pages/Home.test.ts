@@ -51,11 +51,42 @@ vi.mock('@/lib/privy/client', () => ({
 }))
 
 vi.mock('@/components/waitlist/ThinWaitlistFlow', () => ({
-  ThinWaitlistFlow: ({ sectionId, variant }: { sectionId?: string; variant?: string }) => (
+  ThinWaitlistFlow: ({
+    sectionId,
+    variant,
+    autoStartAuth,
+  }: {
+    sectionId?: string
+    variant?: string
+    autoStartAuth?: boolean
+  }) => (
     React.createElement(
       'div',
-      { 'data-testid': 'waitlist-flow', 'data-variant': variant ?? 'embedded' },
+      {
+        'data-testid': 'waitlist-flow',
+        'data-variant': variant ?? 'embedded',
+        'data-auto-start': autoStartAuth ? 'yes' : 'no',
+      },
       sectionId ?? 'waitlist-flow',
+    )
+  ),
+}))
+
+vi.mock('@/components/waitlist/PublicWaitlistOverview', () => ({
+  PublicWaitlistOverview: ({
+    onContinueWithEmail,
+  }: {
+    onContinueWithEmail: () => void
+  }) => (
+    React.createElement(
+      'div',
+      { 'data-testid': 'public-waitlist-overview' },
+      React.createElement('div', null, 'Quiet sign-in, live waitlist context'),
+      React.createElement(
+        'button',
+        { type: 'button', onClick: onContinueWithEmail },
+        'Continue with email',
+      ),
     )
   ),
 }))
@@ -70,7 +101,7 @@ describe('Home', () => {
     expect(screen.queryByRole('link', { name: /join waitlist/i })).toBeNull()
   })
 
-  it('opens the waitlist flow in a modal without routing away from the homepage', async () => {
+  it('opens a quiet modal first and only mounts auth after explicit in-modal intent', async () => {
     const user = userEvent.setup()
     window.sessionStorage.clear()
 
@@ -79,8 +110,14 @@ describe('Home', () => {
     await user.click(screen.getByRole('button', { name: /join waitlist/i }))
 
     expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(await screen.findByTestId('public-waitlist-overview')).toBeTruthy()
+    expect(screen.queryByTestId('waitlist-flow')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /continue with email/i }))
+
     expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
     expect(screen.getByTestId('waitlist-flow').getAttribute('data-variant')).toBe('modal')
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
     expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBeNull()
     expect(window.sessionStorage.getItem('cv:waitlist:auth_auto_start')).toBeNull()
   })

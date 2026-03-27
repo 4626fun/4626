@@ -117,7 +117,7 @@ describe('resolveWaitlistStep', () => {
 })
 
 describe('shouldAutoStartWaitlistAuth', () => {
-  it('auto-starts auth for modal entry when Privy is ready and the user is signed out', () => {
+  it('does not auto-start auth for modal entry unless explicit auth intent was requested', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
@@ -128,10 +128,10 @@ describe('shouldAutoStartWaitlistAuth', () => {
         recoveryRequired: false,
         error: null,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('does not auto-start auth for recovery, errors, or non-modal variants', () => {
+  it('does not auto-start auth for recovery, errors, or missing explicit intent', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'embedded',
@@ -199,6 +199,18 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'page',
+        autoStartRequested: true,
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'modal',
         autoStartRequested: true,
         step: 'auth',
         privyAuthed: false,
