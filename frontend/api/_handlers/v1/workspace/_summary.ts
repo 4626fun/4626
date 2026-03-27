@@ -55,10 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         actorRole: access.context.role,
       },
     } satisfies ApiEnvelope<typeof summary & { actorRole: string }>)
-  } catch (error: any) {
+  } catch (error: unknown) {
     return res.status(500).json({
       success: false,
-      error: typeof error?.message === 'string' ? error.message : 'Failed to load workspace summary',
+      error: error instanceof Error && error.message ? error.message : 'Failed to load workspace summary',
     } satisfies ApiEnvelope<never>)
   }
 }

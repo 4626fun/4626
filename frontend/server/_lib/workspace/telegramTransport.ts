@@ -29,6 +29,11 @@ function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
 function formatSummaryText(payload: WorkspaceTelegramSummaryPayload): string {
   const header = `*${payload.title.trim()}*`
   const context = `Vault: \`${payload.vaultAddress}\``
@@ -75,11 +80,12 @@ class BotTelegramSummaryTransport implements TelegramSummaryTransport {
         disable_web_page_preview: payload.disableWebPagePreview !== false,
         ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
       }),
-    }).catch((error: any) => {
+    }).catch((error: unknown) => {
       return {
         ok: false,
         status: 0,
-        text: async () => String(error?.message ?? 'network_error'),
+        text: async () =>
+          error instanceof Error && error.message ? error.message : 'network_error',
       } as Response
     })
     const text = await response.text().catch(() => '')
@@ -99,7 +105,8 @@ class BotTelegramSummaryTransport implements TelegramSummaryTransport {
         error: String(parsed.description ?? 'unknown_telegram_error').slice(0, 180),
       }
     }
-    const messageId = Number((parsed.result as any)?.message_id)
+    const result = asRecord(parsed.result)
+    const messageId = Number(result.message_id)
     return {
       sent: true,
       messageId: Number.isFinite(messageId) ? messageId : null,

@@ -59,8 +59,8 @@ export function CreatorWorkspacePanel(props: {
         payload,
       })
       toast.success(`Action completed: ${action}`)
-    } catch (error: any) {
-      const message = typeof error?.message === 'string' ? error.message : 'Workspace action failed'
+    } catch (error: unknown) {
+      const message = error instanceof Error && error.message ? error.message : 'Workspace action failed'
       setErrorMessage(message)
       toast.error(message)
     }

@@ -12,7 +12,7 @@ import { enqueueKeeprAction } from '../../../../server/_lib/keeprRegistry.js'
 import { getDb } from '../../../../server/_lib/postgres.js'
 import { ensureTelegramTradingSchema, upsertHolderRoomPolicy } from '../../../../server/_lib/telegramTrading.js'
 import { createTelegramSummaryTransport } from '../../../../server/_lib/workspace/telegramTransport.js'
-import { publishWorkspaceXmtpMessage } from '../../../../server/_lib/workspace/xmtpPublisher.js'
+import { publishWorkspaceXmtpMessage, type WorkspaceXmtpMessageType } from '../../../../server/_lib/workspace/xmtpPublisher.js'
 import {
   appendAuditLog,
   createApprovalRequest,
@@ -81,6 +81,18 @@ function isLowRiskActionType(actionType: string): boolean {
   return actionType === 'strategy.charm.rebalance' || actionType === 'strategy.ajna.rebucket'
 }
 
+function isWorkspaceXmtpMessageType(value: string): value is WorkspaceXmtpMessageType {
+  return (
+    value === 'approval_request' ||
+    value === 'approval_decision' ||
+    value === 'rebalance_suggestion' ||
+    value === 'risk_alert' ||
+    value === 'settlement_update' ||
+    value === 'status_summary' ||
+    value === 'task_update'
+  )
+}
+
 function permissionForAction(action: string): {
   permission:
     | 'strategy_manage'
@@ -129,18 +141,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'action is required' } satisfies ApiEnvelope<never>)
   }
 
-  const requestedPermission = permissionForAction(action)
-  if (requestedPermission.strictActionTypeCheck) {
+  const permissionProfile = permissionForAction(action)
+  let requiredPermission = permissionProfile.permission
+  if (permissionProfile.strictActionTypeCheck) {
     const actionTypeForRisk = asTrimmed(payload.actionType)
     if (actionTypeForRisk && isHighRiskActionType(actionTypeForRisk)) {
-      requestedPermission.permission = 'action_execute_high_risk'
+      requiredPermission = 'action_execute_high_risk'
     }
   }
 
   const access = await requireWorkspaceAccess({
     req,
     vaultAddress,
-    permission: requestedPermission.permission,
+    permission: requiredPermission,
   })
   if (!access.ok) {
     return res.status(access.status).json({ success: false, error: access.error } satisfies ApiEnvelope<never>)
@@ -559,9 +572,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!db) {
         return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
       }
-      await ensureTelegramTradingSchema(db as any)
+      await ensureTelegramTradingSchema(db)
       const policy = await upsertHolderRoomPolicy({
-        db: db as any,
+        db,
         chatId,
         vaultAddress,
         roomChatId,
@@ -624,9 +637,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: 'payload.messageType, payload.title, and payload.body are required',
         } satisfies ApiEnvelope<never>)
       }
+      if (!isWorkspaceXmtpMessageType(messageType)) {
+        return res.status(400).json({
+          success: false,
+          error: `Unsupported XMTP message type: ${messageType}`,
+        } satisfies ApiEnvelope<never>)
+      }
       const publish = await publishWorkspaceXmtpMessage({
         vaultAddress,
-        messageType: messageType as any,
+        messageType,
         title,
         body: bodyText,
         payload: asObject(payload.payload),
@@ -664,10 +683,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: `Unsupported action: ${action}`,
     } satisfies ApiEnvelope<never>)
-  } catch (error: any) {
+  } catch (error: unknown) {
     return res.status(500).json({
       success: false,
-      error: typeof error?.message === 'string' ? error.message : 'Workspace action failed',
+      error: error instanceof Error && error.message ? error.message : 'Workspace action failed',
     } satisfies ApiEnvelope<never>)
   }
 }

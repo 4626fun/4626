@@ -50,7 +50,7 @@ function inferWorkspaceRole(params: {
   const wallet = params.wallet
   const owner =
     normalizeAddress(params.vault.canonicalOwnerAddress) ??
-    normalizeAddress((params.vault as any).config?.roles?.owner)
+    normalizeAddress(params.vault.config?.roles?.owner)
   if (owner && owner === wallet) return 'OWNER'
 
   const adminsRaw = Array.isArray(params.vault.config?.roles?.admins)

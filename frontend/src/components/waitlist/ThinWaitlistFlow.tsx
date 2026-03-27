@@ -239,6 +239,14 @@ function formatLeaderboardPointsTooltip(row: DashboardLeaderboardRow): string {
   return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
 }
 
+function getRecoveryRequiredMessage(): string {
+  return 'That email already belongs to an existing 4626 account. Click Recover account sign-in to continue with the original account.'
+}
+
+function getSessionMismatchMessage(): string {
+  return 'Signed in as a different account. Click Continue with email to try again.'
+}
+
 function getAccessStatusMeta(status: string | null | undefined): {
   label: string
   tone: string
@@ -462,7 +470,6 @@ export function ThinWaitlistFlow(props: {
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
   const authFlowStartedRef = useRef(false)
-  const recoveryAutoAttemptedRef = useRef(false)
   const dashboardRequestSeqRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
@@ -503,6 +510,15 @@ export function ThinWaitlistFlow(props: {
     const timeoutId = window.setTimeout(() => setCopiedReferralLink(false), 1600)
     return () => window.clearTimeout(timeoutId)
   }, [copiedReferralLink])
+
+  const resetResolvedAccountState = useCallback(() => {
+    setAccount(null)
+    setOwnerDelegationFlags(null)
+    setOwnerDelegationVerified(null)
+    setEmbeddedEoaAddress(null)
+    setWaitlistPosition(null)
+    setLeaderboard(null)
+  }, [])
 
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
     const token = await withTimeout(
@@ -663,17 +679,6 @@ export function ThinWaitlistFlow(props: {
     [account?.email, dashboardPointsType, getAccessToken, privyAuthed],
   )
 
-  const beginRecoverySignIn = useCallback(async () => {
-    setAccount(null)
-    setOwnerDelegationFlags(null)
-    setOwnerDelegationVerified(null)
-    setEmbeddedEoaAddress(null)
-    setWaitlistPosition(null)
-    setLeaderboard(null)
-    await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
-    await login(buildWaitlistRecoveryLoginOptions() as any)
-  }, [login])
-
   const onContinueAuth = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
     authFlowStartedRef.current = true
@@ -701,43 +706,17 @@ export function ThinWaitlistFlow(props: {
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
-        if (props.autoStartAuth === true && !recoveryAutoAttemptedRef.current) {
-          recoveryAutoAttemptedRef.current = true
-          setNotice('That email already exists. Opening recovery sign-in…')
-          try {
-            await beginRecoverySignIn()
-            authAttemptInFlightRef.current = false
-            setBusy(false)
-            return
-          } catch (recoverError: any) {
-            setRecoveryRequired(true)
-            setError(
-              typeof recoverError?.message === 'string'
-                ? recoverError.message
-                : 'Failed to start account recovery sign-in.',
-            )
-            authFlowStartedRef.current = false
-            authAttemptInFlightRef.current = false
-            setBusy(false)
-            return
-          }
-        }
         authAutoAttemptedRef.current = true
-        setAccount(null)
-        setOwnerDelegationFlags(null)
-        setOwnerDelegationVerified(null)
-        setEmbeddedEoaAddress(null)
-        setWaitlistPosition(null)
-        setLeaderboard(null)
+        resetResolvedAccountState()
         await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         setRecoveryRequired(true)
       }
       setError(
         isRecoveryRequired
-          ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
+          ? getRecoveryRequiredMessage()
           : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToCanonicalWaitlist()
             ? 'Redirecting back to the waitlist sign-in flow…'
-          : typeof authError?.message === 'string'
+            : typeof authError?.message === 'string'
             ? authError.message
             : 'Failed to start sign-in.',
       )
@@ -745,7 +724,7 @@ export function ThinWaitlistFlow(props: {
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [beginRecoverySignIn, busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, runBootstrap, props.autoStartAuth])
+  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, resetResolvedAccountState, runBootstrap])
 
   const onContinueWithBase = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -1043,40 +1022,17 @@ export function ThinWaitlistFlow(props: {
         ) {
           authAutoAttemptedRef.current = true
         }
-        if (isRecoveryRequired && props.autoStartAuth === true && !recoveryAutoAttemptedRef.current) {
-          recoveryAutoAttemptedRef.current = true
-          setNotice('That email already exists. Opening recovery sign-in…')
-          try {
-            await beginRecoverySignIn()
-            return
-          } catch (recoverError: any) {
-            if (!cancelled) {
-              setRecoveryRequired(true)
-              setError(
-                typeof recoverError?.message === 'string'
-                  ? recoverError.message
-                  : 'Failed to start account recovery sign-in.',
-              )
-            }
-            return
-          }
-        }
         if (isSessionMismatch || isRecoveryRequired) {
-          setAccount(null)
-          setOwnerDelegationFlags(null)
-          setOwnerDelegationVerified(null)
-          setEmbeddedEoaAddress(null)
-          setWaitlistPosition(null)
-          setLeaderboard(null)
+          resetResolvedAccountState()
           await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         }
         if (!cancelled) {
           if (isRecoveryRequired) setRecoveryRequired(true)
           setError(
             isSessionMismatch
-              ? 'Signed in as a different account. Click Continue to sign in again.'
+              ? getSessionMismatchMessage()
               : isRecoveryRequired
-                ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
+                ? getRecoveryRequiredMessage()
                 : message,
           )
         }
@@ -1087,7 +1043,7 @@ export function ThinWaitlistFlow(props: {
     return () => {
       cancelled = true
     }
-  }, [beginRecoverySignIn, privyAuthed, runBootstrap, step, props.autoStartAuth])
+  }, [privyAuthed, resetResolvedAccountState, runBootstrap, step])
 
   useEffect(() => {
     if (step !== 'auth') {
@@ -1095,7 +1051,6 @@ export function ThinWaitlistFlow(props: {
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
       authFlowStartedRef.current = false
-      recoveryAutoAttemptedRef.current = false
       setRecoveryRequired(false)
     }
   }, [step])

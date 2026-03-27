@@ -1,6 +1,6 @@
 import type { VercelRequest } from '@vercel/node'
 
-import { getKeeprVaultByVaultAddress } from '../keeprRegistry.js'
+import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keeprRegistry.js'
 import { getKeeprVaultAutomationByVaultAddress } from '../keeprAutomation.js'
 import { listCreatorXmtpAgents } from '../creatorXmtpAgents.js'
 import { getDb } from '../postgres.js'
@@ -170,6 +170,16 @@ export type WorkspaceSettingsResponse = {
 }
 
 type AnyObject = Record<string, unknown>
+type WorkspaceVaultMetadata = KeeprVaultRow & {
+  graduatedAt?: string | Date | null
+  settledAt?: string | Date | null
+  settlementStage?: string | null
+}
+
+function asObject(value: unknown): AnyObject {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as AnyObject
+}
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -300,7 +310,7 @@ async function readTelegramRoomState(vaultAddress: `0x${string}`): Promise<{
       memberCount: 0,
     }
   }
-  await ensureTelegramTradingSchema(db as any)
+  await ensureTelegramTradingSchema(db)
   const policyResult = await db.sql`
     SELECT chat_id, room_chat_id, enabled, min_shares_raw, grace_hours
     FROM telegram_holder_room_policies
@@ -372,41 +382,50 @@ async function readSystemActivity(vaultAddress: `0x${string}`, groupId: string):
     `,
   ])
 
-  const keeprItems: WorkspaceActivityItem[] = (keeprLogs.rows ?? []).map((row: any) => ({
-    id: `keepr-${row.id}`,
-    source: 'keepr',
-    eventType: String(row.event_type ?? 'keepr.event'),
-    title: `Keepr: ${String(row.event_type ?? 'event')}`,
-    description: null,
-    severity: 'info',
-    actorAddress: normalizeAddress(row.actor_wallet),
-    createdAt: new Date(row.created_at).toISOString(),
-    payload: (row.details && typeof row.details === 'object' ? row.details : {}) as AnyObject,
-  }))
+  const keeprItems: WorkspaceActivityItem[] = (keeprLogs.rows ?? []).map((row) => {
+    const data = asObject(row)
+    return {
+      id: `keepr-${String(data.id ?? '')}`,
+      source: 'keepr',
+      eventType: String(data.event_type ?? 'keepr.event'),
+      title: `Keepr: ${String(data.event_type ?? 'event')}`,
+      description: null,
+      severity: 'info',
+      actorAddress: normalizeAddress(data.actor_wallet),
+      createdAt: new Date(String(data.created_at ?? Date.now())).toISOString(),
+      payload: asObject(data.details),
+    }
+  })
 
-  const chatItems: WorkspaceActivityItem[] = (chatEvents.rows ?? []).map((row: any) => ({
-    id: `chat-${row.id}`,
-    source: 'chat',
-    eventType: String(row.event ?? 'chat.event'),
-    title: `Chat: ${String(row.event ?? 'event')}`,
-    description: null,
-    severity: 'info',
-    actorAddress: null,
-    createdAt: new Date(row.created_at).toISOString(),
-    payload: (row.payload && typeof row.payload === 'object' ? row.payload : {}) as AnyObject,
-  }))
+  const chatItems: WorkspaceActivityItem[] = (chatEvents.rows ?? []).map((row) => {
+    const data = asObject(row)
+    return {
+      id: `chat-${String(data.id ?? '')}`,
+      source: 'chat',
+      eventType: String(data.event ?? 'chat.event'),
+      title: `Chat: ${String(data.event ?? 'event')}`,
+      description: null,
+      severity: 'info',
+      actorAddress: null,
+      createdAt: new Date(String(data.created_at ?? Date.now())).toISOString(),
+      payload: asObject(data.payload),
+    }
+  })
 
-  const creItems: WorkspaceActivityItem[] = (creRecords.rows ?? []).map((row: any) => ({
-    id: `cre-${row.id}`,
-    source: 'cre',
-    eventType: String(row.kind ?? 'cre.record'),
-    title: `CRE: ${String(row.workflow ?? 'workflow')} / ${String(row.kind ?? 'record')}`,
-    description: null,
-    severity: 'info',
-    actorAddress: null,
-    createdAt: new Date(row.created_at).toISOString(),
-    payload: (row.payload_json && typeof row.payload_json === 'object' ? row.payload_json : {}) as AnyObject,
-  }))
+  const creItems: WorkspaceActivityItem[] = (creRecords.rows ?? []).map((row) => {
+    const data = asObject(row)
+    return {
+      id: `cre-${String(data.id ?? '')}`,
+      source: 'cre',
+      eventType: String(data.kind ?? 'cre.record'),
+      title: `CRE: ${String(data.workflow ?? 'workflow')} / ${String(data.kind ?? 'record')}`,
+      description: null,
+      severity: 'info',
+      actorAddress: null,
+      createdAt: new Date(String(data.created_at ?? Date.now())).toISOString(),
+      payload: asObject(data.payload_json),
+    }
+  })
 
   return [...keeprItems, ...chatItems, ...creItems].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
@@ -440,6 +459,7 @@ export async function resolveWorkspaceSummary(params: {
   const activeStrategyCount = strategyRows.filter((row) => row && (row as AnyObject).isActive === true).length
   const targets = await listStrategyTargets(vaultAddress)
   const topAgent = xmtpAgents.rows?.[0] ?? null
+  const vaultMetadata = vault as WorkspaceVaultMetadata
 
   return {
     vaultAddress,
@@ -447,9 +467,9 @@ export async function resolveWorkspaceSummary(params: {
     ownerAddress: vault.canonicalOwnerAddress,
     creatorCoinAddress: vault.creatorCoinAddress,
     settlement: {
-      graduatedAt: (vault as any).graduatedAt ? new Date((vault as any).graduatedAt).toISOString() : null,
-      settledAt: (vault as any).settledAt ? new Date((vault as any).settledAt).toISOString() : null,
-      settlementStage: typeof (vault as any).settlementStage === 'string' ? (vault as any).settlementStage : null,
+      graduatedAt: vaultMetadata.graduatedAt ? new Date(vaultMetadata.graduatedAt).toISOString() : null,
+      settledAt: vaultMetadata.settledAt ? new Date(vaultMetadata.settledAt).toISOString() : null,
+      settlementStage: typeof vaultMetadata.settlementStage === 'string' ? vaultMetadata.settlementStage : null,
     },
     metrics: {
       strategyCount: strategyRows.length,
