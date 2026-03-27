@@ -78,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const dryRun = body.dryRun === true
-  const menuMode = asTrimmed(body.menuMode || config.menuButtonMode || 'web_app').toLowerCase() === 'commands'
+  const menuMode = asTrimmed(body.menuMode || config.menuButtonMode || 'commands').toLowerCase() === 'commands'
     ? 'commands'
     : 'web_app'
   const menuText = asTrimmed(body.menuText || config.menuButtonText || 'Link 4626') || 'Link 4626'

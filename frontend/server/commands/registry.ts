@@ -41,7 +41,16 @@ type CommandDefinition = {
 }
 
 const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
-  { head: 'start', family: 'start', telegramNative: true },
+  {
+    head: 'start',
+    family: 'start',
+    telegramNative: true,
+    botMenu: {
+      private: 'Open the main menu',
+      group: 'Open the main menu',
+      admin: 'Open the main menu',
+    },
+  },
   {
     head: 'id',
     family: 'id',
@@ -56,9 +65,9 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
     head: 'help',
     family: 'help',
     botMenu: {
-      private: 'Start here: connect, trade, wallet',
-      group: 'Start here: connect and trade',
-      admin: 'Start here: admin quick actions',
+      private: 'Show available commands',
+      group: 'Show available commands',
+      admin: 'Show available commands',
     },
   },
   { head: 'keepr', family: 'keepr' },
@@ -68,9 +77,9 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
     family: 'link',
     telegramNative: true,
     botMenu: {
-      private: 'Connect Telegram to 4626 Privy + Zora CSW',
-      group: 'Connect Telegram to 4626 Privy + Zora CSW',
-      admin: 'Connect Telegram to 4626 Privy + Zora CSW',
+      private: 'Link Telegram to your 4626 account',
+      group: 'Link Telegram to your 4626 account',
+      admin: 'Link Telegram to your 4626 account',
     },
   },
   {
@@ -157,9 +166,9 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 ] as const
 
 const BOT_MENU_ORDER: Record<CommandScope, readonly string[]> = {
-  private: ['help', 'id', 'link', 'linked', 'vaults', 'buy', 'sell', 'bid', 'wallet'],
-  group: ['help', 'link', 'vaults', 'buy', 'sell', 'bid'],
-  admin: ['help', 'id', 'link', 'vaults', 'buy', 'sell', 'bid', 'wallet', 'deploy'],
+  private: ['start', 'help', 'link'],
+  group: ['start', 'help', 'link'],
+  admin: ['start', 'help', 'link'],
 } as const
 
 type ResolvedCommandDefinition = CommandDefinition & {

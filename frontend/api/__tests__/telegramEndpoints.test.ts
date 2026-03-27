@@ -559,10 +559,7 @@ describe('telegram endpoint handlers', () => {
     expect(res.body?.data?.miniAppUrl).toBe('https://v1.4626.fun/telegram/menu')
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        menuButton: expect.objectContaining({
-          type: 'web_app',
-          web_app: { url: 'https://v1.4626.fun/telegram/menu' },
-        }),
+        menuButton: { type: 'commands' },
       }),
     )
   })

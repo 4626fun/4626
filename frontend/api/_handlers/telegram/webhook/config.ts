@@ -112,7 +112,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   const inlineMaxResults =
     Number.isFinite(inlineCapRaw) && inlineCapRaw >= 3 && inlineCapRaw <= 20 ? Math.floor(inlineCapRaw) : 8
   const menuButtonModeRaw = asTrimmed(raw.TELEGRAM_MENU_BUTTON_MODE ?? '').toLowerCase()
-  const menuButtonMode: 'web_app' | 'commands' = menuButtonModeRaw === 'commands' ? 'commands' : 'web_app'
+  const menuButtonMode: 'web_app' | 'commands' = menuButtonModeRaw === 'web_app' ? 'web_app' : 'commands'
   const miniAppInitDataMaxAgeSeconds = Math.max(
     30,
     Math.min(60 * 5, parseOptionalPositiveInteger(raw.TELEGRAM_MINIAPP_INITDATA_MAX_AGE_SECONDS ?? '') ?? 60 * 5),

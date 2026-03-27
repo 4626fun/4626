@@ -31,17 +31,14 @@ describe('command registry', () => {
   })
 
   it('builds Telegram bot menus from a shared registry', () => {
-    expect(buildTelegramBotCommands('private')).toEqual([
-      { command: 'help', description: 'Start here: connect, trade, wallet' },
-      { command: 'id', description: 'Pick a user, group, or channel ID' },
-      { command: 'link', description: 'Connect Telegram to 4626 Privy + Zora CSW' },
-      { command: 'linked', description: 'Check wallet link status' },
-      { command: 'vaults', description: 'Browse vaults' },
-      { command: 'buy', description: 'Guided buy flow' },
-      { command: 'sell', description: 'Guided sell flow' },
-      { command: 'bid', description: 'Guided bid flow' },
-      { command: 'wallet', description: 'Your wallet, positions, and actions' },
-    ])
+    const expectedMenu = [
+      { command: 'start', description: 'Open the main menu' },
+      { command: 'help', description: 'Show available commands' },
+      { command: 'link', description: 'Link Telegram to your 4626 account' },
+    ]
+    expect(buildTelegramBotCommands('private')).toEqual(expectedMenu)
+    expect(buildTelegramBotCommands('group')).toEqual(expectedMenu)
+    expect(buildTelegramBotCommands('admin')).toEqual(expectedMenu)
   })
 
   it('includes aliases in Telegram command-head matching and native-head detection', () => {
