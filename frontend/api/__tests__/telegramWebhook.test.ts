@@ -4,6 +4,7 @@ import webhookHandler from '../_handlers/telegram/_webhook.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const AKITA_TOKEN_ADDRESS = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
+const AKITA_INLINE_QUERY = 'query $AKITA'
 
 const {
   executeDeterministicCommandMock,
@@ -1031,7 +1032,7 @@ describe('telegram webhook handler', () => {
       buttons.some(
         (button: any) =>
           button?.text === 'Analyze $AKITA'
-          && button?.switch_inline_query_current_chat === AKITA_TOKEN_ADDRESS,
+          && button?.switch_inline_query_current_chat === AKITA_INLINE_QUERY,
       ),
     ).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'message:delete')).toBe(true)
@@ -1493,7 +1494,7 @@ describe('telegram webhook handler', () => {
     expect((fetch as any).mock.calls.length).toBe(0)
   })
 
-  it('answers inline queries with prefill command templates', async () => {
+  it('answers inline queries with compressed link, query, and ai templates', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -1529,10 +1530,11 @@ describe('telegram webhook handler', () => {
       .filter(Boolean)
       .join('\n')
     expect(resultTexts).toContain('/link')
-    expect(resultTexts).toContain('/buy')
+    expect(resultTexts).toContain(AKITA_INLINE_QUERY)
+    expect(resultTexts).toContain('/ai')
   })
 
-  it('answers inline query with reusable trade command result', async () => {
+  it('answers trade-like inline queries without reviving reusable /buy cards', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -1556,9 +1558,11 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(payload.inline_query_id).toBe('iq-trade')
     expect(Array.isArray(payload.results)).toBe(true)
-    const tradeResult = payload.results.find((entry: any) => String(entry?.input_message_content?.message_text ?? '').trim() === '/buy')
-    expect(tradeResult).toBeTruthy()
-    expect(String(tradeResult?.title ?? '').toLowerCase()).toContain('buy')
+    const directBuyResult = payload.results.find(
+      (entry: any) => String(entry?.input_message_content?.message_text ?? '').trim() === '/buy',
+    )
+    expect(directBuyResult).toBeFalsy()
+    expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Query $AKITA')
   })
 
   it('answers bare-address inline queries with premium token analysis cards without routing through /ai', async () => {
@@ -1785,8 +1789,8 @@ describe('telegram webhook handler', () => {
       const descriptions = payload.results.map((entry: any) => String(entry?.description ?? ''))
 
       expect(titles.some((title: string) => title.includes('Connect wallet'))).toBe(true)
-      expect(titles).toContain('Buy $AKITA')
-      expect(descriptions.some((description: string) => description.includes('Approved token'))).toBe(true)
+      expect(titles).toContain('Query $AKITA')
+      expect(descriptions.some((description: string) => description.includes('Authorized token'))).toBe(true)
       expect(titles.some((title: string) => title.includes('Ask Keepr AI'))).toBe(false)
       expect(titles.join(' ')).not.toContain('🚀')
       expect(descriptions.join(' ')).not.toContain('🚀')
@@ -1821,7 +1825,7 @@ describe('telegram webhook handler', () => {
       .map((entry: any) => String(entry?.input_message_content?.message_text ?? ''))
       .filter(Boolean)
     expect(resultTexts.some((text: string) => text.startsWith('/link'))).toBe(true)
-    expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Buy $AKITA')
+    expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Query $AKITA')
     expect(Boolean(payload.switch_pm_parameter || payload.button?.start_parameter)).toBe(true)
     expect(String(payload.button?.web_app?.url ?? '')).toContain('/telegram/link')
     expect(String(payload.button?.text ?? '')).toBe('Connect wallet')
@@ -1892,14 +1896,14 @@ describe('telegram webhook handler', () => {
     expect(Array.isArray(payload.results)).toBe(true)
     expect(payload.results.length).toBeLessThanOrEqual(8)
     expect(payload.button).toBeUndefined()
-    expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Buy $AKITA')
-    const buyAkita = payload.results.find((entry: any) => String(entry?.title ?? '') === 'Buy $AKITA')
-    expect(String(buyAkita?.input_message_content?.message_text ?? '').trim()).toBe('/buy')
+    expect(payload.results.map((entry: any) => String(entry?.title ?? ''))).toContain('Query $AKITA')
+    const queryAkita = payload.results.find((entry: any) => String(entry?.title ?? '') === 'Query $AKITA')
+    expect(String(queryAkita?.input_message_content?.message_text ?? '').trim()).toBe(AKITA_INLINE_QUERY)
     expect(
-      buyAkita?.reply_markup?.inline_keyboard?.flat?.().some(
+      queryAkita?.reply_markup?.inline_keyboard?.flat?.().some(
         (button: any) =>
           String(button?.text ?? '') === 'Analyze $AKITA'
-          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
+          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_INLINE_QUERY,
       ),
     ).toBe(true)
     if (Object.prototype.hasOwnProperty.call(payload, 'next_offset')) {
@@ -4595,7 +4599,7 @@ describe('telegram webhook handler', () => {
       flat.some(
         (button: any) =>
           String(button?.text ?? '') === 'Analyze $AKITA'
-          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_TOKEN_ADDRESS,
+          && String(button?.switch_inline_query_current_chat ?? '') === AKITA_INLINE_QUERY,
       ),
     ).toBe(true)
     expect(clearTelegramTradePercentPromptMock).toHaveBeenCalledWith({

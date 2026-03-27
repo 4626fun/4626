@@ -6,6 +6,7 @@ export type TelegramApprovedInlineToken = {
   address: `0x${string}`
   symbol: string
   buyLabel: string
+  queryLabel: string
   analyzeLabel: string
   aliases: string[]
 }
@@ -25,6 +26,7 @@ export const TELEGRAM_APPROVED_INLINE_TOKENS: TelegramApprovedInlineToken[] =
       address,
       symbol: token.symbol,
       buyLabel: `Buy $${token.symbol}`,
+      queryLabel: `Query $${token.symbol}`,
       analyzeLabel: `Analyze $${token.symbol}`,
       aliases: [...token.aliases],
     }
@@ -58,11 +60,15 @@ export function resolveTelegramApprovedInlineTokenQuery(rawQuery: string): Teleg
   const byAddress = getTelegramApprovedInlineTokenByAddress(trimmed)
   if (byAddress) return byAddress
   const compact = trimmed.replace(/\s+/g, '').toLowerCase()
+  const strippedCommandPrefix = compact.replace(/^\/?(query|analyze)/, '')
+  const byCommandAddress = getTelegramApprovedInlineTokenByAddress(trimmed.replace(/^\/?(query|analyze)\s+/i, ''))
+  if (byCommandAddress) return byCommandAddress
   return APPROVED_TOKEN_BY_ALIAS.get(compact) ?? null
+    ?? APPROVED_TOKEN_BY_ALIAS.get(strippedCommandPrefix)
 }
 
 export function buildTelegramAnalyzeInlineDraft(token: TelegramApprovedInlineToken): string {
-  return token.address
+  return `query $${token.symbol}`
 }
 
 export function filterTelegramApprovedTradeVaults<T extends { creatorCoinAddress: string }>(

@@ -228,6 +228,8 @@ describe('telegram webhook parsers', () => {
     expect(normalizeInlineTokenAddress(` ${exampleChecksumAddress} `)).toBe(
       '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
     )
+    expect(normalizeInlineTokenAddress('query $AKITA')).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
+    expect(normalizeInlineTokenAddress('analyze $AKITA')).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
     expect(normalizeInlineTokenAddress(`${exampleChecksumAddress} risk`)).toBeNull()
     expect(normalizeInlineTokenAddress(`${exampleChecksumAddress}\nfoo`)).toBeNull()
   })
@@ -254,7 +256,7 @@ describe('telegram webhook parsers', () => {
     expect(resolveNavigationCallbackToast('cre:relay-entries', '/cre relay-entries')).toBe('Relaying entries')
   })
 
-  it('builds paginated inline answers with deterministic next_offset', () => {
+  it('builds compressed inline answers with deterministic ids', () => {
     const scopedVaults = [
       {
         vaultAddress: '0x1111111111111111111111111111111111111111',
@@ -286,25 +288,19 @@ describe('telegram webhook parsers', () => {
       enablePmHandoff: true,
     })
 
-    expect(firstPage.results.length).toBe(4)
-    expect(firstPage.nextOffset).toBe('4')
+    expect(firstPage.results.length).toBe(3)
+    expect(firstPage.results.map((entry: any) => entry.title)).toEqual([
+      'Connect wallet',
+      'Query $AKITA',
+      'Ask AI',
+    ])
+    expect(firstPage.nextOffset).toBe('')
     expect(firstPage.switchPmParameter).toMatch(/^inline_link_/)
-
-    const secondPage = buildInlineQueryAnswer({
-      rawQuery: 'deploy status signal x',
-      queryOffset: firstPage.nextOffset,
-      userId: '42',
-      chatId: '-100123',
-      isLinked: false,
-      scopedVaults: [...scopedVaults],
-      inlineResultCap: 4,
-      growthMode: true,
-      enablePmHandoff: true,
-    })
-
-    expect(secondPage.offset).toBe(4)
-    expect(secondPage.results.length).toBeGreaterThan(0)
-    expect(secondPage.results[0]?.id).not.toBe(firstPage.results[0]?.id)
+    expect(firstPage.results.map((entry: any) => entry.id)).toEqual([
+      'r0:article:link-account',
+      'r1:article:approved-query-akita',
+      'r2:article:ai',
+    ])
   })
 
   it('uses media variants when configured and falls back to article', () => {

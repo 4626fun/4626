@@ -273,39 +273,13 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const offset = parseInlineOffset(params.queryOffset)
   const growthMode = params.growthMode
   const mediaByKey = params.mediaByKey ?? {}
-  const tradeIntent = parseTelegramTradeIntent(normalizedQuery.startsWith('/') ? normalizedQuery : `/${normalizedQuery}`)
-  const tradeFlowHint = '3 taps • vault • size • accept'
-  const xPostCommand = `/x post ${normalizeInlineDraft(normalizedQuery)}`
   const aiPrompt = normalizedQuery ? `/ai ${normalizedQuery}` : '/ai What should I do next?'
   const copy = buildCommonCopy(growthMode)
-  const lowerQuery = normalizedQuery.toLowerCase()
-  const wantsDeploy = queryClass === 'deploy' || /\b(deploy|launch|create)\b/.test(lowerQuery)
-  const wantsStatus = /\b(status|health|permissions)\b/.test(lowerQuery)
-  const wantsSocial = /\b(x|tweet|post)\b/.test(lowerQuery)
-  const wantsAi = queryClass === 'ai'
   const approvedScopedVaults = filterTelegramApprovedTradeVaults(params.scopedVaults)
 
   const templates: InlineResultTemplate[] = []
   const pushTemplate = (template: InlineResultTemplate) => {
     templates.push(template)
-  }
-
-  if (tradeIntent) {
-    const tradeCommand = tradeIntent.actionType === 'buy' ? '/buy' : tradeIntent.actionType === 'sell' ? '/sell' : '/bid'
-    pushTemplate({
-      key: 'trade-intent',
-      title:
-        tradeIntent.actionType === 'buy'
-          ? 'Buy now'
-          : tradeIntent.actionType === 'sell'
-            ? 'Sell now'
-            : 'Bid now',
-      description: tradeFlowHint,
-      command: tradeCommand,
-      baseScore: 120,
-      intentTags: ['trade'],
-      mediaKey: 'card:trade',
-    })
   }
 
   if (!params.isLinked) {
@@ -323,81 +297,34 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   TELEGRAM_APPROVED_INLINE_TOKENS.forEach((token, index) => {
     const scopedVault = approvedScopedVaults.find((vault) => vault.approvedToken.address === token.address)
     const description = !params.isLinked
-      ? 'Approved token • link first to trade'
+      ? 'Authorized token • targeted analysis now, trading after link'
       : scopedVault
-        ? 'Approved token • direct buy flow'
-        : 'Approved token • trade availability depends on this chat'
+        ? 'Authorized token • targeted analysis for this chat'
+        : 'Authorized token • targeted analysis'
+    const queryDraft = buildTelegramAnalyzeInlineDraft(token)
     pushTemplate({
-      key: `approved-buy-${token.symbol.toLowerCase()}`,
-      title: token.buyLabel,
+      key: `approved-query-${token.symbol.toLowerCase()}`,
+      title: token.queryLabel,
       description,
-      command: '/buy',
+      command: queryDraft,
       replyMarkup: {
-        inline_keyboard: [[{ text: token.analyzeLabel, switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(token) }]],
+        inline_keyboard: [[{ text: token.analyzeLabel, switch_inline_query_current_chat: queryDraft }]],
       },
       baseScore: 104 - index,
-      intentTags: ['trade', 'discovery', 'general'],
-      mediaKey: 'card:buy',
+      intentTags: ['token_analysis', 'discovery', 'general'],
+      mediaKey: 'card:query',
     })
   })
 
-  // Keep inline discovery focused on link + approved-token trading.
-  // Only show the broader utility surfaces when the query explicitly asks for them.
-  if (wantsStatus) {
-    pushTemplate({
-      key: 'status',
-      title: copy.statusTitle,
-      description: copy.statusDescription,
-      command: '/keepr status',
-      baseScore: 71,
-      intentTags: ['discovery', 'general'],
-      mediaKey: 'card:status',
-    })
-  }
-  if (params.isLinked && /\bwallet\b/.test(lowerQuery)) {
-    pushTemplate({
-      key: 'wallet',
-      title: copy.walletTitle,
-      description: copy.walletDescription,
-      command: '/wallet',
-      baseScore: 83,
-      intentTags: ['discovery', 'general'],
-      mediaKey: 'card:portfolio',
-    })
-  }
-  if (wantsDeploy || wantsSocial) {
-    pushTemplate({
-      key: 'xpost',
-      title: copy.xPostTitle,
-      description: copy.xPostDescription,
-      command: xPostCommand,
-      baseScore: 68,
-      intentTags: ['general', 'deploy'],
-      mediaKey: 'card:xpost',
-    })
-  }
-  if (wantsAi) {
-    pushTemplate({
-      key: 'ai',
-      title: copy.aiTitle,
-      description: copy.aiDescription,
-      command: aiPrompt,
-      baseScore: 67,
-      intentTags: ['ai', 'general'],
-      mediaKey: 'card:ai',
-    })
-  }
-  if (wantsDeploy) {
-    pushTemplate({
-      key: 'deploy',
-      title: 'Deploy vault',
-      description: 'Launch directly from Telegram',
-      command: '/deploy',
-      baseScore: 76,
-      intentTags: ['deploy', 'discovery'],
-      mediaKey: 'card:deploy',
-    })
-  }
+  pushTemplate({
+    key: 'ai',
+    title: copy.aiTitle,
+    description: copy.aiDescription,
+    command: aiPrompt,
+    baseScore: 67,
+    intentTags: ['ai', 'general'],
+    mediaKey: 'card:ai',
+  })
 
   const rankedTemplates = templates
     .map((template) => ({

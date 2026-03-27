@@ -2803,7 +2803,10 @@ function resolveTradeTargetAddress(params: {
   if (params.actionType === 'buy' && isAddressLike(params.vault.creatorCoinAddress)) {
     return params.vault.creatorCoinAddress
   }
-  return params.vault.vaultAddress
+  if (isAddressLike(params.vault.vaultAddress)) {
+    return params.vault.vaultAddress
+  }
+  throw new Error('Scoped vault is missing a valid vault address.')
 }
 
 function formatTradeTargetLabelFromVault(params: {

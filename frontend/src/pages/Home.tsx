@@ -1,18 +1,21 @@
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Suspense, lazy, useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
 import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
-import {
-  clearStoredWaitlistAuthState,
-  getCanonicalMarketingWaitlistPath,
-  requestStoredWaitlistAuthAutoStart,
-  writeStoredWaitlistAuthArmed,
-} from '@/lib/auth/waitlistEntry'
+import { clearStoredWaitlistAuthState } from '@/lib/auth/waitlistEntry'
 import { getHostMode } from '@/lib/host'
+import { PrivyClientProvider } from '@/lib/privy/client'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { Web3Providers } from '@/web3/Web3Providers'
+
+const LazyThinWaitlistFlow = lazy(async () => {
+  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
+  return { default: mod.ThinWaitlistFlow }
+})
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const DEFAULT_DEPOSIT_TOKENS = '50,000,000'
@@ -22,19 +25,17 @@ const DEFAULT_AUCTION_EPOCH = 'Thursday 00:00 UTC'
 const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
 
 export function Home() {
-  const navigate = useNavigate()
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
+  const [waitlistInlineOpen, setWaitlistInlineOpen] = useState(false)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
   const openWaitlistDirectAuth = () => {
     clearStoredWaitlistAuthState()
-    writeStoredWaitlistAuthArmed(true)
-    requestStoredWaitlistAuthAutoStart()
-    navigate(getCanonicalMarketingWaitlistPath())
+    setWaitlistInlineOpen(true)
   }
 
   if (hostMode === 'app') {
@@ -103,9 +104,9 @@ export function Home() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1.12 }}
-            className="pt-2 sm:pt-6"
-          >
+              transition={{ duration: 0.8, delay: 1.12 }}
+              className="pt-2 sm:pt-6"
+            >
               <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
                 Join waitlist
                 <ArrowRight className="h-4 w-4" />
@@ -128,6 +129,33 @@ export function Home() {
           ) : null}
         </div>
       </section>
+
+      {showJoinWaitlistCta && waitlistInlineOpen ? (
+        <section className="cinematic-section !py-4 sm:!py-6 lg:!py-8">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6">
+            <Suspense
+              fallback={
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
+                  Loading waitlist…
+                </div>
+              }
+            >
+              <Web3Providers>
+                <PrivyClientProvider showWalletLoginFirst={false}>
+                  <div className="rounded-[28px] border border-white/10 bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
+                    <LazyThinWaitlistFlow
+                      variant="embedded"
+                      sectionId="home-waitlist"
+                      autoStartAuth
+                      suppressAuthShell
+                    />
+                  </div>
+                </PrivyClientProvider>
+              </Web3Providers>
+            </Suspense>
+          </div>
+        </section>
+      ) : null}
 
       <section className="cinematic-section !py-10 sm:!py-16 lg:!py-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">

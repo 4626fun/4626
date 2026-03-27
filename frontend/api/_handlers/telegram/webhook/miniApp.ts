@@ -2,15 +2,30 @@ import { getTelegramWebhookConfig } from './config.js'
 import { asTrimmed } from './utils.js'
 
 export const TELEGRAM_MINI_APP_LINK_PATH = '/telegram/link'
+export const TELEGRAM_MINI_APP_ORIGIN = 'https://4626.fun'
 
 function isPrivateChatId(chatId: string): boolean {
   return !chatId.startsWith('-')
 }
 
+export function normalizeTelegramMiniAppBaseUrl(value: string): string {
+  const trimmed = asTrimmed(value)
+  if (!trimmed || !/^https?:\/\//i.test(trimmed)) return ''
+  try {
+    const url = new URL(trimmed)
+    if (/^v\d+\.4626\.fun$/i.test(url.hostname)) {
+      url.hostname = '4626.fun'
+    }
+    return url.origin
+  } catch {
+    return ''
+  }
+}
+
 export function resolveTelegramMiniAppUrl(): string {
-  const configured = asTrimmed(getTelegramWebhookConfig().miniAppUrl)
-  if (configured && /^https?:\/\//i.test(configured)) return configured
-  return 'https://v1.4626.fun'
+  const configured = normalizeTelegramMiniAppBaseUrl(getTelegramWebhookConfig().miniAppUrl)
+  if (configured) return configured
+  return TELEGRAM_MINI_APP_ORIGIN
 }
 
 export function buildTelegramMiniAppUrl(params: {

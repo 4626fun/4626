@@ -13,7 +13,7 @@ import {
   TELEGRAM_GROUP_BOT_COMMANDS,
   TELEGRAM_PRIVATE_BOT_COMMANDS,
 } from './webhook/constants.js'
-import { TELEGRAM_MINI_APP_LINK_PATH, buildTelegramMiniAppUrl } from './webhook/miniApp.js'
+import { TELEGRAM_MINI_APP_LINK_PATH, TELEGRAM_MINI_APP_ORIGIN, buildTelegramMiniAppUrl, normalizeTelegramMiniAppBaseUrl } from './webhook/miniApp.js'
 import { verifyBotConfigSecret } from './webhook/services/access.js'
 import { asTrimmed } from './webhook/utils.js'
 
@@ -27,13 +27,16 @@ type BotConfigBody = {
   dropPendingUpdates?: boolean
 }
 
+function normalizeMenuText(value: string): string {
+  const trimmed = asTrimmed(value)
+  if (!trimmed) return 'Open'
+  return trimmed.replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
+}
+
 function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {
-  const bodyUrl = asTrimmed(body.miniAppUrl)
-  const baseUrl = bodyUrl && /^https?:\/\//i.test(bodyUrl)
-    ? bodyUrl
-    : configured && /^https?:\/\//i.test(configured)
-      ? configured
-      : 'https://v1.4626.fun'
+  const bodyUrl = normalizeTelegramMiniAppBaseUrl(body.miniAppUrl ?? '')
+  const configuredUrl = normalizeTelegramMiniAppBaseUrl(configured)
+  const baseUrl = bodyUrl || configuredUrl || TELEGRAM_MINI_APP_ORIGIN
   return buildTelegramMiniAppUrl({
     baseUrl,
     pathname: TELEGRAM_MINI_APP_LINK_PATH,
@@ -81,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const menuMode = asTrimmed(body.menuMode || config.menuButtonMode || 'commands').toLowerCase() === 'commands'
     ? 'commands'
     : 'web_app'
-  const menuText = asTrimmed(body.menuText || config.menuButtonText || 'Link 4626') || 'Link 4626'
+  const menuText = normalizeMenuText(body.menuText || config.menuButtonText || '')
   const miniAppUrl = resolveMiniAppUrl(body, config.miniAppUrl)
   const webhookUrl = resolveWebhookUrl(req, body, config.webhookUrl)
   const chatId = readChatId(body)

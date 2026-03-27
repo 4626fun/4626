@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -32,6 +32,39 @@ vi.mock('@/lib/host', () => ({
   getHostMode: () => 'marketing',
 }))
 
+vi.mock('@/web3/Web3Providers', () => ({
+  Web3Providers: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+}))
+
+vi.mock('@/lib/privy/client', () => ({
+  PrivyClientProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+}))
+
+vi.mock('@/components/waitlist/ThinWaitlistFlow', () => ({
+  ThinWaitlistFlow: ({
+    sectionId,
+    variant,
+    autoStartAuth,
+    suppressAuthShell,
+  }: {
+    sectionId?: string
+    variant?: string
+    autoStartAuth?: boolean
+    suppressAuthShell?: boolean
+  }) => (
+    React.createElement(
+      'div',
+      {
+        'data-testid': 'waitlist-flow',
+        'data-variant': variant ?? 'embedded',
+        'data-auto-start': autoStartAuth ? 'yes' : 'no',
+        'data-suppress-auth-shell': suppressAuthShell ? 'yes' : 'no',
+      },
+      sectionId ?? 'waitlist-flow',
+    )
+  ),
+}))
+
 import { Home } from './Home'
 
 describe('Home', () => {
@@ -42,35 +75,25 @@ describe('Home', () => {
     expect(screen.queryByRole('link', { name: /join waitlist/i })).toBeNull()
   })
 
-  it('sends join waitlist directly into the canonical waitlist auth route', async () => {
+  it('opens the provider-backed waitlist flow on the homepage without routing away', async () => {
     const user = userEvent.setup()
     window.sessionStorage.clear()
 
-    render(
-      React.createElement(
-        MemoryRouter,
-        { initialEntries: ['/'] },
-        React.createElement(
-          Routes,
-          null,
-          React.createElement(Route, { path: '/', element: React.createElement(Home) }),
-          React.createElement(Route, { path: '/waitlist', element: React.createElement('div', null, 'waitlist-route') }),
-        ),
-      ),
-    )
+    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
 
     await user.click(screen.getByRole('button', { name: /join waitlist/i }))
 
-    expect(await screen.findByText('waitlist-route')).toBeTruthy()
-    expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBe('1')
-    expect(window.sessionStorage.getItem('cv:waitlist:auth_auto_start')).toBe('1')
+    expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-variant')).toBe('embedded')
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-suppress-auth-shell')).toBe('yes')
+    expect(window.location.pathname).toBe('/')
   })
 
-  it('does not render the homepage-owned waitlist modal anymore', () => {
+  it('does not render the waitlist flow before explicit user intent', () => {
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
-    expect(screen.queryByText(/join the 4626 waitlist/i)).toBeNull()
-    expect(screen.queryByText(/sign up for the waitlist by verifying your email address/i)).toBeNull()
+    expect(screen.queryByTestId('waitlist-flow')).toBeNull()
   })
 
   it('shows the current launch mechanics and token flow', () => {

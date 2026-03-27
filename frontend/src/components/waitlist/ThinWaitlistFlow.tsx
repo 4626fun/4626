@@ -414,7 +414,12 @@ function WalletPathCard(props: {
   )
 }
 
-export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string; autoStartAuth?: boolean }) {
+export function ThinWaitlistFlow(props: {
+  variant?: Variant
+  sectionId?: string
+  autoStartAuth?: boolean
+  suppressAuthShell?: boolean
+}) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
 
@@ -457,6 +462,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
   const authFlowStartedRef = useRef(false)
+  const recoveryAutoAttemptedRef = useRef(false)
   const dashboardRequestSeqRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
@@ -684,6 +690,27 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
+        if (props.autoStartAuth === true && !recoveryAutoAttemptedRef.current) {
+          recoveryAutoAttemptedRef.current = true
+          setNotice('That email already exists. Opening recovery sign-in…')
+          try {
+            await beginRecoverySignIn()
+            authAttemptInFlightRef.current = false
+            setBusy(false)
+            return
+          } catch (recoverError: any) {
+            setRecoveryRequired(true)
+            setError(
+              typeof recoverError?.message === 'string'
+                ? recoverError.message
+                : 'Failed to start account recovery sign-in.',
+            )
+            authFlowStartedRef.current = false
+            authAttemptInFlightRef.current = false
+            setBusy(false)
+            return
+          }
+        }
         authAutoAttemptedRef.current = true
         setAccount(null)
         setOwnerDelegationFlags(null)
@@ -707,7 +734,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, runBootstrap])
+  }, [beginRecoverySignIn, busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, runBootstrap, props.autoStartAuth])
 
   const onContinueWithBase = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -913,6 +940,18 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
       setBusy(false)
     }
   }, [busy, login, privyClientStatus, redirectToCanonicalWaitlist])
+
+  const beginRecoverySignIn = useCallback(async () => {
+    setAccount(null)
+    setOwnerDelegationFlags(null)
+    setOwnerDelegationVerified(null)
+    setEmbeddedEoaAddress(null)
+    setWaitlistPosition(null)
+    setLeaderboard(null)
+    await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+    await login(buildWaitlistRecoveryLoginOptions() as any)
+  }, [login])
+
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
     setEnterAppBusy(true)
@@ -1004,6 +1043,24 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
         ) {
           authAutoAttemptedRef.current = true
         }
+        if (isRecoveryRequired && props.autoStartAuth === true && !recoveryAutoAttemptedRef.current) {
+          recoveryAutoAttemptedRef.current = true
+          setNotice('That email already exists. Opening recovery sign-in…')
+          try {
+            await beginRecoverySignIn()
+            return
+          } catch (recoverError: any) {
+            if (!cancelled) {
+              setRecoveryRequired(true)
+              setError(
+                typeof recoverError?.message === 'string'
+                  ? recoverError.message
+                  : 'Failed to start account recovery sign-in.',
+              )
+            }
+            return
+          }
+        }
         if (isSessionMismatch || isRecoveryRequired) {
           setAccount(null)
           setOwnerDelegationFlags(null)
@@ -1030,7 +1087,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     return () => {
       cancelled = true
     }
-  }, [privyAuthed, runBootstrap, step])
+  }, [beginRecoverySignIn, privyAuthed, runBootstrap, step, props.autoStartAuth])
 
   useEffect(() => {
     if (step !== 'auth') {
@@ -1038,6 +1095,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
       authFlowStartedRef.current = false
+      recoveryAutoAttemptedRef.current = false
       setRecoveryRequired(false)
     }
   }, [step])
@@ -1079,6 +1137,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
     error,
   })
   const useCompactModalAuthStart = variant === 'modal' && props.autoStartAuth === true && step === 'auth' && !error && !recoveryRequired
+  const hideAuthShell = props.suppressAuthShell === true && step === 'auth' && !error && !recoveryRequired
   const canonicalCswAddress = account?.accountSignals?.canonicalCswAddress ?? null
   const walletSelectionNeeded = !canonicalCswAddress
   const ownerInstallNeeded = Boolean(canonicalCswAddress && ownerDelegationVerified === false)
@@ -1145,7 +1204,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   return (
     <section id={sectionId} className={wrapClass}>
       <div className={innerClass}>
-        {!useCompactModalAuthStart ? <StepIndicator steps={indicatorSteps} /> : null}
+        {!useCompactModalAuthStart && !hideAuthShell ? <StepIndicator steps={indicatorSteps} /> : null}
 
         {step === 'auth' ? (
           <motion.div
@@ -1155,7 +1214,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="space-y-5"
           >
-            {useCompactModalAuthStart ? (
+            {hideAuthShell ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                <div className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                  Opening secure email sign-in…
+                </div>
+              </div>
+            ) : useCompactModalAuthStart ? (
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
                 <div className="inline-flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
