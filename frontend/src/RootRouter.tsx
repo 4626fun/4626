@@ -83,6 +83,10 @@ export function RootRouter() {
           element={<StandaloneDocumentRedirect htmlPath="/telegram-link.html" />}
         />
         <Route
+          path="/telegram/menu"
+          element={<StandaloneDocumentRedirect htmlPath="/telegram-link.html" />}
+        />
+        <Route
           path="*"
           element={
             <Suspense fallback={<AppLoadingState />}>
