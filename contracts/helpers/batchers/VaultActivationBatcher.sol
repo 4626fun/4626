@@ -27,6 +27,10 @@ interface IWrapper {
 
 interface ICCAStrategy {
     function launchAuctionSimple(uint256 amount, uint128 requiredRaise) external returns (address auction);
+    function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise, bytes calldata auctionSteps)
+        external
+        returns (address auction);
+    function defaultFloorPrice() external view returns (uint256);
 }
 
 interface IOwnable {
@@ -129,7 +133,8 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (auctionPercent > 0) {
             auctionAmount = (shareTokens * auctionPercent) / 100;
             IERC20(shareToken).forceApprove(ccaStrategy, auctionAmount);
-            auction = ICCAStrategy(ccaStrategy).launchAuctionSimple(auctionAmount, requiredRaise);
+            uint256 floorPrice = ICCAStrategy(ccaStrategy).defaultFloorPrice();
+            auction = ICCAStrategy(ccaStrategy).launchAuction(auctionAmount, floorPrice, requiredRaise, bytes(""));
         }
 
         // Reserve portion (creator/team allocation, e.g. vesting escrow)

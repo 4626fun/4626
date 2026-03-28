@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
   sql: vi.fn(),
   AgentCreate: vi.fn(),
+  decryptPrivateKey: vi.fn(),
   ensureKeeprSchema: vi.fn(async () => {}),
   ensureCreatorXmtpAgentsSchema: vi.fn(async () => {}),
   createPrivyScwSigner: vi.fn(),
@@ -81,7 +82,7 @@ vi.mock('../../server/_lib/xmtpDbDirectory.js', () => ({
 }))
 
 vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
-  decryptPrivateKey: vi.fn(),
+  decryptPrivateKey: mocks.decryptPrivateKey,
   ensureCreatorXmtpAgentsSchema: mocks.ensureCreatorXmtpAgentsSchema,
 }))
 
@@ -152,6 +153,9 @@ describe('xmtp queue executor Ajna canonical automation', () => {
       XMTP_AGENT_CSW_OWNER_INDEX: undefined,
     })
     mocks.AgentCreate.mockRejectedValue(new Error('Agent.create should not be called for strategy actions'))
+    mocks.decryptPrivateKey.mockReturnValue(
+      '0x1111111111111111111111111111111111111111111111111111111111111111',
+    )
     mocks.createPrivyScwSigner.mockReturnValue({
       type: 'SCW',
       getIdentifier: vi.fn(() => ({
@@ -547,6 +551,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
           group_id: 'group-1',
           canonical_owner_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           creator_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          xmtp_agent_address: CANONICAL_CSW,
           agent_type: 'csw',
           privy_wallet_id: PRIVY_WALLET_ID,
           csw_address: CANONICAL_CSW,
@@ -577,6 +582,12 @@ describe('xmtp queue executor Ajna canonical automation', () => {
       cswAddress: CANONICAL_CSW,
       chainId: 8453,
     })
+    expect(mocks.AgentCreate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        dbPath: '/tmp/keepr-xmtp-tests/keepr-production-0x3333333333333333333333333333333333333333.db3',
+      }),
+    )
   })
 
   it('keeps preserved XMTP CSW signer helper failures non-retryable', async () => {
@@ -620,6 +631,46 @@ describe('xmtp queue executor Ajna canonical automation', () => {
         walletId: PRIVY_WALLET_ID,
         cswAddress: CANONICAL_CSW,
         chainId: 8453,
+      }),
+    )
+  })
+
+  it('keys EOA XMTP queue databases by xmtp agent identity instead of vault address', async () => {
+    mocks.sql.mockResolvedValueOnce({
+      rows: [
+        {
+          vault_address: VAULT,
+          group_id: 'group-1',
+          canonical_owner_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          creator_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          xmtp_agent_address: '0x7777777777777777777777777777777777777777',
+          agent_type: 'eoa',
+          privy_wallet_id: null,
+          csw_address: null,
+          encrypted_private_key_b64: 'ciphertext',
+          encrypted_private_key_iv_b64: 'iv',
+          encrypted_private_key_tag_b64: 'tag',
+        },
+      ],
+    })
+    mocks.AgentCreate.mockRejectedValueOnce(new Error('agent_init_failed'))
+
+    const result = await executeKeeprAction({
+      id: 16,
+      vaultAddress: VAULT,
+      groupId: 'group-1',
+      actionType: 'xmtp.group.send_message',
+      action: {
+        action: 'xmtp.group.send_message',
+        message: 'hello world',
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.actionType).toBe('xmtp.group.send_message')
+    expect(mocks.AgentCreate.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        dbPath: '/tmp/keepr-xmtp-tests/keepr-production-0x7777777777777777777777777777777777777777.db3',
       }),
     )
   })

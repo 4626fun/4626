@@ -18,7 +18,6 @@ import {
   sendPreparedOwnerTx as submitPreparedOwnerTx,
   shouldRefreshOwnerDelegationOnForeground,
 } from '@/lib/wallet/onboardingWallet'
-import { JoinWaitlistCta } from '@/components/waitlist/JoinWaitlistCta'
 import { selectCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -630,13 +629,9 @@ export function AccountsPage(props: {
             <button type="button" onClick={() => void login({ loginMethods: ['email', 'wallet'] } as any)} className="btn-accent btn-no-icon inline-flex">
               Sign in / Continue
             </button>
-            <JoinWaitlistCta
-              className="text-xs text-zinc-500 hover:text-zinc-300"
-              showArrow={false}
-              onPrivyDisabled={() => window.location.assign(getMarketingWaitlistEntryUrl('needs-session'))}
-            >
+            <a href={getMarketingWaitlistEntryUrl()} className="text-xs text-zinc-500 hover:text-zinc-300">
               Back to waitlist
-            </JoinWaitlistCta>
+            </a>
           </div>
         ) : null}
 

@@ -22,6 +22,12 @@ function createAuctionState(overrides: Partial<AuctionState> = {}): AuctionState
     currentAuction: SAMPLE_AUCTION,
     hasActiveAuction: true,
     isGraduated: false,
+    endBlock: 0n,
+    migrationBlock: 0n,
+    currencySwept: false,
+    unsoldSwept: false,
+    migrated: false,
+    failedFinalized: false,
     ...overrides,
   };
 }
@@ -128,6 +134,8 @@ describe('settlement result structure', () => {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
+      migrated: false,
+      failedFinalized: false,
       skippedReason: 'no_active_auction',
     };
     expect(result.swept).toBe(false);
@@ -142,6 +150,8 @@ describe('settlement result structure', () => {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
+      migrated: false,
+      failedFinalized: false,
       skippedReason: 'not_graduated',
     };
     expect(result.swept).toBe(false);
@@ -154,6 +164,8 @@ describe('settlement result structure', () => {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: true,
       unsoldSwept: true,
+      migrated: true,
+      failedFinalized: false,
       sweepResult: {
         txHash: '0xabc' as `0x${string}`,
         success: true,
@@ -175,6 +187,8 @@ describe('settlement result structure', () => {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: true,
       unsoldSwept: false,
+      migrated: false,
+      failedFinalized: false,
       sweepResult: {
         txHash: '0xabc' as `0x${string}`,
         success: true,
@@ -196,6 +210,8 @@ describe('settlement result structure', () => {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
+      migrated: false,
+      failedFinalized: false,
       sweepResult: {
         txHash: '0x0' as `0x${string}`,
         success: false,

@@ -8,7 +8,7 @@ Launch vaults. Reward holders. Win jackpots. All onchain.
 
 - **Launch Vaults** - One transaction deploys your vault
 - **Cross-Chain** - Works on Base + Solana via bridge
-- **Earn From Trades** - 6.9% fee: 90% to holders, 5% burned, 5% protocol
+- **Earn From Trades** - 6.9% fee policy with configurable gauge split (default: 69% jackpot, 21.39% burn/PPS, 9.61% voter/protocol branch)
 - **Verifiable Randomness** - Chainlink VRF for fair winner selection
 - **Mobile-First** - Built for [Base App](https://docs.base.org/mini-apps)
 

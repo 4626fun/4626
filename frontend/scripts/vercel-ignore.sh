@@ -37,11 +37,11 @@ fi
 while IFS= read -r path; do
   [ -z "$path" ] && continue
   case "$path" in
-    docs/*|apps/docs-site/*)
+    # Build only when the frontend deploy surface changes.
+    frontend/*|.vercelignore)
+      exit 1
       ;;
     *)
-      # Non-docs change found, run the build.
-      exit 1
       ;;
   esac
 done <<EOF

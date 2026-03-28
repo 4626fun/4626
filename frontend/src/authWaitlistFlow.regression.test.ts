@@ -1,21 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import { getWaitlistEntryRouteTarget, resolveAccess } from './App'
+import { getGenericNotFoundCta, resolveAccess } from './App'
 import { buildAppEntryPath } from './lib/auth/appEntry'
 import { buildWaitlistEntryUrl } from './lib/auth/waitlistEntry'
-import { shouldNavigateAfterWaitlistHandoff } from './lib/auth/appContinueGate'
+import { shouldNavigateAfterAppEntryHandoff } from './lib/auth/appContinueGate'
 import { MARKETING_ORIGIN } from './lib/host'
 
 const SESSION_ADDRESS = '0x1234567890123456789012345678901234567890'
 
 describe('waitlist to gated-app route regression', () => {
   it('allows the canonical waitlist handoff into an accepted app route once the session is established', () => {
-    expect(buildAppEntryPath('/swap')).toBe('/continue?from=waitlist&autologin=1&next=%2Fswap')
+    expect(buildAppEntryPath('/swap')).toBe('/continue')
 
     expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: true,
-        fromWaitlist: true,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: null,
         privyClientStatus: 'ready',
         privyReady: true,
@@ -24,9 +22,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toBe(false)
 
     expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: true,
-        fromWaitlist: true,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: SESSION_ADDRESS,
         privyClientStatus: 'ready',
         privyReady: true,
@@ -52,9 +48,7 @@ describe('waitlist to gated-app route regression', () => {
 
   it('redirects back to the waitlist when the session is established but app acceptance fails', () => {
     expect(
-      shouldNavigateAfterWaitlistHandoff({
-        autoLogin: true,
-        fromWaitlist: true,
+      shouldNavigateAfterAppEntryHandoff({
         siweAuthAddress: SESSION_ADDRESS,
         privyClientStatus: 'ready',
         privyReady: true,
@@ -78,7 +72,7 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-acceptance',
-      redirectTo: buildWaitlistEntryUrl('https://4626.fun', 'needs-acceptance'),
+      redirectTo: buildWaitlistEntryUrl('https://4626.fun'),
     })
   })
 
@@ -116,29 +110,40 @@ describe('waitlist to gated-app route regression', () => {
     ).toEqual({
       allow: false,
       reason: 'needs-session',
-      redirectTo: buildWaitlistEntryUrl('https://4626.fun', 'needs-session'),
+      redirectTo: buildWaitlistEntryUrl('https://4626.fun'),
     })
   })
 
-  it('keeps waitlist entry local on marketing host and bounces app-host entry back to marketing', () => {
-    expect(
-      getWaitlistEntryRouteTarget({
-        hostMode: 'marketing',
-        search: '?reason=needs-acceptance',
-      }),
-    ).toEqual({
-      kind: 'internal',
-      to: '/?reason=needs-acceptance#waitlist',
+  it('uses the canonical public waitlist path for marketing-only recovery CTAs', () => {
+    expect(getGenericNotFoundCta('marketing')).toEqual({
+      href: '/',
+      label: 'Join Waitlist',
+      hint: 'Start from the canonical waitlist entry.',
+    })
+
+    expect(getGenericNotFoundCta('app')).toEqual({
+      href: '/swap',
+      label: 'Go To Trade',
+      hint: 'Continue to the canonical app landing route.',
     })
 
     expect(
-      getWaitlistEntryRouteTarget({
+      resolveAccess('accepted', {
+        loading: false,
+        walletConnected: false,
+        sessionValid: false,
+        accepted: false,
+        creator: false,
+        admin: false,
+        allowlistEnforced: true,
+        effectiveAddress: null,
+        marketingUrl: MARKETING_ORIGIN,
         hostMode: 'app',
-        search: '?reason=needs-acceptance',
       }),
     ).toEqual({
-      kind: 'external',
-      to: `${MARKETING_ORIGIN}/?reason=needs-acceptance#waitlist`,
+      allow: false,
+      reason: 'needs-session',
+      redirectTo: buildWaitlistEntryUrl(MARKETING_ORIGIN),
     })
   })
 })

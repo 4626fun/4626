@@ -96,4 +96,12 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
         batcher.finalizePhase1WithSalt(params, codeIds, saltOverride);
     }
+
+    function test_phase2ShareSplitAndDepositBounds_remainFixed() public view {
+        assertEq(batcher.MIN_DEPOSIT(), 50_000_000e18, "minimum first deposit drifted");
+        assertEq(batcher.MAX_DEPOSIT(), 50_000_000e18, "maximum first deposit drifted");
+        assertEq(batcher.AUCTION_PERCENT(), 40, "CCA split drifted");
+        assertEq(batcher.VESTING_PERCENT(), 40, "creator vesting split drifted");
+        assertEq(100 - batcher.AUCTION_PERCENT() - batcher.VESTING_PERCENT(), 20, "LP reserve split drifted");
+    }
 }

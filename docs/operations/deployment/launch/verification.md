@@ -170,14 +170,20 @@ If you intentionally use `/admin/deploy-strategies`, treat it as a manual Charm 
 
 ## Phase 3: Post-Auction Completion (Day 7+)
 
-Completion is a 2-step process reflected in `CompleteAuction.tsx`:
+Completion is a canonical 3-step process reflected in `CompleteAuction.tsx` and keeper workflows:
 
 1. **Sweep**: Call `CCALaunchStrategy.sweepCurrency()` (permissionless)
    - Sweeps raised ETH
-   - Configures the oracle's V4 pool reference if configured
+   - Enables migration prerequisites
 
-2. **Configure hook**: Call `TaxHook.setTaxConfig(...)` (token owner required)
-   - Enables the 6.9% tax hook for ■AKITA/ETH trades
+2. **Migrate**: Call `CCALaunchStrategy.migrate()` (permissionless once migration block is ready)
+   - Initializes v4 pool and migrates LP position
+   - Configures oracle V4 pool reference when configured
+
+3. **Configure hook**: Call `TaxHook.setTaxConfig(...)` (token owner required unless keeper hook mode is explicitly enabled)
+   - Activates the hook fee plane for the intended pair/pool
+   - Must align hook recipient with intended `tradeFeeCollector`
+   - Verify onchain: pool id/key, enabled flag, fee bps, and recipient address
 
 ### Optional (Operations)
 

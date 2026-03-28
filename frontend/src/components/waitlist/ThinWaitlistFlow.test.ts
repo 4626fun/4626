@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveWaitlistStep, shouldAutoStartWaitlistAuth } from './ThinWaitlistFlow'
+import { resolveWaitlistStep, shouldAutoBootstrapWaitlistSession, shouldAutoStartWaitlistAuth } from './ThinWaitlistFlow'
 
 describe('resolveWaitlistStep', () => {
   it('keeps unverified accounts on auth', () => {
@@ -117,23 +117,25 @@ describe('resolveWaitlistStep', () => {
 })
 
 describe('shouldAutoStartWaitlistAuth', () => {
-  it('auto-starts auth for modal entry when Privy is ready and the user is signed out', () => {
+  it('does not auto-start auth for modal entry unless explicit auth intent was requested', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
         recoveryRequired: false,
         error: null,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('does not auto-start auth for recovery, errors, or non-modal variants', () => {
+  it('does not auto-start auth for recovery, errors, or missing explicit intent', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'embedded',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
@@ -145,6 +147,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
@@ -156,6 +159,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'ready',
@@ -169,6 +173,7 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: false,
         privyClientStatus: 'loading',
@@ -180,11 +185,66 @@ describe('shouldAutoStartWaitlistAuth', () => {
     expect(
       shouldAutoStartWaitlistAuth({
         variant: 'modal',
+        autoStartRequested: false,
         step: 'auth',
         privyAuthed: true,
         privyClientStatus: 'ready',
         recoveryRequired: false,
         error: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('auto-starts auth for the dedicated page when the entry explicitly requested it', () => {
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'page',
+        autoStartRequested: true,
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldAutoStartWaitlistAuth({
+        variant: 'modal',
+        autoStartRequested: true,
+        step: 'auth',
+        privyAuthed: false,
+        privyClientStatus: 'ready',
+        recoveryRequired: false,
+        error: null,
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('shouldAutoBootstrapWaitlistSession', () => {
+  it('only bootstraps restored Privy auth after an explicit auth flow has started', () => {
+    expect(
+      shouldAutoBootstrapWaitlistSession({
+        step: 'auth',
+        privyAuthed: true,
+        authFlowStarted: true,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldAutoBootstrapWaitlistSession({
+        step: 'auth',
+        privyAuthed: true,
+        authFlowStarted: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldAutoBootstrapWaitlistSession({
+        step: 'wallet',
+        privyAuthed: true,
+        authFlowStarted: true,
       }),
     ).toBe(false)
   })

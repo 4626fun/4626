@@ -126,6 +126,18 @@ const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
     ],
     stateMutability: 'view',
   },
+  {
+    name: 'previewLaunchPricing',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      { name: 'floorPriceQ96', type: 'uint256' },
+      { name: 'tickSpacingQ96', type: 'uint256' },
+      { name: 'creatorUsdPrice', type: 'uint256' },
+      { name: 'ethUsdPrice', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
 ] as const
 
 type DeployMode = 'default' | 'no_eoa_strict'
@@ -3225,9 +3237,9 @@ function DeployVaultBatcher({
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
-      if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
-        throw new Error('Market floor price not available. Wait for pricing to load.')
-      }
+      // Compatibility-only placeholder. CCA strategy now derives launch floor onchain from oracle data.
+      const floorPriceQ96ForBatcher =
+        floorPriceQ96Aligned && floorPriceQ96Aligned > 0n ? floorPriceQ96Aligned : 1n
       if (strictNoEoaEnforced) {
         logger.info('[DeployVault] deploy_mode=no_eoa_strict', {
           deploy_mode: 'no_eoa_strict',
@@ -3251,9 +3263,9 @@ function DeployVaultBatcher({
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
-      // Safety: The deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
-      // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
-      // We always pass `address(0)` to the batcher and, when needed, set payoutRecipient from the identity wallet separately.
+      // Safety: the deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
+      // Zora Creator Coins restrict that setter to the coin owner, so the batcher-side internal call reverts (msg.sender=batcher).
+      // We always pass `address(0)` to the batcher and, when needed, set CreatorCoin payoutRecipient from the identity wallet separately.
       const payoutForDeploy = ZERO_ADDRESS as Address
 
       const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
@@ -3605,7 +3617,7 @@ function DeployVaultBatcher({
           shareOFT: expected.shareOFT,
           shareSymbol,
           version: deploymentVersion,
-          floorPriceQ96: floorPriceQ96Aligned,
+          floorPriceQ96: floorPriceQ96ForBatcher,
         } as const
 
         const phase2FinalizeParams = {
@@ -3620,7 +3632,7 @@ function DeployVaultBatcher({
           version: deploymentVersion,
           depositAmount,
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
-          floorPriceQ96: floorPriceQ96Aligned,
+          floorPriceQ96: floorPriceQ96ForBatcher,
           auctionSteps,
           meteoraAlphaVault: ZERO_BYTES32 as `0x${string}`,
           solanaIxs: [],
@@ -4060,7 +4072,7 @@ function DeployVaultBatcher({
                   owner,
                   shareOFT: phase2CoreParams.shareOFT,
                   version: deploymentVersion,
-                  floorPriceQ96: floorPriceQ96Aligned,
+                  floorPriceQ96: floorPriceQ96ForBatcher,
                   requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
                   auctionSteps,
                 },
@@ -5201,6 +5213,19 @@ function DeployVaultBatcher({
             const msg = pendingErr instanceof Error ? pendingErr.message : String(pendingErr)
             throw new Error(`Phase 4 precheck failed: ${msg}`)
           }
+          try {
+            await publicClient.readContract({
+              address: expected.ccaStrategy,
+              abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+              functionName: 'previewLaunchPricing',
+            })
+          } catch (pricingErr) {
+            const raw = pricingErr instanceof Error ? pricingErr.message : String(pricingErr ?? '')
+            throw new Error(
+              `Phase 4 pricing precheck failed: ${raw}. ` +
+                'Launch floor is enforced onchain from oracle data; refresh oracle state before launching auction.',
+            )
+          }
           setPhase('phase4')
           await sendPhaseCalls(phase4Calls, 'phase4')
         }
@@ -5449,7 +5474,7 @@ function DeployVaultBatcher({
 
       {payoutMismatch ? (
         <div className="text-[11px] text-amber-300/80">
-          Payout recipient will update to{' '}
+          External revenue recipient will update to{' '}
           <span className="font-mono text-amber-200">{shortAddress(expectedGauge!)}</span> during deploy. Continue only if this is
           intended.
         </div>
@@ -5500,7 +5525,7 @@ function DeployVaultBatcher({
                 </div>
                 {marketFloorText ? (
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">CCA floor</div>
+                    <div className="text-zinc-500">CCA floor (reference)</div>
                     <div className="text-zinc-200/90">{marketFloorText}</div>
                   </div>
                 ) : null}
@@ -5638,7 +5663,11 @@ function DeployVaultBatcher({
         <div className="text-[11px] text-amber-300/80">{disabledReason}</div>
       ) : null}
 
-      {marketFloorText ? <div className="text-[11px] text-zinc-500">Market floor: {marketFloorText}</div> : null}
+      {marketFloorText ? (
+        <div className="text-[11px] text-zinc-500">
+          Market floor (reference): {marketFloorText}. Final auction floor is enforced onchain from oracle data.
+        </div>
+      ) : null}
 
       {error ? (
         <div className="space-y-2">
@@ -5697,11 +5726,6 @@ function DeployVaultMain() {
   const [autoSmartWalletOwnerRetryTick, setAutoSmartWalletOwnerRetryTick] = useState(0)
   const autoSmartWalletOwnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoSmartWalletOwnerAttemptKeyRef = useRef<string | null>(null)
-  const autoLoginAttemptRef = useRef(false)
-  const autoBridgeAttemptRef = useRef(false)
-  const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
-  const [handoffError, setHandoffError] = useState<string | null>(null)
-  
   const privyCrossAppLinkedAccounts = useMemo(() => {
     const linked = Array.isArray(privyUser?.linkedAccounts)
       ? (privyUser.linkedAccounts as any[])
@@ -5885,13 +5909,24 @@ function DeployVaultMain() {
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
   const minFirstDepositTokens = useMemo(() => {
+    // DeploymentBatcher enforces an exact 50M creator-token first deposit onchain.
+    // Keep UI/runtime locked to that value so query/env overrides cannot drift and fail late.
     const env = parsePositiveTokenAmount(
       (import.meta.env.VITE_MIN_FIRST_DEPOSIT_TOKENS as string | undefined) ?? '',
     )
-    if (typeof window === 'undefined') return env ?? DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
-    const params = new URLSearchParams(window.location.search)
-    const query = parsePositiveTokenAmount(params.get('minFirstDepositTokens'))
-    return query ?? env ?? DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+    let requested: bigint | null = env
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const query = parsePositiveTokenAmount(params.get('minFirstDepositTokens'))
+      requested = query ?? env
+    }
+    if (requested !== null && requested !== DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) {
+      logger.warn('[DeployVault] ignoring minFirstDepositTokens override; enforcing 50M policy', {
+        requested: requested.toString(),
+        enforced: DEFAULT_MIN_FIRST_DEPOSIT_TOKENS.toString(),
+      })
+    }
+    return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
   }, [])
   const shareOftSaltOverride = useMemo(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SHARE_OFT_SALT_OVERRIDE as string | undefined)
@@ -5970,10 +6005,6 @@ function DeployVaultMain() {
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
     const run = async () => {
-      setHandoffError(null)
-      setHandoffState('signingIn')
-      autoLoginAttemptRef.current = false
-      autoBridgeAttemptRef.current = false
       // If we're already authenticated, `login()` can no-op in some Privy configurations.
       // Force a re-auth flow so the user can switch to a wallet session if needed.
       try {
@@ -5986,8 +6017,7 @@ function DeployVaultMain() {
       try {
         await login({ loginMethods: ['email', 'wallet'] })
       } catch {
-        setHandoffState('error')
-        setHandoffError('Sign-in cancelled. Click “Restore account connection” to retry.')
+        // ignore
       }
     }
     return {
@@ -6017,31 +6047,23 @@ function DeployVaultMain() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQueryRef = useRef<{
     prefillToken: string
-    autoLogin: boolean
-    fromWaitlist: boolean
     debugEnabledFromQuery: boolean
   } | null>(null)
 
   if (!initialQueryRef.current) {
-    const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
-    const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
     initialQueryRef.current = {
       prefillToken: searchParams.get('token') ?? '',
-      autoLogin: autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes',
-      fromWaitlist: fromRaw === 'waitlist',
       debugEnabledFromQuery: (searchParams.get('debug') ?? '').trim() === '1',
     }
   }
 
   const prefillToken = initialQueryRef.current.prefillToken
-  const autoLogin = initialQueryRef.current.autoLogin
-  const fromWaitlist = initialQueryRef.current.fromWaitlist
   const debugEnabledFromQuery = initialQueryRef.current.debugEnabledFromQuery
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
     let changed = false
-    for (const key of ['autologin', 'auth', 'from', 'shareOftSaltOverride', 'debug']) {
+    for (const key of ['shareOftSaltOverride', 'debug']) {
       if (next.has(key)) {
         next.delete(key)
         changed = true
@@ -6064,90 +6086,6 @@ function DeployVaultMain() {
       return { ok: true, hint: 'configured' }
     }
   }, [cdpPaymasterUrl])
-
-  // Smooth waitlist -> deploy:
-  // If we arrived with `autologin=1&from=waitlist`, prompt email-first auth on app host
-  // and bridge into a 4626 session.
-  useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
-    if (!privyReady) return
-    if (handoffState === 'ready' || handoffState === 'error') return
-    if (handoffState === 'idle') setHandoffState('signingIn')
-
-    const failHandoff = (message: string) => {
-      autoBridgeAttemptRef.current = false
-      setHandoffState('error')
-      setHandoffError(message)
-    }
-
-    if (!privyAuthenticated) {
-      if (autoLoginAttemptRef.current) return
-      autoLoginAttemptRef.current = true
-      void (async () => {
-        try {
-          setHandoffError(null)
-          setHandoffState('signingIn')
-          const loginMethods = ['email', 'wallet'] as const
-          await login({ loginMethods: loginMethods as any })
-        } catch {
-          autoLoginAttemptRef.current = false
-          failHandoff('Sign-in cancelled. Click "Restore account connection" to continue.')
-        }
-      })()
-      return
-    }
-
-    if (autoBridgeAttemptRef.current) return
-    autoBridgeAttemptRef.current = true
-
-    if (typeof getAccessToken !== 'function') {
-      failHandoff('Privy token bridge is unavailable. Click "Restore account connection" to retry.')
-      return
-    }
-    void (async () => {
-      try {
-        setHandoffError(null)
-        setHandoffState('bridging')
-        const token = await getAccessToken()
-        if (!token) {
-          failHandoff('Could not read Privy access token. Click "Restore account connection" to retry.')
-          return
-        }
-        if (token) {
-          const addr = await siwe.signInWithPrivyToken(token)
-          if (!addr) {
-            failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
-            return
-          }
-          setHandoffState('ready')
-          setHandoffError(null)
-        }
-      } catch {
-        failHandoff('Could not establish a session. Click "Restore account connection" and retry.')
-      }
-    })()
-  }, [autoLogin, fromWaitlist, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
-
-  // Mark handoff ready once we have an app session.
-  useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
-    if (handoffState === 'ready') return
-    if (typeof siwe.authAddress === 'string' && siwe.authAddress.length > 0) {
-      setHandoffState('ready')
-      setHandoffError(null)
-    }
-  }, [autoLogin, fromWaitlist, handoffState, siwe.authAddress])
-
-  // Safety timeout so users aren't stuck without feedback.
-  useEffect(() => {
-    if (!autoLogin || !fromWaitlist) return
-    if (handoffState !== 'signingIn' && handoffState !== 'bridging') return
-    const t = window.setTimeout(() => {
-      setHandoffState('error')
-      setHandoffError('This is taking longer than expected. Click "Restore account connection" to continue.')
-    }, 25_000)
-    return () => window.clearTimeout(t)
-  }, [autoLogin, fromWaitlist, handoffState])
 
   useEffect(() => {
     if (!prefillToken) return
@@ -6323,7 +6261,7 @@ function DeployVaultMain() {
     return toShareName(underlyingSymbolUpper, baseName)
   }, [underlyingSymbolUpper, baseName])
 
-  // Onchain read of payoutRecipient (immediate after tx, no indexer delay).
+  // Onchain read of CreatorCoin payoutRecipient.
   const { data: onchainPayoutRecipient } = useReadContract({
     address: tokenIsValid ? (creatorToken as `0x${string}`) : undefined,
     abi: coinABI,
@@ -6332,7 +6270,7 @@ function DeployVaultMain() {
   })
 
   const payoutRecipient = useMemo(() => {
-    // Prefer onchain value (instant). Fall back to Zora indexed value.
+    // Prefer onchain value (instant). Fall back to indexed value.
     const onchain = typeof onchainPayoutRecipient === 'string' ? onchainPayoutRecipient : ''
     if (isAddress(onchain)) return onchain as Address
     const r = zoraCoin?.payoutRecipientAddress ? String(zoraCoin.payoutRecipientAddress) : ''
@@ -6821,13 +6759,6 @@ function DeployVaultMain() {
     retry: 0,
   })
 
-  const marketFloorOk = Boolean(
-    marketFloorQuery.isSuccess &&
-      marketFloorQuery.data &&
-      typeof marketFloorQuery.data.floorPriceQ96Aligned === 'bigint' &&
-      marketFloorQuery.data.floorPriceQ96Aligned > 0n,
-  )
-
   const creatorVaultBatcherAddress = (() => {
     const v = String((CONTRACTS as any).creatorVaultBatcher ?? '')
     return isAddress(v) ? (v as Address) : null
@@ -7218,7 +7149,6 @@ function DeployVaultMain() {
     isCreatorCoin &&
     canonicalIdentityType === 'contract' &&
     coinAgeOk &&
-    marketFloorOk &&
     isAuthorizedDeployerOrOperator &&
     creatorAllowlistQuery.isSuccess &&
     passesCreatorAllowlist &&
@@ -7326,8 +7256,8 @@ function DeployVaultMain() {
         : 'not authorized',
     },
     {
-      label: 'Market floor price',
-      ok: marketFloorOk,
+      label: 'Market floor reference (UI only)',
+      ok: true,
       hint: marketFloorQuery.isFetching
         ? 'computing'
         : marketFloorQuery.isError
@@ -7363,7 +7293,7 @@ function DeployVaultMain() {
                 : !creatorVaultBatcherConfigured
                   ? 'Deployment not configured (missing deployment batcher).'
                   : !isAuthorizedDeployerOrOperator
-                    ? 'Connect the creator or payout recipient wallet.'
+                    ? 'Connect the creator or CreatorCoin payout recipient wallet.'
                     : !fundingGateOk
                       ? `Needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
                       : strictNoEoaEnforced && !strictNoEoaEligibility
@@ -7388,13 +7318,7 @@ function DeployVaultMain() {
                         ? (bytecodeInfraQuery.error as any)?.message || 'Deployment bytecode check failed.'
                         : !bytecodeInfraOk
                           ? bytecodeInfraBlocker || 'Deployment infra is not ready.'
-                        : marketFloorQuery.isFetching
-                          ? 'Computing market floor price…'
-                          : marketFloorQuery.isError
-                            ? (marketFloorQuery.error as any)?.message || 'Could not compute market floor price.'
-                            : !marketFloorOk
-                              ? 'Market floor price is required to deploy.'
-                              : null
+                          : null
 
   const hasPrimaryDeployAuthAction = Boolean(
     privyReady &&
@@ -7415,38 +7339,7 @@ function DeployVaultMain() {
                 <p className="text-zinc-600 text-sm font-light">
                   Deploy a vault for your Creator Coin on Base. Only the creator or current payout recipient can deploy.
                 </p>
-                {fromWaitlist ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18, ease: baseEase }}
-                    className="mt-3 rounded-xl border border-white/10 bg-linear-to-b from-white/8 to-white/3 px-4 py-3 text-[12px] text-zinc-400 backdrop-blur-sm"
-                  >
-                    <div className="text-zinc-200">From the waitlist</div>
-                    <div className="mt-1">
-                      {!autoLogin
-                        ? 'If you get blocked by wallet signing, use “Sign in with Privy”.'
-                        : handoffState === 'signingIn'
-                          ? 'Signing you in…'
-                          : handoffState === 'bridging'
-                            ? 'Finalizing session…'
-                            : handoffState === 'ready'
-                              ? 'Signed in. You can deploy when ready.'
-                              : handoffState === 'error'
-                                ? handoffError || 'Sign-in failed. Click “Sign in with Privy” to continue.'
-                                : 'We’ll prompt sign-in, then continue.'}
-                    </div>
-                    {autoLogin && handoffState === 'error' && switchAuthCta ? (
-                      <div className="mt-3">
-                        <button type="button" className="btn-primary" onClick={switchAuthCta.onClick}>
-                          {switchAuthCta.label}
-                        </button>
-                      </div>
-                    ) : null}
-                  </motion.div>
-                ) : null}
-
-                {fromWaitlist && privyReady && privyAuthenticated && !smartWalletCapabilityReady ? (
+                {privyReady && privyAuthenticated && !smartWalletCapabilityReady ? (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -7695,7 +7588,7 @@ function DeployVaultMain() {
                     <div className="space-y-0">
                       {payoutRecipient && (
                         <div className="data-row">
-                          <div className="label">Payout recipient</div>
+                          <div className="label">External revenue recipient</div>
                           <div className="text-xs text-zinc-300 font-mono">{shortAddress(payoutRecipient)}</div>
                         </div>
                       )}

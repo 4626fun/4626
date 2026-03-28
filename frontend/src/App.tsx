@@ -4,9 +4,9 @@ import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AdminLayout } from './components/AdminLayout'
 import { AppLoadingState } from '@/components/AppLoadingState'
 import { Layout } from './components/Layout'
-import { Home } from './pages/Home'
-import { getHostMode, getMarketingBaseUrl, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
-import { useOptionalAccessContext, waitlistEntryHref, withReason } from './app/accessShared'
+import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
+import { getHostMode, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
+import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
 
 export {
   computeAcceptedFromAllowlist,
@@ -31,33 +31,6 @@ function HostGuard() {
   return null
 }
 
-/** Keep waitlist entry canonical on marketing domain as /#waitlist. */
-export function getWaitlistEntryRouteTarget(params: {
-  hostMode: import('@/lib/host').HostMode
-  search: string
-}): { kind: 'internal'; to: string } | { kind: 'external'; to: string } {
-  const search = params.search || ''
-  if (params.hostMode === 'marketing') {
-    return { kind: 'internal', to: `/${search}#waitlist` }
-  }
-  return { kind: 'external', to: `${MARKETING_ORIGIN}/${search}#waitlist` }
-}
-
-function WaitlistEntryRoute() {
-  const location = useLocation()
-  const target = getWaitlistEntryRouteTarget({
-    hostMode: getHostMode(),
-    search: location.search || '',
-  })
-
-  if (target.kind === 'internal') {
-    return <Navigate to={target.to} replace />
-  }
-
-  if (typeof window !== 'undefined') window.location.replace(target.to)
-  return null
-}
-
 /** Restrict route content to marketing domain; app host redirects cross-origin. */
 function MarketingOnlyRoute(props: { children: ReactNode }) {
   const location = useLocation()
@@ -71,6 +44,25 @@ function MarketingOnlyRoute(props: { children: ReactNode }) {
 
 function LayoutOnly() {
   return <Layout interactive={false} />
+}
+
+export function getGenericNotFoundCta(hostMode: import('@/lib/host').HostMode): {
+  href: string
+  label: string
+  hint: string
+} {
+  if (hostMode === 'marketing') {
+    return {
+      href: getCanonicalMarketingWaitlistPath(),
+      label: 'Join Waitlist',
+      hint: 'Start from the canonical waitlist entry.',
+    }
+  }
+  return {
+    href: '/swap',
+    label: 'Go To Trade',
+    hint: 'Continue to the canonical app landing route.',
+  }
 }
 
 const LazyAppAuthShell = lazy(() => import('./app/AppAuthShell'))
@@ -91,11 +83,6 @@ const LazyRequireSession = lazy(async () => {
 const LazyRequireAccepted = lazy(async () => {
   const m = await import('./app/accessRuntime')
   return { default: m.RequireAccepted }
-})
-
-const LazyRequireTelegramMiniAppEntry = lazy(async () => {
-  const m = await import('./app/accessRuntime')
-  return { default: m.RequireTelegramMiniAppEntry }
 })
 
 const LazyRequireAdmin = lazy(async () => {
@@ -287,51 +274,28 @@ const AppContinue = lazy(async () => {
   return { default: m.AppContinue }
 })
 
-const TelegramLink = lazy(async () => {
-  const m = await import('./pages/TelegramLink')
-  return { default: m.TelegramLink }
-})
-
-const TelegramMenu = lazy(async () => {
-  const m = await import('./pages/TelegramMenu')
-  return { default: m.TelegramMenu }
-})
-
 function NotFoundPage() {
   const location = useLocation()
   const access = useOptionalAccessContext()
-  const genericCta = useMemo(() => {
-    if (getHostMode() === 'marketing') {
-      return {
-        href: waitlistEntryHref(getMarketingBaseUrl(), 'needs-session'),
-        label: 'Join Waitlist',
-        hint: 'Start from the canonical waitlist entry.',
-      }
-    }
-    return {
-      href: withReason('/swap', 'not-found'),
-      label: 'Go To Trade',
-      hint: 'Continue to the canonical app landing route.',
-    }
-  }, [])
+  const genericCta = useMemo(() => getGenericNotFoundCta(getHostMode()), [])
 
   const appCta = useMemo(() => {
     if (!access) return genericCta
     if (!access.sessionValid) {
       return {
-        href: waitlistEntryHref(access.marketingUrl, 'needs-session'),
+        href: waitlistEntryHref(access.marketingUrl),
         label: 'Sign In',
         hint: 'Sign in to get started.',
       }
     }
     if (!access.accepted) {
       return {
-        href: waitlistEntryHref(access.marketingUrl, 'needs-acceptance'),
+        href: waitlistEntryHref(access.marketingUrl),
         label: 'Join Waitlist',
         hint: 'This route requires accepted app access.',
       }
     }
-    const tradeHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/swap' : withReason('/swap', 'not-found')
+    const tradeHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/swap' : '/swap'
     return { href: tradeHref, label: 'Go To Trade', hint: 'Your session is valid. Continue to the canonical app landing route.' }
   }, [access, genericCta])
 
@@ -369,9 +333,7 @@ function App() {
           </>
         }
       >
-        <Route path="/" element={<Home />} />
         <Route path="/404" element={<NotFoundPage />} />
-        <Route path="/waitlist" element={<WaitlistEntryRoute />} />
 
         <Route element={<LayoutOnly />}>
           <Route
@@ -428,35 +390,6 @@ function App() {
             </LazyRouteBoundary>
           }
         >
-          <Route
-            element={
-              <LazyRouteBoundary>
-                <LazyAppPrivyShell />
-              </LazyRouteBoundary>
-            }
-          >
-            <Route
-              path="/telegram/menu"
-              element={
-                <LazyRouteBoundary>
-                  <LazyRequireTelegramMiniAppEntry>
-                    <TelegramMenu />
-                  </LazyRequireTelegramMiniAppEntry>
-                </LazyRouteBoundary>
-              }
-            />
-            <Route
-              path="/telegram/link"
-              element={
-                <LazyRouteBoundary>
-                  <LazyRequireTelegramMiniAppEntry>
-                    <TelegramLink />
-                  </LazyRequireTelegramMiniAppEntry>
-                </LazyRouteBoundary>
-              }
-            />
-          </Route>
-
           <Route
             element={
               <LazyRouteBoundary>

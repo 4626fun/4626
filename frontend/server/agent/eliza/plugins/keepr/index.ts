@@ -1,7 +1,7 @@
 /**
  * ElizaOS Keepr Plugin (Unified)
  *
- * Delegates all vault commands to the production handleKeeprCommand()
+ * Delegates all vault commands to the shared production executor
  * instead of reimplementing them. This gives ElizaOS access to the full
  * command set: vault status, rules, lock/unlock, check, sync, send,
  * and social commands.
@@ -33,11 +33,11 @@ import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'
 
 /**
  * Determines if a message looks like a Keepr/vault command that should
- * be routed to handleKeeprCommand(). This mirrors the isCommandLike()
+ * be routed to the shared deterministic executor. This mirrors the isCommandLike()
  * check in the production agent runtime.
  */
 function isKeeprCommand(text: string): boolean {
-  return matchesAnyCommandFamily(text, ['keepr', 'whois', 'market', 'send', 'twitter', 'coin', 'help'])
+  return matchesAnyCommandFamily(text, ['keepr', 'whois', 'send', 'twitter', 'coin', 'help'])
 }
 
 function isKeeprStatusCommand(text: string): boolean {
@@ -69,7 +69,7 @@ function isPrivilegedKeeprCommand(text: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Single catch-all action that delegates to the production command handler.
+ * Single catch-all action that delegates to the production command executor.
  * This replaces the previous VAULT_STATUS, SEND_TOKENS, and KEEPR_HELP stubs.
  */
 const keeprCommandAction: Action = {
@@ -140,7 +140,7 @@ const keeprCommandAction: Action = {
       await callback?.({ text: result.responseText } as Content)
     } catch (err: any) {
       const agentError = toAgentError(err, 'UPSTREAM_ERROR', 'Keepr command failed')
-      console.error('[keepr-plugin] handleKeeprCommand error:', {
+      console.error('[keepr-plugin] executeDeterministicCommand error:', {
         code: agentError.code,
         message: agentError.message,
       })
@@ -222,7 +222,7 @@ const vaultInfoProvider: Provider = {
 export const keeprPlugin: Plugin = {
   name: '@4626/plugin-keepr',
   description:
-    '4626 Keepr commands — delegates to the production handleKeeprCommand() for vault status, send, lock/unlock, check, sync, social, and AI.',
+    '4626 Keepr commands — delegates to the shared production executor for vault status, send, lock/unlock, check, sync, social, and AI.',
 
   actions: [keeprCommandAction],
   providers: [vaultInfoProvider],

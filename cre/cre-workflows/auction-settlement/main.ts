@@ -8,8 +8,8 @@
  * Flow:
  *   1. HTTP: GET /cre/vaults/active?settled=false&chainId=<configured-chain>
  *   2. EVM:  currentAuction(), isGraduated(), sweepCurrencyBlock()
- *   3. HTTP: POST /cre/keeper/sweep (if graduated + not yet swept)
- *   4. HTTP: POST /cre/keeper/mark-settled (record timestamps)
+ *   3. HTTP: POST /cre/keeper/sweep (canonical completion attempt + invariant gate)
+ *   4. HTTP: POST /cre/keeper/mark-settled (record timestamps + settlement stage)
  *
  * CRE Quota Budget per execution:
  *   - 1 HTTP (fetch unsettled vaults)
@@ -47,6 +47,9 @@ type Config = {
   chainId?: number
   maxVaultsPerExecution?: number
   rotationIntervalSeconds?: number
+  enableKeeperHookConfig?: boolean
+  enforceCompletionInvariants?: boolean
+  expectedPayoutRecipientMode?: "gauge" | "payout_router"
   nativeWriteEnabled?: boolean
   nativeReceiver?: `0x${string}`
   nativeEncoderName?: string
@@ -62,7 +65,12 @@ type Config = {
 type VaultInfo = {
   vaultAddress: string
   chainId: number
+  creatorCoinAddress?: string
+  shareTokenAddress?: string
   ccaStrategyAddress?: string
+  gaugeControllerAddress?: string
+  burnStreamAddress?: string
+  payoutRouterAddress?: string
   graduatedAt?: string | null
   settledAt?: string | null
 }
@@ -74,9 +82,28 @@ type SettlementResult = {
   graduated: boolean
   alreadySwept: boolean
   swept: boolean
+  completionStage: string
+  completionCompleted: boolean
   markedSettled: boolean
   skippedReason: string
   error: string
+}
+
+type SweepCompletionPayload = {
+  sweepStatus?: string
+  migrateStatus?: string
+  hookConfigStatus?: string
+  completionStage?: string
+  completed?: boolean
+}
+
+type CompletionInvariantPayload = {
+  creatorCoinAddress?: string
+  shareTokenAddress?: string
+  gaugeControllerAddress?: string
+  burnStreamAddress?: string
+  payoutRouterAddress?: string
+  payoutRecipientMode?: "gauge" | "payout_router"
 }
 
 // ---------------------------------------------------------------------------
@@ -122,15 +149,21 @@ function sendSweepRequest(
   httpClient: HTTPClient,
   apiKey: string,
   ccaStrategyAddress: string,
-): boolean {
-  const body = postJson<Config, { success: boolean }>(
+  attemptHookConfig: boolean,
+  enforceInvariants: boolean,
+  invariants: CompletionInvariantPayload,
+): { ok: boolean; payload: SweepCompletionPayload } {
+  const body = postJson<Config, { success: boolean; data?: SweepCompletionPayload }>(
     nodeRuntime,
     httpClient,
     apiKey,
     "/cre/keeper/sweep",
-    { ccaStrategyAddress },
+    { ccaStrategyAddress, attemptHookConfig, enforceInvariants, invariants },
   )
-  return body.success
+  return {
+    ok: body.success,
+    payload: body.data ?? {},
+  }
 }
 
 function markSettled(
@@ -140,10 +173,12 @@ function markSettled(
   vaultAddress: string,
   graduatedAt?: string,
   settledAt?: string,
+  settlementStage?: string,
 ): boolean {
   const payload: Record<string, string> = { vaultAddress }
   if (graduatedAt) payload.graduatedAt = graduatedAt
   if (settledAt) payload.settledAt = settledAt
+  if (settlementStage) payload.settlementStage = settlementStage
 
   const body = postJson<Config, { success: boolean }>(
     nodeRuntime,
@@ -192,6 +227,8 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
       graduated: false,
       alreadySwept: false,
       swept: false,
+      completionStage: "none",
+      completionCompleted: false,
       markedSettled: false,
       skippedReason: "no_unsettled_cca_vaults",
       error: "",
@@ -221,6 +258,8 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
       graduated: false,
       alreadySwept: false,
       swept: false,
+      completionStage: "not_applicable",
+      completionCompleted: false,
       markedSettled: false,
       skippedReason: "no_active_auction",
       error: "",
@@ -244,6 +283,8 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
       graduated: false,
       alreadySwept: false,
       swept: false,
+      completionStage: "not_graduated",
+      completionCompleted: false,
       markedSettled: false,
       skippedReason: "not_graduated",
       error: "",
@@ -257,51 +298,25 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
 
   const nowIso = new Date().toISOString()
 
-  if (sweepCurrencyBlock > 0n) {
-    // Already swept on-chain — just mark in DB and skip
-    runtime.log(`Auction already swept at block ${sweepCurrencyBlock} — marking settled in DB`)
-    const marked = runtime.runInNodeMode(
-      (nr: NodeRuntime<Config>) =>
-        markSettled(nr, httpClient, apiKey, vault.vaultAddress, nowIso, nowIso),
-      consensusIdenticalAggregation(),
-    )().result()
-
-    return {
-      vaultAddress: vault.vaultAddress,
-      ccaStrategyAddress: ccaAddr,
-      auctionAddress,
-      graduated: true,
-      alreadySwept: true,
-      swept: false,
-      markedSettled: marked,
-      skippedReason: "already_swept_onchain",
-      error: "",
-    }
-  }
-
-  // Step 3: Graduated but not yet swept — execute sweep
-  runtime.log(`Auction ${auctionAddress} graduated — attempting native sweep write`)
+  // Step 3: Graduated — attempt canonical completion
+  runtime.log(`Auction ${auctionAddress} graduated — attempting canonical completion`)
 
   // Record graduation timestamp
   runtime.runInNodeMode(
     (nr: NodeRuntime<Config>) =>
-      markSettled(nr, httpClient, apiKey, vault.vaultAddress, nowIso),
+      markSettled(nr, httpClient, apiKey, vault.vaultAddress, nowIso, undefined, "graduated_detected"),
     consensusIdenticalAggregation(),
   )().result()
 
-  const nativeSweep = tryNativeWriteReport(runtime, evmClient, {
-    action: "sweep",
-    ccaStrategyAddress: ccaAddr,
-    vaultAddress: vault.vaultAddress,
-    timestamp: nowIso,
-  })
-
-  const swept = nativeSweep.success
-    ? true
-    : runtime.runInNodeMode(
-        (nr: NodeRuntime<Config>) => sendSweepRequest(nr, httpClient, apiKey, ccaAddr),
-        consensusIdenticalAggregation(),
-      )().result()
+  const alreadySwept = sweepCurrencyBlock > 0n
+  const nativeSweep = alreadySwept
+    ? { attempted: false, success: false, txHash: undefined as string | undefined, error: undefined as string | undefined }
+    : tryNativeWriteReport(runtime, evmClient, {
+        action: "sweep",
+        ccaStrategyAddress: ccaAddr,
+        vaultAddress: vault.vaultAddress,
+        timestamp: nowIso,
+      })
 
   if (nativeSweep.success) {
     runtime.log(`Native sweep write succeeded${nativeSweep.txHash ? ` tx=${nativeSweep.txHash}` : ""}`)
@@ -309,19 +324,77 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
     runtime.log(
       `Native sweep write failed, falling back to HTTP bridge (${nativeSweep.error ?? "unknown_error"})`,
     )
+  } else if (alreadySwept) {
+    runtime.log(`Auction already swept on-chain at block ${sweepCurrencyBlock}`)
   }
 
-  // Step 4: If sweep succeeded, mark as fully settled
+  let completion
+  try {
+    const completionInvariants: CompletionInvariantPayload = {
+      ...(vault.creatorCoinAddress ? { creatorCoinAddress: vault.creatorCoinAddress } : {}),
+      ...(vault.shareTokenAddress ? { shareTokenAddress: vault.shareTokenAddress } : {}),
+      ...(vault.gaugeControllerAddress ? { gaugeControllerAddress: vault.gaugeControllerAddress } : {}),
+      ...(vault.burnStreamAddress ? { burnStreamAddress: vault.burnStreamAddress } : {}),
+      ...(vault.payoutRouterAddress ? { payoutRouterAddress: vault.payoutRouterAddress } : {}),
+      payoutRecipientMode: runtime.config.expectedPayoutRecipientMode === "payout_router" ? "payout_router" : "gauge",
+    }
+
+    completion = runtime.runInNodeMode(
+      (nr: NodeRuntime<Config>) =>
+        sendSweepRequest(
+          nr,
+          httpClient,
+          apiKey,
+          ccaAddr,
+          Boolean(runtime.config.enableKeeperHookConfig),
+          runtime.config.enforceCompletionInvariants !== false,
+          completionInvariants,
+        ),
+      consensusIdenticalAggregation(),
+    )().result()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "completion_request_failed"
+    runtime.log(`Canonical completion request failed (${message})`)
+    runtime.runInNodeMode(
+      (nr: NodeRuntime<Config>) =>
+        markSettled(nr, httpClient, apiKey, vault.vaultAddress, undefined, undefined, "completion_request_failed"),
+      consensusIdenticalAggregation(),
+    )().result()
+    return {
+      vaultAddress: vault.vaultAddress,
+      ccaStrategyAddress: ccaAddr,
+      auctionAddress,
+      graduated: true,
+      alreadySwept,
+      swept: nativeSweep.success || alreadySwept,
+      completionStage: "completion_request_failed",
+      completionCompleted: false,
+      markedSettled: false,
+      skippedReason: "",
+      error: message,
+    }
+  }
+
+  const completionStage = completion.payload.completionStage ?? (completion.ok ? "in_progress" : "completion_failed")
+  const completionCompleted = completion.ok && completion.payload.completed === true
+  const sweepStatus = String(completion.payload.sweepStatus ?? "")
+  const swept = alreadySwept || nativeSweep.success || sweepStatus === "success" || sweepStatus === "already_done"
+
   let markedSettled = false
-  if (swept) {
-    runtime.log("Sweep succeeded — marking vault as settled")
+  if (completionCompleted) {
+    runtime.log("Completion succeeded — marking vault as settled")
     markedSettled = runtime.runInNodeMode(
       (nr: NodeRuntime<Config>) =>
-        markSettled(nr, httpClient, apiKey, vault.vaultAddress, undefined, nowIso),
+        markSettled(nr, httpClient, apiKey, vault.vaultAddress, undefined, nowIso, "completed"),
       consensusIdenticalAggregation(),
     )().result()
   } else {
-    runtime.log("Sweep failed — will retry next hour")
+    runtime.log(`Completion pending (${completionStage}) — preserving unsettled state`)
+    runtime.runInNodeMode(
+      (nr: NodeRuntime<Config>) =>
+        markSettled(nr, httpClient, apiKey, vault.vaultAddress, undefined, undefined, completionStage),
+      consensusIdenticalAggregation(),
+    )().result()
   }
 
   return {
@@ -329,11 +402,13 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
     ccaStrategyAddress: ccaAddr,
     auctionAddress,
     graduated: true,
-    alreadySwept: false,
+    alreadySwept,
     swept,
+    completionStage,
+    completionCompleted,
     markedSettled,
     skippedReason: "",
-    error: swept ? "" : "sweep_failed",
+    error: completion.ok ? "" : "completion_failed",
   }
 }
 

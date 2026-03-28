@@ -34,6 +34,17 @@ function safeInt(v: any): number {
   return Number.isFinite(n) ? Math.floor(n) : 0
 }
 
+function emailUsername(email: string | null): string | null {
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+  if (!normalizedEmail.includes('@')) return null
+  const localPart = normalizedEmail.split('@')[0] ?? ''
+  return localPart.trim() || null
+}
+
+function isLegacyGeneratedReferralCode(value: string | null): boolean {
+  return typeof value === 'string' && /^C[0-9A-Z]+$/.test(value)
+}
+
 function shortAddr(a: string | null): string | null {
   if (!a) return null
   const s = String(a)
@@ -45,7 +56,10 @@ function toLeaderboardRow(raw: any): LeaderboardRow {
   const signupId = safeInt(raw?.signup_id)
   const referralCode = typeof raw?.referral_code === 'string' ? String(raw.referral_code) : null
   const wallet = shortAddr(typeof raw?.primary_wallet === 'string' ? raw.primary_wallet : null)
-  const display = referralCode ?? wallet ?? `user#${signupId}`
+  const emailHandle = emailUsername(typeof raw?.email === 'string' ? raw.email : null)
+  const display = !isLegacyGeneratedReferralCode(referralCode)
+    ? referralCode ?? emailHandle ?? wallet ?? `user#${signupId}`
+    : emailHandle ?? referralCode ?? wallet ?? `user#${signupId}`
   return {
     rank: safeInt(raw?.rank),
     signupId,
@@ -111,7 +125,7 @@ export default async function handler(req: any, res: any) {
 
   const rows = await db.sql`
     WITH eligible AS (
-      SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
+      SELECT id, email, primary_wallet, embedded_wallet, referral_code, border_tier
       FROM profiles
       WHERE profile_completed_at IS NOT NULL
       ORDER BY id ASC
@@ -120,6 +134,7 @@ export default async function handler(req: any, res: any) {
     eligible_with_key AS (
       SELECT
         id,
+        email,
         COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
         referral_code,
         border_tier
@@ -138,6 +153,7 @@ export default async function handler(req: any, res: any) {
     scored AS (
       SELECT
         w.canonical_signup_id::bigint AS signup_id,
+        MAX(e.email) FILTER (WHERE e.email IS NOT NULL) AS email,
         w.wallet_key AS primary_wallet,
         w.referral_code,
         w.border_tier,
@@ -160,6 +176,7 @@ export default async function handler(req: any, res: any) {
     ranked AS (
       SELECT
         signup_id,
+        email,
         primary_wallet,
         referral_code,
         border_tier,
@@ -187,7 +204,7 @@ export default async function handler(req: any, res: any) {
         )::int AS rank
       FROM scored
     )
-    SELECT rank, signup_id, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
+    SELECT rank, signup_id, email, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
     FROM ranked
     ORDER BY rank ASC
     OFFSET ${offset}
@@ -210,7 +227,7 @@ export default async function handler(req: any, res: any) {
     if (walletKey) {
       const meQuery = await db.sql`
         WITH eligible AS (
-          SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
+          SELECT id, email, primary_wallet, embedded_wallet, referral_code, border_tier
           FROM profiles
           WHERE profile_completed_at IS NOT NULL
           ORDER BY id ASC
@@ -219,6 +236,7 @@ export default async function handler(req: any, res: any) {
         eligible_with_key AS (
           SELECT
             id,
+            email,
             COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
             referral_code,
             border_tier
@@ -235,11 +253,12 @@ export default async function handler(req: any, res: any) {
           GROUP BY wallet_key
         ),
         scored AS (
-          SELECT
-            w.canonical_signup_id::bigint AS signup_id,
-            w.wallet_key AS primary_wallet,
-            w.referral_code,
-            w.border_tier,
+      SELECT
+        w.canonical_signup_id::bigint AS signup_id,
+        MAX(e.email) FILTER (WHERE e.email IS NOT NULL) AS email,
+        w.wallet_key AS primary_wallet,
+        w.referral_code,
+        w.border_tier,
             COALESCE(SUM(l.amount), 0)::int AS total_points,
             COALESCE(
               SUM(
@@ -259,6 +278,7 @@ export default async function handler(req: any, res: any) {
         ranked AS (
           SELECT
             signup_id,
+            email,
             primary_wallet,
             referral_code,
             border_tier,
@@ -286,7 +306,7 @@ export default async function handler(req: any, res: any) {
             )::int AS rank
           FROM scored
         )
-        SELECT rank, signup_id, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
+        SELECT rank, signup_id, email, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
         FROM ranked
         WHERE LOWER(primary_wallet) = LOWER(${walletKey})
         LIMIT 1;

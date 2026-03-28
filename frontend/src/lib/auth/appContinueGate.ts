@@ -1,15 +1,11 @@
 export type AppContinueGateInput = {
-  autoLogin: boolean
-  fromWaitlist: boolean
   siweAuthAddress: string | null | undefined
   privyClientStatus: 'disabled' | 'loading' | 'ready'
   privyReady: boolean
   privyAuthenticated: boolean
 }
 
-export function shouldNavigateAfterWaitlistHandoff(input: AppContinueGateInput): boolean {
-  if (!input.autoLogin || !input.fromWaitlist) return true
-
+export function shouldNavigateAfterAppEntryHandoff(input: AppContinueGateInput): boolean {
   const hasSiweSession = typeof input.siweAuthAddress === 'string' && input.siweAuthAddress.trim().length > 0
   if (!hasSiweSession) return false
 

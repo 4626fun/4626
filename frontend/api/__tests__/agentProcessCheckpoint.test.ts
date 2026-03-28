@@ -9,6 +9,7 @@ import {
   getEthereumAddressFromInboxState,
   mergeCheckpointMs,
   parseConversationCheckpointRows,
+  resolveAgentProcessXmtpPersistenceError,
   readStrictUnsupportedRetryEnabled,
   resolveFallbackCommandReply,
   shouldDeferFallbackCommand,
@@ -110,6 +111,57 @@ describe('agent/process checkpoints', () => {
     expect(readStrictUnsupportedRetryEnabled('yes')).toBe(true)
     expect(readStrictUnsupportedRetryEnabled('false')).toBe(false)
     expect(readStrictUnsupportedRetryEnabled('')).toBe(true)
+  })
+
+  it('rejects temporary XMTP storage for agent/process when persistence is required', () => {
+    const error = resolveAgentProcessXmtpPersistenceError({
+      resolvedDbDir: '/tmp/.xmtp-data',
+      requirePersistentDb: true,
+      isServerless: true,
+      hasDedicatedMountResult: false,
+      mountedAncestor: '/tmp',
+    })
+
+    expect(error).toContain('resolved DB directory is temporary')
+    expect(error).toContain('/tmp/.xmtp-data')
+  })
+
+  it('rejects serverless root-filesystem XMTP storage for agent/process', () => {
+    const error = resolveAgentProcessXmtpPersistenceError({
+      resolvedDbDir: '/var/task/.xmtp-data',
+      requirePersistentDb: true,
+      isServerless: true,
+      hasDedicatedMountResult: false,
+      mountedAncestor: '/',
+    })
+
+    expect(error).toContain('dedicated mounted XMTP volume')
+    expect(error).toContain('closest mount: /')
+  })
+
+  it('permits local non-serverless XMTP storage without a dedicated mount', () => {
+    const error = resolveAgentProcessXmtpPersistenceError({
+      resolvedDbDir: '/home/dev/project/.xmtp-data',
+      requirePersistentDb: true,
+      isServerless: false,
+      hasDedicatedMountResult: false,
+      mountedAncestor: '/',
+    })
+
+    expect(error).toBeNull()
+  })
+
+  it('rejects configured XMTP directories that silently fall back elsewhere', () => {
+    const error = resolveAgentProcessXmtpPersistenceError({
+      configuredDbDir: '/data/expected-xmtp',
+      resolvedDbDir: '/tmp/.xmtp-data',
+      requirePersistentDb: false,
+      isServerless: false,
+      hasDedicatedMountResult: false,
+      mountedAncestor: '/tmp',
+    })
+
+    expect(error).toContain('resolved fallback /tmp/.xmtp-data')
   })
 
   it('defers fallback commands only in strict mode', () => {

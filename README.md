@@ -146,17 +146,22 @@ flowchart TD
 
 ### 3) Fee + Incentive Routing
 
-The documented model applies a 6.9% trading fee to DEX trades (buy + sell), then routes proceeds through the gauge controller.
+Fee policy is two-plane and deployment-conditional:
+- Native plane: `CreatorShareOFT` buy-side fee trigger (`SwapOnly -> non-SwapOnly`).
+- Hook plane: sell-side (and any additional policy) via explicit tax-hook configuration.
+- Both planes should route to the same `tradeFeeCollector` domain (typically `CreatorGaugeController`).
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%
 flowchart LR
-  Trade["DEX trade\n(buy or sell)"] --> Fee["6.9% trading fee"]
-  Fee --> Gauge["CreatorGaugeController routing"]
+  BuyTrade["DEX buy"] --> NativeFee["Native OFT fee plane\n(6.9% when trigger matches)"]
+  SellTrade["DEX sell"] --> HookFee["Hook fee plane\n(only if hook configured)"]
+  NativeFee --> Gauge["tradeFeeCollector\n(typically CreatorGaugeController)"]
+  HookFee --> Gauge
 
   Gauge --> Lottery["69.00%\nLottery pool"]
   Gauge --> Burn["21.39%\nBurn + PPS support"]
-  Gauge --> Rewards["9.61%\nVoter rewards"]
+  Gauge --> Rewards["9.61%\nVoter/protocol branch"]
 
   Lottery --> VRF["Chainlink VRF draw"]
   VRF --> Payout["Winner payout\n(vault shares)"]
@@ -171,7 +176,7 @@ flowchart LR
   classDef burn fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
   classDef governance fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#4C1D95;
   classDef neutral fill:#F1F5F9,stroke:#64748B,stroke-width:1.5px,color:#0F172A;
-  class Trade,Fee source;
+  class BuyTrade,SellTrade,NativeFee,HookFee source;
   class Gauge router;
   class Lottery,VRF,Payout lottery;
   class Burn,PPS burn;

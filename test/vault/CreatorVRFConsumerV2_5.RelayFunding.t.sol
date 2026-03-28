@@ -110,6 +110,14 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         vm.deal(attacker, 10 ether);
     }
 
+    function test_constructor_revertsWhenLzEidMissing() external {
+        MockEndpointV2 endpoint = new MockEndpointV2();
+        MockCreatorRegistryForVRF badRegistry = new MockCreatorRegistryForVRF(address(endpoint), 0);
+
+        vm.expectRevert(abi.encodeWithSelector(CreatorVRFConsumerV2_5.MissingLayerZeroEid.selector, block.chainid));
+        new CreatorVRFConsumerHarness(address(badRegistry), address(this));
+    }
+
     function test_remoteFulfillmentQueuesPendingWithoutAutoSend() external {
         uint64 sequence = 1;
         _submitRemoteRequest(sequence);

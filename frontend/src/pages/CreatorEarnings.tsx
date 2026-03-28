@@ -367,8 +367,8 @@ export function CreatorEarnings() {
               <span className="label">Creator</span>
               <h1 className="headline text-4xl sm:text-6xl">Creator earnings</h1>
               <p className="text-zinc-600 text-sm font-light max-w-2xl">
-                Lifetime creator earnings from Zora coin trades. Paid to the coin’s{' '}
-                <span className="font-mono">payoutRecipient</span>.
+                Lifetime creator earnings from Zora coin trades. Paid to the coin’s
+                <span className="font-mono"> payoutRecipient</span>.
               </p>
             </div>
 
@@ -584,7 +584,7 @@ export function CreatorEarnings() {
                               ) : null}
                               {coin.payoutRecipientAddress ? (
                                 <div className="text-xs text-zinc-600">
-                                  Payout recipient:{' '}
+                                  External revenue recipient:{' '}
                                   <span className="font-mono">
                                     {shortAddress(String(coin.payoutRecipientAddress))}
                                   </span>

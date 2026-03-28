@@ -42,6 +42,13 @@ export const GaugeControllerABI = [
   },
   {
     type: "function",
+    name: "creatorTreasury",
+    inputs: [],
+    outputs: [{ type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "lastDistribution",
     inputs: [],
     outputs: [{ type: "uint256" }],

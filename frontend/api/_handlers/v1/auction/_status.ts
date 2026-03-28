@@ -88,6 +88,51 @@ const CCA_LAUNCH_STRATEGY_ABI = [
   },
   { name: 'currency', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
   { name: 'auctionToken', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  {
+    name: 'getLifecycleStatus',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'phase', type: 'uint8' },
+          { name: 'auction', type: 'address' },
+          { name: 'isGraduated', type: 'bool' },
+          { name: 'auctionWindowOpen', type: 'bool' },
+          { name: 'claimOpen', type: 'bool' },
+          { name: 'currencySwept', type: 'bool' },
+          { name: 'unsoldSwept', type: 'bool' },
+          { name: 'migrated', type: 'bool' },
+          { name: 'failedFinalized', type: 'bool' },
+          { name: 'startBlock', type: 'uint64' },
+          { name: 'endBlock', type: 'uint64' },
+          { name: 'claimBlock', type: 'uint64' },
+          { name: 'migrationBlock', type: 'uint64' },
+          { name: 'sweepBlock', type: 'uint64' },
+          { name: 'lpReserveAmount', type: 'uint256' },
+          { name: 'clearingPrice', type: 'uint256' },
+          { name: 'currencyRaised', type: 'uint256' },
+        ],
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    name: 'getBackingTelemetry',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      { name: 'vault', type: 'address' },
+      { name: 'launchTotalAssets', type: 'uint256' },
+      { name: 'launchTotalSupply', type: 'uint256' },
+      { name: 'currentTotalAssets', type: 'uint256' },
+      { name: 'currentTotalSupply', type: 'uint256' },
+      { name: 'assetsDelta', type: 'int256' },
+      { name: 'supplyDelta', type: 'int256' },
+    ],
+    stateMutability: 'view',
+  },
 ] as const
 
 const ERC20_META_ABI = [
@@ -118,6 +163,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let status: unknown = null
     let currency: unknown = null
     let auctionToken: unknown = null
+    let lifecycle: unknown = null
+    let backingTelemetry: unknown = null
     let resolvedRpcUrl: string | null = null
     let lastError: unknown = null
 
@@ -132,10 +179,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'getAuctionStatus' }),
           client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'currency' }).catch(() => null),
           client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'auctionToken' }).catch(() => null),
+          client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'getLifecycleStatus' }).catch(() => null),
+          client.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'getBackingTelemetry' }).catch(() => null),
         ])
         status = response[0]
         currency = response[1]
         auctionToken = response[2]
+        lifecycle = response[3]
+        backingTelemetry = response[4]
         resolvedRpcUrl = rpcUrl
         lastError = null
         break
@@ -155,6 +206,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isGraduated = Boolean((status as any)?.[2] ?? false)
     const clearingPriceQ96 = BigInt((status as any)?.[3] ?? 0n).toString()
     const currencyRaised = BigInt((status as any)?.[4] ?? 0n).toString()
+    const lifecyclePhase = Number((lifecycle as any)?.phase ?? (lifecycle as any)?.[0] ?? 0)
+    const lifecycleAuctionWindowOpen = Boolean((lifecycle as any)?.auctionWindowOpen ?? (lifecycle as any)?.[3] ?? false)
+    const lifecycleClaimOpen = Boolean((lifecycle as any)?.claimOpen ?? (lifecycle as any)?.[4] ?? false)
+    const lifecycleCurrencySwept = Boolean((lifecycle as any)?.currencySwept ?? (lifecycle as any)?.[5] ?? false)
+    const lifecycleUnsoldSwept = Boolean((lifecycle as any)?.unsoldSwept ?? (lifecycle as any)?.[6] ?? false)
+    const lifecycleMigrated = Boolean((lifecycle as any)?.migrated ?? (lifecycle as any)?.[7] ?? false)
+    const lifecycleFailedFinalized = Boolean((lifecycle as any)?.failedFinalized ?? (lifecycle as any)?.[8] ?? false)
+    const lifecycleStartBlock = BigInt((lifecycle as any)?.startBlock ?? (lifecycle as any)?.[9] ?? 0n).toString()
+    const lifecycleEndBlock = BigInt((lifecycle as any)?.endBlock ?? (lifecycle as any)?.[10] ?? 0n).toString()
+    const lifecycleClaimBlock = BigInt((lifecycle as any)?.claimBlock ?? (lifecycle as any)?.[11] ?? 0n).toString()
+    const lifecycleMigrationBlock = BigInt((lifecycle as any)?.migrationBlock ?? (lifecycle as any)?.[12] ?? 0n).toString()
+    const lifecycleSweepBlock = BigInt((lifecycle as any)?.sweepBlock ?? (lifecycle as any)?.[13] ?? 0n).toString()
+    const lifecycleLpReserveAmount = BigInt((lifecycle as any)?.lpReserveAmount ?? (lifecycle as any)?.[14] ?? 0n).toString()
+
+    const backingVault = typeof (backingTelemetry as any)?.vault === 'string'
+      ? ((backingTelemetry as any).vault as string)
+      : typeof (backingTelemetry as any)?.[0] === 'string'
+        ? ((backingTelemetry as any)[0] as string)
+        : null
+    const launchTotalAssets = BigInt((backingTelemetry as any)?.launchTotalAssets ?? (backingTelemetry as any)?.[1] ?? 0n).toString()
+    const launchTotalSupply = BigInt((backingTelemetry as any)?.launchTotalSupply ?? (backingTelemetry as any)?.[2] ?? 0n).toString()
+    const currentTotalAssets = BigInt((backingTelemetry as any)?.currentTotalAssets ?? (backingTelemetry as any)?.[3] ?? 0n).toString()
+    const currentTotalSupply = BigInt((backingTelemetry as any)?.currentTotalSupply ?? (backingTelemetry as any)?.[4] ?? 0n).toString()
+    const assetsDelta = BigInt((backingTelemetry as any)?.assetsDelta ?? (backingTelemetry as any)?.[5] ?? 0n).toString()
+    const supplyDelta = BigInt((backingTelemetry as any)?.supplyDelta ?? (backingTelemetry as any)?.[6] ?? 0n).toString()
 
     const tokenAddr = typeof auctionToken === 'string' && isAddress(auctionToken) ? (auctionToken as `0x${string}`) : null
     const currencyAddr = typeof currency === 'string' && isAddressLike(currency) ? (currency as `0x${string}`) : null
@@ -191,6 +267,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         isGraduated,
         clearingPriceQ96,
         currencyRaised,
+        lifecyclePhase,
+        lifecycleAuctionWindowOpen,
+        lifecycleClaimOpen,
+        lifecycleCurrencySwept,
+        lifecycleUnsoldSwept,
+        lifecycleMigrated,
+        lifecycleFailedFinalized,
+        lifecycleStartBlock,
+        lifecycleEndBlock,
+        lifecycleClaimBlock,
+        lifecycleMigrationBlock,
+        lifecycleSweepBlock,
+        lifecycleLpReserveAmount,
+        backingVault: backingVault && isAddressLike(backingVault) ? backingVault.toLowerCase() : null,
+        launchTotalAssets,
+        launchTotalSupply,
+        currentTotalAssets,
+        currentTotalSupply,
+        assetsDelta,
+        supplyDelta,
         currency: currencyAddr ? currencyAddr.toLowerCase() : null,
         currencyDecimals: typeof currencyDecimals === 'number' ? currencyDecimals : currencyDecimals === null ? null : Number(currencyDecimals),
         auctionToken: tokenAddressLower,

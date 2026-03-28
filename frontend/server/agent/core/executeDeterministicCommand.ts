@@ -1,5 +1,5 @@
-import { handleKeeprCommand } from '../../keepr/commands.js'
-import type { KeeprCommandResult } from '../../commands/types.js'
+import { executeCommand } from '../../commands/execute.js'
+import type { ExecuteCommandRoleOverrides, KeeprCommandResult } from '../../commands/types.js'
 
 export type DeterministicCommandResult = {
   ok: boolean
@@ -15,6 +15,7 @@ type ExecuteDeterministicCommandParams = {
   chatId?: string
   userId?: string
   emptyResponseFallback?: string
+  roleOverrides?: ExecuteCommandRoleOverrides
 }
 
 function normalizeKeeprCommandResult(params: {
@@ -34,12 +35,13 @@ function normalizeKeeprCommandResult(params: {
 export async function executeDeterministicCommand(
   params: ExecuteDeterministicCommandParams,
 ): Promise<DeterministicCommandResult> {
-  const result = await handleKeeprCommand({
+  const result = await executeCommand({
     groupId: params.groupId,
     senderWallet: params.senderWallet,
     text: params.text,
     ...(params.chatId ? { chatId: params.chatId } : {}),
     ...(params.userId ? { userId: params.userId } : {}),
+    ...(params.roleOverrides ? { roleOverrides: params.roleOverrides } : {}),
   })
 
   return normalizeKeeprCommandResult({

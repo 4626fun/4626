@@ -695,7 +695,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
 
-        // Prevent draining user-backed vault shares. Only excess (if any) is sweepable.
+        // Prevent unauthorized withdrawal of user-backed vault shares.
+        // Only excess shares above required backing are emergency-withdrawable.
         if (token == address(vault)) {
             uint256 actualLocked = IERC20(address(vault)).balanceOf(address(this));
             uint256 requiredLocked = _requiredLockedBacking();

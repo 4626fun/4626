@@ -18,6 +18,7 @@ const {
   getUserOperationReceiptMock,
   ensureLaunchImageReadyMock,
   validateSponsoredSmartWalletCallsMock,
+  verifyDeployPhase2InvariantsMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
@@ -36,6 +37,19 @@ const {
     shareOFT: '0x7000000000000000000000000000000000000007',
   })),
   validateSponsoredSmartWalletCallsMock: vi.fn(async (..._args: unknown[]) => ({ expectedCreatorToken: null, mode: 'deploy' })),
+  verifyDeployPhase2InvariantsMock: vi.fn(
+    async (): Promise<{
+      checked: boolean
+      checksRun: number
+      violations: Array<{ code: string; message: string }>
+      expectations: Record<string, unknown> | null
+    }> => ({
+      checked: true,
+      checksRun: 0,
+      violations: [],
+      expectations: null,
+    }),
+  ),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -75,6 +89,10 @@ vi.mock('../../server/_lib/deployLaunchImage.js', () => ({
   LAUNCH_IMAGE_SHARE_OFT_KEY: 'launchImageShareOft',
   LAUNCH_IMAGE_VERIFIED_AT_KEY: 'launchImageVerifiedAt',
   LAUNCH_IMAGE_VERIFIED_BYTES_KEY: 'launchImageVerifiedBytes',
+}))
+
+vi.mock('../../server/_lib/deployPhase2Invariants.js', () => ({
+  verifyDeployPhase2Invariants: verifyDeployPhase2InvariantsMock,
 }))
 
 vi.mock('../_handlers/_paymaster.js', () => ({
@@ -159,6 +177,12 @@ describe('deploy session optimistic concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readSiwaAgentFromRequestMock.mockReturnValue(null)
+    verifyDeployPhase2InvariantsMock.mockResolvedValue({
+      checked: true,
+      checksRun: 0,
+      violations: [],
+      expectations: null,
+    })
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
     delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
     delete process.env.SOLANA_REGISTRATION_ORIGINS
@@ -291,6 +315,123 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.body?.data?.diagnostics?.replay?.phase2CoreSkipReason).toBe('onchain_phase2_core_already_deployed')
     expect(res.body?.data?.diagnostics?.replay?.phase2FinalizeSkipReason).toBe(
       'onchain_phase2_finalize_already_completed',
+    )
+  })
+
+  it('continue blocks post-phase2 advancement when phase2 invariant gate fails', async () => {
+    const gateResult = {
+      checked: true,
+      checksRun: 5,
+      violations: [
+        {
+          code: 'strategy_fee_recipient_mismatch',
+          message: 'CCALaunchStrategy feeRecipient does not match expected tradeFeeCollector',
+        },
+      ],
+      expectations: {
+        creatorToken: '0x1000000000000000000000000000000000000001',
+        shareToken: '0x2000000000000000000000000000000000000002',
+        gaugeController: '0x3000000000000000000000000000000000000003',
+        ccaStrategy: '0x4000000000000000000000000000000000000004',
+        expectedTradeFeeCollector: '0x3000000000000000000000000000000000000003',
+        expectedPayoutRecipient: '0x3000000000000000000000000000000000000003',
+        payoutRecipientMode: 'gauge' as const,
+      },
+    }
+    verifyDeployPhase2InvariantsMock.mockResolvedValueOnce(gateResult)
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase3Calls: [makeCall('0xphase3target')],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.error).toBe('phase2_invariant_failed:strategy_fee_recipient_mismatch')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        payloadPatch: expect.objectContaining({
+          phase2InvariantGate: expect.objectContaining({
+            violations: [expect.objectContaining({ code: 'strategy_fee_recipient_mismatch' })],
+          }),
+          phase2InvariantGateCheckedAt: expect.any(String),
+        }),
+      }),
+    )
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'failed',
+        lastError: 'phase2_invariant_failed:strategy_fee_recipient_mismatch',
+      }),
+    )
+  })
+
+  it('status marks the session failed and exposes phase2 invariant gate details', async () => {
+    const gateResult = {
+      checked: true,
+      checksRun: 5,
+      violations: [
+        {
+          code: 'external_revenue_recipient_mismatch',
+          message: 'Creator Coin payoutRecipient does not match expected recipient',
+        },
+      ],
+      expectations: {
+        creatorToken: '0x1000000000000000000000000000000000000001',
+        shareToken: '0x2000000000000000000000000000000000000002',
+        gaugeController: '0x3000000000000000000000000000000000000003',
+        ccaStrategy: '0x4000000000000000000000000000000000000004',
+        expectedTradeFeeCollector: '0x3000000000000000000000000000000000000003',
+        expectedPayoutRecipient: '0x5000000000000000000000000000000000000005',
+        payoutRecipientMode: 'payout_router' as const,
+      },
+    }
+    verifyDeployPhase2InvariantsMock.mockResolvedValueOnce(gateResult)
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase3Calls: [makeCall('0xphase3target')],
+      },
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({
+        ...rec,
+        step: 'failed',
+        lastError: 'phase2_invariant_failed:external_revenue_recipient_mismatch',
+        payload: {
+          ...rec.payload,
+          phase2InvariantGate: gateResult,
+        },
+      })
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('failed')
+    expect(res.body?.data?.lastError).toBe('phase2_invariant_failed:external_revenue_recipient_mismatch')
+    expect(res.body?.data?.phase2InvariantGate?.violations?.[0]?.code).toBe(
+      'external_revenue_recipient_mismatch',
+    )
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'failed',
+        lastError: 'phase2_invariant_failed:external_revenue_recipient_mismatch',
+      }),
     )
   })
 
@@ -1650,8 +1791,10 @@ describe('deploy session optimistic concurrency', () => {
       expect(fetchMock.mock.calls.length).toBeGreaterThan(0)
       expect(transitionDeploySessionMock).not.toHaveBeenCalled()
       expect(updateDeploySessionMock).toHaveBeenCalled()
-      const updateArg = (updateDeploySessionMock.mock.calls as any[])[0]?.[0] as any
-      expect(String(updateArg?.lastError ?? '')).toContain('ovault eligibility')
+      const sawOvaultEligibilityFailure = (updateDeploySessionMock.mock.calls as any[]).some((call) =>
+        String(call?.[0]?.lastError ?? '').includes('ovault eligibility'),
+      )
+      expect(sawOvaultEligibilityFailure).toBe(true)
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }

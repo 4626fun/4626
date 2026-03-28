@@ -177,7 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const allTimeRank = typeof rankAll?.rows?.[0]?.rank === 'number' ? (rankAll.rows[0].rank as number) : null
 
   const origin = getOrigin(req)
-  const referralLink = referralCode ? `${origin}/?ref=${encodeURIComponent(referralCode)}#waitlist` : null
+  const referralLink = referralCode ? `${origin}/r/${encodeURIComponent(referralCode)}` : null
 
   const data: ReferralsMeResponse = {
     referralCode,

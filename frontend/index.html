@@ -59,6 +59,27 @@
     </script>
     <script>
       ;(() => {
+        // Keep stale-chunk cache-busting internal and remove internal-only params from the visible URL.
+        try {
+          const INTERNAL_QUERY_KEYS = new Set(['_r'])
+          const INTERNAL_QUERY_PREFIXES = ['_cv_', '__cv_']
+          const cleanUrl = new URL(window.location.href)
+          let changed = false
+          for (const key of [...cleanUrl.searchParams.keys()]) {
+            const isInternal =
+              INTERNAL_QUERY_KEYS.has(key) || INTERNAL_QUERY_PREFIXES.some((prefix) => key.startsWith(prefix))
+            if (!isInternal) continue
+            cleanUrl.searchParams.delete(key)
+            changed = true
+          }
+          if (changed) {
+            const nextPath = `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`
+            window.history.replaceState(window.history.state, '', nextPath)
+          }
+        } catch {
+          // ignore
+        }
+
         // Stale-chunk recovery:
         // When a user has an old cached HTML that references old hashed assets, module imports can fail with
         // "Expected a JavaScript module but got text/html" (because the SPA fallback serves index.html).

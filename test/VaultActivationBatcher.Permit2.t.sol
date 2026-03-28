@@ -141,12 +141,23 @@ contract MockWrapper {
 contract MockCCAStrategy {
     IERC20 internal immutable shareToken;
     uint128 public lastRequiredRaise;
+    uint256 public constant DEFAULT_FLOOR_PRICE = 1e15;
 
     constructor(address shareToken_) {
         shareToken = IERC20(shareToken_);
     }
 
+    function defaultFloorPrice() external pure returns (uint256) {
+        return DEFAULT_FLOOR_PRICE;
+    }
+
     function launchAuctionSimple(uint256 amount, uint128 requiredRaise) external returns (address auction) {
+        lastRequiredRaise = requiredRaise;
+        shareToken.transferFrom(msg.sender, address(this), amount);
+        return address(this);
+    }
+
+    function launchAuction(uint256 amount, uint256, uint128 requiredRaise, bytes calldata) external returns (address auction) {
         lastRequiredRaise = requiredRaise;
         shareToken.transferFrom(msg.sender, address(this), amount);
         return address(this);

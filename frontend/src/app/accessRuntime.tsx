@@ -21,7 +21,6 @@ import {
   type CreatorAllowlistMode,
   type RouteId,
   useAccessContext,
-  withReason,
 } from './accessShared'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -120,7 +119,7 @@ function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNod
   const decision = resolveAccess(props.routeId, access)
   if (!decision.allow) {
     if (decision.reason === 'loading') return <AppLoadingState />
-    const to = decision.redirectTo ?? withReason('/', decision.reason)
+    const to = decision.redirectTo ?? '/'
     if (to.startsWith('http://') || to.startsWith('https://')) {
       if (typeof window !== 'undefined') window.location.replace(to)
       return null
@@ -190,7 +189,7 @@ export function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode 
   if (acceptedDecision.allow) {
     return <Navigate to="/swap" replace state={{ from: location.pathname }} />
   }
-  const to = acceptedDecision.redirectTo ?? withReason('/', acceptedDecision.reason)
+  const to = acceptedDecision.redirectTo ?? '/'
   if (to.startsWith('http://') || to.startsWith('https://')) {
     if (typeof window !== 'undefined') window.location.replace(to)
     return null

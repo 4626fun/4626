@@ -23,9 +23,9 @@ describe('keepr conversational fallback behavior', () => {
 
   it('returns deterministic command fallback for plain text when vault is not configured', async () => {
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
-    const { handleKeeprCommand } = await import('../commands.ts')
+    const { executeCommand } = await import('../../commands/execute.ts')
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'telegram:7726886643',
       senderWallet: TEST_WALLET,
       text: 'Gm',
@@ -39,9 +39,9 @@ describe('keepr conversational fallback behavior', () => {
 
   it('returns deterministic connect guidance for unconfigured groups', async () => {
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
-    const { handleKeeprCommand } = await import('../commands.ts')
+    const { executeCommand } = await import('../../commands/execute.ts')
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'telegram:-100123456',
       senderWallet: TEST_WALLET,
       text: 'How do I connect this group in 4626?',
@@ -59,9 +59,9 @@ describe('keepr conversational fallback behavior', () => {
 
   it('returns deterministic connect guidance for /ai setup prompts in unconfigured groups', async () => {
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
-    const { handleKeeprCommand } = await import('../commands.ts')
+    const { executeCommand } = await import('../../commands/execute.ts')
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'telegram:-1003595003982',
       senderWallet: TEST_WALLET,
       text: '/ai help me configure this group to 4626',
@@ -75,9 +75,9 @@ describe('keepr conversational fallback behavior', () => {
 
   it('blocks privileged /send command in assistant-only mode', async () => {
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
-    const { handleKeeprCommand } = await import('../commands.ts')
+    const { executeCommand } = await import('../../commands/execute.ts')
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'telegram:-1003595003982',
       senderWallet: TEST_WALLET,
       text: '/send 1 USDC to 0x1111111111111111111111111111111111111111',
@@ -105,9 +105,9 @@ describe('keepr conversational fallback behavior', () => {
       config: {},
     }
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(vault)
-    const { handleKeeprCommand } = await import('../commands.ts')
+    const { executeCommand } = await import('../../commands/execute.ts')
 
-    const result = await handleKeeprCommand({
+    const result = await executeCommand({
       groupId: 'telegram:7726886643',
       senderWallet: TEST_WALLET,
       text: 'Can you summarize this group setup?',

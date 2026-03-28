@@ -35,4 +35,13 @@ describe('telegram webhook config', () => {
     expect(config.miniAppSessionTtlSeconds).toBe(300)
     expect(config.miniAppReplayTtlSeconds).toBe(300)
   })
+
+  it('normalizes stale Telegram menu button labels from env', () => {
+    restoreEnv = applyEnv({
+      TELEGRAM_MENU_BUTTON_TEXT: 'Open 4626 v2',
+    })
+
+    const config = getTelegramWebhookConfig()
+    expect(config.menuButtonText).toBe('Open 4626')
+  })
 })

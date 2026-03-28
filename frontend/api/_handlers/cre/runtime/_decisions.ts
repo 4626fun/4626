@@ -14,6 +14,7 @@ import {
   storeRuntimeDecision,
 } from "../../../../server/_lib/cre/runtimeBridge.js"
 import { logger } from "../../../../server/_lib/logger.js"
+import { normalizeRuntimeDecisionForWorkspace } from "../../../../server/_lib/workspace/normalizer.js"
 
 type EnqueueActionBody = {
   vaultAddress?: string
@@ -181,6 +182,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const actionId =
       enqueueAction && stored.inserted ? await maybeEnqueueRuntimeAction(enqueueAction) : undefined
+
+    if (stored.inserted) {
+      await normalizeRuntimeDecisionForWorkspace({
+        decision: stored.decision,
+        actionId,
+        enqueueAction: enqueueAction ?? null,
+      }).catch((error) => {
+        logger.warn("Workspace runtime decision normalization failed", {
+          workflow,
+          idempotencyKey,
+          correlationId: auth.correlationId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
 
     logger.info("CRE decision stored", {
       workflow,

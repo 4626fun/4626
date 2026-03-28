@@ -556,13 +556,38 @@ describe('telegram endpoint handlers', () => {
     expect(setTelegramMyCommandsMock).toHaveBeenCalledTimes(3)
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledTimes(1)
     expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.miniAppUrl).toBe('https://v1.4626.fun/telegram/menu')
+    expect(res.body?.data?.miniAppUrl).toBe('https://4626.fun/telegram/link')
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        menuButton: expect.objectContaining({
+        menuButton: { type: 'commands' },
+      }),
+    )
+  })
+
+  it('POST /api/telegram/bot-config normalizes stale menu labels and legacy miniapp domains', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_bot-config.ts')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        menuMode: 'web_app',
+        menuText: 'Open 4626 v2',
+        miniAppUrl: 'https://v1.4626.fun',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.menuText).toBe('Connect')
+    expect(res.body?.data?.miniAppUrl).toBe('https://4626.fun/telegram/link')
+    expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        menuButton: {
           type: 'web_app',
-          web_app: { url: 'https://v1.4626.fun/telegram/menu' },
-        }),
+          text: 'Connect',
+          web_app: { url: 'https://4626.fun/telegram/link' },
+        },
       }),
     )
   })

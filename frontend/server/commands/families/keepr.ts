@@ -2,23 +2,10 @@ import type { Address } from 'viem'
 
 import { checkSharesEligibility } from '../../_lib/keeprGating.js'
 import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../../_lib/keeprRegistry.js'
-import {
-  isOpenbbConfigured,
-  openbbCompanyNews,
-  openbbEconomicCalendar,
-  openbbEquityHistorical,
-  openbbEquityQuote,
-  openbbFinancialRatios,
-  type CompanyNewsData,
-  type EconomicCalendarData,
-  type EquityHistoricalData,
-  type EquityQuoteData,
-  type FinancialRatiosData,
-} from '../../_lib/openbbClient.js'
 import { formatNumberedCommandFallback } from '../../_lib/chatCommandFallback.js'
 import type { KeeprCommandResult, KeeprRole } from '../types.js'
 
-type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'market' | 'social' | 'ops' | 'wallet'
+type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'social' | 'ops' | 'wallet'
 
 function formatHelpCommandRow(command: string, description: string, permission?: 'OWNER' | 'ADMIN/OWNER'): string {
   const safeCommand = escapeTelegramHtml(command)
@@ -40,7 +27,7 @@ function escapeTelegramHtml(value: string): string {
 }
 
 function formatKeeprHelpTopics(): string[] {
-  return ['<blockquote>Need more? <code>/help core|coin|market|social|ops|wallet</code> • <code>/help all</code></blockquote>']
+  return ['<blockquote>Need more? <code>/help core|coin|social|ops|wallet</code> • <code>/help all</code></blockquote>']
 }
 
 function formatTelegramQuote(content: string, options?: { expandable?: boolean }): string {
@@ -69,7 +56,7 @@ function formatKeeprHelpFull(): string {
       formatHelpCommandRow('/linked', 'link status'),
       formatHelpCommandRow('/wallet', 'wallet + positions'),
       formatHelpCommandRow('/buy | /sell | /bid', 'guided trade flow'),
-      formatHelpCommandRow('/vaults | /auctions | /signals', 'discovery + monitoring'),
+      formatHelpCommandRow('/vaults | /auctions', 'discovery + monitoring'),
     ]),
     ...formatHelpSection('manage', [
       formatHelpCommandRow('/keepr status', 'vault status'),
@@ -82,11 +69,6 @@ function formatKeeprHelpFull(): string {
     ]),
     ...formatHelpSection('analyze', [
       formatHelpCommandRow('/ai <question>', 'ask Keepr'),
-      formatHelpCommandRow('/mkt quote <symbol>', 'latest quote'),
-      formatHelpCommandRow('/mkt news <symbol> [limit]', 'recent headlines'),
-      formatHelpCommandRow('/mkt ratios <symbol>', 'fundamentals'),
-      formatHelpCommandRow('/mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]', 'macro calendar'),
-      formatHelpCommandRow('/mkt chart <symbol> <range>', 'price history'),
       formatHelpCommandRow('/coin trend check <ticker>', 'trend preflight'),
       formatHelpCommandRow('/whois | /intel | /reputation | /feedback', 'identity + intel'),
     ]),
@@ -107,7 +89,7 @@ function formatKeeprHelpFull(): string {
       formatHelpCommandRow('/coin create <name> <symbol> <uri>', 'create content coin', 'ADMIN/OWNER'),
       formatHelpCommandRow('/coin buy | /coin sell | /coin balance | /coin info', 'coin ops'),
       formatHelpCommandRow('/cre auction | /cre solana | /cre tend | /cre report | /cre settle-fees | /cre relay-entries', 'keeper ops'),
-      'Telegram tip: tap <b>CRE Ops</b> or <b>Solana</b> in the bot menu for one-tap operator actions.',
+      'Telegram ops: tap <b>CRE Ops</b> or <b>Solana</b> in the bot menu for one-tap operator actions.',
     ]),
     ...formatHelpSection('permissions', [
       '<b>OWNER</b> — highest privilege',
@@ -116,7 +98,6 @@ function formatKeeprHelpFull(): string {
     ]),
     ...formatHelpSection('help by topic', [
       '<code>/help coin</code> — Zora Coin commands',
-      '<code>/help mkt</code> — market data commands',
       '<code>/help x</code> — X / Twitter commands',
       '<code>/help cre</code> — CRE Keeper commands',
       '<code>/help wallet</code> — wallet and identity commands',
@@ -141,7 +122,6 @@ function formatKeeprQuickHelp(unknownTopic: string | null = null): string {
     '<u>most used</u>',
     formatHelpCommandRow('/keepr status', 'vault status and config'),
     formatHelpCommandRow('/ai <question>', 'ask in plain English'),
-    formatHelpCommandRow('/mkt quote <symbol>', 'fast market quote'),
     formatHelpCommandRow('/coin trend check <ticker>', 'trend preflight check'),
     formatHelpCommandRow('/x post <message> --confirm', 'publish a post', 'ADMIN/OWNER'),
     '<blockquote>symbol example: <code>BTC</code></blockquote>',
@@ -173,9 +153,6 @@ function resolveKeeprHelpTopic(rawTopic: string | null | undefined): { topic: Ke
     case 'coins':
     case 'zora':
       return { topic: 'coin', unknownTopic: null }
-    case 'market':
-    case 'mkt':
-      return { topic: 'market', unknownTopic: null }
     case 'social':
     case 'x':
     case 'twitter':
@@ -227,20 +204,6 @@ export function formatKeeprHelp(rawTopic: string | null = null): string {
       formatHelpCommandRow('/coin trend reserve <ticker>', 'deploy a trend coin', 'ADMIN/OWNER'),
       formatHelpCommandRow('/coin trend status <ticker>', 'view trend operation status'),
       formatHelpCommandRow('/coin trend funnel <ticker> <eth-amount>', 'run guarded flywheel action', 'ADMIN/OWNER'),
-      '',
-      '<blockquote>Need everything? <code>/help all</code></blockquote>',
-    ].join('\n')
-  }
-
-  if (topic === 'market') {
-    return [
-      '<b>Keepr — market</b>',
-      '',
-      formatHelpCommandRow('/mkt quote <symbol>', 'latest quote'),
-      formatHelpCommandRow('/mkt news <symbol> [limit]', 'recent headlines'),
-      formatHelpCommandRow('/mkt ratios <symbol>', 'fundamentals ratios'),
-      formatHelpCommandRow('/mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]', 'macro event calendar'),
-      formatHelpCommandRow('/mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]', 'price history summary'),
       '',
       '<blockquote>Need everything? <code>/help all</code></blockquote>',
     ].join('\n')
@@ -325,7 +288,7 @@ export function formatAssistantOnlyBlocked(command: string): string {
     'Assistant-only mode',
     '',
     `- ${command} is disabled until this group is connected to a 4626 vault`,
-    '- You can still use /ai, /help, /mkt, /whois, and /wallet',
+    '- You can still use /ai, /help, /whois, and /wallet',
     '- To enable full actions: run /link, verify /linked, scope a vault, then confirm with /keepr status',
   ].join('\n')
 }
@@ -357,473 +320,6 @@ export function formatVaultStatus(v: Awaited<ReturnType<typeof getKeeprVaultByGr
     '  - failClosed: ' + String(v.failClosed),
     '- configHash: ' + v.configHash,
   ].join('\n')
-}
-
-const MARKET_SYMBOL_RE = /^[a-z0-9][a-z0-9.\-]{0,15}$/i
-const DAY_MS = 86_400_000
-
-export function isMarketCommand(rawLower: string): boolean {
-  return /^\/mkt(\s|$)/.test(rawLower) || /^mkt(\s|$)/.test(rawLower)
-}
-
-function formatMarketHelp(): string {
-  return [
-    'Market data commands (OpenBB)',
-    '',
-    '- /mkt quote AAPL',
-    '- /mkt news AAPL [limit]',
-    '- /mkt ratios AAPL',
-    '- /mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]',
-    '- /mkt chart AAPL [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]',
-    '',
-    'Notes:',
-    '- Data is informational only (not financial advice).',
-  ].join('\n')
-}
-
-function normalizeSymbol(value: string | null | undefined): string | null {
-  const raw = String(value ?? '').trim()
-  if (!raw) return null
-  if (!MARKET_SYMBOL_RE.test(raw)) return null
-  return raw.toUpperCase()
-}
-
-function asArray<T>(value: T | T[] | null | undefined): T[] {
-  if (!value) return []
-  return Array.isArray(value) ? value : [value]
-}
-
-function toNumber(value: unknown): number | null {
-  const n = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(n) ? n : null
-}
-
-function formatSignedNumber(value: number, decimals = 2): string {
-  const sign = value >= 0 ? '+' : ''
-  return `${sign}${value.toFixed(decimals)}`
-}
-
-function formatPercentNormalized(value: number, decimals = 2): string {
-  const pct = Math.abs(value) <= 1 ? value * 100 : value
-  const sign = pct >= 0 ? '+' : ''
-  return `${sign}${pct.toFixed(decimals)}%`
-}
-
-function formatCompactNumber(value: number): string {
-  const abs = Math.abs(value)
-  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
-  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
-  if (abs >= 1_000) return `${(value / 1_000).toFixed(2)}K`
-  if (abs >= 10) return value.toFixed(0)
-  return value.toFixed(2)
-}
-
-function isoDateUtcFromMs(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10)
-}
-
-function parseIsoDate(value: string): string | null {
-  const v = value.trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
-  const ms = Date.parse(`${v}T00:00:00Z`)
-  if (!Number.isFinite(ms)) return null
-  return v
-}
-
-function parseIsoRangeToken(value: string): { startDate: string; endDate: string } | null {
-  const parts = value.split('..')
-  if (parts.length !== 2) return null
-  const startDate = parseIsoDate(parts[0] ?? '')
-  const endDate = parseIsoDate(parts[1] ?? '')
-  if (!startDate || !endDate) return null
-  const startMs = Date.parse(`${startDate}T00:00:00Z`)
-  const endMs = Date.parse(`${endDate}T00:00:00Z`)
-  if (endMs < startMs) return null
-  return { startDate, endDate }
-}
-
-function daysBetween(startDate: string, endDate: string): number {
-  const startMs = Date.parse(`${startDate}T00:00:00Z`)
-  const endMs = Date.parse(`${endDate}T00:00:00Z`)
-  return Math.floor((endMs - startMs) / DAY_MS)
-}
-
-function truncate(value: string, max = 120): string {
-  const v = value.trim()
-  if (v.length <= max) return v
-  return v.slice(0, max - 1).trimEnd() + '…'
-}
-
-function formatMarketError(result: { error: string; message?: string }): string {
-  if (result.error === 'not_configured') {
-    return 'Market data is not configured. Set OPENBB_API_BASE_URL on the agent/server.'
-  }
-  if (result.error === 'backend_unavailable') {
-    return 'Market data is temporarily unavailable (OpenBB backend unreachable).'
-  }
-  const msg = (result.message ?? '').trim()
-  if (!msg) return 'Market data request failed.'
-  return `Market data request failed: ${truncate(msg, 180)}`
-}
-
-function pickNumber(row: Record<string, unknown>, keys: string[]): number | null {
-  for (const key of keys) {
-    if (!(key in row)) continue
-    const n = toNumber((row as any)[key])
-    if (n !== null) return n
-  }
-  return null
-}
-
-function formatMaybePercent(value: number | null): string | null {
-  if (value === null) return null
-  const pct = Math.abs(value) <= 1 ? value * 100 : value
-  return `${pct.toFixed(1)}%`
-}
-
-function formatCalendarValue(value: unknown, unit: unknown): string | null {
-  const v = typeof value === 'number' || typeof value === 'string' ? String(value).trim() : ''
-  if (!v) return null
-  const u = typeof unit === 'string' ? unit.trim() : ''
-  if (!u) return v
-  if (u === '%' || u.startsWith('%')) return `${v}${u}`
-  return `${v} ${u}`
-}
-
-function resolveCalendarRange(arg: string | null): { startDate: string; endDate: string } | { error: string } {
-  const raw = String(arg ?? '').trim()
-  const token = raw.toLowerCase()
-
-  const today = isoDateUtcFromMs(Date.now())
-  if (!token || token === 'week') {
-    return { startDate: today, endDate: isoDateUtcFromMs(Date.now() + 7 * DAY_MS) }
-  }
-  if (token === 'today') {
-    return { startDate: today, endDate: today }
-  }
-
-  const explicit = parseIsoRangeToken(raw)
-  if (!explicit) {
-    return { error: 'Usage: /mkt calendar [today|week|YYYY-MM-DD..YYYY-MM-DD]' }
-  }
-  if (daysBetween(explicit.startDate, explicit.endDate) > 31) {
-    return { error: 'Date range too large. Limit calendar queries to 31 days.' }
-  }
-  return explicit
-}
-
-function resolveChartRange(arg: string | null): { startDate: string; endDate: string; label: string } | { error: string } {
-  const raw = String(arg ?? '').trim()
-  const token = raw.toLowerCase()
-
-  const endDate = isoDateUtcFromMs(Date.now())
-  const presets: Record<string, { days: number; label: string }> = {
-    '1w': { days: 7, label: '1w' },
-    week: { days: 7, label: '1w' },
-    '1m': { days: 30, label: '1m' },
-    '3m': { days: 90, label: '3m' },
-    '1y': { days: 365, label: '1y' },
-  }
-
-  if (!token) {
-    const p = presets['1m']
-    return { startDate: isoDateUtcFromMs(Date.now() - p.days * DAY_MS), endDate, label: p.label }
-  }
-
-  const preset = presets[token]
-  if (preset) {
-    return { startDate: isoDateUtcFromMs(Date.now() - preset.days * DAY_MS), endDate, label: preset.label }
-  }
-
-  const explicit = parseIsoRangeToken(raw)
-  if (!explicit) {
-    return { error: 'Usage: /mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]' }
-  }
-  const days = daysBetween(explicit.startDate, explicit.endDate)
-  if (days > 400) {
-    return { error: 'Date range too large. Limit chart queries to ~400 days.' }
-  }
-  return { startDate: explicit.startDate, endDate: explicit.endDate, label: `${explicit.startDate}..${explicit.endDate}` }
-}
-
-export async function handleMarketCommand(text: string): Promise<KeeprCommandResult> {
-  const parts = text.split(/\s+/g).filter(Boolean)
-  const prefix = String(parts[0] ?? '').toLowerCase()
-  if (prefix !== '/mkt' && prefix !== 'mkt') {
-    return { ok: false, response: '' }
-  }
-
-  const cmd = String(parts[1] ?? 'help').trim().toLowerCase()
-  const arg1 = parts[2] ? String(parts[2]).trim() : null
-  const arg2 = parts[3] ? String(parts[3]).trim() : null
-
-  if (cmd === 'help') {
-    return { ok: true, response: formatMarketHelp() }
-  }
-
-  if (cmd === 'quote') {
-    const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: /mkt quote <symbol>' }
-    const result = await openbbEquityQuote({ symbol })
-    if (!result.ok) return { ok: false, response: formatMarketError(result) }
-
-    const envelope = result.data
-    const quote = asArray<EquityQuoteData>(envelope?.results as any)[0]
-    if (!quote) return { ok: false, response: `No quote data returned for ${symbol}.` }
-
-    const last = toNumber(quote.last_price)
-    const change = toNumber(quote.change)
-    const changePct = toNumber(quote.change_percent)
-    const volume = toNumber(quote.volume)
-    const exchange = typeof quote.exchange === 'string' ? quote.exchange : null
-    const name = typeof quote.name === 'string' ? quote.name : null
-    const ts = typeof quote.last_timestamp === 'string' ? quote.last_timestamp : null
-
-    const lines: string[] = []
-    lines.push(`Market quote — ${quote.symbol ?? symbol}${name ? ` (${name})` : ''}`)
-    if (last !== null) {
-      const price = last.toFixed(2)
-      const delta = change !== null ? formatSignedNumber(change, 2) : null
-      const pct = changePct !== null ? formatPercentNormalized(changePct, 2) : null
-      lines.push(`- last: ${price}${pct ? ` (${pct}${delta ? `, ${delta}` : ''})` : delta ? ` (${delta})` : ''}`)
-    }
-    const o = toNumber(quote.open)
-    const h = toNumber(quote.high)
-    const l = toNumber(quote.low)
-    const prev = toNumber(quote.prev_close)
-    const dayParts: string[] = []
-    if (prev !== null) dayParts.push(`prev ${prev.toFixed(2)}`)
-    if (o !== null) dayParts.push(`open ${o.toFixed(2)}`)
-    if (h !== null && l !== null) dayParts.push(`H/L ${h.toFixed(2)}/${l.toFixed(2)}`)
-    if (dayParts.length > 0) lines.push(`- ${dayParts.join(' | ')}`)
-    const metaParts: string[] = []
-    if (volume !== null) metaParts.push(`vol ${formatCompactNumber(volume)}`)
-    if (exchange) metaParts.push(`exch ${exchange}`)
-    if (ts) metaParts.push(`ts ${ts}`)
-    if (metaParts.length > 0) lines.push(`- ${metaParts.join(' | ')}`)
-    if (envelope?.provider) lines.push(`- provider: ${envelope.provider}`)
-    return { ok: true, response: lines.join('\n') }
-  }
-
-  if (cmd === 'news') {
-    const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: /mkt news <symbol> [limit]' }
-    const limit = arg2 ? Math.max(1, Math.min(10, Math.floor(Number(arg2)))) : 5
-    const endDate = isoDateUtcFromMs(Date.now())
-    const startDate = isoDateUtcFromMs(Date.now() - 7 * DAY_MS)
-    const result = await openbbCompanyNews({ symbol, startDate, endDate, limit })
-    if (!result.ok) return { ok: false, response: formatMarketError(result) }
-
-    const envelope = result.data
-    const items = asArray<CompanyNewsData>(envelope?.results as any)
-    if (items.length === 0) return { ok: true, response: `Company news — ${symbol}\n\nNo recent articles found.` }
-
-    const sorted = [...items].sort((a, b) => {
-      const ams = Date.parse(String(a?.date ?? ''))
-      const bms = Date.parse(String(b?.date ?? ''))
-      return (Number.isFinite(bms) ? bms : 0) - (Number.isFinite(ams) ? ams : 0)
-    })
-
-    const lines: string[] = []
-    lines.push(`Company news — ${symbol} (top ${Math.min(limit, sorted.length)})`)
-    lines.push('')
-    sorted.slice(0, limit).forEach((n, idx) => {
-      const date = String(n.date ?? '').slice(0, 10)
-      const title = truncate(String(n.title ?? 'Untitled'), 120)
-      const url = String(n.url ?? '').trim()
-      lines.push(`${idx + 1}) ${title}${date ? ` (${date})` : ''}${url ? ` — ${url}` : ''}`)
-    })
-    if (envelope?.provider) lines.push(`\nprovider: ${envelope.provider}`)
-    return { ok: true, response: lines.join('\n') }
-  }
-
-  if (cmd === 'ratios') {
-    const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: /mkt ratios <symbol>' }
-    const result = await openbbFinancialRatios({ symbol, limit: 1 })
-    if (!result.ok) {
-      if (result.error === 'bad_request' && !isOpenbbConfigured()) {
-        return { ok: false, response: formatMarketError(result) }
-      }
-      if (result.error === 'bad_request') {
-        return {
-          ok: false,
-          response:
-            'Fundamental ratios may require provider API keys on the OpenBB server (e.g. FMP or Intrinio). ' +
-            `Error: ${truncate(result.message ?? 'bad_request', 160)}`,
-        }
-      }
-      return { ok: false, response: formatMarketError(result) }
-    }
-
-    const envelope = result.data
-    const row = asArray<FinancialRatiosData>(envelope?.results as any)[0] as any
-    if (!row || typeof row !== 'object') return { ok: false, response: `No ratios data returned for ${symbol}.` }
-
-    const pe = pickNumber(row, ['price_to_earnings', 'pe_ratio'])
-    const pb = pickNumber(row, ['price_to_book', 'pb_ratio'])
-    const ps = pickNumber(row, ['price_to_sales', 'ps_ratio'])
-    const peg = pickNumber(row, ['peg_ratio', 'peg'])
-    const gross = formatMaybePercent(pickNumber(row, ['gross_profit_margin', 'gross_margin']))
-    const op = formatMaybePercent(pickNumber(row, ['operating_profit_margin', 'operating_margin']))
-    const net = formatMaybePercent(pickNumber(row, ['net_profit_margin', 'net_margin']))
-    const current = pickNumber(row, ['current_ratio'])
-    const quick = pickNumber(row, ['quick_ratio'])
-    const dte = pickNumber(row, ['debt_to_equity', 'debt_equity_ratio'])
-    const roe = formatMaybePercent(pickNumber(row, ['return_on_equity', 'roe']))
-    const roa = formatMaybePercent(pickNumber(row, ['return_on_assets', 'roa']))
-
-    const periodEnding = typeof row.period_ending === 'string' ? row.period_ending : null
-    const lines: string[] = []
-    lines.push(`Financial ratios — ${symbol}${periodEnding ? ` (period ending ${String(periodEnding).slice(0, 10)})` : ''}`)
-    const valuationParts: string[] = []
-    if (pe !== null) valuationParts.push(`P/E ${pe.toFixed(2)}`)
-    if (pb !== null) valuationParts.push(`P/B ${pb.toFixed(2)}`)
-    if (ps !== null) valuationParts.push(`P/S ${ps.toFixed(2)}`)
-    if (peg !== null) valuationParts.push(`PEG ${peg.toFixed(2)}`)
-    if (valuationParts.length > 0) lines.push(`- valuation: ${valuationParts.join(' | ')}`)
-
-    const marginParts: string[] = []
-    if (gross) marginParts.push(`gross ${gross}`)
-    if (op) marginParts.push(`op ${op}`)
-    if (net) marginParts.push(`net ${net}`)
-    if (marginParts.length > 0) lines.push(`- margins: ${marginParts.join(' | ')}`)
-
-    const balanceParts: string[] = []
-    if (current !== null) balanceParts.push(`current ${current.toFixed(2)}`)
-    if (quick !== null) balanceParts.push(`quick ${quick.toFixed(2)}`)
-    if (dte !== null) balanceParts.push(`D/E ${dte.toFixed(2)}`)
-    if (roe) balanceParts.push(`ROE ${roe}`)
-    if (roa) balanceParts.push(`ROA ${roa}`)
-    if (balanceParts.length > 0) lines.push(`- balance: ${balanceParts.join(' | ')}`)
-
-    if (valuationParts.length === 0 && marginParts.length === 0 && balanceParts.length === 0) {
-      const keys = Object.keys(row).slice(0, 20).join(', ')
-      lines.push(`- note: ratios fetched but no known fields matched (keys: ${keys}${Object.keys(row).length > 20 ? ', …' : ''})`)
-    }
-    if (envelope?.provider) lines.push(`- provider: ${envelope.provider}`)
-    return { ok: true, response: lines.join('\n') }
-  }
-
-  if (cmd === 'calendar') {
-    const range = resolveCalendarRange(arg1)
-    if ('error' in range) return { ok: false, response: range.error }
-    const result = await openbbEconomicCalendar({ startDate: range.startDate, endDate: range.endDate })
-    if (!result.ok) return { ok: false, response: formatMarketError(result) }
-
-    const envelope = result.data
-    const items = asArray<EconomicCalendarData>(envelope?.results as any)
-    if (items.length === 0) {
-      return {
-        ok: true,
-        response: `Macro calendar (${range.startDate}..${range.endDate})\n\nNo events found.`,
-      }
-    }
-
-    const toMs = (d: unknown) => {
-      const ms = Date.parse(String(d ?? ''))
-      return Number.isFinite(ms) ? ms : 0
-    }
-    const sorted = [...items].sort((a, b) => toMs(a.date) - toMs(b.date))
-    const highs = sorted.filter((e) => String(e.importance ?? '').toLowerCase().includes('high'))
-    const pick = highs.length > 0 ? highs : sorted
-
-    const lines: string[] = []
-    lines.push(`Macro calendar (${range.startDate}..${range.endDate})`)
-    lines.push('')
-    pick.slice(0, 10).forEach((e) => {
-      const date = String(e.date ?? '').replace('T', ' ').slice(0, 16)
-      const country = String(e.country ?? '').trim()
-      const event = String(e.event ?? '').trim()
-      const importance = String(e.importance ?? '').trim()
-      const actual = formatCalendarValue(e.actual, e.unit)
-      const consensus = formatCalendarValue(e.consensus, e.unit)
-      const previous = formatCalendarValue(e.previous, e.unit)
-      const stats = [
-        actual ? `actual ${actual}` : null,
-        consensus ? `cons ${consensus}` : null,
-        previous ? `prev ${previous}` : null,
-      ].filter(Boolean)
-
-      const left = `${date || 'date?'}${country ? ` ${country}` : ''} — ${event || 'event'}${importance ? ` (${importance})` : ''}`
-      lines.push(`- ${left}${stats.length > 0 ? ` — ${stats.join(', ')}` : ''}`)
-    })
-    if (envelope?.provider) lines.push(`\nprovider: ${envelope.provider}`)
-    return { ok: true, response: lines.join('\n') }
-  }
-
-  if (cmd === 'chart') {
-    const symbol = normalizeSymbol(arg1)
-    if (!symbol) return { ok: false, response: 'Usage: /mkt chart <symbol> [1w|1m|3m|1y|YYYY-MM-DD..YYYY-MM-DD]' }
-    const range = resolveChartRange(arg2)
-    if ('error' in range) return { ok: false, response: range.error }
-    const result = await openbbEquityHistorical({
-      symbol,
-      startDate: range.startDate,
-      endDate: range.endDate,
-      interval: '1d',
-    })
-    if (!result.ok) return { ok: false, response: formatMarketError(result) }
-
-    const envelope = result.data
-    const points = asArray<EquityHistoricalData>(envelope?.results as any)
-      .filter((p) => p && typeof p === 'object')
-      .slice()
-
-    if (points.length < 2) {
-      return { ok: true, response: `Chart — ${symbol} (${range.label})\n\nNot enough data returned.` }
-    }
-
-    const toMs = (d: string) => {
-      const ms = Date.parse(String(d ?? ''))
-      return Number.isFinite(ms) ? ms : 0
-    }
-    points.sort((a, b) => toMs(a.date) - toMs(b.date))
-    const first = points[0]!
-    const last = points[points.length - 1]!
-    const firstClose = toNumber(first.close)
-    const lastClose = toNumber(last.close)
-    const pct =
-      firstClose !== null && lastClose !== null && firstClose !== 0
-        ? ((lastClose - firstClose) / firstClose) * 100
-        : null
-
-    let minLow: number | null = null
-    let maxHigh: number | null = null
-    const closes: number[] = []
-    for (const p of points) {
-      const lo = toNumber(p.low)
-      const hi = toNumber(p.high)
-      const close = toNumber(p.close)
-      if (lo !== null) minLow = minLow === null ? lo : Math.min(minLow, lo)
-      if (hi !== null) maxHigh = maxHigh === null ? hi : Math.max(maxHigh, hi)
-      if (close !== null) closes.push(close)
-    }
-
-    const lines: string[] = []
-    lines.push(`Chart — ${symbol} (${range.label})`)
-    lines.push(`- points: ${points.length} | ${String(first.date).slice(0, 10)} → ${String(last.date).slice(0, 10)}`)
-    if (firstClose !== null && lastClose !== null) {
-      lines.push(
-        `- close: ${firstClose.toFixed(2)} → ${lastClose.toFixed(2)}${pct !== null ? ` (${formatSignedNumber(pct, 2)}%)` : ''}`,
-      )
-    }
-    if (maxHigh !== null && minLow !== null) {
-      lines.push(`- range: high ${maxHigh.toFixed(2)} | low ${minLow.toFixed(2)}`)
-    }
-    if (envelope?.provider) lines.push(`- provider: ${envelope.provider}`)
-    return {
-      ok: true,
-      response: lines.join('\n'),
-    }
-  }
-
-  return {
-    ok: false,
-    response: formatNumberedCommandFallback({
-      intro: 'Unknown /mkt command. Try /mkt help.',
-    }),
-  }
 }
 
 type KeeprVaultRow = Awaited<ReturnType<typeof getKeeprVaultByGroupId>>

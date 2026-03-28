@@ -93,32 +93,6 @@ export function parseDelimitedSet(value: string): Set<string> {
   )
 }
 
-export function parseTipStars(raw: unknown): number | null {
-  const parsed = parseOptionalPositiveInteger(raw)
-  if (!parsed || parsed <= 0) return null
-  return parsed
-}
-
-export function parseTipCallbackData(rawData: string): { stars: number; context: string } | null {
-  const data = asTrimmed(rawData)
-  const match = data.match(/^tip:(\d+):([a-z0-9-]{1,24})$/i)
-  if (!match) return null
-  const stars = parseTipStars(match[1])
-  const context = asTrimmed(match[2]).toLowerCase()
-  if (!stars || !context) return null
-  return { stars, context }
-}
-
-export function parseTipInvoicePayload(rawPayload: unknown): { stars: number; context: string } | null {
-  const payload = asTrimmed(rawPayload)
-  const match = payload.match(/^tip:(\d+):([a-z0-9-]{1,24})(?::.*)?$/i)
-  if (!match) return null
-  const stars = parseTipStars(match[1])
-  const context = asTrimmed(match[2]).toLowerCase()
-  if (!stars || !context) return null
-  return { stars, context }
-}
-
 export function splitTelegramMessage(text: string, maxLen = 3500): string[] {
   const value = asTrimmed(text)
   if (!value) return []
@@ -136,11 +110,6 @@ export function splitTelegramMessage(text: string, maxLen = 3500): string[] {
 
 export function isTwitterCommand(rawText: string): boolean {
   return matchesCommandFamily(rawText, 'twitter')
-}
-
-export function isInlineLauncherCommand(rawText: string): boolean {
-  const lower = asTrimmed(rawText).toLowerCase()
-  return /^(\/inline|inline|\/shortcuts|shortcuts)(\s|$)/.test(lower)
 }
 
 export function isHelpCommand(rawText: string): boolean {

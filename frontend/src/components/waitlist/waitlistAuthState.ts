@@ -1,3 +1,31 @@
+import { apiFetch } from '@/lib/apiBase'
+
+const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
+const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
+
+function clearStoredWaitlistSessionToken() {
+  let changed = false
+  try {
+    const previous = sessionStorage.getItem(SESSION_TOKEN_KEY)
+    if (previous !== null) {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY)
+      changed = true
+    }
+  } catch {
+    return
+  }
+
+  if (!changed || typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(SESSION_TOKEN_CHANGED_EVENT))
+}
+
+async function clearServerWaitlistSession(): Promise<void> {
+  await apiFetch('/api/auth/logout', {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+  }).catch(() => undefined)
+}
+
 export function isRecoveryRequiredAuthError(error: unknown): boolean {
   if (error && typeof error === 'object') {
     const record = error as { status?: unknown; recoveryRequired?: unknown; code?: unknown; message?: unknown }
@@ -36,26 +64,38 @@ export async function runWaitlistPrivyLogout(params: {
   logout: (() => Promise<void>) | null | undefined
   timeoutMs?: number
 }): Promise<void> {
+  clearStoredWaitlistSessionToken()
+  const clearServerSessionPromise = clearServerWaitlistSession()
   const logout = params.logout
-  if (typeof logout !== 'function') return
 
   const timeoutCandidate = params.timeoutMs
   const timeoutMs =
     typeof timeoutCandidate === 'number' && Number.isFinite(timeoutCandidate)
       ? Math.max(0, Math.floor(timeoutCandidate))
       : 1_500
-  let timeoutId: ReturnType<typeof setTimeout> | undefined
 
-  const timeoutPromise = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(resolve, timeoutMs)
-  })
-  const logoutPromise = Promise.resolve()
-    .then(() => logout())
-    .catch(() => undefined)
-
-  try {
-    await Promise.race([logoutPromise, timeoutPromise])
-  } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  const settleWithinTimeout = async (work: Promise<unknown>): Promise<void> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timeoutId = setTimeout(resolve, timeoutMs)
+    })
+    try {
+      await Promise.race([work.then(() => undefined).catch(() => undefined), timeoutPromise])
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId)
+    }
   }
+
+  const tasks: Promise<void>[] = [settleWithinTimeout(clearServerSessionPromise)]
+  if (typeof logout === 'function') {
+    tasks.push(
+      settleWithinTimeout(
+        Promise.resolve()
+          .then(() => logout())
+          .catch(() => undefined),
+      ),
+    )
+  }
+
+  await Promise.all(tasks)
 }

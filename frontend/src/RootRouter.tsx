@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode } from '@/lib/host'
@@ -9,11 +9,23 @@ const Home = lazy(async () => {
   const m = await import('./pages/Home')
   return { default: m.Home }
 })
-const ProtectedApp = lazy(async () => import('./ProtectedApp'))
-const TelegramMenuEntryRoute = lazy(async () => {
-  const m = await import('./pages/TelegramMenuEntry')
-  return { default: m.TelegramMenuEntryRoute }
+const WaitlistInviteEntry = lazy(async () => {
+  const m = await import('./pages/WaitlistInviteEntry')
+  return { default: m.WaitlistInviteEntry }
 })
+const LayoutWithoutAccountContext = lazy(async () => import('./app/LayoutWithoutAccountContext'))
+const ProtectedApp = lazy(async () => import('./ProtectedApp'))
+
+function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) {
+  const location = useLocation()
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.location.replace(`${props.htmlPath}${location.search}${location.hash}`)
+  }, [location.hash, location.search, props.htmlPath])
+
+  return <AppLoadingState />
+}
 
 export function RootRouter() {
   const location = useLocation()
@@ -43,20 +55,32 @@ export function RootRouter() {
       />
       <Routes>
         <Route
-          path="/"
           element={
             <Suspense fallback={<AppLoadingState />}>
-              <Home />
+              <LayoutWithoutAccountContext />
             </Suspense>
           }
-        />
+        >
+          <Route
+            path="/"
+            element={
+              <Suspense fallback={<AppLoadingState />}>
+                <Home />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/r/:referralCode"
+            element={
+              <Suspense fallback={<AppLoadingState />}>
+                <WaitlistInviteEntry />
+              </Suspense>
+            }
+          />
+        </Route>
         <Route
-          path="/telegram/menu"
-          element={
-            <Suspense fallback={<AppLoadingState />}>
-              <TelegramMenuEntryRoute />
-            </Suspense>
-          }
+          path="/telegram/link"
+          element={<StandaloneDocumentRedirect htmlPath="/telegram-link.html" />}
         />
         <Route
           path="*"

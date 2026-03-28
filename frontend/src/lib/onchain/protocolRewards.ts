@@ -63,7 +63,7 @@ export async function fetchProtocolRewardsBalances(accounts: Address[]): Promise
   const client = getBasePublicClient()
   const balances: Record<string, bigint> = {}
 
-  // Small list in practice (unique payoutRecipients), so a simple loop is fine.
+  // Small list in practice (unique CreatorCoin payoutRecipient addresses), so a simple loop is fine.
   for (const account of accounts) {
     balances[account] = await client.readContract({
       address: PROTOCOL_REWARDS_ADDRESS,

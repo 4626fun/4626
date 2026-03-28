@@ -24,10 +24,11 @@ type PoolTableHeaderProps = {
 // V4 cutoff: June 6, 2025 (Zora V4 mainnet launch)
 const V4_CUTOFF_DATE = new Date('2025-06-06T00:00:00Z')
 
-// Zora V4 Fee Structure (1% total fee) - coins created after June 2025 OR migrated
+// Zora V4 Fee Structure (1% total fee) - coins created after June 2025 OR migrated.
+// Note: this is Zora-specific and separate from CreatorVault gauge split economics.
 const FEE_RATES_V4 = {
   total: 0.01,        // 1% total trading fee
-  creator: 0.50,      // 50% of fees → Creator/payoutRecipient
+  creator: 0.50,      // 50% of fees -> Zora creator CreatorCoin payoutRecipient
   platform: 0.20,     // 20% of fees → Platform Referral
   lpRewards: 0.20,    // 20% of fees → Locked LP (not distributed)
   protocol: 0.05,     // 5% of fees → Zora Protocol
@@ -35,10 +36,10 @@ const FEE_RATES_V4 = {
   doppler: 0.01,      // 1% of fees → Doppler (LP hook)
 }
 
-// Legacy Fee Structure (3% total fee) - coins created before June 2025 that haven't migrated
+// Legacy Fee Structure (3% total fee) - coins created before June 2025 that haven't migrated.
 const FEE_RATES_LEGACY = {
   total: 0.03,        // 3% total trading fee
-  creator: 0.50,      // 50% of fees → Creator/payoutRecipient
+  creator: 0.50,      // 50% of fees -> Zora creator CreatorCoin payoutRecipient
   platform: 0.25,     // 25% of fees → Platform Referral
   lpRewards: 0.00,    // No LP rewards in legacy
   protocol: 0.25,     // 25% of fees → Zora Protocol

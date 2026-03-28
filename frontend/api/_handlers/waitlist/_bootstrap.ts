@@ -3,7 +3,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import {
+  dedupeReferralCodeCandidates,
+  ensureReferralsSchema,
+  getClientIp,
+  getUserAgent,
+  hashForAttribution,
+  normalizeReferralCode,
+  referralCodeFromEmail,
+} from '../../../server/_lib/referrals.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
@@ -12,7 +22,7 @@ import {
   verifyPrivyForAccounts,
 } from '../../../server/_lib/accountsIdentity.js'
 
-type BootstrapBody = { email?: string }
+type BootstrapBody = { email?: string; referralCode?: string }
 type WaitlistBootstrapResponse =
   | {
       requiresPrivyAuth: true
@@ -24,11 +34,18 @@ type WaitlistBootstrapResponse =
     } & Awaited<ReturnType<typeof buildAccountsMePayload>>)
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS = 1_500
 
 function normalizeEmail(value: unknown): string | null {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : ''
   if (!email || !EMAIL_RE.test(email)) return null
   return email
+}
+
+function normalizeReferralCodeOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = normalizeReferralCode(value)
+  return normalized || null
 }
 
 function isPrivyUserIdUniqueViolation(error: unknown): boolean {
@@ -89,6 +106,183 @@ async function upsertBootstrapProfile(params: {
   throw new Error('waitlist_bootstrap_profile_upsert_failed')
 }
 
+async function readBootstrapProfile(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  privyUserId: string
+}): Promise<{
+  signupId: number | null
+  referralCode: string | null
+  email: string | null
+  primaryWallet: string | null
+  embeddedWallet: string | null
+}> {
+  const profile = await params.db.sql`
+    SELECT id, referral_code, email, primary_wallet, embedded_wallet
+    FROM profiles
+    WHERE privy_user_id = ${params.privyUserId}
+    LIMIT 1;
+  `
+  const signupId = typeof profile?.rows?.[0]?.id === 'number' ? (profile.rows[0].id as number) : null
+  const referralCode = typeof profile?.rows?.[0]?.referral_code === 'string' ? (profile.rows[0].referral_code as string) : null
+  const email = normalizeEmail(profile?.rows?.[0]?.email)
+  const primaryWallet = typeof profile?.rows?.[0]?.primary_wallet === 'string' ? String(profile.rows[0].primary_wallet).trim() || null : null
+  const embeddedWallet =
+    typeof profile?.rows?.[0]?.embedded_wallet === 'string' ? String(profile.rows[0].embedded_wallet).trim() || null : null
+  return { signupId, referralCode, email, primaryWallet, embeddedWallet }
+}
+
+async function resolveCreatorCoinReferralCode(wallet: string | null | undefined): Promise<string | null> {
+  const normalizedWallet = typeof wallet === 'string' ? wallet.trim() : ''
+  const key = (process.env.ZORA_SERVER_API_KEY || '').trim()
+  if (!normalizedWallet || !key) return null
+  try {
+    const sdk: any = await import('@zoralabs/coins-sdk')
+    sdk.setApiKey(key)
+    const profileResp = await sdk.getProfile({ identifier: normalizedWallet })
+    const creatorCoinAddr = String((profileResp as any)?.data?.profile?.creatorCoin?.address ?? '').trim()
+    if (!creatorCoinAddr) return null
+    const coinResp = await sdk.getCoin({ address: creatorCoinAddr, chain: 8453 })
+    const symbol = String((coinResp as any)?.data?.zora20Token?.symbol ?? '').trim()
+    const name = String((coinResp as any)?.data?.zora20Token?.name ?? '').trim()
+    const normalized = normalizeReferralCode(symbol || name)
+    return normalized || null
+  } catch {
+    return null
+  }
+}
+
+async function resolveCreatorCoinReferralCodeWithTimeout(wallet: string | null | undefined): Promise<string | null> {
+  const normalizedWallet = typeof wallet === 'string' ? wallet.trim() : ''
+  if (!normalizedWallet) return null
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race<string | null>([
+      resolveCreatorCoinReferralCode(normalizedWallet).catch(() => null),
+      new Promise<string | null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
+async function readCurrentBootstrapReferralCode(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  signupId: number
+}): Promise<string | null> {
+  const row = await params.db.sql`
+    SELECT referral_code
+    FROM profiles
+    WHERE id = ${params.signupId}
+    LIMIT 1;
+  `
+  return typeof row?.rows?.[0]?.referral_code === 'string' ? String(row.rows[0].referral_code) : null
+}
+
+async function ensureBootstrapReferralCode(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  signupId: number
+  referralCode: string | null
+  email: string | null
+  primaryWallet: string | null
+  embeddedWallet: string | null
+}): Promise<string | null> {
+  if (params.referralCode) return params.referralCode
+  const creatorCoinCode =
+    (await resolveCreatorCoinReferralCodeWithTimeout(params.primaryWallet)) ??
+    (await resolveCreatorCoinReferralCodeWithTimeout(params.embeddedWallet))
+  const candidates = dedupeReferralCodeCandidates([
+    creatorCoinCode,
+    referralCodeFromEmail(params.email),
+    `C${Number(params.signupId).toString(36).toUpperCase()}`,
+  ])
+
+  for (const desired of candidates) {
+    try {
+      const updated = await params.db.sql`
+        UPDATE profiles
+        SET referral_code = ${desired}, referral_claimed_at = NOW()
+        WHERE id = ${params.signupId} AND referral_code IS NULL
+        RETURNING referral_code;
+      `
+      const claimed = typeof updated?.rows?.[0]?.referral_code === 'string' ? (updated.rows[0].referral_code as string) : null
+      if (claimed) return claimed
+      const existing = await readCurrentBootstrapReferralCode({ db: params.db, signupId: params.signupId })
+      if (existing) return existing
+    } catch {
+      continue
+    }
+  }
+
+  return await readCurrentBootstrapReferralCode({ db: params.db, signupId: params.signupId })
+}
+
+async function applyBootstrapReferral(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+  signupId: number
+  referralCode: string
+  ipHash: string | null
+  uaHash: string | null
+}): Promise<void> {
+  const referrer = await params.db.sql`
+    SELECT id
+    FROM profiles
+    WHERE referral_code = ${params.referralCode}
+    LIMIT 1;
+  `
+  const referrerId = typeof referrer?.rows?.[0]?.id === 'number' ? (referrer.rows[0].id as number) : null
+  if (!referrerId || referrerId === params.signupId) return
+
+  await params.db.sql`
+    UPDATE profiles
+    SET referred_by_code = ${params.referralCode}, referred_by_signup_id = ${referrerId}
+    WHERE id = ${params.signupId} AND referred_by_signup_id IS NULL;
+  `
+
+  const conversionResult = await params.db.sql`
+    INSERT INTO referral_conversions (
+      referral_code,
+      referrer_signup_id,
+      invitee_signup_id,
+      ip_hash,
+      ua_hash,
+      session_id,
+      attribution,
+      is_valid,
+      invalid_reason,
+      status,
+      created_at
+    )
+    VALUES (
+      ${params.referralCode},
+      ${referrerId},
+      ${params.signupId},
+      ${params.ipHash},
+      ${params.uaHash},
+      NULL,
+      'last_click',
+      TRUE,
+      NULL,
+      'signed_up',
+      NOW()
+    )
+    ON CONFLICT (invitee_signup_id) DO NOTHING
+    RETURNING id;
+  `
+
+  if (conversionResult?.rows?.[0]?.id) {
+    await awardWaitlistPoints({
+      db: params.db as any,
+      signupId: referrerId,
+      source: 'referral_signup',
+      sourceId: `invitee:${params.signupId}`,
+      amount: WAITLIST_POINTS.referralSignup,
+    })
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -100,7 +294,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (await readJsonBody<BootstrapBody>(req).catch(() => null)) ?? (req.body as BootstrapBody | null) ?? {}
   const email = normalizeEmail(body?.email)
+  const referralCode = normalizeReferralCodeOrNull(body?.referralCode)
   const token = readPrivyToken(req)
+  const ipHash = hashForAttribution(getClientIp(req))
+  const uaHash = hashForAttribution(getUserAgent(req))
 
   const db = await getDb()
   if (!db) {
@@ -108,6 +305,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   await ensureWaitlistSchema(db as any)
+  await ensureWaitlistPointsSchema(db as any)
+  await ensureReferralsSchema(db as any)
 
   if (!token) {
     let waitlistEntryId: number | null = null
@@ -163,6 +362,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: privyEmail,
         privyUserId: context.privyUserId,
       })
+
+      const bootstrapProfile = await readBootstrapProfile({
+        db: db as any,
+        privyUserId: context.privyUserId,
+      })
+      if (bootstrapProfile.signupId) {
+        await ensureBootstrapReferralCode({
+          db: db as any,
+          signupId: bootstrapProfile.signupId,
+          referralCode: bootstrapProfile.referralCode,
+          email: bootstrapProfile.email,
+          primaryWallet: bootstrapProfile.primaryWallet,
+          embeddedWallet: bootstrapProfile.embeddedWallet,
+        })
+        if (referralCode) {
+          await applyBootstrapReferral({
+            db: db as any,
+            signupId: bootstrapProfile.signupId,
+            referralCode,
+            ipHash,
+            uaHash,
+          })
+        }
+      }
     }
 
     const me = await buildAccountsMePayload({

@@ -246,7 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // First check Zora profile coins
     if (zoraProfile?.coins && zoraProfile.coins.length > 0) {
-      // Find a coin where this address is the creator or payout recipient
+      // Find a coin where this address is the creator or CreatorCoin payoutRecipient.
       for (const coin of zoraProfile.coins) {
         try {
           const parties = await resolveCoinParties(coin.address as `0x${string}`)

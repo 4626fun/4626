@@ -15,9 +15,6 @@
     "api/agent-registration.ts": {
       "includeFiles": "public/.well-known/agent-registration.json"
     },
-    "api/sync-creator-metrics.ts": {
-      "maxDuration": 60
-    },
     "api/keepr/actions/execute.ts": {
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
@@ -188,11 +185,6 @@
       "continue": true
     },
     {
-      "src": "/telegram-menu.html",
-      "headers": { "cache-control": "no-store" },
-      "continue": true
-    },
-    {
       "src": "/telegram-link.html",
       "headers": { "cache-control": "no-store" },
       "continue": true
@@ -208,13 +200,11 @@
       "dest": "/app.html"
     },
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
-    { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/agent/process", "dest": "/api/agent/process" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
     { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
-    { "src": "/telegram/menu", "dest": "/telegram-menu.html" },
     { "src": "/telegram/link", "dest": "/telegram-link.html" },
     { "handle": "filesystem" },
     {

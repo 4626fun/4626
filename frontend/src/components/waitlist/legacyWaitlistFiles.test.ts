@@ -8,8 +8,11 @@ const testDir = path.dirname(fileURLToPath(import.meta.url))
 
 const LEGACY_WAITLIST_FILES = [
   'WaitlistFlow.tsx',
+  'JoinWaitlistCta.tsx',
+  'WaitlistFlowWithProviders.tsx',
   'DeferredWaitlistFlow.tsx',
   'WaitlistDoneCelebrationBackground.tsx',
+  'PublicWaitlistOverview.tsx',
   'steps/DoneStep.tsx',
   'steps/VerifyStep.tsx',
   'useWaitlistReferral.ts',
@@ -19,6 +22,8 @@ const LEGACY_WAITLIST_FILES = [
   'useWaitlistApi.ts',
   'preprovisionStatus.ts',
   '../../pages/WaitlistLanding.tsx',
+  '../../pages/WaitlistPage.tsx',
+  '../../pages/WaitlistPage.test.tsx',
   '../../pages/WaitlistProfile.tsx',
   '../../pages/Waitlist.tsx',
   '../../pages/AccountSettings.tsx',

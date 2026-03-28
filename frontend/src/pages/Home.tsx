@@ -1,210 +1,58 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Suspense, lazy, useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
-import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { buildWaitlistEntryUrl, getMarketingWaitlistEntryUrl, type WaitlistEntryReason } from '@/lib/auth/waitlistEntry'
-import { getHostMode, getMarketingBaseUrl, type HostMode } from '@/lib/host'
+
 import { PageMeta } from '@/components/seo/PageMeta'
+import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
+import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
+import {
+  clearStoredWaitlistAuthState,
+  clearStoredWaitlistReferralCode,
+  consumeStoredWaitlistAuthArmed,
+  consumeStoredWaitlistAuthAutoStart,
+} from '@/lib/auth/waitlistEntry'
+import { getHostMode } from '@/lib/host'
+import { PrivyClientProvider } from '@/lib/privy/client'
+import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { Web3Providers } from '@/web3/Web3Providers'
 
-const LazyWaitlistModal = lazy(async () => {
-  const mod = await import('@/components/waitlist/WaitlistModal')
-  return { default: mod.WaitlistModal }
-})
-
-const LazyJoinWaitlistCtaWithProvider = lazy(async () => {
-  const mod = await import('@/components/waitlist/JoinWaitlistCta')
-  return { default: mod.JoinWaitlistCtaWithProvider }
+const LazyThinWaitlistFlow = lazy(async () => {
+  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
+  return { default: mod.ThinWaitlistFlow }
 })
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
-const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
-
-type HomeRedirectInput = {
-  hostMode: HostMode
-  search: string
-  hash: string
-}
-
-type HomeWaitlistRedirectInput = {
-  hostMode: HostMode
-  marketingOrigin: string
-  search: string
-  hash: string
-}
-
-type WaitlistModalInput = {
-  hash: string
-  search: string
-  stickyOpen: boolean
-}
-
-type WaitlistCloseTargetInput = {
-  pathname: string
-  search: string
-  hash: string
-}
-
-export function shouldRedirectHomeToSwap(input: HomeRedirectInput): boolean {
-  if (input.hostMode !== 'app') return false
-  const params = new URLSearchParams(input.search)
-  const reason = String(params.get('reason') ?? '').trim().toLowerCase()
-  const isWaitlistAccessReason = reason === 'needs-session' || reason === 'needs-acceptance'
-  if (isWaitlistAccessReason) return false
-  if (input.hash === '#waitlist') return false
-  return true
-}
-
-function readWaitlistAccessReason(search: string): WaitlistEntryReason | null {
-  const params = new URLSearchParams(search)
-  const reason = String(params.get('reason') ?? '').trim().toLowerCase()
-  if (reason === 'needs-session' || reason === 'needs-acceptance') {
-    return reason
-  }
-  return null
-}
-
-export function getHomeWaitlistRedirectTarget(input: HomeWaitlistRedirectInput): string | null {
-  if (input.hostMode !== 'app') return null
-  const reason = readWaitlistAccessReason(input.search)
-  if (reason) return buildWaitlistEntryUrl(input.marketingOrigin, reason)
-  if (input.hash === '#waitlist') return buildWaitlistEntryUrl(input.marketingOrigin, 'needs-session')
-  return null
-}
-
-export function shouldOpenWaitlistModal(input: WaitlistModalInput): boolean {
-  if (input.hash === '#waitlist') return true
-  const qs = new URLSearchParams(input.search)
-  const wl = (qs.get('wl') ?? '').trim().toLowerCase()
-  if (wl === '1' || wl === 'true' || wl === 'yes') return true
-  const ref = (qs.get('ref') ?? '').trim()
-  if (ref.length > 0) return true
-  return input.stickyOpen
-}
-
-export function buildWaitlistCloseTarget(input: WaitlistCloseTargetInput): { path: string; changed: boolean } {
-  const qs = new URLSearchParams(input.search)
-  let changed = false
-  if (qs.has('wl')) {
-    qs.delete('wl')
-    changed = true
-  }
-  // If user closes before the referral param is consumed, remove it
-  // so the modal doesn't immediately reopen.
-  if (qs.has('ref')) {
-    qs.delete('ref')
-    changed = true
-  }
-  const hash = input.hash === '#waitlist' ? '' : input.hash
-  if (input.hash === '#waitlist') changed = true
-  const query = qs.toString()
-  return {
-    path: `${input.pathname}${query ? `?${query}` : ''}${hash}`,
-    changed,
-  }
-}
+const DEFAULT_DEPOSIT_TOKENS = '50,000,000'
+const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
+const DEFAULT_AUCTION_WINDOW = '7 days'
+const DEFAULT_AUCTION_EPOCH = 'Thursday 00:00 UTC'
+const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
 
 export function Home() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [waitlistDismissVersion, setWaitlistDismissVersion] = useState(0)
-  const stickyWaitlistOpen = useMemo(() => {
-    // Force recomputation after local dismiss when URL does not change.
-    void waitlistDismissVersion
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage.getItem(WAITLIST_STICKY_OPEN_KEY) === '1') return true
-    } catch {
-      // ignore
-    }
-    return false
-  }, [waitlistDismissVersion])
-  const waitlistOpen = useMemo(() => {
-    return shouldOpenWaitlistModal({
-      hash: location.hash,
-      search: location.search,
-      stickyOpen: stickyWaitlistOpen,
-    })
-  }, [location.hash, location.search, stickyWaitlistOpen])
   const hostMode = getHostMode()
-  const homeWaitlistRedirectTarget = useMemo(
-    () =>
-      getHomeWaitlistRedirectTarget({
-        hostMode,
-        marketingOrigin: getMarketingBaseUrl(),
-        search: location.search,
-        hash: location.hash,
-      }),
-    [hostMode, location.hash, location.search],
-  )
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
+  const [initialWaitlistState] = useState(() => {
+    const autoStart = consumeStoredWaitlistAuthAutoStart()
+    const open = consumeStoredWaitlistAuthArmed() || autoStart
+    return { open, autoStart }
+  })
+  const [waitlistInlineOpen, setWaitlistInlineOpen] = useState(initialWaitlistState.open)
+  const [waitlistAutoStart] = useState(initialWaitlistState.autoStart)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
-  // Keep the waitlist modal open across full-page OAuth redirects (e.g. Privy <-> X).
-  // We intentionally avoid encoding this state in query params, since OAuth redirect URLs
-  // must match allowlists exactly (and query params can break that).
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      if (waitlistOpen) window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
-      else window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
-    } catch {
-      // ignore
-    }
-  }, [waitlistOpen])
+  const openWaitlistDirectAuth = () => {
+    clearStoredWaitlistAuthState()
+    clearStoredWaitlistReferralCode()
+    setWaitlistInlineOpen(true)
+  }
 
-  useEffect(() => {
-    if (hostMode === 'app') return
-    if (location.hash === '#waitlist') return
-
-    if (!location.hash) return
-    const id = location.hash.replace('#', '').trim()
-    if (!id) return
-    const el = document.getElementById(id)
-    if (!el) return
-    requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }, [hostMode, location.hash])
-
-  if (
-    shouldRedirectHomeToSwap({
-      hostMode,
-      search: location.search,
-      hash: location.hash,
-    })
-  ) {
+  if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
   }
-
-  if (homeWaitlistRedirectTarget) {
-    if (typeof window !== 'undefined') window.location.replace(homeWaitlistRedirectTarget)
-    return null
-  }
-
-  const closeWaitlistModal = () => {
-    try {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
-      }
-    } catch {
-      // ignore
-    }
-    // Force a re-evaluation so sticky-open modals close immediately even when URL is unchanged.
-    setWaitlistDismissVersion((v) => v + 1)
-    const closeTarget = buildWaitlistCloseTarget({
-      pathname: location.pathname,
-      search: location.search,
-      hash: location.hash,
-    })
-    if (closeTarget.changed) {
-      navigate(closeTarget.path, { replace: true })
-    }
-  }
-
-  const fallbackWaitlistHref = getMarketingWaitlistEntryUrl('needs-session')
 
   return (
     <div className="relative">
@@ -213,17 +61,24 @@ export function Home() {
         description="Deposit creator coins into vaults on Base. Earn from trading fees. Everyone earns together."
         canonicalPath="/"
       />
-      {/* Subtle particle atmosphere */}
+
       <div className="particles">
-        <div className="absolute top-1/4 left-1/3 w-px h-px bg-brand-primary rounded-full" style={{ animation: 'particle-float 8s ease-in-out infinite' }} />
-        <div className="absolute top-1/2 right-1/4 w-px h-px bg-brand-primary/80 rounded-full" style={{ animation: 'particle-float 10s ease-in-out infinite', animationDelay: '2s' }} />
-        <div className="absolute bottom-1/3 left-1/2 w-px h-px bg-brand-primary/60 rounded-full" style={{ animation: 'particle-float 12s ease-in-out infinite', animationDelay: '4s' }} />
+        <div
+          className="absolute left-1/3 top-1/4 h-px w-px rounded-full bg-brand-primary"
+          style={{ animation: 'particle-float 8s ease-in-out infinite' }}
+        />
+        <div
+          className="absolute right-1/4 top-1/2 h-px w-px rounded-full bg-brand-primary/80"
+          style={{ animation: 'particle-float 10s ease-in-out infinite', animationDelay: '2s' }}
+        />
+        <div
+          className="absolute bottom-1/3 left-1/2 h-px w-px rounded-full bg-brand-primary/60"
+          style={{ animation: 'particle-float 12s ease-in-out infinite', animationDelay: '4s' }}
+        />
       </div>
 
-      {/* Hero - Cinematic Letterbox */}
-      <section className="cinematic-section min-h-[75vh] sm:min-h-[90vh] flex items-center justify-center">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center space-y-8 sm:space-y-16">
-          {/* Status Indicator */}
+      <section className="cinematic-section !py-16 sm:!py-24 lg:!py-28 min-h-[68vh] sm:min-h-[82vh] flex items-center justify-center">
+        <div className="mx-auto max-w-7xl space-y-8 px-4 text-center sm:px-6 sm:space-y-14">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -235,26 +90,24 @@ export function Home() {
             </div>
           </motion.div>
 
-          {/* Headline */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.428 }}
-            className="space-y-6"
+            className="space-y-4 sm:space-y-6"
           >
-            <h1 className="headline text-4xl sm:text-6xl md:text-7xl lg:text-9xl leading-[1.08]">
+            <h1 className="headline text-4xl leading-[0.94] tracking-[-0.05em] sm:text-6xl md:text-7xl lg:text-[7.5rem] xl:text-[8.25rem]">
               Turn Creator Coins
               <br />
               <span className="glow-brand">Into Earnings</span>
             </h1>
           </motion.div>
 
-          {/* Subtext */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.856 }}
-            className="text-base sm:text-xl text-zinc-500 font-light tracking-wide max-w-2xl mx-auto"
+            className="mx-auto max-w-2xl text-base font-light tracking-wide text-zinc-400 sm:text-xl"
           >
             Deposit tokens · Earn from trades · Grow together
           </motion.p>
@@ -264,57 +117,70 @@ export function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-4 sm:pt-6"
+              className="pt-2 sm:pt-6"
             >
-              <Suspense
-                fallback={
-                  <button
-                    type="button"
-                    className={heroCtaClass}
-                    onClick={() => window.location.assign(fallbackWaitlistHref)}
-                  >
-                    Join waitlist
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                }
-              >
-                <LazyJoinWaitlistCtaWithProvider
-                  className={heroCtaClass}
-                  onPrivyDisabled={() => window.location.assign(fallbackWaitlistHref)}
-                />
-              </Suspense>
+              <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
+                Join waitlist
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </motion.div>
           ) : null}
+
           {showExploreCreatorsCta ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-4 sm:pt-6"
+              className="pt-2 sm:pt-6"
             >
               <Link to="/explore/creators" className={heroCtaClass}>
                 Explore Creators
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="h-4 w-4" />
               </Link>
             </motion.div>
           ) : null}
-
         </div>
       </section>
 
-      {/* For Creators - Minimal CTA */}
-      <section className="cinematic-section py-12 sm:py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="grid lg:grid-cols-2 gap-10 sm:gap-16 lg:gap-20 items-center">
+      {showJoinWaitlistCta && waitlistInlineOpen ? (
+        <section className="cinematic-section !py-4 sm:!py-6 lg:!py-8">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6">
+            <Suspense
+              fallback={
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
+                  Loading waitlist…
+                </div>
+              }
+            >
+              <Web3Providers>
+                <PrivyClientProvider showWalletLoginFirst={false}>
+                  <div className="rounded-[28px] border border-white/10 bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
+                    <LazyThinWaitlistFlow
+                      variant="embedded"
+                      sectionId="home-waitlist"
+                      autoStartAuth={waitlistAutoStart || waitlistInlineOpen}
+                      suppressAuthShell
+                    />
+                  </div>
+                </PrivyClientProvider>
+              </Web3Providers>
+            </Suspense>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="cinematic-section !py-10 sm:!py-16 lg:!py-24">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <div className="grid items-start gap-8 sm:gap-16 lg:grid-cols-2 lg:items-center lg:gap-20">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="space-y-5 sm:space-y-8"
+              className="space-y-4 sm:space-y-8"
             >
               <span className="label">For Creators</span>
-              <h2 className="headline text-3xl sm:text-5xl lg:text-6xl leading-tight">
+              <h2 className="headline text-3xl leading-tight sm:text-5xl lg:text-6xl">
                 Launch Your
                 <br />
                 <span className="glow-brand">Vault</span>
@@ -326,23 +192,32 @@ export function Home() {
                   alt="Uniswap"
                   width={16}
                   height={16}
-                  className="w-4 h-4 opacity-80"
+                  className="h-4 w-4 opacity-80"
                   loading="lazy"
                 />
                 <span className="text-uniswap">Uniswap</span>
               </div>
-              <div className="text-zinc-500 text-base sm:text-lg font-light leading-relaxed space-y-3">
+              <div className="space-y-3 text-base font-light leading-relaxed text-zinc-500 sm:text-lg">
                 <p>
-                  Minimum deposit: <span className="font-mono text-zinc-200">5,000,000 TOKEN</span>. In the default launch,
-                  this mints <span className="font-mono text-brand-primary">5,000,000 {SHARE_TOKEN}</span> and runs a{' '}
+                  Minimum deposit: <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span>. In the default
+                  launch, this mints <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span> and runs a{' '}
                   <span className="text-uniswap">Uniswap CCA</span> auction.
                 </p>
-                </div>
+                <p>
+                  The auction opens on the weekly epoch reset at{' '}
+                  <span className="font-mono text-zinc-200">{DEFAULT_AUCTION_EPOCH}</span> and runs for {DEFAULT_AUCTION_WINDOW}.
+                </p>
+                <p>
+                  The deposited <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span> stays as the vault’s
+                  underlying asset base, while the newly minted <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span>{' '}
+                  gets split across launch distribution.
+                </p>
+              </div>
               {showDeployVaultCta ? (
                 <div>
                   <Link to="/deploy" className={heroCtaClass}>
                     Deploy Vault
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="h-4 w-4" />
                   </Link>
                 </div>
               ) : null}
@@ -355,35 +230,32 @@ export function Home() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="space-y-0"
             >
-              <div className="rounded-2xl border border-zinc-900/70 bg-black/30 backdrop-blur-sm p-4 sm:p-6">
+              <div className="rounded-3xl border border-white/8 bg-white/[0.035] p-5 shadow-[0_24px_80px_-44px_rgba(0,82,255,0.35)] backdrop-blur-sm sm:p-6">
                 <div className="text-[10px] font-medium text-zinc-600">Default launch mechanics</div>
 
-                <div className="mt-4 sm:mt-6 space-y-0">
+                <div className="mt-4 space-y-0 sm:mt-6">
                   <div className="data-row">
                     <span className="label">Minimum deposit</span>
-                    <div className="value mono text-sm sm:text-base">5,000,000 TOKEN</div>
+                    <div className="value mono text-sm sm:text-base">{DEFAULT_DEPOSIT_TOKENS} TOKEN</div>
                   </div>
                   <div className="data-row">
                     <span className="label">Minted shares</span>
-                    <div className="value mono text-sm sm:text-base text-brand-primary">{`5,000,000 ${SHARE_TOKEN}`}</div>
+                    <div className="value mono text-sm sm:text-base text-brand-primary">{DEFAULT_SHARE_TOKENS}</div>
                   </div>
                   <div className="data-row">
-                    <span className="label">Uniswap CCA auction</span>
-                    <div className="value mono text-sm sm:text-base">2,500,000 {SHARE_TOKEN}</div>
+                    <span className="label">Auction window</span>
+                    <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_WINDOW}</div>
                   </div>
                   <div className="data-row">
-                    <span className="label">Creator allocation</span>
-                    <div className="value mono text-sm sm:text-base">2,500,000 {SHARE_TOKEN}</div>
+                    <span className="label">Launch epoch</span>
+                    <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_EPOCH}</div>
                   </div>
-                  <div className="data-row border-none">
-                    <span className="label">Fair Launch</span>
-                    <div className="value mono text-uniswap drop-shadow-[0_0_20px_rgba(255,0,122,0.35)] text-sm sm:text-base">100%</div>
+                  <div className="data-row">
+                    <span className="label">Share split</span>
+                    <div className="value mono text-right text-[11px] leading-relaxed text-sm sm:text-base">
+                      40 / 40 / 20
+                    </div>
                   </div>
-                </div>
-
-                <div className="mt-4 text-[11px] sm:text-xs text-zinc-600 font-light">
-                  <span className="font-mono text-zinc-400">TOKEN</span> = creator coin ·{' '}
-                  <span className="font-mono text-zinc-400">{SHARE_TOKEN}</span> = vault share token
                 </div>
               </div>
             </motion.div>
@@ -391,137 +263,56 @@ export function Home() {
         </div>
       </section>
 
-      {/* Strategies - Terminal Display */}
-      <section className="cinematic-section bg-zinc-950/20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+      <StrategyAllocationSection depositTokens={DEFAULT_DEPOSIT_TOKENS} />
+
+      <ShareDistributionSection auctionEpoch={DEFAULT_AUCTION_EPOCH} shareTokens={DEFAULT_SHARE_TOKENS} />
+
+      <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="mb-10 sm:mb-20"
+            className="overflow-hidden rounded-[32px] border border-white/8 bg-linear-to-br from-white/[0.05] via-white/[0.025] to-transparent p-6 shadow-[0_28px_90px_-50px_rgba(0,82,255,0.32)] backdrop-blur-sm sm:p-8 lg:p-10"
           >
-            <span className="label">Vault Strategies</span>
-            <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-4 sm:mt-6">Default strategy allocation</h2>
-            <p className="text-zinc-600 text-[13px] sm:text-sm font-light max-w-xl mt-3 sm:mt-4">
-              Current launch config allocates 30% to Charm LP, 30% to Ajna lending, 30% as Solana reserve,
-              and keeps 10% idle in-vault for withdrawal flexibility.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-vault-card/60">
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
-            >
-              <div className="inline-flex items-center gap-1.5">
-                <img
-                  src="/protocols/charm.png"
-                  alt="Charm"
-                  width={14}
-                  height={14}
-                  className="w-3.5 h-3.5 rounded-sm opacity-90"
-                  loading="lazy"
-                />
-                <span className="label text-[9px] sm:text-[10px]">Charm</span>
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-end">
+              <div className="space-y-4 sm:space-y-6">
+                <span className="label">FAQ</span>
+                <h2 className="headline mt-2 text-3xl sm:text-4xl lg:text-5xl">See the full walkthrough</h2>
+                <p className="max-w-2xl text-[13px] font-light text-zinc-500 sm:text-sm">
+                  The FAQ now carries the whole launch sequence in one place, from deposit mechanics through CCA launch, strategy
+                  allocation, and redemption.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {WAITLIST_JOURNEY_STEPS.map((step) => (
+                    <span
+                      key={step}
+                      className="rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300 sm:text-[11px]"
+                    >
+                      {step}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">30%</div>
-              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">CREATOR/USDC Uniswap V3 LP</div>
-            </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
-            >
-              <div className="inline-flex items-center gap-1.5">
-                <img
-                  src="/protocols/ajna.svg"
-                  alt="Ajna"
-                  width={14}
-                  height={14}
-                  className="w-3.5 h-3.5 opacity-90"
-                  loading="lazy"
-                />
-                <span className="label text-[9px] sm:text-[10px]">Ajna</span>
+              <div className="space-y-4 rounded-3xl border border-white/8 bg-black/35 p-5 sm:p-6">
+                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Read before launch</div>
+                <p className="text-sm font-light leading-relaxed text-zinc-400">
+                  If someone lands on the homepage and wants the full mechanics, this should be the bottom-of-page next step.
+                </p>
+                <div>
+                  <Link to="/faq/how-it-works" className="btn-primary inline-flex items-center">
+                    How it works
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
               </div>
-              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">30%</div>
-              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Permissionless Lending</div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
-            >
-              <div className="inline-flex items-center gap-1.5">
-                <img
-                  src="/protocols/solana.svg"
-                  alt="Solana"
-                  width={16}
-                  height={14}
-                  className="h-3.5 w-auto opacity-90"
-                  loading="lazy"
-                />
-                <span className="label text-[9px] sm:text-[10px]">Solana</span>
-              </div>
-              <div className="value mono text-xl sm:text-3xl lg:text-4xl">30%</div>
-              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Reserved for Solana route flow</div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
-            >
-              <span className="label text-[9px] sm:text-[10px]">Idle Buffer</span>
-              <div className="value mono text-xl sm:text-3xl lg:text-4xl">10%</div>
-              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Kept liquid for operations/withdrawals</div>
-            </motion.div>
-          </div>
-          <div className="mt-4 text-[11px] sm:text-xs text-zinc-600 font-light">
-              <span className="font-mono text-zinc-400">Strategies deploy underlying TOKEN = creator coin ·{' '} </span> not the ■TOKEN = vault share token 
-         </div>
-        </div>
-      </section>
-
-      {/* FAQ Teaser */}
-      <section className="cinematic-section">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="space-y-4 sm:space-y-6"
-          >
-            <span className="label">FAQ</span>
-            <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-2">See the full walkthrough</h2>
-            <p className="text-zinc-600 text-[13px] sm:text-sm font-light max-w-xl">
-              Deposit → CCA launch → 30/30/40 allocation model → redeem.
-            </p>
-            <div>
-              <Link to="/faq/how-it-works" className="btn-primary inline-flex items-center">
-                How it works <ArrowRight className="w-4 h-4 inline ml-2" />
-              </Link>
             </div>
           </motion.div>
         </div>
       </section>
-      {waitlistOpen ? (
-        <Suspense fallback={null}>
-          <LazyWaitlistModal open={waitlistOpen} onClose={closeWaitlistModal} />
-        </Suspense>
-      ) : null}
+
     </div>
   )
 }

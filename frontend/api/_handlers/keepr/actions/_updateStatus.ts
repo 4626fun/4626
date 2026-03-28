@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
 import { getDb } from '../../../../server/_lib/postgres.js'
+import { normalizeKeeprActionStatusForWorkspace } from '../../../../server/_lib/workspace/normalizer.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -146,6 +147,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         RETURNING id;
       `
       const updated = (result.rows?.length ?? 0) > 0
+      if (updated) {
+        await normalizeKeeprActionStatusForWorkspace({
+          actionId: id,
+          status: 'executing',
+          errorMessage,
+        }).catch(() => undefined)
+      }
       return res.status(200).json({
         success: true,
         data: { id, status, updated },
@@ -172,6 +180,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           errorMessage,
           retryDelaySeconds: retryDelay,
         })
+        await normalizeKeeprActionStatusForWorkspace({
+          actionId: id,
+          status: 'executed',
+          errorMessage,
+        }).catch(() => undefined)
       }
       return res.status(200).json({
         success: true,
@@ -199,6 +212,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           errorMessage,
           retryDelaySeconds: retryDelay,
         })
+        await normalizeKeeprActionStatusForWorkspace({
+          actionId: id,
+          status: 'failed',
+          errorMessage,
+        }).catch(() => undefined)
       }
       return res.status(200).json({
         success: true,
@@ -250,6 +268,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           errorMessage,
           retryDelaySeconds: retryDelay,
         })
+        await normalizeKeeprActionStatusForWorkspace({
+          actionId: id,
+          status: 'retry',
+          errorMessage,
+        }).catch(() => undefined)
       }
       return res.status(200).json({
         success: true,

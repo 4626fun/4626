@@ -30,6 +30,8 @@ import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokenSymbols'
+import { CreatorWorkspacePanel } from '@/components/workspace/CreatorWorkspacePanel'
+import { parseVaultWorkspaceQuery, updateVaultWorkspaceQuery } from './vaultWorkspaceQuery'
 
 // ABIs
 const WRAPPER_ABI = [
@@ -170,9 +172,10 @@ async function fetchAuctionStatusSummary(ccaStrategy: `0x${string}`): Promise<Au
 
 export function Vault() {
   const params = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const addressParamRaw = typeof params.address === 'string' ? params.address.trim() : ''
   const addressParam = addressParamRaw && isAddress(addressParamRaw) ? (getAddress(addressParamRaw) as Address) : null
+  const workspaceQuery = useMemo(() => parseVaultWorkspaceQuery(searchParams), [searchParams])
 
   // Solana claim deep-link: ?claim=solana&solanaPubkey=...&prizeAmount=...
   const solanaClaimMode = searchParams.get('claim') === 'solana'
@@ -358,6 +361,7 @@ export function Vault() {
   const isGraduated = auctionStatus?.[2] || false
   const isUnlocked = isAuctionActive || isGraduated
   const canManageVault = isGraduated
+  const showWorkspacePanel = workspaceQuery.panel === 'workspace'
   const phaseLabel = isAuctionActive ? 'Auction Phase' : isGraduated ? 'Vault Active' : 'Not Launched'
 
   // Prefer Zora indexed preview image (fast), then onchain tokenURI metadata.
@@ -845,6 +849,48 @@ export function Vault() {
           >
             <span className="label">Vault Operations</span>
             <h2 className="headline text-3xl sm:text-5xl mt-4 sm:mt-6">Manage Position</h2>
+            <div className="mt-4 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
+              <button
+                type="button"
+                className={`rounded-full px-3 py-1.5 text-xs transition ${
+                  !showWorkspacePanel
+                    ? 'bg-brand-primary/20 text-zinc-100 border border-brand-primary/30'
+                    : 'text-zinc-500 hover:text-zinc-200'
+                }`}
+                onClick={() =>
+                  setSearchParams(
+                    updateVaultWorkspaceQuery({
+                      current: searchParams,
+                      panel: 'manage',
+                    }),
+                    { replace: true },
+                  )
+                }
+              >
+                Position
+              </button>
+              <button
+                type="button"
+                className={`rounded-full px-3 py-1.5 text-xs transition ${
+                  showWorkspacePanel
+                    ? 'bg-brand-primary/20 text-zinc-100 border border-brand-primary/30'
+                    : 'text-zinc-500 hover:text-zinc-200'
+                }`}
+                onClick={() =>
+                  setSearchParams(
+                    updateVaultWorkspaceQuery({
+                      current: searchParams,
+                      panel: 'workspace',
+                      tab: workspaceQuery.tab,
+                      taskId: workspaceQuery.taskId,
+                    }),
+                    { replace: true },
+                  )
+                }
+              >
+                Workspace
+              </button>
+            </div>
           </motion.div>
 
           <div className="grid lg:grid-cols-5 gap-8">
@@ -997,8 +1043,26 @@ export function Vault() {
 
             {/* Position Panel */}
             <div className="lg:col-span-2 space-y-8">
-              {/* Chat with Creator */}
-              <VaultChatCard />
+              {showWorkspacePanel && vaultAddress ? (
+                <CreatorWorkspacePanel
+                  vaultAddress={vaultAddress as `0x${string}`}
+                  initialTab={workspaceQuery.tab}
+                  focusedTaskId={workspaceQuery.taskId}
+                  onTabChange={(tab) =>
+                    setSearchParams(
+                      updateVaultWorkspaceQuery({
+                        current: searchParams,
+                        panel: 'workspace',
+                        tab,
+                        taskId: workspaceQuery.taskId,
+                      }),
+                      { replace: true },
+                    )
+                  }
+                />
+              ) : (
+                <VaultChatCard />
+              )}
 
               <div>
                 <span className="label mb-4 block">Your Holdings</span>

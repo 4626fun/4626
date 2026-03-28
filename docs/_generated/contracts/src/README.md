@@ -145,13 +145,18 @@ flowchart TD
 
 ### 3) Fee + Incentive Routing
 
-The documented model applies a 6.9% trading fee to DEX trades (buy + sell), then routes proceeds through the gauge controller.
+The documented model uses two deployment-conditional fee planes:
+- native OFT buy trigger (`SwapOnly -> non-SwapOnly`) and
+- optional hook fee plane (for configured sell-side/extra paths).
+Both planes should route to the same trade-fee collector domain.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%
 flowchart LR
-  Trade["DEX trade\n(buy or sell)"] --> Fee["6.9% trading fee"]
-  Fee --> Gauge["CreatorGaugeController routing"]
+  BuyTrade["DEX buy"] --> NativeFee["Native OFT fee plane\n(when trigger matches)"]
+  SellTrade["DEX sell"] --> HookFee["Hook fee plane\n(only if configured)"]
+  NativeFee --> Gauge["CreatorGaugeController routing"]
+  HookFee --> Gauge
 
   Gauge --> Lottery["69.00%\nLottery pool"]
   Gauge --> Burn["21.39%\nBurn + PPS support"]

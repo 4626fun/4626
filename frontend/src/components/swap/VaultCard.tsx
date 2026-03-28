@@ -45,6 +45,9 @@ type AuctionStatus = {
   auction?: string | null
   isActive: boolean
   isGraduated: boolean
+  lifecyclePhase?: number
+  lifecycleAuctionWindowOpen?: boolean
+  lifecycleFailedFinalized?: boolean
   currencyRaised?: string
   currencyDecimals?: number
   auctionTokenSymbol?: string
@@ -69,6 +72,9 @@ async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<AuctionSt
       auction?: string | null
       isActive?: boolean
       isGraduated?: boolean
+      lifecyclePhase?: number
+      lifecycleAuctionWindowOpen?: boolean
+      lifecycleFailedFinalized?: boolean
       currencyRaised?: string
       currencyDecimals?: number
       auctionTokenSymbol?: string
@@ -78,6 +84,9 @@ async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<AuctionSt
     auction: typeof json.data?.auction === 'string' ? json.data.auction : null,
     isActive: Boolean(json.data?.isActive),
     isGraduated: Boolean(json.data?.isGraduated),
+    lifecyclePhase: typeof json.data?.lifecyclePhase === 'number' ? json.data.lifecyclePhase : undefined,
+    lifecycleAuctionWindowOpen: Boolean(json.data?.lifecycleAuctionWindowOpen),
+    lifecycleFailedFinalized: Boolean(json.data?.lifecycleFailedFinalized),
     currencyRaised: json.data?.currencyRaised,
     currencyDecimals: json.data?.currencyDecimals ?? 6,
     auctionTokenSymbol: json.data?.auctionTokenSymbol,
@@ -142,8 +151,13 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
     return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value) && value.toLowerCase() !== ZERO_ADDRESS
   }, [auctionQuery.data?.auction])
   const auctionFinished = Boolean(vault.graduatedAt || vault.settledAt || auctionQuery.data?.isGraduated === true)
-  const auctionLive = !auctionFinished && auctionQuery.data?.isActive === true
-  const auctionFailed = hasOnchainAuction && !auctionFinished && auctionQuery.data?.isActive === false
+  const auctionLive =
+    !auctionFinished &&
+    (auctionQuery.data?.lifecycleAuctionWindowOpen === true || auctionQuery.data?.isActive === true)
+  const auctionFailed =
+    hasOnchainAuction &&
+    !auctionFinished &&
+    (auctionQuery.data?.lifecycleFailedFinalized === true || auctionQuery.data?.lifecyclePhase === 6)
   const auctionStatusUnavailable = Boolean(ccaStrategy) && auctionQuery.isError === true
   const activityQuery = useQuery({
     queryKey: ['auction-activity', ccaStrategy],

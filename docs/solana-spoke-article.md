@@ -17,7 +17,7 @@ One lottery. One jackpot. One gauge controller. Two chains of traders feeding in
 ### How It Works
 
 **On Solana:** An SPL Token-2022 mint with two extensions:
-- **TransferFeeConfig** charges 6.9% on every transfer (buys, sells, wallet-to-wallet — same rate as EVM)
+- **TransferFeeConfig** charges 6.9% on every transfer (buys, sells, wallet-to-wallet). This is Solana TransferFeeConfig behavior and is not equivalent to EVM native transfer triggers.
 - **Transfer Hook** detects buys by checking if the source account belongs to a known AMM pool. Buy detected? A lottery entry gets recorded into an on-chain ring buffer (PendingEntries PDA). Sells and regular transfers still pay the fee — they just don't enter the lottery.
 
 **The relay layer (Keepr):** Five workflows run on our existing XMTP agent infrastructure:
@@ -33,7 +33,7 @@ One lottery. One jackpot. One gauge controller. Two chains of traders feeding in
 
 When a creator launches, there are two fixed allocation layers:
 
-1. **Launch split (Phase 2, Base):** 50% CCA auction / 50% creator vesting.
+1. **Launch split (Phase 2, Base):** 40% CCA auction / 40% creator vesting / 20% LP reserve in the current deployment batcher flow.
 2. **Underlying vault target:** 30% Charm, 30% Ajna, 30% reserved for Solana execution, 10% idle buffer.
 
 The Solana reserve is executed out-of-band through the Solana provisioner + Meteora path (DLMM + Alpha Vault), while Base remains the canonical control plane for deployment, ownership, and settlement.

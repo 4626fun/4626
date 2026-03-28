@@ -6,7 +6,13 @@
  *
  * Protected by KEEPR_API_KEY Bearer token.
  *
- * Request body: { vaultAddress: string, graduatedAt?: string, settledAt?: string }
+ * Request body:
+ * {
+ *   vaultAddress: string,
+ *   graduatedAt?: string,
+ *   settledAt?: string,
+ *   settlementStage?: string
+ * }
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -34,18 +40,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const { vaultAddress, graduatedAt, settledAt } = req.body as {
+  const { vaultAddress, graduatedAt, settledAt, settlementStage } = req.body as {
     vaultAddress?: string
     graduatedAt?: string
     settledAt?: string
+    settlementStage?: string
   }
 
   if (!vaultAddress || !vaultAddress.startsWith('0x') || vaultAddress.length !== 42) {
     return res.status(400).json({ success: false, error: 'Invalid vaultAddress' } satisfies ApiEnvelope<never>)
   }
 
-  if (!graduatedAt && !settledAt) {
-    return res.status(400).json({ success: false, error: 'Must provide graduatedAt or settledAt' } satisfies ApiEnvelope<never>)
+  const normalizedStage = typeof settlementStage === 'string' ? settlementStage.trim() : ''
+  if (normalizedStage && !/^[a-z0-9_:-]{2,64}$/i.test(normalizedStage)) {
+    return res.status(400).json({ success: false, error: 'Invalid settlementStage' } satisfies ApiEnvelope<never>)
+  }
+
+  if (!graduatedAt && !settledAt && !normalizedStage) {
+    return res.status(400).json({
+      success: false,
+      error: 'Must provide graduatedAt, settledAt, or settlementStage',
+    } satisfies ApiEnvelope<never>)
   }
 
   if (!isDbConfigured()) {
@@ -61,36 +76,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const addr = vaultAddress.toLowerCase()
 
-    // Update only the fields that are provided, and only if they are currently NULL
-    // (don't overwrite existing timestamps)
-    if (graduatedAt && settledAt) {
-      await db.sql`
-        UPDATE keepr_vaults
-        SET graduated_at = COALESCE(graduated_at, ${graduatedAt}::timestamptz),
-            settled_at = COALESCE(settled_at, ${settledAt}::timestamptz),
-            updated_at = NOW()
-        WHERE LOWER(vault_address) = ${addr};
-      `
-    } else if (graduatedAt) {
-      await db.sql`
-        UPDATE keepr_vaults
-        SET graduated_at = COALESCE(graduated_at, ${graduatedAt}::timestamptz),
-            updated_at = NOW()
-        WHERE LOWER(vault_address) = ${addr};
-      `
-    } else if (settledAt) {
-      await db.sql`
-        UPDATE keepr_vaults
-        SET settled_at = COALESCE(settled_at, ${settledAt}::timestamptz),
-            updated_at = NOW()
-        WHERE LOWER(vault_address) = ${addr};
-      `
-    }
+    // Timestamps are one-way (COALESCE); settlement stage is latest-state and may advance.
+    await db.sql`
+      UPDATE keepr_vaults
+      SET graduated_at = COALESCE(graduated_at, ${graduatedAt ?? null}::timestamptz),
+          settled_at = COALESCE(settled_at, ${settledAt ?? null}::timestamptz),
+          settlement_stage = COALESCE(${normalizedStage || null}::text, settlement_stage),
+          settlement_stage_updated_at =
+            CASE
+              WHEN ${normalizedStage || null}::text IS NULL THEN settlement_stage_updated_at
+              ELSE NOW()
+            END,
+          updated_at = NOW()
+      WHERE LOWER(vault_address) = ${addr};
+    `
 
     return res.status(200).json({
       success: true,
-      data: { updated: true },
-    } satisfies ApiEnvelope<{ updated: boolean }>)
+      data: {
+        updated: true,
+        stageUpdated: Boolean(normalizedStage),
+      },
+    } satisfies ApiEnvelope<{ updated: boolean; stageUpdated: boolean }>)
   } catch (err) {
     console.error('[cre/keeper/mark-settled] Error:', err)
     return res.status(500).json({

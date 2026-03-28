@@ -26,6 +26,10 @@ export async function ensureKeeprSchema(): Promise<void> {
         config_hash TEXT NOT NULL,
         config_json JSONB NOT NULL,
         last_sync_at TIMESTAMPTZ,
+        graduated_at TIMESTAMPTZ,
+        settled_at TIMESTAMPTZ,
+        settlement_stage TEXT,
+        settlement_stage_updated_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
@@ -51,6 +55,16 @@ export async function ensureKeeprSchema(): Promise<void> {
     }
     try {
       await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS settlement_stage TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS settlement_stage_updated_at TIMESTAMPTZ;`
     } catch {
       // ignore
     }

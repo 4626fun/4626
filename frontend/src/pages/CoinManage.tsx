@@ -279,11 +279,11 @@ export function CoinManage() {
                   )}
                 </div>
 
-                {/* Payout recipient */}
+                {/* CreatorCoin payout recipient */}
                 <div className="card p-8 space-y-4">
                   <div className="flex items-start justify-between gap-6">
                     <div>
-                      <div className="label">Payout recipient</div>
+                      <div className="label">CreatorCoin payout recipient</div>
                       <div className="text-sm text-zinc-500 mt-2">
                         Current:{' '}
                         <span className="font-mono text-zinc-300">
@@ -294,7 +294,7 @@ export function CoinManage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="label">New payout recipient</label>
+                    <label className="label">New CreatorCoin payout recipient</label>
                     <input
                       value={newPayoutRecipient}
                       onChange={(e) => setNewPayoutRecipient(e.target.value)}

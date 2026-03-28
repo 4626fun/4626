@@ -16,9 +16,6 @@ const RawTelegramWebhookEnvSchema = z
     TELEGRAM_ALLOW_ALL_PRIVATE_DMS: z.string().optional(),
     TELEGRAM_ALLOW_ADMIN_DM: z.string().optional(),
     TELEGRAM_AI_FOLLOWUP_ENABLED: z.string().optional(),
-    TELEGRAM_STARS_TIPS_ENABLED: z.string().optional(),
-    TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS: z.string().optional(),
-    TELEGRAM_STARS_PROVIDER_TOKEN: z.string().optional(),
     TELEGRAM_SIGNALS_CHAT_ID: z.string().optional(),
     TELEGRAM_SIGNALS_THREAD_BY_CHAT_JSON: z.string().optional(),
     TELEGRAM_SIGNALS_THREAD_ID: z.string().optional(),
@@ -69,9 +66,6 @@ export type TelegramWebhookConfig = {
   allowPrivateDms: boolean
   allowAdminDm: boolean
   aiFollowupEnabled: boolean
-  starsTipsEnabled: boolean
-  starsTipsAllowedChatIdsRaw: string
-  starsProviderToken: string
   signalsChatId: string
   signalsThreadByChatJsonRaw: string
   signalsThreadId: number | null
@@ -107,6 +101,12 @@ export type TelegramWebhookConfig = {
   copyTextButtons: boolean
 }
 
+function normalizeTelegramMenuButtonText(value: string): string {
+  const trimmed = asTrimmed(value)
+  if (!trimmed) return ''
+  return trimmed.replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
+}
+
 function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): TelegramWebhookConfig {
   const botToken = asTrimmed(raw.TELEGRAM_BOT_TOKEN ?? '')
   const targetChatId = asTrimmed(raw.TELEGRAM_TARGET_CHAT_ID ?? '')
@@ -118,7 +118,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
   const inlineMaxResults =
     Number.isFinite(inlineCapRaw) && inlineCapRaw >= 3 && inlineCapRaw <= 20 ? Math.floor(inlineCapRaw) : 8
   const menuButtonModeRaw = asTrimmed(raw.TELEGRAM_MENU_BUTTON_MODE ?? '').toLowerCase()
-  const menuButtonMode: 'web_app' | 'commands' = menuButtonModeRaw === 'commands' ? 'commands' : 'web_app'
+  const menuButtonMode: 'web_app' | 'commands' = menuButtonModeRaw === 'web_app' ? 'web_app' : 'commands'
   const miniAppInitDataMaxAgeSeconds = Math.max(
     30,
     Math.min(60 * 5, parseOptionalPositiveInteger(raw.TELEGRAM_MINIAPP_INITDATA_MAX_AGE_SECONDS ?? '') ?? 60 * 5),
@@ -154,9 +154,6 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     allowPrivateDms,
     allowAdminDm: parseBoolean(raw.TELEGRAM_ALLOW_ADMIN_DM, true),
     aiFollowupEnabled: parseBoolean(raw.TELEGRAM_AI_FOLLOWUP_ENABLED, true),
-    starsTipsEnabled: parseBoolean(raw.TELEGRAM_STARS_TIPS_ENABLED, false),
-    starsTipsAllowedChatIdsRaw: asTrimmed(raw.TELEGRAM_STARS_TIPS_ALLOWED_CHAT_IDS ?? ''),
-    starsProviderToken: asTrimmed(raw.TELEGRAM_STARS_PROVIDER_TOKEN ?? ''),
     signalsChatId: asTrimmed(raw.TELEGRAM_SIGNALS_CHAT_ID ?? ''),
     signalsThreadByChatJsonRaw: asTrimmed(raw.TELEGRAM_SIGNALS_THREAD_BY_CHAT_JSON ?? ''),
     signalsThreadId: parseOptionalPositiveInteger(raw.TELEGRAM_SIGNALS_THREAD_ID ?? ''),
@@ -178,7 +175,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     inlinePreparedEnabled: parseBoolean(raw.TELEGRAM_INLINE_PREPARED_ENABLED, true),
     miniAppUrl: asTrimmed(raw.TELEGRAM_MINI_APP_URL ?? ''),
     menuButtonMode,
-    menuButtonText: asTrimmed(raw.TELEGRAM_MENU_BUTTON_TEXT ?? ''),
+    menuButtonText: normalizeTelegramMenuButtonText(raw.TELEGRAM_MENU_BUTTON_TEXT ?? ''),
     botConfigSecret: asTrimmed(raw.TELEGRAM_BOT_CONFIG_SECRET ?? raw.TELEGRAM_LINK_API_SECRET ?? ''),
     linkApiSecret: asTrimmed(raw.TELEGRAM_LINK_API_SECRET ?? raw.TELEGRAM_BOT_CONFIG_SECRET ?? ''),
     miniAppSessionEnabled: parseBoolean(raw.TELEGRAM_MINIAPP_SESSION_ENABLED, true),

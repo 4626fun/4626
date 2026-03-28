@@ -15,7 +15,7 @@ type CreatorAllowlistResponse = {
   address: string | null
   // Echoes `coin=` input (lowercased), if provided.
   coin: string | null
-  // When `coin=` is provided, we attempt to resolve the creator + payoutRecipient.
+  // When `coin=` is provided, we attempt to resolve creator + CreatorCoin payoutRecipient.
   creator: string | null
   payoutRecipient: string | null
 
@@ -256,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<CreatorAllowlistResponse>)
   }
 
-  // Fallback (no DB): env allowlist (compatibility/simple).
+  // Fallback (no DB): env allowlist.
   const allowlist = parseAllowlist(process.env.CREATOR_ALLOWLIST)
   const mode: AllowlistMode = allowlist.size > 0 ? 'enforced' : 'disabled'
   const allowed = mode === 'disabled' ? true : addressesToCheck.some((a) => allowlist.has(a.toLowerCase()))

@@ -13,8 +13,8 @@ pragma solidity ^0.8.20;
  *
  * @dev CONFIGURATION:
  *      - Set 6.9% (690 bps) fee on swaps
- *      - Route fees to CreatorGaugeController
- *      - GaugeController then distributes: 50% burn, 31% lottery, 19% creator
+ *      - Route fees to the configured tradeFeeCollector (typically CreatorGaugeController)
+ *      - Gauge split behavior is configurable on GaugeController; do not assume fixed percentages here
  */
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";

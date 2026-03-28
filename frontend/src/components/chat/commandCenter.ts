@@ -2,7 +2,6 @@ export type ChatCommandRisk = 'read' | 'write'
 export type ChatCommandMode = 'send' | 'prefill'
 export type ChatCommandCategoryId =
   | 'vault'
-  | 'market'
   | 'cre'
   | 'wallet'
   | 'knowledge'
@@ -27,7 +26,6 @@ export type ChatCommandDefinition = {
 
 export const CHAT_COMMAND_CATEGORIES: readonly ChatCommandCategory[] = [
   { id: 'vault', label: 'Vault' },
-  { id: 'market', label: 'Market' },
   { id: 'cre', label: 'CRE' },
   { id: 'wallet', label: 'Wallet' },
   { id: 'knowledge', label: 'Knowledge' },
@@ -43,7 +41,7 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     command: '/help',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['vault-status', 'cre-health', 'market-quote-eth'],
+    followUpIds: ['vault-status', 'cre-health'],
   },
   {
     id: 'ai-assistant',
@@ -53,7 +51,7 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     command: '/ai What should I do next?',
     risk: 'read',
     mode: 'prefill',
-    followUpIds: ['vault-status', 'market-quote-eth'],
+    followUpIds: ['vault-status', 'cre-health'],
   },
   {
     id: 'vault-status',
@@ -74,26 +72,6 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     risk: 'read',
     mode: 'send',
     followUpIds: ['vault-status'],
-  },
-  {
-    id: 'market-quote-eth',
-    label: 'ETH Quote',
-    description: 'Get current ETH quote snapshot.',
-    category: 'market',
-    command: '/mkt quote ETH',
-    risk: 'read',
-    mode: 'send',
-    followUpIds: ['market-chart-eth'],
-  },
-  {
-    id: 'market-chart-eth',
-    label: 'ETH 1M Chart',
-    description: 'Get 1 month ETH chart summary.',
-    category: 'market',
-    command: '/mkt chart ETH 1M',
-    risk: 'read',
-    mode: 'send',
-    followUpIds: ['market-quote-eth'],
   },
   {
     id: 'cre-health',
@@ -211,7 +189,7 @@ const QUICK_ACTION_IDS = [
   'help',
   'vault-status',
   'cre-health',
-  'market-quote-eth',
+  'cre-status',
 ] as const
 
 const CHAT_COMMAND_BY_ID = new Map<string, ChatCommandDefinition>(
@@ -297,8 +275,6 @@ export function inferCommandIdFromAgentText(text: string): string | null {
   if (lower.includes('keepr status') || lower.includes('vault status')) return 'vault-status'
   if (lower.includes('keepr rules') || lower.includes('gating')) return 'vault-rules'
   if (lower.includes('commands') || lower.includes('/help')) return 'help'
-  if (lower.includes('chart') && lower.includes('eth')) return 'market-chart-eth'
-  if (lower.includes('quote') && lower.includes('eth')) return 'market-quote-eth'
   return null
 }
 

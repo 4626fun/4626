@@ -5,11 +5,19 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
+import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
+import {Plan, StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
+import {TokenPricing} from "liquidity-launcher/src/libraries/TokenPricing.sol";
+import {BasePositionParams, FullRangeParams} from "liquidity-launcher/src/types/PositionTypes.sol";
 
 /**
  * @title ITaxHook
@@ -60,6 +68,16 @@ interface IContinuousClearingAuction {
     function currencyRaised() external view returns (uint256);
     function totalSupply() external view returns (uint128);
     function onTokensReceived() external;
+    function startBlock() external view returns (uint64);
+    function endBlock() external view returns (uint64);
+    function claimBlock() external view returns (uint64);
+    function sweepCurrencyBlock() external view returns (uint256);
+    function sweepUnsoldTokensBlock() external view returns (uint256);
+}
+
+interface IVaultTelemetry {
+    function totalAssets() external view returns (uint256);
+    function totalSupply() external view returns (uint256);
 }
 
 /**
@@ -83,6 +101,8 @@ interface IContinuousClearingAuction {
  */
 contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using StrategyPlanner for *;
+    using TokenPricing for uint256;
 
     // ================================
     // CONSTANTS
@@ -96,6 +116,63 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     uint24 public constant MPS = 1e7;
     /// @notice Q96 fixed point scalar (2^96) used by Uniswap pricing
     uint256 public constant Q96 = 2 ** 96;
+    /// @notice Basis points denominator.
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+    /// @notice Auction allocation: 40%
+    uint24 public constant AUCTION_SPLIT_MPS = 4_000_000;
+    /// @notice Creator vesting allocation: 40%
+    uint24 public constant VESTING_SPLIT_MPS = 4_000_000;
+    /// @notice LP reserve allocation: 20%
+    uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000;
+    /// @notice Unix epoch (1970-01-01 00:00 UTC) was a Thursday, so weekly boundaries align to Thursday 00:00 UTC.
+    uint256 internal constant THURSDAY_EPOCH_SECONDS = 7 days;
+
+    enum LifecyclePhase {
+        Idle,
+        AuctionLive,
+        AuctionEndedPending,
+        ClaimReady,
+        PoolInitializing,
+        PoolLive,
+        LaunchFailed,
+        AuctionScheduled
+    }
+
+    struct LaunchLifecycle {
+        uint64 startBlock;
+        uint64 endBlock;
+        uint64 claimBlock;
+        uint64 migrationBlock;
+        uint64 sweepBlock;
+        uint256 auctionAmount;
+        uint256 lpReserveAmount;
+        uint256 launchVaultTotalAssets;
+        uint256 launchVaultTotalSupply;
+        bool currencySwept;
+        bool unsoldSwept;
+        bool migrated;
+        bool failedFinalized;
+    }
+
+    struct LifecycleStatus {
+        uint8 phase;
+        address auction;
+        bool isGraduated;
+        bool auctionWindowOpen;
+        bool claimOpen;
+        bool currencySwept;
+        bool unsoldSwept;
+        bool migrated;
+        bool failedFinalized;
+        uint64 startBlock;
+        uint64 endBlock;
+        uint64 claimBlock;
+        uint64 migrationBlock;
+        uint64 sweepBlock;
+        uint256 lpReserveAmount;
+        uint256 clearingPrice;
+        uint256 currencyRaised;
+    }
 
     // ================================
     // STATE
@@ -131,6 +208,12 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     /// @notice Tax hook for the V4 pool (configure via `setTaxHook`)
     address public taxHook;
+    /// @notice V4 PositionManager used to mint post-auction LP
+    IPositionManager public positionManager;
+    /// @notice Recipient of the migrated v4 LP position
+    address public positionRecipient;
+    /// @notice Operator allowed to sweep residual balances after sweepBlock
+    address public operator;
 
     /// @notice Fee recipient for the tax hook (GaugeController)
     address public feeRecipient;
@@ -147,6 +230,17 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /// @notice Approved addresses that can launch auctions (e.g., VaultActivationBatcher)
     mapping(address => bool) public approvedLaunchers;
 
+    /// @notice Optional vault used only for non-blocking launch telemetry.
+    address public backingVault;
+    /// @notice Latest lifecycle data for the active auction.
+    LaunchLifecycle public currentLaunch;
+    /// @notice Lifecycle snapshots by auction address.
+    mapping(address => LaunchLifecycle) public launchByAuction;
+    /// @notice Current phase for API/UI/keeper state machines.
+    LifecyclePhase public phase = LifecyclePhase.Idle;
+    /// @notice Last sweep block target used for operator residual sweeps.
+    uint64 public lastSweepBlock;
+
     // ================================
     // AUCTION CONFIG
     // ================================
@@ -156,6 +250,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     /// @notice Default claim delay after auction ends
     uint64 public defaultClaimDelay = 3600; // ~2 hours
+    /// @notice Average seconds per block used to convert Thursday UTC boundaries into CCA block schedules.
+    uint64 public launchBlockTimeSeconds = 2;
 
     /// @notice Default tick spacing in Q96 (recommended ~1% of floor price)
     /// @dev In Uniswap CCA, tickSpacing is a *price granularity* in Q96, not an ERC20/ETH amount.
@@ -164,6 +260,18 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /// @notice Default floor price in Q96
     /// @dev 0.001 ETH per 1 token => 1 ETH buys 1000 tokens => floorPrice = 0.001 * 2^96 = Q96/1000.
     uint256 public defaultFloorPrice = Q96 / 1000;
+    /// @notice Discount applied to oracle-derived floor price for launch (8000 = 80%).
+    uint16 public launchDiscountBps = 8000;
+    /// @notice Tick spacing (in bps of derived floor) used for CCA launch params (100 = 1%).
+    uint16 public launchTickSpacingBps = 100;
+    /// @notice Maximum accepted age for oracle prices used at launch.
+    uint64 public launchOracleMaxAge = 7200; // 2 hours
+    /// @notice Delay from auction end to migration eligibility.
+    uint64 public migrationDelayBlocks = 1;
+    /// @notice Delay from claim block to operator residual sweep eligibility.
+    uint64 public defaultSweepDelayBlocks = 14_400; // ~8 hours on Base @2s blocks
+    /// @notice If false, `launchAuctionSimple` is disabled.
+    bool public simpleLaunchEnabled;
 
     // ================================
     // EVENTS
@@ -172,10 +280,20 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     event AuctionCreated(
         address indexed auction, address indexed token, uint256 totalSupply, uint64 startBlock, uint64 endBlock
     );
+    event LifecyclePhaseChanged(address indexed auction, LifecyclePhase phase);
+    event FailedAuctionFinalized(address indexed auction, uint256 unsoldTokens);
+    event Migrated(address indexed auction, uint160 sqrtPriceX96, uint256 tokenAmount, uint256 currencyAmount);
 
     event AuctionGraduated(address indexed auction, uint256 currencyRaised, uint256 finalPrice);
     event FundsSwept(address indexed auction, uint256 amount);
     event TokensSwept(address indexed auction, uint256 amount);
+    event LaunchPricingResolved(
+        address indexed auction,
+        uint256 floorPriceQ96,
+        uint256 tickSpacingQ96,
+        uint256 creatorUsdPrice,
+        uint256 ethUsdPrice
+    );
 
     event ConfigUpdated(string param, uint256 value);
     event RecipientsUpdated(address fundsRecipient, address tokensRecipient);
@@ -184,6 +302,15 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     event TaxHookConfigured(address indexed token, address indexed recipient, uint256 taxRate);
     event LauncherApproved(address indexed launcher, bool approved);
     event CcaFactoryUpdated(address indexed oldFactory, address indexed newFactory);
+    event MigrationConfigUpdated(
+        address indexed positionManager,
+        address indexed positionRecipient,
+        address indexed operator,
+        uint64 migrationDelayBlocks,
+        uint64 sweepDelayBlocks
+    );
+    event BackingVaultUpdated(address indexed backingVault);
+    event SimpleLaunchToggled(bool enabled);
 
     // ================================
     // ERRORS
@@ -192,6 +319,20 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     error AuctionAlreadyActive();
     error NoActiveAuction();
     error AuctionNotGraduated();
+    error AuctionStillLive(uint64 endBlock, uint256 currentBlock);
+    error AuctionNotFailed();
+    error MigrationNotReady(uint64 migrationBlock, uint256 currentBlock);
+    error MigrationConfigMissing();
+    error CurrencyBalanceTooLow(uint256 needed, uint256 available);
+    error LpReserveTooLow(uint256 requiredReserve, uint256 availableBalance);
+    error SweepNotAllowed(uint64 sweepBlock, uint256 currentBlock);
+    error NotOperator(address caller, address expected);
+    error LaunchOracleNotConfigured();
+    error UnsupportedLaunchCurrency(address currency);
+    error LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice);
+    error LaunchOracleStale(uint256 creatorTimestamp, uint256 ethTimestamp, uint64 maxAge, uint256 currentTimestamp);
+    error LaunchFloorTooLow(uint256 rawFloorPriceQ96, uint256 tickSpacingQ96);
+    error SimpleLaunchDisabled();
     error ZeroAddress();
     error ZeroAmount();
     error InvalidConfig();
@@ -227,6 +368,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
         // Default to Uniswap's v1.1.0 factory deployment.
         ccaFactory = UNISWAP_CCA_FACTORY_V110;
+        positionRecipient = _owner;
+        operator = _owner;
+        simpleLaunchEnabled = false;
     }
 
     // ================================
@@ -273,6 +417,50 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         emit CcaFactoryUpdated(old, newFactory);
     }
 
+    /**
+     * @notice Configure migration path (position manager + recipients + delays).
+     * @dev Position manager may be set to zero during bootstrapping, but migrate() will revert until set.
+     */
+    function setMigrationConfig(
+        address _positionManager,
+        address _positionRecipient,
+        address _operator,
+        uint64 _migrationDelayBlocks,
+        uint64 _sweepDelayBlocks
+    ) external onlyOwner {
+        if (_positionRecipient == address(0) || _operator == address(0)) revert ZeroAddress();
+        if (_migrationDelayBlocks == 0) revert InvalidConfig();
+        if (_sweepDelayBlocks == 0) revert InvalidConfig();
+        if (_positionManager != address(0) && _positionManager.code.length == 0) revert InvalidConfig();
+
+        positionManager = IPositionManager(_positionManager);
+        positionRecipient = _positionRecipient;
+        operator = _operator;
+        migrationDelayBlocks = _migrationDelayBlocks;
+        defaultSweepDelayBlocks = _sweepDelayBlocks;
+
+        emit MigrationConfigUpdated(
+            _positionManager, _positionRecipient, _operator, _migrationDelayBlocks, _sweepDelayBlocks
+        );
+    }
+
+    /**
+     * @notice Configure optional backing-vault telemetry source.
+     * @dev This is non-blocking visibility only; no auction/migration gates depend on it.
+     */
+    function setBackingVault(address _backingVault) external onlyOwner {
+        backingVault = _backingVault;
+        emit BackingVaultUpdated(_backingVault);
+    }
+
+    /**
+     * @notice Enable or disable simplified launch path.
+     */
+    function setSimpleLaunchEnabled(bool enabled) external onlyOwner {
+        simpleLaunchEnabled = enabled;
+        emit SimpleLaunchToggled(enabled);
+    }
+
     // ================================
     // LAUNCH AUCTION
     // ================================
@@ -282,37 +470,37 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * IMPORTANT: Do NOT call the external entrypoint via `this.launchAuction(...)` from within the contract.
      * That changes `msg.sender` (breaks auth) and also trips ReentrancyGuard (both entrypoints are nonReentrant).
      */
-    function _launchAuctionInternal(
-        uint256 amount,
-        uint256 floorPrice,
-        uint128 requiredRaise
-    ) internal returns (address auction) {
-        if (currentAuction != address(0)) {
-            // Check if previous auction is still active
-            if (!IContinuousClearingAuction(currentAuction).isGraduated()) {
-                revert AuctionAlreadyActive();
-            }
-            // Archive previous auction
-            pastAuctions.push(currentAuction);
-        }
-
+    function _launchAuctionInternal(uint256 amount, uint256 lpReserveAmount, uint128 requiredRaise)
+        internal
+        returns (address auction)
+    {
+        _archiveIfFinished();
         if (amount == 0) revert ZeroAmount();
 
-        // Calculate blocks
-        uint64 startBlock = uint64(block.number + 100); // Start in ~100 blocks
+        // Schedule launches on the next Thursday 00:00 UTC weekly epoch.
+        uint64 startBlock = _deriveScheduledStartBlock();
         uint64 endBlock = startBlock + defaultDuration;
         uint64 claimBlock = endBlock + defaultClaimDelay;
+        uint64 migrationBlock = endBlock + migrationDelayBlocks;
+        uint64 sweepBlock = claimBlock + defaultSweepDelayBlocks;
 
         // Strict launch policy: always use the strategy-owned schedule so
         // callers cannot accidentally deploy unsafe issuance curves.
         bytes memory auctionSteps = _createUniswapSafeDefaultSteps(defaultDuration);
+        (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice) =
+            _deriveLaunchPricing();
 
         // Build auction parameters
-        bytes memory configData =
-            _encodeAuctionParams(floorPrice, requiredRaise, startBlock, endBlock, claimBlock, auctionSteps);
+        bytes memory configData = _encodeAuctionParams(
+            floorPriceQ96, tickSpacingQ96, requiredRaise, startBlock, endBlock, claimBlock, auctionSteps
+        );
 
-        // Transfer tokens to this contract for auction
+        // Transfer tokens to this contract for auction inventory.
         auctionToken.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 availableBalance = auctionToken.balanceOf(address(this));
+        if (availableBalance < amount + lpReserveAmount) {
+            revert LpReserveTooLow(lpReserveAmount, availableBalance > amount ? availableBalance - amount : 0);
+        }
 
         // Approve factory to pull tokens
         auctionToken.forceApprove(ccaFactory, amount);
@@ -329,14 +517,34 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         IContinuousClearingAuction(auction).onTokensReceived();
 
         currentAuction = auction;
+        currentLaunch = LaunchLifecycle({
+            startBlock: startBlock,
+            endBlock: endBlock,
+            claimBlock: claimBlock,
+            migrationBlock: migrationBlock,
+            sweepBlock: sweepBlock,
+            auctionAmount: amount,
+            lpReserveAmount: lpReserveAmount,
+            launchVaultTotalAssets: 0,
+            launchVaultTotalSupply: 0,
+            currencySwept: false,
+            unsoldSwept: false,
+            migrated: false,
+            failedFinalized: false
+        });
+        _snapshotBackingTelemetry();
+        _persistLifecycleSnapshot();
+        lastSweepBlock = sweepBlock;
+        _setPhase(block.number < startBlock ? LifecyclePhase.AuctionScheduled : LifecyclePhase.AuctionLive);
 
         emit AuctionCreated(auction, address(auctionToken), amount, startBlock, endBlock);
+        emit LaunchPricingResolved(auction, floorPriceQ96, tickSpacingQ96, creatorUsdPrice, ethUsdPrice);
     }
 
     /**
      * @notice Launch a new CCA auction for token distribution
      * @param amount Amount of tokens to auction
-     * @param floorPrice Starting floor price (Q96 format)
+     * @param floorPrice Deprecated. Ignored; launch floor is derived onchain from oracle data.
      * @param requiredRaise Minimum currency to raise for graduation
      * @param auctionSteps Deprecated. Ignored in favor of strategy-enforced safe schedule.
      */
@@ -347,8 +555,25 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         returns (address auction)
     {
         // Keep ABI compatibility while enforcing strategy-owned schedule.
+        floorPrice;
         auctionSteps;
-        return _launchAuctionInternal(amount, floorPrice, requiredRaise);
+        return _launchAuctionInternal(amount, 0, requiredRaise);
+    }
+
+    /**
+     * @notice Launch auction with explicit LP reserve metadata (for 40/40/20 batch flows).
+     * @dev `lpReserveAmount` is expected to remain in the strategy for post-auction migration.
+     */
+    function launchAuctionWithReserve(
+        uint256 amount,
+        uint256 lpReserveAmount,
+        uint256 floorPrice,
+        uint128 requiredRaise,
+        bytes calldata auctionSteps
+    ) external onlyApprovedOrOwner nonReentrant returns (address auction) {
+        floorPrice;
+        auctionSteps;
+        return _launchAuctionInternal(amount, lpReserveAmount, requiredRaise);
     }
 
     /**
@@ -362,11 +587,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         nonReentrant
         returns (address auction)
     {
-        // Use default floor price
-        uint256 floorPrice = defaultFloorPrice;
-
-        // Forward to internal implementation (preserves msg.sender and nonReentrant semantics)
-        return _launchAuctionInternal(amount, floorPrice, requiredRaise);
+        if (!simpleLaunchEnabled) revert SimpleLaunchDisabled();
+        // Forward to internal implementation (preserves msg.sender and nonReentrant semantics).
+        // Price is still derived onchain from oracle inputs.
+        return _launchAuctionInternal(amount, 0, requiredRaise);
     }
 
     // ================================
@@ -379,40 +603,146 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      */
     function checkpoint() external {
         if (currentAuction == address(0)) revert NoActiveAuction();
-        IContinuousClearingAuction(currentAuction).checkpoint();
+        IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
+        auction.checkpoint();
+        _setPhase(_derivePhase(auction.isGraduated(), currentLaunch));
     }
 
     /**
-     * @notice Sweep raised currency after auction graduates
-     * @dev Also configures the oracle with the V4 pool if oracle is set
-     *      NOTE: Tax hook configuration must be done separately by token owner
-     *      (see getTaxHookCalldata() for the exact call to make)
+     * @notice Sweep raised currency after auction graduates.
+     * @dev This only settles auction funds. Pool migration is performed by `migrate()`.
      */
     function sweepCurrency() external nonReentrant {
         if (currentAuction == address(0)) revert NoActiveAuction();
-        if (!IContinuousClearingAuction(currentAuction).isGraduated()) {
-            revert AuctionNotGraduated();
-        }
-
         IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
+        auction.checkpoint();
+        if (!auction.isGraduated()) revert AuctionNotGraduated();
 
         uint256 raised = auction.currencyRaised();
         uint256 finalPrice = auction.clearingPrice();
 
         auction.sweepCurrency();
-
-        // Configure oracle with V4 pool if all components are set
-        if (oracle != address(0) && address(poolManager) != address(0)) {
-            _configureOracleV4Pool();
-        }
-
-        // NOTE: Tax hook must be configured separately by token owner!
-        // The SimpleSellTaxHook
-        // requires msg.sender == token.owner() to call setTaxConfig.
-        // Use getTaxHookCalldata() to get the exact calldata for ERC-4337 batching.
+        currentLaunch.currencySwept = true;
+        _persistLifecycleSnapshot();
+        _setPhase(LifecyclePhase.ClaimReady);
 
         emit AuctionGraduated(currentAuction, raised, finalPrice);
         emit FundsSwept(currentAuction, raised);
+    }
+
+    /**
+     * @notice Finalize a failed auction and unblock relaunchs.
+     * @dev Sweeps unsold auction tokens and clears active auction pointers.
+     */
+    function finalizeFailedAuction() external nonReentrant {
+        if (currentAuction == address(0)) revert NoActiveAuction();
+        if (block.number <= currentLaunch.endBlock) revert AuctionStillLive(currentLaunch.endBlock, block.number);
+
+        IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
+        auction.checkpoint();
+        if (auction.isGraduated()) revert AuctionNotFailed();
+
+        uint256 unsold = auctionToken.balanceOf(currentAuction);
+        auction.sweepUnsoldTokens();
+        currentLaunch.unsoldSwept = true;
+        currentLaunch.failedFinalized = true;
+        _persistLifecycleSnapshot();
+
+        address archivedAuction = currentAuction;
+        launchByAuction[archivedAuction] = currentLaunch;
+        pastAuctions.push(archivedAuction);
+        currentAuction = address(0);
+        delete currentLaunch;
+        _setPhase(LifecyclePhase.LaunchFailed);
+
+        emit TokensSwept(archivedAuction, unsold);
+        emit FailedAuctionFinalized(archivedAuction, unsold);
+    }
+
+    /**
+     * @notice Migrate graduated CCA liquidity into a Uniswap v4 LP position.
+     */
+    function migrate() external nonReentrant {
+        if (currentAuction == address(0)) revert NoActiveAuction();
+        if (address(positionManager) == address(0) || address(poolManager) == address(0) || taxHook == address(0)) {
+            revert MigrationConfigMissing();
+        }
+        if (currentLaunch.migrated) revert InvalidConfig();
+        if (!currentLaunch.currencySwept) revert MigrationConfigMissing();
+        if (block.number < currentLaunch.migrationBlock) {
+            revert MigrationNotReady(currentLaunch.migrationBlock, block.number);
+        }
+
+        IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
+        auction.checkpoint();
+        if (!auction.isGraduated()) revert AuctionNotGraduated();
+
+        uint256 currencyAmountRaw = auction.currencyRaised();
+        if (currencyAmountRaw > type(uint128).max) revert InvalidConfig();
+        if (currencyAmountRaw == 0) revert ZeroAmount();
+
+        uint256 availableCurrency = _currencyBalance(address(this));
+        if (availableCurrency < currencyAmountRaw) {
+            revert CurrencyBalanceTooLow(currencyAmountRaw, availableCurrency);
+        }
+
+        uint256 reserveRaw = currentLaunch.lpReserveAmount;
+        if (reserveRaw == 0 || reserveRaw > type(uint128).max) revert InvalidConfig();
+
+        uint128 reserveSupply = uint128(reserveRaw);
+        uint128 currencyAmount = uint128(currencyAmountRaw);
+        bool currencyIsCurrency0 = currency < address(auctionToken);
+
+        uint256 priceX192 = auction.clearingPrice().convertToPriceX192(currencyIsCurrency0);
+        uint160 sqrtPriceX96 = priceX192.convertToSqrtPriceX96();
+
+        (uint128 fullRangeTokenAmount, uint128 fullRangeCurrencyAmount) =
+            priceX192.calculateAmounts(currencyAmount, currencyIsCurrency0, reserveSupply);
+
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtPriceAtTick(TickMath.minUsableTick(poolTickSpacing)),
+            TickMath.getSqrtPriceAtTick(TickMath.maxUsableTick(poolTickSpacing)),
+            currencyIsCurrency0 ? fullRangeCurrencyAmount : fullRangeTokenAmount,
+            currencyIsCurrency0 ? fullRangeTokenAmount : fullRangeCurrencyAmount
+        );
+
+        PoolKey memory key = _buildPoolKey();
+        _setPhase(LifecyclePhase.PoolInitializing);
+        poolManager.initialize(key, sqrtPriceX96);
+
+        Plan memory plan = StrategyPlanner.init();
+        BasePositionParams memory baseParams = BasePositionParams({
+            currency: currency,
+            poolToken: address(auctionToken),
+            poolLPFee: poolFeeTier,
+            poolTickSpacing: poolTickSpacing,
+            initialSqrtPriceX96: sqrtPriceX96,
+            liquidity: liquidity,
+            positionRecipient: positionRecipient,
+            hooks: IHooks(taxHook)
+        });
+
+        plan = plan.planFullRangePosition(
+            baseParams, FullRangeParams({tokenAmount: fullRangeTokenAmount, currencyAmount: fullRangeCurrencyAmount})
+        );
+        plan = plan.planTakePair(baseParams);
+        bytes memory encodedPlan = plan.encode();
+
+        Currency.wrap(address(auctionToken)).transfer(address(positionManager), fullRangeTokenAmount);
+        if (currency == address(0)) {
+            positionManager.modifyLiquidities{value: fullRangeCurrencyAmount}(encodedPlan, block.timestamp);
+        } else {
+            IERC20(currency).safeTransfer(address(positionManager), fullRangeCurrencyAmount);
+            positionManager.modifyLiquidities(encodedPlan, block.timestamp);
+        }
+
+        currentLaunch.migrated = true;
+        _persistLifecycleSnapshot();
+        _configureOracleV4Pool();
+        _setPhase(LifecyclePhase.PoolLive);
+
+        emit Migrated(currentAuction, sqrtPriceX96, fullRangeTokenAmount, fullRangeCurrencyAmount);
     }
 
     /**
@@ -420,42 +750,14 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @dev Called automatically on graduation if oracle is set
      */
     function _configureOracleV4Pool() internal {
-        // Sort tokens for pool key (token0 < token1)
-        address token0;
-        address token1;
-
-        // currency = address(0) means ETH, which is Currency.wrap(address(0)) in V4
-        address tokenAddr = address(auctionToken);
-        address currencyAddr = currency; // address(0) for ETH
-
-        if (tokenAddr < currencyAddr || currencyAddr == address(0)) {
-            // ETH (address(0)) is always token0 in Uniswap V4
-            if (currencyAddr == address(0)) {
-                token0 = currencyAddr;
-                token1 = tokenAddr;
-            } else {
-                token0 = tokenAddr;
-                token1 = currencyAddr;
-            }
-        } else {
-            token0 = currencyAddr;
-            token1 = tokenAddr;
-        }
-
-        // Build pool key
-        PoolKey memory poolKey = PoolKey({
-            currency0: Currency.wrap(token0),
-            currency1: Currency.wrap(token1),
-            fee: poolFeeTier,
-            tickSpacing: poolTickSpacing,
-            hooks: IHooks(taxHook)
-        });
+        if (oracle == address(0) || address(poolManager) == address(0) || taxHook == address(0)) revert ZeroAddress();
+        PoolKey memory poolKey = _buildPoolKey();
 
         // Configure oracle (Chainlink-style price uses V4 TWAP × Chainlink ETH/USD)
-        bool creatorIsToken0 = token0 == tokenAddr;
+        bool creatorIsToken0 = Currency.unwrap(poolKey.currency0) == address(auctionToken);
         ICreatorOracle(oracle).setV4Pool(address(poolManager), poolKey, creatorIsToken0);
 
-        emit V4PoolConfigured(oracle, token0, token1);
+        emit V4PoolConfigured(oracle, Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1));
     }
 
     /**
@@ -480,24 +782,29 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Get all calldata needed for "Click 2" (complete auction + configure hook)
+     * @notice Get all calldata needed for completion flow (sweep + migrate + configure hook)
      * @dev Returns array of calls for ERC-4337 batching:
      *      1. sweepCurrency() on this strategy
-     *      2. setTaxConfig() on the tax hook (requires token owner)
+     *      2. migrate() on this strategy
+     *      3. setTaxConfig() on the tax hook (requires token owner)
      * @return targets Array of addresses to call
      * @return calldatas Array of calldata for each call
      */
     function getCompleteAuctionCalldata() external view returns (address[] memory targets, bytes[] memory calldatas) {
-        targets = new address[](2);
-        calldatas = new bytes[](2);
+        targets = new address[](3);
+        calldatas = new bytes[](3);
 
         // Call 1: sweepCurrency on this strategy
         targets[0] = address(this);
         calldatas[0] = abi.encodeWithSelector(this.sweepCurrency.selector);
 
-        // Call 2: setTaxConfig on the tax hook
-        targets[1] = taxHook;
-        calldatas[1] = abi.encodeWithSelector(
+        // Call 2: migrate on this strategy
+        targets[1] = address(this);
+        calldatas[1] = abi.encodeWithSelector(this.migrate.selector);
+
+        // Call 3: setTaxConfig on the tax hook
+        targets[2] = taxHook;
+        calldatas[2] = abi.encodeWithSelector(
             ITaxHook.setTaxConfig.selector,
             address(auctionToken),
             currency,
@@ -525,22 +832,193 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (currentAuction == address(0)) revert NoActiveAuction();
 
         IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
+        auction.checkpoint();
+        bool graduated = auction.isGraduated();
 
         uint256 unsold = auctionToken.balanceOf(currentAuction);
         auction.sweepUnsoldTokens();
+        currentLaunch.unsoldSwept = true;
+        _persistLifecycleSnapshot();
 
         emit TokensSwept(currentAuction, unsold);
+
+        // Failed auction path: clear active pointer to unblock relaunch.
+        if (!graduated) {
+            currentLaunch.failedFinalized = true;
+            _persistLifecycleSnapshot();
+            address archivedAuction = currentAuction;
+            launchByAuction[archivedAuction] = currentLaunch;
+            pastAuctions.push(archivedAuction);
+            currentAuction = address(0);
+            delete currentLaunch;
+            _setPhase(LifecyclePhase.LaunchFailed);
+            emit FailedAuctionFinalized(archivedAuction, unsold);
+        }
+    }
+
+    /**
+     * @notice Sweep residual auction token balance after sweep window.
+     */
+    function sweepResidualAuctionToken() external nonReentrant {
+        _requireOperatorSweep();
+        uint256 amount = auctionToken.balanceOf(address(this));
+        if (amount == 0) return;
+        auctionToken.safeTransfer(operator, amount);
+        emit TokensSwept(address(this), amount);
+    }
+
+    /**
+     * @notice Sweep residual raised currency balance after sweep window.
+     */
+    function sweepResidualCurrency() external nonReentrant {
+        _requireOperatorSweep();
+        uint256 amount = _currencyBalance(address(this));
+        if (amount == 0) return;
+
+        if (currency == address(0)) {
+            (bool ok,) = payable(operator).call{value: amount}("");
+            require(ok, "ETH transfer failed");
+        } else {
+            IERC20(currency).safeTransfer(operator, amount);
+        }
+        emit FundsSwept(address(this), amount);
     }
 
     // ================================
     // INTERNAL HELPERS
     // ================================
 
+    function _archiveIfFinished() internal {
+        if (currentAuction == address(0)) return;
+
+        bool launchCleared = currentLaunch.failedFinalized || currentLaunch.migrated;
+        if (!launchCleared) {
+            // Graduated launches must migrate before a new launch can begin.
+            // Failed launches must be finalized to clear current auction pointers.
+            revert AuctionAlreadyActive();
+        }
+
+        launchByAuction[currentAuction] = currentLaunch;
+        pastAuctions.push(currentAuction);
+        currentAuction = address(0);
+        delete currentLaunch;
+        _setPhase(LifecyclePhase.Idle);
+    }
+
+    function _setPhase(LifecyclePhase newPhase) internal {
+        phase = newPhase;
+        emit LifecyclePhaseChanged(currentAuction, newPhase);
+    }
+
+    function _derivePhase(bool isGraduated, LaunchLifecycle memory launchData) internal view returns (LifecyclePhase) {
+        if (currentAuction == address(0)) return LifecyclePhase.Idle;
+        if (launchData.failedFinalized) return LifecyclePhase.LaunchFailed;
+        if (launchData.migrated) return LifecyclePhase.PoolLive;
+        if (launchData.currencySwept) return LifecyclePhase.ClaimReady;
+        if (block.number < launchData.startBlock) return LifecyclePhase.AuctionScheduled;
+        if (isGraduated) return LifecyclePhase.AuctionEndedPending;
+        if (block.number <= launchData.endBlock) return LifecyclePhase.AuctionLive;
+        return LifecyclePhase.AuctionEndedPending;
+    }
+
+    function _persistLifecycleSnapshot() internal {
+        if (currentAuction == address(0)) return;
+        launchByAuction[currentAuction] = currentLaunch;
+    }
+
+    function _snapshotBackingTelemetry() internal {
+        if (backingVault == address(0)) return;
+        try IVaultTelemetry(backingVault).totalAssets() returns (uint256 assets) {
+            currentLaunch.launchVaultTotalAssets = assets;
+        } catch {}
+        try IVaultTelemetry(backingVault).totalSupply() returns (uint256 supply) {
+            currentLaunch.launchVaultTotalSupply = supply;
+        } catch {}
+    }
+
+    function _deriveScheduledStartBlock() internal view returns (uint64 startBlock) {
+        uint256 nextThursdayStartTimestamp = _nextThursdayStartTimestamp(block.timestamp);
+        uint256 deltaBlocks;
+        if (nextThursdayStartTimestamp > block.timestamp) {
+            deltaBlocks = Math.ceilDiv(nextThursdayStartTimestamp - block.timestamp, uint256(launchBlockTimeSeconds));
+        }
+        if (deltaBlocks == 0) deltaBlocks = 1;
+        startBlock = uint64(block.number + deltaBlocks);
+    }
+
+    function _nextThursdayStartTimestamp(uint256 currentTimestamp) internal pure returns (uint256) {
+        uint256 remainder = currentTimestamp % THURSDAY_EPOCH_SECONDS;
+        if (remainder == 0) return currentTimestamp;
+        return currentTimestamp + (THURSDAY_EPOCH_SECONDS - remainder);
+    }
+
+    function _deriveLaunchPricing()
+        internal
+        view
+        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice)
+    {
+        if (oracle == address(0)) revert LaunchOracleNotConfigured();
+        if (currency != address(0)) revert UnsupportedLaunchCurrency(currency);
+
+        (int256 creatorUsdSigned, uint256 creatorTimestamp) = ICreatorOracle(oracle).getCreatorPrice();
+        (int256 ethUsdSigned, uint256 ethTimestamp) = ICreatorOracle(oracle).getEthPrice();
+
+        if (creatorUsdSigned <= 0 || ethUsdSigned <= 0) {
+            revert LaunchOracleInvalidPrice(creatorUsdSigned, ethUsdSigned);
+        }
+
+        if (
+            creatorTimestamp == 0 || ethTimestamp == 0 || creatorTimestamp > block.timestamp
+                || ethTimestamp > block.timestamp || block.timestamp - creatorTimestamp > launchOracleMaxAge
+                || block.timestamp - ethTimestamp > launchOracleMaxAge
+        ) {
+            revert LaunchOracleStale(creatorTimestamp, ethTimestamp, launchOracleMaxAge, block.timestamp);
+        }
+
+        creatorUsdPrice = uint256(creatorUsdSigned);
+        ethUsdPrice = uint256(ethUsdSigned);
+
+        uint256 discountedCreatorUsd = Math.mulDiv(creatorUsdPrice, uint256(launchDiscountBps), BPS_DENOMINATOR);
+        uint256 rawFloorPriceQ96 = Math.mulDiv(discountedCreatorUsd, Q96, ethUsdPrice);
+
+        tickSpacingQ96 = _deriveLaunchTickSpacing(rawFloorPriceQ96);
+        floorPriceQ96 = (rawFloorPriceQ96 / tickSpacingQ96) * tickSpacingQ96;
+        if (floorPriceQ96 == 0) revert LaunchFloorTooLow(rawFloorPriceQ96, tickSpacingQ96);
+    }
+
+    function _deriveLaunchTickSpacing(uint256 floorPriceQ96) internal view returns (uint256 tickSpacingQ96) {
+        tickSpacingQ96 = Math.mulDiv(floorPriceQ96, uint256(launchTickSpacingBps), BPS_DENOMINATOR);
+        if (tickSpacingQ96 < 2) tickSpacingQ96 = 2;
+    }
+
+    function _currencyBalance(address holder) internal view returns (uint256) {
+        if (currency == address(0)) return holder.balance;
+        return IERC20(currency).balanceOf(holder);
+    }
+
+    function _requireOperatorSweep() internal view {
+        if (msg.sender != operator) revert NotOperator(msg.sender, operator);
+        if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
+    }
+
+    function _buildPoolKey() internal view returns (PoolKey memory key) {
+        // ETH (address(0)) naturally sorts first as token0 in V4.
+        bool currencyIsToken0 = currency < address(auctionToken);
+        key = PoolKey({
+            currency0: Currency.wrap(currencyIsToken0 ? currency : address(auctionToken)),
+            currency1: Currency.wrap(currencyIsToken0 ? address(auctionToken) : currency),
+            fee: poolFeeTier,
+            tickSpacing: poolTickSpacing,
+            hooks: IHooks(taxHook)
+        });
+    }
+
     /**
      * @notice Encode auction parameters for CCA factory
      */
     function _encodeAuctionParams(
         uint256 floorPrice,
+        uint256 tickSpacingQ96,
         uint128 requiredRaise,
         uint64 startBlock,
         uint64 endBlock,
@@ -555,7 +1033,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             startBlock, // startBlock
             endBlock, // endBlock
             claimBlock, // claimBlock
-            defaultTickSpacing, // tickSpacing
+            tickSpacingQ96, // tickSpacing
             address(0), // validationHook (none for now)
             floorPrice, // floorPrice
             requiredRaise, // requiredCurrencyRaised
@@ -614,7 +1092,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @notice Create a Uniswap-safe default schedule.
      * @dev Uniswap recommends the final block sells a significant amount of tokens because
      *      the final clearing price is used to initialize downstream liquidity.
-     *      We allocate 10% over the first half, 40% over the middle, and the remainder in the final block.
+     *      We allocate 20% over the first half, 45% over the middle, and the remainder in the final block.
      */
     function _createUniswapSafeDefaultSteps(uint64 duration) internal pure returns (bytes memory) {
         // For very short auctions, fall back to linear to avoid zero-length phases.
@@ -628,8 +1106,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
         // Compute per-block issuance (mps) for phase 1 and 2 using floor division.
         // Then allocate the exact remainder to the final block so total issuance = 100%.
-        uint24 phase1Total = 1_000_000; // 10% of 1e7
-        uint24 phase2Total = 4_000_000; // 40% of 1e7
+        uint24 phase1Total = 2_000_000; // 20% of 1e7
+        uint24 phase2Total = 4_500_000; // 45% of 1e7
 
         uint24 mps1 = uint24(uint256(phase1Total) / uint256(phase1Blocks));
         uint24 mps2 = uint24(uint256(phase2Total) / uint256(phase2Blocks));
@@ -669,6 +1147,33 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Update the block-time estimate used for Thursday UTC launch alignment.
+     */
+    function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external onlyOwner {
+        if (_secondsPerBlock == 0) revert InvalidConfig();
+        launchBlockTimeSeconds = _secondsPerBlock;
+        emit ConfigUpdated("launchBlockTimeSeconds", _secondsPerBlock);
+    }
+
+    /**
+     * @notice Update migration delay after auction end.
+     */
+    function setMigrationDelayBlocks(uint64 _delay) external onlyOwner {
+        if (_delay == 0) revert InvalidConfig();
+        migrationDelayBlocks = _delay;
+        emit ConfigUpdated("migrationDelayBlocks", _delay);
+    }
+
+    /**
+     * @notice Update default post-claim sweep delay.
+     */
+    function setDefaultSweepDelayBlocks(uint64 _delay) external onlyOwner {
+        if (_delay == 0) revert InvalidConfig();
+        defaultSweepDelayBlocks = _delay;
+        emit ConfigUpdated("sweepDelayBlocks", _delay);
+    }
+
+    /**
      * @notice Update default tick spacing
      */
     function setDefaultTickSpacing(uint256 _spacing) external onlyOwner {
@@ -679,11 +1184,41 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     /**
      * @notice Update default floor price
+     * @dev Legacy fallback value retained for backwards compatibility. Launch flow derives floor onchain.
      */
     function setDefaultFloorPrice(uint256 _price) external onlyOwner {
         if (_price == 0) revert InvalidConfig();
         defaultFloorPrice = _price;
         emit ConfigUpdated("floorPrice", _price);
+    }
+
+    /**
+     * @notice Update launch floor discount applied to oracle price.
+     * @param _discountBps Discount in bps (10000 = 100%, 8000 = 80%).
+     */
+    function setLaunchDiscountBps(uint16 _discountBps) external onlyOwner {
+        if (_discountBps == 0 || _discountBps > BPS_DENOMINATOR) revert InvalidConfig();
+        launchDiscountBps = _discountBps;
+        emit ConfigUpdated("launchDiscountBps", _discountBps);
+    }
+
+    /**
+     * @notice Update launch tick spacing (as bps of derived launch floor).
+     * @param _tickSpacingBps Tick spacing bps (100 = 1%).
+     */
+    function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external onlyOwner {
+        if (_tickSpacingBps == 0 || _tickSpacingBps > BPS_DENOMINATOR) revert InvalidConfig();
+        launchTickSpacingBps = _tickSpacingBps;
+        emit ConfigUpdated("launchTickSpacingBps", _tickSpacingBps);
+    }
+
+    /**
+     * @notice Update maximum accepted oracle staleness for launch pricing.
+     */
+    function setLaunchOracleMaxAge(uint64 _maxAge) external onlyOwner {
+        if (_maxAge == 0) revert InvalidConfig();
+        launchOracleMaxAge = _maxAge;
+        emit ConfigUpdated("launchOracleMaxAge", _maxAge);
     }
 
     /**
@@ -738,6 +1273,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @param _feeTier Fee in hundredths of bips (3000 = 0.3%)
      */
     function setPoolFeeTier(uint24 _feeTier) external onlyOwner {
+        if (_feeTier > LPFeeLibrary.MAX_LP_FEE) revert InvalidConfig();
         poolFeeTier = _feeTier;
         emit ConfigUpdated("poolFeeTier", _feeTier);
     }
@@ -747,6 +1283,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @param _tickSpacing Tick spacing for the pool
      */
     function setPoolTickSpacing(int24 _tickSpacing) external onlyOwner {
+        if (_tickSpacing > TickMath.MAX_TICK_SPACING || _tickSpacing < TickMath.MIN_TICK_SPACING) {
+            revert InvalidConfig();
+        }
         poolTickSpacing = _tickSpacing;
         emit ConfigUpdated("poolTickSpacing", uint256(int256(_tickSpacing)));
     }
@@ -754,6 +1293,18 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     // ================================
     // VIEW FUNCTIONS
     // ================================
+
+    /**
+     * @notice Preview onchain launch pricing derived from oracle data.
+     * @dev Reverts when oracle data is missing/stale/invalid.
+     */
+    function previewLaunchPricing()
+        external
+        view
+        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice)
+    {
+        return _deriveLaunchPricing();
+    }
 
     /**
      * @notice Get current auction status
@@ -770,9 +1321,77 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
         IContinuousClearingAuction cca = IContinuousClearingAuction(auction);
         isGraduated = cca.isGraduated();
-        isActive = !isGraduated;
+        bool auctionWindowOpen = block.number >= currentLaunch.startBlock && block.number <= currentLaunch.endBlock;
+        isActive = auctionWindowOpen && !currentLaunch.migrated && !currentLaunch.failedFinalized;
         clearingPrice = cca.clearingPrice();
         currencyRaised = cca.currencyRaised();
+    }
+
+    /**
+     * @notice Returns richer lifecycle status for keepers and frontend state machines.
+     */
+    function getLifecycleStatus() external view returns (LifecycleStatus memory status) {
+        status.phase = uint8(phase);
+        status.auction = currentAuction;
+        if (status.auction == address(0)) {
+            return status;
+        }
+
+        LaunchLifecycle memory launchData = currentLaunch;
+        IContinuousClearingAuction cca = IContinuousClearingAuction(status.auction);
+        status.isGraduated = cca.isGraduated();
+        status.auctionWindowOpen = block.number >= launchData.startBlock && block.number <= launchData.endBlock;
+        status.claimOpen = block.number >= launchData.claimBlock;
+        status.currencySwept = launchData.currencySwept;
+        status.unsoldSwept = launchData.unsoldSwept;
+        status.migrated = launchData.migrated;
+        status.failedFinalized = launchData.failedFinalized;
+        status.startBlock = launchData.startBlock;
+        status.endBlock = launchData.endBlock;
+        status.claimBlock = launchData.claimBlock;
+        status.migrationBlock = launchData.migrationBlock;
+        status.sweepBlock = launchData.sweepBlock;
+        status.lpReserveAmount = launchData.lpReserveAmount;
+        status.clearingPrice = cca.clearingPrice();
+        status.currencyRaised = cca.currencyRaised();
+        status.phase = uint8(_derivePhase(status.isGraduated, launchData));
+    }
+
+    /**
+     * @notice Non-blocking backing telemetry for share-economics visibility.
+     */
+    function getBackingTelemetry()
+        external
+        view
+        returns (
+            address vault,
+            uint256 launchTotalAssets,
+            uint256 launchTotalSupply,
+            uint256 currentTotalAssets,
+            uint256 currentTotalSupply,
+            int256 assetsDelta,
+            int256 supplyDelta
+        )
+    {
+        vault = backingVault;
+        launchTotalAssets = currentLaunch.launchVaultTotalAssets;
+        launchTotalSupply = currentLaunch.launchVaultTotalSupply;
+
+        if (vault != address(0)) {
+            try IVaultTelemetry(vault).totalAssets() returns (uint256 assets) {
+                currentTotalAssets = assets;
+            } catch {}
+            try IVaultTelemetry(vault).totalSupply() returns (uint256 supply) {
+                currentTotalSupply = supply;
+            } catch {}
+        }
+
+        if (currentTotalAssets <= uint256(type(int256).max) && launchTotalAssets <= uint256(type(int256).max)) {
+            assetsDelta = int256(currentTotalAssets) - int256(launchTotalAssets);
+        }
+        if (currentTotalSupply <= uint256(type(int256).max) && launchTotalSupply <= uint256(type(int256).max)) {
+            supplyDelta = int256(currentTotalSupply) - int256(launchTotalSupply);
+        }
     }
 
     /**
@@ -814,4 +1433,3 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     receive() external payable {}
 }
-

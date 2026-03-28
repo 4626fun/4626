@@ -265,6 +265,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     error InvalidSlippage();
     error MinOutputUnavailable();
     error NotAuthorized();
+    error CreatorTreasuryRequired();
 
     // ================================
     // CONSTRUCTOR
@@ -727,6 +728,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      * @param _treasury Creator's treasury wallet
      */
     function setCreatorTreasury(address _treasury) external onlyOwner {
+        if (_treasury == address(0) && creatorShareBps > 0) revert CreatorTreasuryRequired();
         creatorTreasury = _treasury;
         emit CreatorTreasurySet(_treasury);
     }

@@ -9,8 +9,6 @@ import * as messageHandler from './webhook/updates/message.js'
 import * as callbackHandler from './webhook/updates/callbackQuery.js'
 import * as inlineHandler from './webhook/updates/inlineQuery.js'
 import * as chosenInlineResultHandler from './webhook/updates/chosenInlineResult.js'
-import * as preCheckoutHandler from './webhook/updates/preCheckout.js'
-import * as paymentHandler from './webhook/updates/successfulPayment.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -43,12 +41,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (update.chosen_inline_result) {
     return chosenInlineResultHandler.handle(req, res, update, config)
-  }
-  if (update.pre_checkout_query) {
-    return preCheckoutHandler.handle(req, res, update, config)
-  }
-  if (update.message?.successful_payment) {
-    return paymentHandler.handle(req, res, update, config)
   }
   if (update.callback_query) {
     return callbackHandler.handle(req, res, update, config)

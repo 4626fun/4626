@@ -14,10 +14,10 @@ describe('classifyManualChunk', () => {
     expect(classifyManualChunk('/repo/node_modules/@coinbase/wallet-sdk/dist/index.js')).toBe('wallet-auth')
   })
 
-  it('does not pin AA helper packages into the global wallet chunk', () => {
+  it('keeps AA helper packages with the wallet/auth runtime', () => {
     expect(classifyManualChunk('/repo/node_modules/viem/account-abstraction/index.js')).toBe('wallet-auth')
-    expect(classifyManualChunk('/repo/node_modules/permissionless/index.js')).toBeUndefined()
-    expect(classifyManualChunk('/repo/node_modules/ox/erc8021/index.js')).toBeUndefined()
+    expect(classifyManualChunk('/repo/node_modules/permissionless/index.js')).toBe('wallet-auth')
+    expect(classifyManualChunk('/repo/node_modules/ox/erc8021/index.js')).toBe('wallet-auth')
   })
 
   it('still classifies the other vendor families consistently', () => {
@@ -33,6 +33,6 @@ describe('classifyManualChunk', () => {
   })
 
   it('does not force app code into a manual chunk', () => {
-    expect(classifyManualChunk('/repo/src/pages/TelegramMenu.tsx')).toBeUndefined()
+    expect(classifyManualChunk('/repo/src/pages/Home.tsx')).toBeUndefined()
   })
 })

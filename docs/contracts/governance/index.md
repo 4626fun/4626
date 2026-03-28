@@ -16,10 +16,10 @@ Contracts that manage fee distribution and the ve(3,3) incentive system.
 | **[ve4626](/contracts/governance/ve4626)** | Vote-escrow token |
 | **[VoterRewardsDistributor](/contracts/governance/voter-rewards-distributor)** | Voter reward claims |
 
-## Fee Split (Default)
+## Fee Split (Defaults, Configurable)
 
 | Allocation | Percentage | Description |
 |------------|------------|-------------|
-| Lottery | 69% | Instant lottery prize pool |
-| Burn | 21.39% | Increases PPS for holders |
-| Voter Rewards | 9.61% | Distributed to ve4626 voters |
+| Lottery | 69% (default) | Jackpot reserve in `CreatorGaugeController` |
+| Burn | 21.39% (default) | Immediate PPS-accretive burn |
+| Voter/Protocol Branch | 9.61% (default) | Routed to `VoterRewardsDistributor` when configured, protocol/jackpot fallback otherwise |

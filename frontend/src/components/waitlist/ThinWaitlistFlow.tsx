@@ -2,13 +2,19 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link } from 'react-router-dom'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { Check, CheckCircle2, Copy, Loader2 } from 'lucide-react'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import {
+  clearStoredWaitlistReferralCode,
+  getMarketingWaitlistEntryUrl,
+  getMarketingWaitlistReferralUrl,
+  readStoredWaitlistReferralCode,
+  storeWaitlistReferralCode,
+} from '@/lib/auth/waitlistEntry'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { ZORA_PRIVY_APP_ID, usePrivyClientStatus } from '@/lib/privy/client'
@@ -132,7 +138,8 @@ type WaitlistStep = 'auth' | 'wallet' | 'done'
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
-const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
+const CANONICALIZATION_TIMEOUT_MS = 20_000
+const WAITLIST_BOOTSTRAP_TIMEOUT_MS = 20_000
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -228,10 +235,16 @@ function formatRankLabel(value: number | null | undefined): string {
   return Number.isFinite(n) && n > 0 ? `#${Math.floor(n)}` : 'Unranked'
 }
 
-function getLeaderboardPointsValue(pointsType: DashboardPointsType, row: DashboardLeaderboardRow): number {
-  if (pointsType === 'invite') return row.pointsInvite
-  if (pointsType === 'agent') return row.pointsAgent
-  return row.pointsTotal
+function formatLeaderboardPointsTooltip(row: DashboardLeaderboardRow): string {
+  return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
+}
+
+function getRecoveryRequiredMessage(): string {
+  return 'That email already belongs to an existing 4626 account. Click Recover account sign-in to continue with the original account.'
+}
+
+function getSessionMismatchMessage(): string {
+  return 'Signed in as a different account. Click Continue with email to try again.'
 }
 
 function getAccessStatusMeta(status: string | null | undefined): {
@@ -276,18 +289,31 @@ export function resolveWaitlistStep(params: {
 
 export function shouldAutoStartWaitlistAuth(params: {
   variant?: Variant
+  autoStartRequested?: boolean
   step: WaitlistStep
   privyAuthed: boolean
   privyClientStatus: 'disabled' | 'loading' | 'ready'
   recoveryRequired: boolean
   error: string | null
 }): boolean {
-  if ((params.variant ?? 'embedded') !== 'modal') return false
+  const autoStartAllowed = params.autoStartRequested === true
+  if (!autoStartAllowed) return false
   if (params.step !== 'auth') return false
   if (params.privyAuthed) return false
   if (params.privyClientStatus !== 'ready') return false
   if (params.recoveryRequired) return false
   if (params.error) return false
+  return true
+}
+
+export function shouldAutoBootstrapWaitlistSession(params: {
+  step: WaitlistStep
+  privyAuthed: boolean
+  authFlowStarted: boolean
+}): boolean {
+  if (!params.authFlowStarted) return false
+  if (params.step !== 'auth') return false
+  if (!params.privyAuthed) return false
   return true
 }
 
@@ -396,7 +422,12 @@ function WalletPathCard(props: {
   )
 }
 
-export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
+export function ThinWaitlistFlow(props: {
+  variant?: Variant
+  sectionId?: string
+  autoStartAuth?: boolean
+  suppressAuthShell?: boolean
+}) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
 
@@ -431,25 +462,28 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [dashboardBusy, setDashboardBusy] = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
-  const [dashboardPointsType, setDashboardPointsType] = useState<DashboardPointsType>('total')
+  const dashboardPointsType: DashboardPointsType = 'total'
   const [waitlistPosition, setWaitlistPosition] = useState<WaitlistPositionResponse | null>(null)
   const [leaderboard, setLeaderboard] = useState<DashboardLeaderboardResponse | null>(null)
+  const [copiedReferralLink, setCopiedReferralLink] = useState(false)
   const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const authFlowStartedRef = useRef(false)
   const dashboardRequestSeqRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
   const isPage = variant === 'page'
 
-  const wrapClass = isPage ? 'mx-auto w-full max-w-lg' : 'w-full'
+  const wrapClass = isPage ? 'mx-auto w-full max-w-4xl' : 'w-full'
   const innerClass = isPage
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
+  const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
-  const redirectToCanonicalWaitlist = useCallback((reason: 'needs-session' | 'needs-acceptance' = 'needs-session') => {
+  const redirectToCanonicalWaitlist = useCallback(() => {
     if (typeof window === 'undefined') return false
-    const target = getMarketingWaitlistEntryUrl(reason)
+    const target = getMarketingWaitlistEntryUrl()
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return false
     window.location.assign(target)
@@ -466,15 +500,43 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     privyLogoutRef.current = null
   }, [privy])
 
+  useEffect(() => {
+    if (!activeReferralCode) return
+    storeWaitlistReferralCode(activeReferralCode)
+  }, [activeReferralCode])
+
+  useEffect(() => {
+    if (!copiedReferralLink || typeof window === 'undefined') return
+    const timeoutId = window.setTimeout(() => setCopiedReferralLink(false), 1600)
+    return () => window.clearTimeout(timeoutId)
+  }, [copiedReferralLink])
+
+  const resetResolvedAccountState = useCallback(() => {
+    setAccount(null)
+    setOwnerDelegationFlags(null)
+    setOwnerDelegationVerified(null)
+    setEmbeddedEoaAddress(null)
+    setWaitlistPosition(null)
+    setLeaderboard(null)
+  }, [])
+
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
-    const token = await getAccessToken()
+    const token = await withTimeout(
+      getAccessToken(),
+      GET_ACCESS_TOKEN_TIMEOUT_MS,
+      'Sign-in token',
+    ).catch(() => null)
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     let nextOwnerDelegationVerified: boolean | null = null
     if (token) {
       headers['X-Privy-Token'] = token
-      const canonicalization = await runCanonicalizationPipeline({
-        privyToken: token,
-      })
+      const canonicalization = await withTimeout(
+        runCanonicalizationPipeline({
+          privyToken: token,
+        }),
+        CANONICALIZATION_TIMEOUT_MS,
+        'Account sync',
+      )
       if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
         setOwnerDelegationFlags(null)
         setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
@@ -487,11 +549,15 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         setEmbeddedEoaAddress(null)
       }
     }
-    const response = await apiFetch('/api/waitlist/bootstrap', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({}),
-    })
+    const response = await withTimeout(
+      apiFetch('/api/waitlist/bootstrap', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(activeReferralCode ? { referralCode: activeReferralCode } : {}),
+      }),
+      WAITLIST_BOOTSTRAP_TIMEOUT_MS,
+      'Waitlist bootstrap',
+    )
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
     if (!response.ok || !payload?.success || !payload.data) {
       const err = new Error(readApiErrorMessage(payload, 'Failed to bootstrap waitlist state.')) as Error & {
@@ -518,6 +584,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     const nextAccount = payload.data
     setAccount(nextAccount)
     setRecoveryRequired(false)
+    if (activeReferralCode) clearStoredWaitlistReferralCode()
     if (!nextAccount.emailVerified) {
       setStep('auth')
       setError('Verify your email with 4626 to finish creating this account.')
@@ -525,7 +592,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     }
     setStep(resolveWaitlistStep({ account: nextAccount, ownerDelegationVerified: nextOwnerDelegationVerified }))
     return nextAccount
-  }, [getAccessToken])
+  }, [activeReferralCode, getAccessToken])
 
   const loadDashboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -614,13 +681,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const onContinueAuth = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
+    authFlowStartedRef.current = true
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
     setNotice(null)
     setRecoveryRequired(false)
     try {
-      if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist('needs-session')) {
+      if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         authAttemptInFlightRef.current = false
         setBusy(false)
         return
@@ -630,6 +698,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
         if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
         await runBootstrap()
       } else {
+        await runWaitlistPrivyLogout({ logout: null })
         await login(buildWaitlistEmailLoginOptions() as any)
       }
       authAttemptInFlightRef.current = false
@@ -638,22 +707,24 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
         authAutoAttemptedRef.current = true
-        void runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+        resetResolvedAccountState()
+        await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         setRecoveryRequired(true)
       }
       setError(
         isRecoveryRequired
-          ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
-          : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToCanonicalWaitlist('needs-session')
+          ? getRecoveryRequiredMessage()
+          : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToCanonicalWaitlist()
             ? 'Redirecting back to the waitlist sign-in flow…'
-          : typeof authError?.message === 'string'
+            : typeof authError?.message === 'string'
             ? authError.message
             : 'Failed to start sign-in.',
       )
+      authFlowStartedRef.current = false
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
-  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, runBootstrap])
+  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, resetResolvedAccountState, runBootstrap])
 
   const onContinueWithBase = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
@@ -734,11 +805,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const onCreateInBaseApp = useCallback(() => {
     if (typeof window === 'undefined') return
-    try {
-      window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
-    } catch {
-      // ignore
-    }
     window.location.assign(ownerDelegationFlags?.baseAppUrl ?? resolveBaseAppInviteUrl())
   }, [ownerDelegationFlags?.baseAppUrl])
 
@@ -830,13 +896,20 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const onRecoverAccount = useCallback(async () => {
     if (busy || authAttemptInFlightRef.current) return
+    authFlowStartedRef.current = true
     authAttemptInFlightRef.current = true
     setBusy(true)
     setError(null)
     setNotice(null)
     setRecoveryRequired(false)
+    setAccount(null)
+    setOwnerDelegationFlags(null)
+    setOwnerDelegationVerified(null)
+    setEmbeddedEoaAddress(null)
+    setWaitlistPosition(null)
+    setLeaderboard(null)
     try {
-      if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist('needs-session')) {
+      if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         authAttemptInFlightRef.current = false
         setBusy(false)
         return
@@ -844,17 +917,20 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
       await login(buildWaitlistRecoveryLoginOptions() as any)
     } catch (recoverError: any) {
-      if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist('needs-session')) {
+      if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
         setError('Redirecting back to the waitlist sign-in flow…')
+        authFlowStartedRef.current = false
         return
       }
       setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
       setRecoveryRequired(true)
+      authFlowStartedRef.current = false
     } finally {
       authAttemptInFlightRef.current = false
       setBusy(false)
     }
   }, [busy, login, privyClientStatus, redirectToCanonicalWaitlist])
+
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
     setEnterAppBusy(true)
@@ -912,7 +988,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   }, [enterAppBusy, enterAppUrl, getAccessToken, privyAuthed])
 
   useEffect(() => {
-    if (step !== 'auth' || !privyAuthed) {
+    if (
+      !shouldAutoBootstrapWaitlistSession({
+        step,
+        privyAuthed,
+        authFlowStarted: authFlowStartedRef.current,
+      })
+    ) {
       authBootstrapAutoAttemptedRef.current = false
       return
     }
@@ -941,15 +1023,16 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
           authAutoAttemptedRef.current = true
         }
         if (isSessionMismatch || isRecoveryRequired) {
-          void runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+          resetResolvedAccountState()
+          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
         }
         if (!cancelled) {
           if (isRecoveryRequired) setRecoveryRequired(true)
           setError(
             isSessionMismatch
-              ? 'Signed in as a different account. Click Continue to sign in again.'
+              ? getSessionMismatchMessage()
               : isRecoveryRequired
-                ? 'Recovery required: this email is already linked to another account. Sign in with your original verified email to recover, then continue.'
+                ? getRecoveryRequiredMessage()
                 : message,
           )
         }
@@ -960,13 +1043,14 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     return () => {
       cancelled = true
     }
-  }, [privyAuthed, runBootstrap, step])
+  }, [privyAuthed, resetResolvedAccountState, runBootstrap, step])
 
   useEffect(() => {
     if (step !== 'auth') {
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
+      authFlowStartedRef.current = false
       setRecoveryRequired(false)
     }
   }, [step])
@@ -1000,12 +1084,15 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const authUi = deriveWaitlistAuthUi()
   const shouldAutoStartAuth = shouldAutoStartWaitlistAuth({
     variant,
+    autoStartRequested: props.autoStartAuth === true,
     step,
     privyAuthed,
     privyClientStatus,
     recoveryRequired,
     error,
   })
+  const useCompactModalAuthStart = variant === 'modal' && props.autoStartAuth === true && step === 'auth' && !error && !recoveryRequired
+  const hideAuthShell = props.suppressAuthShell === true && step === 'auth' && !error && !recoveryRequired
   const canonicalCswAddress = account?.accountSignals?.canonicalCswAddress ?? null
   const walletSelectionNeeded = !canonicalCswAddress
   const ownerInstallNeeded = Boolean(canonicalCswAddress && ownerDelegationVerified === false)
@@ -1024,12 +1111,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   const inviteRank = waitlistPosition?.rank.invite ?? null
   const qualifiedReferrals = waitlistPosition?.referrals.qualifiedCount ?? 0
   const pendingReferrals = waitlistPosition?.referrals.pendingCountCapped ?? waitlistPosition?.referrals.pendingCount ?? 0
-  const leaderboardTitle =
-    dashboardPointsType === 'invite'
-      ? 'Invite leaderboard'
-      : dashboardPointsType === 'agent'
-        ? 'Agent leaderboard'
-        : 'Total points leaderboard'
+  const personalReferralCode = waitlistPosition?.referralCode ?? null
+  const personalReferralLink = useMemo(
+    () => (personalReferralCode ? getMarketingWaitlistReferralUrl(personalReferralCode) : null),
+    [personalReferralCode],
+  )
+  const leaderboardTitle = 'Waitlist leaderboard'
   const dashboardSubtitle = appApproved
     ? 'Admin approval is in. Finish wallet readiness and then the app handoff will unlock automatically.'
     : ownerInstallNeeded
@@ -1037,6 +1124,12 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       : walletSelectionNeeded
         ? 'Your email is verified. Track your rank, build points, and optionally connect the wallet you want 4626 to recognize.'
         : 'Your wallet is linked. Keep climbing the leaderboard while you wait for admin approval.'
+
+  const onCopyReferralLink = useCallback(async () => {
+    if (!personalReferralLink || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
+    await navigator.clipboard.writeText(personalReferralLink)
+    setCopiedReferralLink(true)
+  }, [personalReferralLink])
 
   useEffect(() => {
     if (!shouldAutoStartAuth) return
@@ -1066,8 +1159,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
   return (
     <section id={sectionId} className={wrapClass}>
       <div className={innerClass}>
-        {/* Step progress indicator */}
-        <StepIndicator steps={indicatorSteps} />
+        {!useCompactModalAuthStart && !hideAuthShell ? <StepIndicator steps={indicatorSteps} /> : null}
 
         {step === 'auth' ? (
           <motion.div
@@ -1077,6 +1169,22 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="space-y-5"
           >
+            {hideAuthShell ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                <div className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                  Opening secure email sign-in…
+                </div>
+              </div>
+            ) : useCompactModalAuthStart ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                <div className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                  Opening secure email sign-in…
+                </div>
+              </div>
+            ) : (
+              <>
             <div className="space-y-1">
               <h2 className="text-2xl font-semibold tracking-tight text-white">{authUi.title}</h2>
               <p className="text-sm text-zinc-400">{authUi.subtitle}</p>
@@ -1105,6 +1213,8 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                   authUi.ctaLabel
                 )}
               </button>
+            )}
+              </>
             )}
 
             {error ? (
@@ -1249,84 +1359,135 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{leaderboardTitle}</div>
-                    <div className="mt-1 text-sm text-zinc-300">Live snapshot from the public leaderboard.</div>
-                  </div>
-                  <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
-                    Full board
-                  </Link>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {(['total', 'invite', 'agent'] as const).map((pointsType) => (
-                    <button
-                      key={pointsType}
-                      type="button"
-                      disabled={dashboardBusy}
-                      onClick={() => setDashboardPointsType(pointsType)}
-                      className={`rounded-full border px-3 py-1 text-[11px] ${
-                        dashboardPointsType === pointsType
-                          ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-100'
-                          : 'border-white/8 bg-white/[0.03] text-zinc-500'
-                      }`}
-                    >
-                      {pointsType === 'total' ? 'Total' : pointsType === 'invite' ? 'Invites' : 'Agent'}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
-                  {dashboardBusy && leaderboardRows.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-zinc-500">Loading leaderboard…</div>
-                  ) : leaderboardRows.length > 0 ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      {leaderboardRows.map((row) => {
-                        const isMe = Boolean(leaderboardMe && leaderboardMe.signupId === row.signupId)
-                        return (
-                          <div
-                            key={`${row.rank}-${row.signupId}`}
-                            className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-4 py-3 last:border-b-0 ${
-                              isMe ? 'bg-brand-primary/6' : ''
-                            }`}
-                          >
-                            <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
-                            <div className="min-w-0">
-                              <div className="truncate text-sm text-white">{row.display}</div>
-                              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
-                                {row.referralCode ? <span>{row.referralCode}</span> : null}
-                                {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
-                                {isMe ? <span className="text-brand-primary">You</span> : null}
-                              </div>
-                            </div>
-                            <div className="text-sm font-semibold tabular-nums text-zinc-100">
-                              {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, row))}
-                            </div>
-                          </div>
-                        )
-                      })}
+                      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Referral link</div>
+                      <div className="mt-1 text-sm text-zinc-300">Share one clean invite URL instead of sending people back through messy query strings.</div>
                     </div>
+                    {personalReferralCode ? (
+                      <div className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-brand-primary">
+                        {personalReferralCode}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {personalReferralLink ? (
+                    <>
+                      <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                        <div className="truncate font-mono text-sm text-zinc-100">{personalReferralLink}</div>
+                        <p className="mt-2 text-xs text-zinc-500">
+                          New signups land on the waitlist signup flow first, then unlock their ranking and referral view after verification.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Qualified</div>
+                          <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
+                          <div className="mt-1 text-xs text-zinc-500">Friends fully linked and counted.</div>
+                        </div>
+                        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Pending</div>
+                          <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
+                          <div className="mt-1 text-xs text-zinc-500">People who still need to finish setup.</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => void onCopyReferralLink()}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-100 transition hover:bg-white/[0.05] sm:flex-1"
+                        >
+                          {copiedReferralLink ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                          {copiedReferralLink ? 'Copied' : 'Copy invite link'}
+                        </button>
+                        <a
+                          href={personalReferralLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.05] sm:flex-1"
+                        >
+                          Open invite route
+                        </a>
+                      </div>
+                    </>
                   ) : (
-                    <div className="px-4 py-6 text-sm text-zinc-500">No ranked accounts yet.</div>
+                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                      Your invite code will appear here as soon as the waitlist profile finishes syncing.
+                    </div>
                   )}
                 </div>
 
-                {!leaderboardMeInTop && leaderboardMe ? (
-                  <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-brand-primary">Your standing</div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{leaderboardTitle}</div>
+                      <div className="mt-1 text-sm text-zinc-300">Ranked by total points after verified signup.</div>
+                    </div>
+                    <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
+                      Full board
+                    </Link>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
+                    {dashboardBusy && leaderboardRows.length === 0 ? (
+                      <div className="px-4 py-6 text-sm text-zinc-500">Loading leaderboard…</div>
+                    ) : leaderboardRows.length > 0 ? (
                       <div>
-                        <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
-                        <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
+                        {leaderboardRows.map((row) => {
+                          const isMe = Boolean(leaderboardMe && leaderboardMe.signupId === row.signupId)
+                          return (
+                            <div
+                              key={`${row.rank}-${row.signupId}`}
+                              className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-4 py-3 last:border-b-0 ${
+                                isMe ? 'bg-brand-primary/6' : ''
+                              }`}
+                            >
+                              <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
+                              <div className="min-w-0">
+                                <div className="truncate text-sm text-white">{row.display}</div>
+                                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+                                  {row.referralCode ? <span>{row.referralCode}</span> : null}
+                                  {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
+                                  {isMe ? <span className="text-brand-primary">You</span> : null}
+                                </div>
+                              </div>
+                              <div
+                                className="text-sm font-semibold tabular-nums text-zinc-100"
+                                title={formatLeaderboardPointsTooltip(row)}
+                              >
+                                {formatWholeNumber(row.pointsTotal)}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                      <div className="text-sm font-semibold tabular-nums text-zinc-100">
-                        {formatWholeNumber(getLeaderboardPointsValue(dashboardPointsType, leaderboardMe))}
+                    ) : (
+                      <div className="px-4 py-6 text-sm text-zinc-500">No ranked accounts yet.</div>
+                    )}
+                  </div>
+
+                  {!leaderboardMeInTop && leaderboardMe ? (
+                    <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-brand-primary">Your standing</div>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
+                          <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
+                        </div>
+                        <div
+                          className="text-sm font-semibold tabular-nums text-zinc-100"
+                          title={formatLeaderboardPointsTooltip(leaderboardMe)}
+                        >
+                          {formatWholeNumber(leaderboardMe.pointsTotal)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
             </div>
 

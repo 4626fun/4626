@@ -9,7 +9,7 @@ import {
 import { asTrimmed, isAddressLike, truncateAddress } from '../utils.js'
 import { parseTelegramTradeIntent } from './trade.js'
 
-export type InlineQueryClass = 'trade' | 'market' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general' | 'token_analysis'
+export type InlineQueryClass = 'trade' | 'ai' | 'link' | 'deploy' | 'discovery' | 'general' | 'token_analysis'
 
 export type InlineMediaAsset = {
   photoUrl?: string
@@ -64,24 +64,7 @@ export type BuildInlineQueryAnswerParams = {
   growthMode: boolean
   enablePmHandoff: boolean
   mediaByKey?: Record<string, InlineMediaAsset>
-  menuButtonUrl?: string
   linkButtonUrl?: string
-}
-
-function normalizeInlineDraft(rawQuery: string): string {
-  const compact = asTrimmed(rawQuery).replace(/\s+/g, ' ')
-  const stripped = compact
-    .replace(/^\/?x\s+post\s+/i, '')
-    .replace(/^\/?tweet\s+/i, '')
-    .replace(/\s*--confirm\b/gi, '')
-    .trim()
-  const truncated = stripped.slice(0, 240).trim()
-  return truncated || 'your update here'
-}
-
-function inferMarketSymbol(rawQuery: string): string {
-  const token = asTrimmed(rawQuery).split(/\s+/g)[0] ?? ''
-  return /^[a-zA-Z]{1,10}$/.test(token) ? token.toUpperCase() : 'BTC'
 }
 
 function parseInlineOffset(rawOffset: string): number {
@@ -111,11 +94,11 @@ export function classifyInlineQuery(rawQuery: string): InlineQueryClass {
   const query = trimmed.toLowerCase()
   if (parseTelegramTradeIntent(query.startsWith('/') ? query : `/${query}`)) return 'trade'
   if (/\b(buy|sell|bid|trade)\b/.test(query)) return 'trade'
-  if (/\b(mkt|market|quote|price|btc|eth|sol)\b/.test(query)) return 'market'
+  if (/\b(mkt|market|quote|price)\b/.test(query)) return 'ai'
   if (/\b(ai|assistant|prompt|question|analyze)\b/.test(query)) return 'ai'
   if (/\b(link|wallet|connect)\b/.test(query)) return 'link'
   if (/\b(deploy|launch|create)\b/.test(query)) return 'deploy'
-  if (/\b(vault|auction|signal|wallet)\b/.test(query)) return 'discovery'
+  if (/\b(vault|auction|wallet)\b/.test(query)) return 'discovery'
   return 'general'
 }
 
@@ -231,12 +214,8 @@ function buildCommonCopy(growthMode: boolean): {
   helpDescription: string
   statusTitle: string
   statusDescription: string
-  xPostTitle: string
-  xPostDescription: string
   aiTitle: string
   aiDescription: string
-  marketTitle: string
-  marketDescription: string
 } {
   if (growthMode) {
     return {
@@ -248,12 +227,8 @@ function buildCommonCopy(growthMode: boolean): {
       helpDescription: 'Shortcuts and starter flows',
       statusTitle: 'Vault health',
       statusDescription: 'Live config and permissions',
-      xPostTitle: 'Draft X post',
-      xPostDescription: 'Template ready to send',
       aiTitle: 'Ask AI',
       aiDescription: 'Get one clear next action',
-      marketTitle: 'Market quote',
-      marketDescription: 'Fast BTC, ETH, SOL',
     }
   }
 
@@ -266,12 +241,8 @@ function buildCommonCopy(growthMode: boolean): {
     helpDescription: 'Starter commands and shortcuts',
     statusTitle: 'Vault health check',
     statusDescription: 'Config, permissions, live status',
-    xPostTitle: 'Draft X post',
-    xPostDescription: 'Pre-filled with callback confirm',
     aiTitle: 'Ask AI',
     aiDescription: 'Get next actions in plain English',
-    marketTitle: 'Market quote',
-    marketDescription: 'Fast quote for BTC/ETH and more',
   }
 }
 
@@ -285,42 +256,13 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   const offset = parseInlineOffset(params.queryOffset)
   const growthMode = params.growthMode
   const mediaByKey = params.mediaByKey ?? {}
-  const tradeIntent = parseTelegramTradeIntent(normalizedQuery.startsWith('/') ? normalizedQuery : `/${normalizedQuery}`)
-  const tradeFlowHint = '3 taps • vault • size • accept'
-  const xPostCommand = `/x post ${normalizeInlineDraft(normalizedQuery)}`
   const aiPrompt = normalizedQuery ? `/ai ${normalizedQuery}` : '/ai What should I do next?'
-  const marketQuote = `/mkt quote ${inferMarketSymbol(normalizedQuery)}`
   const copy = buildCommonCopy(growthMode)
-  const lowerQuery = normalizedQuery.toLowerCase()
-  const wantsDeploy = queryClass === 'deploy' || /\b(deploy|launch|create)\b/.test(lowerQuery)
-  const wantsStatus = /\b(status|health|permissions)\b/.test(lowerQuery)
-  const wantsSocial = /\b(x|tweet|post)\b/.test(lowerQuery)
-  const wantsAi = queryClass === 'ai'
-  const wantsMarket = queryClass === 'market'
-  const wantsSignals = /\b(signal|signals|feed|live)\b/.test(lowerQuery) || queryClass === 'discovery'
   const approvedScopedVaults = filterTelegramApprovedTradeVaults(params.scopedVaults)
 
   const templates: InlineResultTemplate[] = []
   const pushTemplate = (template: InlineResultTemplate) => {
     templates.push(template)
-  }
-
-  if (tradeIntent) {
-    const tradeCommand = tradeIntent.actionType === 'buy' ? '/buy' : tradeIntent.actionType === 'sell' ? '/sell' : '/bid'
-    pushTemplate({
-      key: 'trade-intent',
-      title:
-        tradeIntent.actionType === 'buy'
-          ? 'Buy now'
-          : tradeIntent.actionType === 'sell'
-            ? 'Sell now'
-            : 'Bid now',
-      description: tradeFlowHint,
-      command: tradeCommand,
-      baseScore: 120,
-      intentTags: ['trade'],
-      mediaKey: 'card:trade',
-    })
   }
 
   if (!params.isLinked) {
@@ -338,111 +280,34 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
   TELEGRAM_APPROVED_INLINE_TOKENS.forEach((token, index) => {
     const scopedVault = approvedScopedVaults.find((vault) => vault.approvedToken.address === token.address)
     const description = !params.isLinked
-      ? 'Approved token • link first to trade'
+      ? 'Authorized token • targeted analysis now, trading after link'
       : scopedVault
-        ? 'Approved token • direct buy flow'
-        : 'Approved token • trade availability depends on this chat'
+        ? 'Authorized token • targeted analysis for this chat'
+        : 'Authorized token • targeted analysis'
+    const queryDraft = buildTelegramAnalyzeInlineDraft(token)
     pushTemplate({
-      key: `approved-buy-${token.symbol.toLowerCase()}`,
-      title: token.buyLabel,
+      key: `approved-query-${token.symbol.toLowerCase()}`,
+      title: token.queryLabel,
       description,
-      command: '/buy',
+      command: queryDraft,
       replyMarkup: {
-        inline_keyboard: [[{ text: token.analyzeLabel, switch_inline_query_current_chat: buildTelegramAnalyzeInlineDraft(token) }]],
+        inline_keyboard: [[{ text: token.analyzeLabel, switch_inline_query_current_chat: queryDraft }]],
       },
       baseScore: 104 - index,
-      intentTags: ['trade', 'discovery', 'general'],
-      mediaKey: 'card:buy',
+      intentTags: ['token_analysis', 'discovery', 'general'],
+      mediaKey: 'card:query',
     })
   })
 
-  if (wantsSignals) {
-    pushTemplate({
-      key: 'signals-live',
-      title: 'Signals Live',
-      description: 'Auto-updating trade feed',
-      command: '/signals',
-      inputMessageText: 'Loading live signals…',
-      replyMarkup: {
-        inline_keyboard: [[
-          { text: 'Refresh', callback_data: 'livefeed:signals:refresh' },
-          { text: 'Pause', callback_data: 'livefeed:signals:pause' },
-          { text: 'Close', callback_data: 'livefeed:signals:close' },
-        ]],
-      },
-      baseScore: 96,
-      intentTags: ['discovery', 'trade', 'general'],
-      mediaKey: 'card:signals',
-    })
-  }
-  // Keep inline discovery focused on link + approved-token trading.
-  // Only show the broader utility surfaces when the query explicitly asks for them.
-  if (wantsStatus) {
-    pushTemplate({
-      key: 'status',
-      title: copy.statusTitle,
-      description: copy.statusDescription,
-      command: '/keepr status',
-      baseScore: 71,
-      intentTags: ['discovery', 'general'],
-      mediaKey: 'card:status',
-    })
-  }
-  if (params.isLinked && /\bwallet\b/.test(lowerQuery)) {
-    pushTemplate({
-      key: 'wallet',
-      title: copy.walletTitle,
-      description: copy.walletDescription,
-      command: '/wallet',
-      baseScore: 83,
-      intentTags: ['discovery', 'general'],
-      mediaKey: 'card:portfolio',
-    })
-  }
-  if (wantsDeploy || wantsSocial) {
-    pushTemplate({
-      key: 'xpost',
-      title: copy.xPostTitle,
-      description: copy.xPostDescription,
-      command: xPostCommand,
-      baseScore: 68,
-      intentTags: ['general', 'deploy'],
-      mediaKey: 'card:xpost',
-    })
-  }
-  if (wantsAi) {
-    pushTemplate({
-      key: 'ai',
-      title: copy.aiTitle,
-      description: copy.aiDescription,
-      command: aiPrompt,
-      baseScore: 67,
-      intentTags: ['ai', 'general', 'market'],
-      mediaKey: 'card:ai',
-    })
-  }
-  if (wantsMarket) {
-    pushTemplate({
-      key: 'market',
-      title: copy.marketTitle,
-      description: copy.marketDescription,
-      command: marketQuote,
-      baseScore: 66,
-      intentTags: ['market', 'general'],
-      mediaKey: 'card:market',
-    })
-  }
-  if (wantsDeploy) {
-    pushTemplate({
-      key: 'deploy',
-      title: 'Deploy vault',
-      description: 'Launch directly from Telegram',
-      command: '/deploy',
-      baseScore: 76,
-      intentTags: ['deploy', 'discovery'],
-      mediaKey: 'card:deploy',
-    })
-  }
+  pushTemplate({
+    key: 'ai',
+    title: copy.aiTitle,
+    description: copy.aiDescription,
+    command: aiPrompt,
+    baseScore: 67,
+    intentTags: ['ai', 'general'],
+    mediaKey: 'card:ai',
+  })
 
   const rankedTemplates = templates
     .map((template) => ({
@@ -475,23 +340,17 @@ export function buildInlineQueryAnswer(params: BuildInlineQueryAnswerParams): In
 
   const shouldShowPmHandoff = params.enablePmHandoff && !params.isLinked
   const pmParameter = sanitizeStartParameter(`inline_link_${queryClass}`)
-  const button =
-    params.isLinked && params.menuButtonUrl
+  const button = shouldShowPmHandoff
+    ? params.linkButtonUrl
       ? {
-          text: 'Open 4626',
-          web_app: { url: params.menuButtonUrl },
+          text: 'Connect wallet',
+          web_app: { url: params.linkButtonUrl },
         }
-      : shouldShowPmHandoff
-        ? params.linkButtonUrl
-          ? {
-              text: 'Connect wallet',
-              web_app: { url: params.linkButtonUrl },
-            }
-          : {
-              text: 'Connect wallet',
-              start_parameter: pmParameter,
-            }
-        : undefined
+      : {
+          text: 'Connect wallet',
+          start_parameter: pmParameter,
+        }
+    : undefined
   return {
     results,
     offset,
