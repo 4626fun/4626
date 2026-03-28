@@ -4,7 +4,8 @@ type PrivyAppearanceOptions = {
 }
 
 export function createPrivyAppearance(options?: PrivyAppearanceOptions) {
-  const walletList = options?.walletCollisionDetected
+  const prefersEmailFirst = options?.showWalletLoginFirst === false
+  const walletList = options?.walletCollisionDetected || prefersEmailFirst
     ? ['coinbase_wallet']
     : ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets']
 

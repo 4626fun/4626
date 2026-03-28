@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { asTrimmed, parseBoolean, parseOptionalPositiveInteger } from './utils.js'
+import { asTrimmed, normalizeTelegramMenuButtonText, parseBoolean, parseOptionalPositiveInteger } from './utils.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -99,12 +99,6 @@ export type TelegramWebhookConfig = {
   holderRoomsEnabled: boolean
   requireTradeMembership: boolean
   copyTextButtons: boolean
-}
-
-function normalizeTelegramMenuButtonText(value: string): string {
-  const trimmed = asTrimmed(value)
-  if (!trimmed) return ''
-  return trimmed.replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
 }
 
 function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): TelegramWebhookConfig {

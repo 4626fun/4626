@@ -87,6 +87,7 @@ describe('Home', () => {
     expect(screen.getByTestId('waitlist-flow').getAttribute('data-variant')).toBe('embedded')
     expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
     expect(screen.getByTestId('waitlist-flow').getAttribute('data-suppress-auth-shell')).toBe('yes')
+    expect(screen.queryByRole('button', { name: /join waitlist/i })).toBeNull()
     expect(window.location.pathname).toBe('/')
   })
 

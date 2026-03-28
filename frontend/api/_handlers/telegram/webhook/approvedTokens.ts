@@ -63,9 +63,9 @@ export function resolveTelegramApprovedInlineTokenQuery(rawQuery: string): Teleg
   const strippedCommandPrefix = compact.replace(/^\/?(query|analyze)/, '')
   const byCommandAddress = getTelegramApprovedInlineTokenByAddress(trimmed.replace(/^\/?(query|analyze)\s+/i, ''))
   if (byCommandAddress) return byCommandAddress
-  return APPROVED_TOKEN_BY_ALIAS.get(compact)
-    ?? APPROVED_TOKEN_BY_ALIAS.get(strippedCommandPrefix)
-    ?? null
+  const byAlias = APPROVED_TOKEN_BY_ALIAS.get(compact)
+  if (byAlias) return byAlias
+  return APPROVED_TOKEN_BY_ALIAS.get(strippedCommandPrefix) ?? null
 }
 
 export function buildTelegramAnalyzeInlineDraft(token: TelegramApprovedInlineToken): string {
