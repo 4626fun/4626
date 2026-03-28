@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, ShieldCheck, ShieldX, Unplug } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, ShieldCheck, ShieldX, Unplug, X } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkAccount, useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
@@ -377,6 +377,7 @@ export function TelegramLink() {
   const codeVerifyExecutionKeyRef = useRef<string | null>(null)
   const bindExecutionKeyRef = useRef<string | null>(null)
   const [telegramUiReady, setTelegramUiReady] = useState(false)
+  const telegramWebApp = telegramUiReady ? readTelegramWebApp() : null
   const privySnapshotRef = useRef({
     ready: Boolean(privy.ready),
     authenticated: Boolean(privy.authenticated),
@@ -389,7 +390,8 @@ export function TelegramLink() {
     emailValid: emailIsValid,
   } = getEmailSubmitAssessment(state)
   const emailSubmitDisabled = emailSubmitDisabledReason !== null
-  const hasTelegramMainButton = telegramUiReady && Boolean(readTelegramWebApp()?.MainButton)
+  const hasTelegramMainButton = Boolean(telegramWebApp?.MainButton)
+  const canCloseTelegramMiniApp = typeof telegramWebApp?.close === 'function'
 
   useEffect(() => {
     stateRef.current = state
@@ -1173,6 +1175,14 @@ export function TelegramLink() {
     submitEmail('telegram_main_button')
   }, [submitEmail])
 
+  const handleCloseTelegramMiniApp = useCallback(() => {
+    try {
+      telegramWebApp?.close?.()
+    } catch {
+      // Ignore Telegram SDK close errors and leave the success state visible.
+    }
+  }, [telegramWebApp])
+
   useEffect(() => {
     if (!telegramUiReady) return
     const mainButton = readTelegramWebApp()?.MainButton
@@ -1446,6 +1456,16 @@ export function TelegramLink() {
               tone="success"
               body={`Canonical account ${state.account.email} is ready. Telegram ${formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} is linked.`}
             />
+            {canCloseTelegramMiniApp ? (
+              <button
+                type="button"
+                onClick={handleCloseTelegramMiniApp}
+                className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-[16px] bg-[#0052FF] px-4 text-sm font-semibold text-white transition hover:bg-[#004AD9]"
+              >
+                <X className="h-4 w-4" />
+                Close
+              </button>
+            ) : null}
             <div className="grid gap-x-4 gap-y-3 border-t border-white/[0.06] pt-3 sm:grid-cols-2">
               <MetaField label="Telegram" value={formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} />
               <MetaField label="Profile" value={String(state.link.profileId)} />

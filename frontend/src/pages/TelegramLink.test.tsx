@@ -10,6 +10,7 @@ const {
   ensureSessionMock,
   setupUiMock,
   telegramWebAppState,
+  telegramCloseMock,
   telegramMainButtonMock,
   telegramMainButtonState,
   apiFetchMock,
@@ -24,7 +25,8 @@ const {
   navigateMock: vi.fn(),
   ensureSessionMock: vi.fn(),
   setupUiMock: vi.fn(() => vi.fn()),
-  telegramWebAppState: { hasMainButton: false },
+  telegramWebAppState: { hasMainButton: false, hasClose: false },
+  telegramCloseMock: vi.fn(),
   telegramMainButtonState: { clickHandler: null as null | (() => void) },
   telegramMainButtonMock: {
     show: vi.fn(),
@@ -72,8 +74,14 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/lib/telegramWebApp', () => ({
   ensureTelegramMiniAppSession: ensureSessionMock,
-  loadTelegramWebApp: vi.fn(async () => (telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {})),
-  readTelegramWebApp: () => (telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {}),
+  loadTelegramWebApp: vi.fn(async () => ({
+    ...(telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {}),
+    ...(telegramWebAppState.hasClose ? { close: telegramCloseMock } : {}),
+  })),
+  readTelegramWebApp: () => ({
+    ...(telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {}),
+    ...(telegramWebAppState.hasClose ? { close: telegramCloseMock } : {}),
+  }),
   setupTelegramMiniAppUi: setupUiMock,
 }))
 
@@ -142,6 +150,7 @@ function mockVerifiedSession() {
 beforeEach(() => {
   vi.clearAllMocks()
   telegramWebAppState.hasMainButton = false
+  telegramWebAppState.hasClose = false
   telegramMainButtonState.clickHandler = null
   mockVerifiedSession()
   privyState.ready = true
@@ -569,6 +578,23 @@ describe('TelegramLink UI flow', () => {
     await waitFor(() => {
       expect(screen.getByText('Telegram Linked')).toBeTruthy()
     })
+  })
+
+  it('offers a Telegram close action after the link succeeds when WebApp.close is available', async () => {
+    const user = userEvent.setup()
+    telegramWebAppState.hasClose = true
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+    await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByText('Telegram Linked')
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(telegramCloseMock).toHaveBeenCalledTimes(1)
   })
 
   it('emits transition and completion telemetry for the happy path', async () => {
