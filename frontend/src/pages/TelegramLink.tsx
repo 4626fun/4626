@@ -389,6 +389,7 @@ export function TelegramLink() {
     emailValid: emailIsValid,
   } = getEmailSubmitAssessment(state)
   const emailSubmitDisabled = emailSubmitDisabledReason !== null
+  const hasTelegramMainButton = telegramUiReady && Boolean(readTelegramWebApp()?.MainButton)
 
   useEffect(() => {
     stateRef.current = state
@@ -1344,21 +1345,23 @@ export function TelegramLink() {
             />
             {state.emailError ? <InlineError message={state.emailError} /> : null}
             {emailSubmitHelperText ? <p className="text-[12px] leading-[1.4] text-[#666666]">{emailSubmitHelperText}</p> : null}
-            <button
-              type="submit"
-              onPointerDown={handleEmailSubmitActivation('pointerdown')}
-              onTouchStart={handleEmailSubmitActivation('touchstart')}
-              onMouseDown={handleEmailSubmitActivation('mousedown')}
-              data-testid="telegram-link-submit"
-              data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
-              data-email-normalized={normalizedCollectEmail}
-              data-email-valid={emailIsValid ? 'true' : 'false'}
-              data-flow-tag={state.tag}
-              className="block h-11 w-full touch-manipulation rounded-md bg-[#0052FF] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
-              disabled={emailSubmitDisabled}
-            >
-              Send Code
-            </button>
+            {!hasTelegramMainButton ? (
+              <button
+                type="submit"
+                onPointerDown={handleEmailSubmitActivation('pointerdown')}
+                onTouchStart={handleEmailSubmitActivation('touchstart')}
+                onMouseDown={handleEmailSubmitActivation('mousedown')}
+                data-testid="telegram-link-submit"
+                data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
+                data-email-normalized={normalizedCollectEmail}
+                data-email-valid={emailIsValid ? 'true' : 'false'}
+                data-flow-tag={state.tag}
+                className="block h-11 w-full touch-manipulation rounded-md bg-[#0052FF] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+                disabled={emailSubmitDisabled}
+              >
+                Send Code
+              </button>
+            ) : null}
           </form>
         )
 

@@ -9,6 +9,7 @@ const {
   navigateMock,
   ensureSessionMock,
   setupUiMock,
+  telegramWebAppState,
   telegramMainButtonMock,
   telegramMainButtonState,
   apiFetchMock,
@@ -23,6 +24,7 @@ const {
   navigateMock: vi.fn(),
   ensureSessionMock: vi.fn(),
   setupUiMock: vi.fn(() => vi.fn()),
+  telegramWebAppState: { hasMainButton: false },
   telegramMainButtonState: { clickHandler: null as null | (() => void) },
   telegramMainButtonMock: {
     show: vi.fn(),
@@ -70,8 +72,8 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/lib/telegramWebApp', () => ({
   ensureTelegramMiniAppSession: ensureSessionMock,
-  loadTelegramWebApp: vi.fn(async () => ({ MainButton: telegramMainButtonMock })),
-  readTelegramWebApp: () => ({ MainButton: telegramMainButtonMock }),
+  loadTelegramWebApp: vi.fn(async () => (telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {})),
+  readTelegramWebApp: () => (telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {}),
   setupTelegramMiniAppUi: setupUiMock,
 }))
 
@@ -139,6 +141,7 @@ function mockVerifiedSession() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  telegramWebAppState.hasMainButton = false
   telegramMainButtonState.clickHandler = null
   mockVerifiedSession()
   privyState.ready = true
@@ -353,6 +356,7 @@ describe('TelegramLink UI flow', () => {
 
   it('exposes the same email submit path through Telegram MainButton', async () => {
     const user = userEvent.setup()
+    telegramWebAppState.hasMainButton = true
     renderFlow()
 
     await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
@@ -360,6 +364,7 @@ describe('TelegramLink UI flow', () => {
     expect(telegramMainButtonMock.show).toHaveBeenCalled()
     expect(telegramMainButtonMock.enable).toHaveBeenCalled()
     expect(telegramMainButtonState.clickHandler).toBeTypeOf('function')
+    expect(screen.queryByTestId('telegram-link-submit')).toBeNull()
 
     await act(async () => {
       telegramMainButtonState.clickHandler?.()
