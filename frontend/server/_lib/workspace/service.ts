@@ -2,7 +2,7 @@ import type { VercelRequest } from '@vercel/node'
 
 import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keeprRegistry.js'
 import { getKeeprVaultAutomationByVaultAddress } from '../keeprAutomation.js'
-import { listCreatorXmtpAgents } from '../creatorXmtpAgents.js'
+import { listCreatorXmtpAgents, type CreatorXmtpAgentRow } from '../creatorXmtpAgents.js'
 import { getDb } from '../postgres.js'
 import { ensureTelegramTradingSchema } from '../telegramTrading.js'
 import { ensureCreRuntimeSchema } from '../cre/runtimeSchema.js'
@@ -175,10 +175,54 @@ type WorkspaceVaultMetadata = KeeprVaultRow & {
   settledAt?: string | Date | null
   settlementStage?: string | null
 }
+type TelegramRoomState = {
+  linked: boolean
+  chatId: string | null
+  roomChatId: string | null
+  enabled: boolean
+  minSharesRaw: string | null
+  graceHours: number | null
+  memberCount: number
+}
+
+const EMPTY_TELEGRAM_ROOM_STATE: TelegramRoomState = {
+  linked: false,
+  chatId: null,
+  roomChatId: null,
+  enabled: false,
+  minSharesRaw: null,
+  graceHours: null,
+  memberCount: 0,
+}
 
 function asObject(value: unknown): AnyObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return value as AnyObject
+}
+
+function normalizeXmtpAgentType(value: unknown): 'eoa' | 'csw' | null {
+  return value === 'eoa' || value === 'csw' ? value : null
+}
+
+function toIsoDate(value: unknown): string {
+  const date = value instanceof Date || typeof value === 'number' || typeof value === 'string'
+    ? new Date(value)
+    : new Date()
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
+}
+
+function toIsoDateOrNull(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+  const date = value instanceof Date || typeof value === 'number' || typeof value === 'string'
+    ? new Date(value)
+    : null
+  if (!date || Number.isNaN(date.getTime())) return null
+  return date.toISOString()
+}
+
+function isStrategyActive(value: unknown): boolean {
+  const row = asObject(value)
+  return row.isActive === true
 }
 
 function isAddressLike(value: string): value is `0x${string}` {
@@ -289,26 +333,10 @@ function normalizeStrategyStatus(params: {
   return 'unknown'
 }
 
-async function readTelegramRoomState(vaultAddress: `0x${string}`): Promise<{
-  linked: boolean
-  chatId: string | null
-  roomChatId: string | null
-  enabled: boolean
-  minSharesRaw: string | null
-  graceHours: number | null
-  memberCount: number
-}> {
+async function readTelegramRoomState(vaultAddress: `0x${string}`): Promise<TelegramRoomState> {
   const db = await getDb()
   if (!db) {
-    return {
-      linked: false,
-      chatId: null,
-      roomChatId: null,
-      enabled: false,
-      minSharesRaw: null,
-      graceHours: null,
-      memberCount: 0,
-    }
+    return { ...EMPTY_TELEGRAM_ROOM_STATE }
   }
   await ensureTelegramTradingSchema(db)
   const policyResult = await db.sql`
@@ -320,15 +348,7 @@ async function readTelegramRoomState(vaultAddress: `0x${string}`): Promise<{
   `
   const policy = policyResult.rows?.[0] ?? null
   if (!policy) {
-    return {
-      linked: false,
-      chatId: null,
-      roomChatId: null,
-      enabled: false,
-      minSharesRaw: null,
-      graceHours: null,
-      memberCount: 0,
-    }
+    return { ...EMPTY_TELEGRAM_ROOM_STATE }
   }
   const roomChatId = typeof policy.room_chat_id === 'string' ? policy.room_chat_id : null
   let memberCount = 0
@@ -392,7 +412,7 @@ async function readSystemActivity(vaultAddress: `0x${string}`, groupId: string):
       description: null,
       severity: 'info',
       actorAddress: normalizeAddress(data.actor_wallet),
-      createdAt: new Date(String(data.created_at ?? Date.now())).toISOString(),
+      createdAt: toIsoDate(data.created_at),
       payload: asObject(data.details),
     }
   })
@@ -407,7 +427,7 @@ async function readSystemActivity(vaultAddress: `0x${string}`, groupId: string):
       description: null,
       severity: 'info',
       actorAddress: null,
-      createdAt: new Date(String(data.created_at ?? Date.now())).toISOString(),
+      createdAt: toIsoDate(data.created_at),
       payload: asObject(data.payload),
     }
   })
@@ -422,7 +442,7 @@ async function readSystemActivity(vaultAddress: `0x${string}`, groupId: string):
       description: null,
       severity: 'info',
       actorAddress: null,
-      createdAt: new Date(String(data.created_at ?? Date.now())).toISOString(),
+      createdAt: toIsoDate(data.created_at),
       payload: asObject(data.payload_json),
     }
   })
@@ -456,9 +476,9 @@ export async function resolveWorkspaceSummary(params: {
   ])
 
   const strategyRows = Array.isArray(strategyData?.strategies) ? strategyData?.strategies ?? [] : []
-  const activeStrategyCount = strategyRows.filter((row) => row && (row as AnyObject).isActive === true).length
+  const activeStrategyCount = strategyRows.filter(isStrategyActive).length
   const targets = await listStrategyTargets(vaultAddress)
-  const topAgent = xmtpAgents.rows?.[0] ?? null
+  const topAgent: CreatorXmtpAgentRow | null = xmtpAgents.rows?.[0] ?? null
   const vaultMetadata = vault as WorkspaceVaultMetadata
 
   return {
@@ -467,8 +487,8 @@ export async function resolveWorkspaceSummary(params: {
     ownerAddress: vault.canonicalOwnerAddress,
     creatorCoinAddress: vault.creatorCoinAddress,
     settlement: {
-      graduatedAt: vaultMetadata.graduatedAt ? new Date(vaultMetadata.graduatedAt).toISOString() : null,
-      settledAt: vaultMetadata.settledAt ? new Date(vaultMetadata.settledAt).toISOString() : null,
+      graduatedAt: toIsoDateOrNull(vaultMetadata.graduatedAt),
+      settledAt: toIsoDateOrNull(vaultMetadata.settledAt),
       settlementStage: typeof vaultMetadata.settlementStage === 'string' ? vaultMetadata.settlementStage : null,
     },
     metrics: {
@@ -490,7 +510,7 @@ export async function resolveWorkspaceSummary(params: {
       xmtp: {
         linked: Boolean(topAgent),
         agentAddress: topAgent?.xmtpAgentAddress ?? null,
-        agentType: (topAgent?.agentType as 'eoa' | 'csw' | undefined) ?? null,
+        agentType: normalizeXmtpAgentType(topAgent?.agentType),
         conversationId: vault.groupId ?? null,
       },
     },
@@ -664,7 +684,7 @@ export async function resolveWorkspaceRooms(params: {
     }).catch(() => ({ rows: [], nextCursor: null })),
   ])
 
-  const topAgent = xmtpAgents.rows?.[0] ?? null
+  const topAgent: CreatorXmtpAgentRow | null = xmtpAgents.rows?.[0] ?? null
   return {
     telegram: {
       linked: telegramRoom.linked,
@@ -681,7 +701,7 @@ export async function resolveWorkspaceRooms(params: {
     xmtp: {
       linked: Boolean(topAgent),
       agentAddress: topAgent?.xmtpAgentAddress ?? null,
-      agentType: (topAgent?.agentType as 'eoa' | 'csw' | undefined) ?? null,
+      agentType: normalizeXmtpAgentType(topAgent?.agentType),
       conversationId: vault.groupId,
       recentMessages: recentActivity.filter((event) => event.source.startsWith('xmtp')).slice(0, 10),
     },
@@ -723,9 +743,7 @@ export async function resolveWorkspaceSettings(params: {
   ])
 
   const latestSnapshot = snapshots[0]
-  const thresholds = latestSnapshot?.payload && typeof latestSnapshot.payload === 'object'
-    ? ((latestSnapshot.payload as AnyObject).context as AnyObject | undefined) ?? {}
-    : {}
+  const thresholds = asObject(asObject(latestSnapshot?.payload).context)
 
   return {
     notificationPreferences: preferences,

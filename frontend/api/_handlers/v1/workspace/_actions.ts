@@ -34,9 +34,23 @@ type WorkspaceActionRequestBody = {
   payload?: Record<string, unknown>
 }
 
+type WorkspaceRequiredPermission =
+  | 'strategy_manage'
+  | 'tasks_manage'
+  | 'settings_manage'
+  | 'rooms_manage'
+  | 'action_execute_low_risk'
+  | 'action_execute_high_risk'
+
+type WorkspaceTaskAction = 'task.approve' | 'task.reject' | 'task.snooze' | 'task.assign'
+
 function asObject(value: unknown): AnyObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return value as AnyObject
+}
+
+function toAuditState(value: unknown): AnyObject {
+  return asObject(value)
 }
 
 function asTrimmed(value: unknown): string {
@@ -93,24 +107,36 @@ function isWorkspaceXmtpMessageType(value: string): value is WorkspaceXmtpMessag
   )
 }
 
-function permissionForAction(action: string): {
-  permission:
-    | 'strategy_manage'
-    | 'tasks_manage'
-    | 'settings_manage'
-    | 'rooms_manage'
-    | 'action_execute_low_risk'
-    | 'action_execute_high_risk'
-  strictActionTypeCheck?: boolean
-} {
-  if (action === 'strategy.setTarget') return { permission: 'strategy_manage' }
-  if (action === 'strategy.execute') return { permission: 'action_execute_low_risk', strictActionTypeCheck: true }
-  if (action.startsWith('task.')) return { permission: 'tasks_manage' }
-  if (action.startsWith('approval.')) return { permission: 'tasks_manage' }
-  if (action.startsWith('settings.')) return { permission: 'settings_manage' }
-  if (action.startsWith('rooms.telegram')) return { permission: 'rooms_manage' }
-  if (action.startsWith('rooms.xmtp')) return { permission: 'action_execute_low_risk' }
-  return { permission: 'tasks_manage' }
+function resolveRequiredPermission(action: string, payload: AnyObject): WorkspaceRequiredPermission {
+  if (action === 'strategy.execute') {
+    const actionType = asTrimmed(payload.actionType)
+    return actionType && isHighRiskActionType(actionType)
+      ? 'action_execute_high_risk'
+      : 'action_execute_low_risk'
+  }
+  if (action === 'strategy.setTarget') return 'strategy_manage'
+  if (action.startsWith('task.')) return 'tasks_manage'
+  if (action.startsWith('approval.')) return 'tasks_manage'
+  if (action.startsWith('settings.')) return 'settings_manage'
+  if (action.startsWith('rooms.telegram')) return 'rooms_manage'
+  if (action.startsWith('rooms.xmtp')) return 'action_execute_low_risk'
+  return 'tasks_manage'
+}
+
+function isWorkspaceTaskAction(action: string): action is WorkspaceTaskAction {
+  return (
+    action === 'task.approve' ||
+    action === 'task.reject' ||
+    action === 'task.snooze' ||
+    action === 'task.assign'
+  )
+}
+
+function resolveTaskStatusForAction(action: WorkspaceTaskAction, currentStatus: string): string {
+  if (action === 'task.approve') return 'completed'
+  if (action === 'task.reject') return 'rejected'
+  if (action === 'task.snooze') return 'snoozed'
+  return currentStatus
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -141,19 +167,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'action is required' } satisfies ApiEnvelope<never>)
   }
 
-  const permissionProfile = permissionForAction(action)
-  let requiredPermission = permissionProfile.permission
-  if (permissionProfile.strictActionTypeCheck) {
-    const actionTypeForRisk = asTrimmed(payload.actionType)
-    if (actionTypeForRisk && isHighRiskActionType(actionTypeForRisk)) {
-      requiredPermission = 'action_execute_high_risk'
-    }
-  }
-
   const access = await requireWorkspaceAccess({
     req,
     vaultAddress,
-    permission: requiredPermission,
+    permission: resolveRequiredPermission(action, payload),
   })
   if (!access.ok) {
     return res.status(access.status).json({ success: false, error: access.error } satisfies ApiEnvelope<never>)
@@ -201,7 +218,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         action: 'strategy.setTarget',
         targetType: 'strategy_target',
         targetId: strategyAddress,
-        after: updated as unknown as AnyObject,
+        after: toAuditState(updated),
         details: {
           input: payload,
         },
@@ -346,7 +363,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<{ action: string; queued: boolean; approval: unknown; task: unknown }>)
     }
 
-    if (action === 'task.approve' || action === 'task.reject' || action === 'task.snooze' || action === 'task.assign') {
+    if (isWorkspaceTaskAction(action)) {
       const taskId = asNumber(payload.taskId)
       if (!taskId) {
         return res.status(400).json({ success: false, error: 'payload.taskId is required' } satisfies ApiEnvelope<never>)
@@ -356,14 +373,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ success: false, error: 'Task not found' } satisfies ApiEnvelope<never>)
       }
 
-      const nextStatus =
-        action === 'task.approve'
-          ? 'completed'
-          : action === 'task.reject'
-            ? 'rejected'
-            : action === 'task.snooze'
-              ? 'snoozed'
-              : before.status
+      const nextStatus = resolveTaskStatusForAction(action, before.status)
 
       const updated = await updateTaskItem({
         id: taskId,
@@ -394,8 +404,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         action,
         targetType: 'task',
         targetId: String(updated.id),
-        before: before as unknown as AnyObject,
-        after: updated as unknown as AnyObject,
+        before: toAuditState(before),
+        after: toAuditState(updated),
         details: { payload },
       })
 
@@ -487,8 +497,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         action,
         targetType: 'approval_request',
         targetId: String(updated.id),
-        before: before as unknown as AnyObject,
-        after: updated as unknown as AnyObject,
+        before: toAuditState(before),
+        after: toAuditState(updated),
         details: {
           reason,
           queuedActionId: executionActionId,
@@ -545,7 +555,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         action,
         targetType: 'notification_preference',
         targetId: updated.principalAddress,
-        after: updated as unknown as AnyObject,
+        after: toAuditState(updated),
         details: { payload },
       })
       return res.status(200).json({
@@ -605,7 +615,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         action,
         targetType: 'telegram_room_policy',
         targetId: `${chatId}:${vaultAddress}`,
-        after: policy as unknown as AnyObject,
+        after: toAuditState(policy),
       })
 
       if (action === 'rooms.telegram.link' && policy.enabled) {
