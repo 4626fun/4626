@@ -69,6 +69,8 @@ describe('resolveDmRecipient', () => {
 
     expect(resolved).toEqual({
       address: sampleAddress.toLowerCase(),
+      inputAddress: sampleAddress.toLowerCase(),
+      wasCanonicalRemap: false,
       basenameHint: null,
       avatarUrl: 'https://example.com/base-avatar.png',
     })
@@ -85,6 +87,8 @@ describe('resolveDmRecipient', () => {
     expect(resolveBasenameAddressMock).toHaveBeenCalledWith('akita')
     expect(resolved).toEqual({
       address: sampleAddress.toLowerCase(),
+      inputAddress: sampleAddress.toLowerCase(),
+      wasCanonicalRemap: false,
       basenameHint: 'akita',
       avatarUrl: null,
     })
@@ -110,6 +114,8 @@ describe('resolveDmRecipient', () => {
 
     expect(resolved).toEqual({
       address: sampleAddress.toLowerCase(),
+      inputAddress: ownerAddress.toLowerCase(),
+      wasCanonicalRemap: true,
       basenameHint: 'akita',
       avatarUrl: 'https://example.com/akita.png',
     })
@@ -124,6 +130,8 @@ describe('resolveDmRecipient', () => {
 
     expect(resolved).toEqual({
       address: sampleAddress.toLowerCase(),
+      inputAddress: sampleAddress.toLowerCase(),
+      wasCanonicalRemap: false,
       basenameHint: 'akita',
       avatarUrl: null,
     })
@@ -137,6 +145,8 @@ describe('resolveDmRecipient', () => {
 
     expect(resolved).toEqual({
       address: sampleAddress.toLowerCase(),
+      inputAddress: sampleAddress.toLowerCase(),
+      wasCanonicalRemap: false,
       basenameHint: 'akita',
       avatarUrl: null,
     })
@@ -168,6 +178,8 @@ describe('resolveDmRecipient', () => {
 
     await expect(resolutionPromise).resolves.toEqual({
       address: sampleAddress.toLowerCase(),
+      inputAddress: sampleAddress.toLowerCase(),
+      wasCanonicalRemap: false,
       basenameHint: 'akita',
       avatarUrl: null,
     })

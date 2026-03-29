@@ -84,9 +84,17 @@ export type SendChatMessageOptions = {
 export type StartDmOptions = {
   nameHint?: string | null
   imageUrl?: string | null
+  /** Address resolved from user input before canonical remapping. */
+  inputAddress?: `0x${string}` | null
 }
 
-export type StartDmFailureReason = 'not_connected' | 'self_recipient' | 'create_failed'
+export type StartDmFailureReason =
+  | 'not_connected'
+  | 'self_recipient'
+  | 'recipient_not_registered'
+  | 'canonical_recipient_not_registered'
+  | 'environment_mismatch'
+  | 'create_failed'
 
 export type StartDmResult =
   | { ok: true; conversationId: string }
@@ -536,6 +544,111 @@ function extractInstallationLimitInboxId(message: string): string | null {
   // "Cannot register a new installation because the InboxID <hex> has already registered 10/10 installations..."
   const m = msg.match(/InboxID\s+([0-9a-fA-F]{64})/)
   return m?.[1] ? m[1].toLowerCase() : null
+}
+
+function formatXmtpEnvLabel(env: 'production' | 'dev' | 'local'): string {
+  if (env === 'production') return 'production'
+  if (env === 'dev') return 'dev'
+  return 'local'
+}
+
+function isXmtpNotRegisteredError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('address not registered on xmtp') ||
+    m.includes('notfound.inboxidforaddress') ||
+    m.includes('inboxidforaddress')
+  )
+}
+
+function isXmtpEnvironmentMismatchError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('different xmtp network environment') ||
+    (m.includes('xmtp') && m.includes('environment') && (m.includes('production') || m.includes('dev') || m.includes('local')))
+  )
+}
+
+function readCanMessageBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value
+  if (!value || typeof value !== 'object') return null
+  const maybeFlag = (value as { canMessage?: unknown }).canMessage
+  return typeof maybeFlag === 'boolean' ? maybeFlag : null
+}
+
+function extractCanMessageResult(result: unknown, address: `0x${string}`): boolean | null {
+  const normalizedTarget = normalizeEvmAddress(address)
+  if (!normalizedTarget) return null
+
+  if (result instanceof Map) {
+    for (const [key, value] of result.entries()) {
+      const keyAddress = normalizeEvmAddress(
+        typeof key === 'string'
+          ? key
+          : (key as { identifier?: unknown; address?: unknown } | null)?.identifier ??
+              (key as { identifier?: unknown; address?: unknown } | null)?.address ??
+              null,
+      )
+      if (!keyAddress || keyAddress !== normalizedTarget) continue
+      const parsed = readCanMessageBoolean(value)
+      if (parsed !== null) return parsed
+    }
+    return null
+  }
+
+  if (Array.isArray(result)) {
+    if (result.length === 1) {
+      const singleParsed = readCanMessageBoolean(result[0])
+      if (singleParsed !== null) return singleParsed
+    }
+    for (const entry of result) {
+      if (!entry || typeof entry !== 'object') continue
+      const maybeEntry = entry as { identifier?: unknown; address?: unknown; canMessage?: unknown }
+      const entryAddress = normalizeEvmAddress(maybeEntry.identifier ?? maybeEntry.address)
+      if (!entryAddress || entryAddress !== normalizedTarget) continue
+      const parsed = readCanMessageBoolean(maybeEntry)
+      if (parsed !== null) return parsed
+    }
+    return null
+  }
+
+  if (result && typeof result === 'object') {
+    const entries = Object.entries(result as Record<string, unknown>)
+    for (const [key, value] of entries) {
+      const normalizedKey = normalizeEvmAddress(key)
+      if (!normalizedKey || normalizedKey !== normalizedTarget) continue
+      const parsed = readCanMessageBoolean(value)
+      if (parsed !== null) return parsed
+    }
+  }
+
+  return null
+}
+
+async function canMessageAddressOnCurrentEnv(address: `0x${string}`): Promise<boolean | null> {
+  const identifiers = [{ identifier: address, identifierKind: IdentifierKind.Ethereum }]
+  try {
+    const result = await (Client as any).canMessage(identifiers, XMTP_ENV as any)
+    return extractCanMessageResult(result, address)
+  } catch {
+    try {
+      const fallbackResult = await (Client as any).canMessage(identifiers)
+      return extractCanMessageResult(fallbackResult, address)
+    } catch {
+      return null
+    }
+  }
+}
+
+function buildNotRegisteredDmMessage(params: {
+  peerAddress: `0x${string}`
+  canonicalizedFromAddress: `0x${string}` | null
+}): string {
+  const envLabel = formatXmtpEnvLabel(XMTP_ENV)
+  if (params.canonicalizedFromAddress && params.canonicalizedFromAddress !== params.peerAddress) {
+    return `Resolved canonical wallet ${truncateAddress(params.peerAddress)} is not registered on XMTP (${envLabel}). Original address ${truncateAddress(params.canonicalizedFromAddress)} maps here in 4626; make sure that canonical wallet has XMTP on the same environment.`
+  }
+  return `Address ${truncateAddress(params.peerAddress)} is not registered on XMTP (${envLabel}). Ask the recipient to open an XMTP-enabled app on the same environment, then retry.`
 }
 
 function isInstallationLimitError(message: string): boolean {
@@ -1926,6 +2039,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     peerAddress: `0x${string}`,
     options?: StartDmOptions,
   ): Promise<StartDmResult> => {
+    const normalizedPeerAddress = (normalizeEvmAddress(peerAddress) ?? peerAddress.toLowerCase()) as `0x${string}`
+    const normalizedInputAddress = normalizeEvmAddress(options?.inputAddress ?? null) as `0x${string}` | null
+    const canonicalizedFromAddress =
+      normalizedInputAddress && normalizedInputAddress !== normalizedPeerAddress
+        ? normalizedInputAddress
+        : null
+
     if (shouldBlockSelfDm({ peerAddress, identityAddress: identityAddressRef.current })) {
       return {
         ok: false,
@@ -1943,9 +2063,22 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       }
     }
     try {
+      const preflightCanMessage = await canMessageAddressOnCurrentEnv(normalizedPeerAddress)
+      if (preflightCanMessage === false) {
+        return {
+          ok: false,
+          reason: canonicalizedFromAddress
+            ? 'canonical_recipient_not_registered'
+            : 'recipient_not_registered',
+          message: buildNotRegisteredDmMessage({
+            peerAddress: normalizedPeerAddress,
+            canonicalizedFromAddress,
+          }),
+        }
+      }
       await client.conversations.sync().catch(() => undefined)
       const dm = await client.conversations.createDmWithIdentifier({
-        identifier: peerAddress,
+        identifier: normalizedPeerAddress,
         identifierKind: IdentifierKind.Ethereum,
       })
       const summary = await buildConvoSummary(dm as any)
@@ -1962,10 +2095,30 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       return { ok: true, conversationId: dm.id }
     } catch (e) {
       console.error('[xmtp] startDm error:', e)
+      const errMsg = e instanceof Error && e.message ? e.message : 'Could not start conversation'
+      if (isXmtpEnvironmentMismatchError(errMsg)) {
+        return {
+          ok: false,
+          reason: 'environment_mismatch',
+          message: `Recipient appears to be on a different XMTP environment. This app is using ${formatXmtpEnvLabel(XMTP_ENV)}.`,
+        }
+      }
+      if (isXmtpNotRegisteredError(errMsg)) {
+        return {
+          ok: false,
+          reason: canonicalizedFromAddress
+            ? 'canonical_recipient_not_registered'
+            : 'recipient_not_registered',
+          message: buildNotRegisteredDmMessage({
+            peerAddress: normalizedPeerAddress,
+            canonicalizedFromAddress,
+          }),
+        }
+      }
       return {
         ok: false,
         reason: 'create_failed',
-        message: e instanceof Error && e.message ? e.message : 'Could not start conversation',
+        message: errMsg,
       }
     }
   }, [buildConvoSummary])

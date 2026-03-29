@@ -48,7 +48,12 @@ export async function getBasenameName(address: string): Promise<string | null> {
 }
 
 export type DmRecipientResolution = {
+  /** Final recipient used for DM creation (after canonical wallet mapping). */
   address: `0x${string}`
+  /** Direct address resolved from the user input before canonical mapping. */
+  inputAddress: `0x${string}`
+  /** True when recipient address was remapped to a canonical smart wallet. */
+  wasCanonicalRemap: boolean
   basenameHint: string | null
   avatarUrl: string | null
 }
@@ -163,8 +168,9 @@ export async function resolveDmRecipient(input: string): Promise<DmRecipientReso
     EMPTY_BASENAME_PROFILE,
   )
 
-  const normalizedRecipient = recipientAddress.toLowerCase()
-  const normalizedInitial = normalizedResolved.toLowerCase()
+  const normalizedRecipient = recipientAddress.toLowerCase() as `0x${string}`
+  const normalizedInitial = normalizedResolved.toLowerCase() as `0x${string}`
+  const wasCanonicalRemap = normalizedRecipient !== normalizedInitial
   const shouldLookupReverse = !inputHint && !inputIsAddress
   const reverseBasename = shouldLookupReverse
     ? await resolveReverseBasename(
@@ -183,7 +189,9 @@ export async function resolveDmRecipient(input: string): Promise<DmRecipientReso
     : reverseBasename?.replace(/\.base\.eth$/i, '').trim() || inputHint
 
   return {
-    address: recipientAddress,
+    address: normalizedRecipient,
+    inputAddress: normalizedInitial,
+    wasCanonicalRemap,
     basenameHint: basenameHint || null,
     avatarUrl: inputBasenameProfile?.avatar ?? recipientBasenameProfile?.avatar ?? null,
   }

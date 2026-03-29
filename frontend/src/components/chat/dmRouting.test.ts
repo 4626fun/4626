@@ -6,6 +6,8 @@ import { resolveDmRoute } from './dmRouting'
 function sampleRecipient(address: `0x${string}`): DmRecipientResolution {
   return {
     address,
+    inputAddress: address,
+    wasCanonicalRemap: false,
     basenameHint: null,
     avatarUrl: null,
   }
