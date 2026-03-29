@@ -176,6 +176,8 @@ const TELEGRAM_MENU_LABELS = {
   back: 'Back',
 } as const
 
+type TelegramHomeState = 'unlinked' | 'pending' | 'ready'
+
 function sanitizeTelegramLabel(label: string): string {
   return label.replace(/\uFE0F/g, '')
 }
@@ -1196,7 +1198,7 @@ function buildTelegramLinkFlowResponse(params: {
   if (!isPrivateChatId(params.chatId)) {
     return {
       text: [
-        'Link your 4626 account (one time)',
+        'Connect your 4626 account (one time)',
         '',
         'For security, linking is only available in a private chat with this bot.',
         'Linking verifies your 4626 account and finishes the wallet setup required for bot actions.',
@@ -1273,38 +1275,38 @@ function buildTelegramLinkFlowResponse(params: {
       ? [
           '<b>Base app | 4626.fun</b>',
           '',
-          'Need a Coinbase Smart Wallet? Install the Base app first, then come back here to finish linking.',
+          'Need a Coinbase Smart Wallet? Install Base app first, then come back here to finish connecting Telegram.',
           '',
           '1) Tap Get Base app.',
           '2) Tap Open Mini App.',
           '3) Sign in to 4626 and verify your email.',
           '4) Create or connect your Coinbase Smart Wallet.',
-          '5) Add your 4626 embedded wallet as an owner so bot actions can execute safely.',
+          '5) Finish wallet confirmation so Telegram actions can unlock safely.',
           '',
           '4626 never holds your keys — you approve actions in your wallet.',
-          'After linking, Telegram actions run directly through the bot.',
+          'After setup is complete, Telegram actions run directly through the bot.',
         ]
       : params.zoraOnboardingBranch === 'has'
         ? [
             '<b>Link | 4626.fun</b>',
             '',
-            'Finish linking your Telegram account, then confirm that your 4626 embedded wallet is an owner on your Coinbase Smart Wallet.',
+            'Finish connecting your Telegram account, then complete wallet confirmation on your Coinbase Smart Wallet.',
             '',
             '4626 never holds your keys — you approve actions in your wallet.',
             '',
             '1) Tap Open Mini App.',
             '2) Sign in to 4626 and verify your email.',
-            '3) Confirm the owner step on your Coinbase Smart Wallet.',
+            '3) Complete the wallet confirmation step on your Coinbase Smart Wallet.',
             '',
-            'After linking, Telegram actions run directly through the bot.',
+            'After setup is complete, Telegram actions run directly through the bot.',
           ]
         : [
-            'Link your 4626 account (one time)',
+            'Connect your 4626 account (one time)',
             '',
             '1) Tap Open Mini App.',
             '2) Sign in to 4626 and verify your email.',
             '3) Connect your Coinbase Smart Wallet if you have one.',
-            '4) Confirm your 4626 embedded wallet is installed as an owner.',
+            '4) Finish wallet confirmation so bot actions can unlock safely.',
             '',
             '4626 never holds your keys — you approve actions in your wallet.',
           ]
@@ -1368,15 +1370,21 @@ function buildOnboardingWelcomeText(): string {
   return [
     '<b>Welcome to 4626.fun on Telegram</b>',
     '',
-    'Tap <b>Start</b> to begin setup.',
+    'Start with a verified 4626 account, then connect this Telegram account to it.',
     '',
-    'Link once, then buy, sell, bid, and manage your connected Coinbase Smart Wallet directly from chats.',
+    'Tap <b>Start</b> to choose your wallet path and open the Mini App.',
   ].join('\n')
 }
 
 function buildOnboardingWelcomeReplyMarkup(): Record<string, unknown> {
   return {
-    inline_keyboard: [[{ text: 'Start', callback_data: 'onboard:begin' }]],
+    inline_keyboard: [
+      [{ text: 'Start', callback_data: 'onboard:begin' }],
+      [
+        { text: 'Check Link Status', callback_data: 'menu:linked' },
+        { text: menuLabel('help'), callback_data: 'menu:topics' },
+      ],
+    ],
   }
 }
 
@@ -1384,9 +1392,9 @@ function buildCswForkText(): string {
   return [
     '<b>Coinbase Smart Wallet | 4626.fun</b>',
     '',
-    'Finish account linking and wallet setup. Link an existing Coinbase Smart Wallet, or create a new one after installing the Base app.',
+    'Choose how you want to continue wallet setup before opening the Mini App.',
     '',
-    'Tap a button to continue.',
+    'If you already have a Coinbase Smart Wallet, link it. Otherwise, install Base app and create one first.',
   ].join('\n')
 }
 
@@ -1410,27 +1418,34 @@ function buildUnlinkedGroupStartLandingText(): string {
     '<u>In your DM with this bot</u>',
     '<code>/start</code> — home (tap <b>Start</b> to begin onboarding)',
     '<code>/link</code> — continue wallet linking after onboarding',
-    '<code>/linked</code> — verify link + owner status',
+    '<code>/linked</code> — check Telegram link and wallet setup',
     '',
     'After /linked shows ready, use /buy, /sell, /bid, and /wallet.',
   ].join('\n')
 }
 
-function buildStartLandingText(params: { isLinked: boolean }): string {
-  if (params.isLinked) {
+function buildStartLandingText(params: { state: Exclude<TelegramHomeState, 'unlinked'> }): string {
+  if (params.state === 'ready') {
     return [
       '<b>4626 on Telegram</b>',
       '',
-      `<blockquote>Connected and ready. Convert attention into onchain action: ${menuLabel('trade')} -> ${menuLabel('wallet')} -> Repeat.</blockquote>`,
+      '<blockquote>Ready for bot actions. Open Wallet, Trade, or Explore from here.</blockquote>',
       '',
-      '<u>Fast path</u>',
+      '<u>Core actions</u>',
+      '<code>/wallet</code> — wallet, positions, and recent actions',
       '<code>/buy</code> — guided buy flow',
       '<code>/sell</code> — guided sell flow',
       '<code>/bid</code> — guided bid flow',
-      '<code>/wallet</code> — wallet, positions, and recent actions',
     ].join('\n')
   }
-  return buildUnlinkedGroupStartLandingText()
+  return [
+    '<b>4626 on Telegram</b>',
+    '',
+    '<blockquote>Telegram is linked. Wallet setup is still pending before trades and wallet actions unlock.</blockquote>',
+    '',
+    '<u>Next step</u>',
+    'Tap <b>Finish Wallet Setup</b> to reopen the connect flow and complete wallet confirmation.',
+  ].join('\n')
 }
 
 function buildStartAndLinkNudgeText(): string {
@@ -1438,6 +1453,46 @@ function buildStartAndLinkNudgeText(): string {
 }
 
 function buildStartAndLinkNudgeReplyMarkup(): Record<string, unknown> {
+  return buildOnboardingWelcomeReplyMarkup()
+}
+
+function buildStartReplyMarkup(params: { chatId: string; state: TelegramHomeState }): Record<string, unknown> {
+  if (params.state === 'ready') {
+    return {
+      inline_keyboard: [
+        [{ text: menuLabel('wallet'), callback_data: 'menu:wallet' }],
+        [
+          { text: menuLabel('trade'), callback_data: 'menu:trade' },
+          { text: menuLabel('explore'), callback_data: 'menu:explore' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
+        ],
+      ],
+    }
+  }
+
+  if (params.state === 'pending') {
+    return {
+      inline_keyboard: [
+        [{ text: 'Finish Wallet Setup', callback_data: 'menu:connect' }],
+        [
+          { text: 'Check Link Status', callback_data: 'menu:linked' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
+        ],
+      ],
+    }
+  }
+
+  if (!isPrivateChatId(params.chatId)) {
+    return {
+      inline_keyboard: [
+        [
+          { text: 'Check Link Status', callback_data: 'menu:linked' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
+        ],
+      ],
+    }
+  }
+
   return buildOnboardingWelcomeReplyMarkup()
 }
 
@@ -1623,20 +1678,20 @@ function resolveNavigationCallbackToast(rawData: string, mappedCommand: string |
 function resolveStaticMenuCallbackResponse(params: {
   callbackData: string
   chatId: string
-  isLinked: boolean
+  homeState: TelegramHomeState
 }): TelegramCommandResponse | null {
   const token = asTrimmed(params.callbackData).toLowerCase()
   if (token === 'menu:start') {
-    if (params.isLinked) {
+    if (params.homeState !== 'unlinked') {
       return {
-        text: buildStartLandingText({ isLinked: true }),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+        text: buildStartLandingText({ state: params.homeState }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: params.homeState }),
       }
     }
     if (!isPrivateChatId(params.chatId)) {
       return {
         text: buildUnlinkedGroupStartLandingText(),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: 'unlinked' }),
       }
     }
     return {
@@ -1651,7 +1706,7 @@ function resolveStaticMenuCallbackResponse(params: {
     }
   }
   if (token === 'menu:trade') {
-    if (!params.isLinked) {
+    if (params.homeState !== 'ready') {
       return {
         text: [`Trade requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
         replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
@@ -1669,7 +1724,7 @@ function resolveStaticMenuCallbackResponse(params: {
     }
   }
   if (token === 'menu:cre') {
-    if (!shouldShowOperatorMenus(params)) {
+    if (!shouldShowOperatorMenus({ chatId: params.chatId, isLinked: params.homeState === 'ready' })) {
       return {
         text: [`${menuLabel('cre')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
         replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
@@ -1681,7 +1736,7 @@ function resolveStaticMenuCallbackResponse(params: {
     }
   }
   if (token === 'menu:solana') {
-    if (!shouldShowOperatorMenus(params)) {
+    if (!shouldShowOperatorMenus({ chatId: params.chatId, isLinked: params.homeState === 'ready' })) {
       return {
         text: [`${menuLabel('solana')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
         replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
@@ -2386,7 +2441,9 @@ function buildTelegramPickedUserProfileText(params: {
     `Telegram: ${params.selectedUser.username ? `@${params.selectedUser.username}` : 'n/a'}`,
   ]
   if (params.profile) {
-    detailLines.push(`Link: ${params.profile.linkStatus ?? 'unknown'}${params.profile.ownerVerified ? ' • owner verified' : ''}`)
+    detailLines.push(
+      `Link: ${params.profile.linkStatus ?? 'unknown'} • ${params.profile.ownerVerified ? 'wallet ready' : 'wallet setup pending'}`,
+    )
     detailLines.push(`Profile ID: ${params.profile.profileId ?? 'n/a'}`)
     detailLines.push(`Creator coin: ${params.profile.creatorCoinAddress ?? 'n/a'}`)
     detailLines.push(`Name: ${params.profile.creatorCoinName ?? 'n/a'}`)
@@ -2444,6 +2501,17 @@ async function isTelegramUserLinked(params: {
   return Boolean(link && link.linkStatus === 'active' && link.ownerVerified)
 }
 
+async function resolveTelegramHomeState(params: {
+  telegramUserId: string
+  db?: Awaited<ReturnType<typeof getDb>> | null
+}): Promise<TelegramHomeState> {
+  const db = params.db ?? (await getDb())
+  if (!db) return 'unlinked'
+  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.telegramUserId })
+  if (!link || link.linkStatus !== 'active') return 'unlinked'
+  return link.ownerVerified ? 'ready' : 'pending'
+}
+
 async function handleTelegramOnboardingCallback(params: {
   callbackDataLower: string
   chatId: string
@@ -2475,14 +2543,14 @@ async function handleTelegramOnboardingCallback(params: {
   }
   await ensureTelegramTradingSchema(db as any)
 
-  const isLinked = await isTelegramUserLinked({ telegramUserId: params.userId, db })
-  if (isLinked) {
+  const homeState = await resolveTelegramHomeState({ telegramUserId: params.userId, db })
+  if (homeState !== 'unlinked') {
     return {
       response: {
-        text: buildStartLandingText({ isLinked: true }),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+        text: buildStartLandingText({ state: homeState }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: homeState }),
       },
-      callbackToast: 'Already connected',
+      callbackToast: homeState === 'ready' ? 'Already connected' : 'Continue setup',
     }
   }
 
@@ -2538,16 +2606,16 @@ function formatLinkStatusDetails(link: Awaited<ReturnType<typeof getTelegramLink
   if (!link) {
     return [
       '- linked: no',
-      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram to your 4626 account and finishes the wallet checks required for bot actions. Full 4626 web app access may still require team approval.',
+      '- next: send /start in a private DM, tap Start, then continue in the Mini App. Telegram will attach after your 4626 account is verified.',
     ]
   }
+  const walletSetup = link.linkStatus === 'active' && link.ownerVerified ? 'ready' : 'pending'
   return [
     `- linked: ${link.linkStatus === 'active' ? 'yes' : 'no'}`,
-    `- status: ${link.linkStatus}`,
-    `- ownerVerified: ${String(link.ownerVerified)}`,
-    `- profileId: ${String(link.profileId)}`,
-    `- canonicalCSW: ${link.canonicalCswAddress}`,
-    `- linkedAt: ${link.linkedAt ?? 'n/a'}`,
+    `- wallet setup: ${walletSetup}`,
+    `- profile: ${String(link.profileId)}`,
+    `- canonical wallet: ${link.canonicalCswAddress}`,
+    `- linked at: ${link.linkedAt ?? 'n/a'}`,
   ]
 }
 
@@ -2568,12 +2636,12 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
   const summaryLines =
     link.linkStatus === 'active' && link.ownerVerified
       ? [
-          'Connected and ready for bot actions.',
-          `Canonical CSW: ${truncateAddress(link.canonicalCswAddress)}`,
+          'Telegram linked. Ready for bot actions.',
+          `Canonical wallet: ${truncateAddress(link.canonicalCswAddress)}`,
         ]
       : [
-          'Link found, but setup is not complete yet.',
-          `Owner verified: ${String(link.ownerVerified)}`,
+          'Telegram linked. Wallet setup pending.',
+          'Finish wallet confirmation before trading and wallet actions unlock.',
         ]
 
   return buildTelegramCommandChrome({
@@ -3143,11 +3211,11 @@ async function executeTelegramNativeCommand(params: {
   }
 
   if (head === 'start') {
-    const isLinked = await isTelegramUserLinked({
+    const homeState = await resolveTelegramHomeState({
       telegramUserId: params.userId,
       db: params.db,
     })
-    if (!isLinked && isPrivateChatId(params.chatId)) {
+    if (homeState === 'unlinked' && isPrivateChatId(params.chatId)) {
       const db = params.db ?? (await getDb())
       if (db) {
         await ensureTelegramTradingSchema(db as any)
@@ -3158,15 +3226,16 @@ async function executeTelegramNativeCommand(params: {
         replyMarkup: buildOnboardingWelcomeReplyMarkup(),
       }
     }
-    if (!isLinked && !isPrivateChatId(params.chatId)) {
+    if (homeState === 'unlinked' && !isPrivateChatId(params.chatId)) {
       return {
         text: buildUnlinkedGroupStartLandingText(),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: 'unlinked' }),
       }
     }
+    const linkedHomeState: Exclude<TelegramHomeState, 'unlinked'> = homeState === 'ready' ? 'ready' : 'pending'
     return {
-      text: buildStartLandingText({ isLinked: true }),
-      replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+      text: buildStartLandingText({ state: linkedHomeState }),
+      replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: linkedHomeState }),
     }
   }
 
@@ -3179,12 +3248,12 @@ async function executeTelegramNativeCommand(params: {
       })
     }
     const db = params.db ?? (await getDb())
-    const isLinked = await isTelegramUserLinked({ telegramUserId: params.userId, db: db ?? undefined })
-    if (isLinked) {
+    const homeState = await resolveTelegramHomeState({ telegramUserId: params.userId, db: db ?? undefined })
+    if (homeState !== 'unlinked') {
       return buildTelegramLinkFlowResponse({
         chatId: params.chatId,
         telegramUserId: params.userId,
-        linkButtonText: 'Refresh Connect',
+        linkButtonText: homeState === 'pending' ? 'Finish Wallet Setup' : 'Refresh Connect',
       })
     }
     if (!db) {
@@ -3366,8 +3435,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Vault Deploy blocked',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3475,8 +3544,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Deploy blocked',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3578,8 +3647,8 @@ async function executeTelegramNativeCommand(params: {
           text: [
             'Trade blocked',
             '',
-            '- owner verification required',
-            '- run /linked and ensure ownerVerified is true',
+            '- wallet setup pending',
+            '- run /linked, finish wallet confirmation, then retry',
           ].join('\n'),
         }
       }
@@ -3737,8 +3806,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Join Room',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3933,8 +4002,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           formatLinkStatusText(link),
           '',
-          'Owner verification is still pending.',
-          'Reconnect below to verify your canonical Coinbase Smart Wallet.',
+          'Wallet setup is still pending.',
+          'Reconnect below to finish wallet confirmation for bot actions.',
         ].join('\n'),
         replyMarkup: relinkFlow.replyMarkup,
       }
@@ -4034,8 +4103,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Trade blocked',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -4436,10 +4505,10 @@ async function handleTelegramTradeFlowCallback(params: {
       text: [
         'Trade blocked',
         '',
-        '- owner verification required',
-        '- run /linked and ensure ownerVerified is true',
+        '- wallet setup pending',
+        '- run /linked, finish wallet confirmation, then retry',
       ].join('\n'),
-      callbackToast: 'Owner check required',
+      callbackToast: 'Wallet setup pending',
     }
   }
 
@@ -4589,8 +4658,8 @@ async function maybeHandlePendingTradePercentInput(params: {
       text: [
         'Trade blocked',
         '',
-        '- link + owner verification required',
-        '- run /link then /linked, then retry',
+        '- Telegram link and wallet setup are required',
+        '- run /link, then /linked to finish wallet confirmation, then retry',
       ].join('\n'),
     }
   }
@@ -6805,8 +6874,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    const menuIsLinked = await isTelegramUserLinked({ telegramUserId: userId })
-    if (asTrimmed(callbackData).toLowerCase() === 'menu:start' && !menuIsLinked && isPrivateChatId(chatId)) {
+    const menuHomeState = await resolveTelegramHomeState({ telegramUserId: userId })
+    const menuIsLinked = menuHomeState === 'ready'
+    if (asTrimmed(callbackData).toLowerCase() === 'menu:start' && menuHomeState === 'unlinked' && isPrivateChatId(chatId)) {
       const db = await getDb()
       if (db) {
         await ensureTelegramTradingSchema(db as any)
@@ -6816,7 +6886,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const staticMenuResponse = resolveStaticMenuCallbackResponse({
       callbackData,
       chatId,
-      isLinked: menuIsLinked,
+      homeState: menuHomeState,
     })
     if (staticMenuResponse) {
       if (canReplaceMenuMessage) {

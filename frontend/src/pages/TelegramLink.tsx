@@ -62,6 +62,17 @@ const TG_VIEWPORT_STYLE: CSSProperties = {
   paddingRight: 'max(12px, var(--cv-tg-content-safe-right, 0px))',
 }
 
+const PRIMARY_ACTION_BUTTON_CLASS =
+  'inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-[16px] bg-[#0052FF] px-4 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70'
+const SECONDARY_ACTION_BUTTON_CLASS =
+  'inline-flex h-11 w-full touch-manipulation items-center justify-center rounded-[16px] border border-white/[0.06] bg-transparent px-4 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-55'
+const TELEGRAM_LINK_PROGRESS_STEPS = [
+  { key: 'telegram', label: 'Telegram' },
+  { key: 'email', label: 'Email' },
+  { key: 'code', label: 'Code' },
+  { key: 'link', label: 'Link' },
+] as const
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms))
 }
@@ -210,21 +221,21 @@ function parseTelegramLinkReadyAccount(data: unknown, expectedEmail: string): Te
 function getFlowHeadline(tag: string): string {
   switch (tag) {
     case 'verify_telegram_session':
-      return 'Verify Telegram Session'
+      return 'Verify Telegram'
     case 'collect_email':
     case 'sending_email_code':
-      return 'Verify Email'
+      return 'Enter Email Address'
     case 'enter_email_code':
     case 'verifying_email_code':
       return 'Enter Verification Code'
     case 'wait_for_privy_sync':
-      return 'Awaiting Account Sync'
+      return 'Resolving Account'
     case 'bind_telegram':
-      return 'Binding Telegram Identity'
+      return 'Linking Telegram'
     case 'success':
       return 'Telegram Linked'
     case 'expired_or_error':
-      return 'Session Expired'
+      return 'Reconnect Telegram'
     default:
       return 'Telegram Link'
   }
@@ -236,20 +247,40 @@ function getFlowDescription(tag: string): string {
       return 'Validating the Telegram Mini App proof.'
     case 'collect_email':
     case 'sending_email_code':
-      return 'Verified email is the canonical 4626 identity.'
+      return 'Use the email for your 4626 account. We’ll verify it, then attach this Telegram account.'
     case 'enter_email_code':
     case 'verifying_email_code':
-      return 'Enter the code inline. Telegram remains linked only.'
+      return 'Enter the 6-digit code we emailed you to keep setup moving inside Telegram.'
     case 'wait_for_privy_sync':
-      return 'Email verified. Waiting for Privy and the canonical 4626 account.'
+      return 'We’re confirming your verified 4626 account before attaching Telegram.'
     case 'bind_telegram':
-      return 'Canonical account ready. Binding Telegram now.'
+      return 'Telegram is being attached to your verified 4626 account now.'
     case 'success':
-      return 'Canonical account resolved. Telegram is attached.'
+      return 'Your 4626 account is verified and this Telegram account is connected.'
     case 'expired_or_error':
       return 'Telegram launch or account sync could not complete.'
     default:
       return ''
+  }
+}
+
+function getFlowProgressIndex(tag: TelegramLinkState['tag']): number {
+  switch (tag) {
+    case 'verify_telegram_session':
+      return 1
+    case 'collect_email':
+    case 'sending_email_code':
+      return 2
+    case 'enter_email_code':
+    case 'verifying_email_code':
+      return 3
+    case 'wait_for_privy_sync':
+    case 'bind_telegram':
+    case 'success':
+    case 'expired_or_error':
+      return 4
+    default:
+      return 1
   }
 }
 
@@ -1318,9 +1349,8 @@ export function TelegramLink() {
         ? null
         : emailSubmitDisabledReason === 'invalid_email'
           ? 'Enter a complete email address to continue.'
-          : 'Email resolves the canonical 4626 account. Telegram attaches after sync.'
+          : 'We’ll send a 6-digit code to this email.'
       : null
-  const isMinimalVerifyEmailStep = state.tag === 'collect_email' || state.tag === 'sending_email_code'
 
   const renderContent = () => {
     switch (state.tag) {
@@ -1331,7 +1361,7 @@ export function TelegramLink() {
         return (
           <form className="space-y-3" onSubmit={handleEmailFormSubmit}>
             <label htmlFor="telegram-link-email" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-[#666666]">
-              Verified Email
+              Email Address
             </label>
             <input
               ref={emailInputRef}
@@ -1351,7 +1381,7 @@ export function TelegramLink() {
                 submitEmail('enter')
               }}
               placeholder="name@example.com"
-              className="block h-11 w-full rounded-md border border-white/10 bg-[#111111] px-3 text-[15px] text-[#EDEDED] outline-none focus:border-[#0052FF] focus:ring-0"
+              className="block h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/75 focus:bg-white/[0.04] focus:ring-0"
             />
             {state.emailError ? <InlineError message={state.emailError} /> : null}
             {emailSubmitHelperText ? <p className="text-[12px] leading-[1.4] text-[#666666]">{emailSubmitHelperText}</p> : null}
@@ -1366,7 +1396,7 @@ export function TelegramLink() {
                 data-email-normalized={normalizedCollectEmail}
                 data-email-valid={emailIsValid ? 'true' : 'false'}
                 data-flow-tag={state.tag}
-                className="block h-11 w-full touch-manipulation rounded-md bg-[#0052FF] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+                className={PRIMARY_ACTION_BUTTON_CLASS}
                 disabled={emailSubmitDisabled}
               >
                 Send Code
@@ -1400,10 +1430,10 @@ export function TelegramLink() {
               />
               {state.codeError ? <InlineError message={state.codeError} /> : null}
             </div>
-            <div className="flex gap-2.5">
+            <div className="space-y-2.5">
               <button
                 type="submit"
-                className="relative z-10 inline-flex h-11 flex-1 touch-manipulation items-center justify-center rounded-[16px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70"
+                className={PRIMARY_ACTION_BUTTON_CLASS}
                 disabled={state.code.trim().length < 6}
               >
                 Verify Code
@@ -1411,7 +1441,7 @@ export function TelegramLink() {
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'RESEND_CODE' })}
-                className="inline-flex h-11 touch-manipulation items-center justify-center rounded-[16px] border border-white/[0.06] bg-transparent px-4 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-55"
+                className={SECONDARY_ACTION_BUTTON_CLASS}
                 disabled={!canResend}
               >
                 {canResend ? 'Resend' : `${resendSeconds}s`}
@@ -1449,27 +1479,31 @@ export function TelegramLink() {
 
       case 'success':
         const canonicalCswAddress = state.link.canonicalCswAddress ?? state.account.canonicalCswAddress
+        const walletSetupPending = state.link.linkStatus !== 'active' || !state.link.ownerVerified
         return (
           <div className="space-y-4">
             <StatusBlock
               icon={CheckCircle2}
               tone="success"
-              body={`Canonical account ${state.account.email} is ready. Telegram ${formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} is linked.`}
+              body={`Telegram ${formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} is connected to ${state.account.email}.`}
             />
             {canCloseTelegramMiniApp ? (
               <button
                 type="button"
                 onClick={handleCloseTelegramMiniApp}
-                className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-[16px] bg-[#0052FF] px-4 text-sm font-semibold text-white transition hover:bg-[#004AD9]"
+                className={PRIMARY_ACTION_BUTTON_CLASS}
               >
                 <X className="h-4 w-4" />
                 Close
               </button>
             ) : null}
+            {walletSetupPending ? (
+              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED]">
+                Wallet setup pending. Telegram is connected, but wallet and trading actions unlock after your Coinbase Smart Wallet is confirmed.
+              </div>
+            ) : null}
             <div className="grid gap-x-4 gap-y-3 border-t border-white/[0.06] pt-3 sm:grid-cols-2">
               <MetaField label="Telegram" value={formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} />
-              <MetaField label="Profile" value={String(state.link.profileId)} />
-              <MetaField label="Link Status" value={state.link.linkStatus} />
               <MetaField label="Canonical Email" value={state.account.email} />
               <MetaField
                 label="Canonical CSW"
@@ -1478,7 +1512,7 @@ export function TelegramLink() {
               />
             </div>
             <div className="text-sm leading-6 text-[#666666]">
-              Telegram is attached to the verified-email 4626 account. Telegram does not replace email recovery.
+              Telegram is attached to your verified-email 4626 account. Telegram does not replace email recovery.
             </div>
           </div>
         )
@@ -1527,70 +1561,84 @@ export function TelegramLink() {
       style={TG_VIEWPORT_STYLE}
     >
       <PageMeta title="Telegram Link" description="Verify email inside Telegram and bind Telegram to the canonical 4626 account." canonicalPath="/telegram/link" />
-      {!isMinimalVerifyEmailStep ? (
-        <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
-          <div className="absolute right-[-10%] top-[8%] h-80 w-80 rounded-full bg-[#3B82F6]/12 blur-3xl" />
-          <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
-        </div>
-      ) : null}
+      <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
+        <div className="absolute right-[-10%] top-[8%] h-80 w-80 rounded-full bg-[#3B82F6]/12 blur-3xl" />
+        <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
+      </div>
 
       <div className="relative z-10 mx-auto flex h-full w-full max-w-[27rem] items-start">
-        {isMinimalVerifyEmailStep ? (
-          <section
-            data-flow-state={state.tag}
-            data-testid="telegram-link-panel"
-            className="relative isolate flex w-full flex-col rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-4 touch-manipulation"
-          >
-            <h1 className="text-[20px] font-semibold text-[#EDEDED]">Verify Email</h1>
-            <p className="mt-1 text-[13px] leading-[1.4] text-[#666666]">
-              Verified email is the canonical 4626 identity. Telegram links after verification.
-            </p>
-
-            {proof ? (
-              <div className="mt-3 space-y-1.5 text-[13px] leading-[1.4] text-[#EDEDED]">
-                <div>Telegram: <span className="font-mono">{formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)}</span></div>
-                <div>Chat: <span className="font-mono">{proof.chatId ?? 'direct'}</span></div>
-                <div>Session: <span className="font-mono">{new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
+        <div
+          data-flow-state={state.tag}
+          data-testid="telegram-link-panel"
+          className="flex w-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2 py-0.75 text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">
+                Telegram Mini App
               </div>
-            ) : null}
-
-            <div className="mt-4">{renderContent()}</div>
-          </section>
-        ) : (
-          <div
-            data-flow-state={state.tag}
-            data-testid="telegram-link-panel"
-            className="flex w-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2 py-0.75 text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">
-                  Telegram Mini App
-                </div>
-                <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
-                <p className="max-w-xl text-[12px] leading-[1.35] text-[#666666]">{getFlowDescription(state.tag)}</p>
-              </div>
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
+              <p className="max-w-xl text-[12px] leading-[1.35] text-[#666666]">{getFlowDescription(state.tag)}</p>
             </div>
-
-            <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] leading-[1.35]">
-              <span className="font-mono text-[#EDEDED]">email -&gt; account</span>
-              <span className="font-mono text-[#666666]">telegram -&gt; linked</span>
-            </div>
-
-            {proof ? (
-              <div className="mt-2 grid gap-x-3 gap-y-2 border-t border-white/[0.05] pt-2.5 text-sm sm:grid-cols-3">
-                <MetaField label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
-                <MetaField label="Chat" value={proof.chatId ?? 'direct'} />
-                <MetaField label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
-              </div>
-            ) : null}
-
-            <div className="mt-3 min-h-0 overflow-y-auto pr-0.5 scrollbar-hide">{renderContent()}</div>
           </div>
-        )}
+
+          <FlowProgress currentTag={state.tag} />
+
+          {proof ? (
+            <div className="mt-3 grid gap-x-3 gap-y-2 border-t border-white/[0.05] pt-2.5 text-sm sm:grid-cols-3">
+              <MetaField label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
+              <MetaField label="Chat" value={proof.chatId ?? 'direct'} />
+              <MetaField label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
+            </div>
+          ) : null}
+
+          <div className="mt-3 min-h-0 overflow-y-auto pr-0.5 scrollbar-hide">{renderContent()}</div>
+        </div>
       </div>
     </div>
+  )
+}
+
+function FlowProgress(props: { currentTag: TelegramLinkState['tag'] }) {
+  const currentStep = getFlowProgressIndex(props.currentTag)
+  const isComplete = props.currentTag === 'success'
+
+  return (
+    <ol data-testid="telegram-link-progress" className="mt-3 flex items-start justify-between gap-2">
+      {TELEGRAM_LINK_PROGRESS_STEPS.map((step, index) => {
+        const stepNumber = index + 1
+        const status = isComplete
+          ? 'complete'
+          : stepNumber < currentStep
+            ? 'complete'
+            : stepNumber === currentStep
+              ? 'active'
+              : 'upcoming'
+        const statusClasses =
+          status === 'complete'
+            ? 'border-[#0052FF] bg-[#0052FF] text-white'
+            : status === 'active'
+              ? 'border-[#0052FF] bg-[#0052FF]/15 text-[#EDEDED]'
+              : 'border-white/[0.08] bg-white/[0.03] text-[#666666]'
+
+        return (
+          <li
+            key={step.key}
+            data-testid={`telegram-link-progress-step-${step.key}`}
+            data-status={status}
+            className="min-w-0 flex-1"
+          >
+            <div className="flex items-center gap-2">
+              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${statusClasses}`}>
+                {stepNumber}
+              </div>
+              <div className="min-w-0 text-[11px] font-medium text-[#CFCFCF]">{step.label}</div>
+            </div>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 

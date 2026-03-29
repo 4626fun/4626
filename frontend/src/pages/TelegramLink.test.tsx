@@ -147,6 +147,10 @@ function mockVerifiedSession() {
   })
 }
 
+function expectProgressStatus(step: 'telegram' | 'email' | 'code' | 'link', status: 'complete' | 'active' | 'upcoming') {
+  expect(screen.getByTestId(`telegram-link-progress-step-${step}`).getAttribute('data-status')).toBe(status)
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   telegramWebAppState.hasMainButton = false
@@ -236,7 +240,7 @@ describe('TelegramLink UI flow', () => {
     const user = userEvent.setup()
     renderFlow()
 
-    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    const input = (await screen.findByLabelText('Email Address')) as HTMLInputElement
     const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
 
     expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
@@ -262,7 +266,7 @@ describe('TelegramLink UI flow', () => {
     const user = userEvent.setup()
     renderFlow()
 
-    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    const input = (await screen.findByLabelText('Email Address')) as HTMLInputElement
     await user.type(input, ' USER@EXAMPLE.COM ')
     const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
 
@@ -280,7 +284,7 @@ describe('TelegramLink UI flow', () => {
   it('submits from pointer activation while the email input is focused', async () => {
     renderFlow()
 
-    const input = (await screen.findByLabelText('Verified Email')) as HTMLInputElement
+    const input = (await screen.findByLabelText('Email Address')) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'user@example.com' } })
     input.focus()
     const submitButton = screen.getByTestId('telegram-link-submit') as HTMLButtonElement
@@ -301,7 +305,7 @@ describe('TelegramLink UI flow', () => {
     sendCodeMock.mockImplementationOnce(() => sendCodeDeferred.promise)
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     expect(document.querySelector('[data-flow-state="collect_email"]')).toBeTruthy()
 
     await user.click(screen.getByTestId('telegram-link-submit'))
@@ -334,7 +338,7 @@ describe('TelegramLink UI flow', () => {
 
     const view = render(<Harness tick={0} />)
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Code' }))
 
     await waitFor(() => {
@@ -368,7 +372,7 @@ describe('TelegramLink UI flow', () => {
     telegramWebAppState.hasMainButton = true
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
 
     expect(telegramMainButtonMock.show).toHaveBeenCalled()
     expect(telegramMainButtonMock.enable).toHaveBeenCalled()
@@ -384,20 +388,43 @@ describe('TelegramLink UI flow', () => {
     })
   })
 
-  it('renders the verify-email step without decorative overlays', async () => {
+  it('renders the shared Telegram Mini App shell with progress on the email step', async () => {
     renderFlow()
 
-    await screen.findByLabelText('Verified Email')
-    expect(screen.queryByTestId('telegram-link-decorative-overlay')).toBeNull()
-    expect(screen.getByText(/Telegram:/)).toBeTruthy()
-    expect(screen.getByText(/Chat:/)).toBeTruthy()
-    expect(screen.getByText(/Session:/)).toBeTruthy()
+    await screen.findByLabelText('Email Address')
+    expect(screen.getByText('Telegram Mini App')).toBeTruthy()
+    expect(screen.getByText('@akita')).toBeTruthy()
+    expect(screen.getByText('-100123')).toBeTruthy()
+    expect(screen.getByText(/\d{2}:\d{2}\s(?:AM|PM)/)).toBeTruthy()
+    expectProgressStatus('telegram', 'complete')
+    expectProgressStatus('email', 'active')
+    expectProgressStatus('code', 'upcoming')
+    expectProgressStatus('link', 'upcoming')
+  })
+
+  it('keeps the primary call-to-action styling consistent between email and code steps', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    await screen.findByLabelText('Email Address')
+    const sendCodeButton = screen.getByRole('button', { name: 'Send Code' })
+    expect(sendCodeButton.className).toContain('bg-[#0052FF]')
+    expect(sendCodeButton.className).toContain('rounded-[16px]')
+    expect(sendCodeButton.className).toContain('h-11')
+
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
+    await user.click(sendCodeButton)
+
+    const verifyCodeButton = await screen.findByRole('button', { name: 'Verify Code' })
+    expect(verifyCodeButton.className).toContain('bg-[#0052FF]')
+    expect(verifyCodeButton.className).toContain('rounded-[16px]')
+    expect(verifyCodeButton.className).toContain('h-11')
   })
 
   it('locks document scrolling for the Telegram shell', async () => {
     const view = renderFlow()
 
-    await screen.findByLabelText('Verified Email')
+    await screen.findByLabelText('Email Address')
 
     expect(document.documentElement.classList.contains('telegram-link-html-lock')).toBe(true)
     expect(document.body.classList.contains('telegram-link-body-lock')).toBe(true)
@@ -414,12 +441,12 @@ describe('TelegramLink UI flow', () => {
     const user = userEvent.setup()
     renderFlow()
 
-    await screen.findByLabelText('Verified Email')
-    const input = screen.getByLabelText('Verified Email') as HTMLInputElement
+    await screen.findByLabelText('Email Address')
+    const input = screen.getByLabelText('Email Address') as HTMLInputElement
 
     await user.type(input, 'user@example.com')
 
-    expect(screen.getByLabelText('Verified Email')).toBe(input)
+    expect(screen.getByLabelText('Email Address')).toBe(input)
     expect(input.value).toBe('user@example.com')
   })
 
@@ -428,12 +455,12 @@ describe('TelegramLink UI flow', () => {
     sendCodeMock.mockRejectedValueOnce(new Error('Unable to send verification code.'))
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Code' }))
 
     await screen.findByText('Unable to send verification code.')
-    expect(screen.getByText('Verify Email')).toBeTruthy()
-    expect((screen.getByLabelText('Verified Email') as HTMLInputElement).value).toBe('user@example.com')
+    expect(screen.getByText('Enter Email Address')).toBeTruthy()
+    expect((screen.getByLabelText('Email Address') as HTMLInputElement).value).toBe('user@example.com')
   })
 
   it('returns to collect_email with an inline error when sendCode hangs', async () => {
@@ -442,7 +469,7 @@ describe('TelegramLink UI flow', () => {
       sendCodeMock.mockImplementationOnce(() => new Promise(() => {}))
       renderFlow()
 
-      await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+      await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
       vi.useFakeTimers()
       fireEvent.click(screen.getByRole('button', { name: 'Send Code' }))
 
@@ -465,7 +492,7 @@ describe('TelegramLink UI flow', () => {
     loginWithCodeMock.mockRejectedValueOnce(new Error('Incorrect code.'))
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Code' }))
 
     const codeInput = (await screen.findByLabelText('Email Verification Code')) as HTMLInputElement
@@ -484,12 +511,12 @@ describe('TelegramLink UI flow', () => {
     apiFetchMock.mockImplementationOnce(async () => accountsDeferred.promise)
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Code' }))
     await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
     await user.click(screen.getByRole('button', { name: 'Verify Code' }))
 
-    await screen.findByText('Awaiting Account Sync')
+    await screen.findByText('Resolving Account')
     expect(screen.queryByText('Telegram Linked')).toBeNull()
 
     await act(async () => {
@@ -514,6 +541,42 @@ describe('TelegramLink UI flow', () => {
     await screen.findByText('Telegram Linked')
     expect(screen.getByText('0x1234…5678')).toBeTruthy()
     expect(screen.getByText('Canonical CSW')).toBeTruthy()
+    expect(screen.getByText(/Wallet setup pending\./)).toBeTruthy()
+    expect(screen.queryByText('Profile')).toBeNull()
+    expect(screen.queryByText('Link Status')).toBeNull()
+    expectProgressStatus('telegram', 'complete')
+    expectProgressStatus('email', 'complete')
+    expectProgressStatus('code', 'complete')
+    expectProgressStatus('link', 'complete')
+  })
+
+  it('advances the 4-step progress indicator across the flow', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    await screen.findByLabelText('Email Address')
+    expectProgressStatus('telegram', 'complete')
+    expectProgressStatus('email', 'active')
+    expectProgressStatus('code', 'upcoming')
+    expectProgressStatus('link', 'upcoming')
+
+    await user.type(screen.getByLabelText('Email Address'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+
+    await screen.findByLabelText('Email Verification Code')
+    expectProgressStatus('telegram', 'complete')
+    expectProgressStatus('email', 'complete')
+    expectProgressStatus('code', 'active')
+    expectProgressStatus('link', 'upcoming')
+
+    await user.type(screen.getByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByText('Telegram Linked')
+    expectProgressStatus('telegram', 'complete')
+    expectProgressStatus('email', 'complete')
+    expectProgressStatus('code', 'complete')
+    expectProgressStatus('link', 'complete')
   })
 
   it('does not strip query-derived link context before proof capture', async () => {
@@ -540,7 +603,7 @@ describe('TelegramLink UI flow', () => {
       await sessionDeferred.promise
     })
 
-    await screen.findByText('Verify Email')
+    await screen.findByText('Enter Email Address')
     expect(navigateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         pathname: '/telegram/link',
@@ -563,7 +626,7 @@ describe('TelegramLink UI flow', () => {
     }
     const view = render(<Harness tick={0} />)
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Code' }))
     await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
     await user.click(screen.getByRole('button', { name: 'Verify Code' }))
@@ -585,7 +648,7 @@ describe('TelegramLink UI flow', () => {
     telegramWebAppState.hasClose = true
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Code' }))
     await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
     await user.click(screen.getByRole('button', { name: 'Verify Code' }))
@@ -601,7 +664,7 @@ describe('TelegramLink UI flow', () => {
     const user = userEvent.setup()
     renderFlow()
 
-    await user.type(await screen.findByLabelText('Verified Email'), 'user@example.com')
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Code' }))
     await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
     await user.click(screen.getByRole('button', { name: 'Verify Code' }))
