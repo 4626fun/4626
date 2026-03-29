@@ -1362,7 +1362,8 @@ describe('telegram webhook handler', () => {
     expect(String(payload.parse_mode ?? '')).toBe('HTML')
     const body = String(payload.text ?? '')
     expect(body).toContain('Welcome to 4626.fun on Telegram')
-    expect(body).toContain('Start with a verified 4626 account')
+    expect(body).toContain('creator coins, vault activity, and wallet actions on Base into Telegram')
+    expect(body).toContain('Connect once with your verified 4626 account')
     expect(body).not.toContain('/link')
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const buttons = payload.reply_markup.inline_keyboard.flat()
@@ -1408,7 +1409,9 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('Ready for bot actions')
+    expect(String(payload.text ?? '')).toContain('Welcome back to 4626')
+    expect(String(payload.text ?? '')).toContain('smart wallet are connected')
+    expect(String(payload.text ?? '')).toContain('Use the buttons below to open Wallet, Trade, Explore, or Help.')
     const flat = (payload.reply_markup?.inline_keyboard ?? []).flat()
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:wallet')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:trade')).toBe(true)
@@ -1451,7 +1454,7 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('Wallet setup is still pending')
+    expect(String(payload.text ?? '')).toContain('wallet setup is not finished yet')
     const flat = (payload.reply_markup?.inline_keyboard ?? []).flat()
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:connect')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:linked')).toBe(true)
@@ -1477,7 +1480,7 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('Open a private chat with this bot')
+    expect(String(payload.text ?? '')).toContain('Groups are for discovery and live context')
     expect(String(payload.text ?? '')).toContain('/linked')
     const flat = (payload.reply_markup?.inline_keyboard ?? []).flat()
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:linked')).toBe(true)

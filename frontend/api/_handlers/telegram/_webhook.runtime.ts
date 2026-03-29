@@ -1370,7 +1370,9 @@ function buildOnboardingWelcomeText(): string {
   return [
     '<b>Welcome to 4626.fun on Telegram</b>',
     '',
-    'Start with a verified 4626 account, then connect this Telegram account to it.',
+    '4626 brings creator coins, vault activity, and wallet actions on Base into Telegram.',
+    '',
+    'Connect once with your verified 4626 account, then use this bot to check your wallet, trade, and follow what is happening onchain.',
     '',
     'Tap <b>Start</b> to choose your wallet path and open the Mini App.',
   ].join('\n')
@@ -1413,35 +1415,37 @@ function buildUnlinkedGroupStartLandingText(): string {
   return [
     '<b>4626 on Telegram</b>',
     '',
-    '<blockquote>Open a private chat with this bot for setup. Groups stay discovery-first.</blockquote>',
+    '<blockquote>Groups are for discovery and live context. Do setup in a private chat first, then come back here ready to act.</blockquote>',
     '',
     '<u>In your DM with this bot</u>',
     '<code>/start</code> — home (tap <b>Start</b> to begin onboarding)',
     '<code>/link</code> — continue wallet linking after onboarding',
     '<code>/linked</code> — check Telegram link and wallet setup',
     '',
-    'After /linked shows ready, use /buy, /sell, /bid, and /wallet.',
+    'After setup is ready, use /buy, /sell, /bid, and /wallet from Telegram.',
   ].join('\n')
 }
 
 function buildStartLandingText(params: { state: Exclude<TelegramHomeState, 'unlinked'> }): string {
   if (params.state === 'ready') {
     return [
-      '<b>4626 on Telegram</b>',
+      '<b>Welcome back to 4626</b>',
       '',
-      '<blockquote>Ready for bot actions. Open Wallet, Trade, or Explore from here.</blockquote>',
+      '<blockquote>Your 4626 account and smart wallet are connected. You can manage creator coins and vault activity on Base directly from Telegram.</blockquote>',
       '',
-      '<u>Core actions</u>',
-      '<code>/wallet</code> — wallet, positions, and recent actions',
-      '<code>/buy</code> — guided buy flow',
-      '<code>/sell</code> — guided sell flow',
-      '<code>/bid</code> — guided bid flow',
+      '<u>What you can do here</u>',
+      '<code>/wallet</code> — check balances, positions, and recent actions',
+      '<code>/buy</code> — buy a creator coin from chat',
+      '<code>/sell</code> — sell from chat',
+      '<code>/bid</code> — place an auction bid from chat',
+      '',
+      'Use the buttons below to open Wallet, Trade, Explore, or Help.',
     ].join('\n')
   }
   return [
-    '<b>4626 on Telegram</b>',
+    '<b>Welcome back to 4626</b>',
     '',
-    '<blockquote>Telegram is linked. Wallet setup is still pending before trades and wallet actions unlock.</blockquote>',
+    '<blockquote>Your Telegram account is connected, but wallet setup is not finished yet. Finish it once and trading actions will unlock here.</blockquote>',
     '',
     '<u>Next step</u>',
     'Tap <b>Finish Wallet Setup</b> to reopen the connect flow and complete wallet confirmation.',
