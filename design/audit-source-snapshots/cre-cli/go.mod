@@ -93,7 +93,7 @@ require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
 	github.com/buger/goterm v1.0.4 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/bytecodealliance/wasmtime-go/v28 v28.0.0 // indirect
 	github.com/bytedance/sonic v1.12.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.0 // indirect
@@ -272,7 +272,7 @@ require (
 	github.com/petermattis/goid v0.0.0-20240813172612-4fcff4a6cae7 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
-	github.com/pion/logging v0.2.2 // indirect
+	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/stun/v2 v2.0.0 // indirect
 	github.com/pion/transport/v2 v2.2.10 // indirect
 	github.com/pion/transport/v3 v3.0.1 // indirect
@@ -381,9 +381,9 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.36.0 // indirect
 	go.opentelemetry.io/otel/log v0.15.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.39.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.15.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.39.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
