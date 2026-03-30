@@ -2,6 +2,11 @@
  * CreatorGaugeController ABI fragments for CRE payout-integrity workflow.
  *
  * Only includes the read-only functions needed for monitoring.
+ *
+ * Selector stability: `burnShareBps`, `lotteryShareBps`, `creatorShareBps`, and
+ * `protocolShareBps` must match the on-chain public getters (camelCase). The gauge
+ * uses `uint256 public constant` with these names so splits are immutable without
+ * changing function selectors.
  */
 
 export const GaugeControllerABI = [

@@ -141,20 +141,22 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     IVoterRewardsDistributor public voterRewardsDistributor;
 
     // ================================
-    // FEE SPLIT (in basis points)
+    // FEE SPLIT (in basis points) — IMMUTABLE
     // ================================
+    /// @dev Public constant names preserve legacy getter selectors (`burnShareBps()`, etc.) for
+    ///      off-chain monitors (e.g. CRE payout-integrity) and integrators. Do not rename.
 
     /// @notice Percentage to burn (increases PPS for all holders)
-    uint256 public constant BURN_SHARE_BPS = 2139; // 21.39% - ve(3,3) passive value accrual
+    uint256 public constant burnShareBps = 2139; // 21.39% - ve(3,3) passive value accrual
 
     /// @notice Percentage to lottery reserve (jackpot)
-    uint256 public constant LOTTERY_SHARE_BPS = 6900; // 69% - vote-directed probability pool
+    uint256 public constant lotteryShareBps = 6900; // 69% - vote-directed probability pool
 
     /// @notice Percentage to creator treasury
-    uint256 public constant CREATOR_SHARE_BPS = 0; // 0% - creators earn via appreciation + bribes
+    uint256 public constant creatorShareBps = 0; // 0% - creators earn via appreciation + bribes
 
-    /// @notice Percentage to protocol treasury (multisig)
-    uint256 public constant PROTOCOL_SHARE_BPS = 961; // 9.61% - platform operations
+    /// @notice Voter / protocol slice (routed via voterRewardsDistributor or treasury fallbacks)
+    uint256 public constant protocolShareBps = 961; // 9.61%
 
     // ================================
     // ACCUMULATION & DISTRIBUTION
@@ -609,9 +611,9 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         lastDistribution = block.timestamp;
 
         // Calculate splits (in vault shares)
-        uint256 toBurn = (vaultSharesReceived * BURN_SHARE_BPS) / MAX_BPS;
-        uint256 toLottery = (vaultSharesReceived * LOTTERY_SHARE_BPS) / MAX_BPS;
-        uint256 toCreator = (vaultSharesReceived * CREATOR_SHARE_BPS) / MAX_BPS;
+        uint256 toBurn = (vaultSharesReceived * burnShareBps) / MAX_BPS;
+        uint256 toLottery = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;
+        uint256 toCreator = (vaultSharesReceived * creatorShareBps) / MAX_BPS;
         uint256 toProtocol = vaultSharesReceived - toBurn - toLottery - toCreator;
 
         // Burn shares (increases PPS for all holders) - disabled by default
@@ -852,8 +854,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /**
      * @notice Get current fee split configuration
      */
-    function getFeeSplit() external view returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol) {
-        return (BURN_SHARE_BPS, LOTTERY_SHARE_BPS, CREATOR_SHARE_BPS, PROTOCOL_SHARE_BPS);
+    function getFeeSplit() external pure returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol) {
+        return (burnShareBps, lotteryShareBps, creatorShareBps, protocolShareBps);
     }
 
     /**
@@ -867,9 +869,9 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     {
         // Note: In reality, unwrap may have fees, so this is approximate
         uint256 estimatedShares = pendingFees; // 1:1 if no unwrap fee
-        toBurn = (estimatedShares * BURN_SHARE_BPS) / MAX_BPS;
-        toLottery = (estimatedShares * LOTTERY_SHARE_BPS) / MAX_BPS;
-        toCreator = (estimatedShares * CREATOR_SHARE_BPS) / MAX_BPS;
+        toBurn = (estimatedShares * burnShareBps) / MAX_BPS;
+        toLottery = (estimatedShares * lotteryShareBps) / MAX_BPS;
+        toCreator = (estimatedShares * creatorShareBps) / MAX_BPS;
         toProtocol = estimatedShares - toBurn - toLottery - toCreator;
     }
 
