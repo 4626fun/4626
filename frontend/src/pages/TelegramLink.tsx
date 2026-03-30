@@ -1359,7 +1359,7 @@ export function TelegramLink() {
 
       case 'collect_email':
         return (
-          <form className="space-y-3" onSubmit={handleEmailFormSubmit}>
+          <form id="telegram-link-email-form" className="space-y-3" onSubmit={handleEmailFormSubmit}>
             <label htmlFor="telegram-link-email" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-[#666666]">
               Email Address
             </label>
@@ -1385,23 +1385,6 @@ export function TelegramLink() {
             />
             {state.emailError ? <InlineError message={state.emailError} /> : null}
             {emailSubmitHelperText ? <p className="text-[12px] leading-[1.4] text-[#666666]">{emailSubmitHelperText}</p> : null}
-            {!hasTelegramMainButton ? (
-              <button
-                type="submit"
-                onPointerDown={handleEmailSubmitActivation('pointerdown')}
-                onTouchStart={handleEmailSubmitActivation('touchstart')}
-                onMouseDown={handleEmailSubmitActivation('mousedown')}
-                data-testid="telegram-link-submit"
-                data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
-                data-email-normalized={normalizedCollectEmail}
-                data-email-valid={emailIsValid ? 'true' : 'false'}
-                data-flow-tag={state.tag}
-                className={PRIMARY_ACTION_BUTTON_CLASS}
-                disabled={emailSubmitDisabled}
-              >
-                Send Code
-              </button>
-            ) : null}
           </form>
         )
 
@@ -1410,7 +1393,7 @@ export function TelegramLink() {
 
       case 'enter_email_code':
         return (
-          <form className="space-y-3" onSubmit={handleCodeSubmit}>
+          <form id="telegram-link-code-form" className="space-y-3" onSubmit={handleCodeSubmit}>
             <div className="text-[13px] text-[#EDEDED]">
               Code sent to <span className="font-mono text-[13px]">{state.email}</span>
             </div>
@@ -1429,23 +1412,6 @@ export function TelegramLink() {
                 className="h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-4 text-center font-mono text-[18px] tracking-[0.34em] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/75 focus:bg-white/[0.04] focus:ring-0"
               />
               {state.codeError ? <InlineError message={state.codeError} /> : null}
-            </div>
-            <div className="space-y-2.5">
-              <button
-                type="submit"
-                className={PRIMARY_ACTION_BUTTON_CLASS}
-                disabled={state.code.trim().length < 6}
-              >
-                Verify Code
-              </button>
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'RESEND_CODE' })}
-                className={SECONDARY_ACTION_BUTTON_CLASS}
-                disabled={!canResend}
-              >
-                {canResend ? 'Resend' : `${resendSeconds}s`}
-              </button>
             </div>
           </form>
         )
@@ -1487,16 +1453,6 @@ export function TelegramLink() {
               tone="success"
               body={`Connected to ${state.account.email}. Your Telegram account is verified and attached to your 4626 account.`}
             />
-            {canCloseTelegramMiniApp ? (
-              <button
-                type="button"
-                onClick={handleCloseTelegramMiniApp}
-                className={PRIMARY_ACTION_BUTTON_CLASS}
-              >
-                <X className="h-4 w-4" />
-                Close
-              </button>
-            ) : null}
             {walletSetupPending ? (
               <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED]">
                 Wallet setup pending. Telegram is connected, but wallet and trading actions unlock after your Coinbase Smart Wallet is confirmed.
@@ -1534,30 +1490,99 @@ export function TelegramLink() {
                   : 'This flow must be re-opened from Telegram to obtain a fresh session proof.'}
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              {state.retryTarget ? (
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'RETRY' })}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[18px] bg-[#0052FF] px-5 text-sm font-semibold text-white transition hover:bg-[#004AD9]"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Retry
-                </button>
-              ) : null}
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'RESET' })}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[18px] border border-white/[0.08] bg-transparent px-5 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04]"
-                >
-                  <Unplug className="h-4 w-4" />
-                  Reset Flow
-              </button>
-            </div>
           </div>
         )
     }
   }
+
+  const renderFooterActions = () => {
+    switch (state.tag) {
+      case 'collect_email':
+        if (hasTelegramMainButton) return null
+        return (
+          <button
+            type="submit"
+            form="telegram-link-email-form"
+            onPointerDown={handleEmailSubmitActivation('pointerdown')}
+            onTouchStart={handleEmailSubmitActivation('touchstart')}
+            onMouseDown={handleEmailSubmitActivation('mousedown')}
+            data-testid="telegram-link-submit"
+            data-disabled-reason={emailSubmitDisabledReason ?? 'ready'}
+            data-email-normalized={normalizedCollectEmail}
+            data-email-valid={emailIsValid ? 'true' : 'false'}
+            data-flow-tag={state.tag}
+            className={PRIMARY_ACTION_BUTTON_CLASS}
+            disabled={emailSubmitDisabled}
+          >
+            Send Code
+          </button>
+        )
+
+      case 'enter_email_code':
+        return (
+          <div className="space-y-2.5">
+            <button
+              type="submit"
+              form="telegram-link-code-form"
+              className={PRIMARY_ACTION_BUTTON_CLASS}
+              disabled={state.code.trim().length < 6}
+            >
+              Verify Code
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'RESEND_CODE' })}
+              className={SECONDARY_ACTION_BUTTON_CLASS}
+              disabled={!canResend}
+            >
+              {canResend ? 'Resend' : `${resendSeconds}s`}
+            </button>
+          </div>
+        )
+
+      case 'success':
+        if (!canCloseTelegramMiniApp) return null
+        return (
+          <button
+            type="button"
+            onClick={handleCloseTelegramMiniApp}
+            className={PRIMARY_ACTION_BUTTON_CLASS}
+          >
+            <X className="h-4 w-4" />
+            Close
+          </button>
+        )
+
+      case 'expired_or_error':
+        return (
+          <div className="space-y-2.5">
+            {state.retryTarget ? (
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'RETRY' })}
+                className={PRIMARY_ACTION_BUTTON_CLASS}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Retry
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'RESET' })}
+              className={SECONDARY_ACTION_BUTTON_CLASS}
+            >
+              <Unplug className="h-4 w-4" />
+              Reset Flow
+            </button>
+          </div>
+        )
+
+      default:
+        return null
+    }
+  }
+
+  const footerActions = renderFooterActions()
 
   return (
     <div
@@ -1572,11 +1597,11 @@ export function TelegramLink() {
         <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
       </div>
 
-      <div className="relative z-10 mx-auto flex h-full w-full max-w-[27rem] items-start">
+      <div className="relative z-10 mx-auto flex h-full w-full max-w-[27rem] flex-col">
         <div
           data-flow-state={state.tag}
           data-testid="telegram-link-panel"
-          className="flex w-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          className="flex w-full flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-1">
@@ -1598,8 +1623,14 @@ export function TelegramLink() {
             </div>
           ) : null}
 
-          <div className="mt-3 min-h-0 overflow-y-auto pr-0.5 scrollbar-hide">{renderContent()}</div>
+          <div className="mt-3">{renderContent()}</div>
         </div>
+
+        {footerActions ? (
+          <div data-testid="telegram-link-footer-actions" className="mt-auto pt-4">
+            {footerActions}
+          </div>
+        ) : null}
       </div>
     </div>
   )

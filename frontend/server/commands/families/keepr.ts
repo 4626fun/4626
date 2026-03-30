@@ -34,75 +34,69 @@ function formatTelegramQuote(content: string, options?: { expandable?: boolean }
   return `<blockquote${options?.expandable ? ' expandable' : ''}>${content}</blockquote>`
 }
 
-function formatHelpSection(title: string, rows: string[]): string[] {
+function formatHelpTreeSection(title: string, rows: string[]): string {
   return [
-    `<u>${escapeTelegramHtml(title)}</u>`,
-    formatTelegramQuote(rows.join('\n'), { expandable: rows.length >= 4 }),
-    '',
-  ]
+    title,
+    ...rows.map((row, index) => `${index === rows.length - 1 ? '└' : '├'} ${row}`),
+  ].join('\n')
 }
 
 function formatKeeprHelpFull(): string {
-  return [
-    '<b>Keepr — Help</b>',
-    '',
-    '<blockquote>Use <code>/help</code> for quick mode, or <code>/help &lt;topic&gt;</code> for sections.</blockquote>',
-    '',
-    ...formatHelpSection('start', [
-      formatHelpCommandRow('/start', 'menu'),
-      formatHelpCommandRow('/id', 'pick a user, group, or channel ID'),
-      formatHelpCommandRow('/help', 'command guide'),
+  const commandTree = [
+    formatHelpTreeSection('🎮 Core Commands', [
+      formatHelpCommandRow('/start', 'home and menu'),
       formatHelpCommandRow('/link', 'connect Telegram + Zora CSW'),
-      formatHelpCommandRow('/linked', 'link status'),
-      formatHelpCommandRow('/wallet', 'wallet + positions'),
+      formatHelpCommandRow('/linked', 'check link and wallet status'),
+      formatHelpCommandRow('/wallet', 'wallet and positions'),
       formatHelpCommandRow('/buy | /sell | /bid', 'guided trade flow'),
-      formatHelpCommandRow('/vaults | /auctions', 'discovery + monitoring'),
+      formatHelpCommandRow('/vaults | /auctions', 'discovery and monitoring'),
+      formatHelpCommandRow('/help core|coin|social|ops|wallet', 'focused guides'),
+      formatHelpCommandRow('/id', 'pick a user, group, or channel ID'),
     ]),
-    ...formatHelpSection('manage', [
+    formatHelpTreeSection('🧠 Analysis', [
+      formatHelpCommandRow('/ai <question>', 'ask Keepr'),
+      formatHelpCommandRow('/coin trend check <ticker>', 'trend preflight'),
+      formatHelpCommandRow('/whois | /intel | /reputation | /feedback', 'identity and intel'),
+    ]),
+    formatHelpTreeSection('🛠 Operator / Admin', [
       formatHelpCommandRow('/keepr status', 'vault status'),
       formatHelpCommandRow('/keepr rules', 'active rules'),
       formatHelpCommandRow('/keepr check', 'health check'),
       formatHelpCommandRow('/keepr check 0x...', 'inspect specific address', 'ADMIN/OWNER'),
       formatHelpCommandRow('/keepr lock | /keepr unlock', 'toggle vault actions', 'OWNER'),
       formatHelpCommandRow('/keepr sync', 'resync vault config', 'ADMIN/OWNER'),
-      formatHelpCommandRow('/coin help | /cre status | /cre health', 'coin + keeper health'),
-    ]),
-    ...formatHelpSection('analyze', [
-      formatHelpCommandRow('/ai <question>', 'ask Keepr'),
-      formatHelpCommandRow('/coin trend check <ticker>', 'trend preflight'),
-      formatHelpCommandRow('/whois | /intel | /reputation | /feedback', 'identity + intel'),
-    ]),
-    ...formatHelpSection('publish', [
+      formatHelpCommandRow('/cre status | /cre health | /cre auction | /cre solana', 'keeper and bridge status'),
+      formatHelpCommandRow('/cre tend | /cre report | /cre settle-fees | /cre relay-entries', 'keeper execution', 'ADMIN/OWNER'),
       formatHelpCommandRow('/x status', 'X integration'),
       formatHelpCommandRow('/x post <message> --confirm', 'publish a post', 'ADMIN/OWNER'),
       formatHelpCommandRow('/tweet <message> --confirm', 'alias for posting', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/coin create <name> <symbol> <uri>', 'create content coin', 'ADMIN/OWNER'),
+      formatHelpCommandRow('/coin buy | /coin sell | /coin balance | /coin info', 'coin ops'),
       formatHelpCommandRow('/coin trend reserve <ticker>', 'deploy trend coin', 'ADMIN/OWNER'),
       formatHelpCommandRow('/coin trend status <ticker>', 'trend status'),
       formatHelpCommandRow('/coin trend funnel <ticker> <eth-amount>', 'guarded flywheel', 'ADMIN/OWNER'),
-    ]),
-    ...formatHelpSection('transfer', [
       formatHelpCommandRow('/send <amount> USDC to <address>', 'send USDC', 'ADMIN/OWNER'),
       formatHelpCommandRow('/send <amount> ETH to <address>', 'send ETH', 'ADMIN/OWNER'),
-      'Example: <code>/send 25 USDC to 0xabc...123</code>',
     ]),
-    ...formatHelpSection('advanced', [
-      formatHelpCommandRow('/coin create <name> <symbol> <uri>', 'create content coin', 'ADMIN/OWNER'),
-      formatHelpCommandRow('/coin buy | /coin sell | /coin balance | /coin info', 'coin ops'),
-      formatHelpCommandRow('/cre auction | /cre solana | /cre tend | /cre report | /cre settle-fees | /cre relay-entries', 'keeper ops'),
-      'Telegram ops: tap <b>CRE Ops</b> or <b>Solana</b> in the bot menu for one-tap operator actions.',
-    ]),
-    ...formatHelpSection('permissions', [
+    formatHelpTreeSection('🔐 Permissions', [
       '<b>OWNER</b> — highest privilege',
       '<b>ADMIN</b> — management actions',
-      'Restricted commands fail without required role',
+      'Restricted commands fail without the required role',
     ]),
-    ...formatHelpSection('help by topic', [
+    formatHelpTreeSection('📚 Topic Guides', [
       '<code>/help coin</code> — Zora Coin commands',
       '<code>/help x</code> — X / Twitter commands',
       '<code>/help cre</code> — CRE Keeper commands',
       '<code>/help wallet</code> — wallet and identity commands',
     ]),
-    '<blockquote>Tip: keep short help in groups, and use full help in DMs/admin flows.</blockquote>',
+  ].join('\n\n')
+
+  return [
+    '<b>Keepr — Help</b>',
+    '',
+    '<blockquote>Use <code>/help</code> for quick start, or <code>/help &lt;topic&gt;</code> for a focused guide.</blockquote>',
+    '',
+    formatTelegramQuote(commandTree, { expandable: true }),
   ].join('\n')
 }
 

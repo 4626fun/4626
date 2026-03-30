@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -661,6 +661,27 @@ describe('TelegramLink UI flow', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }))
 
     expect(telegramCloseMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps fallback and success actions in the bottom footer', async () => {
+    const user = userEvent.setup()
+    telegramWebAppState.hasClose = true
+    renderFlow()
+
+    await screen.findByLabelText('Email Address')
+    expect(within(screen.getByTestId('telegram-link-footer-actions')).getByRole('button', { name: 'Send Code' })).toBeTruthy()
+
+    await user.type(screen.getByLabelText('Email Address'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+
+    await screen.findByLabelText('Email Verification Code')
+    expect(within(screen.getByTestId('telegram-link-footer-actions')).getByRole('button', { name: 'Verify Code' })).toBeTruthy()
+
+    await user.type(screen.getByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByText('Telegram Linked')
+    expect(within(screen.getByTestId('telegram-link-footer-actions')).getByRole('button', { name: 'Close' })).toBeTruthy()
   })
 
   it('emits transition and completion telemetry for the happy path', async () => {
