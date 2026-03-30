@@ -76,8 +76,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     uint256 public constant MAX_BPS = 10000;
-    uint256 public constant MAX_CREATOR_SHARE = 5000; // Max 50% to creator
-    uint256 public constant MAX_PROTOCOL_SHARE = 1000; // Max 10% to protocol
 
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
@@ -143,20 +141,22 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     IVoterRewardsDistributor public voterRewardsDistributor;
 
     // ================================
-    // FEE SPLIT (in basis points)
+    // FEE SPLIT (in basis points) — IMMUTABLE
     // ================================
+    /// @dev Public constant names preserve legacy getter selectors (`burnShareBps()`, etc.) for
+    ///      off-chain monitors (e.g. CRE payout-integrity) and integrators. Do not rename.
 
     /// @notice Percentage to burn (increases PPS for all holders)
-    uint256 public burnShareBps = 2139; // 21.39% - ve(3,3) passive value accrual
+    uint256 public constant burnShareBps = 2139; // 21.39% - ve(3,3) passive value accrual
 
     /// @notice Percentage to lottery reserve (jackpot)
-    uint256 public lotteryShareBps = 6900; // 69% - vote-directed probability pool
+    uint256 public constant lotteryShareBps = 6900; // 69% - vote-directed probability pool
 
     /// @notice Percentage to creator treasury
-    uint256 public creatorShareBps = 0; // 0% - creators earn via appreciation + bribes
+    uint256 public constant creatorShareBps = 0; // 0% - creators earn via appreciation + bribes
 
-    /// @notice Percentage to protocol treasury (multisig)
-    uint256 public protocolShareBps = 961; // 9.61% - platform operations
+    /// @notice Voter / protocol slice (routed via voterRewardsDistributor or treasury fallbacks)
+    uint256 public constant protocolShareBps = 961; // 9.61%
 
     // ================================
     // ACCUMULATION & DISTRIBUTION
@@ -241,7 +241,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     event CreatorTreasurySet(address indexed treasury);
     event ProtocolTreasurySet(address indexed treasury);
     event CreatorCoinSet(address indexed coin);
-    event FeeSplitUpdated(uint256 burnBps, uint256 lotteryBps, uint256 creatorBps, uint256 protocolBps);
     event ThresholdUpdated(uint256 newThreshold);
     event SwapConfigUpdated(uint24 feeTier, uint256 slippageBps);
     event OracleSet(address indexed oracle);
@@ -257,7 +256,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     error ZeroAddress();
-    error InvalidSplit();
     error NothingToDistribute();
     error TooSoon();
     error VaultNotSet();
@@ -833,33 +831,6 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Update fee split
-     * @param _burnBps Percentage to burn (increases PPS)
-     * @param _lotteryBps Percentage to lottery (jackpot)
-     * @param _creatorBps Percentage to creator
-     * @param _protocolBps Percentage to protocol (multisig)
-     */
-    function setFeeSplit(uint256 _burnBps, uint256 _lotteryBps, uint256 _creatorBps, uint256 _protocolBps)
-        external
-        onlyOwner
-    {
-        // Validate totals to 100%
-        if (_burnBps + _lotteryBps + _creatorBps + _protocolBps != MAX_BPS) revert InvalidSplit();
-        if (_creatorBps > 0 && creatorTreasury == address(0)) revert CreatorTreasuryRequired();
-
-        // Enforce maximums for user protection
-        if (_creatorBps > MAX_CREATOR_SHARE) revert InvalidSplit();
-        if (_protocolBps > MAX_PROTOCOL_SHARE) revert InvalidSplit();
-
-        burnShareBps = _burnBps;
-        lotteryShareBps = _lotteryBps;
-        creatorShareBps = _creatorBps;
-        protocolShareBps = _protocolBps;
-
-        emit FeeSplitUpdated(_burnBps, _lotteryBps, _creatorBps, _protocolBps);
-    }
-
-    /**
      * @notice Set distribution threshold
      * @param _threshold Minimum OFT tokens before auto-distribution
      */
@@ -883,7 +854,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /**
      * @notice Get current fee split configuration
      */
-    function getFeeSplit() external view returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol) {
+    function getFeeSplit() external pure returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol) {
         return (burnShareBps, lotteryShareBps, creatorShareBps, protocolShareBps);
     }
 
