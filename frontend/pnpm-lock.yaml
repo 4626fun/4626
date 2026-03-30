@@ -17,7 +17,7 @@ overrides:
   markdown-it: 14.1.1
   minimatch: 10.2.3
   node-fetch: 2.7.0
-  path-to-regexp: '>=8.0.0'
+  path-to-regexp: 8.4.0
   qs: 6.14.2
   socket.io-parser: 4.2.6
   tar: 7.5.11
@@ -4673,8 +4673,8 @@ packages:
   path-to-regexp@6.3.0:
     resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
 
-  path-to-regexp@8.3.0:
-    resolution: {integrity: sha512-7jdwVIRtsP8MYpdXSwOS0YdD0Du+qOoF/AEPIt88PcCFrZCzx41oxku1jD88hZBwbNUIEfpqvuhjFaMAqMTWnA==}
+  path-to-regexp@8.4.0:
+    resolution: {integrity: sha512-PuseHIvAnz3bjrM2rGJtSgo1zjgxapTLZ7x2pjhzWwlp4SJQgK3f3iZIQwkpEnBaKz6seKBADpM4B4ySkuYypg==}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -9424,7 +9424,7 @@ snapshots:
       etag: 1.8.1
       mime-types: 2.1.35
       node-fetch: 2.7.0(encoding@0.1.13)
-      path-to-regexp: 8.3.0
+      path-to-regexp: 8.4.0
       path-to-regexp-updated: path-to-regexp@6.3.0
       ts-morph: 12.0.0
       ts-node: 10.9.1(@types/node@20.11.0)(typescript@4.9.5)
@@ -12883,7 +12883,7 @@ snapshots:
 
   path-to-regexp@6.3.0: {}
 
-  path-to-regexp@8.3.0: {}
+  path-to-regexp@8.4.0: {}
 
   pathe@2.0.3: {}
 
