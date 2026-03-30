@@ -9,6 +9,7 @@ import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/
 import { fetchZoraExplore } from '@/lib/zora/client'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
+import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_24H',
@@ -153,6 +154,7 @@ export function ExploreContent() {
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}
             currentSort={currentSort}
+            volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
           />
         </motion.div>
 

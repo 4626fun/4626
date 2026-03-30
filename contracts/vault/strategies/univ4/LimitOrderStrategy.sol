@@ -725,8 +725,9 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
             // Buy order filled if price dropped below it
             return currentTick < order.tickLower;
         } else {
-            // Sell order filled if price rose above it
-            return currentTick > order.tickUpper;
+            // Sell order filled if price reached or rose above upper boundary.
+            // V4 liquidity range semantics are right-exclusive: [tickLower, tickUpper).
+            return currentTick >= order.tickUpper;
         }
     }
 

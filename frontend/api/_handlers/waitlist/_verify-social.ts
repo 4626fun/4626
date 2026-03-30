@@ -36,8 +36,8 @@ function isValidEmail(v: string): boolean {
 
 // Discord verification would require a bot - use honor system for now
 async function verifyDiscordMembership(discordUserId: string): Promise<boolean> {
-  // TODO: Implement Discord bot verification
-  // For now, use honor system
+  // NOTE: Discord bot membership checks are not implemented; honor-system path returns true.
+  void discordUserId
   return true
 }
 

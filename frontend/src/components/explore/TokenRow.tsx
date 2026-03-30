@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
+import { getZoraExploreVolumeColumnRaw, getZoraExploreVolumeForFees } from '@/lib/zora/exploreVolume'
 import { usePublicClient } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { getAddress, isAddress, type Address } from 'viem'
@@ -198,9 +199,9 @@ export function TokenRow({
   onToggleFees,
 }: TokenRowProps) {
   const publicClient = usePublicClient({ chainId: base.id })
-  // Use timeframe for future API support
-  const volume = timeframe === '1d' ? coin.volume24h : coin.volume24h // TODO: support other timeframes
-  
+  const volumeDisplay = getZoraExploreVolumeColumnRaw(coin, timeframe)
+  const volumeForFees = getZoraExploreVolumeForFees(coin)
+
   const avatarUrl = coin.mediaContent?.previewImage?.small || coin.creatorProfile?.avatar?.previewImage?.small
   const name = coin.name || coin.symbol || 'Unknown'
   const symbol = coin.symbol || ''
@@ -239,13 +240,13 @@ export function TokenRow({
       ? '1% fee (V4 - after June 2025)'
       : '3% fee (Legacy - before June 2025)'
 
-  const totalFees = formatFeeAmount(volume, feeRates.total, 1)
+  const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
   const feeBreakdown = [
-    `Creator ${formatFeeAmount(volume, feeRates.total, feeRates.creator)}`,
-    `Platform ${formatFeeAmount(volume, feeRates.total, feeRates.platform)}`,
-    `LP Lock ${feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}`,
-    `Zora ${formatFeeAmount(volume, feeRates.total, feeRates.protocol)}`,
-    `Doppler ${feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}`,
+    `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
+    `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,
+    `LP Lock ${feeRates.lpRewards > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.lpRewards) : '-'}`,
+    `Zora ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.protocol)}`,
+    `Doppler ${feeRates.doppler > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.doppler) : '-'}`,
   ].join(' • ')
 
   const columns = getExploreColumns({ variant: 'creators', timeframe, collapseIdentity })
@@ -374,7 +375,7 @@ export function TokenRow({
         </span>
 
         {/* Volume */}
-        <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volume)}</span>
+        <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volumeDisplay)}</span>
 
         {/* Fee % */}
         <div className="px-3 py-2 text-center">
@@ -424,26 +425,26 @@ export function TokenRow({
               <div className="grid gap-2">
                 <div>
                   <span className="text-zinc-500">Creator</span>{' '}
-                  <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.creator)}</span>
+                  <span className="text-zinc-200">{formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}</span>
                 </div>
                 <div>
                   <span className="text-zinc-500">Platform</span>{' '}
-                  <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.platform)}</span>
+                  <span className="text-zinc-200">{formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}</span>
                 </div>
                 <div>
                   <span className="text-zinc-500">LP Lock</span>{' '}
                   <span className="text-zinc-200">
-                    {feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}
+                    {feeRates.lpRewards > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.lpRewards) : '-'}
                   </span>
                 </div>
                 <div>
                   <span className="text-zinc-500">Zora</span>{' '}
-                  <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.protocol)}</span>
+                  <span className="text-zinc-200">{formatFeeAmount(volumeForFees, feeRates.total, feeRates.protocol)}</span>
                 </div>
                 <div>
                   <span className="text-zinc-500">Doppler</span>{' '}
                   <span className="text-zinc-200">
-                    {feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}
+                    {feeRates.doppler > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.doppler) : '-'}
                   </span>
                 </div>
               </div>

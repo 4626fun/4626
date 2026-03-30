@@ -43,14 +43,16 @@ export const EXPLORE_TABLE_GROUPS = [
 ] as const satisfies ReadonlyArray<ExploreTableGroup>
 
 function getVolumeLabel(timeframe: string): string {
-  const labels: Record<string, string> = {
-    '1h': 'Vol 1H',
-    '1d': 'Vol 24H',
-    '1w': 'Vol 7D',
-    '1m': 'Vol 30D',
-    '1y': 'Vol 1Y',
+  switch (timeframe) {
+    case '1d':
+      return 'Vol 24H'
+    case '1y':
+      return 'All-time vol'
+    case '1w':
+      return 'Vol (24h)'
+    default:
+      return 'Vol 24H'
   }
-  return labels[timeframe] || 'Vol 24H'
 }
 
 export function getExploreColumns(opts: { variant: ExploreTableVariant; timeframe?: string; collapseIdentity?: boolean }): ExploreTableColumn[] {

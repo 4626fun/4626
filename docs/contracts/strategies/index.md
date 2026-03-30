@@ -26,3 +26,12 @@ interface ICreatorStrategy {
     function report() external returns (uint256 gain, uint256 loss);
 }
 ```
+
+## Uniswap V4 Tick Boundary Rule (Limit Orders)
+
+For single-range limit orders, treat the active range as right-exclusive: `[tickLower, tickUpper)`.
+
+- Buy-side crossing: fill when `currentTick < tickLower` (strictly below lower bound).
+- Sell-side crossing: fill when `currentTick >= tickUpper` (upper bound inclusive for crossing detection).
+
+This avoids premature/late fill transitions at tick boundaries and should remain consistent with `LimitOrderStrategy` rebalance logic.

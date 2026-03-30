@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "check:no-todo-markers": "bash scripts/check-no-todo-markers.sh",
     "security:local": "bash scripts/security-audit-local.sh",
     "docs:refresh": "node apps/docs-site/scripts/docs-refresh.mjs",
     "docs:check": "node apps/docs-site/scripts/docs-refresh.mjs --check",

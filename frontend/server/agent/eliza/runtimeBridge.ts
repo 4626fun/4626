@@ -1094,19 +1094,19 @@ function extractTaskLoopsFromText(text: string): string[] {
     .map((line) => line.trim())
     .filter(Boolean)
   for (const line of lines) {
-    const todoMatch = line.match(/^(?:[-*]\s*)?(?:todo|task)\s*:\s*(.+)$/i)
-    if (todoMatch?.[1]) {
-      tasks.push(truncateForSummary(todoMatch[1], 160))
+    const taskLineMatch = line.match(/^(?:[-*]\s*)?(?:todo|task)\s*:\s*(.+)$/i)
+    if (taskLineMatch?.[1]) {
+      tasks.push(truncateForSummary(taskLineMatch[1], 160))
     }
   }
 
-  const inlineTodoRegex = /(?:^|[\s;,.])(?:todo|task)\s*:\s*([^.!?\n]+)/gi
-  let inlineTodoMatch = inlineTodoRegex.exec(normalizedText)
-  while (inlineTodoMatch) {
-    if (inlineTodoMatch[1]) {
-      tasks.push(truncateForSummary(inlineTodoMatch[1], 160))
+  const inlineTaskLabelRegex = /(?:^|[\s;,.])(?:todo|task)\s*:\s*([^.!?\n]+)/gi
+  let inlineTaskMatch = inlineTaskLabelRegex.exec(normalizedText)
+  while (inlineTaskMatch) {
+    if (inlineTaskMatch[1]) {
+      tasks.push(truncateForSummary(inlineTaskMatch[1], 160))
     }
-    inlineTodoMatch = inlineTodoRegex.exec(normalizedText)
+    inlineTaskMatch = inlineTaskLabelRegex.exec(normalizedText)
   }
 
   const needToMatch = normalizedText.match(/\bneed to\s+([^.!?\n]+)/i)

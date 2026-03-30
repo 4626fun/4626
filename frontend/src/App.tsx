@@ -148,6 +148,11 @@ const FaqHowItWorks = lazy(async () => {
   return { default: m.FaqHowItWorks }
 })
 
+const DistributeCcaLaunch = lazy(async () => {
+  const m = await import('./pages/DistributeCcaLaunch')
+  return { default: m.DistributeCcaLaunch }
+})
+
 const Status = lazy(async () => {
   const m = await import('./pages/Status')
   return { default: m.Status }
@@ -349,6 +354,14 @@ function App() {
             element={
               <MarketingOnlyRoute>
                 <FaqHowItWorks />
+              </MarketingOnlyRoute>
+            }
+          />
+          <Route
+            path="/distribute/cca-launch"
+            element={
+              <MarketingOnlyRoute>
+                <DistributeCcaLaunch />
               </MarketingOnlyRoute>
             }
           />

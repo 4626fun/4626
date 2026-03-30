@@ -8,6 +8,11 @@ import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
+import {
+  getZoraExploreVolumeColumnRaw,
+  getZoraExploreVolumeHeaderLabel,
+  getZoraExploreVolumeNote,
+} from '@/lib/zora/exploreVolume'
 
 function formatAddress(address: string | undefined): string {
   if (!address) return '-'
@@ -80,14 +85,14 @@ function timeFilterWindowMs(filter: string): number | null {
   }
 }
 
-function ActivityRow({ coin }: { coin: ZoraCoin }) {
+function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string }) {
   const change = formatChange(coin.marketCapDelta24h)
   const isBuy = change.positive // Use price change as proxy for buy/sell indication
   
   const avatarUrl = coin.mediaContent?.previewImage?.small || coin.creatorProfile?.avatar?.previewImage?.small
   const symbol = coin.symbol || '???'
   const name = coin.name || 'Unknown'
-  const volume = formatVolume(coin.volume24h)
+  const volume = formatVolume(getZoraExploreVolumeColumnRaw(coin, timeframe))
   const time = formatTimeAgo(activityDateString(coin))
   const address = coin.address || ''
   const creatorAddress = coin.creatorAddress
@@ -155,12 +160,13 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
   )
 }
 
-function ActivityTableHeader() {
+function ActivityTableHeader({ timeframe }: { timeframe: string }) {
+  const volLabel = getZoraExploreVolumeHeaderLabel(timeframe)
   return (
     <div className="hidden sm:grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-white/8 bg-vault-card/50">
       <span>Type</span>
       <span>Token</span>
-      <span className="text-center">Volume (24h)</span>
+      <span className="text-center">{volLabel}</span>
       <span className="text-center">Time ↓</span>
       <span>Creator</span>
       <span></span>
@@ -323,6 +329,7 @@ export function ExploreTransactions() {
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}
             currentSort={currentSort}
+            volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
           />
         </motion.div>
 
@@ -335,7 +342,7 @@ export function ExploreTransactions() {
         >
           {/* Sticky header */}
           <div className="hidden sm:block sticky top-24 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
-            <ActivityTableHeader />
+            <ActivityTableHeader timeframe={currentTimeFilter} />
           </div>
 
           {/* Table Body */}
@@ -362,7 +369,7 @@ export function ExploreTransactions() {
             ) : (
               // Activity rows
               filteredActivity.map((coin, index) => (
-                <ActivityRow key={`${coin.address}-${index}`} coin={coin} />
+                <ActivityRow key={`${coin.address}-${index}`} coin={coin} timeframe={currentTimeFilter} />
               ))
             )}
 

@@ -12,6 +12,7 @@ import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoin
 import { apiFetch } from '@/lib/apiBase'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
+import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
@@ -690,6 +691,7 @@ export function ExploreCreators() {
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}
             currentSort={currentSort}
+            volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
           />
         </motion.div>
 

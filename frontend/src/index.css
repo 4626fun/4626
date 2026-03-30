@@ -153,7 +153,11 @@
   }
 
   .vault-shell {
-    @apply relative isolate overflow-x-hidden;
+    @apply relative isolate;
+    /* overflow-x: clip prevents horizontal overflow without creating a scroll
+       container (unlike overflow-x: hidden which forces overflow-y: auto and
+       breaks position:sticky and scroll-tracking inside the shell). */
+    overflow-x: clip;
   }
 
   .bv-panel {

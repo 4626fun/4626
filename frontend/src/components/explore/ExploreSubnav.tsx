@@ -14,13 +14,12 @@ const TABS: Tab[] = [
   { label: 'Transactions', to: '/explore/transactions' },
 ]
 
-// Base timeframes - availability depends on data source
+// Zora explore volume is 24h or all-time (`totalVolume`); 1W is labeled honestly in copy when selected.
+// Pill availability: 1D always; others when Uniswap historical service is configured (see useUniswapServiceStatus).
 const TIME_FILTERS = [
-  { label: '1H', value: '1h' },
   { label: '1D', value: '1d' },
   { label: '1W', value: '1w' },
-  { label: '1M', value: '1m' },
-  { label: '1Y', value: '1y' },
+  { label: 'All-time', value: '1y' },
 ] as const
 
 const SORT_OPTIONS = [
@@ -42,6 +41,7 @@ export function ExploreSubnav({
   onSortChange,
   currentTimeFilter = '1d',
   currentSort = 'volume',
+  volumeColumnNote = null,
 }: {
   searchPlaceholder?: string
   onSearch?: (query: string) => void
@@ -49,6 +49,8 @@ export function ExploreSubnav({
   onSortChange?: (sort: string) => void
   currentTimeFilter?: string
   currentSort?: string
+  /** Explains how Zora explore volume relates to the selected time pill (API has no 1H–1M windows; 1Y uses all-time). */
+  volumeColumnNote?: string | null
 }) {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -114,31 +116,36 @@ export function ExploreSubnav({
             />
           </div>
 
-          {/* Time filter pills */}
-          <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
-            {TIME_FILTERS.map((filter) => {
-              const active = currentTimeFilter === filter.value
-              const isAvailable = filter.value === '1d' || uniswapAvailable
-              const disabled = !isAvailable
-              return (
-                <button
-                  key={filter.value}
-                  type="button"
-                  onClick={() => !disabled && handleTimeFilterClick(filter.value)}
-                  disabled={disabled}
-                  title={disabled ? 'Requires THEGRAPH_API_KEY - Uniswap V4 historical data' : `View ${filter.label} data`}
-                  className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-full border text-[10px] sm:text-[11px] font-medium leading-none transition-all duration-200 ${
-                    active
-                      ? 'border-blue-300/35 bg-blue-500/20 text-blue-100 shadow-[0_8px_20px_-14px_rgba(59,130,246,0.9)]'
-                      : disabled
-                        ? 'border-transparent text-zinc-600 cursor-not-allowed'
-                        : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              )
-            })}
+          <div className="flex flex-col items-start gap-1.5">
+            {/* Time filter pills */}
+            <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
+              {TIME_FILTERS.map((filter) => {
+                const active = currentTimeFilter === filter.value
+                const isAvailable = filter.value === '1d' || uniswapAvailable
+                const disabled = !isAvailable
+                return (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => !disabled && handleTimeFilterClick(filter.value)}
+                    disabled={disabled}
+                    title={disabled ? 'Requires THEGRAPH_API_KEY - Uniswap V4 historical data' : `View ${filter.label} data`}
+                    className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-full border text-[10px] sm:text-[11px] font-medium leading-none transition-all duration-200 ${
+                      active
+                        ? 'border-blue-300/35 bg-blue-500/20 text-blue-100 shadow-[0_8px_20px_-14px_rgba(59,130,246,0.9)]'
+                        : disabled
+                          ? 'border-transparent text-zinc-600 cursor-not-allowed'
+                          : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                )
+              })}
+            </div>
+            {volumeColumnNote ? (
+              <p className="text-[11px] text-zinc-500 max-w-md leading-snug">{volumeColumnNote}</p>
+            ) : null}
           </div>
         </div>
       </div>

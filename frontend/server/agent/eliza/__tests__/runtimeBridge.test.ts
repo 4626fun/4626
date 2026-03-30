@@ -402,7 +402,7 @@ describe('runtime bridge', () => {
           rows: [
             {
               role: 'user',
-              content: 'My wallet is 0x1111111111111111111111111111111111111111. I prefer concise answers. TODO: verify metrics rollout.',
+              content: 'My wallet is 0x1111111111111111111111111111111111111111. I prefer concise answers. Task: verify metrics rollout.',
             },
           ],
         }
@@ -422,7 +422,7 @@ describe('runtime bridge', () => {
       conversationId: 'conv-facts',
       conversationType: 'dm',
       senderAddress: '0x1111111111111111111111111111111111111111',
-      content: 'My wallet is 0x1111111111111111111111111111111111111111. I prefer concise answers. TODO: verify metrics rollout.',
+      content: 'My wallet is 0x1111111111111111111111111111111111111111. I prefer concise answers. Task: verify metrics rollout.',
     })
     await bridge.runtime.createMemory(inbound as any, 'messages' as any)
 

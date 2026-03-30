@@ -10,8 +10,7 @@ import {
   DEFAULT_DEPOSIT_TOKENS,
   SHARE_SPLIT_LABEL,
 } from '@/components/home/launchConfig'
-import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
-import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
+import { VaultFlowScroll } from '@/components/home/VaultFlowScroll'
 import {
   clearStoredWaitlistAuthState,
   clearStoredWaitlistReferralCode,
@@ -80,7 +79,7 @@ export function Home() {
         />
       </div>
 
-      <section className="cinematic-section !py-16 sm:!py-24 lg:!py-28 min-h-[68vh] sm:min-h-[82vh] flex items-center justify-center">
+      <section className="cinematic-section no-divider-bottom !py-16 sm:!py-24 lg:!py-28 min-h-screen flex items-center justify-center relative">
         <div className="mx-auto max-w-7xl space-y-8 px-4 text-center sm:px-6 sm:space-y-14">
           <motion.div
             initial={{ opacity: 0 }}
@@ -168,18 +167,51 @@ export function Home() {
             </motion.div>
           ) : null}
         </div>
+
+        {/* Scroll cue — anchored to hero bottom, desktop only */}
+        <motion.div
+          className="pointer-events-none absolute inset-x-0 bottom-8 hidden flex-col items-center gap-2 sm:flex"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 1.6 }}
+        >
+          <motion.div
+            className="flex flex-col items-center gap-2"
+            animate={{ y: [0, 7, 0] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.26em] text-zinc-600">
+              Scroll to explore
+            </p>
+            <div className="h-7 w-px rounded-full bg-gradient-to-b from-zinc-700/60 to-transparent" />
+            <svg width="9" height="5" viewBox="0 0 9 5" fill="none" aria-hidden="true">
+              <path d="M1 1L4.5 4L8 1" stroke="rgba(120,120,140,0.5)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </motion.div>
+        </motion.div>
+
+        {/* Bottom fade — blends hero into VaultFlowScroll */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-28 sm:h-40"
+          style={{ background: 'linear-gradient(to bottom, transparent, var(--color-vault-bg, #020202))' }}
+          aria-hidden="true"
+        />
       </section>
 
-      <section className="cinematic-section !py-10 sm:!py-16 lg:!py-24">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
-          <div className="grid items-start gap-8 sm:gap-16 lg:grid-cols-2 lg:items-center lg:gap-20">
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-              className="space-y-4 sm:space-y-8"
-            >
+      <VaultFlowScroll depositTokens={DEFAULT_DEPOSIT_TOKENS} shareTokens={DEFAULT_SHARE_TOKENS} />
+
+      <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
+        <div className="mx-auto max-w-5xl space-y-10 px-4 sm:space-y-14 sm:px-6">
+
+          {/* ── Launch Your Vault (moved from above VaultFlowScroll) */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="grid items-center gap-8 sm:gap-16 lg:grid-cols-2 lg:gap-20"
+          >
+            <div className="space-y-4 sm:space-y-8">
               <span className="label">For Creators</span>
               <h2 className="headline text-3xl leading-tight sm:text-5xl lg:text-6xl">
                 Launch Your
@@ -204,11 +236,6 @@ export function Home() {
                   <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span> for a{' '}
                   <span className="text-uniswap">Uniswap CCA</span> auction.
                 </p>
-                <p>
-                  Auctions open weekly at <span className="font-mono text-zinc-200">{DEFAULT_AUCTION_EPOCH}</span> and run for{' '}
-                  {DEFAULT_AUCTION_WINDOW}. The deposit remains vault principal while minted shares are allocated across launch
-                  distribution.
-                </p>
               </div>
               {showDeployVaultCta ? (
                 <div>
@@ -218,67 +245,51 @@ export function Home() {
                   </Link>
                 </div>
               ) : null}
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              className="space-y-0"
+            <div
+              className="space-y-0 rounded-2xl border border-white/6 bg-white/[0.015] px-4 py-3 sm:px-5 sm:py-4"
+              data-launch-section="launch-profile"
             >
-              <div
-                className="space-y-0 rounded-2xl border border-white/6 bg-white/[0.015] px-4 py-3 sm:px-5 sm:py-4"
-                data-launch-section="launch-profile"
-              >
-                <div className="label text-[9px] sm:text-[10px]">Launch profile</div>
-
-                <div className="mt-3 space-y-0 sm:mt-4">
-                  <div className="data-row">
-                    <span className="label">Minimum deposit</span>
-                    <div className="value mono text-sm sm:text-base" data-launch-key="depositTokens">
-                      {DEFAULT_DEPOSIT_TOKENS} TOKEN
-                    </div>
+              <div className="label text-[9px] sm:text-[10px]">Launch profile</div>
+              <div className="mt-3 space-y-0 sm:mt-4">
+                <div className="data-row">
+                  <span className="label">Minimum deposit</span>
+                  <div className="value mono text-sm sm:text-base" data-launch-key="depositTokens">
+                    {DEFAULT_DEPOSIT_TOKENS} TOKEN
                   </div>
-                  <div className="data-row">
-                    <span className="label">Minted shares</span>
-                    <div className="value mono text-sm sm:text-base text-brand-primary" data-launch-key="shareTokens">
-                      {DEFAULT_SHARE_TOKENS}
-                    </div>
+                </div>
+                <div className="data-row">
+                  <span className="label">Minted shares</span>
+                  <div className="value mono text-sm sm:text-base text-brand-primary" data-launch-key="shareTokens">
+                    {DEFAULT_SHARE_TOKENS}
                   </div>
-                  <div className="data-row">
-                    <span className="label">Auction window</span>
-                    <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_WINDOW}</div>
-                  </div>
-                  <div className="data-row">
-                    <span className="label">Launch epoch</span>
-                    <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_EPOCH}</div>
-                  </div>
-                  <div className="data-row">
-                    <span className="label">Share split</span>
-                    <div className="value mono text-right text-[11px] leading-relaxed text-sm sm:text-base">
-                      {SHARE_SPLIT_LABEL}
-                    </div>
+                </div>
+                <div className="data-row">
+                  <span className="label">Auction window</span>
+                  <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_WINDOW}</div>
+                </div>
+                <div className="data-row">
+                  <span className="label">Launch epoch</span>
+                  <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_EPOCH}</div>
+                </div>
+                <div className="data-row">
+                  <span className="label">Share split</span>
+                  <div className="value mono text-right text-[11px] leading-relaxed text-sm sm:text-base">
+                    {SHARE_SPLIT_LABEL}
                   </div>
                 </div>
               </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
+            </div>
+          </motion.div>
 
-      <ShareDistributionSection auctionEpoch={DEFAULT_AUCTION_EPOCH} shareTokens={DEFAULT_SHARE_TOKENS} />
-
-      <StrategyAllocationSection depositTokens={DEFAULT_DEPOSIT_TOKENS} />
-
-      <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          {/* ── FAQ */}
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="grid gap-8 rounded-[28px] border border-white/6 bg-white/[0.015] p-5 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-end lg:p-8"
+            className="grid gap-8 rounded-[28px] bg-white/[0.015] p-5 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-end lg:p-8"
           >
             <div className="space-y-4 sm:space-y-6">
               <span className="label">FAQ</span>
@@ -311,6 +322,7 @@ export function Home() {
               </div>
             </div>
           </motion.div>
+
         </div>
       </section>
 

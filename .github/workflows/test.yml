@@ -71,6 +71,9 @@ jobs:
       - name: Frontend ESLint
         run: pnpm --dir frontend lint
 
+      - name: No TODO/FIXME markers (first-party)
+        run: bash scripts/check-no-todo-markers.sh
+
       - name: Frontend TypeScript
         run: pnpm --dir frontend typecheck
 

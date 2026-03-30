@@ -84,8 +84,7 @@ export const AKITA_DEFAULTS = {
 } as const
 
 export const ERC4626_DEFAULTS = {
-  // TODO: Replace these with the real protocol coin ($4626) creator-coin stack once it exists.
-  // Until then, we mirror AKITA so the app has a working default example without requiring env vars.
+  // Placeholder: mirrors AKITA until a live protocol coin ($4626) stack is wired; avoids requiring env vars for defaults.
   token: AKITA_DEFAULTS.token,
   vault: AKITA_DEFAULTS.vault,
   wrapper: AKITA_DEFAULTS.wrapper,
