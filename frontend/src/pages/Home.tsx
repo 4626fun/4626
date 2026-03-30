@@ -4,6 +4,12 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
+import {
+  DEFAULT_AUCTION_EPOCH,
+  DEFAULT_AUCTION_WINDOW,
+  DEFAULT_DEPOSIT_TOKENS,
+  SHARE_SPLIT_LABEL,
+} from '@/components/home/launchConfig'
 import { ShareDistributionSection } from '@/components/home/ShareDistributionSection'
 import { StrategyAllocationSection } from '@/components/home/StrategyAllocationSection'
 import {
@@ -23,10 +29,7 @@ const LazyThinWaitlistFlow = lazy(async () => {
 })
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
-const DEFAULT_DEPOSIT_TOKENS = '50,000,000'
 const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
-const DEFAULT_AUCTION_WINDOW = '7 days'
-const DEFAULT_AUCTION_EPOCH = 'Thursday 00:00 UTC'
 const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
 
 export function Home() {
@@ -197,18 +200,14 @@ export function Home() {
               </div>
               <div className="space-y-3 text-base font-light leading-relaxed text-zinc-500 sm:text-lg">
                 <p>
-                  Minimum deposit: <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span>. In the default
-                  launch, this mints <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span> and runs a{' '}
+                  Launch starts with <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span>, minting{' '}
+                  <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span> for a{' '}
                   <span className="text-uniswap">Uniswap CCA</span> auction.
                 </p>
                 <p>
-                  The auction opens on the weekly epoch reset at{' '}
-                  <span className="font-mono text-zinc-200">{DEFAULT_AUCTION_EPOCH}</span> and runs for {DEFAULT_AUCTION_WINDOW}.
-                </p>
-                <p>
-                  The deposited <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span> stays as the vault’s
-                  underlying asset base, while the newly minted <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span>{' '}
-                  gets split across launch distribution.
+                  Auctions open weekly at <span className="font-mono text-zinc-200">{DEFAULT_AUCTION_EPOCH}</span> and run for{' '}
+                  {DEFAULT_AUCTION_WINDOW}. The deposit remains vault principal while minted shares are allocated across launch
+                  distribution.
                 </p>
               </div>
               {showDeployVaultCta ? (
@@ -228,17 +227,24 @@ export function Home() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="space-y-0"
             >
-              <div className="rounded-3xl border border-white/8 bg-white/[0.035] p-5 shadow-[0_24px_80px_-44px_rgba(0,82,255,0.35)] backdrop-blur-sm sm:p-6">
-                <div className="text-[10px] font-medium text-zinc-600">Default launch mechanics</div>
+              <div
+                className="space-y-0 rounded-2xl border border-white/6 bg-white/[0.015] px-4 py-3 sm:px-5 sm:py-4"
+                data-launch-section="launch-profile"
+              >
+                <div className="label text-[9px] sm:text-[10px]">Launch profile</div>
 
-                <div className="mt-4 space-y-0 sm:mt-6">
+                <div className="mt-3 space-y-0 sm:mt-4">
                   <div className="data-row">
                     <span className="label">Minimum deposit</span>
-                    <div className="value mono text-sm sm:text-base">{DEFAULT_DEPOSIT_TOKENS} TOKEN</div>
+                    <div className="value mono text-sm sm:text-base" data-launch-key="depositTokens">
+                      {DEFAULT_DEPOSIT_TOKENS} TOKEN
+                    </div>
                   </div>
                   <div className="data-row">
                     <span className="label">Minted shares</span>
-                    <div className="value mono text-sm sm:text-base text-brand-primary">{DEFAULT_SHARE_TOKENS}</div>
+                    <div className="value mono text-sm sm:text-base text-brand-primary" data-launch-key="shareTokens">
+                      {DEFAULT_SHARE_TOKENS}
+                    </div>
                   </div>
                   <div className="data-row">
                     <span className="label">Auction window</span>
@@ -251,7 +257,7 @@ export function Home() {
                   <div className="data-row">
                     <span className="label">Share split</span>
                     <div className="value mono text-right text-[11px] leading-relaxed text-sm sm:text-base">
-                      40 / 40 / 20
+                      {SHARE_SPLIT_LABEL}
                     </div>
                   </div>
                 </div>
@@ -261,9 +267,9 @@ export function Home() {
         </div>
       </section>
 
-      <StrategyAllocationSection depositTokens={DEFAULT_DEPOSIT_TOKENS} />
-
       <ShareDistributionSection auctionEpoch={DEFAULT_AUCTION_EPOCH} shareTokens={DEFAULT_SHARE_TOKENS} />
+
+      <StrategyAllocationSection depositTokens={DEFAULT_DEPOSIT_TOKENS} />
 
       <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
@@ -272,39 +278,36 @@ export function Home() {
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="overflow-hidden rounded-[32px] border border-white/8 bg-linear-to-br from-white/[0.05] via-white/[0.025] to-transparent p-6 shadow-[0_28px_90px_-50px_rgba(0,82,255,0.32)] backdrop-blur-sm sm:p-8 lg:p-10"
+            className="grid gap-8 rounded-[28px] border border-white/6 bg-white/[0.015] p-5 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-end lg:p-8"
           >
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-end">
-              <div className="space-y-4 sm:space-y-6">
-                <span className="label">FAQ</span>
-                <h2 className="headline mt-2 text-3xl sm:text-4xl lg:text-5xl">See the full walkthrough</h2>
-                <p className="max-w-2xl text-[13px] font-light text-zinc-500 sm:text-sm">
-                  The FAQ now carries the whole launch sequence in one place, from deposit mechanics through CCA launch, strategy
-                  allocation, and redemption.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {WAITLIST_JOURNEY_STEPS.map((step) => (
-                    <span
-                      key={step}
-                      className="rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300 sm:text-[11px]"
-                    >
-                      {step}
-                    </span>
-                  ))}
-                </div>
+            <div className="space-y-4 sm:space-y-6">
+              <span className="label">FAQ</span>
+              <h2 className="headline mt-2 text-3xl sm:text-4xl lg:text-5xl">Read the full launch flow</h2>
+              <p className="max-w-2xl text-[13px] font-light text-zinc-500 sm:text-sm">
+                One concise walkthrough covering deposit mechanics, CCA launch, strategy allocation, and redemptions.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {WAITLIST_JOURNEY_STEPS.map((step) => (
+                  <span
+                    key={step}
+                    className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300 sm:text-[11px]"
+                  >
+                    {step}
+                  </span>
+                ))}
               </div>
+            </div>
 
-              <div className="space-y-4 rounded-3xl border border-white/8 bg-black/35 p-5 sm:p-6">
-                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Read before launch</div>
-                <p className="text-sm font-light leading-relaxed text-zinc-400">
-                  If someone lands on the homepage and wants the full mechanics, this should be the bottom-of-page next step.
-                </p>
-                <div>
-                  <Link to="/faq/how-it-works" className="btn-primary inline-flex items-center">
-                    How it works
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </div>
+            <div className="space-y-3 rounded-2xl border border-white/6 bg-black/10 p-4 sm:p-5 lg:max-w-sm lg:justify-self-end">
+              <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Before you launch</div>
+              <p className="text-sm font-light leading-relaxed text-zinc-400">
+                Use this as the final homepage step when you want the complete mechanics in one place.
+              </p>
+              <div>
+                <Link to="/faq/how-it-works" className="btn-primary btn-no-icon inline-flex items-center">
+                  How it works
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
             </div>
           </motion.div>

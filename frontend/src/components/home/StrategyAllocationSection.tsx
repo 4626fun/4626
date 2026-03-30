@@ -4,7 +4,7 @@ const STRATEGY_CARDS = [
   {
     label: 'Charm',
     percent: '30%',
-    description: 'CREATOR/USDC Uniswap V3 LP',
+    description: 'Managed Uniswap V3 CREATOR/USDC LP',
     icon: '/protocols/charm.png',
     iconAlt: 'Charm',
     iconClassName: 'h-3.5 w-3.5 rounded-sm opacity-90',
@@ -12,7 +12,7 @@ const STRATEGY_CARDS = [
   {
     label: 'Ajna',
     percent: '30%',
-    description: 'Permissionless lending',
+    description: 'Permissionless lending exposure',
     icon: '/protocols/ajna.svg',
     iconAlt: 'Ajna',
     iconClassName: 'h-3.5 w-3.5 opacity-90',
@@ -20,17 +20,17 @@ const STRATEGY_CARDS = [
   {
     label: 'Solana',
     percent: '30%',
-    description: 'Reserved for Solana route flow',
+    description: 'Reserved for Solana route deployment',
     icon: '/protocols/solana.svg',
     iconAlt: 'Solana',
     iconClassName: 'h-3.5 w-auto opacity-90',
   },
   {
-    label: 'Idle Buffer',
+    label: 'Idle Reserve',
     percent: '10%',
-    description: 'Kept liquid for operations and withdrawals',
+    description: 'Kept in-vault for withdrawals and execution flexibility',
     icon: null,
-    iconAlt: 'Idle Buffer',
+    iconAlt: 'Idle Reserve',
     iconClassName: '',
   },
 ] as const
@@ -41,7 +41,7 @@ type StrategyAllocationSectionProps = {
 
 export function StrategyAllocationSection({ depositTokens }: StrategyAllocationSectionProps) {
   return (
-    <section className="cinematic-section bg-zinc-950/20 !py-10 sm:!py-20 lg:!py-24">
+    <section className="cinematic-section bg-zinc-950/20 !py-10 sm:!py-20 lg:!py-24" data-launch-section="strategy-allocation">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-12">
           <motion.div
@@ -55,26 +55,26 @@ export function StrategyAllocationSection({ depositTokens }: StrategyAllocationS
             <div className="space-y-4">
               <h2 className="headline text-3xl sm:text-4xl lg:text-5xl">Default strategy allocation</h2>
               <p className="max-w-md text-[13px] font-light text-zinc-500 sm:text-sm">
-                The launch vault spreads the creator coin across three active strategy buckets and leaves 10% idle in the vault
-                so redemptions stay flexible.
+                A clean 30/30/30 split across active strategy buckets, with 10% held idle to keep redemptions smooth.
               </p>
             </div>
 
-            <div className="rounded-3xl border border-white/8 bg-white/[0.035] p-5 shadow-[0_24px_70px_-44px_rgba(0,82,255,0.22)] backdrop-blur-sm sm:p-6">
+            <div className="space-y-3 rounded-2xl border border-white/6 bg-white/[0.015] px-4 py-3 sm:px-5 sm:py-4">
               <div className="label text-[9px] sm:text-[10px]">Underlying Deposit</div>
-              <div className="mt-3 space-y-3">
-                <div className="text-3xl sm:text-4xl">
-                  <span className="value mono">{depositTokens}</span> <span className="value mono text-zinc-300">TOKEN</span>
-                </div>
-                <p className="max-w-lg text-xs font-light leading-relaxed text-zinc-500 sm:text-sm">
-                  Creator coin deposit routed into the strategy mix on the right. This is the productive capital base of the
-                  vault, separate from the share-token launch distribution.
-                </p>
+              <div className="text-3xl sm:text-4xl">
+                <span className="value mono" data-launch-key="depositTokens">
+                  {depositTokens}
+                </span>{' '}
+                <span className="value mono text-zinc-300">TOKEN</span>
               </div>
+              <p className="max-w-lg text-xs font-light leading-relaxed text-zinc-500 sm:text-sm">
+                This deposit is the vault&apos;s principal capital base. It feeds strategy deployment and stays separate from
+                share-token launch allocation.
+              </p>
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-white/8 bg-white/[0.035] shadow-[0_24px_80px_-48px_rgba(0,82,255,0.24)] sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 rounded-2xl border border-white/6 bg-white/[0.01] p-4 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-6 sm:p-5">
             {STRATEGY_CARDS.map((card, index) => (
               <motion.div
                 key={card.label}
@@ -82,7 +82,7 @@ export function StrategyAllocationSection({ depositTokens }: StrategyAllocationS
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: index * 0.08 }}
-                className="space-y-3 bg-black/55 p-5 sm:min-h-[178px] sm:space-y-4 sm:p-7"
+                className="space-y-2 border-l border-white/8 pl-4 sm:pl-5"
               >
                 <div className="inline-flex items-center gap-1.5">
                   {card.icon ? (
@@ -95,7 +95,7 @@ export function StrategyAllocationSection({ depositTokens }: StrategyAllocationS
                       loading="lazy"
                     />
                   ) : (
-                    <span className="inline-flex h-3.5 w-3.5 rounded-full border border-white/12 bg-white/[0.05]" aria-hidden="true" />
+                    <span className="inline-flex h-3.5 w-3.5 rounded-full bg-white/[0.28]" aria-hidden="true" />
                   )}
                   <span className="label text-[9px] sm:text-[10px]">{card.label}</span>
                 </div>
