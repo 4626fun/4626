@@ -126,6 +126,7 @@ describe('v1 auction status handler', () => {
       auction: AUCTION.toLowerCase(),
       auctionToken: AUCTION_TOKEN.toLowerCase(),
       auctionTokenSymbol: 'SHARE',
+      auctionLifecycleDegraded: false,
       auctionTokenDecimals: 18,
       currencyDecimals: 6,
       lifecyclePhase: 1,
@@ -139,6 +140,136 @@ describe('v1 auction status handler', () => {
       auctionTokenImagePath: `/api/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`,
       auctionTokenImageUrl: `https://api.4626.fun/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`,
     })
+  })
+
+  it('maps ws-prefixed on-chain auction token symbols to ■-prefixed share display', async () => {
+    mocks.readContract.mockImplementation(async ({ functionName, address }: { functionName: string; address?: string }) => {
+      switch (functionName) {
+        case 'getAuctionStatus':
+          return [AUCTION, true, false, 123n, 456n]
+        case 'getLifecycleStatus':
+          return {
+            phase: 1,
+            auction: AUCTION,
+            isGraduated: false,
+            auctionWindowOpen: true,
+            claimOpen: false,
+            currencySwept: false,
+            unsoldSwept: false,
+            migrated: false,
+            failedFinalized: false,
+            startBlock: 1000n,
+            endBlock: 2000n,
+            claimBlock: 2100n,
+            migrationBlock: 2001n,
+            sweepBlock: 2500n,
+            lpReserveAmount: 789n,
+            clearingPrice: 123n,
+            currencyRaised: 456n,
+          }
+        case 'getBackingTelemetry':
+          return {
+            vault: '0x4444444444444444444444444444444444444444',
+            launchTotalAssets: 1_000n,
+            launchTotalSupply: 10_000n,
+            currentTotalAssets: 1_250n,
+            currentTotalSupply: 10_000n,
+            assetsDelta: 250n,
+            supplyDelta: 0n,
+          }
+        case 'currency':
+          return CURRENCY
+        case 'auctionToken':
+          return AUCTION_TOKEN
+        case 'decimals':
+          return String(address || '').toLowerCase() === CURRENCY.toLowerCase() ? 6 : 18
+        case 'symbol':
+          return String(address || '').toLowerCase() === AUCTION_TOKEN.toLowerCase() ? 'wsAKITA' : 'SHARE'
+        default:
+          return null
+      }
+    })
+
+    const mod = await import('../_handlers/v1/auction/_status.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { ccaStrategy: CCA_STRATEGY },
+      headers: { host: 'v1.4626.fun' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.auctionTokenSymbol).toBe('\u25A0AKITA')
+  })
+
+  it('marks auctionLifecycleDegraded when no auction contract is bound', async () => {
+    mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      switch (functionName) {
+        case 'getAuctionStatus':
+          return ['0x0000000000000000000000000000000000000000', false, false, 0n, 0n]
+        case 'getLifecycleStatus':
+          return {
+            phase: 0,
+            auction: '0x0000000000000000000000000000000000000000',
+            isGraduated: false,
+            auctionWindowOpen: false,
+            claimOpen: false,
+            currencySwept: false,
+            unsoldSwept: false,
+            migrated: false,
+            failedFinalized: false,
+            startBlock: 0n,
+            endBlock: 0n,
+            claimBlock: 0n,
+            migrationBlock: 0n,
+            sweepBlock: 0n,
+            lpReserveAmount: 0n,
+            clearingPrice: 0n,
+            currencyRaised: 0n,
+          }
+        case 'getBackingTelemetry':
+          return {
+            vault: '0x0000000000000000000000000000000000000000',
+            launchTotalAssets: 0n,
+            launchTotalSupply: 0n,
+            currentTotalAssets: 0n,
+            currentTotalSupply: 0n,
+            assetsDelta: 0n,
+            supplyDelta: 0n,
+          }
+        case 'currency':
+          return CURRENCY
+        case 'auctionToken':
+          return AUCTION_TOKEN
+        case 'decimals':
+          return 18
+        case 'symbol':
+          return 'wsAKITA'
+        default:
+          return null
+      }
+    })
+
+    const mod = await import('../_handlers/v1/auction/_status.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { ccaStrategy: CCA_STRATEGY },
+      headers: { host: 'v1.4626.fun' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.auction).toBeNull()
+    expect(res.body?.data?.auctionLifecycleDegraded).toBe(true)
+    expect(res.body?.data?.auctionTokenSymbol).toBe('\u25A0AKITA')
   })
 
   it('does not trust forwarded host headers when API_HOST is unset', async () => {

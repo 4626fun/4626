@@ -206,6 +206,7 @@
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
     { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
     { "src": "/telegram/link", "dest": "/telegram-link.html" },
+    { "src": "/telegram/menu", "dest": "/telegram-link.html" },
     { "handle": "filesystem" },
     {
       "src": "/((?!assets/).*)",

@@ -176,6 +176,8 @@ const TELEGRAM_MENU_LABELS = {
   back: 'Back',
 } as const
 
+type TelegramHomeState = 'unlinked' | 'pending' | 'ready'
+
 function sanitizeTelegramLabel(label: string): string {
   return label.replace(/\uFE0F/g, '')
 }
@@ -1146,7 +1148,13 @@ async function buildInlineQueryResults(params: {
   })
 }
 
-function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
+function buildHelpCategoryReplyMarkup(params: { isAdmin: boolean }): Record<string, unknown> {
+  const secondaryRow = params.isAdmin
+    ? [
+        { text: 'Ops', callback_data: 'help:ops' },
+        { text: menuLabel('wallet'), callback_data: 'help:wallet' },
+      ]
+    : [{ text: menuLabel('wallet'), callback_data: 'help:wallet' }]
   return {
     inline_keyboard: [
       [
@@ -1154,10 +1162,7 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
         { text: 'Coin', callback_data: 'help:coin' },
         { text: 'Social', callback_data: 'help:social' },
       ],
-      [
-        { text: 'Ops', callback_data: 'help:ops' },
-        { text: menuLabel('wallet'), callback_data: 'help:wallet' },
-      ],
+      secondaryRow,
       [{ text: 'Help', callback_data: 'help:all' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
@@ -1196,7 +1201,7 @@ function buildTelegramLinkFlowResponse(params: {
   if (!isPrivateChatId(params.chatId)) {
     return {
       text: [
-        'Link your 4626 account (one time)',
+        'Connect your 4626 account (one time)',
         '',
         'For security, linking is only available in a private chat with this bot.',
         'Linking verifies your 4626 account and finishes the wallet setup required for bot actions.',
@@ -1273,38 +1278,38 @@ function buildTelegramLinkFlowResponse(params: {
       ? [
           '<b>Base app | 4626.fun</b>',
           '',
-          'Need a Coinbase Smart Wallet? Install the Base app first, then come back here to finish linking.',
+          'Need a Coinbase Smart Wallet? Install Base app first, then come back here to finish connecting Telegram.',
           '',
           '1) Tap Get Base app.',
           '2) Tap Open Mini App.',
           '3) Sign in to 4626 and verify your email.',
           '4) Create or connect your Coinbase Smart Wallet.',
-          '5) Add your 4626 embedded wallet as an owner so bot actions can execute safely.',
+          '5) Finish wallet confirmation so Telegram actions can unlock safely.',
           '',
           '4626 never holds your keys — you approve actions in your wallet.',
-          'After linking, Telegram actions run directly through the bot.',
+          'After setup is complete, Telegram actions run directly through the bot.',
         ]
       : params.zoraOnboardingBranch === 'has'
         ? [
             '<b>Link | 4626.fun</b>',
             '',
-            'Finish linking your Telegram account, then confirm that your 4626 embedded wallet is an owner on your Coinbase Smart Wallet.',
+            'Finish connecting your Telegram account, then complete wallet confirmation on your Coinbase Smart Wallet.',
             '',
             '4626 never holds your keys — you approve actions in your wallet.',
             '',
             '1) Tap Open Mini App.',
             '2) Sign in to 4626 and verify your email.',
-            '3) Confirm the owner step on your Coinbase Smart Wallet.',
+            '3) Complete the wallet confirmation step on your Coinbase Smart Wallet.',
             '',
-            'After linking, Telegram actions run directly through the bot.',
+            'After setup is complete, Telegram actions run directly through the bot.',
           ]
         : [
-            'Link your 4626 account (one time)',
+            'Connect your 4626 account (one time)',
             '',
             '1) Tap Open Mini App.',
             '2) Sign in to 4626 and verify your email.',
             '3) Connect your Coinbase Smart Wallet if you have one.',
-            '4) Confirm your 4626 embedded wallet is installed as an owner.',
+            '4) Finish wallet confirmation so bot actions can unlock safely.',
             '',
             '4626 never holds your keys — you approve actions in your wallet.',
           ]
@@ -1368,15 +1373,23 @@ function buildOnboardingWelcomeText(): string {
   return [
     '<b>Welcome to 4626.fun on Telegram</b>',
     '',
-    'Tap <b>Start</b> to begin setup.',
+    '4626 brings creator coins, vault activity, and wallet actions on Base into Telegram.',
     '',
-    'Link once, then buy, sell, bid, and manage your connected Coinbase Smart Wallet directly from chats.',
+    'Connect once with your verified 4626 account, then use this bot to check your wallet, trade, and follow what is happening onchain.',
+    '',
+    'Tap <b>Start</b> to choose your wallet path and open the Mini App.',
   ].join('\n')
 }
 
 function buildOnboardingWelcomeReplyMarkup(): Record<string, unknown> {
   return {
-    inline_keyboard: [[{ text: 'Start', callback_data: 'onboard:begin' }]],
+    inline_keyboard: [
+      [{ text: 'Start', callback_data: 'onboard:begin' }],
+      [
+        { text: 'Check Link Status', callback_data: 'menu:linked' },
+        { text: menuLabel('help'), callback_data: 'menu:topics' },
+      ],
+    ],
   }
 }
 
@@ -1384,9 +1397,9 @@ function buildCswForkText(): string {
   return [
     '<b>Coinbase Smart Wallet | 4626.fun</b>',
     '',
-    'Finish account linking and wallet setup. Link an existing Coinbase Smart Wallet, or create a new one after installing the Base app.',
+    'Choose how you want to continue wallet setup before opening the Mini App.',
     '',
-    'Tap a button to continue.',
+    'If you already have a Coinbase Smart Wallet, link it. Otherwise, install Base app and create one first.',
   ].join('\n')
 }
 
@@ -1405,32 +1418,41 @@ function buildUnlinkedGroupStartLandingText(): string {
   return [
     '<b>4626 on Telegram</b>',
     '',
-    '<blockquote>Open a private chat with this bot for setup. Groups stay discovery-first.</blockquote>',
+    '<blockquote>Groups are for discovery and live context. Do setup in a private chat first, then come back here ready to act.</blockquote>',
     '',
     '<u>In your DM with this bot</u>',
     '<code>/start</code> — home (tap <b>Start</b> to begin onboarding)',
     '<code>/link</code> — continue wallet linking after onboarding',
-    '<code>/linked</code> — verify link + owner status',
+    '<code>/linked</code> — check Telegram link and wallet setup',
     '',
-    'After /linked shows ready, use /buy, /sell, /bid, and /wallet.',
+    'After setup is ready, use /buy, /sell, /bid, and /wallet from Telegram.',
   ].join('\n')
 }
 
-function buildStartLandingText(params: { isLinked: boolean }): string {
-  if (params.isLinked) {
+function buildStartLandingText(params: { state: Exclude<TelegramHomeState, 'unlinked'> }): string {
+  if (params.state === 'ready') {
     return [
-      '<b>4626 on Telegram</b>',
+      '<b>Welcome back to 4626</b>',
       '',
-      `<blockquote>Connected and ready. Convert attention into onchain action: ${menuLabel('trade')} -> ${menuLabel('wallet')} -> Repeat.</blockquote>`,
+      '<blockquote>Your 4626 account and smart wallet are connected. You can manage creator coins and vault activity on Base directly from Telegram.</blockquote>',
       '',
-      '<u>Fast path</u>',
-      '<code>/buy</code> — guided buy flow',
-      '<code>/sell</code> — guided sell flow',
-      '<code>/bid</code> — guided bid flow',
-      '<code>/wallet</code> — wallet, positions, and recent actions',
+      '<u>What you can do here</u>',
+      '<code>/wallet</code> — check balances, positions, and recent actions',
+      '<code>/buy</code> — buy a creator coin from chat',
+      '<code>/sell</code> — sell from chat',
+      '<code>/bid</code> — place an auction bid from chat',
+      '',
+      'Use the buttons below to open Wallet, Trade, Explore, or Help.',
     ].join('\n')
   }
-  return buildUnlinkedGroupStartLandingText()
+  return [
+    '<b>Welcome back to 4626</b>',
+    '',
+    '<blockquote>Your Telegram account is connected, but wallet setup is not finished yet. Finish it once and trading actions will unlock here.</blockquote>',
+    '',
+    '<u>Next step</u>',
+    'Tap <b>Finish Wallet Setup</b> to reopen the connect flow and complete wallet confirmation.',
+  ].join('\n')
 }
 
 function buildStartAndLinkNudgeText(): string {
@@ -1441,48 +1463,83 @@ function buildStartAndLinkNudgeReplyMarkup(): Record<string, unknown> {
   return buildOnboardingWelcomeReplyMarkup()
 }
 
-function buildFocusedHelpText(): string {
-  return [
-    '<b>4626 Command Guide</b>',
-    '',
-    `<blockquote>Core loop: ${menuLabel('connect')} -> ${menuLabel('trade')} -> ${menuLabel('wallet')} -> Repeat.</blockquote>`,
-    '',
-    '<u>Core commands</u>',
-    '<code>/start</code> — onboarding entry (private DM: tap Start, then follow prompts). Setup ≠ operator-approved app access.',
-    '<code>/id</code> — native Telegram picker for users, groups, channels, and forums',
-    '<code>/link</code> — continue Mini App linking (after onboarding Start, or to refresh)',
-    '<code>/linked</code> — check link status',
-    '<code>/buy</code> — guided buy flow',
-    '<code>/sell</code> — guided sell flow',
-    '<code>/bid</code> — guided bid flow',
-    '<code>/vaultdeploy</code> — one-tap AKITA deploy preview',
-    '<code>/wallet</code> — wallet, positions, and actions',
-    '<code>/vaults</code> — browse vaults',
-    '',
-    '<u>Need more?</u>',
-    '<code>/help coin|social|ops|wallet</code> — focused guides',
-    '<code>/help all</code> — complete command catalog',
-    'Tap <b>CRE Ops</b> or <b>Solana</b> below for one-tap keeper actions.',
-  ].join('\n')
-}
-
-function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
-  const operatorRow = shouldShowOperatorMenus(params)
-    ? [[
-        { text: menuLabel('cre'), callback_data: 'menu:cre' },
-        { text: menuLabel('solana'), callback_data: 'menu:solana' },
-      ]]
-    : []
-  const keyboard: Array<Array<Record<string, unknown>>> = params.isLinked
-    ? [
+function buildStartReplyMarkup(params: { chatId: string; state: TelegramHomeState }): Record<string, unknown> {
+  if (params.state === 'ready') {
+    return {
+      inline_keyboard: [
         [{ text: menuLabel('wallet'), callback_data: 'menu:wallet' }],
-        [{ text: 'Deploy Vault', callback_data: 'menu:vaultdeploy' }],
         [
           { text: menuLabel('trade'), callback_data: 'menu:trade' },
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
-        ...operatorRow,
+      ],
+    }
+  }
+
+  if (params.state === 'pending') {
+    return {
+      inline_keyboard: [
+        [{ text: 'Finish Wallet Setup', callback_data: 'menu:connect' }],
+        [
+          { text: 'Check Link Status', callback_data: 'menu:linked' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
+        ],
+      ],
+    }
+  }
+
+  if (!isPrivateChatId(params.chatId)) {
+    return {
+      inline_keyboard: [
+        [
+          { text: 'Check Link Status', callback_data: 'menu:linked' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
+        ],
+      ],
+    }
+  }
+
+  return buildOnboardingWelcomeReplyMarkup()
+}
+
+function buildFocusedHelpText(): string {
+  return buildTelegramCommandChrome({
+    title: '4626 on Telegram',
+    command: '/help',
+    summaryLines: [
+      'Link your 4626 account once, then use Telegram to check your wallet, trade creator coins, and follow vault activity on Base.',
+    ],
+    detailLines: [
+      'Start here',
+      '/start — home and onboarding entry',
+      '/link — reopen the Mini App connect flow',
+      '/linked — check Telegram link and wallet setup',
+      '',
+      'Core actions',
+      '/wallet — wallet, positions, and recent actions',
+      '/buy — guided buy flow',
+      '/sell — guided sell flow',
+      '/bid — guided bid flow',
+      '/vaults — browse vaults and discovery surfaces',
+      '',
+      'Need more?',
+      '/help coin|social|ops|wallet — focused guides',
+      '/help all — complete command catalog',
+    ],
+    expandableDetails: true,
+  })
+}
+
+function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
+  const keyboard: Array<Array<Record<string, unknown>>> = params.isLinked
+    ? [
+        [{ text: menuLabel('wallet'), callback_data: 'menu:wallet' }],
+        [
+          { text: menuLabel('trade'), callback_data: 'menu:trade' },
+          { text: menuLabel('explore'), callback_data: 'menu:explore' },
+          { text: menuLabel('help'), callback_data: 'menu:topics' },
+        ],
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
       ]
     : [
@@ -1491,7 +1548,6 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
-        ...operatorRow,
         [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
       ]
 
@@ -1507,7 +1563,6 @@ function buildExploreReplyMarkup(): Record<string, unknown> {
         { text: menuLabel('vaults'), callback_data: 'menu:vaults' },
         { text: menuLabel('auctions'), callback_data: 'menu:auctions' },
       ],
-      [{ text: 'Deploy Vault', callback_data: 'menu:vaultdeploy' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -1530,32 +1585,31 @@ function buildTradeMenuReplyMarkup(): Record<string, unknown> {
   }
 }
 
-function buildMoreToolsReplyMarkup(chatId: string): Record<string, unknown> {
-  return {
-    inline_keyboard: [
-      [
-        { text: 'Vaults', callback_data: 'menu:vaults' },
-        { text: 'Auctions', callback_data: 'menu:auctions' },
-        { text: 'My Bids', callback_data: 'menu:mybids' },
-      ],
-      [
-        { text: 'Rooms', callback_data: 'menu:rooms' },
-        { text: 'Deploy Coin', callback_data: 'menu:deploy' },
-        { text: 'Deploy Vault', callback_data: 'menu:vaultdeploy' },
-        { text: 'Zora', callback_data: 'menu:zora' },
-      ],
-      [{ text: 'Help Topics', callback_data: 'menu:topics' }],
-      [
-        { text: menuLabel('cre'), callback_data: 'menu:cre' },
-        { text: menuLabel('solana'), callback_data: 'menu:solana' },
-      ],
-      [{ text: 'Back to Main', callback_data: 'menu:start' }],
-    ],
-  }
+function shouldShowOperatorMenus(params: { isAdmin: boolean }): boolean {
+  return params.isAdmin
 }
 
-function shouldShowOperatorMenus(params: { chatId: string; isLinked: boolean }): boolean {
-  return params.isLinked || !isPrivateChatId(params.chatId)
+function isOperatorCallbackToken(rawData: string): boolean {
+  const token = asTrimmed(rawData).toLowerCase()
+  return token === 'menu:cre' || token === 'menu:solana' || token.startsWith('cre:')
+}
+
+function isOperatorCommand(rawText: string): boolean {
+  return asTrimmed(rawText).toLowerCase().startsWith('/cre')
+}
+
+function buildOperatorAccessDeniedResponse(params: {
+  chatId: string
+  homeState: TelegramHomeState
+}): TelegramCommandResponse {
+  return {
+    text: [
+      `${menuLabel('cre')} and ${menuLabel('solana')} are only available to configured bot operators.`,
+      '',
+      'Use /start for regular wallet, trade, and discovery actions.',
+    ].join('\n'),
+    replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: params.homeState }),
+  }
 }
 
 function buildCreReplyMarkup(): Record<string, unknown> {
@@ -1623,20 +1677,21 @@ function resolveNavigationCallbackToast(rawData: string, mappedCommand: string |
 function resolveStaticMenuCallbackResponse(params: {
   callbackData: string
   chatId: string
-  isLinked: boolean
+  homeState: TelegramHomeState
+  isAdmin: boolean
 }): TelegramCommandResponse | null {
   const token = asTrimmed(params.callbackData).toLowerCase()
   if (token === 'menu:start') {
-    if (params.isLinked) {
+    if (params.homeState !== 'unlinked') {
       return {
-        text: buildStartLandingText({ isLinked: true }),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+        text: buildStartLandingText({ state: params.homeState }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: params.homeState }),
       }
     }
     if (!isPrivateChatId(params.chatId)) {
       return {
         text: buildUnlinkedGroupStartLandingText(),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: 'unlinked' }),
       }
     }
     return {
@@ -1651,7 +1706,7 @@ function resolveStaticMenuCallbackResponse(params: {
     }
   }
   if (token === 'menu:trade') {
-    if (!params.isLinked) {
+    if (params.homeState !== 'ready') {
       return {
         text: [`Trade requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
         replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
@@ -1662,18 +1717,12 @@ function resolveStaticMenuCallbackResponse(params: {
       replyMarkup: buildTradeMenuReplyMarkup(),
     }
   }
-  if (token === 'menu:more') {
-    return {
-      text: ['More Tools', '', '- advanced actions and discovery tools'].join('\n'),
-      replyMarkup: buildMoreToolsReplyMarkup(params.chatId),
-    }
-  }
   if (token === 'menu:cre') {
-    if (!shouldShowOperatorMenus(params)) {
-      return {
-        text: [`${menuLabel('cre')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
-      }
+    if (!shouldShowOperatorMenus({ isAdmin: params.isAdmin })) {
+      return buildOperatorAccessDeniedResponse({
+        chatId: params.chatId,
+        homeState: params.homeState,
+      })
     }
     return {
       text: [menuLabel('cre'), '', 'Tap an operator action to inspect or run keeper flows.'].join('\n'),
@@ -1681,11 +1730,11 @@ function resolveStaticMenuCallbackResponse(params: {
     }
   }
   if (token === 'menu:solana') {
-    if (!shouldShowOperatorMenus(params)) {
-      return {
-        text: [`${menuLabel('solana')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
-      }
+    if (!shouldShowOperatorMenus({ isAdmin: params.isAdmin })) {
+      return buildOperatorAccessDeniedResponse({
+        chatId: params.chatId,
+        homeState: params.homeState,
+      })
     }
     return {
       text: [menuLabel('solana'), '', 'Tap a Solana action to inspect bridge health or run the relay path.'].join('\n'),
@@ -1695,7 +1744,7 @@ function resolveStaticMenuCallbackResponse(params: {
   if (token === 'menu:topics') {
     return {
       text: [`${menuLabel('help')} Topics`, '', 'Pick a focused command guide.'].join('\n'),
-      replyMarkup: buildHelpCategoryReplyMarkup(),
+      replyMarkup: buildHelpCategoryReplyMarkup({ isAdmin: params.isAdmin }),
     }
   }
   return null
@@ -2386,7 +2435,9 @@ function buildTelegramPickedUserProfileText(params: {
     `Telegram: ${params.selectedUser.username ? `@${params.selectedUser.username}` : 'n/a'}`,
   ]
   if (params.profile) {
-    detailLines.push(`Link: ${params.profile.linkStatus ?? 'unknown'}${params.profile.ownerVerified ? ' • owner verified' : ''}`)
+    detailLines.push(
+      `Link: ${params.profile.linkStatus ?? 'unknown'} • ${params.profile.ownerVerified ? 'wallet ready' : 'wallet setup pending'}`,
+    )
     detailLines.push(`Profile ID: ${params.profile.profileId ?? 'n/a'}`)
     detailLines.push(`Creator coin: ${params.profile.creatorCoinAddress ?? 'n/a'}`)
     detailLines.push(`Name: ${params.profile.creatorCoinName ?? 'n/a'}`)
@@ -2444,6 +2495,17 @@ async function isTelegramUserLinked(params: {
   return Boolean(link && link.linkStatus === 'active' && link.ownerVerified)
 }
 
+async function resolveTelegramHomeState(params: {
+  telegramUserId: string
+  db?: Awaited<ReturnType<typeof getDb>> | null
+}): Promise<TelegramHomeState> {
+  const db = params.db ?? (await getDb())
+  if (!db) return 'unlinked'
+  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.telegramUserId })
+  if (!link || link.linkStatus !== 'active') return 'unlinked'
+  return link.ownerVerified ? 'ready' : 'pending'
+}
+
 async function handleTelegramOnboardingCallback(params: {
   callbackDataLower: string
   chatId: string
@@ -2475,14 +2537,14 @@ async function handleTelegramOnboardingCallback(params: {
   }
   await ensureTelegramTradingSchema(db as any)
 
-  const isLinked = await isTelegramUserLinked({ telegramUserId: params.userId, db })
-  if (isLinked) {
+  const homeState = await resolveTelegramHomeState({ telegramUserId: params.userId, db })
+  if (homeState !== 'unlinked') {
     return {
       response: {
-        text: buildStartLandingText({ isLinked: true }),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+        text: buildStartLandingText({ state: homeState }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: homeState }),
       },
-      callbackToast: 'Already connected',
+      callbackToast: homeState === 'ready' ? 'Already connected' : 'Continue setup',
     }
   }
 
@@ -2538,16 +2600,16 @@ function formatLinkStatusDetails(link: Awaited<ReturnType<typeof getTelegramLink
   if (!link) {
     return [
       '- linked: no',
-      '- next: send /start in a private DM, tap Start, then continue in the Mini App (or /link after that step). Setup links Telegram to your 4626 account and finishes the wallet checks required for bot actions. Full 4626 web app access may still require team approval.',
+      '- next: send /start in a private DM, tap Start, then continue in the Mini App. Telegram will attach after your 4626 account is verified.',
     ]
   }
+  const walletSetup = link.linkStatus === 'active' && link.ownerVerified ? 'ready' : 'pending'
   return [
     `- linked: ${link.linkStatus === 'active' ? 'yes' : 'no'}`,
-    `- status: ${link.linkStatus}`,
-    `- ownerVerified: ${String(link.ownerVerified)}`,
-    `- profileId: ${String(link.profileId)}`,
-    `- canonicalCSW: ${link.canonicalCswAddress}`,
-    `- linkedAt: ${link.linkedAt ?? 'n/a'}`,
+    `- wallet setup: ${walletSetup}`,
+    `- profile: ${String(link.profileId)}`,
+    `- canonical wallet: ${link.canonicalCswAddress}`,
+    `- linked at: ${link.linkedAt ?? 'n/a'}`,
   ]
 }
 
@@ -2568,12 +2630,12 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
   const summaryLines =
     link.linkStatus === 'active' && link.ownerVerified
       ? [
-          'Connected and ready for bot actions.',
-          `Canonical CSW: ${truncateAddress(link.canonicalCswAddress)}`,
+          'Telegram linked. Ready for bot actions.',
+          `Canonical wallet: ${truncateAddress(link.canonicalCswAddress)}`,
         ]
       : [
-          'Link found, but setup is not complete yet.',
-          `Owner verified: ${String(link.ownerVerified)}`,
+          'Telegram linked. Wallet setup pending.',
+          'Finish wallet confirmation before trading and wallet actions unlock.',
         ]
 
   return buildTelegramCommandChrome({
@@ -2630,54 +2692,107 @@ function formatWalletText(summary: Awaited<ReturnType<typeof getTelegramPortfoli
   })
 }
 
-function formatVaultsText(vaults: Awaited<ReturnType<typeof listTelegramScopedVaults>>): string {
-  if (vaults.length === 0) {
-    return [
-      'Vaults',
-      '',
-      '- no scoped vaults found for this chat',
-    ].join('\n')
+function buildWalletReplyMarkup(summary: Awaited<ReturnType<typeof getTelegramPortfolioSummary>>): Record<string, unknown> {
+  if (!summary) {
+    return {
+      inline_keyboard: [[
+        { text: menuLabel('connect'), callback_data: 'menu:connect' },
+        { text: menuLabel('back'), callback_data: 'menu:start' },
+      ]],
+    }
   }
 
-  const lines = ['Vaults', '']
+  return {
+    inline_keyboard: [[{ text: menuLabel('back'), callback_data: 'menu:start' }]],
+  }
+}
+
+function formatVaultsText(vaults: Awaited<ReturnType<typeof listTelegramScopedVaults>>): string {
+  if (vaults.length === 0) {
+    return buildTelegramCommandChrome({
+      title: 'AKITA | VAULTS',
+      command: '/vaults',
+      summaryLines: ['No scoped vaults found for this chat.'],
+    })
+  }
+
+  const lines: string[] = []
   for (const vault of vaults.slice(0, 8)) {
     const status = vault.isSettled ? 'settled' : 'active'
     lines.push(
       `- ${truncateAddress(vault.vaultAddress)} | coin ${truncateAddress(vault.creatorCoinAddress)} | ${status}`,
     )
   }
-  return lines.join('\n')
+  const summaryLines = [
+    `${vaults.length} scoped vault${vaults.length === 1 ? '' : 's'} available in this chat.`,
+    vaults.length > 8 ? 'Showing the first 8 entries below.' : 'Tap to expand the scoped vault list.',
+  ]
+  return buildTelegramCommandChrome({
+    title: 'AKITA | VAULTS',
+    command: '/vaults',
+    summaryLines,
+    detailLines: lines,
+    expandableDetails: true,
+  })
 }
 
 function formatAuctionsText(auctions: Awaited<ReturnType<typeof listTelegramAuctions>>): string {
   if (auctions.length === 0) {
-    return [
-      'Auctions',
-      '',
-      '- no CCA auctions configured in scope',
-    ].join('\n')
+    return buildTelegramCommandChrome({
+      title: 'AKITA | AUCTIONS',
+      command: '/auctions',
+      summaryLines: ['No CCA auctions are configured in scope right now.'],
+    })
   }
 
-  const lines = ['Auctions', '']
+  const lines: string[] = []
   for (const row of auctions.slice(0, 8)) {
     const status = row.isSettled ? 'settled' : 'available'
     lines.push(`- ${truncateAddress(row.vaultAddress)} -> ${truncateAddress(row.ccaStrategyAddress)} (${status})`)
   }
-  return lines.join('\n')
+  const summaryLines = [
+    `${auctions.length} scoped auction${auctions.length === 1 ? '' : 's'} found.`,
+    auctions.length > 8 ? 'Showing the first 8 entries below.' : 'Tap to expand the auction list.',
+  ]
+  return buildTelegramCommandChrome({
+    title: 'AKITA | AUCTIONS',
+    command: '/auctions',
+    summaryLines,
+    detailLines: lines,
+    expandableDetails: true,
+  })
 }
 
 function formatSignalsText(
-  title: string,
-  rows: Array<{ actionType: string; status: string; txHash?: string | null }>,
+  params: {
+    title: string
+    command: string
+    rows: Array<{ actionType: string; status: string; txHash?: string | null }>
+  },
 ): string {
-  if (rows.length === 0) {
-    return [title, '', '- no recent signals'].join('\n')
+  if (params.rows.length === 0) {
+    return buildTelegramCommandChrome({
+      title: `AKITA | ${params.title.toUpperCase()}`,
+      command: params.command,
+      summaryLines: ['No recent entries yet.'],
+    })
   }
-  const lines = [title, '']
-  for (const row of rows.slice(0, 8)) {
+
+  const lines: string[] = []
+  for (const row of params.rows.slice(0, 8)) {
     lines.push(`- ${row.actionType} ${row.status}${row.txHash ? ` (${truncateAddress(row.txHash)})` : ''}`)
   }
-  return lines.join('\n')
+  const summaryLines = [
+    `${params.rows.length} recent entr${params.rows.length === 1 ? 'y' : 'ies'} found.`,
+    params.rows.length > 8 ? 'Showing the first 8 entries below.' : 'Tap to expand the recent activity list.',
+  ]
+  return buildTelegramCommandChrome({
+    title: `AKITA | ${params.title.toUpperCase()}`,
+    command: params.command,
+    summaryLines,
+    detailLines: lines,
+    expandableDetails: true,
+  })
 }
 
 async function logTelegramActionAudit(params: Parameters<typeof logTelegramActionAuditShared>[0] & { botToken?: string }) {
@@ -3143,11 +3258,11 @@ async function executeTelegramNativeCommand(params: {
   }
 
   if (head === 'start') {
-    const isLinked = await isTelegramUserLinked({
+    const homeState = await resolveTelegramHomeState({
       telegramUserId: params.userId,
       db: params.db,
     })
-    if (!isLinked && isPrivateChatId(params.chatId)) {
+    if (homeState === 'unlinked' && isPrivateChatId(params.chatId)) {
       const db = params.db ?? (await getDb())
       if (db) {
         await ensureTelegramTradingSchema(db as any)
@@ -3158,15 +3273,16 @@ async function executeTelegramNativeCommand(params: {
         replyMarkup: buildOnboardingWelcomeReplyMarkup(),
       }
     }
-    if (!isLinked && !isPrivateChatId(params.chatId)) {
+    if (homeState === 'unlinked' && !isPrivateChatId(params.chatId)) {
       return {
         text: buildUnlinkedGroupStartLandingText(),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
+        replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: 'unlinked' }),
       }
     }
+    const linkedHomeState: Exclude<TelegramHomeState, 'unlinked'> = homeState === 'ready' ? 'ready' : 'pending'
     return {
-      text: buildStartLandingText({ isLinked: true }),
-      replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: true }),
+      text: buildStartLandingText({ state: linkedHomeState }),
+      replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: linkedHomeState }),
     }
   }
 
@@ -3179,12 +3295,12 @@ async function executeTelegramNativeCommand(params: {
       })
     }
     const db = params.db ?? (await getDb())
-    const isLinked = await isTelegramUserLinked({ telegramUserId: params.userId, db: db ?? undefined })
-    if (isLinked) {
+    const homeState = await resolveTelegramHomeState({ telegramUserId: params.userId, db: db ?? undefined })
+    if (homeState !== 'unlinked') {
       return buildTelegramLinkFlowResponse({
         chatId: params.chatId,
         telegramUserId: params.userId,
-        linkButtonText: 'Refresh Connect',
+        linkButtonText: homeState === 'pending' ? 'Finish Wallet Setup' : 'Refresh Connect',
       })
     }
     if (!db) {
@@ -3366,8 +3482,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Vault Deploy blocked',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3475,8 +3591,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Deploy blocked',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3578,8 +3694,8 @@ async function executeTelegramNativeCommand(params: {
           text: [
             'Trade blocked',
             '',
-            '- owner verification required',
-            '- run /linked and ensure ownerVerified is true',
+            '- wallet setup pending',
+            '- run /linked, finish wallet confirmation, then retry',
           ].join('\n'),
         }
       }
@@ -3737,8 +3853,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Join Room',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3927,14 +4043,14 @@ async function executeTelegramNativeCommand(params: {
         chatId: params.chatId,
         telegramUserId: params.userId,
         telegramUsername: link.telegramUsername,
-        linkButtonText: 'Reconnect',
+        linkButtonText: 'Finish Wallet Setup',
       })
       return {
         text: [
           formatLinkStatusText(link),
           '',
-          'Owner verification is still pending.',
-          'Reconnect below to verify your canonical Coinbase Smart Wallet.',
+          'Wallet setup is still pending.',
+          'Use Finish Wallet Setup below to complete wallet confirmation for bot actions.',
         ].join('\n'),
         replyMarkup: relinkFlow.replyMarkup,
       }
@@ -3943,19 +4059,13 @@ async function executeTelegramNativeCommand(params: {
       text: [
         formatLinkStatusText(link),
         '',
-        'Ready actions:',
-        `- tap ${menuLabel('wallet')}, ${menuLabel('trade')}, or ${menuLabel('explore')} below`,
+        'Ready for bot actions.',
+        'Use /start to open Wallet, Trade, or Explore.',
       ].join('\n'),
       replyMarkup: {
         inline_keyboard: [
-          [
-            { text: menuLabel('wallet'), callback_data: 'menu:wallet' },
-          ],
-          [
-            { text: menuLabel('trade'), callback_data: 'menu:trade' },
-            { text: menuLabel('explore'), callback_data: 'menu:explore' },
-            { text: menuLabel('help'), callback_data: 'menu:topics' },
-          ],
+          [{ text: 'Open Start Menu', callback_data: 'menu:start' }],
+          [{ text: menuLabel('help'), callback_data: 'menu:topics' }],
         ],
       },
     }
@@ -3995,7 +4105,10 @@ async function executeTelegramNativeCommand(params: {
 
   if (head === 'wallet') {
     const summary = await getTelegramPortfolioSummary({ db: db as any, telegramUserId: params.userId })
-    return { text: formatWalletText(summary) }
+    return {
+      text: formatWalletText(summary),
+      replyMarkup: buildWalletReplyMarkup(summary),
+    }
   }
 
   if (head === 'vaults') {
@@ -4010,7 +4123,13 @@ async function executeTelegramNativeCommand(params: {
 
   if (head === 'mybids') {
     const bids = await listTelegramUserBids({ db: db as any, telegramUserId: params.userId })
-    return { text: formatSignalsText('My Bids', bids) }
+    return {
+      text: formatSignalsText({
+        title: 'My Bids',
+        command: '/mybids',
+        rows: bids,
+      }),
+    }
   }
 
   if (tradeIntent) {
@@ -4034,8 +4153,8 @@ async function executeTelegramNativeCommand(params: {
         text: [
           'Trade blocked',
           '',
-          '- owner verification required',
-          '- run /linked and ensure ownerVerified is true',
+          '- wallet setup pending',
+          '- run /linked, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -4436,10 +4555,10 @@ async function handleTelegramTradeFlowCallback(params: {
       text: [
         'Trade blocked',
         '',
-        '- owner verification required',
-        '- run /linked and ensure ownerVerified is true',
+        '- wallet setup pending',
+        '- run /linked, finish wallet confirmation, then retry',
       ].join('\n'),
-      callbackToast: 'Owner check required',
+      callbackToast: 'Wallet setup pending',
     }
   }
 
@@ -4589,8 +4708,8 @@ async function maybeHandlePendingTradePercentInput(params: {
       text: [
         'Trade blocked',
         '',
-        '- link + owner verification required',
-        '- run /link then /linked, then retry',
+        '- Telegram link and wallet setup are required',
+        '- run /link, then /linked to finish wallet confirmation, then retry',
       ].join('\n'),
     }
   }
@@ -5621,6 +5740,14 @@ async function executeTelegramCommand(params: {
     messageId: params.messageId,
   })
   if (nativeResponse) return nativeResponse
+
+  if (isOperatorCommand(params.text) && !params.isAdmin) {
+    const homeState = await resolveTelegramHomeState({ telegramUserId: params.userId })
+    return buildOperatorAccessDeniedResponse({
+      chatId: params.chatId,
+      homeState,
+    })
+  }
 
   const processed = await processTelegramAgentInput({
     text: params.text,
@@ -6665,6 +6792,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
+    if (isOperatorCallbackToken(callbackDataLower) && !isAdmin) {
+      await answerTelegramCallbackQuery({
+        botToken,
+        callbackQueryId,
+        text: 'Only configured bot operators can use CRE Ops and Solana actions.',
+        showAlert: true,
+      }).catch(() => {})
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
+
     let callbackAcknowledged = false
     try {
       const vaultDeployImmediateToast = parsedVaultDeployCallback
@@ -6805,8 +6945,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
-    const menuIsLinked = await isTelegramUserLinked({ telegramUserId: userId })
-    if (asTrimmed(callbackData).toLowerCase() === 'menu:start' && !menuIsLinked && isPrivateChatId(chatId)) {
+    const menuHomeState = await resolveTelegramHomeState({ telegramUserId: userId })
+    const menuIsLinked = menuHomeState === 'ready'
+    if (asTrimmed(callbackData).toLowerCase() === 'menu:start' && menuHomeState === 'unlinked' && isPrivateChatId(chatId)) {
       const db = await getDb()
       if (db) {
         await ensureTelegramTradingSchema(db as any)
@@ -6816,7 +6957,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const staticMenuResponse = resolveStaticMenuCallbackResponse({
       callbackData,
       chatId,
-      isLinked: menuIsLinked,
+      homeState: menuHomeState,
+      isAdmin,
     })
     if (staticMenuResponse) {
       if (canReplaceMenuMessage) {
@@ -6906,7 +7048,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const helpMarkup = response.replyMarkup
       ?? resolveOperatorReplyMarkup(mappedCommand)
       ?? (isHelpCategoryCommand(mappedCommand)
-        ? buildHelpCategoryReplyMarkup()
+        ? buildHelpCategoryReplyMarkup({ isAdmin })
         : isHelpCommand(mappedCommand)
           ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
           : undefined)
@@ -7157,7 +7299,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const helpMarkup = response.replyMarkup
     ?? resolveOperatorReplyMarkup(normalizedText)
     ?? (isHelpCategoryCommand(normalizedText)
-      ? buildHelpCategoryReplyMarkup()
+      ? buildHelpCategoryReplyMarkup({ isAdmin })
       : isHelpCommand(normalizedText)
         ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
         : undefined)

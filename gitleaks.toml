@@ -1,0 +1,19 @@
+title = "4626 gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Vendored audit snapshots, third-party scan dumps, docs with example material, and test fixtures using non-production secrets"
+paths = [
+  '''^design/audit-source-snapshots/''',
+  '''^docs/vibeship/''',
+  '''^docs/scan2\.txt$''',
+  '''^docs/yearn/''',
+  '''^frontend/api/__tests__/''',
+  '''^frontend/src/.+\.test\.tsx?$''',
+  '''^cre/tests/''',
+  '''^\.cursor/skills/moltbook/''',
+  '''^frontend/skills/moltbook/''',
+  '''^deployment-vault-v3-final\.json$''',
+]

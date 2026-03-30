@@ -116,6 +116,9 @@ function sslOptionsForConnection(connectionString: string): any | undefined {
 
   const mode = getSslMode(connectionString)
   if (mode === 'verify-full' || mode === 'verify-ca') return { rejectUnauthorized: true }
+  // Encrypted session to managed Postgres (e.g. sslmode=require) but CA chain may not match Node defaults.
+  // Tighten with POSTGRES_SSL_REJECT_UNAUTHORIZED=true or sslmode=verify-full on the URL when your CA is trusted.
+  // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
   return { rejectUnauthorized: false }
 }
 

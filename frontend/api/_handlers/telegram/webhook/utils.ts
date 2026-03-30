@@ -12,6 +12,17 @@ export function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+export function normalizeTelegramMenuButtonText(value: unknown, fallbackValue = ''): string {
+  const trimmed = asTrimmed(value)
+  if (!trimmed) return fallbackValue
+
+  const withoutVersion = trimmed.replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
+  if (/^open(?:\s+4626(?:\.fun)?)?$/i.test(withoutVersion)) {
+    return 'Connect'
+  }
+  return withoutVersion
+}
+
 export function parseBoolean(value: unknown, defaultValue: boolean): boolean {
   const raw = asTrimmed(value).toLowerCase()
   if (!raw) return defaultValue

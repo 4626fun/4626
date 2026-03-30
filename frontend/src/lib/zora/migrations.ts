@@ -30,6 +30,9 @@ const V4_LAUNCH_BLOCK = 31250000n
 const CACHE_KEY = 'zora_migrated_coins'
 const CACHE_TIMESTAMP_KEY = 'zora_migrated_coins_ts'
 const CACHE_TTL = 1000 * 60 * 60 // 1 hour
+const RATE_LIMIT_RETRY_BASE_MS = 5_000
+const RATE_LIMIT_RETRY_MAX_MS = 60_000
+const MAX_RATE_LIMIT_RETRIES_PER_CHUNK = 6
 const TRUST_CHECK_CONCURRENCY = (() => {
   const raw = Number(import.meta.env.VITE_ZORA_MIGRATION_TRUST_CONCURRENCY ?? 8)
   if (!Number.isFinite(raw)) return 8
@@ -43,6 +46,10 @@ const TRUST_CHECK_CONCURRENCY = (() => {
 let migratedCoinsSet: Set<string> | null = null
 let lastFetchTime = 0
 let inFlightFetchMigratedCoins: Promise<Set<string>> | null = null
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms))
+}
 
 function parseAddressAllowlist(raw: string | undefined, fallback: readonly string[]): Set<string> {
   const parsed = new Set<string>()
@@ -151,9 +158,9 @@ function setCachedMigratedCoins(addresses: string[]) {
 
 function getInitialLogRangeDelta(): bigint {
   const raw = import.meta.env.VITE_BASE_LOG_RANGE_DELTA as string | undefined
-  if (!raw) return 50000n
+  if (!raw) return 100000n
   const n = Number(raw)
-  if (!Number.isFinite(n) || n < 0) return 50000n
+  if (!Number.isFinite(n) || n < 0) return 100000n
   return BigInt(Math.floor(n))
 }
 
@@ -267,6 +274,53 @@ function extractSuggestedRangeDelta(error: unknown): bigint | null {
   return null
 }
 
+function getErrorStatus(error: unknown): number | null {
+  const direct = Number((error as { status?: unknown } | null)?.status)
+  if (Number.isFinite(direct) && direct > 0) return direct
+  const cause = Number((error as { cause?: { status?: unknown } } | null)?.cause?.status)
+  if (Number.isFinite(cause) && cause > 0) return cause
+  return null
+}
+
+function readRetryAfterHeader(error: unknown): string | null {
+  const headers = (error as { headers?: Headers | { get?: (name: string) => string | null } } | null)?.headers
+  const direct = typeof headers?.get === 'function' ? headers.get('Retry-After') ?? headers.get('retry-after') : null
+  if (direct) return direct
+  const causeHeaders = (
+    error as { cause?: { headers?: Headers | { get?: (name: string) => string | null } } } | null
+  )?.cause?.headers
+  return typeof causeHeaders?.get === 'function'
+    ? causeHeaders.get('Retry-After') ?? causeHeaders.get('retry-after')
+    : null
+}
+
+function parseRetryAfterMs(value: string | null): number | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1000)
+  const timestamp = Date.parse(raw)
+  if (!Number.isFinite(timestamp)) return null
+  const delayMs = timestamp - Date.now()
+  if (delayMs <= 0) return 1_000
+  return delayMs
+}
+
+function isRateLimitError(error: unknown): boolean {
+  if (getErrorStatus(error) === 429) return true
+  const code = Number((error as { code?: unknown } | null)?.code)
+  if (Number.isFinite(code) && code === -32005) return true
+  const msg = String((error as any)?.message ?? (error as any)?.details ?? error ?? '').toLowerCase()
+  return msg.includes('rate limit')
+}
+
+function getRateLimitRetryDelayMs(error: unknown, attempt: number): number {
+  const headerDelayMs = parseRetryAfterMs(readRetryAfterHeader(error))
+  if (headerDelayMs !== null) return Math.min(RATE_LIMIT_RETRY_MAX_MS, Math.max(1_000, headerDelayMs))
+  const exponent = Math.max(0, attempt - 1)
+  return Math.min(RATE_LIMIT_RETRY_MAX_MS, RATE_LIMIT_RETRY_BASE_MS * (2 ** exponent))
+}
+
 /**
  * Fetch all migrated coin addresses from LiquidityMigrated events
  */
@@ -294,11 +348,13 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
       // Query logs in chunks to avoid RPC limits
       let chunkDelta = getInitialLogRangeDelta()
       let warnedRangeLimit = false
+      let warnedRateLimit = false
       const migratedAddresses = new Set<string>()
       const trustedAddressCache = new Map<string, boolean>()
       let rejectedUntrustedCandidates = 0
       
       let fromBlock = V4_LAUNCH_BLOCK
+      let rateLimitRetriesForChunk = 0
       
       while (fromBlock < latestBlock) {
         const toBlock = fromBlock + chunkDelta > latestBlock ? latestBlock : fromBlock + chunkDelta
@@ -349,7 +405,31 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
               rejectedUntrustedCandidates += 1
             }
           }
+          rateLimitRetriesForChunk = 0
         } catch (e) {
+          if (isRateLimitError(e)) {
+            rateLimitRetriesForChunk += 1
+            if (rateLimitRetriesForChunk > MAX_RATE_LIMIT_RETRIES_PER_CHUNK) {
+              console.warn(
+                `[migrations] Rate limit persisted for blocks ${fromBlock}-${toBlock}. Skipping chunk after ${MAX_RATE_LIMIT_RETRIES_PER_CHUNK} retries.`,
+              )
+              rateLimitRetriesForChunk = 0
+              fromBlock = toBlock + 1n
+              continue
+            }
+
+            const delayMs = getRateLimitRetryDelayMs(e, rateLimitRetriesForChunk)
+            if (!warnedRateLimit) {
+              warnedRateLimit = true
+              console.warn(
+                `[migrations] RPC rate limit detected. Waiting ${delayMs}ms before retrying block range ${fromBlock}-${toBlock}.`,
+              )
+            }
+            await sleep(delayMs)
+            continue
+          }
+
+          rateLimitRetriesForChunk = 0
           const suggestedDelta = extractSuggestedRangeDelta(e)
           if (suggestedDelta !== null && suggestedDelta < chunkDelta) {
             chunkDelta = suggestedDelta
@@ -361,9 +441,9 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
             }
             continue
           }
-          if (chunkDelta > 0n) {
-            const reduced = chunkDelta / 10n
-            chunkDelta = reduced < 1n ? 0n : reduced
+          if (chunkDelta > 1n) {
+            const reduced = chunkDelta / 2n
+            chunkDelta = reduced < 1n ? 1n : reduced
             continue
           }
           // If we can't reduce further, skip this block to avoid stalling.

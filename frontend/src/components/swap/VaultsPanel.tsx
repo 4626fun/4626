@@ -24,6 +24,8 @@ type AuctionStatusSnapshot = {
   auction?: string | null
   isActive: boolean
   isGraduated: boolean
+  /** From `/api/v1/auction/status` — suppress swap/featured when no live or upcoming auction surface */
+  auctionLifecycleDegraded?: boolean
 }
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
@@ -50,6 +52,7 @@ async function fetchAuctionStatusSnapshot(ccaStrategy: `0x${string}`): Promise<A
           auction?: string | null
           isActive?: boolean
           isGraduated?: boolean
+          auctionLifecycleDegraded?: boolean
         }
       }
     | null
@@ -57,6 +60,8 @@ async function fetchAuctionStatusSnapshot(ccaStrategy: `0x${string}`): Promise<A
     auction: typeof payload?.data?.auction === 'string' ? payload.data.auction : null,
     isActive: Boolean(payload?.data?.isActive),
     isGraduated: Boolean(payload?.data?.isGraduated),
+    auctionLifecycleDegraded:
+      typeof payload?.data?.auctionLifecycleDegraded === 'boolean' ? payload.data.auctionLifecycleDegraded : undefined,
   }
 }
 
@@ -116,6 +121,8 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
       const status = featuredStatusQueries[index]?.data
       if (!status) return true
       const hasAuction = isOnchainAuctionAddress(status.auction)
+      if (status.auctionLifecycleDegraded === true) return false
+      if (status.auctionLifecycleDegraded === undefined && !hasAuction && !status.isGraduated) return false
       const failed = hasAuction && !status.isActive && !status.isGraduated
       if (failed || status.isGraduated) return false
       return true

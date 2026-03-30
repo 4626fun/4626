@@ -71,4 +71,46 @@ describe('fetchMigratedCoins single-flight behavior', () => {
     const getCodeCalls = mockRequest.mock.calls.filter(([args]) => args?.method === 'eth_getCode')
     expect(getCodeCalls).toHaveLength(0)
   })
+
+  it('backs off and retries the same log range when the rpc returns 429', async () => {
+    vi.useFakeTimers()
+    mockGetBlockNumber.mockResolvedValue(31_250_001n)
+    const logRangeCalls: Array<{ fromBlock: string; toBlock: string }> = []
+
+    mockRequest.mockImplementation(async (args: { method?: string; params?: Array<{ fromBlock: string; toBlock: string }> }) => {
+      if (args?.method === 'eth_getLogs') {
+        const range = args.params?.[0]
+        if (range) logRangeCalls.push({ fromBlock: range.fromBlock, toBlock: range.toBlock })
+        if (logRangeCalls.length < 3) {
+          const error = new Error('Rate limit exceeded') as Error & {
+            status?: number
+            headers?: Headers
+          }
+          error.status = 429
+          error.headers = new Headers({ 'Retry-After': '1' })
+          throw error
+        }
+        return []
+      }
+      if (args?.method === 'eth_chainId') return '0x2105'
+      return '0x'
+    })
+
+    try {
+      const { fetchMigratedCoins } = await import('./migrations')
+      const fetchPromise = fetchMigratedCoins()
+
+      await vi.runAllTimersAsync()
+      const migratedCoins = await fetchPromise
+
+      expect(migratedCoins.size).toBe(0)
+      expect(logRangeCalls).toEqual([
+        { fromBlock: '0x1dcd650', toBlock: '0x1dcd651' },
+        { fromBlock: '0x1dcd650', toBlock: '0x1dcd651' },
+        { fromBlock: '0x1dcd650', toBlock: '0x1dcd651' },
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

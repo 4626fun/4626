@@ -20,7 +20,7 @@ import { useAccount } from 'wagmi'
 import { useLogin } from '@privy-io/react-auth'
 import { MessageSquare, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
-import { XmtpChatProvider, type ChatConversation, useXmtp } from '@/lib/xmtp/provider'
+import { XmtpChatProvider, type ChatConversation, type StartDmResult, useXmtp } from '@/lib/xmtp/provider'
 import {
   getBasenameAutocompleteCandidate,
   resolveDmRecipient,
@@ -37,6 +37,7 @@ import { hasChatDeepLinkSearch } from './chatActivation'
 const MAX_OPEN_WINDOWS = 3
 const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
 const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
+const XMTP_ENV_LABEL = String(import.meta.env.VITE_XMTP_ENV ?? 'production').trim().toLowerCase() || 'production'
 const DM_PREVIEW_LOOKUP_DEBOUNCE_MS = 450
 
 function isEvmAddress(value: string): value is `0x${string}` {
@@ -46,6 +47,24 @@ function isEvmAddress(value: string): value is `0x${string}` {
 function normalizeEvmAddress(value: string | null | undefined): `0x${string}` | null {
   const raw = String(value ?? '').trim()
   return isEvmAddress(raw) ? (raw.toLowerCase() as `0x${string}`) : null
+}
+
+function shortAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
+
+function formatStartDmError(result: Exclude<StartDmResult, { ok: true }>): string {
+  const base = result.message || 'Could not start conversation'
+  if (result.reason === 'environment_mismatch') {
+    return `${base} Check that both wallets are on XMTP ${XMTP_ENV_LABEL}.`
+  }
+  if (result.reason === 'canonical_recipient_not_registered') {
+    return `${base} Verify the canonical wallet already created an XMTP inbox on ${XMTP_ENV_LABEL}.`
+  }
+  if (result.reason === 'recipient_not_registered') {
+    return `${base} Verify the recipient wallet already created an XMTP inbox on ${XMTP_ENV_LABEL}.`
+  }
+  return base
 }
 
 function shouldResolveDmPreviewInput(input: string): boolean {
@@ -382,10 +401,16 @@ function ChatWidgetInner() {
       })
       let destination = routeDecision.recipient
       if (routeDecision.notice) setNewDmNotice(routeDecision.notice)
+      if (!routeDecision.notice && destination.wasCanonicalRemap && destination.inputAddress !== destination.address) {
+        setNewDmNotice(
+          `Using canonical wallet ${shortAddress(destination.address)} (from ${shortAddress(destination.inputAddress)}).`,
+        )
+      }
 
       let dmResult = await startDm(destination.address, {
         nameHint: destination.basenameHint,
         imageUrl: destination.avatarUrl,
+        inputAddress: destination.inputAddress,
       })
 
       if (!dmResult.ok && dmResult.reason === 'self_recipient' && agentAddress) {
@@ -412,7 +437,7 @@ function ChatWidgetInner() {
           unreadCount: 0,
         })
       } else {
-        setNewDmError(dmResult.message || 'Could not start conversation')
+        setNewDmError(formatStartDmError(dmResult))
       }
     } catch (e) {
       setNewDmError(e instanceof Error ? e.message : 'Failed to start DM')
@@ -596,6 +621,12 @@ function ChatWidgetInner() {
                   <div className="text-[11px] font-mono text-zinc-400">
                     {activeDmPreview.address.slice(0, 6)}…{activeDmPreview.address.slice(-4)}
                   </div>
+                  {activeDmPreview.wasCanonicalRemap && activeDmPreview.inputAddress !== activeDmPreview.address && (
+                    <div className="text-[11px] text-amber-200/80">
+                      Canonical route: {shortAddress(activeDmPreview.inputAddress)} to{' '}
+                      {shortAddress(activeDmPreview.address)}
+                    </div>
+                  )}
                 </div>
               )}
               {newDmError && (

@@ -44,6 +44,8 @@ Standard commands are documented in `frontend/package.json` scripts:
 - `pnpm -C frontend typecheck` — TypeScript (clean — 0 errors)
 - `pnpm -C frontend test` — Vitest (289 tests, all passing)
 - `forge test` — Foundry unit tests (72 tests, all passing)
+- `pnpm security:local` — optional sweep: `forge test`, frontend lint/typecheck/test, Semgrep on `frontend/api` + `frontend/server/_lib` (needs Docker). Script: `scripts/security-audit-local.sh`.
+- **Security CI:** `.github/workflows/security-scanning.yml` — gitleaks, pnpm audit summaries, **blocking** Semgrep on that API surface, Slither (report-only). PRs: `.github/workflows/dependency-review.yml` (high+ vulns, runtime **and** development scopes; enable Dependency graph per `docs/audits/github-supply-chain-setup.md`). Index: `docs/audits/README.md`.
 
 ### Non-obvious caveats
 

@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions } from '../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import { auctionTokenDisplaySymbol } from '../../../../server/_lib/auctionTokenDisplaySymbol.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -39,6 +40,8 @@ function isRpcRateLimitError(error: unknown): boolean {
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 function normalizeHost(raw: string): string | null {
   const host = raw.trim().toLowerCase()
@@ -243,7 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chain: base,
       transport: http(resolvedRpcUrl ?? rpcUrls[0], { timeout: 20_000 }),
     })
-    const [tokenDecimals, tokenSymbol, currencyDecimals] = await Promise.all([
+    const [tokenDecimals, tokenSymbolRaw, currencyDecimals] = await Promise.all([
       tokenAddr
         ? metadataClient.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
         : null,
@@ -255,6 +258,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : null,
     ])
 
+    const tokenSymbolOnChain = typeof tokenSymbolRaw === 'string' ? tokenSymbolRaw : null
+    const tokenSymbol = auctionTokenDisplaySymbol(tokenSymbolOnChain) ?? tokenSymbolOnChain
+
+    const auctionAddrNorm = isAddressLike(auction) ? auction.toLowerCase() : null
+    const hasRealAuction = Boolean(auctionAddrNorm && auctionAddrNorm !== ZERO_ADDRESS)
+    /** LifecyclePhase.AuctionScheduled — auction contract exists but window not open yet */
+    const auctionScheduledPhase = 7
+    /** True when the strategy should not be promoted on swap/featured surfaces (idle, failed, between phases, etc.) */
+    const auctionLifecycleDegraded = !(
+      isGraduated ||
+      (hasRealAuction && (isActive || lifecycleAuctionWindowOpen || lifecyclePhase === auctionScheduledPhase))
+    )
+
     setCache(res, 20)
     return res.status(200).json({
       success: true,
@@ -262,7 +278,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chainId: 8453,
         generatedAt: new Date().toISOString(),
         ccaStrategy: ccaStrategy.toLowerCase(),
-        auction: isAddressLike(auction) ? auction.toLowerCase() : null,
+        auction: auctionAddrNorm && auctionAddrNorm !== ZERO_ADDRESS ? auctionAddrNorm : null,
         isActive,
         isGraduated,
         clearingPriceQ96,
@@ -291,6 +307,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         currencyDecimals: typeof currencyDecimals === 'number' ? currencyDecimals : currencyDecimals === null ? null : Number(currencyDecimals),
         auctionToken: tokenAddressLower,
         auctionTokenSymbol: typeof tokenSymbol === 'string' ? tokenSymbol : null,
+        auctionLifecycleDegraded,
         auctionTokenDecimals: typeof tokenDecimals === 'number' ? tokenDecimals : tokenDecimals === null ? null : Number(tokenDecimals),
         auctionTokenImagePath: tokenImagePath,
         auctionTokenImageUrl: tokenImageUrl,

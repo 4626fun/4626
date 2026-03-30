@@ -42,6 +42,7 @@ type TelegramWebAppLike = {
   contentSafeAreaInset?: TelegramSafeAreaInset
   ready?: () => void
   expand?: () => void
+  close?: () => void
   MainButton?: TelegramMainButtonLike
   switchInlineQuery?: (query: string, chooseChatTypes?: TelegramInlineQueryChatType[]) => void
   onEvent?: (eventType: string, eventHandler: () => void) => void

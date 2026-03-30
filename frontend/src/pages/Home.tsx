@@ -119,10 +119,35 @@ export function Home() {
               transition={{ duration: 0.8, delay: 1.12 }}
               className="pt-2 sm:pt-6"
             >
-              <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
-                Join waitlist
-                <ArrowRight className="h-4 w-4" />
-              </button>
+              {waitlistInlineOpen ? (
+                <div className="mx-auto w-full max-w-3xl text-left">
+                  <Suspense
+                    fallback={
+                      <div className="rounded-[28px] border border-white/10 bg-black/45 px-4 py-6 text-sm text-zinc-300 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:px-6">
+                        Loading waitlist…
+                      </div>
+                    }
+                  >
+                    <Web3Providers>
+                      <PrivyClientProvider showWalletLoginFirst={false}>
+                        <div className="rounded-[28px] border border-white/10 bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
+                          <LazyThinWaitlistFlow
+                            variant="embedded"
+                            sectionId="home-waitlist"
+                            autoStartAuth={waitlistAutoStart || waitlistInlineOpen}
+                            suppressAuthShell
+                          />
+                        </div>
+                      </PrivyClientProvider>
+                    </Web3Providers>
+                  </Suspense>
+                </div>
+              ) : (
+                <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
+                  Join waitlist
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              )}
             </motion.div>
           ) : null}
 
@@ -141,33 +166,6 @@ export function Home() {
           ) : null}
         </div>
       </section>
-
-      {showJoinWaitlistCta && waitlistInlineOpen ? (
-        <section className="cinematic-section !py-4 sm:!py-6 lg:!py-8">
-          <div className="mx-auto max-w-5xl px-4 sm:px-6">
-            <Suspense
-              fallback={
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-zinc-300">
-                  Loading waitlist…
-                </div>
-              }
-            >
-              <Web3Providers>
-                <PrivyClientProvider showWalletLoginFirst={false}>
-                  <div className="rounded-[28px] border border-white/10 bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
-                    <LazyThinWaitlistFlow
-                      variant="embedded"
-                      sectionId="home-waitlist"
-                      autoStartAuth={waitlistAutoStart || waitlistInlineOpen}
-                      suppressAuthShell
-                    />
-                  </div>
-                </PrivyClientProvider>
-              </Web3Providers>
-            </Suspense>
-          </div>
-        </section>
-      ) : null}
 
       <section className="cinematic-section !py-10 sm:!py-16 lg:!py-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">

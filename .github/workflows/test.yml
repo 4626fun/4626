@@ -68,6 +68,12 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm --dir frontend install --frozen-lockfile
 
+      - name: Frontend ESLint
+        run: pnpm --dir frontend lint
+
+      - name: Frontend TypeScript
+        run: pnpm --dir frontend typecheck
+
       - name: Run frontend tests
         run: pnpm --dir frontend test -- --reporter=verbose --reporter=json --outputFile=test-results.json 2>&1 | tee test-output.txt
         env:

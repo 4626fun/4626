@@ -22,7 +22,8 @@ function parseAesKeyFromEnv(): Buffer {
 function encryptPrivateKey(privKeyHex: `0x${string}`, aad: string): { ciphertextB64: string; ivB64: string; tagB64: string } {
   const key = parseAesKeyFromEnv()
   const iv = randomBytes(12) // GCM standard IV length
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const gcmOpts = { authTagLength: 16 } as const
+  const cipher = createCipheriv('aes-256-gcm', key, iv, gcmOpts)
   cipher.setAAD(Buffer.from(aad, 'utf8'))
   const plaintext = Buffer.from(privKeyHex, 'utf8')
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
@@ -35,7 +36,7 @@ export function decryptPrivateKey(params: { ciphertextB64: string; ivB64: string
   const iv = Buffer.from(params.ivB64, 'base64')
   const tag = Buffer.from(params.tagB64, 'base64')
   const ciphertext = Buffer.from(params.ciphertextB64, 'base64')
-  const decipher = createDecipheriv('aes-256-gcm', key, iv)
+  const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 })
   decipher.setAAD(Buffer.from(params.aad, 'utf8'))
   decipher.setAuthTag(tag)
   const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')

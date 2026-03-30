@@ -15,7 +15,7 @@ import {
 } from './webhook/constants.js'
 import { TELEGRAM_MINI_APP_LINK_PATH, TELEGRAM_MINI_APP_ORIGIN, buildTelegramMiniAppUrl, normalizeTelegramMiniAppBaseUrl } from './webhook/miniApp.js'
 import { verifyBotConfigSecret } from './webhook/services/access.js'
-import { asTrimmed } from './webhook/utils.js'
+import { asTrimmed, normalizeTelegramMenuButtonText } from './webhook/utils.js'
 
 type BotConfigBody = {
   dryRun?: boolean
@@ -25,14 +25,6 @@ type BotConfigBody = {
   webhookUrl?: string
   chatId?: string | number
   dropPendingUpdates?: boolean
-}
-
-function normalizeMenuText(value: string): string {
-  const trimmed = asTrimmed(value)
-  if (!trimmed) return 'Connect'
-  return trimmed
-    .replace(/\b(4626(?:\.fun)?)\s+v\d+\b/gi, '$1')
-    .replace(/^open(?:\s+4626(?:\.fun)?)?$/i, 'Connect')
 }
 
 function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {
@@ -86,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const menuMode = asTrimmed(body.menuMode || config.menuButtonMode || 'commands').toLowerCase() === 'commands'
     ? 'commands'
     : 'web_app'
-  const menuText = normalizeMenuText(body.menuText || config.menuButtonText || '')
+  const menuText = normalizeTelegramMenuButtonText(body.menuText || config.menuButtonText || '', 'Connect')
   const miniAppUrl = resolveMiniAppUrl(body, config.miniAppUrl)
   const webhookUrl = resolveWebhookUrl(req, body, config.webhookUrl)
   const chatId = readChatId(body)

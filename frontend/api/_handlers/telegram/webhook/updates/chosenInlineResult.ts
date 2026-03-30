@@ -1,19 +1,5 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-
-import runtimeHandler from '../../_webhook.runtime.js'
-import type { TelegramWebhookConfig } from '../config.js'
-import type { TelegramChosenInlineResult, TelegramUpdate, TelegramWebhookOk } from '../types.js'
+import type { TelegramChosenInlineResult, TelegramWebhookOk } from '../types.js'
 import { asTrimmed } from '../utils.js'
-
-export async function handle(
-  req: VercelRequest,
-  res: VercelResponse,
-  update: TelegramUpdate,
-  _config: TelegramWebhookConfig,
-) {
-  ;(req as any).body = update
-  return runtimeHandler(req, res)
-}
 
 export async function handleChosenInlineResultUpdate(params: {
   updateId?: number

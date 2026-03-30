@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions } from '../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import { auctionTokenDisplaySymbol } from '../../../../server/_lib/auctionTokenDisplaySymbol.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -131,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenAddr = typeof auctionToken === 'string' && isAddress(auctionToken) ? (auctionToken as `0x${string}`) : null
     const currencyAddr = typeof currency === 'string' && isAddressLike(currency) ? (currency as `0x${string}`) : null
 
-    const [auctionTokenDecimals, auctionTokenSymbol, currencyDecimals] = await Promise.all([
+    const [auctionTokenDecimals, auctionTokenSymbolRaw, currencyDecimals] = await Promise.all([
       tokenAddr
         ? readClient.readContract({ address: tokenAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
         : null,
@@ -142,6 +143,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? readClient.readContract({ address: currencyAddr, abi: ERC20_META_ABI as any, functionName: 'decimals' }).catch(() => null)
         : null,
     ])
+
+    const auctionTokenSymbol =
+      auctionTokenDisplaySymbol(typeof auctionTokenSymbolRaw === 'string' ? auctionTokenSymbolRaw : null) ??
+      (typeof auctionTokenSymbolRaw === 'string' ? auctionTokenSymbolRaw : null)
 
     const hasLiveAuction = isActive && isAddressLike(auction)
     let activity: Array<{
@@ -185,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             amountDisplay: formatDisplayAmount(
               amount,
               typeof auctionTokenDecimals === 'number' ? auctionTokenDecimals : auctionTokenDecimals === null ? null : Number(auctionTokenDecimals),
-              typeof auctionTokenSymbol === 'string' ? auctionTokenSymbol : null,
+              auctionTokenSymbol,
               formatUnits,
             ),
           }

@@ -1,11 +1,64 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "npm"
+    directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 8
+
+  - package-ecosystem: "npm"
+    directory: "/cre"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # CRE Chainlink workflows: Bun lockfiles (text `bun.lock`); dirs without a lockfile rely on CI install only.
+  - package-ecosystem: "bun"
+    directory: "/cre/cre-workflows"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: "bun"
+    directory: "/cre/cre-workflows/ajna-bucket-manager"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: "bun"
+    directory: "/cre/cre-workflows/auction-settlement"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: "bun"
+    directory: "/cre/cre-workflows/keepr-queue"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: "bun"
+    directory: "/cre/cre-workflows/payout-integrity"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: "bun"
+    directory: "/cre/cre-workflows/vault-keeper"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5

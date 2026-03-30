@@ -28,11 +28,13 @@ vi.mock('./pages/WaitlistInviteEntry', () => ({
 import { RootRouter } from './RootRouter'
 
 describe('RootRouter', () => {
-  it('redirects telegram link requests to the standalone html without loading ProtectedApp', async () => {
+  it.each(['/telegram/link', '/telegram/menu'])(
+    'redirects %s requests to the standalone html without loading ProtectedApp',
+    async (pathname) => {
     const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
 
     render(
-      <MemoryRouter initialEntries={['/telegram/link?tgEntry=link&tgLinkToken=abc123#step=otp']}>
+      <MemoryRouter initialEntries={[`${pathname}?tgEntry=link&tgLinkToken=abc123#step=otp`]}>
         <RootRouter />
       </MemoryRouter>,
     )
@@ -42,7 +44,8 @@ describe('RootRouter', () => {
     )
     expect(screen.queryByTestId('protected-app')).toBeNull()
     replaceSpy.mockRestore()
-  })
+    },
+  )
 
   it('keeps non-telegram routes on ProtectedApp', async () => {
     render(

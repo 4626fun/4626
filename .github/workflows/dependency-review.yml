@@ -1,0 +1,26 @@
+# https://github.com/actions/dependency-review-action
+# Requires dependency graph / review API: public repos, or private org repos with GitHub Advanced Security.
+
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          # High+ only; both runtime and dev deps (tooling vulns can affect CI or supply chain).
+          fail-on-severity: high
+          fail-on-scopes: runtime, development
+          license-check: true
