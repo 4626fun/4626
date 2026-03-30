@@ -13,8 +13,6 @@ const MENU_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
   auctions: '/auctions',
   mybids: '/mybids',
   deploy: '/deploy',
-  vaultdeploy: '/vaultdeploy akita v1.6.1',
-  zora: '/zora',
   help: '/help',
 }
 
@@ -43,7 +41,6 @@ const HELP_TOPIC_ACTIONS = new Set([
 
 const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
   'menu:start': 'Start menu',
-  'menu:more': 'More tools',
   'menu:trade': 'Trade menu',
   'menu:explore': 'Explore menu',
   'menu:cre': 'CRE ops',
@@ -57,8 +54,6 @@ const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
   'menu:sell': 'Sell flow',
   'menu:bid': 'Bid flow',
   'menu:deploy': 'Deploy wizard',
-  'menu:vaultdeploy': 'Vault deploy',
-  'menu:zora': 'Zora setup',
   'onboard:begin': 'Onboarding',
   'onboard:csw:link': 'CSW check',
   'onboard:csw:create': 'CSW check',

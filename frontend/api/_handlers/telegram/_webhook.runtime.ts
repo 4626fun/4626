@@ -1148,7 +1148,13 @@ async function buildInlineQueryResults(params: {
   })
 }
 
-function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
+function buildHelpCategoryReplyMarkup(params: { isAdmin: boolean }): Record<string, unknown> {
+  const secondaryRow = params.isAdmin
+    ? [
+        { text: 'Ops', callback_data: 'help:ops' },
+        { text: menuLabel('wallet'), callback_data: 'help:wallet' },
+      ]
+    : [{ text: menuLabel('wallet'), callback_data: 'help:wallet' }]
   return {
     inline_keyboard: [
       [
@@ -1156,10 +1162,7 @@ function buildHelpCategoryReplyMarkup(): Record<string, unknown> {
         { text: 'Coin', callback_data: 'help:coin' },
         { text: 'Social', callback_data: 'help:social' },
       ],
-      [
-        { text: 'Ops', callback_data: 'help:ops' },
-        { text: menuLabel('wallet'), callback_data: 'help:wallet' },
-      ],
+      secondaryRow,
       [{ text: 'Help', callback_data: 'help:all' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
@@ -1578,25 +1581,31 @@ function buildTradeMenuReplyMarkup(): Record<string, unknown> {
   }
 }
 
-function buildMoreToolsReplyMarkup(): Record<string, unknown> {
-  return {
-    inline_keyboard: [
-      [
-        { text: 'Vaults', callback_data: 'menu:vaults' },
-        { text: 'Auctions', callback_data: 'menu:auctions' },
-        { text: 'My Bids', callback_data: 'menu:mybids' },
-      ],
-      [
-        { text: 'Rooms', callback_data: 'menu:rooms' },
-        { text: 'Help Topics', callback_data: 'menu:topics' },
-      ],
-      [{ text: 'Back to Main', callback_data: 'menu:start' }],
-    ],
-  }
+function shouldShowOperatorMenus(params: { isAdmin: boolean }): boolean {
+  return params.isAdmin
 }
 
-function shouldShowOperatorMenus(params: { chatId: string; isLinked: boolean }): boolean {
-  return params.isLinked || !isPrivateChatId(params.chatId)
+function isOperatorCallbackToken(rawData: string): boolean {
+  const token = asTrimmed(rawData).toLowerCase()
+  return token === 'menu:cre' || token === 'menu:solana' || token.startsWith('cre:')
+}
+
+function isOperatorCommand(rawText: string): boolean {
+  return asTrimmed(rawText).toLowerCase().startsWith('/cre')
+}
+
+function buildOperatorAccessDeniedResponse(params: {
+  chatId: string
+  homeState: TelegramHomeState
+}): TelegramCommandResponse {
+  return {
+    text: [
+      `${menuLabel('cre')} and ${menuLabel('solana')} are only available to configured bot operators.`,
+      '',
+      'Use /start for regular wallet, trade, and discovery actions.',
+    ].join('\n'),
+    replyMarkup: buildStartReplyMarkup({ chatId: params.chatId, state: params.homeState }),
+  }
 }
 
 function buildCreReplyMarkup(): Record<string, unknown> {
@@ -1665,6 +1674,7 @@ function resolveStaticMenuCallbackResponse(params: {
   callbackData: string
   chatId: string
   homeState: TelegramHomeState
+  isAdmin: boolean
 }): TelegramCommandResponse | null {
   const token = asTrimmed(params.callbackData).toLowerCase()
   if (token === 'menu:start') {
@@ -1703,18 +1713,12 @@ function resolveStaticMenuCallbackResponse(params: {
       replyMarkup: buildTradeMenuReplyMarkup(),
     }
   }
-  if (token === 'menu:more') {
-    return {
-      text: ['More Tools', '', '- discovery and status tools'].join('\n'),
-      replyMarkup: buildMoreToolsReplyMarkup(),
-    }
-  }
   if (token === 'menu:cre') {
-    if (!shouldShowOperatorMenus({ chatId: params.chatId, isLinked: params.homeState === 'ready' })) {
-      return {
-        text: [`${menuLabel('cre')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
-      }
+    if (!shouldShowOperatorMenus({ isAdmin: params.isAdmin })) {
+      return buildOperatorAccessDeniedResponse({
+        chatId: params.chatId,
+        homeState: params.homeState,
+      })
     }
     return {
       text: [menuLabel('cre'), '', 'Tap an operator action to inspect or run keeper flows.'].join('\n'),
@@ -1722,11 +1726,11 @@ function resolveStaticMenuCallbackResponse(params: {
     }
   }
   if (token === 'menu:solana') {
-    if (!shouldShowOperatorMenus({ chatId: params.chatId, isLinked: params.homeState === 'ready' })) {
-      return {
-        text: [`${menuLabel('solana')} requires ${menuLabel('connect')} first.`, '', `Tap ${menuLabel('connect')} to link Telegram and wallet.`].join('\n'),
-        replyMarkup: buildHelpReplyMarkup({ chatId: params.chatId, isLinked: false }),
-      }
+    if (!shouldShowOperatorMenus({ isAdmin: params.isAdmin })) {
+      return buildOperatorAccessDeniedResponse({
+        chatId: params.chatId,
+        homeState: params.homeState,
+      })
     }
     return {
       text: [menuLabel('solana'), '', 'Tap a Solana action to inspect bridge health or run the relay path.'].join('\n'),
@@ -1736,7 +1740,7 @@ function resolveStaticMenuCallbackResponse(params: {
   if (token === 'menu:topics') {
     return {
       text: [`${menuLabel('help')} Topics`, '', 'Pick a focused command guide.'].join('\n'),
-      replyMarkup: buildHelpCategoryReplyMarkup(),
+      replyMarkup: buildHelpCategoryReplyMarkup({ isAdmin: params.isAdmin }),
     }
   }
   return null
@@ -5671,6 +5675,14 @@ async function executeTelegramCommand(params: {
   })
   if (nativeResponse) return nativeResponse
 
+  if (isOperatorCommand(params.text) && !params.isAdmin) {
+    const homeState = await resolveTelegramHomeState({ telegramUserId: params.userId })
+    return buildOperatorAccessDeniedResponse({
+      chatId: params.chatId,
+      homeState,
+    })
+  }
+
   const processed = await processTelegramAgentInput({
     text: params.text,
     chatId: params.chatId,
@@ -6714,6 +6726,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<TelegramWebhookOk>)
     }
 
+    if (isOperatorCallbackToken(callbackDataLower) && !isAdmin) {
+      await answerTelegramCallbackQuery({
+        botToken,
+        callbackQueryId,
+        text: 'Only configured bot operators can use CRE Ops and Solana actions.',
+        showAlert: true,
+      }).catch(() => {})
+      return res.status(200).json({
+        success: true,
+        data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
+
     let callbackAcknowledged = false
     try {
       const vaultDeployImmediateToast = parsedVaultDeployCallback
@@ -6867,6 +6892,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       callbackData,
       chatId,
       homeState: menuHomeState,
+      isAdmin,
     })
     if (staticMenuResponse) {
       if (canReplaceMenuMessage) {
@@ -6956,7 +6982,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const helpMarkup = response.replyMarkup
       ?? resolveOperatorReplyMarkup(mappedCommand)
       ?? (isHelpCategoryCommand(mappedCommand)
-        ? buildHelpCategoryReplyMarkup()
+        ? buildHelpCategoryReplyMarkup({ isAdmin })
         : isHelpCommand(mappedCommand)
           ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
           : undefined)
@@ -7207,7 +7233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const helpMarkup = response.replyMarkup
     ?? resolveOperatorReplyMarkup(normalizedText)
     ?? (isHelpCategoryCommand(normalizedText)
-      ? buildHelpCategoryReplyMarkup()
+      ? buildHelpCategoryReplyMarkup({ isAdmin })
       : isHelpCommand(normalizedText)
         ? buildHelpReplyMarkup({ chatId, isLinked: menuIsLinked })
         : undefined)
