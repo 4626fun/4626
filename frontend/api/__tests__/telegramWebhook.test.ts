@@ -846,6 +846,7 @@ describe('telegram webhook handler', () => {
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('<blockquote expandable>')
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
     const connectButton = callbackButtons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
@@ -3487,6 +3488,31 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('AKITA | WALLET')
     expect(String(payload.text ?? '')).toContain('<blockquote expandable>')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:start')).toBe(true)
+  })
+
+  it('handles /vaults as a telegram-native command with expandable details', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 13_0_1,
+        message: { message_id: 17, text: '/vaults', chat: { id: -100123 }, from: { id: 99 } },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('AKITA | VAULTS')
+    expect(String(payload.text ?? '')).toContain('<code>/vaults</code>')
+    expect(String(payload.text ?? '')).toContain('<blockquote expandable>')
   })
 
   it('blocks /join when telegram user is not linked', async () => {
@@ -3760,6 +3786,8 @@ describe('telegram webhook handler', () => {
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Wallet')
+    const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:start')).toBe(true)
   })
 
   it('accepts callbacks in configured signals chat even when target chat differs', async () => {

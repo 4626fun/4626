@@ -6,6 +6,8 @@
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)
 [![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
 [![Tests](https://github.com/wenakita/4626/actions/workflows/test.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/test.yml)
+[![Security scanning](https://github.com/wenakita/4626/actions/workflows/security-scanning.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/security-scanning.yml)
+[![Dependency review](https://github.com/wenakita/4626/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/dependency-review.yml)
 
 ## Quick Navigation
 
@@ -308,6 +310,7 @@ pnpm -C apps/docs-site start
 | Frontend       | `pnpm -C frontend test`<br/>`pnpm -C frontend typecheck`<br/>`pnpm -C frontend lint` |
 | CRE            | `npm --prefix cre test`<br/>`npm --prefix cre run typecheck`                         |
 | Contracts      | `forge build`<br/>`forge test -vvv`                                                  |
+| Security sweep | `pnpm security:local` — Forge tests, CRE workflow checks, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](docs/audits/README.md)) |
 | Frontend build | `pnpm -C frontend build`                                                             |
 | Docs build     | `pnpm -C apps/docs-site build`                                                       |
 
@@ -437,6 +440,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Wallet/account invariants are documented in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - Deploy/session ownership + creator access checks are enforced server-side before phased execution.
 - CRE automation uses an HTTP bridge pattern; write execution happens through audited API surfaces.
+- CI: `.github/workflows/security-scanning.yml` (secret scan, dependency reports, Semgrep on API/server lib, Slither report-only); `.github/workflows/dependency-review.yml` (PR dependency review, high+ in runtime **and** dev deps). Enable Dependency graph + optional branch protection: [`docs/audits/github-supply-chain-setup.md`](docs/audits/github-supply-chain-setup.md). Audit index: [`docs/audits/README.md`](docs/audits/README.md). Trust-boundary rules: [`AGENTS.md`](AGENTS.md).
 
 ## Documentation Map
 
@@ -446,6 +450,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Deployment operations: `docs/operations/deployment/index.md`
 - Current contract inventory: `docs/current-contract-inventory.md`
 - Security docs: `docs/security/index.md`
+- Internal audit / CI security index: `docs/audits/README.md`
 - Frontend guide: `frontend/README.md`
 - Swap integration/runtime notes: `frontend/docs/uniswap-integration-notes.md`
 - Account + onboarding architecture: `frontend/docs/account-auth-invariants.md`, `frontend/docs/waitlist-accounts-architecture.md`

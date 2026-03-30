@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "security:local": "bash scripts/security-audit-local.sh",
     "docs:refresh": "node apps/docs-site/scripts/docs-refresh.mjs",
     "docs:check": "node apps/docs-site/scripts/docs-refresh.mjs --check",
     "docs:build:strict": "pnpm docs:check",
@@ -34,12 +35,16 @@
     "diff": "8.0.3",
     "minimatch": "10.2.3",
     "qs": "6.14.2",
-    "serialize-javascript": "7.0.4",
+    "serialize-javascript": "7.0.5",
+    "picomatch@2": "2.3.2",
+    "picomatch@4": "4.0.4",
+    "brace-expansion": "5.0.5",
     "tar": "7.5.11",
     "path-to-regexp": "6.3.0",
     "tmp": "0.2.4",
     "undici": "6.24.0",
-    "ws": "8.18.0"
+    "ws": "8.18.0",
+    "yaml": "2.8.3"
   },
   "pnpm": {
     "overrides": {
@@ -58,12 +63,16 @@
       "diff": "8.0.3",
       "minimatch": "10.2.3",
       "qs": "6.14.2",
-      "serialize-javascript": "7.0.4",
+      "serialize-javascript": "7.0.5",
+      "picomatch@2": "2.3.2",
+      "picomatch@4": "4.0.4",
+      "brace-expansion": "5.0.5",
       "tar": "7.5.11",
       "path-to-regexp": "6.3.0",
       "tmp": "0.2.4",
       "undici": "6.24.0",
-      "ws": "8.18.0"
+      "ws": "8.18.0",
+      "yaml": "2.8.3"
     },
     "peerDependencyRules": {
       "ignoreMissing": [

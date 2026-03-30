@@ -1485,7 +1485,7 @@ export function TelegramLink() {
             <StatusBlock
               icon={CheckCircle2}
               tone="success"
-              body={`Telegram ${formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} is connected to ${state.account.email}.`}
+              body={`Connected to ${state.account.email}. Your Telegram account is verified and attached to your 4626 account.`}
             />
             {canCloseTelegramMiniApp ? (
               <button
@@ -1502,17 +1502,22 @@ export function TelegramLink() {
                 Wallet setup pending. Telegram is connected, but wallet and trading actions unlock after your Coinbase Smart Wallet is confirmed.
               </div>
             ) : null}
-            <div className="grid gap-x-4 gap-y-3 border-t border-white/[0.06] pt-3 sm:grid-cols-2">
-              <MetaField label="Telegram" value={formatTelegramHandle(state.link.telegramUsername, state.link.telegramUserId)} />
-              <MetaField label="Canonical Email" value={state.account.email} />
-              <MetaField
-                label="Canonical CSW"
-                value={canonicalCswAddress ? shortAddress(canonicalCswAddress) : 'Pending wallet setup'}
-                title={canonicalCswAddress ?? 'Canonical Coinbase Smart Wallet not set yet.'}
-              />
+            <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.025] p-3.5">
+              <div className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">Connected Account</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <SuccessSummaryCard label="Canonical Email" value={state.account.email} />
+                <SuccessSummaryCard
+                  label="Canonical CSW"
+                  value={canonicalCswAddress ? shortAddress(canonicalCswAddress) : 'Pending wallet setup'}
+                  title={canonicalCswAddress ?? 'Canonical Coinbase Smart Wallet not set yet.'}
+                  mono
+                />
+              </div>
             </div>
             <div className="text-sm leading-6 text-[#666666]">
-              Telegram is attached to your verified-email 4626 account. Telegram does not replace email recovery.
+              {walletSetupPending
+                ? 'You can close this Mini App now. Finish wallet setup to unlock trading and wallet actions in Telegram.'
+                : 'You can close this Mini App and return to the bot. Wallet, trade, and creator actions are ready there.'}
             </div>
           </div>
         )
@@ -1681,6 +1686,17 @@ function MetaField(props: { label: string; value: string; title?: string }) {
     <div className="min-w-0" title={props.title}>
       <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
       <div className="mt-0.5 truncate font-mono text-[12px] text-[#EDEDED]">{props.value}</div>
+    </div>
+  )
+}
+
+function SuccessSummaryCard(props: { label: string; value: string; title?: string; mono?: boolean }) {
+  return (
+    <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-3" title={props.title}>
+      <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
+      <div className={`mt-1 min-w-0 truncate text-[13px] text-[#EDEDED] ${props.mono ? 'font-mono' : 'font-medium'}`}>
+        {props.value}
+      </div>
     </div>
   )
 }

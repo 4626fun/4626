@@ -1,5 +1,7 @@
 # Internal monorepo audit — 2026-03-30
 
+**Index:** [docs/audits/README.md](./README.md)
+
 Evidence captured from a clean workspace run. This document implements the layered audit plan (scope → automation → doc delta → trust boundaries → production parity checklist).
 
 ---
@@ -28,22 +30,22 @@ Commands run: `2026-03-30` (workspace: `/home/akitav2/projects/4626`).
 | TypeScript | `pnpm -C frontend typecheck` | **Pass** (app + node configs). |
 | CRE workflows | `bash cre/cre-workflows/scripts/typecheck-workflows.sh` | **Pass** (all listed packages typecheck). |
 
-**CI:** The `api-tests` job in [.github/workflows/test.yml](../../.github/workflows/test.yml) now runs `pnpm --dir frontend lint` and `typecheck` before Vitest (added after the 2026-03-30 audit pass).
+**CI:** The `api-tests` job in [.github/workflows/test.yml](../../.github/workflows/test.yml) runs `pnpm --dir frontend lint` and `typecheck` before Vitest. PR supply chain: [.github/workflows/dependency-review.yml](../../.github/workflows/dependency-review.yml) (high+ vulns, runtime **and** development scopes; setup [github-supply-chain-setup.md](./github-supply-chain-setup.md)). Version bumps: [.github/dependabot.yml](../../.github/dependabot.yml) (root, frontend, cre, Bun workflows, GitHub Actions).
 
 ### Dependency audit
 
 | Lockfile | Command | Result |
 |----------|---------|--------|
-| Root | `pnpm audit` | **Vulnerabilities reported** (transitive: e.g. `brace-expansion`, `picomatch`, `yaml` via LayerZero/Vercel chains; `elliptic` CVE-2025-14505 low; `serialize-javascript` moderate via mocha). Exit non-zero. |
-| Frontend | `pnpm audit` | **17 vulnerabilities** (summary: 2 low, 6 moderate, 8 high, 1 critical per CLI table); paths include `@elizaos/core` → `elliptic`, `handlebars`, etc. |
+| Root | `pnpm audit` | **Reduced** after `yaml` override **2.8.3**; remaining items are mostly dev/transitive (`picomatch`, `brace-expansion`, `elliptic`). See [npm-advisories-triage.md](./npm-advisories-triage.md) root section. |
+| Frontend | `pnpm audit` | **Reduced** after triage: handlebars override, `happy-dom` bump, `yaml` override — see current counts in [npm-advisories-triage.md](./npm-advisories-triage.md). |
 
-**Action:** Track upstream fixes; prioritize critical/high in frontend runtime paths; accept or document risk for Solidity/tooling-only transitive deps where not reachable from production bundles.
+**Action:** Track upstream fixes; prioritize critical/high in the **production** dependency graph; accept or document dev-only transitive risk (e.g. `picomatch` via ESLint / `@vercel/node`). **CI:** [.github/workflows/security-scanning.yml](../../.github/workflows/security-scanning.yml) includes `dependency-audit` (report-only), **gitleaks** (incremental), **semgrep-api** (**blocking** on `frontend/api` + `frontend/server/_lib`), and **slither-contracts** (Foundry + `slither --fail-none`, **report-only** job). Slither uses root [slither.config.json](../../slither.config.json) `filter_paths` to drop vendored `lib/` / `node_modules` noise from reports (~460 fewer findings vs unfiltered).
 
 ### Secret scan
 
 | Tool | Result |
 |------|--------|
-| `gitleaks` | **Not installed** in this environment. **Recommendation:** enable GitHub secret scanning / run `gitleaks` in CI or locally before releases. |
+| `gitleaks` | **CI:** [.github/workflows/security-scanning.yml](../../.github/workflows/security-scanning.yml) runs the open-source `gitleaks` CLI on **incremental commit ranges** (PR `base..head`, push `before..after`, or single commit when `before` is all zeros). Config: [gitleaks.toml](../../gitleaks.toml) (allowlists vendored snapshots, known doc/test noise). **Manual:** install [gitleaks](https://github.com/gitleaks/gitleaks) locally for full-history scans. |
 
 ### Submodule integrity
 
@@ -90,6 +92,8 @@ The system audit remains the authoritative protocol narrative. Below: **status v
 
 ## 5. Layer 5 — Production parity checklist (operational)
 
+Worksheet copy: [production-parity-checklist.md](./production-parity-checklist.md).
+
 Perform before high-stakes release or investor diligence:
 
 1. **Bytecode** — Compare deployed contracts to artifact from tagged commit; reconcile proxies/implementation addresses.
@@ -103,7 +107,7 @@ Perform before high-stakes release or investor diligence:
 ## 6. Summary
 
 - **Hygiene:** Forge tests pass; frontend lint/typecheck/tests pass; CRE workflow typecheck passes. `forge build --sizes` fails on EIP-170 (known).  
-- **Supply chain:** `pnpm audit` reports issues at root and frontend; prioritize frontend runtime graph; install and run secret scanning in CI.  
+- **Supply chain:** Frontend audit count reduced (see [npm-advisories-triage.md](./npm-advisories-triage.md)); CI runs gitleaks, `pnpm audit` summary, and informational Semgrep on API/server lib.  
 - **Protocol:** Defer to [system.md](./system.md) + §3 delta; no contradictions found in this automation-only pass.  
 - **App trust boundaries:** Mapped to concrete handlers; machine-auth and Telegram proof paths are test-backed.  
-- **Next hardening:** Remediate or document high/critical npm advisories; run gitleaks (or GitHub secret scanning) in CI; execute production parity checklist against live deploy.
+- **Next hardening:** Follow [npm-advisories-triage.md](./npm-advisories-triage.md) for remaining dev transitive advisories; optionally make **Slither** or **pnpm audit** blocking after triage; execute production parity checklist (§5) against live deploy.

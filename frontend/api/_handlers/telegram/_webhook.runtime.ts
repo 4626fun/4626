@@ -1504,27 +1504,31 @@ function buildStartReplyMarkup(params: { chatId: string; state: TelegramHomeStat
 }
 
 function buildFocusedHelpText(): string {
-  return [
-    '<b>4626 on Telegram</b>',
-    '',
-    '<blockquote>Link your 4626 account once, then use Telegram to check your wallet, trade creator coins, and follow vault activity on Base.</blockquote>',
-    '',
-    '<u>Start here</u>',
-    '<code>/start</code> — home and onboarding entry',
-    '<code>/link</code> — reopen the Mini App connect flow',
-    '<code>/linked</code> — check Telegram link and wallet setup',
-    '',
-    '<u>Core actions</u>',
-    '<code>/wallet</code> — wallet, positions, and recent actions',
-    '<code>/buy</code> — guided buy flow',
-    '<code>/sell</code> — guided sell flow',
-    '<code>/bid</code> — guided bid flow',
-    '<code>/vaults</code> — browse vaults and discovery surfaces',
-    '',
-    '<u>Need more?</u>',
-    '<code>/help coin|social|ops|wallet</code> — focused guides',
-    '<code>/help all</code> — complete command catalog',
-  ].join('\n')
+  return buildTelegramCommandChrome({
+    title: '4626 on Telegram',
+    command: '/help',
+    summaryLines: [
+      'Link your 4626 account once, then use Telegram to check your wallet, trade creator coins, and follow vault activity on Base.',
+    ],
+    detailLines: [
+      'Start here',
+      '/start — home and onboarding entry',
+      '/link — reopen the Mini App connect flow',
+      '/linked — check Telegram link and wallet setup',
+      '',
+      'Core actions',
+      '/wallet — wallet, positions, and recent actions',
+      '/buy — guided buy flow',
+      '/sell — guided sell flow',
+      '/bid — guided bid flow',
+      '/vaults — browse vaults and discovery surfaces',
+      '',
+      'Need more?',
+      '/help coin|social|ops|wallet — focused guides',
+      '/help all — complete command catalog',
+    ],
+    expandableDetails: true,
+  })
 }
 
 function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
@@ -2688,54 +2692,107 @@ function formatWalletText(summary: Awaited<ReturnType<typeof getTelegramPortfoli
   })
 }
 
-function formatVaultsText(vaults: Awaited<ReturnType<typeof listTelegramScopedVaults>>): string {
-  if (vaults.length === 0) {
-    return [
-      'Vaults',
-      '',
-      '- no scoped vaults found for this chat',
-    ].join('\n')
+function buildWalletReplyMarkup(summary: Awaited<ReturnType<typeof getTelegramPortfolioSummary>>): Record<string, unknown> {
+  if (!summary) {
+    return {
+      inline_keyboard: [[
+        { text: menuLabel('connect'), callback_data: 'menu:connect' },
+        { text: menuLabel('back'), callback_data: 'menu:start' },
+      ]],
+    }
   }
 
-  const lines = ['Vaults', '']
+  return {
+    inline_keyboard: [[{ text: menuLabel('back'), callback_data: 'menu:start' }]],
+  }
+}
+
+function formatVaultsText(vaults: Awaited<ReturnType<typeof listTelegramScopedVaults>>): string {
+  if (vaults.length === 0) {
+    return buildTelegramCommandChrome({
+      title: 'AKITA | VAULTS',
+      command: '/vaults',
+      summaryLines: ['No scoped vaults found for this chat.'],
+    })
+  }
+
+  const lines: string[] = []
   for (const vault of vaults.slice(0, 8)) {
     const status = vault.isSettled ? 'settled' : 'active'
     lines.push(
       `- ${truncateAddress(vault.vaultAddress)} | coin ${truncateAddress(vault.creatorCoinAddress)} | ${status}`,
     )
   }
-  return lines.join('\n')
+  const summaryLines = [
+    `${vaults.length} scoped vault${vaults.length === 1 ? '' : 's'} available in this chat.`,
+    vaults.length > 8 ? 'Showing the first 8 entries below.' : 'Tap to expand the scoped vault list.',
+  ]
+  return buildTelegramCommandChrome({
+    title: 'AKITA | VAULTS',
+    command: '/vaults',
+    summaryLines,
+    detailLines: lines,
+    expandableDetails: true,
+  })
 }
 
 function formatAuctionsText(auctions: Awaited<ReturnType<typeof listTelegramAuctions>>): string {
   if (auctions.length === 0) {
-    return [
-      'Auctions',
-      '',
-      '- no CCA auctions configured in scope',
-    ].join('\n')
+    return buildTelegramCommandChrome({
+      title: 'AKITA | AUCTIONS',
+      command: '/auctions',
+      summaryLines: ['No CCA auctions are configured in scope right now.'],
+    })
   }
 
-  const lines = ['Auctions', '']
+  const lines: string[] = []
   for (const row of auctions.slice(0, 8)) {
     const status = row.isSettled ? 'settled' : 'available'
     lines.push(`- ${truncateAddress(row.vaultAddress)} -> ${truncateAddress(row.ccaStrategyAddress)} (${status})`)
   }
-  return lines.join('\n')
+  const summaryLines = [
+    `${auctions.length} scoped auction${auctions.length === 1 ? '' : 's'} found.`,
+    auctions.length > 8 ? 'Showing the first 8 entries below.' : 'Tap to expand the auction list.',
+  ]
+  return buildTelegramCommandChrome({
+    title: 'AKITA | AUCTIONS',
+    command: '/auctions',
+    summaryLines,
+    detailLines: lines,
+    expandableDetails: true,
+  })
 }
 
 function formatSignalsText(
-  title: string,
-  rows: Array<{ actionType: string; status: string; txHash?: string | null }>,
+  params: {
+    title: string
+    command: string
+    rows: Array<{ actionType: string; status: string; txHash?: string | null }>
+  },
 ): string {
-  if (rows.length === 0) {
-    return [title, '', '- no recent signals'].join('\n')
+  if (params.rows.length === 0) {
+    return buildTelegramCommandChrome({
+      title: `AKITA | ${params.title.toUpperCase()}`,
+      command: params.command,
+      summaryLines: ['No recent entries yet.'],
+    })
   }
-  const lines = [title, '']
-  for (const row of rows.slice(0, 8)) {
+
+  const lines: string[] = []
+  for (const row of params.rows.slice(0, 8)) {
     lines.push(`- ${row.actionType} ${row.status}${row.txHash ? ` (${truncateAddress(row.txHash)})` : ''}`)
   }
-  return lines.join('\n')
+  const summaryLines = [
+    `${params.rows.length} recent entr${params.rows.length === 1 ? 'y' : 'ies'} found.`,
+    params.rows.length > 8 ? 'Showing the first 8 entries below.' : 'Tap to expand the recent activity list.',
+  ]
+  return buildTelegramCommandChrome({
+    title: `AKITA | ${params.title.toUpperCase()}`,
+    command: params.command,
+    summaryLines,
+    detailLines: lines,
+    expandableDetails: true,
+  })
 }
 
 async function logTelegramActionAudit(params: Parameters<typeof logTelegramActionAuditShared>[0] & { botToken?: string }) {
@@ -4048,7 +4105,10 @@ async function executeTelegramNativeCommand(params: {
 
   if (head === 'wallet') {
     const summary = await getTelegramPortfolioSummary({ db: db as any, telegramUserId: params.userId })
-    return { text: formatWalletText(summary) }
+    return {
+      text: formatWalletText(summary),
+      replyMarkup: buildWalletReplyMarkup(summary),
+    }
   }
 
   if (head === 'vaults') {
@@ -4063,7 +4123,13 @@ async function executeTelegramNativeCommand(params: {
 
   if (head === 'mybids') {
     const bids = await listTelegramUserBids({ db: db as any, telegramUserId: params.userId })
-    return { text: formatSignalsText('My Bids', bids) }
+    return {
+      text: formatSignalsText({
+        title: 'My Bids',
+        command: '/mybids',
+        rows: bids,
+      }),
+    }
   }
 
   if (tradeIntent) {
