@@ -28,6 +28,7 @@ import {
   upsertStrategyTarget,
 } from '../../../../server/_lib/workspace/repository.js'
 import { appendWorkspaceActionActivity } from '../../../../server/_lib/workspace/service.js'
+import { roleCan } from '../../../../server/_lib/workspace/auth.js'
 import { normalizeVaultAddressFromQuery, requireWorkspaceAccess } from './_shared.js'
 
 type AnyObject = Record<string, unknown>
@@ -429,6 +430,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const before = await getApprovalRequestById(approvalId)
       if (!before || before.vaultAddress !== vaultAddress) {
         return res.status(404).json({ success: false, error: 'Approval request not found' } satisfies ApiEnvelope<never>)
+      }
+      if (action === 'approval.approve') {
+        const beforePayload = asObject(before.payload)
+        const beforeActionType = asTrimmed(before.actionType || beforePayload.actionType)
+        if (beforeActionType && isHighRiskActionType(beforeActionType)) {
+          const canExecuteHighRisk = roleCan({
+            role: access.context.role,
+            permission: 'action_execute_high_risk',
+          })
+          if (!canExecuteHighRisk) {
+            return res.status(403).json({
+              success: false,
+              error: 'Only OWNER/ADMIN can approve high-risk actions',
+            } satisfies ApiEnvelope<never>)
+          }
+        }
       }
 
       const status = action === 'approval.approve' ? 'approved' : 'rejected'

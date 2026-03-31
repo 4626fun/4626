@@ -17,6 +17,7 @@ import {
 import { ensureSiwaNonceSchema, isAddressLike, parseAgentRegistryRef, storeSiwaNonce } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
+import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 
 
 
@@ -54,20 +55,6 @@ function parseAgentId(value: unknown): number | null {
   const n = Number(value)
   if (!Number.isFinite(n) || Math.floor(n) !== n || n < 0) return null
   return n
-}
-
-function firstHeaderValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return String(value[0] ?? '').trim()
-  return String(value ?? '').split(',')[0]?.trim() ?? ''
-}
-
-function getRequestOrigin(req: VercelRequest): string {
-  const protoRaw = firstHeaderValue(req.headers?.['x-forwarded-proto'])
-  const hostRaw =
-    firstHeaderValue(req.headers?.['x-forwarded-host']) || firstHeaderValue(req.headers?.host)
-  const proto = protoRaw.toLowerCase().startsWith('https') ? 'https' : 'http'
-  const host = hostRaw || 'localhost'
-  return `${proto}://${host}`
 }
 
 function getDefaultAgentRegistry(): string {
@@ -197,8 +184,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'SIWA nonce service unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const uri = getRequestOrigin(req)
-  const domain = new URL(uri).host
+  let uri = ''
+  try {
+    uri = getCanonicalOrigin(req)
+  } catch {
+    return res.status(503).json({ success: false, error: 'Canonical origin is not configured' } satisfies ApiEnvelope<never>)
+  }
+  const domain = new URL(uri).host.toLowerCase()
 
   return res.status(200).json({
     success: true,

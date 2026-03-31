@@ -30,6 +30,13 @@ type LeaderboardResponse = {
   me?: { weeklyRank?: number | null; allTimeRank?: number | null } | null
 }
 
+function maskReferralCode(value: string): string {
+  const normalized = String(value || '').trim()
+  if (!normalized) return ''
+  if (normalized.length <= 4) return '****'
+  return `${normalized.slice(0, 2)}***${normalized.slice(-2)}`
+}
+
 function getWeekBoundsUtc(now = new Date()): { start: Date; end: Date } {
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0))
   const day = d.getUTCDay()
@@ -150,9 +157,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const top: LeaderboardRow[] = Array.isArray(rows?.rows)
     ? rows.rows.map((r: any) => ({
         rank: Number(r.rank) || 0,
-        referralCode: typeof r.referral_code === 'string' ? r.referral_code : '',
+        referralCode: maskReferralCode(typeof r.referral_code === 'string' ? r.referral_code : ''),
         conversions: Number(r.conversions) || 0,
-        primaryWallet: typeof r.primary_wallet === 'string' ? r.primary_wallet : null,
+        primaryWallet: null,
       }))
     : []
 

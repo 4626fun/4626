@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
+  readRequestPrincipalAddress,
   setCors,
   setNoStore,
   getApiContracts,
@@ -10,6 +11,7 @@ import {
 
 
 import { resolvePayoutRouterFeeConfig, resolvePayoutRouterKeeperAddress } from '../../../server/_lib/payoutRouterRuntime.js'
+import { isServerAdminAddress } from '../../../server/_lib/trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -37,6 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+  const principalAddress = readRequestPrincipalAddress(req, { lowercase: true })
+  if (!principalAddress || !isServerAdminAddress(principalAddress)) {
+    return res.status(403).json({ success: false, error: 'Admin access required' } satisfies ApiEnvelope<never>)
   }
 
   const contracts = getApiContracts()

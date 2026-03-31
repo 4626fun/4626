@@ -73,14 +73,16 @@ async function dbIsAllowlisted(
 async function dbHasLinkedWallet(
   db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> },
   address: string | null,
+  coin: string | null,
 ): Promise<boolean> {
-  if (!address || !isAddressLike(address)) return false
+  if (!address || !isAddressLike(address) || !coin || !isAddressLike(coin)) return false
   try {
     await ensureCreatorWalletsSchema(db)
     const { rows } = await db.sql`
       SELECT wallet_address
       FROM creator_wallets
       WHERE lower(wallet_address) = ${address.toLowerCase()}
+        AND lower(coin_address) = ${coin.toLowerCase()}
       LIMIT 1;
     `
     return rows.length > 0
@@ -144,11 +146,16 @@ async function supabaseIsAllowlisted(addresses: string[]): Promise<boolean> {
   return Array.isArray(res.data) && res.data.length > 0
 }
 
-async function supabaseHasLinkedWallet(address: string | null): Promise<boolean> {
-  if (!address || !isAddressLike(address)) return false
+async function supabaseHasLinkedWallet(address: string | null, coin: string | null): Promise<boolean> {
+  if (!address || !isAddressLike(address) || !coin || !isAddressLike(coin)) return false
   const supabase = getSupabaseAdmin()
   try {
-    const res = await supabase.from('creator_wallets').select('wallet_address').ilike('wallet_address', address.toLowerCase()).limit(1)
+    const res = await supabase
+      .from('creator_wallets')
+      .select('wallet_address')
+      .ilike('wallet_address', address.toLowerCase())
+      .ilike('coin_address', coin.toLowerCase())
+      .limit(1)
     if (res.error) return false
     return Array.isArray(res.data) && res.data.length > 0
   } catch {
@@ -225,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const mode: AllowlistMode = 'enforced'
       const [allowlisted, linked, waitlisted] = await Promise.all([
         supabaseIsAllowlisted(addressesToCheck),
-        supabaseHasLinkedWallet(address),
+        supabaseHasLinkedWallet(address, coin),
         supabaseIsWaitlisted(address),
       ])
       const allowed = allowlisted || linked || waitlisted
@@ -249,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const mode: AllowlistMode = 'enforced'
     const [allowlisted, linked, waitlisted] = await Promise.all([
       dbIsAllowlisted(db, addressesToCheck),
-      dbHasLinkedWallet(db, address),
+      dbHasLinkedWallet(db, address, coin),
       dbIsWaitlisted(db, address),
     ])
     const allowed = allowlisted || linked || waitlisted

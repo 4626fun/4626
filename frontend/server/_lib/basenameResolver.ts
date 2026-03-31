@@ -18,6 +18,8 @@ import { getEnsName } from './ensResolver.js'
 declare const process: { env: Record<string, string | undefined> }
 
 const CACHE_TTL_MS = 5 * 60_000
+const MAX_CACHE_ENTRIES = 2_000
+const MAX_PENDING_ENTRIES = 500
 const DEFAULT_GATEWAY_URLS = ['https://ccip.ens.xyz']
 const BASE_COIN_TYPE = toCoinType(base.id)
 
@@ -28,6 +30,17 @@ type CacheEntry = {
 
 const cache = new Map<string, CacheEntry>()
 const pending = new Map<string, Promise<string | null>>()
+
+function evictExpiredOrOldest(now = Date.now()): void {
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key)
+  }
+  while (cache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value as string | undefined
+    if (!oldestKey) break
+    cache.delete(oldestKey)
+  }
+}
 
 function getEthRpcUrl(): string {
   // Prefer explicit env var, fall back to public endpoint.
@@ -66,9 +79,13 @@ export async function getBasenameName(address: string): Promise<string | null> {
 
   const cached = cache.get(normalized)
   if (cached && cached.expiresAt > Date.now()) return cached.value
+  if (cached && cached.expiresAt <= Date.now()) cache.delete(normalized)
 
   const inFlight = pending.get(normalized)
   if (inFlight) return await inFlight
+  if (pending.size >= MAX_PENDING_ENTRIES) {
+    return null
+  }
 
   const promise = (async (): Promise<string | null> => {
     const name = await mainnetClient
@@ -90,7 +107,10 @@ export async function getBasenameName(address: string): Promise<string | null> {
   pending.set(normalized, promise)
   try {
     const name = await promise
+    evictExpiredOrOldest()
+    if (cache.has(normalized)) cache.delete(normalized)
     cache.set(normalized, { expiresAt: Date.now() + CACHE_TTL_MS, value: name })
+    evictExpiredOrOldest()
     return name
   } finally {
     pending.delete(normalized)

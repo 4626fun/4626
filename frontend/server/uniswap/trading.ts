@@ -19,7 +19,9 @@ export function getUniswapApiKey(): string {
 }
 
 export function isObject(value: unknown): value is JsonObject {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
 }
 
 export async function readJsonObjectBody(req: VercelRequest): Promise<JsonObject | null> {

@@ -6,6 +6,10 @@ import {
   setCors,
   setNoStore,
   readRequestPrincipalAddress,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
@@ -78,6 +82,12 @@ function getAddressFromRequest(req: VercelRequest): string | null {
   return null
 }
 
+function parseStoreRequested(req: VercelRequest, body: LensGraphRequest): boolean {
+  if (req.method === 'POST') return body.store === true
+  const raw = typeof req.query.store === 'string' ? req.query.store.trim().toLowerCase() : ''
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -86,18 +96,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
+  const clientIp = getClientIp(req) || 'unknown'
+  const rate = checkRateLimit(rateLimitKey('lens-graph', clientIp), RATE_LIMITS.general)
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
 
   const body = req.method === 'POST' ? (await readJsonBody<LensGraphRequest>(req)) ?? {} : {}
   const addressRaw = body.address?.trim() || getAddressFromRequest(req) || ''
 
-  const principalAddress = readRequestPrincipalAddress(req, { lowercase: false }).trim()
+  const principalAddress = (readRequestPrincipalAddress(req, { lowercase: false }) ?? '').trim()
   const wallet = normalizeAddress(addressRaw || principalAddress)
 
   if (!wallet || !isAddressLike(wallet)) {
     return res.status(400).json({ success: false, error: 'address is required' } satisfies ApiEnvelope<never>)
   }
 
-  const shouldStore = body.store !== false
+  const storeRequested = parseStoreRequested(req, body)
+  if (storeRequested && !principalAddress) {
+    return res.status(401).json({ success: false, error: 'Authentication required for Grove uploads' } satisfies ApiEnvelope<never>)
+  }
+  const shouldStore = storeRequested
 
   try {
     const canonicalWallet = (await resolveCanonicalSmartWalletAddress(wallet)) ?? wallet

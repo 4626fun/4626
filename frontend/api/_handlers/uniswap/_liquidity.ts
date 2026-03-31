@@ -19,7 +19,7 @@ import {
 } from '../../../server/uniswap/guards.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
-const ACTION_PATH: Record<string, string> = {
+const ACTION_PATH: Record<string, string> = Object.freeze({
   positions: '/liquidity/positions',
   'quote-create': '/liquidity/quote',
   create: '/liquidity/create',
@@ -27,7 +27,7 @@ const ACTION_PATH: Record<string, string> = {
   remove: '/liquidity/remove',
   claim: '/liquidity/claim',
   migrate: '/liquidity/migrate',
-}
+})
 
 function assertPayloadSafety(payload: Record<string, unknown>): string | null {
   const chainErr = validateChainIdField(payload, 'chainId')
@@ -68,9 +68,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = await readJsonObjectBody(req)
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' })
 
-  const action = typeof body.action === 'string' ? body.action : ''
+  const action = typeof body.action === 'string' ? body.action.trim() : ''
   const payload = isObject(body.payload) ? body.payload : null
-  const path = ACTION_PATH[action]
+  const path = Object.prototype.hasOwnProperty.call(ACTION_PATH, action) ? ACTION_PATH[action] : null
   if (!path || !payload) {
     return res.status(400).json({ success: false, error: 'Invalid liquidity action payload' })
   }

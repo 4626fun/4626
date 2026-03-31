@@ -20,7 +20,6 @@ import {
 
 type ClickBody = {
   referralCode?: string
-  sessionId?: string | null
   landingUrl?: string | null
 }
 
@@ -58,30 +57,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data: { recorded: false } satisfies ClickResponse } satisfies ApiEnvelope<ClickResponse>)
   }
 
-  const sessionId = typeof body?.sessionId === 'string' ? body.sessionId.trim() : ''
-  const landingUrl = typeof body?.landingUrl === 'string' ? body.landingUrl.trim() : ''
-
   const uaRaw = getUserAgent(req)
+  const clientIpRaw = getClientIp(req)
   const ipHash = hashForAttribution(getClientIp(req))
   const uaHash = hashForAttribution(uaRaw)
+  const sessionId = hashForAttribution(`${clientIpRaw || 'unknown'}|${uaRaw || 'unknown'}`)
+  const landingUrlRaw = typeof body?.landingUrl === 'string' ? body.landingUrl.trim() : ''
+  const landingUrl = landingUrlRaw ? landingUrlRaw.slice(0, 300) : ''
   const uaLower = String(uaRaw || '').toLowerCase()
   const isBotSuspected =
     !uaLower ||
     /(bot|crawler|spider|headless|pingdom|uptime|monitor|curl|wget|httpclient)/i.test(uaLower)
 
-  // Rate limit: ignore repeated clicks from same session within 10 seconds.
-  if (sessionId) {
-    const last = await db.sql`
-      SELECT created_at
-      FROM referral_clicks
-      WHERE referral_code = ${referralCode} AND session_id = ${sessionId}
-      ORDER BY created_at DESC
-      LIMIT 1;
-    `
-    const lastAt = last?.rows?.[0]?.created_at ? new Date(String(last.rows[0].created_at)).getTime() : 0
-    if (lastAt && Date.now() - lastAt < 10_000) {
-      return res.status(200).json({ success: true, data: { recorded: false } satisfies ClickResponse } satisfies ApiEnvelope<ClickResponse>)
-    }
+  const last = await db.sql`
+    SELECT created_at
+    FROM referral_clicks
+    WHERE referral_code = ${referralCode} AND session_id = ${sessionId}
+    ORDER BY created_at DESC
+    LIMIT 1;
+  `
+  const lastAt = last?.rows?.[0]?.created_at ? new Date(String(last.rows[0].created_at)).getTime() : 0
+  if (lastAt && Date.now() - lastAt < 10_000) {
+    return res.status(200).json({ success: true, data: { recorded: false } satisfies ClickResponse } satisfies ApiEnvelope<ClickResponse>)
   }
 
   await db.sql`
@@ -100,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ${referrerId},
       ${ipHash},
       ${uaHash},
-      ${sessionId || null},
+      ${sessionId},
       ${landingUrl || null},
       ${isBotSuspected},
       NOW()

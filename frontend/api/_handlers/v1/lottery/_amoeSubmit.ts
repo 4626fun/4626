@@ -277,15 +277,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     if (relayRequested) {
-      const txHash = await relayAmoeEntryTransaction({
-        to: attested.to,
-        callData: attested.callData,
-      })
-
       const creditSpend = await consumeAmoeCreditsForEntry({
         wallet: proof.wallet,
         requiredCredits: AMOE_CREDITS_PER_ENTRY,
         refId: `${proof.creatorCoin}:${proof.nonce}`,
+      })
+      const txHash = await relayAmoeEntryTransaction({
+        to: attested.to,
+        callData: attested.callData,
       })
 
       return res.status(200).json({

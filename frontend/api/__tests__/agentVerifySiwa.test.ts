@@ -7,8 +7,6 @@ const AGENT_REGISTRY = 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432'
 const REGISTRY_ADDRESS = '0x8004a169fb4a3325136eb29fa0ceb6d2e539a432'
 const CANONICAL_CSW = '0xab6d5c10b03300326cd7fab7267ae192842967b5'
 const OTHER_CSW = '0x3333333333333333333333333333333333333333'
-const DELEGATED_OWNER = '0x1111111111111111111111111111111111111111'
-const OUTSIDER = '0x2222222222222222222222222222222222222222'
 
 const {
   verifySIWAMock,
@@ -23,9 +21,9 @@ const {
   resolveCanonicalSmartWalletAddressMock,
   getIdentityRegistryAddressMock,
   getDbMock,
-  recoverMessageAddressMock,
-  clientVerifyMessageMock,
   clientReadContractMock,
+  getTrustedRequestOriginsMock,
+  normalizeOriginMock,
 } = vi.hoisted(() => ({
   verifySIWAMock: vi.fn(),
   readJsonBodyMock: vi.fn(async (req: any) => req.body ?? {}),
@@ -39,9 +37,9 @@ const {
   resolveCanonicalSmartWalletAddressMock: vi.fn(async () => CANONICAL_CSW),
   getIdentityRegistryAddressMock: vi.fn(() => REGISTRY_ADDRESS),
   getDbMock: vi.fn(async () => ({ sql: vi.fn() })),
-  recoverMessageAddressMock: vi.fn(),
-  clientVerifyMessageMock: vi.fn(),
   clientReadContractMock: vi.fn(),
+  getTrustedRequestOriginsMock: vi.fn(),
+  normalizeOriginMock: vi.fn(),
 }))
 
 vi.mock('@buildersgarden/siwa', () => ({
@@ -58,12 +56,12 @@ vi.mock('@buildersgarden/siwa', () => ({
   verifySIWA: verifySIWAMock,
 }))
 
-vi.mock('../../server/auth/_shared.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
-  hostMatchesDomain: vi.fn((host: string, domain: string) => host === domain),
   readJsonBody: readJsonBodyMock,
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  getDb: getDbMock,
 }))
 
 vi.mock('../../server/auth/_siwa.js', () => ({
@@ -83,8 +81,9 @@ vi.mock('../../server/_lib/erc8004.js', () => ({
   getIdentityRegistryAddress: getIdentityRegistryAddressMock,
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
-  getDb: getDbMock,
+vi.mock('../../server/_lib/trust.js', () => ({
+  getTrustedRequestOrigins: getTrustedRequestOriginsMock,
+  normalizeOrigin: normalizeOriginMock,
 }))
 
 vi.mock('viem', async (importOriginal) => {
@@ -93,7 +92,6 @@ vi.mock('viem', async (importOriginal) => {
     ...actual,
     createPublicClient: createPublicClientMock,
     http: vi.fn(() => ({ transport: 'http' })),
-    recoverMessageAddress: recoverMessageAddressMock,
   }
 })
 
@@ -107,6 +105,7 @@ describe('agent SIWA verification', () => {
 
     parseSiwaMessageSafeMock.mockReturnValue({
       domain: 'v1.4626.fun',
+      uri: 'https://v1.4626.fun',
       address: CANONICAL_CSW,
       agentId: 2205,
       agentRegistry: AGENT_REGISTRY,
@@ -118,40 +117,34 @@ describe('agent SIWA verification', () => {
       chainId: 8453,
       registryAddress: REGISTRY_ADDRESS,
     })
-    verifySIWAMock.mockResolvedValue({
-      valid: false,
-      code: 'INVALID_SIGNATURE',
-      error: 'Invalid signature',
-      address: CANONICAL_CSW,
-      agentId: 2205,
-      agentRegistry: AGENT_REGISTRY,
-      chainId: 8453,
-      verified: 'onchain',
+    verifySIWAMock.mockImplementation(async (_message: string, _signature: string, _domain: string, consumeNonce: (nonce: string) => Promise<boolean>) => {
+      await consumeNonce('nonce-123')
+      return {
+        valid: true,
+        address: CANONICAL_CSW,
+        agentId: 2205,
+        agentRegistry: AGENT_REGISTRY,
+        chainId: 8453,
+        verified: 'onchain',
+      }
     })
     consumeSiwaNonceMock.mockResolvedValue({ ownerAddress: CANONICAL_CSW })
     createSiwaReceiptTokenMock.mockReturnValue({
       receipt: 'siwa-receipt-token',
       expiresAt: '2099-01-01T01:00:00.000Z',
     })
-    clientVerifyMessageMock.mockResolvedValue(false)
-    clientReadContractMock.mockImplementation(async ({ functionName, args }: any) => {
-      if (functionName === 'ownerOf') return CANONICAL_CSW
-      if (functionName === 'isOwnerAddress') return String(args?.[0] ?? '').toLowerCase() === DELEGATED_OWNER
-      throw new Error(`Unexpected function ${functionName}`)
-    })
+    clientReadContractMock.mockResolvedValue(CANONICAL_CSW)
     createPublicClientMock.mockReturnValue({
-      verifyMessage: clientVerifyMessageMock,
       readContract: clientReadContractMock,
     })
+    getTrustedRequestOriginsMock.mockReturnValue(new Set(['https://v1.4626.fun']))
+    normalizeOriginMock.mockImplementation((value: string) => String(value || '').trim().toLowerCase())
     resolveCanonicalSmartWalletAddressMock.mockResolvedValue(CANONICAL_CSW)
   })
 
-  it('accepts a delegated CSW owner when the SIWA library rejects the raw signature', async () => {
-    recoverMessageAddressMock.mockResolvedValue(DELEGATED_OWNER)
-
+  it('returns a receipt for a valid SIWA payload', async () => {
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'v1.4626.fun' },
       body: {
         message: 'siwa-message',
         signature: '0xsig',
@@ -172,22 +165,16 @@ describe('agent SIWA verification', () => {
       verified: 'onchain',
       receipt: 'siwa-receipt-token',
     })
-    expect(consumeSiwaNonceMock).toHaveBeenCalledTimes(1)
-    expect(clientReadContractMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        address: CANONICAL_CSW,
-        functionName: 'isOwnerAddress',
-        args: [DELEGATED_OWNER],
-      }),
-    )
   })
 
-  it('still rejects signatures from wallets that do not own the canonical CSW', async () => {
-    recoverMessageAddressMock.mockResolvedValue(OUTSIDER)
-
+  it('rejects invalid SIWA signatures from verifySIWA', async () => {
+    verifySIWAMock.mockResolvedValueOnce({
+      valid: false,
+      code: 'INVALID_SIGNATURE',
+      error: 'Invalid signature',
+    })
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'v1.4626.fun' },
       body: {
         message: 'siwa-message',
         signature: '0xsig',
@@ -198,33 +185,30 @@ describe('agent SIWA verification', () => {
     await handler(req as any, res as any)
 
     expect(res.statusCode).toBe(401)
-    expect(res.body).toEqual({
-      success: false,
-      error: 'INVALID_SIGNATURE: Invalid signature',
-    })
-    expect(consumeSiwaNonceMock).not.toHaveBeenCalled()
+    expect(String(res.body?.error ?? '')).toContain('INVALID_SIGNATURE')
   })
 
-  it('rejects SIWA messages whose address no longer matches the nonce-bound canonical owner', async () => {
-    parseSiwaMessageSafeMock.mockReturnValue({
-      domain: 'v1.4626.fun',
-      address: OTHER_CSW,
-      agentId: 2205,
-      agentRegistry: AGENT_REGISTRY,
-      chainId: 8453,
-      nonce: 'nonce-123',
-      expirationTime: '2099-01-01T00:00:00.000Z',
-    })
-    recoverMessageAddressMock.mockResolvedValue(DELEGATED_OWNER)
-    clientReadContractMock.mockImplementation(async ({ functionName, args }: any) => {
-      if (functionName === 'ownerOf') return CANONICAL_CSW
-      if (functionName === 'isOwnerAddress') return String(args?.[0] ?? '').toLowerCase() === DELEGATED_OWNER
-      throw new Error(`Unexpected function ${functionName}`)
-    })
-
+  it('rejects SIWA payloads when URI origin is not trusted', async () => {
+    normalizeOriginMock.mockReturnValueOnce('https://evil.example')
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'v1.4626.fun' },
+      body: {
+        message: 'siwa-message',
+        signature: '0xsig',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('URI mismatch')
+  })
+
+  it('rejects SIWA payloads whose nonce owner differs from message address', async () => {
+    consumeSiwaNonceMock.mockResolvedValueOnce({ ownerAddress: OTHER_CSW })
+    const req = createMockReq({
+      method: 'POST',
       body: {
         message: 'siwa-message',
         signature: '0xsig',
@@ -235,9 +219,6 @@ describe('agent SIWA verification', () => {
     await handler(req as any, res as any)
 
     expect(res.statusCode).toBe(401)
-    expect(res.body).toEqual({
-      success: false,
-      error: 'SIWA message address does not match nonce owner',
-    })
+    expect(res.body?.error).toBe('SIWA message address does not match nonce owner')
   })
 })

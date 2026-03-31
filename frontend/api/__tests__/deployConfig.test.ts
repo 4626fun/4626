@@ -3,18 +3,35 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import handler from '../_handlers/deploy/_config.ts'
 import { createMockReq, createMockRes } from './helpers'
 
-const { getApiContractsMock } = vi.hoisted(() => ({
+const {
+  getApiContractsMock,
+  readRequestPrincipalAddressMock,
+  isServerAdminAddressMock,
+  resolvePayoutRouterKeeperAddressMock,
+  resolvePayoutRouterFeeConfigMock,
+} = vi.hoisted(() => ({
   getApiContractsMock: vi.fn(),
+  readRequestPrincipalAddressMock: vi.fn(),
+  isServerAdminAddressMock: vi.fn(),
+  resolvePayoutRouterKeeperAddressMock: vi.fn(),
+  resolvePayoutRouterFeeConfigMock: vi.fn(),
 }))
 
-vi.mock('../../server/auth/_shared.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  getApiContracts: getApiContractsMock,
+  readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 
-vi.mock('../../server/_lib/contracts.js', () => ({
-  getApiContracts: getApiContractsMock,
+vi.mock('../../server/_lib/trust.js', () => ({
+  isServerAdminAddress: isServerAdminAddressMock,
+}))
+
+vi.mock('../../server/_lib/payoutRouterRuntime.js', () => ({
+  resolvePayoutRouterKeeperAddress: resolvePayoutRouterKeeperAddressMock,
+  resolvePayoutRouterFeeConfig: resolvePayoutRouterFeeConfigMock,
 }))
 
 describe('deploy config handler', () => {
@@ -22,6 +39,14 @@ describe('deploy config handler', () => {
     vi.clearAllMocks()
     getApiContractsMock.mockReturnValue({
       creatorVaultBatcher: '0x2222222222222222222222222222222222222222',
+      zora: '0x3333333333333333333333333333333333333333',
+    })
+    readRequestPrincipalAddressMock.mockReturnValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    isServerAdminAddressMock.mockReturnValue(true)
+    resolvePayoutRouterKeeperAddressMock.mockReturnValue('0x4444444444444444444444444444444444444444')
+    resolvePayoutRouterFeeConfigMock.mockReturnValue({
+      zoraWethFee: 123,
+      wethCreatorFee: 456,
     })
     delete process.env.ALLOW_API_CONTRACT_OVERRIDES
     delete process.env.VITE_DEPLOY_USE_SERVER_CONTINUE
@@ -58,6 +83,10 @@ describe('deploy config handler', () => {
       allowApiContractOverrides: true,
       deployMode: 'no_eoa_strict',
       serverContinue: false,
+      payoutRouterKeeperAddress: '0x4444444444444444444444444444444444444444',
+      zoraToken: '0x3333333333333333333333333333333333333333',
+      payoutRouterZoraWethFee: 123,
+      payoutRouterWethCreatorFee: 456,
     })
   })
 })

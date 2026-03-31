@@ -1,13 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { SIWAErrorCode, verifySIWA } from '@buildersgarden/siwa'
-import { createPublicClient, http, recoverMessageAddress } from 'viem'
+import { createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
 
 import {
   type ApiEnvelope,
   handleOptions,
-  hostMatchesDomain,
   readJsonBody,
   setCors,
   setNoStore,
@@ -24,6 +23,7 @@ import {
 } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
+import { getTrustedRequestOrigins, normalizeOrigin } from '../../../server/_lib/trust.js'
 
 
 declare const process: { env: Record<string, string | undefined> }
@@ -54,16 +54,6 @@ const OWNER_OF_ABI = [
   },
 ] as const
 
-const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
-
 function getConfiguredChainId(): number {
   const raw = Number(process.env.ERC8004_AGENT_CHAIN_ID ?? 8453)
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 8453
@@ -91,125 +81,7 @@ function statusForSiwaCode(code: SIWAErrorCode | undefined): number {
   return 401
 }
 
-type ParsedSiwaMessage = NonNullable<ReturnType<typeof parseSiwaMessageSafe>>
-
-type FallbackVerifyResult =
-  | {
-      valid: true
-      address: string
-      agentId: number
-      agentRegistry: string
-      chainId: number
-      verified: 'onchain'
-    }
-  | { valid: false; code: SIWAErrorCode; error: string }
-
-type SiwaVerifyResult = Awaited<ReturnType<typeof verifySIWA>> | FallbackVerifyResult
-
-async function verifyCanonicalOwnerSiwaFallback(params: {
-  parsed: ParsedSiwaMessage
-  message: string
-  signature: string
-  client: any
-  consumeNonce: () => Promise<boolean>
-}): Promise<FallbackVerifyResult> {
-  const address = String(params.parsed.address ?? '').trim().toLowerCase()
-  if (!address) {
-    return {
-      valid: false,
-      code: SIWAErrorCode.INVALID_SIGNATURE,
-      error: 'Invalid signature',
-    }
-  }
-
-  const contractVerified =
-    typeof params.client?.verifyMessage === 'function'
-      ? await params.client
-          .verifyMessage({
-            address: address as `0x${string}`,
-            message: params.message,
-            signature: params.signature as `0x${string}`,
-          })
-          .then((value: unknown) => value === true)
-          .catch(() => false)
-      : false
-
-  if (!contractVerified) {
-    let recoveredAddress = ''
-    try {
-      recoveredAddress = String(
-        await recoverMessageAddress({
-          message: params.message,
-          signature: params.signature as `0x${string}`,
-        }),
-      ).toLowerCase()
-    } catch {
-      recoveredAddress = ''
-    }
-
-    if (!recoveredAddress) {
-      return {
-        valid: false,
-        code: SIWAErrorCode.INVALID_SIGNATURE,
-        error: 'Invalid signature',
-      }
-    }
-
-    if (recoveredAddress !== address) {
-      const delegatedOwnerValid = await params.client
-        .readContract({
-          address: address as `0x${string}`,
-          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [recoveredAddress as `0x${string}`],
-        })
-        .then((value: unknown) => value === true)
-        .catch(() => false)
-
-      if (!delegatedOwnerValid) {
-        return {
-          valid: false,
-          code: SIWAErrorCode.INVALID_SIGNATURE,
-          error: 'Invalid signature',
-        }
-      }
-    }
-  }
-
-  const nonceValid = await params.consumeNonce()
-  if (!nonceValid) {
-    return {
-      valid: false,
-      code: SIWAErrorCode.INVALID_NONCE,
-      error: 'Invalid or consumed nonce',
-    }
-  }
-
-  const now = new Date()
-  if (params.parsed.expirationTime && now > new Date(params.parsed.expirationTime)) {
-    return {
-      valid: false,
-      code: SIWAErrorCode.MESSAGE_EXPIRED,
-      error: 'Message expired',
-    }
-  }
-  if (params.parsed.notBefore && now < new Date(params.parsed.notBefore)) {
-    return {
-      valid: false,
-      code: SIWAErrorCode.MESSAGE_NOT_YET_VALID,
-      error: 'Message not yet valid (notBefore)',
-    }
-  }
-
-  return {
-    valid: true,
-    address,
-    agentId: params.parsed.agentId,
-    agentRegistry: String(params.parsed.agentRegistry ?? '').toLowerCase(),
-    chainId: params.parsed.chainId,
-    verified: 'onchain',
-  }
-}
+type SiwaVerifyResult = Awaited<ReturnType<typeof verifySIWA>>
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -232,9 +104,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid SIWA message' } satisfies ApiEnvelope<never>)
   }
 
-  const host = typeof req.headers?.host === 'string' ? req.headers.host : ''
-  if (!hostMatchesDomain(host, parsed.domain)) {
+  const trustedOrigins = getTrustedRequestOrigins(req)
+  const trustedDomains = new Set<string>()
+  for (const origin of trustedOrigins) {
+    try {
+      trustedDomains.add(new URL(origin).host.toLowerCase())
+    } catch {
+      // ignore invalid trusted origin entries
+    }
+  }
+  if (!trustedDomains.has(String(parsed.domain).trim().toLowerCase())) {
     return res.status(400).json({ success: false, error: 'Domain mismatch' } satisfies ApiEnvelope<never>)
+  }
+  const parsedUriOrigin = normalizeOrigin(String(parsed.uri ?? ''))
+  if (!parsedUriOrigin || !trustedOrigins.has(parsedUriOrigin)) {
+    return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
+  }
+  if (new URL(parsedUriOrigin).host.toLowerCase() !== String(parsed.domain).trim().toLowerCase()) {
+    return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
   }
 
   const registryRef = parseAgentRegistryRef(parsed.agentRegistry)
@@ -297,16 +184,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     client as any,
   )
-
-  if (!result.valid && result.code === SIWAErrorCode.INVALID_SIGNATURE) {
-    result = await verifyCanonicalOwnerSiwaFallback({
-      parsed,
-      message,
-      signature,
-      client,
-      consumeNonce: async () => consumeNonceOnce(parsed.nonce),
-    })
-  }
 
   if (!result.valid) {
     const reason = result.code ? `${result.code}: ${result.error || 'SIWA verification failed'}` : (result.error || 'SIWA verification failed')

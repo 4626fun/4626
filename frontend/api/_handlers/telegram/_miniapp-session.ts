@@ -15,7 +15,6 @@ import {
   claimTelegramMiniAppReplayNonce,
   createTelegramMiniAppSession,
   ensureTelegramTradingSchema,
-  findReusableTelegramMiniAppSession,
 } from '../../../server/_lib/telegramTrading.js'
 
 import { getTelegramWebhookConfig } from './webhook/config.js'
@@ -125,32 +124,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     authDate: identity.authDate,
     ttlSeconds: config.miniAppReplayTtlSeconds,
   })
-  let reusedExistingSession = false
   if (!replayAccepted) {
-    const reusable = await findReusableTelegramMiniAppSession({
-      db: db as any,
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_miniapp_session_result',
+      source: 'telegram-miniapp-session',
+      flowId,
+      phase: 'verify_telegram_session',
+      status: 'failed',
       telegramUserId: identity.telegramUserId,
       chatId: identity.chatId,
-      initDataHash: identity.initDataHash,
-      authDate: identity.authDate,
+      payload: {
+        reason: 'replay_detected',
+        replayAccepted: false,
+      },
     })
-    if (!reusable) {
-      await trackTelegramLinkEvent({
-        event: 'telegram_link_miniapp_session_result',
-        source: 'telegram-miniapp-session',
-        flowId,
-        phase: 'verify_telegram_session',
-        status: 'failed',
-        telegramUserId: identity.telegramUserId,
-        chatId: identity.chatId,
-        payload: {
-          reason: 'replay_detected',
-          replayAccepted: false,
-        },
-      })
-      return res.status(409).json({ success: false, error: 'telegram_miniapp_replay_detected' } satisfies ApiEnvelope<never>)
-    }
-    reusedExistingSession = true
+    return res.status(409).json({ success: false, error: 'telegram_miniapp_replay_detected' } satisfies ApiEnvelope<never>)
   }
 
   const created = await createTelegramMiniAppSession({
@@ -176,7 +164,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload: {
         reason: 'session_create_failed',
         replayAccepted,
-        reusedExistingSession,
       },
     })
     return res.status(500).json({ success: false, error: 'telegram_miniapp_session_create_failed' } satisfies ApiEnvelope<never>)
@@ -192,7 +179,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     chatId: identity.chatId,
     payload: {
       replayAccepted,
-      reusedExistingSession,
     },
   })
 

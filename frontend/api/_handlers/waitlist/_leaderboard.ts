@@ -42,17 +42,6 @@ function safeInt(v: any): number {
   return Number.isFinite(n) ? Math.floor(n) : 0
 }
 
-function emailUsername(email: string | null): string | null {
-  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
-  if (!normalizedEmail.includes('@')) return null
-  const localPart = normalizedEmail.split('@')[0] ?? ''
-  return localPart.trim() || null
-}
-
-function isLegacyGeneratedReferralCode(value: string | null): boolean {
-  return typeof value === 'string' && /^C[0-9A-Z]+$/.test(value)
-}
-
 function shortAddr(a: string | null): string | null {
   if (!a) return null
   const s = String(a)
@@ -60,14 +49,12 @@ function shortAddr(a: string | null): string | null {
   return `${s.slice(0, 6)}…${s.slice(-4)}`
 }
 
-function toLeaderboardRow(raw: any): LeaderboardRow {
+function toLeaderboardRow(raw: any, options?: { includeReferralCode?: boolean }): LeaderboardRow {
   const signupId = safeInt(raw?.signup_id)
-  const referralCode = typeof raw?.referral_code === 'string' ? String(raw.referral_code) : null
+  const referralCodeRaw = typeof raw?.referral_code === 'string' ? String(raw.referral_code) : null
   const wallet = shortAddr(typeof raw?.primary_wallet === 'string' ? raw.primary_wallet : null)
-  const emailHandle = emailUsername(typeof raw?.email === 'string' ? raw.email : null)
-  const display = !isLegacyGeneratedReferralCode(referralCode)
-    ? referralCode ?? emailHandle ?? wallet ?? `user#${signupId}`
-    : emailHandle ?? referralCode ?? wallet ?? `user#${signupId}`
+  const display = wallet ?? `user#${signupId}`
+  const referralCode = options?.includeReferralCode ? referralCodeRaw : null
   return {
     rank: safeInt(raw?.rank),
     signupId,
@@ -133,7 +120,7 @@ export default async function handler(req: any, res: any) {
 
   const rows = await db.sql`
     WITH eligible AS (
-      SELECT id, email, primary_wallet, embedded_wallet, referral_code, border_tier
+      SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
       FROM profiles
       WHERE profile_completed_at IS NOT NULL
       ORDER BY id ASC
@@ -142,7 +129,6 @@ export default async function handler(req: any, res: any) {
     eligible_with_key AS (
       SELECT
         id,
-        email,
         COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
         referral_code,
         border_tier
@@ -161,7 +147,6 @@ export default async function handler(req: any, res: any) {
     scored AS (
       SELECT
         w.canonical_signup_id::bigint AS signup_id,
-        MAX(e.email) FILTER (WHERE e.email IS NOT NULL) AS email,
         w.wallet_key AS primary_wallet,
         w.referral_code,
         w.border_tier,
@@ -203,7 +188,6 @@ export default async function handler(req: any, res: any) {
     ranked AS (
       SELECT
         signup_id,
-        email,
         primary_wallet,
         referral_code,
         border_tier,
@@ -231,14 +215,16 @@ export default async function handler(req: any, res: any) {
         )::int AS rank
       FROM scored
     )
-    SELECT rank, signup_id, email, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
+    SELECT rank, signup_id, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
     FROM ranked
     ORDER BY rank ASC
     OFFSET ${offset}
     LIMIT ${limit};
   `
 
-  const leaderboard: LeaderboardRow[] = Array.isArray(rows?.rows) ? rows.rows.map((raw: any) => toLeaderboardRow(raw)) : []
+  const leaderboard: LeaderboardRow[] = Array.isArray(rows?.rows)
+    ? rows.rows.map((raw: any) => toLeaderboardRow(raw, { includeReferralCode: false }))
+    : []
 
   const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
   let me: LeaderboardRow | null = null
@@ -254,7 +240,7 @@ export default async function handler(req: any, res: any) {
     if (walletKey) {
       const meQuery = await db.sql`
         WITH eligible AS (
-          SELECT id, email, primary_wallet, embedded_wallet, referral_code, border_tier
+          SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
           FROM profiles
           WHERE profile_completed_at IS NOT NULL
           ORDER BY id ASC
@@ -263,7 +249,6 @@ export default async function handler(req: any, res: any) {
         eligible_with_key AS (
           SELECT
             id,
-            email,
             COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
             referral_code,
             border_tier
@@ -282,7 +267,6 @@ export default async function handler(req: any, res: any) {
         scored AS (
       SELECT
         w.canonical_signup_id::bigint AS signup_id,
-        MAX(e.email) FILTER (WHERE e.email IS NOT NULL) AS email,
         w.wallet_key AS primary_wallet,
         w.referral_code,
         w.border_tier,
@@ -324,7 +308,6 @@ export default async function handler(req: any, res: any) {
         ranked AS (
           SELECT
             signup_id,
-            email,
             primary_wallet,
             referral_code,
             border_tier,
@@ -352,13 +335,13 @@ export default async function handler(req: any, res: any) {
             )::int AS rank
           FROM scored
         )
-        SELECT rank, signup_id, email, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
+        SELECT rank, signup_id, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
         FROM ranked
         WHERE LOWER(primary_wallet) = LOWER(${walletKey})
         LIMIT 1;
       `
       const raw = meQuery?.rows?.[0] ?? null
-      me = raw ? toLeaderboardRow(raw) : null
+      me = raw ? toLeaderboardRow(raw, { includeReferralCode: true }) : null
     }
   }
 

@@ -33,8 +33,15 @@ declare const process: { env: Record<string, string | undefined> }
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const IPFS_GATEWAY = `${String(process.env.IPFS_GATEWAY ?? DEFAULT_IPFS_GATEWAY).trim().replace(/\/+$/, '')}/`
 const IPNS_GATEWAY = IPFS_GATEWAY.replace(/\/ipfs\/$/i, '/')
+const MAX_SOURCE_IMAGE_BYTES = 12 * 1024 * 1024
+const MAX_SOURCE_IMAGE_PIXELS = 16_000_000
+const MAX_SOURCE_IMAGE_DIMENSION = 8192
 
 ensureFontconfig()
+
+function isSafeSourceByteLength(bytes: Uint8Array | null | undefined): bytes is Uint8Array {
+  return !!bytes && bytes.length > 0 && bytes.length <= MAX_SOURCE_IMAGE_BYTES
+}
 
 function normalizeHttpUrl(value: string): string | null {
   try {
@@ -212,7 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (aiOverride) {
         const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
         const rawBytes = fetched?.bytes
-        if (rawBytes && rawBytes.length > 0) {
+        if (isSafeSourceByteLength(rawBytes)) {
           preferredSourceBytes = rawBytes
           preferredSourceFingerprint = sha256Hex(Buffer.from(rawBytes).toString('base64'))
         }
@@ -297,22 +304,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (preferRawSourceImage) {
       const rawBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: artworkUrl }))
       if (rawBytes && rawBytes.length > 0) {
-        res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
-        if (format === 'svg') {
-          const contentType = 'image/png'
-          const b64 = Buffer.from(rawBytes).toString('base64')
-          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:${contentType};base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
-          res.setHeader('Content-Type', 'image/svg+xml')
-          return res.status(200).send(svg)
+        try {
+          const normalizedRaw = await normalizeImageToPng(rawBytes)
+          res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
+          if (format === 'svg') {
+            const contentType = 'image/png'
+            const b64 = Buffer.from(normalizedRaw).toString('base64')
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:${contentType};base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
+            res.setHeader('Content-Type', 'image/svg+xml')
+            return res.status(200).send(svg)
+          }
+          const resized = await sharp(Buffer.from(normalizedRaw), { limitInputPixels: MAX_SOURCE_IMAGE_PIXELS })
+            .resize(size, size, { fit: 'cover' })
+            // Keep icon corners opaque/dark across wallets and image viewers.
+            .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
+            .png()
+            .toBuffer()
+          res.setHeader('Content-Type', 'image/png')
+          return res.status(200).send(resized)
+        } catch (error) {
+          console.warn('[token/image] raw source processing failed; falling back to deterministic icon:', error)
         }
-        const resized = await sharp(Buffer.from(rawBytes))
-          .resize(size, size, { fit: 'cover' })
-          // Keep icon corners opaque/dark across wallets and image viewers.
-          .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
-          .png()
-          .toBuffer()
-        res.setHeader('Content-Type', 'image/png')
-        return res.status(200).send(resized)
       }
     }
 
@@ -1280,6 +1292,7 @@ async function fetchSourceArtworkBytes(params: {
   if (!url) return null
   try {
     const fetched = await fetchBytes(url)
+    if (!isSafeSourceByteLength(fetched.bytes)) return null
     return fetched.bytes
   } catch (error) {
     console.warn('[token/image] source artwork fetch failed; using deterministic fallback icon:', {
@@ -1291,7 +1304,25 @@ async function fetchSourceArtworkBytes(params: {
 }
 
 async function normalizeImageToPng(bytes: Uint8Array): Promise<Uint8Array> {
-  const normalized = await sharp(Buffer.from(bytes))
+  if (!isSafeSourceByteLength(bytes)) {
+    throw new Error('source_image_too_large')
+  }
+  const source = sharp(Buffer.from(bytes), {
+    limitInputPixels: MAX_SOURCE_IMAGE_PIXELS,
+  })
+  const meta = await source.metadata()
+  const width = meta.width ?? 0
+  const height = meta.height ?? 0
+  if (
+    width <= 0 ||
+    height <= 0 ||
+    width > MAX_SOURCE_IMAGE_DIMENSION ||
+    height > MAX_SOURCE_IMAGE_DIMENSION ||
+    width * height > MAX_SOURCE_IMAGE_PIXELS
+  ) {
+    throw new Error('source_image_dimensions_not_allowed')
+  }
+  const normalized = await source
     .rotate()
     .png()
     .toBuffer()

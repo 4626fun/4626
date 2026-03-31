@@ -73,6 +73,9 @@ const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Failed to fetch dynamically imported module:\s*(chrome|moz)-extension:\/\//i,
 ]
 
+const VITE_OPTIMIZE_DEP_RECOVERY_KEY = 'cv:vite:optimize-dep-reload-at'
+const VITE_OPTIMIZE_DEP_RECOVERY_WINDOW_MS = 15_000
+
 function shouldSuppressWalletNoise(args: unknown[]): boolean {
   if (!args.length) return false
   const joined = args
@@ -97,6 +100,13 @@ function readErrorMessage(value: unknown): string {
   return String((value as any)?.message ?? value)
 }
 
+function readErrorSource(value: unknown): string {
+  if (!value) return ''
+  const stack = String((value as any)?.stack ?? '').trim()
+  if (stack) return stack
+  return String(value)
+}
+
 function isKnownExtensionWalletError(message: string, source: string): boolean {
   if (!message) return false
   const hitPattern = EXTENSION_ETHEREUM_ERROR_PATTERNS.some((pattern) => pattern.test(message))
@@ -111,6 +121,29 @@ function isKnownExtensionWalletError(message: string, source: string): boolean {
     src.includes('inpage.js') ||
     src.includes('formatters.js')
   )
+}
+
+function isViteOutdatedOptimizeDepError(message: string, source: string): boolean {
+  const msg = message.toLowerCase()
+  const src = source.toLowerCase()
+  if (msg.includes('outdated optimize dep')) return true
+  if (!msg.includes('failed to fetch dynamically imported module')) return false
+  return msg.includes('/node_modules/.vite/deps/') || src.includes('/node_modules/.vite/deps/')
+}
+
+function tryRecoverFromViteOptimizeDepError(message: string, source: string): boolean {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return false
+  if (!isViteOutdatedOptimizeDepError(message, source)) return false
+  try {
+    const last = Number(window.sessionStorage.getItem(VITE_OPTIMIZE_DEP_RECOVERY_KEY) ?? '0')
+    const now = Date.now()
+    if (Number.isFinite(last) && now - last < VITE_OPTIMIZE_DEP_RECOVERY_WINDOW_MS) return false
+    window.sessionStorage.setItem(VITE_OPTIMIZE_DEP_RECOVERY_KEY, String(now))
+  } catch {
+    return false
+  }
+  window.location.reload()
+  return true
 }
 
 if (typeof window !== 'undefined') {
@@ -140,6 +173,10 @@ if (typeof window !== 'undefined') {
     window.addEventListener(
       'error',
       (event) => {
+        if (tryRecoverFromViteOptimizeDepError(event.message || '', event.filename || '')) {
+          event.preventDefault()
+          return
+        }
         if (isKnownExtensionWalletError(event.message || '', event.filename || '')) {
           event.preventDefault()
         }
@@ -149,8 +186,14 @@ if (typeof window !== 'undefined') {
     window.addEventListener(
       'unhandledrejection',
       (event) => {
-        const message = readErrorMessage((event as PromiseRejectionEvent).reason)
-        if (isKnownExtensionWalletError(message, '')) {
+        const reason = (event as PromiseRejectionEvent).reason
+        const message = readErrorMessage(reason)
+        const source = readErrorSource(reason)
+        if (tryRecoverFromViteOptimizeDepError(message, source)) {
+          event.preventDefault()
+          return
+        }
+        if (isKnownExtensionWalletError(message, source)) {
           event.preventDefault()
         }
       },

@@ -72,10 +72,8 @@ type ChallengePayload = {
 }
 
 function getCswProofSecret(): string {
-  // Prefer a dedicated secret; fall back to the auth session secret; fall back to an ephemeral one.
-  const env =
-    (process.env.CSW_PROOF_SECRET ?? '').trim() ||
-    (process.env.AUTH_SESSION_SECRET ?? '').trim()
+  // Never fall back to AUTH_SESSION_SECRET to avoid token-type confusion.
+  const env = (process.env.CSW_PROOF_SECRET ?? '').trim()
   if (env.length >= 16) return env
 
   const g: any = globalThis as any

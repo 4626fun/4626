@@ -32,20 +32,19 @@ describe('waitlist/leaderboard', () => {
     vi.clearAllMocks()
   })
 
-  it('falls back to email username when the referral code is still a generated legacy code', async () => {
+  it('does not expose email-derived identities in public leaderboard display names', async () => {
     getDbMock.mockResolvedValue({
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         if (text.includes('select count(*)::int as c')) {
           return { rows: [{ c: 2 }] }
         }
-        if (text.includes('select rank, signup_id, email, primary_wallet, referral_code')) {
+        if (text.includes('select rank, signup_id, primary_wallet, referral_code')) {
           return {
             rows: [
               {
                 rank: 1,
                 signup_id: 42,
-                email: 'hello@4626.fun',
                 primary_wallet: '0x00000000000000000000000000000000000000aa',
                 referral_code: 'C2',
                 border_tier: 0,
@@ -56,7 +55,6 @@ describe('waitlist/leaderboard', () => {
               {
                 rank: 2,
                 signup_id: 43,
-                email: 'akita@4626.fun',
                 primary_wallet: '0x00000000000000000000000000000000000000bb',
                 referral_code: 'AKITA',
                 border_tier: 1,
@@ -81,7 +79,8 @@ describe('waitlist/leaderboard', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.leaderboard?.[0]?.display).toBe('hello')
-    expect(res.body?.data?.leaderboard?.[1]?.display).toBe('AKITA')
+    expect(res.body?.data?.leaderboard?.[0]?.display).toContain('0x0000')
+    expect(res.body?.data?.leaderboard?.[1]?.display).toContain('0x0000')
+    expect(res.body?.data?.leaderboard?.[0]?.referralCode).toBeNull()
   })
 })

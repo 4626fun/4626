@@ -185,6 +185,17 @@ function normalizeAddress(value: unknown): `0x${string}` | null {
   return normalized as `0x${string}`
 }
 
+function parseAddressAllowlist(raw: string | undefined): Set<`0x${string}`> {
+  const out = new Set<`0x${string}`>()
+  const source = String(raw ?? '').trim()
+  if (!source) return out
+  for (const part of source.split(/[\s,]+/g)) {
+    const normalized = normalizeAddress(part)
+    if (normalized) out.add(normalized)
+  }
+  return out
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -205,9 +216,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const { ccaStrategyAddress, attemptHookConfig, enforceInvariants, invariants } = req.body as {
+  const { ccaStrategyAddress, enforceInvariants, invariants } = req.body as {
     ccaStrategyAddress?: string
-    attemptHookConfig?: boolean
     enforceInvariants?: boolean
     invariants?: {
       creatorCoinAddress?: string
@@ -244,7 +254,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
 
     const hookFlagFromEnv = process.env.KEEPER_ENABLE_HOOK_CONFIG === 'true'
-    const shouldAttemptHookConfig = typeof attemptHookConfig === 'boolean' ? attemptHookConfig : hookFlagFromEnv
+    const hookStrategyAllowlist = parseAddressAllowlist(process.env.KEEPER_HOOK_CONFIG_STRATEGY_ALLOWLIST)
+    const normalizedStrategyAddress = normalizeAddress(ccaStrategyAddress)
+    const strategyAllowedForHookConfig =
+      !!normalizedStrategyAddress &&
+      hookStrategyAllowlist.size > 0 &&
+      hookStrategyAllowlist.has(normalizedStrategyAddress)
+    const shouldAttemptHookConfig = hookFlagFromEnv && strategyAllowedForHookConfig
     const enforceCompletionInvariants =
       typeof enforceInvariants === 'boolean'
         ? enforceInvariants
@@ -270,6 +286,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         abi: CCA_STRATEGY_ABI as unknown as Abi,
         functionName: 'getLifecycleStatus',
       }))
+    const readFeeRecipient = async (): Promise<`0x${string}`> =>
+      (await publicClient.readContract({
+        address: ccaStrategyAddress as `0x${string}`,
+        abi: CCA_STRATEGY_ABI as unknown as Abi,
+        functionName: 'feeRecipient',
+      })) as `0x${string}`
 
     const recordInvariantViolation = (
       code: string,
@@ -482,6 +504,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             abi: CCA_STRATEGY_ABI as unknown as Abi,
             functionName: 'getTaxHookCalldata',
           }) as readonly [`0x${string}`, `0x${string}`]
+          const expectedHookTarget = (await readFeeRecipient()).toLowerCase()
+          if (!target || target.toLowerCase() !== expectedHookTarget) {
+            throw new Error('hook_target_not_allowed')
+          }
+          if (typeof calldata !== 'string' || !/^0x[0-9a-fA-F]+$/.test(calldata) || calldata.length < 10) {
+            throw new Error('hook_calldata_not_allowed')
+          }
 
           hookConfigTxHash = await walletClient.sendTransaction({
             account,
@@ -509,6 +538,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         hookConfigStatus = 'owner_manual_required'
         completionStage = 'awaiting_owner_hook_config'
+        if (hookFlagFromEnv && !strategyAllowedForHookConfig) {
+          hookConfigError = 'hook_config_strategy_not_allowlisted'
+        }
       }
     }
 

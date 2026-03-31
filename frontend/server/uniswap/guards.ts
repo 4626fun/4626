@@ -149,7 +149,16 @@ export function validateQuoteTokenPolicy(quote: Record<string, unknown>): string
 export function validateRoutePolicy(routing: unknown): string | null {
   const allowed = readAllowedRouteTypes()
   if (allowed.size === 0) return null
-  const route = String(routing ?? '').trim().toUpperCase()
+  let routeCandidate: unknown = routing
+  if (isObject(routing)) {
+    routeCandidate =
+      routing.routeType ??
+      routing.route ??
+      routing.routing ??
+      routing.type ??
+      ''
+  }
+  const route = String(routeCandidate ?? '').trim().toUpperCase()
   if (!route || !allowed.has(route)) return `Routing not allowed by policy: ${String(routing ?? 'unknown')}`
   return null
 }

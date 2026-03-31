@@ -2658,6 +2658,9 @@ async function validateInnerCalls(params: {
 
     // PayoutRouter admin calls (phase2/phase3 deploy flow)
     if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedPayoutRouter && c.target === expectedPayoutRouter) {
+      if (!expectedProtocolTreasury || params.sender !== expectedProtocolTreasury) {
+        throw new Error('payout_router_admin_sender_not_allowed')
+      }
       if (selector !== SELECTOR_PAYOUT_ROUTER_SET_KEEPER && selector !== SELECTOR_PAYOUT_ROUTER_SET_SWAP_PATH) {
         throw new Error('payout_router_selector_not_allowed')
       }

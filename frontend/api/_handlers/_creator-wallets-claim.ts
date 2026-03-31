@@ -12,7 +12,7 @@ import {
 
 
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
-import { isAddressLike, resolveCoinPartiesAndOwner } from '../../server/_lib/coinParties.js'
+import { isAddressLike, resolveCoinParties } from '../../server/_lib/coinParties.js'
 
 
 type ClaimBody = { coinAddress?: string }
@@ -26,7 +26,6 @@ type ClaimResponse = {
   matchSource: MatchSource
   creator: string | null
   payoutRecipient: string | null
-  owner: string | null
 }
 
 const COINBASE_SMART_WALLET_OWNER_ABI = [
@@ -124,6 +123,27 @@ async function isCswOwner(ownerAddress: `0x${string}`, smartWalletAddress: `0x${
   return false
 }
 
+async function isTrustedCreatorCoin(
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> },
+  coinAddress: `0x${string}`,
+): Promise<boolean> {
+  const normalized = coinAddress.toLowerCase()
+  const creatorCoinPromise = db.sql`
+    SELECT coin_address
+    FROM creator_coins
+    WHERE lower(coin_address) = ${normalized}
+    LIMIT 1;
+  `.catch(() => ({ rows: [] as any[] }))
+  const keeprVaultPromise = db.sql`
+    SELECT creator_coin_address
+    FROM keepr_vaults
+    WHERE lower(creator_coin_address) = ${normalized}
+    LIMIT 1;
+  `.catch(() => ({ rows: [] as any[] }))
+  const [creatorCoinRow, keeprVaultRow] = await Promise.all([creatorCoinPromise, keeprVaultPromise])
+  return Boolean((creatorCoinRow.rows?.length ?? 0) > 0 || (keeprVaultRow.rows?.length ?? 0) > 0)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -145,18 +165,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid coin address' } satisfies ApiEnvelope<never>)
   }
 
-  const parties = await resolveCoinPartiesAndOwner(coin)
+  const db = await getDb()
+  if (!db) {
+    return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
+  }
+  const trustedCoin = await isTrustedCreatorCoin(db, coin)
+  if (!trustedCoin) {
+    return res.status(403).json({ success: false, error: 'Coin is not in the trusted creator registry' } satisfies ApiEnvelope<never>)
+  }
+
+  const parties = await resolveCoinParties(coin)
   const creator = parties.creator
   const payoutRecipient = parties.payoutRecipient
-  const owner = parties.owner
-  if (!creator && !payoutRecipient && !owner) {
+  if (!creator && !payoutRecipient) {
     return res.status(404).json({ success: false, error: 'Coin not found' } satisfies ApiEnvelope<never>)
   }
 
-  // Some coins expose an Ownable-style `owner()` that may not equal `creator()` or
-  // CreatorCoin `payoutRecipient`.
-  // We treat `owner` as a valid "creator" claimant.
-  let role: WalletRole | null = wallet === creator ? 'creator' : wallet === payoutRecipient ? 'payout' : wallet === owner ? 'creator' : null
+  let role: WalletRole | null = wallet === creator ? 'creator' : wallet === payoutRecipient ? 'payout' : null
   let matchSource: MatchSource = 'direct'
 
   // If direct match fails, allow the signed-in wallet when it is an owner of the smart-wallet
@@ -165,7 +190,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const candidates: Array<{ role: WalletRole; address: `0x${string}` | null }> = [
       { role: 'creator', address: creator },
       { role: 'payout', address: payoutRecipient },
-      { role: 'creator', address: owner },
     ]
     for (const candidate of candidates) {
       if (!candidate.address) continue
@@ -185,10 +209,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const db = await getDb()
-  if (!db) {
-    return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
-  }
   await ensureCreatorWalletsSchema(db)
 
   await db.sql`
@@ -219,7 +239,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     matchSource,
     creator,
     payoutRecipient,
-    owner,
   }
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ClaimResponse>)

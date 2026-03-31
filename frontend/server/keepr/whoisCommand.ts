@@ -5,6 +5,8 @@ import { getEnsProfile, type EnsProfile } from '../_lib/ensResolver.js'
 import { getBasenameName } from '../_lib/basenameResolver.js'
 
 const CACHE_TTL_MS = 5 * 60_000
+const MAX_CACHE_ENTRIES = 2_000
+const MAX_PENDING_ENTRIES = 500
 
 type CacheEntry = {
   expiresAt: number
@@ -13,6 +15,17 @@ type CacheEntry = {
 
 const cache = new Map<string, CacheEntry>()
 const pending = new Map<string, Promise<KeeprCommandResult>>()
+
+function evictCache(now = Date.now()): void {
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key)
+  }
+  while (cache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value as string | undefined
+    if (!oldestKey) break
+    cache.delete(oldestKey)
+  }
+}
 
 function truncate(value: string, maxLen: number): string {
   const v = String(value ?? '').trim()
@@ -56,9 +69,13 @@ export async function handleWhoisCommand(params: {
   const address = getAddress(target).toLowerCase() as `0x${string}`
   const cached = cache.get(address)
   if (cached && cached.expiresAt > Date.now()) return cached.value
+  if (cached && cached.expiresAt <= Date.now()) cache.delete(address)
 
   const inFlight = pending.get(address)
   if (inFlight) return await inFlight
+  if (pending.size >= MAX_PENDING_ENTRIES) {
+    return { ok: false, response: 'Please retry in a moment.' }
+  }
 
   const promise = (async (): Promise<KeeprCommandResult> => {
     const [ens, basename] = await Promise.all([
@@ -94,7 +111,10 @@ export async function handleWhoisCommand(params: {
   pending.set(address, promise)
   try {
     const result = await promise
+    evictCache()
+    if (cache.has(address)) cache.delete(address)
     cache.set(address, { expiresAt: Date.now() + CACHE_TTL_MS, value: result })
+    evictCache()
     return result
   } finally {
     pending.delete(address)

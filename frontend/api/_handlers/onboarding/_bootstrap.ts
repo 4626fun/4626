@@ -6,7 +6,6 @@ import {
   setCors,
   setNoStore,
   getDb,
-  getDbInitError,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -62,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db) {
     return res.status(503).json({
       success: false,
-      error: getDbInitError() || 'Database unavailable',
+      error: 'Database unavailable',
       code: 'ONBOARDING_BOOTSTRAP_UNAVAILABLE',
       retryable: true,
     } satisfies BootstrapErrorEnvelope)
@@ -78,9 +77,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<BootstrapResponse>)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Onboarding bootstrap failed'
+    const statusCode = resolveStatusCode(error)
+    const message =
+      statusCode >= 500
+        ? 'Onboarding bootstrap failed'
+        : error instanceof Error
+          ? error.message
+          : 'Onboarding bootstrap failed'
     return res
-      .status(resolveStatusCode(error))
+      .status(statusCode)
       .json({ success: false, error: message, ...extractDelegationFlags(error) } satisfies BootstrapErrorEnvelope)
   }
 }

@@ -40,23 +40,159 @@ function getSubgraphUrl(): string {
 }
 
 type GraphQLRequest = {
-  query: string
+  query?: string
+  operation?: string
   variables?: Record<string, unknown>
 }
 
-const ALLOWED_OPERATIONS = new Set([
-  'GetPoolsByToken',
-  'GetPoolHourData',
-  'GetPoolDayData',
-  'GetPoolSwaps',
-  'GetToken',
-  'GetTokenDayData',
-  'HealthMeta',
-])
+const ALLOWED_QUERY_BY_OPERATION: Record<string, string> = {
+  GetPoolsByToken: `query GetPoolsByToken($token: String!) {
+    pools0: pools(where: { token0: $token }, orderBy: totalValueLockedUSD, orderDirection: desc, first: 10) {
+      id
+      token0 { id symbol name decimals }
+      token1 { id symbol name decimals }
+      feeTier
+      liquidity
+      sqrtPrice
+      token0Price
+      token1Price
+      volumeUSD
+      feesUSD
+      txCount
+      totalValueLockedUSD
+      hooks
+      createdAtTimestamp
+    }
+    pools1: pools(where: { token1: $token }, orderBy: totalValueLockedUSD, orderDirection: desc, first: 10) {
+      id
+      token0 { id symbol name decimals }
+      token1 { id symbol name decimals }
+      feeTier
+      liquidity
+      sqrtPrice
+      token0Price
+      token1Price
+      volumeUSD
+      feesUSD
+      txCount
+      totalValueLockedUSD
+      hooks
+      createdAtTimestamp
+    }
+  }`,
+  GetPoolHourData: `query GetPoolHourData($pool: String!, $first: Int!) {
+    poolHourDatas(where: { pool: $pool }, orderBy: periodStartUnix, orderDirection: desc, first: $first) {
+      id
+      periodStartUnix
+      pool { id }
+      liquidity
+      sqrtPrice
+      token0Price
+      token1Price
+      tick
+      tvlUSD
+      volumeToken0
+      volumeToken1
+      volumeUSD
+      feesUSD
+      txCount
+      open
+      high
+      low
+      close
+    }
+  }`,
+  GetPoolDayData: `query GetPoolDayData($pool: String!, $first: Int!) {
+    poolDayDatas(where: { pool: $pool }, orderBy: date, orderDirection: desc, first: $first) {
+      id
+      date
+      pool { id }
+      liquidity
+      sqrtPrice
+      token0Price
+      token1Price
+      tick
+      tvlUSD
+      volumeToken0
+      volumeToken1
+      volumeUSD
+      feesUSD
+      txCount
+      open
+      high
+      low
+      close
+    }
+  }`,
+  GetPoolSwaps: `query GetPoolSwaps($pool: String!, $first: Int!) {
+    swaps(where: { pool: $pool }, orderBy: timestamp, orderDirection: desc, first: $first) {
+      id
+      timestamp
+      transaction { id timestamp }
+      token0 { id symbol decimals }
+      token1 { id symbol decimals }
+      sender
+      origin
+      amount0
+      amount1
+      amountUSD
+    }
+  }`,
+  GetToken: `query GetToken($id: ID!) {
+    token(id: $id) {
+      id
+      symbol
+      name
+      decimals
+      volume
+      volumeUSD
+      feesUSD
+      txCount
+      totalValueLocked
+      totalValueLockedUSD
+      derivedETH
+    }
+  }`,
+  GetTokenDayData: `query GetTokenDayData($token: String!, $first: Int!) {
+    tokenDayDatas(where: { token: $token }, orderBy: date, orderDirection: desc, first: $first) {
+      id
+      date
+      token { id symbol name }
+      volume
+      volumeUSD
+      untrackedVolumeUSD
+      totalValueLocked
+      totalValueLockedUSD
+      priceUSD
+      feesUSD
+      open
+      high
+      low
+      close
+    }
+  }`,
+  HealthMeta: `query HealthMeta {
+    _meta {
+      block {
+        number
+      }
+    }
+  }`,
+}
 
 function extractOperationName(query: string): string | null {
   const match = query.match(/^\s*query\s+([_A-Za-z][_0-9A-Za-z]*)\b/)
   return match?.[1] ?? null
+}
+
+function hasOwn<T extends object>(obj: T, key: string): key is Extract<keyof T, string> {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -86,15 +222,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = req.body as GraphQLRequest
-    
-    if (!body?.query || typeof body.query !== 'string') {
-      return res.status(400).json({ success: false, error: 'Missing GraphQL query' })
-    }
-
-    const opName = extractOperationName(body.query)
-    if (!opName || !ALLOWED_OPERATIONS.has(opName)) {
+    const requestedOperation =
+      typeof body?.operation === 'string' && body.operation.trim()
+        ? body.operation.trim()
+        : typeof body?.query === 'string'
+          ? extractOperationName(body.query)
+          : null
+    if (!requestedOperation || !hasOwn(ALLOWED_QUERY_BY_OPERATION, requestedOperation)) {
       return res.status(400).json({ success: false, error: 'Operation not allowed' })
     }
+    const safeQuery = ALLOWED_QUERY_BY_OPERATION[requestedOperation]
+    const safeVariables = isPlainRecord(body?.variables) ? body.variables : {}
 
     const subgraphUrl = getSubgraphUrl()
 
@@ -106,8 +244,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: body.query,
-        variables: body.variables || {},
+        query: safeQuery,
+        variables: safeVariables,
       }),
       timeoutMs: 10_000,
       maxResponseBytes: 1_000_000,

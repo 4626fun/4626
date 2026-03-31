@@ -7224,6 +7224,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (sharedSelection) {
     if (sharedSelection.kind === 'users') {
       const selectedUser = sharedSelection.users[0] ?? null
+      const adminUserIds = parseAdminUserIds()
+      const isAdmin = userId ? adminUserIds.has(userId) : false
+      if (selectedUser && selectedUser.userId !== userId && !isAdmin) {
+        await sendTelegramMessage({
+          botToken,
+          chatId,
+          text: 'You can only view your own linked profile from the ID picker.',
+          replyToMessageId: messageId,
+          replyMarkup: { remove_keyboard: true },
+        })
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
       const db = await getDb()
       const pickedProfile = selectedUser && db
         ? await resolveTelegramPickerUserProfile({ db, telegramUserId: selectedUser.userId })
