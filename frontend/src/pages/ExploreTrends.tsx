@@ -10,6 +10,7 @@ import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/
 import { getExploreColumns } from '@/components/explore/tableColumns'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
+import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
 
@@ -91,22 +92,11 @@ export function ExploreTrends() {
     })
   }, [allCoins, searchQuery])
 
-  // Handle infinite scroll
-  const handleScroll = useCallback(() => {
-    if (
-      window.innerHeight + document.documentElement.scrollTop >=
-      document.documentElement.offsetHeight - 500
-    ) {
-      if (hasNextPage && !isFetchingNextPage) {
-        fetchNextPage()
-      }
-    }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
-
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [handleScroll])
+  useWindowInfiniteScrollLoadMore({
+    hasNextPage: Boolean(hasNextPage),
+    isFetchingNextPage,
+    onLoadMore: fetchNextPage,
+  })
 
   const updateHorizontalControls = useCallback((el: HTMLElement | null) => {
     if (!el) return
@@ -375,4 +365,3 @@ export function ExploreTrends() {
     </div>
   )
 }
-

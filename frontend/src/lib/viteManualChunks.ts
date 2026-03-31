@@ -44,7 +44,7 @@ const MANUAL_CHUNK_RULES: ReadonlyArray<{
 ]
 
 export function classifyManualChunk(id: string): string | undefined {
-  const normalizedId = id.replaceAll('\\', '/').toLowerCase()
+  const normalizedId = id.replace(/\\/g, '/').toLowerCase()
 
   // Keep Vite preload helpers in the baseline vendor chunk.
   if (normalizedId.includes('vite/preload-helper')) {

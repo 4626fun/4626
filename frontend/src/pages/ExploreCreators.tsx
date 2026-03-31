@@ -13,6 +13,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
+import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
 
@@ -504,22 +505,11 @@ export function ExploreCreators() {
     !isFetchingNextPage &&
     (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
 
-  // Handle infinite scroll
-  const handleScroll = useCallback(() => {
-    if (
-      window.innerHeight + document.documentElement.scrollTop >=
-      document.documentElement.offsetHeight - 500
-    ) {
-      if (hasNextPage && !isFetchingNextPage) {
-        fetchNextPage()
-      }
-    }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
-
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [handleScroll])
+  useWindowInfiniteScrollLoadMore({
+    hasNextPage: Boolean(hasNextPage),
+    isFetchingNextPage,
+    onLoadMore: fetchNextPage,
+  })
 
   useEffect(() => {
     if (!shouldAutoFetchForSearch) return

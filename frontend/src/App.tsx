@@ -234,6 +234,19 @@ const MARKETING_ONLY_ROUTES: Array<{ path: string; element: ReactNode }> = [
 
 type PathRouteDef = { path: string; element: ReactNode }
 
+function renderPathRoutes(
+  routes: PathRouteDef[],
+  transformElement?: (element: ReactNode) => ReactNode,
+) {
+  return routes.map((route) => (
+    <Route
+      key={route.path}
+      path={route.path}
+      element={transformElement ? transformElement(route.element) : route.element}
+    />
+  ))
+}
+
 const ACCOUNT_ROUTES: PathRouteDef[] = [
   { path: '/continue', element: <AppContinue /> },
   { path: '/accounts', element: <AccountsPage /> },
@@ -364,9 +377,7 @@ function App() {
         <Route path="/404" element={<NotFoundPage />} />
 
         <Route element={<Layout interactive={false} />}>
-          {MARKETING_ONLY_ROUTES.map((route) => (
-            <Route key={route.path} path={route.path} element={marketingOnlyElement(route.element)} />
-          ))}
+          {renderPathRoutes(MARKETING_ONLY_ROUTES, marketingOnlyElement)}
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Route>
 
@@ -374,9 +385,7 @@ function App() {
           element={<LazyGuardedOutlet guard={LazyAuthWalletBoundary} />}
         >
           <Route element={<AuthenticatedAppLayout />}>
-            {ACCOUNT_ROUTES.map((route) => (
-              <Route key={route.path} path={route.path} element={route.element} />
-            ))}
+            {renderPathRoutes(ACCOUNT_ROUTES)}
           </Route>
         </Route>
 
@@ -385,9 +394,7 @@ function App() {
         >
           <Route element={<PublicAppLayout />}>
             <Route element={<SessionAcceptedRoute />}>
-              {EXPLORE_ROUTES.map((route) => (
-                <Route key={route.path} path={route.path} element={route.element} />
-              ))}
+              {renderPathRoutes(EXPLORE_ROUTES)}
             </Route>
           </Route>
 
@@ -396,16 +403,12 @@ function App() {
           >
             <Route element={<AuthenticatedAppLayout />}>
               <Route element={<SessionAcceptedRoute />}>
-                {APP_ACCEPTED_ROUTES.map((route) => (
-                  <Route key={route.path} path={route.path} element={route.element} />
-                ))}
+                {renderPathRoutes(APP_ACCEPTED_ROUTES)}
 
                 <Route element={<LazyGuardedOutlet guard={LazyRequireAdmin} />}>
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<Navigate to="/admin/waitlist" replace />} />
-                    {ADMIN_CHILD_ROUTES.map((route) => (
-                      <Route key={route.path} path={route.path} element={route.element} />
-                    ))}
+                    {renderPathRoutes(ADMIN_CHILD_ROUTES)}
                   </Route>
                 </Route>
               </Route>
