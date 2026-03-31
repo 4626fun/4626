@@ -41,7 +41,6 @@ import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndex
 import { readProfileWalletAuthority } from '../../../../server/_lib/canonicalWalletResolver.js'
 import {
   normalizeSolanaAssetMintOrigin,
-  parseSolanaOvaultMintCompatibilityHints,
 } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { hasContractBytecode } from '../../../../src/wallet/canonicalWalletPolicy'
 
@@ -571,8 +570,6 @@ function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | 
       ? raw.shareMeshMint.trim()
       : null
   const solanaEid = parseUInt32Like(raw.solanaEid)
-  const mintCompatibilityHints = parseSolanaOvaultMintCompatibilityHints(raw.mintCompatibilityHints)
-  const hasMintHints = Object.values(mintCompatibilityHints).some((v) => v !== null)
 
   return {
     enabled,
@@ -580,7 +577,6 @@ function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | 
     ...(assetMeshMint ? { assetMeshMint } : null),
     ...(shareMeshMint ? { shareMeshMint } : null),
     ...(solanaEid !== null ? { solanaEid } : null),
-    ...(hasMintHints ? { mintCompatibilityHints } : null),
   }
 }
 

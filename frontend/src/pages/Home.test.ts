@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { SHARE_SPLIT_LABEL } from '@/components/home/launchConfig'
 
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
@@ -29,6 +28,7 @@ vi.mock('framer-motion', () => ({
   useTransform: () => 0,
   useMotionTemplate: () => '',
   useMotionValueEvent: () => {},
+  useReducedMotion: () => false,
 }))
 
 vi.mock('@/components/seo/PageMeta', () => ({
@@ -72,6 +72,15 @@ vi.mock('@/components/waitlist/ThinWaitlistFlow', () => ({
   ),
 }))
 
+vi.mock('@/components/home/VaultFlowScroll', () => ({
+  VaultFlowScroll: ({ depositTokens, shareTokens }: { depositTokens: string; shareTokens: string }) =>
+    React.createElement(
+      'div',
+      { 'data-testid': 'vault-flow-scroll' },
+      `${depositTokens} TOKEN · ${shareTokens}`,
+    ),
+}))
+
 import { Home } from './Home'
 
 describe('Home', () => {
@@ -92,8 +101,8 @@ describe('Home', () => {
 
     expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
     expect(screen.getByTestId('waitlist-flow').getAttribute('data-variant')).toBe('embedded')
-    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
-    expect(screen.getByTestId('waitlist-flow').getAttribute('data-suppress-auth-shell')).toBe('yes')
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('no')
+    expect(screen.getByTestId('waitlist-flow').getAttribute('data-suppress-auth-shell')).toBe('no')
     expect(screen.queryByRole('button', { name: /join waitlist/i })).toBeNull()
     expect(window.location.pathname).toBe('/')
   })
@@ -132,11 +141,11 @@ describe('Home', () => {
   it('shows the current launch mechanics and token flow', () => {
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
+    expect(screen.getByTestId('vault-flow-scroll')).toBeTruthy()
     expect(screen.getAllByText(/50,000,000 TOKEN/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/50,000,000 ■TOKEN/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/7 days/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Thursday 00:00 UTC/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Share split/i)).toBeTruthy()
-    expect(screen.getByText(SHARE_SPLIT_LABEL)).toBeTruthy()
+    expect(screen.getAllByText(/CCA launch/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Redeem/i).length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: /How it works/i })).toBeTruthy()
   })
 })

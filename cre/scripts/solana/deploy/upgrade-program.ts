@@ -14,15 +14,16 @@
  *   BUFFER_AUTHORITY         - Buffer authority keypair (default: payer)
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { CHAINS, requireEnv } from '../../../config.js';
+import { CHAINS } from '../../../config.js';
 import { loadKeeperKeypair } from '../../../utils/solana.js';
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const programId = CHAINS.solana.programId;
 const soPath = process.env.PROGRAM_SO_PATH ?? 'target/deploy/creator_share_hook.so';
 const payer = loadKeeperKeypair();
+const keypairPath = `${process.env.HOME ?? ''}/.config/solana/id.json`;
 
 if (!existsSync(soPath)) {
   console.error(`Program binary not found at: ${soPath}`);
@@ -37,19 +38,23 @@ console.log('Binary:     ', soPath);
 console.log('Authority:  ', payer.publicKey.toBase58());
 console.log();
 
-const cmd = [
-  'solana program deploy',
-  `--url ${rpcUrl}`,
-  `--program-id ${programId}`,
-  `--keypair ~/.config/solana/id.json`,
+const args = [
+  'program',
+  'deploy',
+  '--url',
+  rpcUrl,
+  '--program-id',
+  programId,
+  '--keypair',
+  keypairPath,
   soPath,
-].join(' ');
+];
 
-console.log('Running:', cmd);
+console.log('Running:', ['solana', ...args].join(' '));
 console.log();
 
 try {
-  execSync(cmd, { stdio: 'inherit' });
+  execFileSync('solana', args, { stdio: 'inherit' });
   console.log('\nProgram upgraded successfully!');
 } catch (error) {
   console.error('\nProgram upgrade failed');

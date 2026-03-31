@@ -20,8 +20,14 @@ type Config = AjnaManagerConfig & {
 const onCronTrigger = (runtime: Runtime<Config>): AjnaWorkflowResult =>
   evaluateAndEnqueueAjnaActions(runtime)
 
-const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): AjnaWorkflowResult =>
-  evaluateAndEnqueueAjnaActions(runtime, parseAjnaManualPayload(payload.input))
+const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): AjnaWorkflowResult => {
+  const manual = parseAjnaManualPayload(payload.input)
+  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  if (!manual.authToken || manual.authToken !== apiKey) {
+    throw new Error("unauthorized_manual_trigger")
+  }
+  return evaluateAndEnqueueAjnaActions(runtime, manual)
+}
 
 const initWorkflow = (config: Config) => {
   const cron = new CronCapability()

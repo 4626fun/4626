@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { validateSwapTransactionPayload } from '../../_handlers/uniswap/_swap'
+import { validateSwapTransactionPayload } from '../../../server/uniswap/swapPayloadValidation'
 
 const BASE_SWAP = {
   swap: {

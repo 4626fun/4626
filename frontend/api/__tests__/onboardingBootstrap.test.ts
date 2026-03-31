@@ -114,7 +114,7 @@ describe('POST /api/onboarding/bootstrap', () => {
 
     expect(res.statusCode).toBe(503)
     expect(res.body?.success).toBe(false)
-    expect(res.body?.error).toBe('Max client connections reached')
+    expect(res.body?.error).toBe('Database unavailable')
     expect(res.body?.code).toBe('ONBOARDING_BOOTSTRAP_UNAVAILABLE')
     expect(res.body?.retryable).toBe(true)
   })

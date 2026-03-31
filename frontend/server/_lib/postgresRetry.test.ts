@@ -4,7 +4,7 @@ const SESSION_MODE_ERROR_MSG =
   'error: MaxClientsInSessionMode: max clients reached - in Session mode max clients are limited to pool_size'
 
 let queryCallCount = 0
-let queryBehavior: 'succeed' | 'session_error' | 'other_error' | 'fail_then_succeed' = 'succeed'
+let queryBehavior: 'succeed' | 'session_error' | 'other_error' | 'fail_then_succeed' | 'self_signed_once' = 'succeed'
 let failThenSucceedThreshold = 0
 
 const mockPoolEnd = vi.fn(async () => {})
@@ -12,6 +12,14 @@ const mockPoolQuery = vi.fn(async () => {
   queryCallCount++
   if (queryBehavior === 'succeed') return { rows: [{ ok: 1 }] }
   if (queryBehavior === 'other_error') throw new Error('connection refused')
+  if (queryBehavior === 'self_signed_once') {
+    if (queryCallCount === 1) {
+      const err = new Error('self-signed certificate in certificate chain') as any
+      err.code = 'SELF_SIGNED_CERT_IN_CHAIN'
+      throw err
+    }
+    return { rows: [{ ok: 1 }] }
+  }
   if (queryBehavior === 'fail_then_succeed') {
     if (queryCallCount <= failThenSucceedThreshold) {
       const err = new Error(SESSION_MODE_ERROR_MSG) as any
@@ -36,6 +44,7 @@ vi.mock('@vercel/postgres', () => ({}))
 
 describe('postgres session-mode retry', () => {
   let getDb: typeof import('./postgres.ts').getDb
+  let getDbInitError: typeof import('./postgres.ts').getDbInitError
 
   beforeEach(async () => {
     vi.resetModules()
@@ -53,9 +62,12 @@ describe('postgres session-mode retry', () => {
     delete process.env.POSTGRES_URL_NON_POOLING
     delete process.env.VERCEL
     delete process.env.VERCEL_ENV
+    delete process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED
+    delete process.env.POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK
 
     const mod = await import('./postgres.ts')
     getDb = mod.getDb
+    getDbInitError = mod.getDbInitError
   })
 
   afterEach(() => {
@@ -127,5 +139,22 @@ describe('postgres session-mode retry', () => {
     const result = await db!.query!('SELECT $1', [42])
     expect(result.rows).toEqual([{ ok: 1 }])
     expect(queryCallCount).toBe(2)
+  })
+
+  it('retries init once with relaxed TLS on SELF_SIGNED_CERT_IN_CHAIN', async () => {
+    queryBehavior = 'self_signed_once'
+    const db = await getDb()
+    expect(db).not.toBeNull()
+    // First query fails with self-signed chain, second succeeds after TLS fallback.
+    expect(queryCallCount).toBe(2)
+  })
+
+  it('does not auto-fallback when self-signed fallback is explicitly disabled', async () => {
+    vi.stubEnv('POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK', 'false')
+    queryBehavior = 'self_signed_once'
+    const db = await getDb()
+    expect(db).toBeNull()
+    expect(getDbInitError()).toMatch(/self-signed certificate in certificate chain/i)
+    expect(queryCallCount).toBe(1)
   })
 })

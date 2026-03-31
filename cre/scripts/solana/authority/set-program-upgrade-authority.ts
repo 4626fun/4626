@@ -13,12 +13,13 @@
  *   SOLANA_PROGRAM_ID       - Program ID (default: from config)
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { CHAINS, requireEnv } from '../../../config.js';
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const programId = CHAINS.solana.programId;
 const newAuthority = requireEnv('NEW_AUTHORITY');
+const keypairPath = `${process.env.HOME ?? ''}/.config/solana/id.json`;
 
 console.log('=== Set Program Upgrade Authority ===');
 console.log('RPC:           ', rpcUrl);
@@ -26,23 +27,24 @@ console.log('Program ID:    ', programId);
 console.log('New Authority: ', newAuthority);
 console.log();
 
-const authorityFlag = newAuthority.toLowerCase() === 'none'
-  ? '--final'
-  : `--new-upgrade-authority ${newAuthority}`;
-
-const cmd = [
-  'solana program set-upgrade-authority',
+const args = [
+  'program',
+  'set-upgrade-authority',
   programId,
-  authorityFlag,
-  `--url ${rpcUrl}`,
-  '--keypair ~/.config/solana/id.json',
-].join(' ');
+  ...(newAuthority.toLowerCase() === 'none'
+    ? ['--final']
+    : ['--new-upgrade-authority', newAuthority]),
+  '--url',
+  rpcUrl,
+  '--keypair',
+  keypairPath,
+];
 
-console.log('Running:', cmd);
+console.log('Running:', ['solana', ...args].join(' '));
 console.log();
 
 try {
-  execSync(cmd, { stdio: 'inherit' });
+  execFileSync('solana', args, { stdio: 'inherit' });
   console.log('\nUpgrade authority updated!');
   if (newAuthority.toLowerCase() === 'none') {
     console.log('WARNING: Program is now IMMUTABLE and cannot be upgraded.');

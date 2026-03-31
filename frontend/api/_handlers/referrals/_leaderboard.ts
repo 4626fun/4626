@@ -12,8 +12,16 @@ import {
 
 
 import { ensureReferralsSchema } from '../../../server/_lib/referrals.js'
+import {
+  getProfileIdByPrincipalAddress,
+  getReferralLeaderboardTop,
+  getReferralRanksForLeaderboardMe,
+  getWeekBoundsUtc,
+  maskReferralCode,
+  type ReferralsPeriod,
+} from '../../../server/_lib/referralsLeaderboard.js'
 
-type Period = 'weekly' | 'all_time'
+type Period = ReferralsPeriod
 
 type LeaderboardRow = {
   rank: number
@@ -28,23 +36,6 @@ type LeaderboardResponse = {
   weekEndUtc?: string
   top: LeaderboardRow[]
   me?: { weeklyRank?: number | null; allTimeRank?: number | null } | null
-}
-
-function maskReferralCode(value: string): string {
-  const normalized = String(value || '').trim()
-  if (!normalized) return ''
-  if (normalized.length <= 4) return '****'
-  return `${normalized.slice(0, 2)}***${normalized.slice(-2)}`
-}
-
-function getWeekBoundsUtc(now = new Date()): { start: Date; end: Date } {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0))
-  const day = d.getUTCDay()
-  const diffToMon = (day + 6) % 7
-  d.setUTCDate(d.getUTCDate() - diffToMon)
-  const start = d
-  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
-  return { start, end }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -67,167 +58,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { start, end } = getWeekBoundsUtc()
 
-  const rows =
-    period === 'weekly'
-      ? await db.sql`
-          WITH referrers AS (
-            SELECT id, referral_code, primary_wallet
-            FROM profiles
-            WHERE referral_code IS NOT NULL
-          ),
-          conversions AS (
-            SELECT referrer_signup_id, COUNT(*)::int AS conversions
-            FROM referral_conversions
-            WHERE is_valid = TRUE
-              AND created_at >= ${start.toISOString()}
-              AND created_at < ${end.toISOString()}
-            GROUP BY referrer_signup_id
-          ),
-          clicks AS (
-            SELECT referrer_signup_id,
-              COUNT(DISTINCT COALESCE(ip_hash, ua_hash))::int AS unique_clicks
-            FROM referral_clicks
-            WHERE is_bot_suspected = FALSE
-              AND created_at >= ${start.toISOString()}
-              AND created_at < ${end.toISOString()}
-            GROUP BY referrer_signup_id
-          ),
-          scored AS (
-            SELECT r.id, r.referral_code, r.primary_wallet,
-              COALESCE(conv.conversions, 0)::int AS conversions,
-              COALESCE(clk.unique_clicks, 0)::int AS unique_clicks
-            FROM referrers r
-            LEFT JOIN conversions conv ON conv.referrer_signup_id = r.id
-            LEFT JOIN clicks clk ON clk.referrer_signup_id = r.id
-          ),
-          ranked AS (
-            SELECT
-              referral_code,
-              primary_wallet,
-              conversions,
-              DENSE_RANK() OVER (ORDER BY conversions DESC, unique_clicks DESC, id ASC)::int AS rank
-            FROM scored
-          )
-          SELECT rank, referral_code, conversions, primary_wallet
-          FROM ranked
-          ORDER BY rank ASC
-          LIMIT ${limit};
-        `
-      : await db.sql`
-          WITH referrers AS (
-            SELECT id, referral_code, primary_wallet
-            FROM profiles
-            WHERE referral_code IS NOT NULL
-          ),
-          conversions AS (
-            SELECT referrer_signup_id, COUNT(*)::int AS conversions
-            FROM referral_conversions
-            WHERE is_valid = TRUE
-            GROUP BY referrer_signup_id
-          ),
-          clicks AS (
-            SELECT referrer_signup_id,
-              COUNT(DISTINCT COALESCE(ip_hash, ua_hash))::int AS unique_clicks
-            FROM referral_clicks
-            WHERE is_bot_suspected = FALSE
-            GROUP BY referrer_signup_id
-          ),
-          scored AS (
-            SELECT r.id, r.referral_code, r.primary_wallet,
-              COALESCE(conv.conversions, 0)::int AS conversions,
-              COALESCE(clk.unique_clicks, 0)::int AS unique_clicks
-            FROM referrers r
-            LEFT JOIN conversions conv ON conv.referrer_signup_id = r.id
-            LEFT JOIN clicks clk ON clk.referrer_signup_id = r.id
-          ),
-          ranked AS (
-            SELECT
-              referral_code,
-              primary_wallet,
-              conversions,
-              DENSE_RANK() OVER (ORDER BY conversions DESC, unique_clicks DESC, id ASC)::int AS rank
-            FROM scored
-          )
-          SELECT rank, referral_code, conversions, primary_wallet
-          FROM ranked
-          ORDER BY rank ASC
-          LIMIT ${limit};
-        `
-
-  const top: LeaderboardRow[] = Array.isArray(rows?.rows)
-    ? rows.rows.map((r: any) => ({
-        rank: Number(r.rank) || 0,
-        referralCode: maskReferralCode(typeof r.referral_code === 'string' ? r.referral_code : ''),
-        conversions: Number(r.conversions) || 0,
-        primaryWallet: null,
-      }))
-    : []
+  const topRows = await getReferralLeaderboardTop(db, { period, limit, week: { start, end } })
+  const top: LeaderboardRow[] = topRows.map((row) => ({
+    rank: row.rank,
+    referralCode: maskReferralCode(row.referralCode),
+    conversions: row.conversions,
+    primaryWallet: null,
+  }))
 
   const addr = readRequestPrincipalAddress(req)
   let me: LeaderboardResponse['me'] = null
   if (addr) {
-    const mine = await db.sql`
-      SELECT id
-      FROM profiles
-      WHERE (
-        LOWER(primary_wallet) = ${addr}
-        OR LOWER(embedded_wallet) = ${addr}
-        OR LOWER(csw_address) = ${addr}
-        OR LOWER(base_sub_account) = ${addr}
-      )
-      LIMIT 1;
-    `
-    const myId = typeof mine?.rows?.[0]?.id === 'number' ? (mine.rows[0].id as number) : null
+    const myId = await getProfileIdByPrincipalAddress(db, addr)
     if (myId) {
-      // Return both ranks for convenience.
-      const rWeekly = await db.sql`
-        WITH referrers AS (
-          SELECT id
-          FROM profiles
-          WHERE referral_code IS NOT NULL
-        ),
-        scored AS (
-          SELECT r.id,
-            COALESCE(COUNT(c.id), 0)::int AS conversions
-          FROM referrers r
-          LEFT JOIN referral_conversions c
-            ON c.referrer_signup_id = r.id
-           AND c.is_valid = TRUE
-           AND c.created_at >= ${start.toISOString()}
-           AND c.created_at < ${end.toISOString()}
-          GROUP BY r.id
-        ),
-        ranked AS (
-          SELECT id, DENSE_RANK() OVER (ORDER BY conversions DESC, id ASC)::int AS rank
-          FROM scored
-        )
-        SELECT rank FROM ranked WHERE id = ${myId} LIMIT 1;
-      `
-      const weeklyRank = typeof rWeekly?.rows?.[0]?.rank === 'number' ? (rWeekly.rows[0].rank as number) : null
-
-      const rAll = await db.sql`
-        WITH referrers AS (
-          SELECT id
-          FROM profiles
-          WHERE referral_code IS NOT NULL
-        ),
-        scored AS (
-          SELECT r.id,
-            COALESCE(COUNT(c.id), 0)::int AS conversions
-          FROM referrers r
-          LEFT JOIN referral_conversions c
-            ON c.referrer_signup_id = r.id
-           AND c.is_valid = TRUE
-          GROUP BY r.id
-        ),
-        ranked AS (
-          SELECT id, DENSE_RANK() OVER (ORDER BY conversions DESC, id ASC)::int AS rank
-          FROM scored
-        )
-        SELECT rank FROM ranked WHERE id = ${myId} LIMIT 1;
-      `
-      const allTimeRank = typeof rAll?.rows?.[0]?.rank === 'number' ? (rAll.rows[0].rank as number) : null
-      me = { weeklyRank, allTimeRank }
+      me = await getReferralRanksForLeaderboardMe(db, myId, { start, end })
     }
   }
 

@@ -22,6 +22,7 @@ import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalle
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { ensureLaunchImageReady } from '../../../../server/_lib/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deployPhase2Invariants.js'
+import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession } from './_sessionAccess.js'
 
@@ -411,9 +412,10 @@ async function ensureOvaultPreflight(params: {
     typeof solanaOvault.assetMintOrigin === 'string' && solanaOvault.assetMintOrigin.trim()
       ? solanaOvault.assetMintOrigin.trim()
       : 'existing'
-  const mintCompatibilityHints = isPlainObject(solanaOvault.mintCompatibilityHints)
-    ? solanaOvault.mintCompatibilityHints
-    : null
+  // Never trust session-persisted hints from client payloads.
+  // Compatibility hints used for OVault gating must come from trusted server config.
+  const mintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
+  const hasMintCompatibilityHints = Object.values(mintCompatibilityHints).some((value) => value !== null)
 
   const origin = getCanonicalOrigin(params.req)
   const internalRegistrationSecret = String(
@@ -436,7 +438,7 @@ async function ensureOvaultPreflight(params: {
       assetMintOrigin,
       enforceCompatibility: true,
     }
-    if (mintCompatibilityHints) body.mintCompatibilityHints = mintCompatibilityHints
+    if (hasMintCompatibilityHints) body.mintCompatibilityHints = mintCompatibilityHints
     if (expectedSolanaAmount && expectedSolanaAmount > 0n) {
       body.creatorToken = bridgeToken
       body.expectedSolanaAmount = expectedSolanaAmount.toString()

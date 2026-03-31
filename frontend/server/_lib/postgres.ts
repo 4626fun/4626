@@ -104,6 +104,29 @@ function sslOptionsForConnection(connectionString: string): any | undefined {
   return { rejectUnauthorized: true }
 }
 
+function isSelfSignedCertChainError(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === 'SELF_SIGNED_CERT_IN_CHAIN') return true
+  const message = String((err as any)?.message ?? err ?? '').toLowerCase()
+  return message.includes('self-signed certificate in certificate chain')
+}
+
+function shouldRetryWithRelaxedTls(params: {
+  error: unknown
+  connectionString: string
+  ssl: any
+}): boolean {
+  if (!isSelfSignedCertChainError(params.error)) return false
+  if (!params.ssl || params.ssl.rejectUnauthorized !== true) return false
+  if (!requiresSsl(params.connectionString)) return false
+  // Respect explicit operator choice. If this is set (true/false), do not auto-fallback.
+  if (parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED) !== undefined) return false
+  // Default on for operational resilience; can be disabled explicitly.
+  const allowFallback = parseEnvBool(process.env.POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK)
+  if (allowFallback === false) return false
+  return true
+}
+
 type DbResult = { rows: any[]; rowCount?: number }
 type DbPool = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<DbResult>
@@ -341,60 +364,86 @@ export async function getDb(): Promise<DbPool | null> {
           parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ??
           (useConservativeServerlessPool ? 10_000 : 8_000)
         const maxUses = parsePositiveInt(process.env.POSTGRES_POOL_MAX_USES) ?? 7_500
-        const pool = new Pool({
-          connectionString: poolConnectionString,
-          ssl,
-          max,
-          idleTimeoutMillis,
-          connectionTimeoutMillis,
-          maxUses,
-          allowExitOnIdle: true,
-        })
-        cachedRawPool = pool
-        const queryRetries = getQueryRetryCount()
-        const db: DbPool = {
-          sql: async (strings: TemplateStringsArray, ...values: any[]) => {
-            let text = ''
-            for (let i = 0; i < strings.length; i++) {
-              text += strings[i]
-              if (i < values.length) text += `$${i + 1}`
-            }
-            return withSessionRetry(
-              async () => {
-                const res = await pool.query(text, values)
-                const rows = res.rows ?? []
-                return {
-                  rows,
-                  rowCount: Number.isFinite(Number(res.rowCount))
-                    ? Number(res.rowCount)
-                    : rows.length,
-                }
-              },
-              db,
-              queryRetries,
-            )
-          },
-          query: async (text: string, params?: any[]) => {
-            return withSessionRetry(
-              async () => {
-                const res = await pool.query(text, params)
-                const rows = res.rows ?? []
-                return {
-                  rows,
-                  rowCount: Number.isFinite(Number(res.rowCount))
-                    ? Number(res.rowCount)
-                    : rows.length,
-                }
-              },
-              db,
-              queryRetries,
-            )
-          },
+        const createPgDb = async (sslForPool: any): Promise<DbPool> => {
+          const pool = new Pool({
+            connectionString: poolConnectionString,
+            ssl: sslForPool,
+            max,
+            idleTimeoutMillis,
+            connectionTimeoutMillis,
+            maxUses,
+            allowExitOnIdle: true,
+          })
+          cachedRawPool = pool
+          const queryRetries = getQueryRetryCount()
+          const db: DbPool = {
+            sql: async (strings: TemplateStringsArray, ...values: any[]) => {
+              let text = ''
+              for (let i = 0; i < strings.length; i++) {
+                text += strings[i]
+                if (i < values.length) text += `$${i + 1}`
+              }
+              return withSessionRetry(
+                async () => {
+                  const res = await pool.query(text, values)
+                  const rows = res.rows ?? []
+                  return {
+                    rows,
+                    rowCount: Number.isFinite(Number(res.rowCount))
+                      ? Number(res.rowCount)
+                      : rows.length,
+                  }
+                },
+                db,
+                queryRetries,
+              )
+            },
+            query: async (text: string, params?: any[]) => {
+              return withSessionRetry(
+                async () => {
+                  const res = await pool.query(text, params)
+                  const rows = res.rows ?? []
+                  return {
+                    rows,
+                    rowCount: Number.isFinite(Number(res.rowCount))
+                      ? Number(res.rowCount)
+                      : rows.length,
+                  }
+                },
+                db,
+                queryRetries,
+              )
+            },
+          }
+          // Sanity check connectivity (retried via withSessionRetry above).
+          await db.sql`SELECT 1;`
+          return db
         }
-        // Sanity check connectivity (retried via withSessionRetry above).
-        await db.sql`SELECT 1;`
-        cachedDb = db
-        return cachedDb
+
+        try {
+          cachedDb = await createPgDb(ssl)
+          return cachedDb
+        } catch (pgInitError) {
+          const rawPool = cachedRawPool
+          cachedRawPool = null
+          if (rawPool && typeof rawPool.end === 'function') {
+            await rawPool.end().catch(() => {})
+          }
+          if (shouldRetryWithRelaxedTls({
+            error: pgInitError,
+            connectionString: cs,
+            ssl,
+          })) {
+            console.warn(
+              'Postgres TLS validation failed with SELF_SIGNED_CERT_IN_CHAIN; retrying once with rejectUnauthorized=false. ' +
+                'Set POSTGRES_SSL_REJECT_UNAUTHORIZED=false to make this explicit, or POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK=false to disable fallback.',
+            )
+            const relaxedSsl = { ...(ssl && typeof ssl === 'object' ? ssl : {}), rejectUnauthorized: false }
+            cachedDb = await createPgDb(relaxedSsl)
+            return cachedDb
+          }
+          throw pgInitError
+        }
       } catch (err) {
         const rawPool = cachedRawPool
         cachedRawPool = null
@@ -542,4 +591,3 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
     // ignore (already dropped or insufficient permissions)
   }
 }
-

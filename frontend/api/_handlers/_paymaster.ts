@@ -34,7 +34,7 @@ import {
   deriveCreatorCoinPolicyControllerSalt,
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
-} from '../../src/lib/deploy/create2Salts.js'
+} from '../../shared/deploy/create2Salts.js'
 
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'

@@ -36,6 +36,7 @@ import {
   evaluateSolanaOvaultMintCompatibility,
   normalizeSolanaAssetMintOrigin,
   parseSolanaOvaultMintCompatibilityHints,
+  readSolanaOvaultMintCompatibilityHintsFromEnv,
 } from '../../../server/_lib/solanaOvaultCompatibility.js'
 import {
   evaluateCanonicalBridgeTokenPolicy,
@@ -1362,7 +1363,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     body?.assetMintOrigin,
     creatorToken ? 'existing' : 'new',
   )
-  let mintCompatibilityHints = parseSolanaOvaultMintCompatibilityHints(body?.mintCompatibilityHints)
+  const envMintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
+  const requestMintCompatibilityHints = internalAuthorized
+    ? parseSolanaOvaultMintCompatibilityHints(body?.mintCompatibilityHints)
+    : parseSolanaOvaultMintCompatibilityHints(null)
+  // Only trusted internal calls may provide per-request hint overrides.
+  // External/admin callers are pinned to server-configured compatibility hints.
+  let mintCompatibilityHints = mergeMintCompatibilityHints(
+    requestMintCompatibilityHints,
+    envMintCompatibilityHints,
+  )
   // Canonical selection order:
   // 1) explicit bridgeToken
   // 2) creatorToken (for creator-coin bridging flows)

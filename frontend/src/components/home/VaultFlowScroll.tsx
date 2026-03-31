@@ -327,7 +327,10 @@ function useTextScramble(text: string, trigger: boolean) {
   const progress = useRef(0)
 
   useEffect(() => {
-    if (!trigger) { setOutput(text); return }
+    if (!trigger) {
+      cancelAnimationFrame(frame.current)
+      return
+    }
     progress.current = 0
     const animate = () => {
       progress.current += 0.7
@@ -350,7 +353,7 @@ function useTextScramble(text: string, trigger: boolean) {
     return () => cancelAnimationFrame(frame.current)
   }, [trigger, text])
 
-  return output
+  return trigger ? output : text
 }
 
 // ── Numbered step chip with text-scramble decode on mount/trigger
@@ -555,8 +558,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Section envelope fades in at 0.52, holds, fades as vault rushes at 0.88
   // Dist section fades in AFTER the deposit connector finishes (~0.60) and stays
   // fully opaque well into the zoom phase so users can see it during the zoom-in
-  // Distributions hold through stage 3, then fade as the camera zoom begins (0.86) and are gone by 0.93
-  const distSectionOp = useTransform(scroll, [0.58, 0.64, 0.86, 0.93], [0, 1, 1, 0])
+  // Distributions hold through stage 3, then clear slightly earlier to give stage 4 more runway.
+  const distSectionOp = useTransform(scroll, [0.58, 0.64, 0.84, 0.90], [0, 1, 1, 0])
 
   // Path + card 0 (CCA Launch — left): 0.62 start — extra gap after cameos
   const _n0Raw = useTransform(scroll, [0.62, 0.68], [0, 1])
@@ -565,7 +568,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const _ot0Raw = useTransform(scroll, [0.62, 0.67], [0, 1])
   const orbitTrav0 = useTransform(_ot0Raw, smoothstep)
   // Border glow: dot arrives → soft persistent glow stays until section fades
-  const nodeGlow0 = useTransform(scroll, [0.66, 0.70, 0.86, 0.93], [0, 1, 1, 0])
+  const nodeGlow0 = useTransform(scroll, [0.66, 0.70, 0.84, 0.90], [0, 1, 1, 0])
 
   // Path + card 1 (Creator Vesting — center): 0.72 start
   const _n1Raw = useTransform(scroll, [0.72, 0.77], [0, 1])
@@ -573,7 +576,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist1CardY = useTransform(scroll, [0.72, 0.77], [20, 0])
   const _ot1Raw = useTransform(scroll, [0.72, 0.77], [0, 1])
   const orbitTrav1 = useTransform(_ot1Raw, smoothstep)
-  const nodeGlow1 = useTransform(scroll, [0.76, 0.80, 0.86, 0.93], [0, 1, 1, 0])
+  const nodeGlow1 = useTransform(scroll, [0.76, 0.80, 0.84, 0.90], [0, 1, 1, 0])
 
   // Path + card 2 (LP Reserve — right): 0.80 start
   const _n2Raw = useTransform(scroll, [0.80, 0.84], [0, 1])
@@ -581,7 +584,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist2CardY = useTransform(scroll, [0.80, 0.84], [20, 0])
   const _ot2Raw = useTransform(scroll, [0.80, 0.84], [0, 1])
   const orbitTrav2 = useTransform(_ot2Raw, smoothstep)
-  const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.88, 0.93], [0, 1, 1, 0])
+  const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.88, 0.90], [0, 1, 1, 0])
 
   // Keep headline as a single centered "Zora" word throughout stage 1.
   // 4626 pill appears during the pause so users see the full identity at rest
@@ -608,14 +611,14 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Share node — appears ABOVE vault after minting, stays through all distributions
   const shareZ = useTransform(scroll, [0.48, 0.60], [-180, 0])
   const shareScale = useTransform(scroll, [0.52, 0.58], [0.94, 1])
-  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.86, 0.93], [0, 1, 1, 0])
+  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.84, 0.90], [0, 1, 1, 0])
   const shareTransform = useMotionTemplate`
     translate3d(-50%, 0px, ${shareZ}px)
     scale(${shareScale})
   `
 
-  // Cube interior POV — flashes in at peak zoom (0.93-0.94), then settles for deploy
-  const cubeOp = useTransform(scroll, [0.90, 0.93, 0.95, 1.0], [0, 1.0, 0.85, 0.8])
+  // Cube interior POV — starts slightly earlier so stage 4 has more visible dwell time.
+  const cubeOp = useTransform(scroll, [0.88, 0.91, 0.95, 1.0], [0, 1.0, 0.85, 0.8])
 
   // Dot positions along each distribution bezier path (cubic Bezier formula)
   // Path 0: M 400 10 C 400 60 130 60 130 100
@@ -644,46 +647,46 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
 
 
-  // Deploy chamber — slides in after zoom peak (0.93); all 4 cards fully visible by 0.97 and hold to 1.0.
-  const deployZ = useTransform(scroll, [0.93, 0.97, 1.0], [-180, 0, 0])
-  const deployOpacity = useTransform(scroll, [0.93, 0.97], [0, 1])
-  const deployBlur = useTransform(scroll, [0.93, 0.97, 1.0], [10, 0, 0])
+  // Deploy chamber — widened timing so the final stage plays longer before scroll end.
+  const deployZ = useTransform(scroll, [0.88, 0.95, 1.0], [-180, 0, 0])
+  const deployOpacity = useTransform(scroll, [0.88, 0.94], [0, 1])
+  const deployBlur = useTransform(scroll, [0.88, 0.94, 1.0], [10, 0, 0])
   const deployTransform = useMotionTemplate`translate3d(0px, 0px, ${deployZ}px)`
   const deployFilter = useMotionTemplate`blur(${deployBlur}px)`
-  const deployTitleOp = useTransform(scroll, [0.93, 0.97], [0, 1])
-  const deployTitleY = useTransform(scroll, [0.93, 0.97], [18, 0])
+  const deployTitleOp = useTransform(scroll, [0.89, 0.95], [0, 1])
+  const deployTitleY = useTransform(scroll, [0.89, 0.95], [18, 0])
 
-  const s4PillOp = useTransform(scroll, [0.93, 0.97], [0, 1])
-  const s4PillY = useTransform(scroll, [0.97, 1.0], [12, 0])
+  const s4PillOp = useTransform(scroll, [0.89, 0.95], [0, 1])
+  const s4PillY = useTransform(scroll, [0.95, 1.0], [12, 0])
 
-  // Stage 4 sequential fan — 4 cards across 0.94–1.0 (shifted +0.03 from previous 0.91)
-  const _s4p0r = useTransform(scroll, [0.94, 0.97], [0, 1])
+  // Stage 4 sequential fan — expanded window so each card has more dwell time.
+  const _s4p0r = useTransform(scroll, [0.90, 0.93], [0, 1])
   const s4p0 = useTransform(_s4p0r, smoothstep)
-  const s4pOp0 = useTransform(scroll, [0.94, 0.97], [0, 1])
-  const s4d0 = useTransform(scroll, [0.95, 0.97], [0, 1])
-  const s4c0o = useTransform(scroll, [0.95, 0.97], [0, 1])
-  const s4c0y = useTransform(scroll, [0.95, 0.97], [24, 0])
+  const s4pOp0 = useTransform(scroll, [0.90, 0.93], [0, 1])
+  const s4d0 = useTransform(scroll, [0.91, 0.94], [0, 1])
+  const s4c0o = useTransform(scroll, [0.91, 0.94], [0, 1])
+  const s4c0y = useTransform(scroll, [0.91, 0.94], [24, 0])
 
-  const _s4p1r = useTransform(scroll, [0.95, 0.98], [0, 1])
+  const _s4p1r = useTransform(scroll, [0.92, 0.95], [0, 1])
   const s4p1 = useTransform(_s4p1r, smoothstep)
-  const s4pOp1 = useTransform(scroll, [0.95, 0.98], [0, 1])
-  const s4d1 = useTransform(scroll, [0.96, 0.98], [0, 1])
-  const s4c1o = useTransform(scroll, [0.96, 0.99], [0, 1])
-  const s4c1y = useTransform(scroll, [0.96, 0.99], [24, 0])
+  const s4pOp1 = useTransform(scroll, [0.92, 0.95], [0, 1])
+  const s4d1 = useTransform(scroll, [0.93, 0.96], [0, 1])
+  const s4c1o = useTransform(scroll, [0.93, 0.96], [0, 1])
+  const s4c1y = useTransform(scroll, [0.93, 0.96], [24, 0])
 
-  const _s4p2r = useTransform(scroll, [0.96, 0.98], [0, 1])
+  const _s4p2r = useTransform(scroll, [0.94, 0.97], [0, 1])
   const s4p2 = useTransform(_s4p2r, smoothstep)
-  const s4pOp2 = useTransform(scroll, [0.96, 0.98], [0, 1])
-  const s4d2 = useTransform(scroll, [0.97, 0.99], [0, 1])
-  const s4c2o = useTransform(scroll, [0.97, 1.0], [0, 1])
-  const s4c2y = useTransform(scroll, [0.97, 1.0], [24, 0])
+  const s4pOp2 = useTransform(scroll, [0.94, 0.97], [0, 1])
+  const s4d2 = useTransform(scroll, [0.95, 0.98], [0, 1])
+  const s4c2o = useTransform(scroll, [0.95, 0.98], [0, 1])
+  const s4c2y = useTransform(scroll, [0.95, 0.98], [24, 0])
 
-  const _s4p3r = useTransform(scroll, [0.97, 1.0], [0, 1])
+  const _s4p3r = useTransform(scroll, [0.96, 0.99], [0, 1])
   const s4p3 = useTransform(_s4p3r, smoothstep)
-  const s4pOp3 = useTransform(scroll, [0.97, 1.0], [0, 1])
-  const s4d3 = useTransform(scroll, [0.98, 1.0], [0, 1])
-  const s4c3o = useTransform(scroll, [0.98, 1.0], [0, 1])
-  const s4c3y = useTransform(scroll, [0.98, 1.0], [24, 0])
+  const s4pOp3 = useTransform(scroll, [0.96, 0.99], [0, 1])
+  const s4d3 = useTransform(scroll, [0.97, 1.0], [0, 1])
+  const s4c3o = useTransform(scroll, [0.97, 1.0], [0, 1])
+  const s4c3y = useTransform(scroll, [0.97, 1.0], [24, 0])
 
   const s4CardMotions = [
     { opacity: s4c0o, y: s4c0y },

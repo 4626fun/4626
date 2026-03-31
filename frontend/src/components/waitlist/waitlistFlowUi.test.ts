@@ -13,7 +13,7 @@ describe('deriveWaitlistAuthUi', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Get early access',
       subtitle: 'Verify your email to lock your spot and unlock your referral link.',
-      ctaLabel: '■ Continue with email',
+      ctaLabel: 'Join waitlist',
       busyLabel: 'Opening email sign-in…',
     })
   })

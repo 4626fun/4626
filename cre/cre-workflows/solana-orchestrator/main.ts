@@ -24,6 +24,7 @@ type ManualPayload = {
   actions?: string[]
   workflowName?: string
   checkpointKey?: string
+  authToken?: string
   payload?: Record<string, unknown>
 }
 
@@ -188,8 +189,14 @@ function runReconciliation(runtime: Runtime<Config>, manual?: ManualPayload): So
 
 const onCronTrigger = (runtime: Runtime<Config>): SolanaOrchestratorResult => runReconciliation(runtime)
 
-const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): SolanaOrchestratorResult =>
-  runReconciliation(runtime, parseManualPayload(payload))
+const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): SolanaOrchestratorResult => {
+  const manual = parseManualPayload(payload)
+  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  if (!manual.authToken || manual.authToken !== apiKey) {
+    throw new Error("unauthorized_manual_trigger")
+  }
+  return runReconciliation(runtime, manual)
+}
 
 const initWorkflow = (config: Config) => {
   const cron = new CronCapability()

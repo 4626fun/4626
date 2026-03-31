@@ -30,7 +30,8 @@
     "src/config/contracts.defaults.ts",
     "src/deploy/**/*.ts",
     "src/lib/deploy/create2Salts.ts",
-    "src/lib/viteManualChunks.ts",
+    "shared/deploy/create2Salts.ts",
+    "build/viteManualChunks.ts",
     "src/wallet/canonicalWalletPolicy.ts"
   ]
 }

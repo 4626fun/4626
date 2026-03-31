@@ -1546,9 +1546,10 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     typeof solanaOvault.assetMintOrigin === 'string' && solanaOvault.assetMintOrigin.trim()
       ? solanaOvault.assetMintOrigin.trim()
       : 'existing'
-  const mintCompatibilityHints = isPlainObject(solanaOvault.mintCompatibilityHints)
-    ? solanaOvault.mintCompatibilityHints
-    : readSolanaOvaultMintCompatibilityHintsFromEnv()
+  // Never trust session-persisted hints from client payloads.
+  // Compatibility hints used for OVault gating must come from trusted server config.
+  const mintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
+  const hasMintCompatibilityHints = Object.values(mintCompatibilityHints).some((value) => value !== null)
 
   const [adapterRaw, destinationRaw] = await Promise.all([
     params.publicClient
@@ -1632,7 +1633,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         assetMintOrigin,
         enforceCompatibility: true,
       }
-      if (mintCompatibilityHints) payload.mintCompatibilityHints = mintCompatibilityHints
+      if (hasMintCompatibilityHints) payload.mintCompatibilityHints = mintCompatibilityHints
       // Only force Meteora payload generation while the bridge token is not yet registered.
       if (registered !== true) {
         payload.creatorToken = bridgeToken

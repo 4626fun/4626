@@ -326,7 +326,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
     createPublicClientMock.mockReturnValue(mockPublicClient as any)
 
-    const req = createMockReq({
+    const req = createInternalReq({
       method: 'POST',
       body: {
         bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
@@ -370,7 +370,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
     createPublicClientMock.mockReturnValue(mockPublicClient as any)
 
-    const req = createMockReq({
+    const req = createInternalReq({
       method: 'POST',
       body: {
         bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
@@ -414,7 +414,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
     createPublicClientMock.mockReturnValue(mockPublicClient as any)
 
-    const req = createMockReq({
+    const req = createInternalReq({
       method: 'POST',
       body: {
         bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',

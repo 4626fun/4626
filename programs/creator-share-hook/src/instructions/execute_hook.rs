@@ -65,10 +65,18 @@ pub struct TransferHook<'info> {
     pub pending_entries: AccountLoader<'info, PendingEntries>,
 }
 
+fn is_allowlisted_buy(config: &CreatorConfig, authority: &Pubkey, source_owner: &Pubkey) -> bool {
+    config.is_known_amm(authority) && authority == source_owner
+}
+
 pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
     let config = &ctx.accounts.creator_config;
 
     if !config.lottery_enabled {
+        return Ok(());
+    }
+    let authority = ctx.accounts.authority.key();
+    if !config.is_known_amm(&authority) {
         return Ok(());
     }
 
@@ -78,8 +86,9 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
         return Ok(());
     }
     let source_owner = Pubkey::try_from(&source_data[32..64]).unwrap_or_default();
-
-    if !config.is_known_amm(&source_owner) {
+    // Treat as AMM buy only when runtime transfer authority is allowlisted AND
+    // matches the source token-account owner field.
+    if !is_allowlisted_buy(config, &authority, &source_owner) {
         return Ok(());
     }
 
@@ -88,6 +97,9 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
         return Ok(());
     }
     let buyer = Pubkey::try_from(&dest_data[32..64]).unwrap_or_default();
+    if buyer == Pubkey::default() {
+        return Ok(());
+    }
 
     let clock = Clock::get()?;
     let entry = LotteryEntry {
@@ -115,4 +127,51 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::constants::MAX_AMM_PROGRAMS;
+
+    fn config_with_known_amm(amm: Pubkey) -> CreatorConfig {
+        let mut known_amm_programs = [Pubkey::default(); MAX_AMM_PROGRAMS];
+        known_amm_programs[0] = amm;
+        CreatorConfig {
+            creator_mint: Pubkey::default(),
+            authority: Pubkey::default(),
+            keeper_authority: Pubkey::default(),
+            hub_creator_coin: [0u8; 32],
+            hub_share_oft: [0u8; 32],
+            fee_bps: 0,
+            settlement_threshold: 0,
+            lottery_enabled: true,
+            amm_program_count: 1,
+            known_amm_programs,
+            bump: 0,
+            _reserved: [0u8; 64],
+        }
+    }
+
+    #[test]
+    fn allowlisted_buy_requires_authority_match() {
+        let amm = Pubkey::new_unique();
+        let config = config_with_known_amm(amm);
+        let spoofed_source_owner = amm;
+        let untrusted_authority = Pubkey::new_unique();
+
+        assert!(!is_allowlisted_buy(
+            &config,
+            &untrusted_authority,
+            &spoofed_source_owner
+        ));
+    }
+
+    #[test]
+    fn allowlisted_buy_accepts_matching_authority_and_source_owner() {
+        let amm = Pubkey::new_unique();
+        let config = config_with_known_amm(amm);
+
+        assert!(is_allowlisted_buy(&config, &amm, &amm));
+    }
 }

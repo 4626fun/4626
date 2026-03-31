@@ -638,7 +638,7 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.erc7712Grant?.validUntil).toBe('2026-03-01T08:30:00.000Z')
   })
 
-  it('persists solana OVault hints in deploy session payload', async () => {
+  it('does not persist client-provided solana OVault compatibility hints', async () => {
     getDbMock.mockResolvedValue(makeCanonicalDb())
 
     const req = createMockReq({
@@ -671,8 +671,7 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.solanaOvault?.enabled).toBe(true)
     expect(insertArgs.payload?.solanaOvault?.assetMintOrigin).toBe('existing')
     expect(insertArgs.payload?.solanaOvault?.solanaEid).toBe(30168)
-    expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints?.transferHookDetected).toBe(true)
-    expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints?.oftFeeBps).toBe(0)
+    expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints).toBeUndefined()
   })
 
   it('rejects creator-token party allowlist spoofing when caller is not directly allowlisted', async () => {
