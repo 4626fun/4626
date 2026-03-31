@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_PRIVY_ENABLED?: string
   readonly VITE_PRIVY_ALLOWED_ORIGINS?: string
   readonly VITE_PRIVY_DISABLE_ANALYTICS?: string
+  readonly VITE_PRIVY_ENABLE_ANALYTICS?: string
   readonly VITE_APP_ORIGIN?: string
   readonly VITE_MARKETING_ORIGIN?: string
   readonly VITE_WAITLIST_REFERRAL_BASE_URL?: string

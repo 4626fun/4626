@@ -14,18 +14,25 @@ import {
 import '@4626/brand-kit/styles'
 import './index.css'
 
+function isLockedEthereumDescriptor(descriptor: PropertyDescriptor | undefined): boolean {
+  if (!descriptor) return false
+  if (typeof descriptor.get === 'function' && typeof descriptor.set !== 'function') return true
+  if (Object.prototype.hasOwnProperty.call(descriptor, 'writable') && descriptor.writable === false) return true
+  return false
+}
+
 function stabilizeWindowEthereumSlot() {
   if (typeof window === 'undefined') return
   try {
-    // If a wallet extension exposes getter-only `ethereum` on Window.prototype,
-    // later `window.ethereum = ...` assignments throw. Shadow it with an own,
-    // writable data property so provider announcement flows do not crash.
+    // Some wallet stacks expose a locked `window.ethereum` descriptor (own or inherited).
+    // Later provider assignment attempts then throw and can disrupt wallet boot.
+    // Normalize it to a writable own data property when we safely can.
     const ownDescriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
-    if (ownDescriptor) return
+    if (ownDescriptor && !isLockedEthereumDescriptor(ownDescriptor)) return
 
     let cursor: object | null = window
     let inheritedDescriptor: PropertyDescriptor | null = null
-    while (cursor) {
+    while (!ownDescriptor && cursor) {
       const descriptor = Object.getOwnPropertyDescriptor(cursor, 'ethereum')
       if (descriptor) {
         inheritedDescriptor = descriptor
@@ -34,11 +41,10 @@ function stabilizeWindowEthereumSlot() {
       cursor = Object.getPrototypeOf(cursor)
     }
 
-    const getterOnlyInherited =
-      Boolean(inheritedDescriptor) &&
-      typeof inheritedDescriptor?.get === 'function' &&
-      typeof inheritedDescriptor?.set !== 'function'
-    if (!getterOnlyInherited) return
+    const lockedOwn = isLockedEthereumDescriptor(ownDescriptor)
+    const lockedInherited = isLockedEthereumDescriptor(inheritedDescriptor ?? undefined)
+    if (!lockedOwn && !lockedInherited) return
+    if (ownDescriptor && ownDescriptor.configurable !== true) return
 
     let currentProvider: unknown = undefined
     try {
@@ -62,9 +68,27 @@ const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Cannot redefine property:\s*ethereum/i,
   /Cannot set property ethereum of #<Window> which has only a getter/i,
   /MetaMask encountered an error setting the global Ethereum provider/i,
+  /Failed to add embedded wallet connector:\s*Wallet proxy not initialized/i,
   /Cannot access '\$a' before initialization/i,
   /Failed to fetch dynamically imported module:\s*(chrome|moz)-extension:\/\//i,
 ]
+
+function shouldSuppressWalletNoise(args: unknown[]): boolean {
+  if (!args.length) return false
+  const joined = args
+    .map((arg) => {
+      if (typeof arg === 'string') return arg
+      if (arg instanceof Error) return arg.message
+      return String((arg as any)?.message ?? arg ?? '')
+    })
+    .join(' ')
+    .toLowerCase()
+  if (!joined) return false
+  return (
+    joined.includes('failed to add embedded wallet connector: wallet proxy not initialized') ||
+    joined.includes('cannot set property ethereum of #<window> which has only a getter')
+  )
+}
 
 function readErrorMessage(value: unknown): string {
   if (!value) return ''
@@ -92,6 +116,20 @@ if (typeof window !== 'undefined') {
   try {
     stabilizeWindowEthereumSlot()
 
+    if (!(window as any).__cvWalletNoisePatched) {
+      const originalDebug = console.debug.bind(console)
+      const originalError = console.error.bind(console)
+      console.debug = (...args: unknown[]) => {
+        if (shouldSuppressWalletNoise(args)) return
+        originalDebug(...args)
+      }
+      console.error = (...args: unknown[]) => {
+        if (shouldSuppressWalletNoise(args)) return
+        originalError(...args)
+      }
+      ;(window as any).__cvWalletNoisePatched = true
+    }
+
     // Keep app rendering stable when multiple wallet extensions race to inject window.ethereum.
     window.addEventListener(
       'error',
@@ -115,7 +153,13 @@ if (typeof window !== 'undefined') {
 
     const params = new URLSearchParams(window.location.search)
     const debugEnabled = params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
+    const analyticsExplicitlyEnabled = ['1', 'true', 'yes'].includes(
+      String(import.meta.env.VITE_PRIVY_ENABLE_ANALYTICS ?? '')
+        .trim()
+        .toLowerCase(),
+    )
     const disablePrivyAnalytics =
+      !analyticsExplicitlyEnabled ||
       debugEnabled ||
       params.get('privy_analytics') === '0' ||
       window.localStorage.getItem('cv:privy:analytics') === 'off' ||

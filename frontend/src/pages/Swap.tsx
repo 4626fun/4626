@@ -8,7 +8,6 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { Alert } from '@/components/ui/Alert'
-import { VaultsPanel } from '@/components/swap/VaultsPanel'
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
 import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
@@ -1287,7 +1286,7 @@ export function Swap() {
             />
           )
         }
-        vaultPanel={activePanel === 'swap' ? <VaultsPanel chainId={swapChainId} /> : null}
+        vaultPanel={null}
         title="Swap"
         subtitle="1-Click Swaps on Base"
       />
