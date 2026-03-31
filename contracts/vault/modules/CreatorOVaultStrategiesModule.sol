@@ -47,6 +47,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase {
     error NoStrategies();
     error NothingToBuy();
     error TransferAmountMismatch(uint256 expected, uint256 actual);
+    error StrategyWithdrawShortfall(uint256 expected, uint256 actual);
 
     // =================================
     // STRATEGY MANAGEMENT
@@ -87,7 +88,8 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase {
 
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt > 0) {
-            _withdrawFromStrategyMeasured(strategy, currentDebt);
+            uint256 withdrawn = _withdrawFromStrategyMeasured(strategy, currentDebt);
+            if (withdrawn < currentDebt) revert StrategyWithdrawShortfall(currentDebt, withdrawn);
             totalDebt -= currentDebt;
             strategyDebt[strategy] = 0;
             emit DebtUpdated(strategy, currentDebt, 0);

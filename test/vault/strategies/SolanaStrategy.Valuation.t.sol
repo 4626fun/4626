@@ -71,6 +71,13 @@ contract SolanaStrategyValuationTest is Test {
         strategy.updateRemoteNav(160e18, bytes32(0));
     }
 
+    function test_updateRemoteNav_reverts_whenInitialBootstrapExceedsBaseLiquidityBound() public {
+        // With 10% min base liquidity and 100 CRT base balance, remote bootstrap cap is 900 CRT.
+        vm.prank(keeper);
+        vm.expectRevert(SolanaStrategy.NavDeltaExceedsCap.selector);
+        strategy.updateRemoteNav(901e18, bytes32(0));
+    }
+
     function test_getTotalAssets_basePlusRemote_whenValuationReady() public {
         vm.prank(keeper);
         strategy.updateRemoteNav(50e18, bytes32(0));

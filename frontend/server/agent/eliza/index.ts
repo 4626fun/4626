@@ -316,10 +316,18 @@ function checkDbPersistence(): DbPersistenceCheckResult {
         '[xmtp] Legacy plaintext XMTP DB detected; auto encrypted migration is enabled and will rotate plaintext DB files.',
       )
     } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir(XMTP_DB_DIR)) {
-      logger.warn(
-        '[xmtp] Legacy plaintext XMTP DB detected elsewhere under the volume. ' +
-          'Startup will validate the active DB path before use, but stale historical DBs no longer block container boot.',
-      )
+      if (XMTP_DB_ENCRYPTION_KEY) {
+        errors.push(
+          '[xmtp] Legacy plaintext XMTP DB detected while XMTP_DB_ENCRYPTION_KEY is configured. ' +
+            'Refusing startup to avoid unencrypted-at-rest runtime. Set XMTP_DB_AUTO_ENCRYPTED_MIGRATION=true ' +
+            'or confirm XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to rotate plaintext files.',
+        )
+      } else {
+        logger.warn(
+          '[xmtp] Legacy plaintext XMTP DB detected and encryption is not configured. ' +
+            'Database contents may remain unencrypted at rest.',
+        )
+      }
     }
   } catch {
     // Directory doesn't exist yet — will be created by makeDbPath

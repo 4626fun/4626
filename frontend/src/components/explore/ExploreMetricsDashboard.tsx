@@ -4,7 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
-import type { ExploreMetricHistoryPoint } from './ExploreMetricSparkline'
+
+type ExploreMetricHistoryPoint = {
+  date: string
+  creatorCoinsMarketCapUsd: number | null
+}
 
 type ExploreMetrics = {
   scope: 'creators'

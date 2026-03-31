@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { DEFAULT_CHAIN_ID, getNumberQuery, getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../packages/server-core/src/index.js'
 
 const PAGE_LIMIT = 50
-const MAX_TOTAL_COUNT = 1000
+const MAX_TOTAL_COUNT = 250
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -20,6 +21,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const identifier = getStringQuery(req, 'identifier')
   if (!identifier) {
     return res.status(400).json({ success: false, error: 'Identifier is required' })
+  }
+  const clientIp = getClientIp(req)
+  const rate = checkRateLimit(rateLimitKey('zora-profile-coins', identifier.toLowerCase(), clientIp), RATE_LIMITS.general)
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
   const count = Math.min(Math.max(getNumberQuery(req, 'count') ?? 20, 1), MAX_TOTAL_COUNT)

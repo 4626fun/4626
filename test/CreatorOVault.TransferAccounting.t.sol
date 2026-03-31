@@ -73,6 +73,65 @@ contract CreatorOVaultDebtHarness is CreatorOVault {
     }
 }
 
+contract MockShortWithdrawStrategy is IStrategy, IStrategyValuation {
+    IERC20 public immutable TOKEN;
+    uint256 public trackedAssets;
+    bool public active = true;
+
+    constructor(address token_) {
+        TOKEN = IERC20(token_);
+    }
+
+    function setTrackedAssetsForTest(uint256 assets) external {
+        trackedAssets = assets;
+    }
+
+    function isValuationReady() external pure override returns (bool) {
+        return true;
+    }
+
+    function isActive() external view override returns (bool) {
+        return active;
+    }
+
+    function asset() external view override returns (address) {
+        return address(TOKEN);
+    }
+
+    function getTotalAssets() external view override returns (uint256) {
+        return trackedAssets;
+    }
+
+    function deposit(uint256 amount) external override returns (uint256 deposited) {
+        if (amount == 0) return 0;
+        require(TOKEN.transferFrom(msg.sender, address(this), amount), "transferFrom failed");
+        trackedAssets += amount;
+        return amount;
+    }
+
+    function withdraw(uint256 amount) external override returns (uint256 withdrawn) {
+        uint256 maxWithdrawable = amount / 2;
+        withdrawn = maxWithdrawable > trackedAssets ? trackedAssets : maxWithdrawable;
+        if (withdrawn == 0) return 0;
+        trackedAssets -= withdrawn;
+        require(TOKEN.transfer(msg.sender, withdrawn), "transfer failed");
+    }
+
+    function emergencyWithdraw() external override returns (uint256 withdrawn) {
+        withdrawn = trackedAssets;
+        trackedAssets = 0;
+        if (withdrawn > 0) {
+            require(TOKEN.transfer(msg.sender, withdrawn), "transfer failed");
+        }
+    }
+
+    function harvest() external pure override returns (uint256 profit) {
+        return 0;
+    }
+
+    function rebalance() external override {}
+}
+
 contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
     address internal alice = makeAddr("alice");
     address internal donor = makeAddr("donor");
@@ -225,6 +284,25 @@ contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
         assertEq(vault.totalDebt(), expectedSpent);
         assertEq(strategy.trackedAssets(), expectedSpent);
         assertEq(vault.coinBalance(), creatorCoin.balanceOf(address(vault)));
+    }
+
+    function test_removeStrategy_reverts_when_strategy_withdraws_less_than_debt() public {
+        MockCreatorCoinStandard creatorCoin = new MockCreatorCoinStandard();
+        CreatorOVaultDebtHarness vault = new CreatorOVaultDebtHarness(address(creatorCoin), address(this));
+        _setVaultModules(vault);
+
+        MockShortWithdrawStrategy strategy = new MockShortWithdrawStrategy(address(creatorCoin));
+        uint256 tracked = 50e18;
+        uint256 debt = 100e18;
+
+        creatorCoin.mint(address(strategy), tracked);
+        strategy.setTrackedAssetsForTest(tracked);
+        vault.__setDebtForTest(address(strategy), debt);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVaultStrategiesModule.StrategyWithdrawShortfall.selector, debt, tracked)
+        );
+        vault.removeStrategy(address(strategy));
     }
 }
 

@@ -54,18 +54,6 @@ function withRequiredSsl(connectionString: string): string {
   return `${cs}${cs.includes('?') ? '&' : '?'}sslmode=require`
 }
 
-function withNoVerifySsl(connectionString: string): string {
-  const cs = (connectionString ?? '').trim()
-  if (!cs) return cs
-  const lower = cs.toLowerCase()
-  // Respect explicit sslmode if present.
-  if (lower.includes('sslmode=')) return cs
-  if (lower.includes('localhost') || lower.includes('127.0.0.1')) return cs
-  // Some managed Postgres providers present cert chains that fail Node verification in serverless.
-  // `sslmode=no-verify` matches our `rejectUnauthorized: false` behavior and avoids hard failures.
-  return `${cs}${cs.includes('?') ? '&' : '?'}sslmode=no-verify`
-}
-
 function requiresSsl(connectionString: string): boolean {
   const cs = (connectionString ?? '').trim().toLowerCase()
   if (!cs) return false
@@ -105,21 +93,15 @@ function stripQueryParams(connectionString: string, keys: string[]): string {
 
 function sslOptionsForConnection(connectionString: string): any | undefined {
   if (!requiresSsl(connectionString)) return undefined
-  // Many hosted Postgres providers require TLS. We still want predictable behavior
-  // across Node runtimes and connection-string parsers (pg-connection-string has
-  // some non-libpq semantics by default), so we compute TLS verification here.
-  //
-  // Default: compatibility-first (do not hard-fail on unusual cert chains).
-  // To tighten security, set POSTGRES_SSL_REJECT_UNAUTHORIZED=true and provide a valid CA chain.
+  // Secure by default: require valid TLS certificates for remote Postgres.
+  // Operators can explicitly relax this via env or sslmode=no-verify when needed.
   const envOverride = parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED)
   if (envOverride !== undefined) return { rejectUnauthorized: envOverride }
 
   const mode = getSslMode(connectionString)
-  if (mode === 'verify-full' || mode === 'verify-ca') return { rejectUnauthorized: true }
-  // Encrypted session to managed Postgres (e.g. sslmode=require) but CA chain may not match Node defaults.
-  // Tighten with POSTGRES_SSL_REJECT_UNAUTHORIZED=true or sslmode=verify-full on the URL when your CA is trusted.
-  // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
-  return { rejectUnauthorized: false }
+  if (mode === 'no-verify') return { rejectUnauthorized: false }
+  if (mode === 'disable') return undefined
+  return { rejectUnauthorized: true }
 }
 
 type DbResult = { rows: any[]; rowCount?: number }
@@ -275,9 +257,7 @@ export async function getDb(): Promise<DbPool | null> {
         // Re-read env at init time (still deterministic in serverless).
         const cfg2 = getDbConfig()
         const cs = cfg2?.connectionString
-          ? cfg2.source === 'database_url'
-            ? withNoVerifySsl(cfg2.connectionString)
-            : withRequiredSsl(cfg2.connectionString)
+          ? withRequiredSsl(cfg2.connectionString)
           : null
         if (!cfg2 || !cs) return null
         const ssl = sslOptionsForConnection(cs)

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { VaultGaugeVotingPanel } from '../components/ve33'
+import { VaultGaugeVotingPanel } from '../components/ve33/VaultGaugeVotingPanel'
 import { AKITA } from '../config/contracts'
 import { toShareSymbol } from '@/lib/tokenSymbols'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -139,5 +139,4 @@ export default function GaugeVoting() {
     </div>
   )
 }
-
 

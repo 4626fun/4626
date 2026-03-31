@@ -46,17 +46,38 @@ const MAX_INBOUND_MESSAGE_CHARS = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_MAX_INBOUND_CHARS, 4_000))
 const LLM_COOLDOWN_MS = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_MS, 10_000))
+const LLM_COOLDOWN_CACHE_LIMIT = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_CACHE_LIMIT, 2_000))
 
 const groupCooldowns = new Map<string, number>()
 
+function pruneCooldowns(now = Date.now()): void {
+  for (const [groupId, timestamp] of groupCooldowns) {
+    if (now - timestamp >= LLM_COOLDOWN_MS) {
+      groupCooldowns.delete(groupId)
+    }
+  }
+  while (groupCooldowns.size > LLM_COOLDOWN_CACHE_LIMIT) {
+    const oldest = groupCooldowns.keys().next().value as string | undefined
+    if (!oldest) break
+    groupCooldowns.delete(oldest)
+  }
+}
+
 function canCallLlm(groupId: string): boolean {
+  pruneCooldowns()
   const last = groupCooldowns.get(groupId)
   if (!last) return true
   return Date.now() - last >= LLM_COOLDOWN_MS
 }
 
 function recordLlmCall(groupId: string): void {
+  pruneCooldowns()
+  if (groupCooldowns.has(groupId)) {
+    groupCooldowns.delete(groupId)
+  }
   groupCooldowns.set(groupId, Date.now())
+  pruneCooldowns()
 }
 
 // ---------------------------------------------------------------------------
@@ -420,9 +441,22 @@ export async function generateLlmResponse(params: {
   let runtimeTruth = resolveAssistantRuntimeTruth(params.runtimeTruth)
   const identityIntent = classifyIdentityIntent(userText)
   const allowActionExecution = params.allowActionExecution !== false
+  // Web-origin requests must provide a trusted runtime context before actions can execute.
+  const canExecuteActions =
+    allowActionExecution &&
+    (Boolean(params.runtimeContext) || conversationType === 'telegram' || conversationType === 'xmtp')
+  const senderAddress = toSenderAddress(params.senderWallet)
 
   if (!userText.trim()) {
     return { ok: true, response: buildIdentityReply(conversationType, runtimeTruth), handledByRuntime: true }
+  }
+
+  if (!senderAddress) {
+    return {
+      ok: false,
+      response: 'Connect a verified wallet to use AI commands.',
+      handledByRuntime: false,
+    }
   }
 
   if (rawText.startsWith('/') && !isHandledConversationalSlashPrefix(rawText)) {
@@ -438,7 +472,6 @@ export async function generateLlmResponse(params: {
   let inbound: any = null
 
   try {
-    const senderAddress = toSenderAddress(params.senderWallet)
     if (params.runtimeContext) {
       runtimeBridge = params.runtimeContext.runtimeBridge
       inbound = params.runtimeContext.inboundMemory
@@ -482,7 +515,7 @@ export async function generateLlmResponse(params: {
       providedRuntimeContext: Boolean(params.runtimeContext),
     })
 
-    if (allowActionExecution) {
+    if (canExecuteActions) {
       const correlationId = `keepr-${params.groupId}-${Date.now()}`
       const rankedActions = await runtimeBridge.rankActions(userText, inbound as any)
       const maxCandidates = Math.max(1, ACTION_MAX_CANDIDATES)
@@ -648,7 +681,6 @@ export async function generateLlmResponse(params: {
           })
         }
       }
-      const senderAddress = toSenderAddress(params.senderWallet)
       if (senderAddress) {
         vaultContext +=
           '\n[wallet_context]\n' +

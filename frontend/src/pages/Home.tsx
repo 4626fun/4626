@@ -32,7 +32,6 @@ export function Home() {
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
-  const showDeployVaultCta = hostMode === 'app'
   const [initialWaitlistState] = useState(() => {
     const autoStart = consumeStoredWaitlistAuthAutoStart()
     const open = consumeStoredWaitlistAuthArmed() || autoStart
@@ -129,12 +128,11 @@ export function Home() {
                   >
                     <PrivyClientProvider showWalletLoginFirst={false}>
                       <Web3Providers>
-                        <div className="rounded-[28px] border border-white/10 bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
+                        <div className="rounded-[28px] bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
                           <LazyThinWaitlistFlow
                             variant="embedded"
                             sectionId="home-waitlist"
-                            autoStartAuth={waitlistAutoStart || waitlistInlineOpen}
-                            suppressAuthShell
+                            autoStartAuth={waitlistAutoStart}
                           />
                         </div>
                       </Web3Providers>
@@ -199,74 +197,6 @@ export function Home() {
 
       <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
         <div className="mx-auto max-w-5xl space-y-10 px-4 sm:space-y-14 sm:px-6">
-
-          {/* ── Launch Your Vault (moved from above VaultFlowScroll) */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="grid items-center gap-8 sm:gap-16 lg:grid-cols-2 lg:gap-20"
-          >
-            <div className="space-y-4 sm:space-y-8">
-              <span className="label">For Creators</span>
-              <h2 className="headline text-3xl leading-tight sm:text-5xl lg:text-6xl">
-                Launch Your
-                <br />
-                <span className="glow-brand">Vault</span>
-              </h2>
-              <div className="inline-flex items-center gap-2 text-[10px] font-medium text-zinc-600">
-                <span>Powered by</span>
-                <img
-                  src="/protocols/uniswap.svg"
-                  alt="Uniswap"
-                  width={16}
-                  height={16}
-                  className="h-4 w-4 opacity-80"
-                  loading="lazy"
-                />
-                <span className="text-uniswap">Uniswap</span>
-              </div>
-              <div className="space-y-3 text-base font-light leading-relaxed text-zinc-500 sm:text-lg">
-                <p>
-                  Launch starts with <span className="font-mono text-zinc-200">{DEFAULT_DEPOSIT_TOKENS} TOKEN</span>, minting{' '}
-                  <span className="font-mono text-brand-primary">{DEFAULT_SHARE_TOKENS}</span> for a{' '}
-                  <span className="text-uniswap">Uniswap CCA</span> auction.
-                </p>
-              </div>
-              {showDeployVaultCta ? (
-                <div>
-                  <Link to="/deploy" className={heroCtaClass}>
-                    Deploy Vault
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="space-y-4 rounded-2xl border border-white/6 bg-white/[0.015] px-5 py-5 sm:px-6 sm:py-6">
-              <div className="label text-[9px] sm:text-[10px]">CCA launch</div>
-              <h3 className="text-lg font-medium text-zinc-100 sm:text-xl">Launch profile moved to its own page</h3>
-              <p className="text-sm font-light leading-relaxed text-zinc-400">
-                View the full CCA profile and mechanics in one dedicated surface under the CCA route.
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300">
-                  {DEFAULT_DEPOSIT_TOKENS} token
-                </span>
-                <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300">
-                  Uniswap CCA
-                </span>
-              </div>
-              <div className="pt-2">
-                <Link to="/cca" className="btn-secondary inline-flex items-center gap-2">
-                  Open CCA page
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-
           {/* ── FAQ */}
           <motion.div
             initial={{ opacity: 0 }}

@@ -1,2 +1,0 @@
-export { VaultGaugeVotingPanel } from './VaultGaugeVotingPanel'
-

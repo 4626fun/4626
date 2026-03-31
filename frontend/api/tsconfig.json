@@ -25,8 +25,7 @@
     "./_handlers/**/*.ts",
     "./creator-access/**/*.ts",
     "./admin/**/*.ts",
-    "./_lib/**/*.ts",
-    "../src/types/vercel-node.d.ts"
+    "./_lib/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

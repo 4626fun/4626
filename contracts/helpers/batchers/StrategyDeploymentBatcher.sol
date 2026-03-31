@@ -63,6 +63,8 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     address public immutable ajnaStrategyFactory;
     address public immutable protocolOwner;
     bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
+    int24 private constant CHARM_MAX_TWAP_DEVIATION = 500;
+    uint32 private constant CHARM_TWAP_DURATION = 300;
 
     error InvalidOwnerAddress();
     error InvalidVaultName();
@@ -167,8 +169,8 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
                 fullRangeWeight: 0, // fullRangeWeight (0 = no full range position)
                 period: 1800, // period (30 minutes between rebalances)
                 minTickMove: int24(0),
-                maxTwapDeviation: int24(0),
-                twapDuration: 60,
+                maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
+                twapDuration: CHARM_TWAP_DURATION,
                 name: vaultName,
                 symbol: vaultSymbol
             })

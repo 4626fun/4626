@@ -1369,6 +1369,16 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
     return json(res, 400, { success: false, error: 'hubCreatorCoin and hubShareToken are required.' })
   }
 
+  let ammPrograms: string[] = []
+  if (body?.ammPrograms !== undefined) {
+    if (!Array.isArray(body.ammPrograms)) {
+      return json(res, 400, { success: false, error: 'ammPrograms must be an array of non-empty strings when provided.' })
+    }
+    ammPrograms = body.ammPrograms
+      .map((value) => String(value ?? '').trim())
+      .filter((value) => value.length > 0)
+  }
+
   const args = [
     'scripts/solana/deploy/setup-creator-full.ts',
     '--hub-creator-coin', hubCreatorCoin,
@@ -1377,7 +1387,7 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
   if (body?.keeperPubkey) args.push('--keeper-pubkey', body.keeperPubkey)
   if (body?.feeBps !== undefined) args.push('--fee-bps', String(body.feeBps))
   if (body?.decimals !== undefined) args.push('--decimals', String(body.decimals))
-  if (body?.ammPrograms?.length) args.push('--amm-programs', body.ammPrograms.join(','))
+  if (ammPrograms.length) args.push('--amm-programs', ammPrograms.join(','))
   if (body?.settlementThreshold) args.push('--settlement-threshold', body.settlementThreshold)
   if (body?.lotteryEnabled === false) args.push('--lottery-disabled')
 

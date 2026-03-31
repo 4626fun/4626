@@ -1191,11 +1191,21 @@ export function ThinWaitlistFlow(props: {
             </div>
 
             {shouldAutoStartAuth ? (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
-                <div className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-                  Opening secure email sign-in…
+              <div className="space-y-3">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                  <div className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                    Opening secure email sign-in…
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onContinueAuth()}
+                  className="btn-secondary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  Join waitlist
+                </button>
               </div>
             ) : (
               <button

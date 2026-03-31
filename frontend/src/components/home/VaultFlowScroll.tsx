@@ -157,7 +157,6 @@ const BOT_COLOR = '#fbbf24' // amber — distinct from regular user palette
 function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
   // Start empty — intro messages arrive one by one as the chat fades in
   const [lines, setLines] = useState<FeedLine[]>([])
-  const [mobileMinimized, setMobileMinimized] = useState(false)
   const introIdx = useRef(0)   // which INTRO_LINE to drop next
   const feedCursor = useRef(0) // which FEED_LINE to drop after intro
   const msgCount = useRef(0)   // total messages delivered (for acceleration)
@@ -198,28 +197,18 @@ function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
       style={{ opacity: feedOp, pointerEvents: 'none' }}
       aria-hidden="true"
     >
-      {/* ── Desktop: full Twitch-style sidebar, starts below nav (h-14 = 56px) ── */}
+      {/* ── Desktop: message-only overlay, offset from app chrome ── */}
       <div
-        className="absolute right-0 hidden w-[240px] flex-col sm:flex"
-        style={{ background: '#18181b', top: '3.5rem', bottom: 0 }}
+        className="pointer-events-none absolute right-4 hidden w-[250px] flex-col md:flex"
+        style={{ top: 'calc(3.5rem + 0.75rem)', bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
       >
-        {/* Header */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-white/[0.06] px-4 py-2.5" style={{ background: '#0e0e10' }}>
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-          <span className="text-[10px] font-semibold text-[#efeff1]">
-            Stream Chat
-          </span>
-        </div>
-
-        {/* Messages — newest at bottom, fill from bottom, top gradient masks overflow */}
-        <div className="relative flex flex-1 flex-col justify-end overflow-hidden px-3 py-2">
-          {/* Top fade-out so old messages dissolve instead of hard-clip */}
+        <div className="relative flex h-full flex-col justify-end overflow-hidden px-1.5 py-1.5">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16"
-            style={{ background: 'linear-gradient(to bottom, #18181b 0%, transparent 100%)' }}
+            style={{ background: 'linear-gradient(to bottom, rgba(2,2,2,0.92) 0%, transparent 100%)' }}
           />
           <AnimatePresence initial={false}>
-            {lines.map(line => (
+            {lines.slice(-16).map(line => (
               <motion.div
                 key={line.id}
                 initial={{ opacity: 0, y: 6 }}
@@ -229,91 +218,61 @@ function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
                 className="py-[3px]"
               >
                 {line.isBot ? (
-                  <p className="break-words text-[10px] leading-[1.5]" style={{ wordBreak: 'break-word' }}>
-                    <span className="mr-1 rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide" style={{ background: 'rgba(251,191,36,0.15)', color: BOT_COLOR, border: '1px solid rgba(251,191,36,0.3)' }}>
-                      Bot
-                    </span>
+                  <p className="break-words text-[10px] leading-[1.45]" style={{ wordBreak: 'break-word', textShadow: '0 1px 4px rgba(0,0,0,0.95)' }}>
                     <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
-                    <span style={{ color: '#a8a29e' }}>: {line.text}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.78)' }}>: {line.text}</span>
                   </p>
                 ) : (
-                  <p className="break-words text-[10px] leading-[1.5]" style={{ wordBreak: 'break-word' }}>
+                  <p className="break-words text-[10px] leading-[1.45]" style={{ wordBreak: 'break-word', textShadow: '0 1px 4px rgba(0,0,0,0.95)' }}>
                     <span style={{ color: feedUserColor(line.user) }} className="font-bold">
                       {line.user}
                     </span>
-                    <span style={{ color: '#efeff1' }}>: {line.text}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.9)' }}>: {line.text}</span>
                   </p>
                 )}
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
-
-        {/* Footer input bar */}
-        <div className="shrink-0 border-t border-white/[0.06] px-3 py-2" style={{ background: '#0e0e10' }}>
-          <div
-            className="flex h-7 items-center rounded px-2 text-[10px] text-zinc-600"
-            style={{ background: '#1f1f23', border: '1px solid rgba(255,255,255,0.08)' }}
-          >
-            Send a message
-          </div>
-        </div>
       </div>
 
-      {/* ── Mobile: fully transparent overlay — text floats over the scene ── */}
-      <div className="absolute bottom-20 left-3 sm:hidden" style={{ pointerEvents: 'none' }}>
-        {/* Tiny hide/show toggle — transparent, just text + drop shadow */}
-        <button
-          onClick={() => setMobileMinimized(v => !v)}
-          className="mb-1.5"
-          style={{ pointerEvents: 'auto', background: 'none', border: 'none', padding: 0 }}
+      {/* ── Mobile: message-only overlay above bottom nav ── */}
+      <div
+        className="absolute left-3 w-[min(72vw,220px)] sm:hidden"
+        style={{ pointerEvents: 'none', bottom: 'calc(env(safe-area-inset-bottom) + 4.5rem)' }}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className="flex flex-col gap-[2px]"
         >
-          <span
-            className="text-[9px] font-semibold"
-            style={{ color: 'rgba(255,255,255,0.55)', textShadow: '0 1px 4px rgba(0,0,0,0.9)', letterSpacing: '0.03em' }}
-          >
-            {mobileMinimized ? '[ show chat ]' : '[ hide ]'}
-          </span>
-        </button>
-
-        {/* Messages — hidden when minimized */}
-        <AnimatePresence>
-          {!mobileMinimized && (
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              transition={{ duration: 0.2 }}
-              className="flex w-[200px] flex-col gap-[2px]"
-            >
-              <AnimatePresence initial={false}>
-                {lines.slice(-5).map(line => (
-                  <motion.div
-                    key={line.id}
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, transition: { duration: 0.25 } }}
-                    transition={{ duration: 0.3, ease: 'easeOut' }}
-                  >
-                    {line.isBot ? (
-                      <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
-                        <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
-                        <span style={{ color: 'rgba(255,255,255,0.65)' }}>: {line.text}</span>
-                      </p>
-                    ) : (
-                      <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
-                        <span style={{ color: feedUserColor(line.user) }} className="font-bold">
-                          {line.user}
-                        </span>
-                        <span style={{ color: 'rgba(255,255,255,0.8)' }}>: {line.text}</span>
-                      </p>
-                    )}
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          <AnimatePresence initial={false}>
+            {lines.slice(-5).map(line => (
+              <motion.div
+                key={line.id}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.25 } }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+              >
+                {line.isBot ? (
+                  <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
+                    <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
+                    <span style={{ color: 'rgba(255,255,255,0.65)' }}>: {line.text}</span>
+                  </p>
+                ) : (
+                  <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
+                    <span style={{ color: feedUserColor(line.user) }} className="font-bold">
+                      {line.user}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.8)' }}>: {line.text}</span>
+                  </p>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       </div>
     </motion.div>,
     document.body,
@@ -534,14 +493,18 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
   const atmosphereOpacity = useTransform(scroll, [0, 1], [0.22, 0.42])
 
-  // Hero plane — stays large and legible through the freefall, gentle exit
-  // Hard freeze plateau: everything is IDENTICAL at 0.36 and 0.46 so the hero
-  // (title + pills) looks completely frozen while the user scrolls ~110 vh
-  // (≈ 1-2 s of normal scrolling at 1100 vh total height).
+  // Hero plane — stays hidden during the initial Zorb drop, then reveals in steps.
+  // We keep the same hold/fade window later so stage transitions remain stable.
   const heroZ = useTransform(scroll, [0, 0.28, 0.46, 0.58], [170, 40, 40, -60])
   const heroY = useTransform(scroll, [0, 0.58], [0, -12])
   const heroScale = useTransform(scroll, [0, 0.28, 0.46, 0.58], [1, 0.94, 0.94, 0.88])
-  const heroOpacity = useTransform(scroll, [0, 0.46, 0.60], [1, 1, 0])
+  const heroOpacity = useTransform(scroll, [0, 0.24, 0.32, 0.46, 0.60], [0, 0, 1, 1, 0])
+  const heroTitleOpacity = useTransform(scroll, [0.24, 0.32], [0, 1])
+  const heroTitleY = useTransform(scroll, [0.24, 0.32], [14, 0])
+  const heroPillsOpacity = useTransform(scroll, [0.30, 0.38], [0, 1])
+  const heroPillsY = useTransform(scroll, [0.30, 0.38], [12, 0])
+  const heroBodyOpacity = useTransform(scroll, [0.34, 0.42], [0, 1])
+  const heroBodyY = useTransform(scroll, [0.34, 0.42], [10, 0])
   const heroBlur = useTransform(scroll, [0.48, 0.58], [0, 7])
   const heroFilter = useMotionTemplate`blur(${heroBlur}px)`
   const heroTransform = useMotionTemplate`
@@ -581,6 +544,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Persistent vault square — fades in at capture, holds through ALL distribution
   // stages, only dissolves as the world zooms into the deploy phase
   const vaultSquare = useTransform(scroll, [0.36, 0.42, 0.91, 0.94], [0, 0.45, 0.45, 0])
+  // Subtle 3D frame that gives the vault visible depth.
+  const vaultDepthOp = useTransform(scroll, [0.36, 0.44, 0.91, 0.94], [0, 0.78, 0.78, 0])
   // Deposit arrival glow — large white ring pulse when dot lands on vault (~0.47)
   const depositArrivalGlow = useTransform(scroll, [0.45, 0.49, 0.53, 0.58], [0, 1, 0.45, 0])
   // Entry radial bloom: peaks as vault rushes, bridges into deploy
@@ -905,9 +870,14 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                 aria-hidden="true"
               />
 
-              <div
+              <motion.div
                 className="font-mono font-black leading-none text-center overflow-hidden"
-                style={{ fontSize: 'clamp(1.8rem, 5.2vw, 5.2rem)', whiteSpace: 'nowrap' }}
+                style={{
+                  fontSize: 'clamp(1.8rem, 5.2vw, 5.2rem)',
+                  whiteSpace: 'nowrap',
+                  opacity: heroTitleOpacity,
+                  y: heroTitleY,
+                }}
               >
                 {/* Single-word headline */}
                 <motion.span
@@ -922,11 +892,14 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   Zora&thinsp;<span style={{ WebkitTextFillColor: 'rgba(160,180,255,0.82)' }}>×</span>
                   &thinsp;ERC-4626
                 </motion.span>
-              </div>
+              </motion.div>
 
               {/* Pills — Zora Creator Coin always centred; 4626 pill mounts only
                   once the vault captures the Zorb so it never shifts layout */}
-              <div className="mx-auto mt-5 flex w-full max-w-lg items-center justify-center gap-2">
+              <motion.div
+                className="mx-auto mt-5 flex w-full max-w-lg items-center justify-center gap-2"
+                style={{ opacity: heroPillsOpacity, y: heroPillsY }}
+              >
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5">
                   <img src="/protocols/zora.svg" alt="Zora" className="h-4 w-4 rounded-full" loading="lazy" />
                   <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
@@ -944,12 +917,15 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                     </span>
                   </motion.div>
                 )}
-              </div>
+              </motion.div>
 
-              <p className="mx-auto mt-8 max-w-lg text-center text-[13px] font-light leading-[1.85] text-zinc-600">
+              <motion.p
+                className="mx-auto mt-8 max-w-lg text-center text-[13px] font-light leading-[1.85] text-zinc-600"
+                style={{ opacity: heroBodyOpacity, y: heroBodyY }}
+              >
                 Every deposit lives inside a single protocol vault, and
                 <span className="text-zinc-500"> only the verified creator of that coin can open the door.</span>
-              </p>
+              </motion.p>
             </motion.div>
 
             {/* Deposit pill — descends from above, overlaps the Zorb on arrival */}
@@ -1034,6 +1010,64 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
               }}
             >
               <div className="relative">
+                {/* 3D vault frame — front/back faces + connecting edges */}
+                <motion.div
+                  className="pointer-events-none absolute inset-[-18px]"
+                  style={{ opacity: vaultDepthOp }}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 184 184" className="h-full w-full" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id={`${uid}-vf-front`} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
+                        <stop offset="100%" stopColor="rgba(160,190,255,0.06)" />
+                      </linearGradient>
+                      <linearGradient id={`${uid}-vf-top`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(210,225,255,0.18)" />
+                        <stop offset="100%" stopColor="rgba(210,225,255,0.02)" />
+                      </linearGradient>
+                      <linearGradient id={`${uid}-vf-side`} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="rgba(180,205,255,0.12)" />
+                        <stop offset="100%" stopColor="rgba(180,205,255,0.02)" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* Top/side planes */}
+                    <path d="M24 30 L160 30 L144 16 L40 16 Z" fill={`url(#${uid}-vf-top)`} />
+                    <path d="M24 30 L40 16 L40 120 L24 166 Z" fill={`url(#${uid}-vf-side)`} />
+                    <path d="M160 30 L144 16 L144 120 L160 166 Z" fill={`url(#${uid}-vf-side)`} />
+
+                    {/* Back face */}
+                    <rect
+                      x="40"
+                      y="16"
+                      width="104"
+                      height="104"
+                      rx="26"
+                      fill="none"
+                      stroke="rgba(190,215,255,0.18)"
+                      strokeWidth="1.1"
+                    />
+
+                    {/* Front face */}
+                    <rect
+                      x="24"
+                      y="30"
+                      width="136"
+                      height="136"
+                      rx="34"
+                      fill="none"
+                      stroke={`url(#${uid}-vf-front)`}
+                      strokeWidth="1.4"
+                    />
+
+                    {/* Connecting edges */}
+                    <line x1="24" y1="30" x2="40" y2="16" stroke="rgba(190,215,255,0.24)" strokeWidth="1.1" />
+                    <line x1="160" y1="30" x2="144" y2="16" stroke="rgba(190,215,255,0.24)" strokeWidth="1.1" />
+                    <line x1="24" y1="166" x2="40" y2="120" stroke="rgba(190,215,255,0.2)" strokeWidth="1.1" />
+                    <line x1="160" y1="166" x2="144" y2="120" stroke="rgba(190,215,255,0.2)" strokeWidth="1.1" />
+                  </svg>
+                </motion.div>
                 {/* Ambient blue glow */}
                 <motion.div
                   className="pointer-events-none absolute inset-[-40px] rounded-full"

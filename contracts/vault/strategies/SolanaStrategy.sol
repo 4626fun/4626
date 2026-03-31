@@ -51,6 +51,7 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
     IERC20 public immutable CREATOR;
 
     uint256 public remoteNav;
+    uint256 public remoteNavAnchor;
     uint64 public remoteNavUpdatedAt;
     uint64 public maxNavAge;
     uint16 public maxNavDeltaBpsPerUpdate;
@@ -120,13 +121,25 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
      * @param reportId Report identifier for offchain correlation.
      */
     function updateRemoteNav(uint256 newRemoteNav, bytes32 reportId) external onlyKeeper {
-        if (remoteNav > 0) {
-            uint256 delta = newRemoteNav > remoteNav ? newRemoteNav - remoteNav : remoteNav - newRemoteNav;
-            uint256 deltaBps = (delta * 10_000) / remoteNav;
+        uint256 referenceNav = remoteNav > 0 ? remoteNav : remoteNavAnchor;
+
+        // On first NAV update, enforce a bounded bootstrap relative to base liquidity.
+        // This prevents unbounded first writes while still allowing remote NAV initialization.
+        if (referenceNav == 0 && newRemoteNav > 0) {
+            uint256 baseLiquid = CREATOR.balanceOf(address(this));
+            if (minBaseLiquidityBps == 0) revert NavDeltaExceedsCap();
+            uint256 maxBootstrapRemoteNav = (baseLiquid * (10_000 - minBaseLiquidityBps)) / minBaseLiquidityBps;
+            if (newRemoteNav > maxBootstrapRemoteNav) revert NavDeltaExceedsCap();
+        } else if (referenceNav > 0) {
+            uint256 delta = newRemoteNav > referenceNav ? newRemoteNav - referenceNav : referenceNav - newRemoteNav;
+            uint256 deltaBps = (delta * 10_000) / referenceNav;
             if (deltaBps > maxNavDeltaBpsPerUpdate) revert NavDeltaExceedsCap();
         }
 
         remoteNav = newRemoteNav;
+        if (newRemoteNav > 0) {
+            remoteNavAnchor = newRemoteNav;
+        }
         remoteNavUpdatedAt = uint64(block.timestamp);
         emit RemoteNavUpdated(newRemoteNav, reportId);
     }

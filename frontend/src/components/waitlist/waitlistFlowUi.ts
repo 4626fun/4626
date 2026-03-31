@@ -52,7 +52,7 @@ export function deriveWaitlistAuthUi(): WaitlistEmailUi {
     title: 'Get early access',
     subtitle:
       'Verify your email to lock your spot and unlock your referral link.',
-    ctaLabel: `${SHARE_SYMBOL_PREFIX} Continue with email`,
+    ctaLabel: 'Join waitlist',
     busyLabel: 'Opening email sign-in…',
   }
 }

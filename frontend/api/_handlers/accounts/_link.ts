@@ -71,7 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db: db as any,
       privyUserId: context.privyUserId,
       provider,
-      value: typeof body.value === 'string' ? body.value : null,
+      // Never trust caller-supplied identity values; only use verified Privy-linked identities.
+      value: null,
       privyUser: context.privyUser,
     })
 

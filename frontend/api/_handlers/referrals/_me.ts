@@ -124,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ),
     clicks AS (
       SELECT referrer_signup_id,
-        COUNT(DISTINCT COALESCE(session_id, ip_hash, ua_hash))::int AS unique_clicks
+        COUNT(DISTINCT COALESCE(ip_hash, ua_hash))::int AS unique_clicks
       FROM referral_clicks
       WHERE is_bot_suspected = FALSE
         AND created_at >= ${start.toISOString()}
@@ -162,7 +162,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ),
     clicks AS (
       SELECT referrer_signup_id,
-        COUNT(DISTINCT COALESCE(session_id, ip_hash, ua_hash))::int AS unique_clicks
+        COUNT(DISTINCT COALESCE(ip_hash, ua_hash))::int AS unique_clicks
       FROM referral_clicks
       WHERE is_bot_suspected = FALSE
       GROUP BY referrer_signup_id

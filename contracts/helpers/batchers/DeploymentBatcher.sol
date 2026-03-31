@@ -153,6 +153,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint24 internal constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
+    int24 internal constant CHARM_MAX_TWAP_DEVIATION = 500;
+    uint32 internal constant CHARM_TWAP_DURATION = 300;
 
     /// @notice Charm Finance Alpha Vault Factory on Base
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
@@ -985,8 +987,8 @@ contract DeploymentBatcher is ReentrancyGuard {
                 fullRangeWeight: 0, // fullRangeWeight (0 = no full range position)
                 period: 1800, // period (30 minutes between rebalances)
                 minTickMove: int24(0),
-                maxTwapDeviation: int24(0),
-                twapDuration: 60,
+                maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
+                twapDuration: CHARM_TWAP_DURATION,
                 name: params.charmVaultName,
                 symbol: params.charmVaultSymbol
             })

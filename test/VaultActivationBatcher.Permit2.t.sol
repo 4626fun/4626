@@ -188,8 +188,11 @@ contract VaultActivationBatcherPermit2Test is Test {
         batcher = new VaultActivationBatcher(address(permit2));
 
         creatorToken.mint(identity, 1_000_000e18);
+        creatorToken.mint(operator, 1_000_000e18);
 
         vm.prank(identity);
+        creatorToken.approve(address(permit2), type(uint256).max);
+        vm.prank(operator);
         creatorToken.approve(address(permit2), type(uint256).max);
     }
 
@@ -308,6 +311,33 @@ contract VaultActivationBatcherPermit2Test is Test {
         assertEq(shareToken.balanceOf(identity), depositAmount);
         assertEq(shareToken.balanceOf(operator), 0);
         assertEq(permit2.lastOwner(), identity);
+    }
+
+    function test_batchActivateWithPermit2FromOperatorWithReserve_reverts_whenReserveRecipientNotIdentity() external {
+        uint256 depositAmount = 80e18;
+        ISignatureTransfer.PermitTransferFrom memory permit = _permit(address(creatorToken), depositAmount);
+        vault.setAuthorizedOperator(operator, OP_ACTIVATE, true);
+
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                VaultActivationBatcher.InvalidReserveRecipient.selector, identity, operator
+            )
+        );
+        batcher.batchActivateWithPermit2FromOperatorWithReserve(
+            identity,
+            address(creatorToken),
+            address(vault),
+            address(wrapper),
+            address(strategy),
+            depositAmount,
+            25,
+            25,
+            operator,
+            1 ether,
+            permit,
+            hex"9999"
+        );
     }
 
     function _permit(address token, uint256 amount)

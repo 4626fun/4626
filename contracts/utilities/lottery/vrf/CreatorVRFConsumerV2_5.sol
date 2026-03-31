@@ -229,6 +229,7 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     error RelayFeeMismatch(uint256 provided, uint256 expected);
     error MissingLayerZeroEid(uint256 chainId);
     error InvalidRateLimitConfig();
+    error CrossChainRateLimitExceeded(uint32 sourceChainEid, uint64 sequence);
 
     // ================================
     // CONSTRUCTOR
@@ -344,7 +345,9 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
             emit CrossChainRequestIgnored(_origin.srcEid, _origin.sender, sequence, IGNORE_REASON_DUPLICATE_SEQUENCE);
             return;
         }
-        if (!_consumeRateLimit(_origin.srcEid, sequence, _origin.sender)) return;
+        if (!_consumeRateLimit(_origin.srcEid, sequence, _origin.sender)) {
+            revert CrossChainRateLimitExceeded(_origin.srcEid, sequence);
+        }
 
         // Request VRF
         uint256 requestId = vrfCoordinator.requestRandomWords(

@@ -61,11 +61,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Missing required field: quote' })
   }
   const quoteObj = body.quote as Record<string, unknown>
+  const routingCandidate =
+    body.routing ??
+    quoteObj.routing ??
+    quoteObj.routeType ??
+    quoteObj.route ??
+    quoteObj.type ??
+    quoteObj.routingPreference
   const tokenPolicyErr = validateQuoteTokenPolicy(quoteObj)
   if (tokenPolicyErr) {
     return res.status(400).json({ success: false, error: tokenPolicyErr })
   }
-  const routingPolicyErr = validateRoutePolicy(quoteObj.routing)
+  const routingPolicyErr = validateRoutePolicy(routingCandidate)
   if (routingPolicyErr) {
     return res.status(400).json({ success: false, error: routingPolicyErr })
   }

@@ -93,6 +93,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
     error NotAuthorizedOperator();
     error PermitTokenMismatch();
     error PermitAmountTooLow();
+    error InvalidReserveRecipient(address expectedRecipient, address actualRecipient);
 
     // ================================
     // INTERNAL SHARED LOGIC
@@ -115,6 +116,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (creatorReservePercent > 100) revert InvalidReserve();
         if (uint256(auctionPercent) + uint256(creatorReservePercent) > 100) revert InvalidReserve();
         if (creatorReservePercent > 0 && creatorReserveRecipient == address(0)) revert ZeroAddress();
+        if (creatorReservePercent > 0 && creatorReserveRecipient != identity) {
+            revert InvalidReserveRecipient(identity, creatorReserveRecipient);
+        }
 
         // ============ STEP 2: Deposit to vault (creatorToken → ▢TOKEN) ============
         IERC20(creatorToken).forceApprove(vault, depositAmount);

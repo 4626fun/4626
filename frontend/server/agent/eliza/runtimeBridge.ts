@@ -993,7 +993,12 @@ async function loadSemanticRecallHits(params: {
 function buildSemanticRecallBlock(hits: SemanticRecallHit[]): string {
   if (!hits.length) return '<semantic_recall />'
   const entries = hits
-    .map((hit) => `<hit role="${hit.role}" score="${hit.score.toFixed(2)}" ts="${hit.createdAt}">${truncateForSummary(hit.content, 280)}</hit>`)
+    .map((hit) => {
+      const content = escapePromptXml(truncateForSummary(hit.content, 280))
+      const role = escapePromptXml(hit.role)
+      const ts = escapePromptXml(hit.createdAt)
+      return `<hit role="${role}" score="${hit.score.toFixed(2)}" ts="${ts}">${content}</hit>`
+    })
     .join('\n')
   return `<semantic_recall>\n${entries}\n</semantic_recall>`
 }
@@ -1153,7 +1158,10 @@ function buildHistoryBlock(recentMessages: Array<{ text: string; role: string; c
   const entries = recentMessages
     .map((entry) => {
       const iso = Number.isFinite(entry.createdAt) ? new Date(entry.createdAt).toISOString() : new Date().toISOString()
-      return `<turn role="${entry.role}" ts="${iso}">${truncateForSummary(entry.text, 280)}</turn>`
+      const role = escapePromptXml(entry.role)
+      const ts = escapePromptXml(iso)
+      const text = escapePromptXml(truncateForSummary(entry.text, 280))
+      return `<turn role="${role}" ts="${ts}">${text}</turn>`
     })
     .join('\n')
   return `<history>\n${entries}\n</history>`
@@ -1161,27 +1169,36 @@ function buildHistoryBlock(recentMessages: Array<{ text: string; role: string; c
 
 function buildFactCardsBlock(factCards: WarmFactCard[]): string {
   const entries = factCards
-    .map((card) => `<fact entity="${card.entity}" confidence="${Number(card.confidence).toFixed(2)}">${card.fact}</fact>`)
+    .map((card) => {
+      const entity = escapePromptXml(card.entity)
+      const fact = escapePromptXml(card.fact)
+      return `<fact entity="${entity}" confidence="${Number(card.confidence).toFixed(2)}">${fact}</fact>`
+    })
     .join('\n')
   return `<fact_cards>\n${entries}\n</fact_cards>`
 }
 
 function buildOpenTasksBlock(tasks: WarmTaskLoop[]): string {
   const entries = tasks
-    .map((task) => `<task id="${task.id}" status="${task.status}">${task.task}</task>`)
+    .map((task) => {
+      const id = escapePromptXml(task.id)
+      const status = escapePromptXml(task.status)
+      const label = escapePromptXml(task.task)
+      return `<task id="${id}" status="${status}">${label}</task>`
+    })
     .join('\n')
   return `<open_tasks>\n${entries}\n</open_tasks>`
 }
 
 function buildMemorySnapshotBlock(snapshot: WarmMemorySnapshot | null): string {
   if (!snapshot) return '<memory_snapshot />'
-  const goals = snapshot.currentGoals.map((goal) => `<goal>${goal}</goal>`).join('\n')
-  const prefs = snapshot.userPreferences.map((pref) => `<preference>${pref}</preference>`).join('\n')
-  const decisions = snapshot.recentDecisions.map((decision) => `<decision>${decision}</decision>`).join('\n')
+  const goals = snapshot.currentGoals.map((goal) => `<goal>${escapePromptXml(goal)}</goal>`).join('\n')
+  const prefs = snapshot.userPreferences.map((pref) => `<preference>${escapePromptXml(pref)}</preference>`).join('\n')
+  const decisions = snapshot.recentDecisions.map((decision) => `<decision>${escapePromptXml(decision)}</decision>`).join('\n')
   return [
     '<memory_snapshot>',
-    `<summary>${snapshot.summary}</summary>`,
-    `<generated_at>${snapshot.generatedAt}</generated_at>`,
+    `<summary>${escapePromptXml(snapshot.summary)}</summary>`,
+    `<generated_at>${escapePromptXml(snapshot.generatedAt)}</generated_at>`,
     '<current_goals>',
     goals,
     '</current_goals>',
@@ -1193,6 +1210,15 @@ function buildMemorySnapshotBlock(snapshot: WarmMemorySnapshot | null): string {
     '</recent_decisions>',
     '</memory_snapshot>',
   ].join('\n')
+}
+
+function escapePromptXml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
 }
 
 async function upsertEpisodicSummary(params: {

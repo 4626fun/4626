@@ -11,7 +11,7 @@ import {
 } from '../../../server/zora/_shared.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
-import { readRequestPrincipal } from '../../../packages/server-core/src/index.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey, readRequestPrincipal } from '../../../packages/server-core/src/index.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -44,7 +44,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const chainId = getNumberQuery(req, 'chain') ?? DEFAULT_CHAIN_ID
   const storeRaw = getStringQuery(req, 'store')
-  const shouldStore = storeRaw ? storeRaw.toLowerCase() !== 'false' : true
+  const shouldStore = storeRaw ? storeRaw.toLowerCase() !== 'false' : false
+  const rate = checkRateLimit(rateLimitKey('lens-share-token-metadata', String(address).toLowerCase(), getClientIp(req) || 'unknown'), RATE_LIMITS.general)
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
   const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
 
   if (shouldStore && !hasAuthPrincipal) {
