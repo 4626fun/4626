@@ -86,7 +86,8 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
   if (!joined) return false
   return (
     joined.includes('failed to add embedded wallet connector: wallet proxy not initialized') ||
-    joined.includes('cannot set property ethereum of #<window> which has only a getter')
+    joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
+    joined.includes('embedded1193provider.request() called with args')
   )
 }
 
@@ -117,8 +118,13 @@ if (typeof window !== 'undefined') {
     stabilizeWindowEthereumSlot()
 
     if (!(window as any).__cvWalletNoisePatched) {
+      const originalLog = console.log.bind(console)
       const originalDebug = console.debug.bind(console)
       const originalError = console.error.bind(console)
+      console.log = (...args: unknown[]) => {
+        if (shouldSuppressWalletNoise(args)) return
+        originalLog(...args)
+      }
       console.debug = (...args: unknown[]) => {
         if (shouldSuppressWalletNoise(args)) return
         originalDebug(...args)

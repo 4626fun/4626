@@ -20,7 +20,7 @@ export function SwapPageLayout({
   return (
     <div className="relative pb-36 md:pb-0">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-40 bg-[radial-gradient(65%_70%_at_50%_0%,rgba(0,82,255,0.14)_0%,rgba(0,82,255,0.04)_44%,transparent_80%)]" />
-      <section className={hasSidePanel ? 'py-4 sm:py-5' : 'flex min-h-[calc(100vh-7rem)] items-center py-4 sm:py-5'}>
+      <section className={hasSidePanel ? 'py-4 sm:py-5' : 'pt-8 pb-4 sm:pt-10 sm:pb-5'}>
         <div className="mx-auto max-w-[1400px] px-3 sm:px-6">
           <h1 className="sr-only">{title ?? 'Swap'}</h1>
 
