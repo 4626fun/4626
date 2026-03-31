@@ -10,6 +10,7 @@ import {
   getCreate2Address,
   isAddress,
   keccak256,
+  toBytes,
   type Address,
   type Hex,
 } from 'viem'
@@ -24,6 +25,7 @@ import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/s
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../server/auth/_shared.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
+import { resolvePayoutRouterKeeperAddress } from '../../server/_lib/payoutRouterRuntime.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -661,8 +663,11 @@ const COINBASE_SMART_WALLET_FACTORIES = new Set<Address>([
 // Allowed inner call selectors
 const SELECTOR_ERC20_APPROVE = '0x095ea7b3'
 const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
+const SELECTOR_OWNABLE_TRANSFER_OWNERSHIP = '0xf2fde38b'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
 const SELECTOR_SWAP_ROUTER_EXECUTE = '0x3593564c' // execute(bytes,bytes[],uint256)
+const SELECTOR_PAYOUT_ROUTER_SET_KEEPER = '0x748747e6' // setKeeper(address)
+const SELECTOR_PAYOUT_ROUTER_SET_SWAP_PATH = '0xc772f341' // setSwapPath(address,bytes)
 
 // Coinbase Smart Wallet owner management (used for deploy sessions)
 const SELECTOR_CSW_ADD_OWNER_ADDRESS = '0x0f0f3f24' // addOwnerAddress(address)
@@ -731,7 +736,11 @@ const ALLOWED_ACTIVATION_SELECTORS = new Set<string>([
   SELECTOR_ACTIVATION_BATCH_ACTIVATE_WITH_PERMIT2_FOR,
 ])
 
-const ALLOWED_TOKEN_SELECTORS = new Set<string>([SELECTOR_ERC20_APPROVE, SELECTOR_COIN_SET_PAYOUT_RECIPIENT])
+const ALLOWED_TOKEN_SELECTORS = new Set<string>([
+  SELECTOR_ERC20_APPROVE,
+  SELECTOR_COIN_SET_PAYOUT_RECIPIENT,
+  SELECTOR_OWNABLE_TRANSFER_OWNERSHIP,
+])
 const ALLOWED_PERMIT2_SELECTORS = new Set<string>([SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM])
 const ALLOWED_SELF_SELECTORS = new Set<string>([SELECTOR_CSW_ADD_OWNER_ADDRESS, SELECTOR_CSW_REMOVE_OWNER_AT_INDEX])
 const ALLOWED_ERC8004_SELECTORS = new Set<string>([
@@ -798,6 +807,19 @@ function readDeploySessionHeaders(req: VercelRequest): { token: string; signatur
 // This prevents frontend/backend drift that causes `CODE_NOT_FOUND` in paymaster validation.
 const PAYOUT_ROUTER_CODE_ID = keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex)
 const VAULT_SHARE_BURN_STREAM_CODE_ID = keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex)
+const CREATOR_COIN_POLICY_CONTROLLER_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex)
+const CREATOR_OVAULT_WRAPPER_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex)
+const CREATOR_SHARE_OFT_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex)
+const OFT_BOOTSTRAP_REGISTRY_CODE_ID = keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex)
+const CREATOR_GAUGE_CONTROLLER_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex)
+const CCA_LAUNCH_STRATEGY_CODE_ID = keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex)
+const CREATOR_ORACLE_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex)
+const CREATOR_CHARM_STRATEGY_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex)
+const AJNA_VAULT_AUTH_CODE_ID = keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex)
+const AJNA_ERC4626_VAULT_CODE_ID = keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex)
+const ERC4626_STRATEGY_ADAPTER_CODE_ID = keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex)
+const SOLANA_STRATEGY_CODE_ID = keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex)
+const CHARM_ALPHA_VAULT_DEPLOY_SENTINEL_CODE_ID = keccak256(toBytes('charm-factory-sentinel-v1'))
 
 const BYTECODE_STORE_ABI = [
   {
@@ -835,6 +857,26 @@ const LEGACY_VESTING_VIEW_ABI = [
   { type: 'function', name: 'beneficiary', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+const PAYOUT_ROUTER_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'setKeeper',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newKeeper', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setSwapPath',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'path', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+] as const
+
 const SELECTOR_VESTING_RELEASE = '0x86d1a69f'
 const SELECTOR_WRAPPER_UNWRAP = '0xde0e9a3e'
 const SELECTOR_VAULT_REDEEM = '0xba087652'
@@ -866,6 +908,7 @@ const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
 ] as const
 
 const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
+const ZERO_ADDRESS = getAddress(`0x${'0'.repeat(40)}`)
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
 // Uniswap Universal Router on Base (compatibility + current deployments).
@@ -873,6 +916,7 @@ const BASE_SWAP_ROUTER_LEGACY = getAddress(`0x${'2626664c2603336E57B271c5C0b26F4
 const BASE_SWAP_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
 const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
 const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
+const CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG = '4626:CreatorCoinPolicyController' as const
 const CREATOR_OVAULT_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex)
 
 const UNISWAP_UNIVERSAL_ROUTER_ABI = [
@@ -1446,6 +1490,17 @@ function decodeAddressArgFromAbiEncodedBytes(data: Hex, argIndex: number): Addre
   return getAddress(addr)
 }
 
+function decodeAddressFromPackedPath(path: Hex, byteOffset: number): Address | null {
+  if (!isHexString(path)) return null
+  const totalBytes = Math.max(0, Math.floor((path.length - 2) / 2))
+  if (byteOffset < 0 || byteOffset + 20 > totalBytes) return null
+  const start = 2 + byteOffset * 2
+  const end = start + 40
+  const raw = `0x${path.slice(start, end)}`
+  if (!isAddress(raw)) return null
+  return getAddress(raw)
+}
+
 function expectedPayoutRouterSalt(params: { creatorToken: Address; sender: Address }): Hex {
   return keccak256(
     encodePacked(['string', 'address', 'address'], [PAYOUT_ROUTER_SALT_TAG, params.creatorToken, params.sender]),
@@ -1455,6 +1510,15 @@ function expectedPayoutRouterSalt(params: { creatorToken: Address; sender: Addre
 function expectedBurnStreamSalt(params: { creatorToken: Address; sender: Address }): Hex {
   return keccak256(
     encodePacked(['string', 'address', 'address'], [BURN_STREAM_SALT_TAG, params.creatorToken, params.sender]),
+  )
+}
+
+function expectedCreatorCoinPolicyControllerSalt(params: { creatorToken: Address; sender: Address }): Hex {
+  return keccak256(
+    encodePacked(
+      ['string', 'address', 'address'],
+      [CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG, params.creatorToken, params.sender],
+    ),
   )
 }
 
@@ -1694,6 +1758,11 @@ async function validateInnerCalls(params: {
   }) => void
 }): Promise<{ expectedCreatorToken: Address | null; mode: string }> {
   const contracts = getApiContracts()
+  const expectedPayoutRouterKeeper = resolvePayoutRouterKeeperAddress()
+  const expectedZoraToken = contracts.zora && isAddress(contracts.zora) ? getAddress(contracts.zora) : null
+  const expectedWethToken = contracts.weth && isAddress(contracts.weth) ? getAddress(contracts.weth) : BASE_WETH
+  const expectedProtocolTreasury =
+    contracts.protocolTreasury && isAddress(contracts.protocolTreasury) ? getAddress(contracts.protocolTreasury) : null
   if (!contracts.creatorVaultBatcher) throw new Error('creator_vault_batcher_not_configured')
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
   const vaultActivationBatcher = getAddress(contracts.vaultActivationBatcher)
@@ -1816,6 +1885,92 @@ async function validateInnerCalls(params: {
         owner = p && isAddress(p.owner) ? getAddress(p.owner) : null
         if (!creatorToken || !owner) throw new Error('batcher_decode_failed')
         if (owner !== params.sender) throw new Error('batcher_owner_mismatch')
+
+        const isPhase2DeploySelector =
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE
+        const isPhase3DeploySelector = selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES
+
+        if (isPhase2DeploySelector) {
+          if (!expectedProtocolTreasury) throw new Error('protocol_treasury_not_configured')
+
+          const creatorTreasuryArg = p && isAddress(p.creatorTreasury) ? getAddress(p.creatorTreasury) : null
+          const payoutRecipientArg = p && isAddress(p.payoutRecipient) ? getAddress(p.payoutRecipient) : null
+          if (!creatorTreasuryArg || !payoutRecipientArg) throw new Error('batcher_phase2_policy_decode_failed')
+
+          if (creatorTreasuryArg !== expectedProtocolTreasury && creatorTreasuryArg !== ZERO_ADDRESS) {
+            throw new Error('batcher_creator_treasury_mismatch')
+          }
+          // Payout recipient policy is enforced explicitly through router wiring + policy controller handoff.
+          if (payoutRecipientArg !== ZERO_ADDRESS) throw new Error('batcher_payout_recipient_must_be_zero')
+
+          const expectedPhase2CodeIds = {
+            vault: CREATOR_OVAULT_CODE_ID,
+            wrapper: CREATOR_OVAULT_WRAPPER_CODE_ID,
+            shareOFT: CREATOR_SHARE_OFT_CODE_ID,
+            gauge: CREATOR_GAUGE_CONTROLLER_CODE_ID,
+            cca: CCA_LAUNCH_STRATEGY_CODE_ID,
+            oracle: CREATOR_ORACLE_CODE_ID,
+            oftBootstrap: OFT_BOOTSTRAP_REGISTRY_CODE_ID,
+          } as const
+          const hasValidPhase2CodeIds =
+            codeIds &&
+            typeof codeIds === 'object' &&
+            isHexString(codeIds.vault) &&
+            isHexString(codeIds.wrapper) &&
+            isHexString(codeIds.shareOFT) &&
+            isHexString(codeIds.gauge) &&
+            isHexString(codeIds.cca) &&
+            isHexString(codeIds.oracle) &&
+            isHexString(codeIds.oftBootstrap) &&
+            String(codeIds.vault).toLowerCase() === String(expectedPhase2CodeIds.vault).toLowerCase() &&
+            String(codeIds.wrapper).toLowerCase() === String(expectedPhase2CodeIds.wrapper).toLowerCase() &&
+            String(codeIds.shareOFT).toLowerCase() === String(expectedPhase2CodeIds.shareOFT).toLowerCase() &&
+            String(codeIds.gauge).toLowerCase() === String(expectedPhase2CodeIds.gauge).toLowerCase() &&
+            String(codeIds.cca).toLowerCase() === String(expectedPhase2CodeIds.cca).toLowerCase() &&
+            String(codeIds.oracle).toLowerCase() === String(expectedPhase2CodeIds.oracle).toLowerCase() &&
+            String(codeIds.oftBootstrap).toLowerCase() === String(expectedPhase2CodeIds.oftBootstrap).toLowerCase()
+          if (!hasValidPhase2CodeIds) throw new Error('batcher_phase2_codeids_mismatch')
+        }
+
+        if (isPhase3DeploySelector) {
+          if (!expectedProtocolTreasury) throw new Error('protocol_treasury_not_configured')
+
+          const ajnaKeeperArg = p && isAddress(p.ajnaKeeper) ? getAddress(p.ajnaKeeper) : null
+          const solanaKeeperArg = p && isAddress(p.solanaKeeper) ? getAddress(p.solanaKeeper) : null
+          if (!ajnaKeeperArg || !solanaKeeperArg) throw new Error('batcher_phase3_keeper_decode_failed')
+          if (ajnaKeeperArg !== expectedProtocolTreasury) throw new Error('batcher_ajna_keeper_mismatch')
+          if (solanaKeeperArg !== expectedProtocolTreasury) throw new Error('batcher_solana_keeper_mismatch')
+
+          const expectedPhase3CodeIds = {
+            charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_SENTINEL_CODE_ID,
+            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            ajnaVaultAuth: AJNA_VAULT_AUTH_CODE_ID,
+            ajnaVault: AJNA_ERC4626_VAULT_CODE_ID,
+            erc4626StrategyAdapter: ERC4626_STRATEGY_ADAPTER_CODE_ID,
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID,
+          } as const
+          const hasValidPhase3CodeIds =
+            codeIds &&
+            typeof codeIds === 'object' &&
+            isHexString(codeIds.charmAlphaVaultDeploy) &&
+            isHexString(codeIds.creatorCharmStrategy) &&
+            isHexString(codeIds.ajnaVaultAuth) &&
+            isHexString(codeIds.ajnaVault) &&
+            isHexString(codeIds.erc4626StrategyAdapter) &&
+            isHexString(codeIds.solanaStrategy) &&
+            String(codeIds.charmAlphaVaultDeploy).toLowerCase() ===
+              String(expectedPhase3CodeIds.charmAlphaVaultDeploy).toLowerCase() &&
+            String(codeIds.creatorCharmStrategy).toLowerCase() ===
+              String(expectedPhase3CodeIds.creatorCharmStrategy).toLowerCase() &&
+            String(codeIds.ajnaVaultAuth).toLowerCase() === String(expectedPhase3CodeIds.ajnaVaultAuth).toLowerCase() &&
+            String(codeIds.ajnaVault).toLowerCase() === String(expectedPhase3CodeIds.ajnaVault).toLowerCase() &&
+            String(codeIds.erc4626StrategyAdapter).toLowerCase() ===
+              String(expectedPhase3CodeIds.erc4626StrategyAdapter).toLowerCase() &&
+            String(codeIds.solanaStrategy).toLowerCase() === String(expectedPhase3CodeIds.solanaStrategy).toLowerCase()
+          if (!hasValidPhase3CodeIds) throw new Error('batcher_phase3_codeids_mismatch')
+        }
 
         if (
           selector === SELECTOR_BATCHER_DEPLOY_PHASE1 ||
@@ -2133,6 +2288,7 @@ async function validateInnerCalls(params: {
   // If codeIds are missing, fall back to the Phase1Deployed event for this creator/owner.
   let expectedBurnStream: Address | null = null
   let expectedPayoutRouter: Address | null = null
+  let expectedCreatorCoinPolicyController: Address | null = null
   if (mode === 'deploy_phase2' || mode === 'deploy_phase3') {
     if (!expectedVault) throw new Error('missing_vault')
     const client = await getBaseClient()
@@ -2251,6 +2407,7 @@ async function validateInnerCalls(params: {
     })
 
     const routerSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
+    if (!expectedProtocolTreasury) throw new Error('protocol_treasury_not_configured')
     expectedPayoutRouter = await computeCreate2AddressFromStore({
       store: bytecodeStore,
       deployer: create2DeployerFromStore,
@@ -2260,9 +2417,24 @@ async function validateInnerCalls(params: {
         expectedCreatorToken as Address,
         expectedVault,
         expectedBurnStream,
-        params.sender,
+        expectedProtocolTreasury,
         defaultSwapRouterForDerivedAddresses,
         BASE_WETH,
+      ]),
+    })
+    const policyControllerSalt = expectedCreatorCoinPolicyControllerSalt({
+      creatorToken: expectedCreatorToken as Address,
+      sender: params.sender,
+    })
+    expectedCreatorCoinPolicyController = await computeCreate2AddressFromStore({
+      store: bytecodeStore,
+      deployer: create2DeployerFromStore,
+      salt: policyControllerSalt,
+      codeId: CREATOR_COIN_POLICY_CONTROLLER_CODE_ID as Hex,
+      constructorArgs: abiEncodeAddresses([
+        expectedCreatorToken as Address,
+        expectedPayoutRouter,
+        expectedProtocolTreasury as Address,
       ]),
     })
 
@@ -2274,6 +2446,7 @@ async function validateInnerCalls(params: {
       expectedVault,
       expectedBurnStream,
       expectedPayoutRouter,
+      expectedCreatorCoinPolicyController,
     })
   }
 
@@ -2399,7 +2572,9 @@ async function validateInnerCalls(params: {
     // Deterministic CREATE2 deploy via UniversalCreate2DeployerFromStore (used for burn stream + payout router).
     if (c.target === create2DeployerFromStore) {
       if (mode !== 'deploy_phase2' && mode !== 'deploy_phase3') throw new Error('create2_deploy_not_allowed')
-      if (!expectedVault || !expectedBurnStream || !expectedPayoutRouter) throw new Error('missing_expected_addresses')
+      if (!expectedVault || !expectedBurnStream || !expectedPayoutRouter || !expectedCreatorCoinPolicyController) {
+        throw new Error('missing_expected_addresses')
+      }
       if (selector !== SELECTOR_CREATE2_DEPLOY_FROM_STORE) throw new Error('create2_selector_not_allowed')
 
       const create2Abi = [
@@ -2457,14 +2632,79 @@ async function validateInnerCalls(params: {
           })
           throw new Error('payout_router_burn_stream_mismatch')
         }
-        if (!ownerArg || ownerArg !== params.sender) throw new Error('payout_router_owner_mismatch')
+        if (!ownerArg || ownerArg !== expectedProtocolTreasury) throw new Error('payout_router_owner_mismatch')
         if (!swapRouterArg || !allowedSwapRouters.has(swapRouterArg)) throw new Error('payout_router_swap_router_mismatch')
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
+      } else if (codeIdLc === String(CREATOR_COIN_POLICY_CONTROLLER_CODE_ID).toLowerCase()) {
+        const expectedSalt = expectedCreatorCoinPolicyControllerSalt({
+          creatorToken: expectedCreatorToken as Address,
+          sender: params.sender,
+        })
+        if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
+
+        // CreatorCoinPolicyController constructor args:
+        // constructor(address creatorCoin, address payoutRouter, address owner)
+        const creatorCoinArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
+        const payoutRouterArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 1)
+        const ownerArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 2)
+        if (!creatorCoinArg || creatorCoinArg !== expectedCreatorToken) {
+          throw new Error('policy_controller_creator_mismatch')
+        }
+        if (!payoutRouterArg || payoutRouterArg !== expectedPayoutRouter) {
+          throw new Error('policy_controller_payout_router_mismatch')
+        }
+        if (!ownerArg || ownerArg !== expectedProtocolTreasury) throw new Error('policy_controller_owner_mismatch')
       } else {
         throw new Error('create2_codeid_not_allowed')
       }
 
       continue
+    }
+
+    // PayoutRouter admin calls (phase2/phase3 deploy flow)
+    if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedPayoutRouter && c.target === expectedPayoutRouter) {
+      if (selector !== SELECTOR_PAYOUT_ROUTER_SET_KEEPER && selector !== SELECTOR_PAYOUT_ROUTER_SET_SWAP_PATH) {
+        throw new Error('payout_router_selector_not_allowed')
+      }
+
+      let decodedRouter: any
+      try {
+        decodedRouter = decodeFunctionData({ abi: PAYOUT_ROUTER_ADMIN_ABI, data: c.data })
+      } catch {
+        throw new Error('payout_router_decode_failed')
+      }
+
+      if (decodedRouter.functionName === 'setKeeper') {
+        if (!expectedPayoutRouterKeeper) throw new Error('payout_router_keeper_not_configured')
+        const keeperArg = decodedRouter.args[0] as Address
+        if (!keeperArg || getAddress(keeperArg) !== expectedPayoutRouterKeeper) {
+          throw new Error('payout_router_keeper_mismatch')
+        }
+        continue
+      }
+
+      if (decodedRouter.functionName === 'setSwapPath') {
+        if (!expectedCreatorToken) throw new Error('missing_creator_token')
+        const tokenInArg = getAddress(decodedRouter.args[0] as Address)
+        const pathArg = decodedRouter.args[1] as Hex
+        const allowedSwapInputs = new Set<Address>([
+          expectedWethToken,
+          ...(expectedZoraToken ? [expectedZoraToken] : []),
+        ])
+        if (!allowedSwapInputs.has(tokenInArg)) throw new Error('payout_router_swap_token_not_allowed')
+        if (!isHexString(pathArg)) throw new Error('payout_router_swap_path_invalid')
+        const pathBytesLength = Math.max(0, Math.floor((pathArg.length - 2) / 2))
+        if (pathBytesLength < 43 || (pathBytesLength - 20) % 23 !== 0) {
+          throw new Error('payout_router_swap_path_invalid')
+        }
+        const pathStart = decodeAddressFromPackedPath(pathArg, 0)
+        const pathEnd = decodeAddressFromPackedPath(pathArg, pathBytesLength - 20)
+        if (!pathStart || pathStart !== tokenInArg) throw new Error('payout_router_swap_path_start_mismatch')
+        if (!pathEnd || pathEnd !== expectedCreatorToken) throw new Error('payout_router_swap_path_end_mismatch')
+        continue
+      }
+
+      throw new Error('payout_router_selector_not_allowed')
     }
 
     // Vault admin calls (phase2/phase3 deploy flow)
@@ -2525,6 +2765,16 @@ async function validateInnerCalls(params: {
       if (!recipient || recipient !== expectedPayoutRouter) throw new Error('payout_recipient_mismatch')
       continue
     }
+
+    if (selector === SELECTOR_OWNABLE_TRANSFER_OWNERSHIP) {
+      if (mode !== 'deploy_phase2' && mode !== 'deploy_phase3') throw new Error('transfer_ownership_not_allowed')
+      if (!expectedCreatorCoinPolicyController) throw new Error('policy_controller_not_configured')
+      const newOwner = decodeAddressArgFromCalldata(c.data, 0)
+      if (!newOwner || newOwner !== expectedCreatorCoinPolicyController) {
+        throw new Error('transfer_ownership_target_mismatch')
+      }
+      continue
+    }
   }
 
   return { expectedCreatorToken, mode: mode ?? 'unknown' }
@@ -2554,6 +2804,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         expectedVault?: Address | null
         expectedBurnStream?: Address | null
         expectedPayoutRouter?: Address | null
+        expectedCreatorCoinPolicyController?: Address | null
         payoutRouterBurnStreamArg?: Address | null
         vaultBurnStreamArg?: Address | null
       }
@@ -2568,6 +2819,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `expectedVault=${info.expectedVault ?? 'null'}`,
       `expectedBurnStream=${info.expectedBurnStream ?? 'null'}`,
       `expectedPayoutRouter=${info.expectedPayoutRouter ?? 'null'}`,
+      `expectedCreatorCoinPolicyController=${info.expectedCreatorCoinPolicyController ?? 'null'}`,
       `payoutRouterBurnStreamArg=${info.payoutRouterBurnStreamArg ?? 'null'}`,
       `vaultBurnStreamArg=${info.vaultBurnStreamArg ?? 'null'}`,
     ]

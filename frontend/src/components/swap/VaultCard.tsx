@@ -211,7 +211,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex items-start gap-3">
+        <div className="min-w-0 flex flex-1 items-start gap-3">
           {tokenImageUrl ? (
             <img
               src={tokenImageUrl}
@@ -236,7 +236,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             </div>
           </div>
         </div>
-        <div className="text-right text-xs text-zinc-500">
+        <div className="w-[7.5rem] shrink-0 text-right text-xs text-zinc-500">
           <div>{tvlUsd != null ? 'TVL' : 'Assets in vault'}</div>
           <div className="text-sm text-zinc-200">{tvlUsd != null ? formatCompactUsd(tvlUsd) : tvlLabel}</div>
           {tvlUsd != null ? <div className="app-meta-value mt-1 text-zinc-500">{tvlLabel} in vault</div> : null}

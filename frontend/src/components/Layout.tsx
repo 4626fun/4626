@@ -99,6 +99,49 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
     return () => window.removeEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
   }, [])
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const managedAttr = 'data-cv-managed-inert'
+
+    const syncInertForAriaHiddenRoots = () => {
+      const hiddenRoots = document.querySelectorAll<HTMLElement>('[data-aria-hidden="true"][aria-hidden="true"]')
+      hiddenRoots.forEach((node) => {
+        if (!node.hasAttribute(managedAttr)) {
+          node.setAttribute('inert', '')
+          node.setAttribute(managedAttr, 'true')
+        }
+      })
+
+      const managedNodes = document.querySelectorAll<HTMLElement>(`[${managedAttr}="true"]`)
+      managedNodes.forEach((node) => {
+        const stillAriaHidden = node.getAttribute('aria-hidden') === 'true' && node.getAttribute('data-aria-hidden') === 'true'
+        if (!stillAriaHidden) {
+          node.removeAttribute('inert')
+          node.removeAttribute(managedAttr)
+        }
+      })
+    }
+
+    syncInertForAriaHiddenRoots()
+
+    const observer = new MutationObserver(syncInertForAriaHiddenRoots)
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['aria-hidden', 'data-aria-hidden'],
+    })
+
+    return () => {
+      observer.disconnect()
+      document.querySelectorAll<HTMLElement>(`[${managedAttr}="true"]`).forEach((node) => {
+        node.removeAttribute('inert')
+        node.removeAttribute(managedAttr)
+      })
+    }
+  }, [])
+
   return (
     <div className="vault-shell min-h-screen flex flex-col bg-vault-bg">
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">

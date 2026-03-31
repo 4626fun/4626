@@ -17,7 +17,7 @@ export function SwapPageLayout({
 }: SwapPageLayoutProps) {
   void subtitle
   return (
-    <div className="relative pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
+    <div className="relative pb-36 md:pb-0">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-40 bg-[radial-gradient(65%_70%_at_50%_0%,rgba(0,82,255,0.14)_0%,rgba(0,82,255,0.04)_44%,transparent_80%)]" />
       <section className="py-4 sm:py-5">
         <div className="mx-auto max-w-[1400px] px-3 sm:px-6">

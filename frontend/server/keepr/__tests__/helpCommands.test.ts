@@ -14,7 +14,7 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — Quick Start</b>')
-    expect(result.response).toContain('<u>start</u>')
+    expect(result.response).toContain('🎮 <b>Start Here</b>')
     expect(result.response).toContain('/buy | /sell | /bid')
     expect(result.response).toContain('/help core|coin|social|ops|wallet')
     expect(result.response).toContain('/help all')
@@ -31,7 +31,7 @@ describe('keepr help commands', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response).toContain('<blockquote>Unknown help topic: <code>market</code></blockquote>')
+    expect(result.response).toContain('Unknown help topic: <code>market</code>')
     expect(result.response).toContain('<b>Keepr — Quick Start</b>')
   })
 
@@ -43,7 +43,7 @@ describe('keepr help commands', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response).toContain('<blockquote>Unknown help topic: <code>arena</code></blockquote>')
+    expect(result.response).toContain('Unknown help topic: <code>arena</code>')
     expect(result.response).toContain('<b>Keepr — Quick Start</b>')
   })
 
@@ -69,13 +69,12 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — Help</b>')
-    expect(result.response).toContain('<blockquote>Use <code>/help</code> for quick start')
-    expect(result.response).toContain('<blockquote expandable>')
-    expect(result.response).toContain('🎮 Core Commands')
+    expect(result.response).toContain('Use <code>/help</code> for quick start')
+    expect(result.response).toContain('🎮 <b>Core Commands</b>')
     expect(result.response).toContain('└ <code>/id</code> — pick a user, group, or channel ID')
-    expect(result.response).toContain('🛠 Operator / Admin')
-    expect(result.response).toContain('📚 Topic Guides')
-    expect(result.response).toContain('<code>/wallet</code> — wallet and positions')
+    expect(result.response).toContain('🛠 <b>Operator / Admin</b>')
+    expect(result.response).toContain('📚 <b>Topic Guides</b>')
+    expect(result.response).toContain('<code>/wallet</code> — balances and positions')
     expect(result.response).toContain('<code>/coin create &lt;name&gt; &lt;symbol&gt; &lt;uri&gt;</code>')
     expect(result.response).toContain('<code>/coin trend funnel &lt;ticker&gt; &lt;eth-amount&gt;</code>')
     expect(result.response).toContain('<code>/cre status | /cre health | /cre auction | /cre solana</code>')
@@ -85,6 +84,7 @@ describe('keepr help commands', () => {
     expect(result.response).toContain('/ai &lt;question&gt;')
     expect(result.response).not.toContain('/ai <question>')
     expect(result.response).not.toContain('/mkt')
+    expect(result.response).not.toContain('<blockquote expandable>')
   })
 
   it('falls back to quick help with an unknown topic', async () => {
@@ -95,7 +95,7 @@ describe('keepr help commands', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response).toContain('<blockquote>Unknown help topic: <code>bananas</code></blockquote>')
+    expect(result.response).toContain('Unknown help topic: <code>bananas</code>')
     expect(result.response).toContain('<b>Keepr — Quick Start</b>')
   })
 })

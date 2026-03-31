@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
+import { fetchZoraProfile } from '../../../server/_lib/zoraProfile.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -21,13 +22,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const sdk: any = await import('@zoralabs/coins-sdk')
-    sdk.setApiKey(key)
-    const response = await sdk.getProfile({ identifier })
+    const profile = await fetchZoraProfile(identifier)
 
     setCache(res, 300)
     // Docs note profile types are WIP in the SDK; pass-through for now.
-    return res.status(200).json({ success: true, data: (response as any)?.data?.profile ?? null })
+    return res.status(200).json({ success: true, data: profile })
   } catch (e: any) {
     const status = typeof e?.status === 'number' ? e.status : 500
     return res.status(status).json({

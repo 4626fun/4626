@@ -10,7 +10,7 @@ export const SHARE_DISTRIBUTION_ROWS = [
     amount: '20,000,000',
     route: '/distribute/cca-launch',
     description: 'Allocated to the weekly Thursday 00:00 UTC launch window for market price discovery.',
-    icon: null as string | null,
+    icon: '/protocols/uniswap.svg' as string | null,
   },
   {
     title: 'Creator vesting',

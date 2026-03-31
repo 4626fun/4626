@@ -5,17 +5,22 @@
  *
  * Single workflow that handles all vault automation:
  *   1. Vault Keeper   — tend() idle funds, report() yields (per vault)
- *   2. Ajna Buckets    — liquidity-aware bucket moves from oracle TWAP
- *   3. Charm Rebalance — trigger Charm vault rebalance on 10%+ move
- *   4. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
- *   5. Keepr Queue     — execute pending XMTP/Neynar group actions
- *   6. Bridge Integrity — monitor bridge signer/route/scalar/liveness drift
+ *   2. Payout Router   — claim protocol rewards + convertAndQueue routed balances
+ *   3. Ajna Buckets    — liquidity-aware bucket moves from oracle TWAP
+ *   4. Charm Rebalance — trigger Charm vault rebalance on 10%+ move
+ *   5. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
+ *   6. Keepr Queue     — execute pending XMTP/Neynar group actions
+ *   7. Bridge Integrity — monitor bridge signer/route/scalar/liveness drift
  *
  * All vaults are fetched from the registry API (keepr_vaults table).
  * Falls back to single-vault env vars if KEEPR_API_KEY is not set.
  */
 
 import { executeKeeper, type BatchKeeperResult } from '../actions/vault-keeper.action.js';
+import {
+  executePayoutRouterProcessor,
+  type BatchPayoutRouterResult,
+} from '../actions/payout-router-processor.action.js';
 import {
   executeAjnaBucketManager,
   type BatchAjnaBucketResult,
@@ -36,6 +41,7 @@ const WORKFLOW_NAME = '4626';
 
 export interface UnifiedResult {
   keeper: BatchKeeperResult | null;
+  payoutRouter: BatchPayoutRouterResult | null;
   ajnaBuckets: BatchAjnaBucketResult | null;
   charmRebalance: BatchCharmRebalanceResult | null;
   settlement: BatchSettlementResult | null;
@@ -52,6 +58,7 @@ export async function handler(): Promise<void> {
   const start = Date.now();
   const errors: string[] = [];
   let keeperResult: BatchKeeperResult | null = null;
+  let payoutRouterResult: BatchPayoutRouterResult | null = null;
   let ajnaBucketsResult: BatchAjnaBucketResult | null = null;
   let charmRebalanceResult: BatchCharmRebalanceResult | null = null;
   let settlementResult: BatchSettlementResult | null = null;
@@ -72,7 +79,22 @@ export async function handler(): Promise<void> {
     errors.push(`vault-keeper: ${msg}`);
   }
 
-  // ── 2. Ajna Bucket Manager (TWAP + liquidity-aware) ──────────────────
+  // ── 2. Payout Router Processor (claim + convertAndQueue) ─────────────
+  try {
+    console.log('═══ Payout Router Processor ═══');
+    payoutRouterResult = await executePayoutRouterProcessor();
+    console.log(
+      `  vaults=${payoutRouterResult.totalVaults} processed=${payoutRouterResult.processed} ` +
+        `claimed=${payoutRouterResult.claimedVaults} converted=${payoutRouterResult.converted} ` +
+        `skipped=${payoutRouterResult.skipped} errors=${payoutRouterResult.errors}`,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  payout-router-processor failed: ${msg}`);
+    errors.push(`payout-router-processor: ${msg}`);
+  }
+
+  // ── 3. Ajna Bucket Manager (TWAP + liquidity-aware) ──────────────────
   try {
     console.log('═══ Ajna Bucket Manager ═══');
     ajnaBucketsResult = await executeAjnaBucketManager();
@@ -86,7 +108,7 @@ export async function handler(): Promise<void> {
     errors.push(`ajna-bucket-manager: ${msg}`);
   }
 
-  // ── 3. Charm Rebalance Manager (oracle price-move trigger) ───────────
+  // ── 4. Charm Rebalance Manager (oracle price-move trigger) ───────────
   try {
     console.log('═══ Charm Rebalance Manager ═══');
     charmRebalanceResult = await executeCharmRebalanceManager();
@@ -101,7 +123,7 @@ export async function handler(): Promise<void> {
     errors.push(`charm-rebalance-manager: ${msg}`);
   }
 
-  // ── 4. Auction Settlement (sweepCurrency + sweepUnsoldTokens) ────────
+  // ── 5. Auction Settlement (sweepCurrency + sweepUnsoldTokens) ────────
   try {
     console.log('═══ Auction Settlement ═══');
     settlementResult = await executeSettlement();
@@ -115,7 +137,7 @@ export async function handler(): Promise<void> {
     errors.push(`auction-settlement: ${msg}`);
   }
 
-  // ── 5. Keepr Queue (XMTP group ops + Neynar/Farcaster) ──────────────
+  // ── 6. Keepr Queue (XMTP group ops + Neynar/Farcaster) ──────────────
   try {
     console.log('═══ Keepr Queue ═══');
     queueResult = await executeQueueProcessor();
@@ -134,7 +156,7 @@ export async function handler(): Promise<void> {
     }
   }
 
-  // ── 6. Bridge Integrity Monitor (signer/route/scalar/liveness) ─────────
+  // ── 7. Bridge Integrity Monitor (signer/route/scalar/liveness) ─────────
   try {
     console.log('═══ Bridge Integrity Monitor ═══');
     bridgeIntegrityResult = await executeBridgeIntegrityMonitor();
@@ -164,6 +186,14 @@ export async function handler(): Promise<void> {
     durationMs,
     keeper: keeperResult
       ? { vaults: keeperResult.totalVaults, tended: keeperResult.tended, reported: keeperResult.reported }
+      : null,
+    payoutRouter: payoutRouterResult
+      ? {
+          vaults: payoutRouterResult.totalVaults,
+          processed: payoutRouterResult.processed,
+          claimedVaults: payoutRouterResult.claimedVaults,
+          converted: payoutRouterResult.converted,
+        }
       : null,
     ajnaBuckets: ajnaBucketsResult
       ? {

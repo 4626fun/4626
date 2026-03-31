@@ -9,6 +9,7 @@ import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
 import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/accountsIdentity.js'
 import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
+import { extractCreatorCoinAddressFromProfile, fetchZoraProfile } from '../../../server/_lib/zoraProfile.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
 import {
@@ -761,6 +762,50 @@ function resolveTradeTarget(
   return resolveTradeTargetShared(scopedVaults as any, identifier) as any
 }
 
+type ResolvedTradeIdentifier = {
+  identifier: string
+  profileLookupAttempted: boolean
+  profileLookupHit: boolean
+}
+
+async function resolveTradeIdentifier(params: {
+  identifier: string
+}): Promise<ResolvedTradeIdentifier> {
+  const trimmed = asTrimmed(params.identifier)
+  if (!trimmed) {
+    return { identifier: '', profileLookupAttempted: false, profileLookupHit: false }
+  }
+
+  const normalized = trimmed.toLowerCase()
+  if (normalized === 'vault' || normalized === 'default' || isAddressLike(normalized)) {
+    return {
+      identifier: normalized,
+      profileLookupAttempted: false,
+      profileLookupHit: false,
+    }
+  }
+
+  try {
+    const profile = await fetchZoraProfile(trimmed)
+    const creatorCoinAddress = extractCreatorCoinAddressFromProfile(profile)
+    if (creatorCoinAddress) {
+      return {
+        identifier: creatorCoinAddress,
+        profileLookupAttempted: true,
+        profileLookupHit: true,
+      }
+    }
+  } catch {
+    // Best-effort resolver: fall back to existing identifier behavior.
+  }
+
+  return {
+    identifier: trimmed,
+    profileLookupAttempted: true,
+    profileLookupHit: false,
+  }
+}
+
 function parseTradeFlowCallbackData(rawData: string):
   | { kind: 'vault'; actionType: InteractiveTradeAction; vaultAddress: `0x${string}` }
   | { kind: 'percent'; actionType: InteractiveTradeAction; vaultAddress: `0x${string}`; percentBps: number }
@@ -1421,9 +1466,9 @@ function buildUnlinkedGroupStartLandingText(): string {
     '<blockquote>Groups are for discovery and live context. Do setup in a private chat first, then come back here ready to act.</blockquote>',
     '',
     '<u>In your DM with this bot</u>',
-    '<code>/start</code> — home (tap <b>Start</b> to begin onboarding)',
-    '<code>/link</code> — continue wallet linking after onboarding',
-    '<code>/linked</code> — check Telegram link and wallet setup',
+    '/start — home (tap <b>Start</b> to begin onboarding)',
+    '/link — continue wallet linking after onboarding',
+    '/linked — check Telegram link and wallet setup',
     '',
     'After setup is ready, use /buy, /sell, /bid, and /wallet from Telegram.',
   ].join('\n')
@@ -1432,17 +1477,19 @@ function buildUnlinkedGroupStartLandingText(): string {
 function buildStartLandingText(params: { state: Exclude<TelegramHomeState, 'unlinked'> }): string {
   if (params.state === 'ready') {
     return [
-      '<b>Welcome back to 4626</b>',
+      '<b>4626 Command Center</b>',
       '',
-      '<blockquote>Your 4626 account and smart wallet are connected. You can manage creator coins and vault activity on Base directly from Telegram.</blockquote>',
+      'Your 4626 account and smart wallet are connected.',
+      'You can trade creator coins and manage vault activity on Base directly from Telegram.',
       '',
-      '<u>What you can do here</u>',
-      '<code>/wallet</code> — check balances, positions, and recent actions',
-      '<code>/buy</code> — buy a creator coin from chat',
-      '<code>/sell</code> — sell from chat',
-      '<code>/bid</code> — place an auction bid from chat',
+      '<u>Quick commands (tap to run)</u>',
+      '/wallet — balances, positions, and recent actions',
+      '/buy — guided creator-coin buy flow',
+      '/sell — guided creator-coin sell flow',
+      '/bid — guided auction bid flow',
+      '/linked — account and wallet link status',
       '',
-      'Use the buttons below to open Wallet, Trade, Explore, or Help.',
+      'Use the buttons below for Wallet, Trade, Explore, and Help.',
     ].join('\n')
   }
   return [
@@ -1504,31 +1551,27 @@ function buildStartReplyMarkup(params: { chatId: string; state: TelegramHomeStat
 }
 
 function buildFocusedHelpText(): string {
-  return buildTelegramCommandChrome({
-    title: '4626 on Telegram',
-    command: '/help',
-    summaryLines: [
-      'Link your 4626 account once, then use Telegram to check your wallet, trade creator coins, and follow vault activity on Base.',
-    ],
-    detailLines: [
-      'Start here',
-      '/start — home and onboarding entry',
-      '/link — reopen the Mini App connect flow',
-      '/linked — check Telegram link and wallet setup',
-      '',
-      'Core actions',
-      '/wallet — wallet, positions, and recent actions',
-      '/buy — guided buy flow',
-      '/sell — guided sell flow',
-      '/bid — guided bid flow',
-      '/vaults — browse vaults and discovery surfaces',
-      '',
-      'Need more?',
-      '/help coin|social|ops|wallet — focused guides',
-      '/help all — complete command catalog',
-    ],
-    expandableDetails: true,
-  })
+  return [
+    '<b>4626 on Telegram</b>',
+    '',
+    'Use <code>/help all</code> for the full command guide.',
+    '',
+    '🎮 <b>Start Here</b>',
+    '├ <code>/start</code> — home and onboarding',
+    '├ <code>/link</code> — open the Mini App connect flow',
+    '├ <code>/linked</code> — check link and wallet setup',
+    '└ <code>/help all</code> — full command guide',
+    '',
+    '💼 <b>Core Actions</b>',
+    '├ <code>/wallet</code> — balances and positions',
+    '├ <code>/buy</code> — guided buy flow',
+    '├ <code>/sell</code> — guided sell flow',
+    '├ <code>/bid</code> — guided bid flow',
+    '└ <code>/vaults</code> — browse vaults and discovery',
+    '',
+    '🧠 <b>Focused Guides</b>',
+    '└ <code>/help coin|social|ops|wallet</code> — deeper sections',
+  ].join('\n')
 }
 
 function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Record<string, unknown> {
@@ -3662,7 +3705,11 @@ async function executeTelegramNativeCommand(params: {
       actionType,
     })
     const hasArgs = commandHasArguments(params.text, actionType)
-    if (hasArgs && !params.allowTradeArgs) {
+    const typedIdentifier = tradeIntent ? asTrimmed(tradeIntent.identifier).toLowerCase() : ''
+    const allowNonAddressTradeArgs = Boolean(
+      hasArgs && !params.allowTradeArgs && tradeIntent && typedIdentifier && !isAddressLike(typedIdentifier),
+    )
+    if (hasArgs && !params.allowTradeArgs && !allowNonAddressTradeArgs) {
       return {
         text: [
           'Trade Flow',
@@ -4219,7 +4266,21 @@ async function executeTelegramNativeCommand(params: {
       params.tradePrefetch?.scopedVaults
         ? params.tradePrefetch.scopedVaults
         : await listTelegramScopedVaults({ db: db as any, chatId: params.chatId })
-    const target = resolveTradeTarget(scopedVaults, tradeIntent.identifier)
+    const resolvedTradeIdentifier = await resolveTradeIdentifier({ identifier: tradeIntent.identifier })
+    const target = resolveTradeTarget(scopedVaults, resolvedTradeIdentifier.identifier)
+    emitTelegramFunnelEvent({
+      db,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      eventName: 'trade_identifier_profile_resolution',
+      actionType: tradeIntent.actionType,
+      context: {
+        identifierInput: tradeIntent.identifier,
+        identifierResolved: resolvedTradeIdentifier.identifier,
+        profileLookupAttempted: resolvedTradeIdentifier.profileLookupAttempted,
+        profileLookupHit: resolvedTradeIdentifier.profileLookupHit,
+      },
+    })
     if (!target) {
       return {
         text: [
@@ -4303,6 +4364,9 @@ async function executeTelegramNativeCommand(params: {
       canonicalCswAddress: link.canonicalCswAddress,
       profileId: link.profileId,
       ownerVerified: link.ownerVerified,
+      identifierInput: tradeIntent.identifier,
+      identifierResolved: resolvedTradeIdentifier.identifier,
+      identifierResolvedViaProfile: resolvedTradeIdentifier.profileLookupHit,
       createdAt: new Date().toISOString(),
     }
     if (tradeIntent.actionType === 'bid' && bidQuote) {
@@ -4366,6 +4430,9 @@ async function executeTelegramNativeCommand(params: {
         creatorCoinAddress: target.creatorCoinAddress,
         amountInput: tradeIntent.amountInput,
         amountUnit: tradeIntent.amountUnit,
+        identifierInput: tradeIntent.identifier,
+        identifierResolved: resolvedTradeIdentifier.identifier,
+        identifierResolvedViaProfile: resolvedTradeIdentifier.profileLookupHit,
       },
     })
 

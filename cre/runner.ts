@@ -6,7 +6,7 @@
  *   tsx runner.ts [workflow-name] [--dry-run]
  *
  * No argument runs the unified workflow
- * (vault-keeper + ajna-bucket-manager + charm-rebalance-manager + auction-settlement + keepr-queue).
+ * (vault-keeper + payout-router-processor + ajna-bucket-manager + charm-rebalance-manager + auction-settlement + keepr-queue).
  *
  * Examples:
  *   tsx runner.ts                        # Run everything
@@ -15,6 +15,7 @@
  *   tsx runner.ts ajna-bucket-manager    # Run just Ajna bucket manager
  *   tsx runner.ts charm-rebalance-manager # Run just Charm rebalance manager
  *   tsx runner.ts auction-settlement     # Run just auction settlement
+ *   tsx runner.ts payout-router-processor # Run just payout router processor
  *   tsx runner.ts keepr-queue            # Run just the keepr queue processor
  *   tsx runner.ts strategy-event-listener # Run always-on event listener
  *   tsx runner.ts bridge-integrity-monitor # Run bridge integrity monitor
@@ -68,6 +69,9 @@ async function main() {
       case 'auction-settlement':
         workflow = await import('./workflows/auction-settlement.workflow.js');
         break;
+      case 'payout-router-processor':
+        workflow = await import('./workflows/payout-router-processor.workflow.js');
+        break;
       case 'keepr-queue':
         workflow = await import('./workflows/keepr-queue-executor.workflow.js');
         break;
@@ -82,9 +86,10 @@ async function main() {
         console.error('');
         console.error('Available:');
         console.error(
-          '  (no arg)             — run all (vault-keeper + ajna-bucket-manager + charm-rebalance-manager + auction-settlement + keepr-queue)',
+          '  (no arg)             — run all (vault-keeper + payout-router-processor + ajna-bucket-manager + charm-rebalance-manager + auction-settlement + keepr-queue)',
         );
         console.error('  vault-keeper         — tend/report per vault');
+        console.error('  payout-router-processor — claim + convert payout-router balances');
         console.error('  ajna-bucket-manager  — liquidity-aware Ajna bucket management');
         console.error('  charm-rebalance-manager — trigger Charm rebalance on 10%+ price move');
         console.error('  auction-settlement   — sweep graduated auctions');

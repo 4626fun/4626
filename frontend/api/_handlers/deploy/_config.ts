@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
+import { resolvePayoutRouterFeeConfig, resolvePayoutRouterKeeperAddress } from '../../../server/_lib/payoutRouterRuntime.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -11,6 +12,10 @@ type DeployConfigResponse = {
   allowApiContractOverrides: boolean
   deployMode: string
   serverContinue: boolean
+  payoutRouterKeeperAddress: `0x${string}` | null
+  zoraToken: `0x${string}` | null
+  payoutRouterZoraWethFee: number
+  payoutRouterWethCreatorFee: number
 }
 
 function envBool(key: string): boolean {
@@ -28,6 +33,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const contracts = getApiContracts()
+  const payoutRouterKeeperAddress = resolvePayoutRouterKeeperAddress()
+  const payoutRouterFees = resolvePayoutRouterFeeConfig()
   const deployMode = String(process.env.VITE_DEPLOY_MODE ?? process.env.DEPLOY_MODE ?? 'default')
     .trim()
     .toLowerCase() || 'default'
@@ -39,6 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     allowApiContractOverrides: envBool('ALLOW_API_CONTRACT_OVERRIDES'),
     deployMode,
     serverContinue: envBool('VITE_DEPLOY_USE_SERVER_CONTINUE'),
+    payoutRouterKeeperAddress: payoutRouterKeeperAddress ?? null,
+    zoraToken: contracts.zora ?? null,
+    payoutRouterZoraWethFee: payoutRouterFees.zoraWethFee,
+    payoutRouterWethCreatorFee: payoutRouterFees.wethCreatorFee,
   }
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<DeployConfigResponse>)

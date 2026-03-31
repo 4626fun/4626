@@ -146,8 +146,13 @@ contract MockAjnaPoolFactory {
 }
 
 contract MockVaultStrategyManager {
+    address public owner;
     mapping(address => uint256) public addedWeights;
     bool public autoAllocate;
+
+    constructor(address owner_) {
+        owner = owner_;
+    }
 
     function addStrategy(address strategy, uint256 weight) external {
         addedWeights[strategy] = weight;
@@ -178,7 +183,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
     DeploymentBatcher internal batcher;
 
     function setUp() public {
-        vault = new MockVaultStrategyManager();
+        vault = new MockVaultStrategyManager(ownerAddr);
         create2Deployer = new MockCreate2Deployer(
             CREATOR_CHARM_STRATEGY_CODE_ID,
             AJNA_AUTH_CODE_ID,
@@ -219,7 +224,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         );
     }
 
-    function test_deployPhase3Strategies_setsNestedAjnaOwnerToTreasuryAndAuthToCreatorOwner() external {
+    function test_deployPhase3Strategies_setsNestedAjnaOwnerAndAuthAdminToTreasury() external {
         DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
             creatorToken: makeAddr("creatorToken"),
             owner: ownerAddr,
@@ -256,7 +261,11 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         DeploymentBatcher.Phase3Result memory out = batcher.deployPhase3Strategies(params, codeIds);
 
         assertEq(MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna adapter owner should be treasury");
-        assertEq(MockAjnaVaultAuth(out.ajnaVaultAuth).admin(), ownerAddr, "ajna auth admin should be creator owner");
+        assertEq(
+            MockAjnaVaultAuth(out.ajnaVaultAuth).admin(),
+            protocolTreasury,
+            "ajna auth admin should be treasury"
+        );
         assertEq(MockAjnaAdapter(out.ajnaStrategy).idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "charm owner remains treasury");
         assertEq(vault.addedWeights(out.charmStrategy), params.charmWeightBps, "charm strategy should be registered");

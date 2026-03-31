@@ -61,6 +61,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
     address public immutable creatorCharmStrategyFactory;
     address public immutable ajnaStrategyFactory;
+    address public immutable protocolOwner;
     bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
 
     error InvalidOwnerAddress();
@@ -69,10 +70,17 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     error ZeroUnderlying();
     error ZeroQuote();
     error ZeroVault();
+    error NotProtocolOwner();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmVaultManagerMismatch(address expected, address actual);
 
+    modifier onlyProtocolOwner() {
+        if (msg.sender != protocolOwner) revert NotProtocolOwner();
+        _;
+    }
+
     constructor() {
+        protocolOwner = msg.sender;
         creatorCharmStrategyFactory = address(new CreatorCharmStrategyFactory());
         ajnaStrategyFactory = address(new AjnaERC4626StrategyFactory());
     }
@@ -118,7 +126,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         address owner,
         string memory vaultName,
         string memory vaultSymbol
-    ) external nonReentrant returns (DeploymentResult memory result) {
+    ) external nonReentrant onlyProtocolOwner returns (DeploymentResult memory result) {
         if (owner == address(0)) revert InvalidOwnerAddress();
         if (bytes(vaultName).length == 0) revert InvalidVaultName();
         if (bytes(vaultSymbol).length == 0) revert InvalidVaultSymbol();

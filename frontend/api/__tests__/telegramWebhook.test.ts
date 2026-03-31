@@ -53,6 +53,7 @@ const {
   upsertTelegramOnboardingSessionMock,
   startAkitaVaultDeployFromTelegramMock,
   fetchVaultDeployStatusFromTelegramMock,
+  fetchZoraProfileMock,
 } = vi.hoisted(() => ({
   executeDeterministicCommandMock: vi.fn(),
   handleTwitterCommandMock: vi.fn(),
@@ -100,6 +101,7 @@ const {
   upsertTelegramOnboardingSessionMock: vi.fn(),
   startAkitaVaultDeployFromTelegramMock: vi.fn(),
   fetchVaultDeployStatusFromTelegramMock: vi.fn(),
+  fetchZoraProfileMock: vi.fn(),
 }))
 
 vi.mock('@privy-io/server-auth', () => ({
@@ -156,6 +158,14 @@ vi.mock('../../server/_lib/keeprSchema.js', () => ({
 
 vi.mock('../../server/_lib/keeprGating.js', () => ({
   checkSharesEligibility: checkSharesEligibilityMock,
+}))
+
+vi.mock('../../server/_lib/zoraProfile.js', () => ({
+  fetchZoraProfile: fetchZoraProfileMock,
+  extractCreatorCoinAddressFromProfile: (profile: any) => {
+    const raw = typeof profile?.creatorCoin?.address === 'string' ? profile.creatorCoin.address.trim() : ''
+    return /^0x[a-fA-F0-9]{40}$/.test(raw) ? raw.toLowerCase() : null
+  },
 }))
 
 vi.mock('../../server/_lib/telegramTrading.js', () => ({
@@ -312,6 +322,7 @@ describe('telegram webhook handler', () => {
       status: 500,
       error: 'vault_deploy_status_failed',
     })
+    fetchZoraProfileMock.mockResolvedValue(null)
     checkSharesEligibilityMock.mockResolvedValue({
       eligible: false,
       reason: 'share_balance<threshold',
@@ -846,7 +857,7 @@ describe('telegram webhook handler', () => {
     expect(handleTwitterCommandMock).not.toHaveBeenCalled()
     expect((fetch as any).mock.calls.length).toBe(1)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('<blockquote expandable>')
+    expect(String(payload.text ?? '')).toContain('🎮 <b>Start Here</b>')
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const callbackButtons = payload.reply_markup.inline_keyboard.flat()
     const connectButton = callbackButtons.find((button: any) => String(button?.text ?? '').trim() === '■ Connect')
@@ -1433,9 +1444,19 @@ describe('telegram webhook handler', () => {
 
     expect(res.statusCode).toBe(200)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('Welcome back to 4626')
+    expect(String(payload.text ?? '')).toContain('4626 Command Center')
     expect(String(payload.text ?? '')).toContain('smart wallet are connected')
-    expect(String(payload.text ?? '')).toContain('Use the buttons below to open Wallet, Trade, Explore, or Help.')
+    expect(String(payload.text ?? '')).toContain('Quick commands (tap to run)')
+    expect(String(payload.text ?? '')).toContain('/wallet — balances, positions, and recent actions')
+    expect(String(payload.text ?? '')).toContain('/buy — guided creator-coin buy flow')
+    expect(String(payload.text ?? '')).toContain('/sell — guided creator-coin sell flow')
+    expect(String(payload.text ?? '')).toContain('/bid — guided auction bid flow')
+    expect(String(payload.text ?? '')).toContain('/linked — account and wallet link status')
+    expect(String(payload.text ?? '')).toContain('Use the buttons below for Wallet, Trade, Explore, and Help.')
+    expect(String(payload.text ?? '')).not.toContain('<code>/wallet</code>')
+    expect(String(payload.text ?? '')).not.toContain('<code>/buy</code>')
+    expect(String(payload.text ?? '')).not.toContain('<code>/sell</code>')
+    expect(String(payload.text ?? '')).not.toContain('<code>/bid</code>')
     const flat = (payload.reply_markup?.inline_keyboard ?? []).flat()
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:wallet')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:trade')).toBe(true)
@@ -5011,6 +5032,142 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('/buy')
     expect(String(payload.text ?? '')).toContain('interactive')
+  })
+
+  it('resolves typed non-address /buy identifier through zora profile before preview', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValue({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    createTelegramActionTokenMock.mockResolvedValueOnce({
+      token: 'trade-token-profile-hit',
+      expiresAt: '2026-03-13T00:01:30.000Z',
+    })
+    fetchZoraProfileMock.mockResolvedValueOnce({
+      creatorCoin: { address: AKITA_TOKEN_ADDRESS },
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_3_1,
+        message: {
+          message_id: 32_1,
+          text: '/buy akita 0.05 --confirm',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(fetchZoraProfileMock).toHaveBeenCalledWith('akita')
+    expect(createTelegramActionTokenMock).toHaveBeenCalledTimes(1)
+    expect(createTelegramActionTokenMock).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'buy',
+      intentPayload: expect.objectContaining({
+        identifierInput: 'akita',
+        identifierResolved: AKITA_TOKEN_ADDRESS,
+        identifierResolvedViaProfile: true,
+        creatorCoinAddress: AKITA_TOKEN_ADDRESS,
+      }),
+    }))
+    const funnelCalls = logTelegramFunnelEventMock.mock.calls.map((call) => call[0] ?? {})
+    expect(
+      funnelCalls.some(
+        (entry: any) =>
+          entry?.eventName === 'trade_identifier_profile_resolution'
+          && entry?.actionType === 'buy'
+          && entry?.context?.profileLookupHit === true,
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps non-address /buy profile miss on fallback path and blocks ambiguous scope', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValue({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    listTelegramScopedVaultsMock.mockResolvedValueOnce([
+      {
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+        creatorCoinAddress: AKITA_TOKEN_ADDRESS,
+        chainId: 8453,
+        groupId: 'xmtp-group-1',
+        isSettled: false,
+        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+      },
+      {
+        vaultAddress: '0x2222222222222222222222222222222222222222',
+        creatorCoinAddress: '0x4444444444444444444444444444444444444444',
+        chainId: 8453,
+        groupId: 'xmtp-group-2',
+        isSettled: false,
+        ccaStrategyAddress: '0x5555555555555555555555555555555555555555',
+      },
+    ])
+    fetchZoraProfileMock.mockResolvedValueOnce(null)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 18_3_2,
+        message: {
+          message_id: 32_2,
+          text: '/buy unknowncreator 0.05 --confirm',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(fetchZoraProfileMock).toHaveBeenCalledWith('unknowncreator')
+    expect(createTelegramActionTokenMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '')).toContain('target vault not found')
+    const funnelCalls = logTelegramFunnelEventMock.mock.calls.map((call) => call[0] ?? {})
+    expect(
+      funnelCalls.some(
+        (entry: any) =>
+          entry?.eventName === 'trade_identifier_profile_resolution'
+          && entry?.actionType === 'buy'
+          && entry?.context?.profileLookupAttempted === true
+          && entry?.context?.profileLookupHit === false,
+      ),
+    ).toBe(true)
   })
 
   it('prompts for custom percent and stores pending prompt state', async () => {

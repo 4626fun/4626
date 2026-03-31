@@ -22,11 +22,6 @@ interface IUniversalBytecodeStore {
     function get(bytes32 codeId) external view returns (bytes memory);
 }
 
-interface ICreatorCoin {
-    /// @dev CreatorCoin payout-recipient setter.
-    function setPayoutRecipient(address _recipient) external;
-}
-
 interface ICreatorOVaultWrapper {
     function setShareOFT(address _shareOFT) external;
     function deposit(uint256 amount) external returns (uint256 shareTokens);
@@ -73,6 +68,10 @@ interface ICCALaunchStrategy {
 
 interface IOwnableTransfer {
     function transferOwnership(address newOwner) external;
+}
+
+interface IOwnableView {
+    function owner() external view returns (address);
 }
 
 interface IOFTBootstrapRegistry {
@@ -360,6 +359,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     error PermitTokenMismatch();
     error PermitAmountTooLow();
     error Phase1ShareOFTMissing();
+    error InvalidCreatorTreasury(address provided);
+    error InvalidPayoutRecipient();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmVaultManagerMismatch(address expected, address actual);
 
@@ -770,7 +771,15 @@ contract DeploymentBatcher is ReentrancyGuard {
             revert Phase1Missing();
         }
 
-        address treasury = params.creatorTreasury == address(0) ? params.owner : params.creatorTreasury;
+        // Enforce protocol custody lane for treasury split in hardened deploy mode.
+        // Legacy callers may pass zero (treated as protocol treasury), but non-zero
+        // creator treasury overrides are rejected.
+        if (params.creatorTreasury != address(0) && params.creatorTreasury != protocolTreasury) {
+            revert InvalidCreatorTreasury(params.creatorTreasury);
+        }
+        // Payout recipient is configured explicitly via payout router + policy controller.
+        if (params.payoutRecipient != address(0)) revert InvalidPayoutRecipient();
+        address treasury = protocolTreasury;
         address tempOwner = address(this);
 
         string memory shareSymbolLower = _toLower(params.shareSymbol);
@@ -788,11 +797,6 @@ contract DeploymentBatcher is ReentrancyGuard {
 
         bytes memory oracleArgs = abi.encode(address(registry), chainlinkEthUsd, shareSymbolLower, tempOwner);
         out.oracle = create2Deployer.deploy(oracleSalt, codeIds.oracle, oracleArgs);
-
-        if (params.payoutRecipient != address(0)) {
-            // Configure the CreatorCoin payout recipient.
-            ICreatorCoin(params.creatorToken).setPayoutRecipient(params.payoutRecipient);
-        }
 
         // Phase-2 wiring (now that gauge + oracle exist).
         ICreatorShareOFT(params.shareOFT).setGaugeController(out.gaugeController);
@@ -815,7 +819,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         ICCALaunchStrategy(out.ccaStrategy).setRecipients(out.ccaStrategy, out.ccaStrategy);
         ICCALaunchStrategy(out.ccaStrategy).setBackingVault(params.vault);
         // Position manager can be set later by governance if not known at deploy-time.
-        ICCALaunchStrategy(out.ccaStrategy).setMigrationConfig(address(0), params.owner, protocolTreasury, 1, 14_400);
+        ICCALaunchStrategy(out.ccaStrategy).setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
         ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
         // Launch floor/tick are derived onchain from oracle data; wire explicit defaults here.
         ICCALaunchStrategy(out.ccaStrategy).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
@@ -927,11 +931,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         nonReentrant
         returns (Phase3Result memory out)
     {
-        _requireOwner(params.owner);
-
         if (params.creatorToken == address(0) || params.owner == address(0) || params.vault == address(0)) {
             revert ZeroAddress();
         }
+        // Bind caller auth to the actual vault owner onchain (not only user-supplied params.owner).
+        if (IOwnableView(params.vault).owner() != params.owner) revert NotOwner();
+        _requireOwner(params.owner);
         if (params.charmWeightBps == 0 || params.charmWeightBps > 10_000) revert InvalidWeight();
         if (params.ajnaWeightBps == 0 || params.ajnaWeightBps > 10_000) revert InvalidWeight();
         if (params.solanaWeightBps == 0 || params.solanaWeightBps > 10_000) revert InvalidWeight();
@@ -1039,9 +1044,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
         IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setSwapper(out.ajnaStrategy);
         IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
-        // Set Ajna auth admin to the creator owner (canonical CSW sender) so
-        // post-launch keeper actions can execute without a manual admin handoff.
-        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(params.owner);
+        // Protocol controls Ajna auth admin surface (keepers/swapper/fee controls).
+        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(protocolTreasury);
 
         // ───────────────────────────────
         // 4b) Deploy Solana strategy + transfer ownership

@@ -48,7 +48,7 @@ export function VaultNavBarPublic() {
   const brandHref = hostMode === 'marketing' ? '/' : '/swap'
 
   return (
-    <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
+    <header className="hidden md:block sticky top-0 left-0 right-0 z-50">
       <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl shadow-[0_10px_34px_-12px_rgba(0,0,0,0.88)]" />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-white/8" />
 

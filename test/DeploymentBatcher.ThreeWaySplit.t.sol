@@ -5,10 +5,20 @@ import "forge-std/Test.sol";
 
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 
+contract MockOwnableVaultForPhase3Bounds {
+    address public owner;
+
+    constructor(address owner_) {
+        owner = owner_;
+    }
+}
+
 contract DeploymentBatcherThreeWaySplitTest is Test {
     DeploymentBatcher internal batcher;
+    MockOwnableVaultForPhase3Bounds internal vault;
 
     function setUp() public {
+        vault = new MockOwnableVaultForPhase3Bounds(address(this));
         batcher = new DeploymentBatcher(
             makeAddr("registry"),
             makeAddr("bytecodeStore"),
@@ -34,7 +44,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
             creatorToken: makeAddr("creatorToken"),
             owner: address(this),
-            vault: makeAddr("vault"),
+            vault: address(vault),
             version: "v1",
             initialSqrtPriceX96: 0,
             charmVaultName: "Charm Vault",

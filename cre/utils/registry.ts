@@ -14,6 +14,8 @@ export interface VaultConfig {
   ccaStrategyAddress?: `0x${string}`;
   oracleAddress?: `0x${string}`;
   vrfHubAddress?: `0x${string}`;
+  burnStreamAddress?: `0x${string}`;
+  payoutRouterAddress?: `0x${string}`;
   groupId: string;
   extra?: Record<string, unknown>;
 }
@@ -160,6 +162,7 @@ export function filterVaultsForWorkflow(
     | 'vrf-health-monitor'
     | 'ajna-bucket-manager'
     | 'charm-rebalance-manager'
+    | 'payout-router-processor'
 ): VaultConfig[] {
   switch (workflow) {
     case 'vault-keeper':
@@ -185,6 +188,10 @@ export function filterVaultsForWorkflow(
     case 'charm-rebalance-manager':
       // Charm rebalance manager needs vault + oracle for price trigger checks.
       return vaults.filter((v) => v.vaultAddress && v.oracleAddress);
+
+    case 'payout-router-processor':
+      // Payout processor needs creator coin + router wiring.
+      return vaults.filter((v) => v.creatorCoinAddress && v.payoutRouterAddress);
 
     default:
       return vaults;

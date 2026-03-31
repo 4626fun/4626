@@ -75,8 +75,11 @@ const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')
 const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
 const BASE_CHAINLINK_ETH_USD = addr('71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70')
+const DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE = 10_000
+const DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE = 10_000
 const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
 const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
+const CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG = '4626:CreatorCoinPolicyController' as const
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
@@ -219,6 +222,38 @@ function parseUint8(value: unknown): number | null {
     if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
   }
   return null
+}
+
+function parseUniswapV3Fee(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const parsed = Math.floor(value)
+    if (parsed > 0 && parsed <= 1_000_000) return parsed
+    return null
+  }
+  if (typeof value === 'string') {
+    const v = value.trim()
+    if (!v) return null
+    const parsed = Number(v)
+    if (!Number.isFinite(parsed)) return null
+    const normalized = Math.floor(parsed)
+    if (normalized > 0 && normalized <= 1_000_000) return normalized
+  }
+  return null
+}
+
+function encodeUniswapV3Path(tokens: Address[], fees: number[]): Hex {
+  if (tokens.length < 2) throw new Error('Uniswap path requires at least two tokens')
+  if (fees.length !== tokens.length - 1) throw new Error('Uniswap path fee count mismatch')
+  let out = `0x${tokens[0].slice(2)}`
+  for (let i = 0; i < fees.length; i += 1) {
+    const fee = fees[i]
+    if (!Number.isInteger(fee) || fee <= 0 || fee > 1_000_000) {
+      throw new Error(`Invalid Uniswap fee tier: ${fee}`)
+    }
+    out += fee.toString(16).padStart(6, '0')
+    out += tokens[i + 1].slice(2)
+  }
+  return out as Hex
 }
 
 function parsePositiveTokenAmount(value: unknown): bigint | null {
@@ -571,6 +606,10 @@ type DeployRuntimeConfigResponse = {
   allowApiContractOverrides: boolean
   deployMode: string
   serverContinue: boolean
+  payoutRouterKeeperAddress: Address | null
+  zoraToken: Address | null
+  payoutRouterZoraWethFee: number
+  payoutRouterWethCreatorFee: number
 }
 type ServerDeployResponse = {
   userOpHash: string
@@ -894,6 +933,15 @@ function deriveVaultShareBurnStreamSalt(params: { creatorToken: Address; owner: 
   )
 }
 
+function deriveCreatorCoinPolicyControllerSalt(params: { creatorToken: Address; owner: Address }): Hex {
+  return keccak256(
+    encodePacked(
+      ['string', 'address', 'address'],
+      [CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG, params.creatorToken, params.owner],
+    ),
+  )
+}
+
 function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; version: string }): Hex {
   const base = keccak256(encodePacked(['address', 'string'], [params.owner, params.shareSymbol.toLowerCase()]))
   return keccak256(encodePacked(['bytes32', 'string'], [base, `CreatorShareOFT:${params.version}`]))
@@ -981,6 +1029,23 @@ const COIN_PAYOUT_RECIPIENT_ABI = [
   },
 ] as const
 
+const COIN_OWNERSHIP_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'transferOwnership',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newOwner', type: 'address' }],
+    outputs: [],
+  },
+] as const
+
 const UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI = [
   {
     type: 'function',
@@ -992,6 +1057,40 @@ const UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI = [
       { name: 'constructorArgs', type: 'bytes' },
     ],
     outputs: [{ name: 'deployed', type: 'address' }],
+  },
+] as const
+
+const PAYOUT_ROUTER_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'keeper',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'swapPathToCreator',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenIn', type: 'address' }],
+    outputs: [{ name: '', type: 'bytes' }],
+  },
+  {
+    type: 'function',
+    name: 'setKeeper',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newKeeper', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setSwapPath',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'path', type: 'bytes' },
+    ],
+    outputs: [],
   },
 ] as const
 
@@ -2781,6 +2880,10 @@ function DeployVaultBatcher({
     return keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex)
   }, [])
 
+  const creatorCoinPolicyControllerCodeId = useMemo(() => {
+    return keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex)
+  }, [])
+
   const strategyCodeIds = useMemo(() => {
     return {
       // Phase 3 now deploys Charm alpha vault through Charm's factory (not via bytecode store).
@@ -3015,6 +3118,7 @@ function DeployVaultBatcher({
       const burnStreamInitCode = concatHex([DEPLOY_BYTECODE.VaultShareBurnStream as Hex, burnStreamArgs])
 
       const payoutRouterSalt = derivePayoutRouterSalt({ creatorToken, owner })
+      const creatorCoinPolicyControllerSalt = deriveCreatorCoinPolicyControllerSalt({ creatorToken, owner })
 
       // IMPORTANT: burnStream + payoutRouter are deployed via UniversalCreate2DeployerFromStore in Phase 2.
       // The paymaster computes expected addresses using `bytecodeStore.get(codeId)` + CREATE2.
@@ -3025,12 +3129,21 @@ function DeployVaultBatcher({
           creatorToken,
           vaultAddress,
           burnStreamAddress,
-          owner,
+          protocolTreasury,
           getAddress(BASE_SWAP_ROUTER as Address),
           weth,
         ])
         const init = concatHex([DEPLOY_BYTECODE.PayoutRouter as Hex, args])
         return predictCreate2Address({ create2Deployer, salt: payoutRouterSalt, initCode: init })
+      })()
+      let creatorCoinPolicyControllerAddress = (() => {
+        const args = encodeAbiParameters(parseAbiParameters('address,address,address'), [
+          creatorToken,
+          payoutRouterAddress,
+          protocolTreasury,
+        ])
+        const init = concatHex([DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex, args])
+        return predictCreate2Address({ create2Deployer, salt: creatorCoinPolicyControllerSalt, initCode: init })
       })()
 
       try {
@@ -3060,7 +3173,7 @@ function DeployVaultBatcher({
         }
 
         if (bytecodeStore) {
-          const [burnCreation, routerCreation] = (await Promise.all([
+          const [burnCreation, routerCreation, policyControllerCreation] = (await Promise.all([
             publicClient!.readContract({
               address: bytecodeStore,
               abi: BYTECODE_STORE_GET_ABI,
@@ -3073,7 +3186,13 @@ function DeployVaultBatcher({
               functionName: 'get',
               args: [payoutRouterCodeId],
             }),
-          ])) as [Hex, Hex]
+            publicClient!.readContract({
+              address: bytecodeStore,
+              abi: BYTECODE_STORE_GET_ABI,
+              functionName: 'get',
+              args: [creatorCoinPolicyControllerCodeId],
+            }),
+          ])) as [Hex, Hex, Hex]
 
           const burnInitHash = keccak256(concatHex([burnCreation as Hex, burnStreamArgs]))
           burnStreamAddress = getCreate2Address({ from: create2Deployer, salt: burnStreamSalt, bytecodeHash: burnInitHash })
@@ -3082,12 +3201,26 @@ function DeployVaultBatcher({
             creatorToken,
             vaultAddress,
             burnStreamAddress,
-            owner,
+            protocolTreasury,
             getAddress(BASE_SWAP_ROUTER as Address),
             weth,
           ])
           const routerInitHash = keccak256(concatHex([routerCreation as Hex, routerArgsFixed]))
           payoutRouterAddress = getCreate2Address({ from: create2Deployer, salt: payoutRouterSalt, bytecodeHash: routerInitHash })
+
+          const policyControllerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address'), [
+            creatorToken,
+            payoutRouterAddress,
+            protocolTreasury,
+          ])
+          const policyControllerInitHash = keccak256(
+            concatHex([policyControllerCreation as Hex, policyControllerArgsFixed]),
+          )
+          creatorCoinPolicyControllerAddress = getCreate2Address({
+            from: create2Deployer,
+            salt: creatorCoinPolicyControllerSalt,
+            bytecodeHash: policyControllerInitHash,
+          })
         }
       } catch {
         // Best-effort: fall back to local bytecode predictions
@@ -3115,6 +3248,7 @@ function DeployVaultBatcher({
           oracle: oracleAddress,
           burnStream: burnStreamAddress,
           payoutRouter: payoutRouterAddress,
+          creatorCoinPolicyController: creatorCoinPolicyControllerAddress,
         },
       }
     },
@@ -3122,10 +3256,12 @@ function DeployVaultBatcher({
 
   const expected = expectedQuery.data?.expected ?? null
   const expectedCreate2Deployer = expectedQuery.data?.create2Deployer ?? null
+  const expectedProtocolTreasury = normalizeAddressLike(expectedQuery.data?.protocolTreasury ?? CONTRACTS.protocolTreasury)
   const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
+  const expectedCreatorCoinPolicyController = expected?.creatorCoinPolicyController ?? null
 
   useEffect(() => {
     expectedRef.current = expected
@@ -3234,8 +3370,23 @@ function DeployVaultBatcher({
           `Deploy page is stale after a local restart. Client deployment version ${deploymentVersion} does not match server deployment version ${runtimeDeploymentVersion}. Hard refresh the page and confirm you are on the dry-run origin (http://localhost:5174).`,
         )
       }
+      const payoutRouterKeeperAddress = normalizeAddressLike(runtimeConfig?.payoutRouterKeeperAddress)
+      const payoutRouterZoraToken =
+        normalizeAddressLike(runtimeConfig?.zoraToken) ?? normalizeAddressLike(CONTRACTS.zora)
+      const payoutRouterZoraWethFee =
+        parseUniswapV3Fee(runtimeConfig?.payoutRouterZoraWethFee) ?? DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE
+      const payoutRouterWethCreatorFee =
+        parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
       if (!publicClient) throw new Error('Network client not ready')
-      if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
+      if (
+        !expected ||
+        !expectedGauge ||
+        !expectedBurnStream ||
+        !expectedPayoutRouter ||
+        !expectedCreatorCoinPolicyController ||
+        !expectedCreate2Deployer ||
+        !expectedProtocolTreasury
+      )
         throw new Error('Failed to compute expected deployment addresses')
       // Compatibility-only placeholder. CCA strategy now derives launch floor onchain from oracle data.
       const floorPriceQ96ForBatcher =
@@ -3291,7 +3442,7 @@ function DeployVaultBatcher({
         creatorToken,
         expected.vault,
         expectedBurnStream,
-        owner,
+        expectedProtocolTreasury,
         getAddress(BASE_SWAP_ROUTER as Address),
         weth,
       ])
@@ -3309,6 +3460,130 @@ function DeployVaultBatcher({
         const bc = await publicClient.getBytecode({ address: expectedPayoutRouter })
         return !!bc && bc !== '0x'
       })()
+
+      const creatorCoinPolicyControllerSalt = deriveCreatorCoinPolicyControllerSalt({ creatorToken, owner })
+      const creatorCoinPolicyControllerConstructorArgs = encodeAbiParameters(
+        parseAbiParameters('address,address,address'),
+        [creatorToken, expectedPayoutRouter, expectedProtocolTreasury],
+      )
+      const creatorCoinPolicyControllerDeployCall = {
+        target: expectedCreate2Deployer,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI,
+          functionName: 'deploy',
+          args: [creatorCoinPolicyControllerSalt, creatorCoinPolicyControllerCodeId, creatorCoinPolicyControllerConstructorArgs],
+        }),
+      } as const
+
+      const creatorCoinPolicyControllerAlreadyDeployed = await (async () => {
+        const bc = await publicClient.getBytecode({ address: expectedCreatorCoinPolicyController })
+        return !!bc && bc !== '0x'
+      })()
+
+      const payoutRouterDesiredSwapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' }> = []
+      if (!sameAddress(weth, creatorToken)) {
+        payoutRouterDesiredSwapPaths.push({
+          tokenIn: weth,
+          path: encodeUniswapV3Path([weth, creatorToken], [payoutRouterWethCreatorFee]),
+          label: 'WETH',
+        })
+      }
+      if (payoutRouterZoraToken) {
+        if (!sameAddress(payoutRouterZoraToken, creatorToken) && !sameAddress(payoutRouterZoraToken, weth)) {
+          payoutRouterDesiredSwapPaths.push({
+            tokenIn: payoutRouterZoraToken,
+            path: encodeUniswapV3Path(
+              [payoutRouterZoraToken, weth, creatorToken],
+              [payoutRouterZoraWethFee, payoutRouterWethCreatorFee],
+            ),
+            label: 'ZORA',
+          })
+        }
+      } else {
+        logger.warn('[DeployVault] Missing runtime ZORA token address; skipping payout router ZORA swap-path auto-config')
+      }
+
+      const currentPayoutRouterKeeper = await (async () => {
+        if (!payoutRouterAlreadyDeployed) return ZERO_ADDRESS as Address
+        try {
+          const keeper = await publicClient.readContract({
+            address: expectedPayoutRouter,
+            abi: PAYOUT_ROUTER_ADMIN_ABI,
+            functionName: 'keeper',
+          })
+          if (typeof keeper === 'string' && isAddress(keeper)) return getAddress(keeper as Address)
+          return ZERO_ADDRESS as Address
+        } catch {
+          return ZERO_ADDRESS as Address
+        }
+      })()
+
+      const currentRouterPaths = await (async () => {
+        const out = new Map<string, Hex>()
+        if (!payoutRouterAlreadyDeployed || payoutRouterDesiredSwapPaths.length === 0) return out
+        const reads = await Promise.all(
+          payoutRouterDesiredSwapPaths.map(async ({ tokenIn }) => {
+            try {
+              const raw = await publicClient.readContract({
+                address: expectedPayoutRouter,
+                abi: PAYOUT_ROUTER_ADMIN_ABI,
+                functionName: 'swapPathToCreator',
+                args: [tokenIn],
+              })
+              const normalized = typeof raw === 'string' && raw.startsWith('0x') ? (raw as Hex) : ('0x' as Hex)
+              return [tokenIn.toLowerCase(), normalized] as const
+            } catch {
+              return [tokenIn.toLowerCase(), '0x' as Hex] as const
+            }
+          }),
+        )
+        for (const [token, path] of reads) out.set(token, path)
+        return out
+      })()
+
+      const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
+
+      const payoutRouterSetKeeperCall =
+        senderCanAdminPayoutRouter &&
+        payoutRouterKeeperAddress &&
+        !sameAddress(currentPayoutRouterKeeper, payoutRouterKeeperAddress)
+          ? ({
+              target: expectedPayoutRouter,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: PAYOUT_ROUTER_ADMIN_ABI,
+                functionName: 'setKeeper',
+                args: [payoutRouterKeeperAddress],
+              }),
+            } as const)
+          : null
+
+      const payoutRouterSetSwapPathCalls = senderCanAdminPayoutRouter
+        ? (payoutRouterDesiredSwapPaths
+            .filter(({ tokenIn, path }) => {
+              const current = currentRouterPaths.get(tokenIn.toLowerCase()) ?? ('0x' as Hex)
+              return String(current).toLowerCase() !== String(path).toLowerCase()
+            })
+            .map(({ tokenIn, path }) => ({
+              target: expectedPayoutRouter,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: PAYOUT_ROUTER_ADMIN_ABI,
+                functionName: 'setSwapPath',
+                args: [tokenIn, path],
+              }),
+            })) as const)
+        : ([] as const)
+
+      if (!payoutRouterKeeperAddress) {
+        logger.warn('[DeployVault] Missing payoutRouter keeper runtime config; skipping setKeeper auto-config')
+      }
+      if (!senderCanAdminPayoutRouter && (payoutRouterKeeperAddress || payoutRouterDesiredSwapPaths.length > 0)) {
+        logger.warn(
+          '[DeployVault] PayoutRouter owner is protocol treasury; skipping creator-side setKeeper/setSwapPath auto-config',
+        )
+      }
 
       const vaultSetBurnStreamCall = {
         target: expected.vault,
@@ -3377,12 +3652,48 @@ function DeployVaultBatcher({
         functionName: 'setPayoutRecipient',
         args: [expectedPayoutRouter],
       })
+      const coinTransferOwnershipCallData = encodeFunctionData({
+        abi: COIN_OWNERSHIP_ABI,
+        functionName: 'transferOwnership',
+        args: [expectedCreatorCoinPolicyController],
+      })
+      const currentCoinOwner = await (async () => {
+        try {
+          const value = await publicClient.readContract({
+            address: creatorToken,
+            abi: COIN_OWNERSHIP_ABI,
+            functionName: 'owner',
+          })
+          if (typeof value === 'string' && isAddress(value)) return getAddress(value as Address)
+          return null
+        } catch {
+          return null
+        }
+      })()
+      if (!currentCoinOwner) {
+        throw new Error('Failed to resolve CreatorCoin owner.')
+      }
+      const coinOwnershipNeedsTransfer = !sameAddress(currentCoinOwner, expectedCreatorCoinPolicyController)
       const canSetPayoutRecipientFromOwner = await (async () => {
         if (!payoutMismatch) return false
         try {
           await publicClient.call({
             to: creatorToken,
             data: payoutRecipientCallData,
+            account: owner,
+          })
+          return true
+        } catch {
+          return false
+        }
+      })()
+      const canTransferCoinOwnershipFromOwner = await (async () => {
+        if (!coinOwnershipNeedsTransfer) return false
+        if (!sameAddress(currentCoinOwner, owner)) return false
+        try {
+          await publicClient.call({
+            to: creatorToken,
+            data: coinTransferOwnershipCallData,
             account: owner,
           })
           return true
@@ -3610,7 +3921,7 @@ function DeployVaultBatcher({
         const phase2CoreParams = {
           creatorToken,
           owner,
-          creatorTreasury: owner,
+          creatorTreasury: expectedProtocolTreasury,
           payoutRecipient: payoutForDeploy,
           vault: expected.vault,
           wrapper: expected.wrapper,
@@ -3653,11 +3964,7 @@ function DeployVaultBatcher({
           throw new Error('Solana bridge adapter is not configured.')
         }
         const solanaBridgeAddress = getAddress(configuredSolanaBridge as Address)
-        const configuredSolanaKeeper = (CONTRACTS as any).protocolTreasury
-        const solanaKeeper =
-          configuredSolanaKeeper && isAddress(String(configuredSolanaKeeper))
-            ? getAddress(configuredSolanaKeeper as Address)
-            : owner
+        const solanaKeeper = expectedProtocolTreasury
         const ajnaKeeper = solanaKeeper
         const ajnaBufferRatioBps = 1_000n
         const ajnaMinBucketIndex = 4_156n
@@ -4027,23 +4334,36 @@ function DeployVaultBatcher({
 
         if (!burnStreamAlreadyDeployed) phase2Calls.push(burnStreamDeployCall)
         if (!payoutRouterAlreadyDeployed) phase2Calls.push(payoutRouterDeployCall)
+        if (!creatorCoinPolicyControllerAlreadyDeployed) phase2Calls.push(creatorCoinPolicyControllerDeployCall)
         if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
+        if (payoutRouterSetKeeperCall) phase2Calls.push(payoutRouterSetKeeperCall)
+        if (payoutRouterSetSwapPathCalls.length > 0) phase2Calls.push(...payoutRouterSetSwapPathCalls)
         if (payoutMismatch) {
-          if (canSetPayoutRecipientFromOwner) {
-            phase2Calls.push({
-              target: creatorToken,
-              value: 0n,
-              data: payoutRecipientCallData,
-            })
-          } else {
-            logger.warn('[DeployVault] Skipping setPayoutRecipient in deploy batch (caller not authorized)', {
-              creatorToken,
-              owner,
-              expectedPayoutRouter,
-              currentPayoutRecipient,
-            })
+          if (!canSetPayoutRecipientFromOwner) {
+            throw new Error(
+              `Cannot set CreatorCoin payout recipient to router from ${shortAddress(owner)}. ` +
+                `Current payout recipient is ${shortAddress(currentPayoutRecipient)}.`,
+            )
           }
+          phase2Calls.push({
+            target: creatorToken,
+            value: 0n,
+            data: payoutRecipientCallData,
+          })
+        }
+        if (coinOwnershipNeedsTransfer) {
+          if (!canTransferCoinOwnershipFromOwner) {
+            throw new Error(
+              `Cannot transfer CreatorCoin ownership to policy controller ${shortAddress(expectedCreatorCoinPolicyController)} ` +
+                `from current owner ${shortAddress(currentCoinOwner)}.`,
+            )
+          }
+          phase2Calls.push({
+            target: creatorToken,
+            value: 0n,
+            data: coinTransferOwnershipCallData,
+          })
         }
 
         const phase3StrategyCalls: Array<{ target: Address; value: bigint; data: Hex }> = [
@@ -4088,6 +4408,7 @@ function DeployVaultBatcher({
             getAddress(batcherAddress).toLowerCase(),
             getAddress(expectedCreate2Deployer).toLowerCase(),
             getAddress(expected.vault).toLowerCase(),
+            getAddress(expectedPayoutRouter).toLowerCase(),
           ])
           for (const c of calls) {
             const to = getAddress(c.target).toLowerCase()
@@ -6777,6 +7098,7 @@ function DeployVaultMain() {
       // Newly required per-vault contracts (deployed via UniversalCreate2DeployerFromStore)
       payoutRouter: keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex),
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
+      creatorCoinPolicyController: keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
@@ -6799,6 +7121,7 @@ function DeployVaultMain() {
       deployCodeIds.oftBootstrap,
       deployCodeIds.payoutRouter,
       deployCodeIds.vaultShareBurnStream,
+      deployCodeIds.creatorCoinPolicyController,
       deployCodeIds.creatorCharmStrategy,
       deployCodeIds.ajnaVaultAuth,
       deployCodeIds.ajnaVault,
@@ -6914,6 +7237,11 @@ function DeployVaultMain() {
         { key: 'oracle', label: 'CreatorOracle', codeId: deployCodeIds.oracle },
         { key: 'vaultShareBurnStream', label: 'VaultShareBurnStream', codeId: deployCodeIds.vaultShareBurnStream },
         { key: 'payoutRouter', label: 'PayoutRouter', codeId: deployCodeIds.payoutRouter },
+        {
+          key: 'creatorCoinPolicyController',
+          label: 'CreatorCoinPolicyController',
+          codeId: deployCodeIds.creatorCoinPolicyController,
+        },
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
         { key: 'creatorCharmStrategy', label: 'CreatorCharmStrategy', codeId: deployCodeIds.creatorCharmStrategy },
         { key: 'ajnaVaultAuth', label: 'AjnaVaultAuth', codeId: deployCodeIds.ajnaVaultAuth },

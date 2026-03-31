@@ -120,7 +120,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
     })
 
   return (
-    <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
+    <header className="hidden md:block sticky top-0 left-0 right-0 z-50">
       <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl shadow-[0_10px_34px_-12px_rgba(0,0,0,0.88)]" />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-white/8" />
 
@@ -146,7 +146,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
         </nav>
 
         {showConnect ? (
-          <div className="shrink-0 origin-right scale-[0.72] lg:scale-[0.82] xl:scale-95 transition-transform">
+          <div className="shrink-0 w-[164px] origin-right scale-[0.72] lg:scale-[0.82] xl:scale-95">
             <ConnectButton variant="nav" />
           </div>
         ) : null}

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodeFunctionData, getAddress, type Address } from 'viem'
+import { encodeFunctionData, getAddress, keccak256, toBytes, type Address } from 'viem'
 
 import paymasterHandler from '../_handlers/_paymaster.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
@@ -7,6 +7,9 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 const ENTRYPOINT_V06 = getAddress('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
 const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 const CSW_IMPLEMENTATION = getAddress('0x9999999999999999999999999999999999999998')
+const MOCK_BYTECODE = ('0x' + '00'.repeat(32)) as `0x${string}`
+const MOCK_CODE_ID = keccak256(MOCK_BYTECODE)
+const CHARM_FACTORY_SENTINEL_CODE_ID = keccak256(toBytes('charm-factory-sentinel-v1'))
 
 const sessionAddress = getAddress('0x1111111111111111111111111111111111111111')
 const sender = getAddress('0x3333333333333333333333333333333333333333')
@@ -78,11 +81,26 @@ vi.mock('../../server/_lib/logger.js', () => ({
 }))
 
 vi.mock('../../src/deploy/bytecode.generated.js', () => ({
-  DEPLOY_BYTECODE: {
-    CreatorOVault: ('0x' + '00'.repeat(32)) as `0x${string}`,
-    PayoutRouter: ('0x' + '00'.repeat(32)) as `0x${string}`,
-    VaultShareBurnStream: ('0x' + '00'.repeat(32)) as `0x${string}`,
-  },
+  DEPLOY_BYTECODE: (() => {
+    const mockBytecode = ('0x' + '00'.repeat(32)) as `0x${string}`
+    return {
+      CreatorOVault: mockBytecode,
+      CreatorOVaultWrapper: mockBytecode,
+      CreatorShareOFT: mockBytecode,
+      OFTBootstrapRegistry: mockBytecode,
+      CreatorGaugeController: mockBytecode,
+      CCALaunchStrategy: mockBytecode,
+      CreatorOracle: mockBytecode,
+      PayoutRouter: mockBytecode,
+      VaultShareBurnStream: mockBytecode,
+      CreatorCoinPolicyController: mockBytecode,
+      CreatorCharmStrategy: mockBytecode,
+      AjnaVaultAuth: mockBytecode,
+      AjnaERC4626Vault: mockBytecode,
+      ERC4626StrategyAdapter: mockBytecode,
+      SolanaStrategy: mockBytecode,
+    }
+  })(),
 }))
 
 vi.mock('viem', async (importOriginal) => {
@@ -112,6 +130,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     restoreEnv = applyEnv({
       CDP_PAYMASTER_URL: 'https://paymaster.example.com',
       AUTH_SESSION_SECRET: 'test-secret-at-least-16-chars',
+      PROTOCOL_TREASURY: sessionAddress,
     })
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
@@ -121,6 +140,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       permit2,
       universalCreate2DeployerFromStore: create2Deployer,
       universalBytecodeStore: bytecodeStore,
+      protocolTreasury: sessionAddress,
     })
     isDbConfiguredMock.mockReturnValue(false)
     isSupabaseAdminConfiguredMock.mockReturnValue(false)
@@ -506,8 +526,8 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           solanaWeightBps: 3_000n,
           ajnaBufferRatioBps: 1_000n,
           ajnaMinBucketIndex: 4_156n,
-          ajnaKeeper: sender,
-          solanaKeeper: sender,
+          ajnaKeeper: sessionAddress,
+          solanaKeeper: sessionAddress,
           solanaMaxNavAge: 86_400n,
           solanaMaxNavDeltaBpsPerUpdate: 500,
           solanaMinBaseLiquidityBps: 100,
@@ -515,12 +535,12 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           enableAutoAllocate: false,
         },
         {
-          charmAlphaVaultDeploy: ZERO_BYTES32,
-          creatorCharmStrategy: ZERO_BYTES32,
-          ajnaVaultAuth: ZERO_BYTES32,
-          ajnaVault: ZERO_BYTES32,
-          erc4626StrategyAdapter: ZERO_BYTES32,
-          solanaStrategy: ZERO_BYTES32,
+          charmAlphaVaultDeploy: CHARM_FACTORY_SENTINEL_CODE_ID,
+          creatorCharmStrategy: MOCK_CODE_ID,
+          ajnaVaultAuth: MOCK_CODE_ID,
+          ajnaVault: MOCK_CODE_ID,
+          erc4626StrategyAdapter: MOCK_CODE_ID,
+          solanaStrategy: MOCK_CODE_ID,
         },
       ],
     })
@@ -763,8 +783,8 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           solanaWeightBps: 3_000n,
           ajnaBufferRatioBps: 1_000n,
           ajnaMinBucketIndex: 4_156n,
-          ajnaKeeper: sender,
-          solanaKeeper: sender,
+          ajnaKeeper: sessionAddress,
+          solanaKeeper: sessionAddress,
           solanaMaxNavAge: 86_400n,
           solanaMaxNavDeltaBpsPerUpdate: 500,
           solanaMinBaseLiquidityBps: 100,
@@ -772,12 +792,12 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           enableAutoAllocate: false,
         },
         {
-          charmAlphaVaultDeploy: ZERO_BYTES32,
-          creatorCharmStrategy: ZERO_BYTES32,
-          ajnaVaultAuth: ZERO_BYTES32,
-          ajnaVault: ZERO_BYTES32,
-          erc4626StrategyAdapter: ZERO_BYTES32,
-          solanaStrategy: ZERO_BYTES32,
+          charmAlphaVaultDeploy: CHARM_FACTORY_SENTINEL_CODE_ID,
+          creatorCharmStrategy: MOCK_CODE_ID,
+          ajnaVaultAuth: MOCK_CODE_ID,
+          ajnaVault: MOCK_CODE_ID,
+          erc4626StrategyAdapter: MOCK_CODE_ID,
+          solanaStrategy: MOCK_CODE_ID,
         },
       ],
     })

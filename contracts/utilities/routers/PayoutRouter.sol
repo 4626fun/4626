@@ -30,6 +30,10 @@ interface ISwapRouterV3 {
     function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
 }
 
+interface IProtocolRewards {
+    function balanceOf(address account) external view returns (uint256);
+}
+
 /**
  * @title PayoutRouter
  * @author 0xakita.eth
@@ -59,6 +63,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     address public immutable burnStream;
     address public immutable swapRouter;
     address public immutable weth;
+    address public constant PROTOCOL_REWARDS = 0x7777777F279eba3d3Ad8F4E708545291A6fDBA8B;
 
     // ================================
     // CONFIG
@@ -78,6 +83,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     event KeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event SwapPathSet(address indexed tokenIn, bytes path);
     event ConvertedAndQueued(address indexed tokenIn, uint256 amountIn, uint256 creatorOut, uint256 vaultSharesQueued);
+    event ProtocolRewardsClaimed(address indexed claimer, uint256 amount);
     event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
 
     // ================================
@@ -89,6 +95,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error PathNotSet(address tokenIn);
     error InvalidPath(address tokenIn);
+    error ProtocolRewardsClaimFailed();
 
     // ================================
     // MODIFIERS
@@ -244,6 +251,36 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         emit EmergencyWithdraw(token, to, amount);
     }
 
+    /**
+     * @notice Return claimable protocol rewards assigned to this router.
+     */
+    function protocolRewardsClaimable() external view returns (uint256) {
+        return IProtocolRewards(PROTOCOL_REWARDS).balanceOf(address(this));
+    }
+
+    /**
+     * @notice Claim an explicit amount of protocol rewards into this router.
+     * @dev Claimed ETH is wrapped to WETH by `receive()`.
+     */
+    function claimProtocolRewards(uint256 amount) external onlyOwnerOrKeeper nonReentrant returns (uint256 claimed) {
+        if (amount == 0) revert ZeroAmount();
+        _claimProtocolRewards(amount);
+        emit ProtocolRewardsClaimed(msg.sender, amount);
+        return amount;
+    }
+
+    /**
+     * @notice Claim all currently claimable protocol rewards into this router.
+     * @dev Claimed ETH is wrapped to WETH by `receive()`.
+     */
+    function claimAllProtocolRewards() external onlyOwnerOrKeeper nonReentrant returns (uint256 claimed) {
+        uint256 claimable = IProtocolRewards(PROTOCOL_REWARDS).balanceOf(address(this));
+        if (claimable == 0) revert ZeroAmount();
+        _claimProtocolRewards(claimable);
+        emit ProtocolRewardsClaimed(msg.sender, claimable);
+        return claimable;
+    }
+
     // ================================
     // INTERNAL HELPERS
     // ================================
@@ -254,5 +291,17 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         assembly {
             addr := shr(96, mload(add(add(data, 0x20), offset)))
         }
+    }
+
+    function _claimProtocolRewards(uint256 amount) internal {
+        // Primary ABI: withdraw(address to, uint256 amount)
+        (bool ok,) = PROTOCOL_REWARDS.call(abi.encodeWithSelector(bytes4(0xf3fef3a3), address(this), amount));
+
+        // Compatibility ABI: withdrawFor(address from, address to, uint256 amount)
+        if (!ok) {
+            (ok,) = PROTOCOL_REWARDS.call(abi.encodeWithSelector(bytes4(0x9f1d9267), address(this), address(this), amount));
+        }
+
+        if (!ok) revert ProtocolRewardsClaimFailed();
     }
 }

@@ -4,6 +4,16 @@ type EthereumProviderCollisionState = {
   shouldDisableInjectedConnector: boolean
 }
 
+function findWindowEthereumDescriptor(target: Window): PropertyDescriptor | null {
+  let cursor: object | null = target
+  while (cursor) {
+    const descriptor = Object.getOwnPropertyDescriptor(cursor, 'ethereum')
+    if (descriptor) return descriptor
+    cursor = Object.getPrototypeOf(cursor)
+  }
+  return null
+}
+
 export function detectEthereumProviderCollision(): EthereumProviderCollisionState {
   if (typeof window === 'undefined') {
     return {
@@ -13,12 +23,16 @@ export function detectEthereumProviderCollision(): EthereumProviderCollisionStat
     }
   }
 
-  const providerList = Array.isArray((window as any)?.ethereum?.providers)
-    ? ((window as any).ethereum.providers as unknown[])
-    : []
+  let providerList: unknown[] = []
+  try {
+    const providers = (window as any)?.ethereum?.providers
+    providerList = Array.isArray(providers) ? providers : []
+  } catch {
+    providerList = []
+  }
   const hasMultipleInjectedProviders = providerList.length > 1
 
-  const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
+  const descriptor = findWindowEthereumDescriptor(window)
   const lockedEthereumProviderGlobal = Boolean(
     descriptor &&
       typeof descriptor.get === 'function' &&

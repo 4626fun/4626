@@ -401,9 +401,9 @@ export function TokenRow({
                 event.stopPropagation()
                 onToggleFees?.()
               }}
-              className="inline-flex items-center justify-center rounded-full border border-white/10 p-1 text-zinc-400 hover:text-white hover:border-white/20 transition-colors"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors"
             >
-              <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
             </button>
           ) : null}
         </div>

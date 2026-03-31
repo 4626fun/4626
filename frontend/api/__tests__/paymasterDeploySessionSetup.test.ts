@@ -90,8 +90,20 @@ vi.mock('../../server/_lib/logger.js', () => ({
 vi.mock('../../src/deploy/bytecode.generated.js', () => ({
   DEPLOY_BYTECODE: {
     CreatorOVault: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CreatorOVaultWrapper: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CreatorShareOFT: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    OFTBootstrapRegistry: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CreatorGaugeController: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CCALaunchStrategy: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CreatorOracle: ('0x' + '00'.repeat(32)) as `0x${string}`,
     PayoutRouter: ('0x' + '00'.repeat(32)) as `0x${string}`,
     VaultShareBurnStream: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CreatorCoinPolicyController: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CreatorCharmStrategy: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    AjnaVaultAuth: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    AjnaERC4626Vault: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    ERC4626StrategyAdapter: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    SolanaStrategy: ('0x' + '00'.repeat(32)) as `0x${string}`,
   },
 }))
 
@@ -123,6 +135,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     restoreEnv = applyEnv({
       CDP_PAYMASTER_URL: 'https://paymaster.example.com',
       AUTH_SESSION_SECRET: 'test-secret-at-least-16-chars',
+      PROTOCOL_TREASURY: sessionSigner,
     })
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
@@ -133,6 +146,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       permit2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
       universalCreate2DeployerFromStore: '0x0243F14771054c890E5Ef5D467D0137a20B2d94B',
       universalBytecodeStore: '0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c',
+      protocolTreasury: sessionSigner,
     })
     isDbConfiguredMock.mockReturnValue(false)
     isSupabaseAdminConfiguredMock.mockReturnValue(false)

@@ -5,8 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { SHARE_SPLIT_LABEL } from '@/components/home/launchConfig'
 
 vi.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   motion: new Proxy(
     {},
     {
@@ -22,6 +24,11 @@ vi.mock('framer-motion', () => ({
         }: any) => React.createElement(tag, props, children),
     },
   ),
+  useScroll: () => ({ scrollYProgress: 0 }),
+  useSpring: <T,>(value: T) => value,
+  useTransform: () => 0,
+  useMotionTemplate: () => '',
+  useMotionValueEvent: () => {},
 }))
 
 vi.mock('@/components/seo/PageMeta', () => ({
@@ -129,7 +136,7 @@ describe('Home', () => {
     expect(screen.getAllByText(/50,000,000 ■TOKEN/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/7 days/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Thursday 00:00 UTC/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(/40% creator vesting/i)).toBeTruthy()
-    expect(screen.getByText(/20% LP reserve/i)).toBeTruthy()
+    expect(screen.getByText(/Share split/i)).toBeTruthy()
+    expect(screen.getByText(SHARE_SPLIT_LABEL)).toBeTruthy()
   })
 })

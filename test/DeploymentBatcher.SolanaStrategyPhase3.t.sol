@@ -111,9 +111,14 @@ contract MockAjnaAdapterForPhase3 is MockOwnableTransferForPhase3 {
 }
 
 contract MockVaultStrategyManagerForPhase3 {
+    address public owner;
     address[] public strategies;
     uint256[] public weights;
     bool public autoAllocate;
+
+    constructor(address owner_) {
+        owner = owner_;
+    }
 
     function addStrategy(address strategy, uint256 weight) external {
         strategies.push(strategy);
@@ -197,7 +202,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         uniswapFactory.setPool(address(new MockUniswapV3PoolForPhase3()));
         ajnaFactory = new MockAjnaPoolFactoryForPhase3(makeAddr("ajnaPool"));
 
-        vault = new MockVaultStrategyManagerForPhase3();
+        vault = new MockVaultStrategyManagerForPhase3(address(this));
         charmStrategy = new MockCharmStrategyForPhase3();
         ajnaAuth = new MockAjnaVaultAuthForPhase3();
         ajnaVault = makeAddr("ajnaVault");
@@ -305,7 +310,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(ajnaAuth.bufferRatio(), 1_500, "ajna buffer ratio mismatch");
         assertEq(ajnaAuth.minBucketIndex(), 4_156, "ajna min bucket mismatch");
         assertTrue(ajnaAuth.keepers(ajnaKeeper), "ajna keeper should be configured");
-        assertEq(ajnaAuth.admin(), address(this), "ajna auth admin should transfer to creator owner");
+        assertEq(ajnaAuth.admin(), protocolTreasury, "ajna auth admin should transfer to treasury");
     }
 
     function test_deployPhase3Strategies_revertsWhenAjnaCodeIdsMissing() public {
