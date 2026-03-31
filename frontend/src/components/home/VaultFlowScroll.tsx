@@ -904,63 +904,88 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   aria-hidden="true"
                 />
 
-                {/* ── Vault seal — slides in on capture ────────────────────────── *
-                 *  Full enclosure with engineering-style corner brackets.           */}
+                {/* ── X-Z vault seal — snaps to horizontal plane on capture ──────── *
+                 *  A flat foreshortened grid lying in depth beneath the Zorb,        *
+                 *  making the vault a floor platform rather than a bounding box.     */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    inset: -14,
-                    borderRadius: 26,
+                    bottom: -40,
+                    left: -66,
+                    right: -66,
+                    height: 80,
                     opacity: vaultLidOp,
-                    border: '1px solid rgba(220,235,255,0.28)',
-                    boxShadow: [
-                      '0 0 0 1px rgba(180,205,255,0.08)',
-                      '0 0 20px 5px rgba(150,185,255,0.12)',
-                      '0 0 52px 14px rgba(90,140,255,0.06)',
-                    ].join(', '),
                   }}
                   aria-hidden="true"
-                />
-                {/* Engineering corner brackets on sealed vault */}
-                <motion.div
-                  className="pointer-events-none absolute"
-                  style={{ inset: -14, opacity: vaultLidOp }}
-                  aria-hidden="true"
                 >
-                  <svg viewBox="0 0 136 136" className="h-full w-full" fill="none">
-                    {/* Top-left */}
-                    <polyline points="8,22 8,8 22,8" stroke="rgba(190,215,255,0.50)" strokeWidth="1.4" fill="none" />
-                    {/* Top-right */}
-                    <polyline points="114,8 128,8 128,22" stroke="rgba(190,215,255,0.50)" strokeWidth="1.4" fill="none" />
-                    {/* Bottom-left */}
-                    <polyline points="8,114 8,128 22,128" stroke="rgba(190,215,255,0.50)" strokeWidth="1.4" fill="none" />
-                    {/* Bottom-right */}
-                    <polyline points="114,128 128,128 128,114" stroke="rgba(190,215,255,0.50)" strokeWidth="1.4" fill="none" />
+                  <svg viewBox="0 0 244 80" width="100%" height="80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id={`${uid}-xz-fill`} x1="0.5" y1="0" x2="0.5" y2="1">
+                        <stop offset="0%" stopColor="rgba(80,130,255,0.06)" />
+                        <stop offset="100%" stopColor="rgba(20,55,180,0.22)" />
+                      </linearGradient>
+                    </defs>
+                    {/* Perspective trapezoid — X-Z plane viewed from ~12° above */}
+                    <polygon points="28,8 216,8 244,72 0,72" fill={`url(#${uid}-xz-fill)`} />
+                    {/* Near edge — brightest (closest to viewer) */}
+                    <line x1="0" y1="72" x2="244" y2="72" stroke="rgba(160,205,255,0.68)" strokeWidth="1.6" />
+                    {/* Far edge — dimmer */}
+                    <line x1="28" y1="8" x2="216" y2="8" stroke="rgba(100,148,255,0.30)" strokeWidth="0.9" />
+                    {/* Side edges */}
+                    <line x1="28" y1="8" x2="0" y2="72" stroke="rgba(130,178,255,0.36)" strokeWidth="0.9" />
+                    <line x1="216" y1="8" x2="244" y2="72" stroke="rgba(130,178,255,0.36)" strokeWidth="0.9" />
+                    {/* Horizontal grid lines */}
+                    <line x1="10" y1="32" x2="234" y2="32" stroke="rgba(80,130,200,0.11)" strokeWidth="0.7" />
+                    <line x1="18" y1="52" x2="226" y2="52" stroke="rgba(80,130,200,0.11)" strokeWidth="0.7" />
+                    {/* Depth grid lines (slightly angled) */}
+                    <line x1="84" y1="8" x2="72" y2="72" stroke="rgba(80,130,200,0.09)" strokeWidth="0.7" />
+                    <line x1="122" y1="8" x2="122" y2="72" stroke="rgba(80,130,200,0.09)" strokeWidth="0.7" />
+                    <line x1="160" y1="8" x2="172" y2="72" stroke="rgba(80,130,200,0.09)" strokeWidth="0.7" />
+                    {/* Corner brackets — foreshortened for X-Z plane */}
+                    <polyline points="28,20 28,8 42,8"   stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
+                    <polyline points="202,8 216,8 216,20" stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
+                    <polyline points="0,60 0,72 16,72"   stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
+                    <polyline points="228,72 244,72 244,60" stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
+                    {/* Centre focal crosshair */}
+                    <circle cx="122" cy="40" r="2.8" fill="none" stroke="rgba(155,198,255,0.40)" strokeWidth="0.8" />
+                    <line x1="114" y1="40" x2="130" y2="40" stroke="rgba(155,198,255,0.28)" strokeWidth="0.7" />
+                    <line x1="122" y1="32" x2="122" y2="48" stroke="rgba(155,198,255,0.28)" strokeWidth="0.7" />
+                    {/* Ground glow cast below near edge */}
+                    <ellipse cx="122" cy="75" rx="100" ry="5.5" fill="rgba(70,120,255,0.16)" />
                   </svg>
                 </motion.div>
 
-                {/* Ambient blue glow */}
-                <motion.div
-                  className="pointer-events-none absolute inset-[-40px] rounded-full"
-                  style={{
-                    opacity: vaultGlow,
-                    background: 'radial-gradient(circle, rgba(0,82,255,0.14) 0%, transparent 70%)',
-                    boxShadow: '0 0 70px 24px rgba(0,82,255,0.35)',
-                  }}
-                  aria-hidden="true"
-                />
-                {/* Capture flash */}
+                {/* Ambient blue glow — elliptical to suggest the horizontal plane */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    inset: -14,
-                    borderRadius: 26,
+                    bottom: -50,
+                    left: -80,
+                    right: -80,
+                    height: 80,
+                    borderRadius: '50%',
+                    opacity: vaultGlow,
+                    background: 'radial-gradient(ellipse 100% 60% at 50% 80%, rgba(0,82,255,0.18) 0%, transparent 70%)',
+                    boxShadow: '0 14px 60px 20px rgba(0,82,255,0.28)',
+                  }}
+                  aria-hidden="true"
+                />
+                {/* Capture flash — horizontal line burst matching the X-Z plane near edge */}
+                <motion.div
+                  className="pointer-events-none absolute"
+                  style={{
+                    bottom: -42,
+                    left: -70,
+                    right: -70,
+                    height: 3,
+                    borderRadius: 2,
                     opacity: vaultFlash,
+                    background: 'rgba(255,255,255,0.82)',
                     boxShadow: [
-                      '0 0 0 1.5px rgba(255,255,255,0.78)',
-                      '0 0 20px 4px rgba(255,255,255,0.45)',
-                      '0 0 55px 14px rgba(220,228,255,0.22)',
-                      '0 0 110px 36px rgba(200,215,255,0.10)',
+                      '0 0 0 1px rgba(255,255,255,0.80)',
+                      '0 0 16px 6px rgba(255,255,255,0.50)',
+                      '0 0 44px 16px rgba(220,228,255,0.26)',
+                      '0 0 90px 36px rgba(190,210,255,0.12)',
                     ].join(', '),
                   }}
                   aria-hidden="true"
