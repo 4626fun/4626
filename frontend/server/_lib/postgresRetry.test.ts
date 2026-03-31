@@ -31,7 +31,7 @@ const mockPoolQuery = vi.fn(async () => {
   err.code = 'XX000'
   throw err
 })
-const mockPoolCtor = vi.fn(() => ({
+const mockPoolCtor = vi.fn((..._args: any[]) => ({
   query: mockPoolQuery,
   end: mockPoolEnd,
 }))

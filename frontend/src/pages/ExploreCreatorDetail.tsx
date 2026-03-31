@@ -407,6 +407,15 @@ export function ExploreCreatorDetail() {
     creatorChatPeer && isAddress(creatorChatPeer)
       ? `/?chatAction=help&chatPeer=${creatorChatPeer}&chatName=${encodeURIComponent(displayName)}`
       : null
+  const copyButtonProps = {
+    title: 'Copy address',
+    resetMs: 2000,
+    copiedIconClassName: 'w-4 h-4 text-green-500',
+  } as const
+  const statRowStyleProps = {
+    labelClassName: 'text-sm text-zinc-400',
+    valueClassName: 'text-sm text-white font-medium',
+  } as const
 
   return (
     <div className="relative min-h-screen bg-black">
@@ -501,9 +510,7 @@ export function ExploreCreatorDetail() {
                 <ExploreCopyButton
                   text={tokenAddress}
                   className="p-2 rounded-lg hover:bg-white/8 shrink-0"
-                  title="Copy address"
-                  resetMs={2000}
-                  copiedIconClassName="w-4 h-4 text-green-500"
+                  {...copyButtonProps}
                 />
               </div>
             </div>
@@ -518,9 +525,7 @@ export function ExploreCreatorDetail() {
                   <ExploreCopyButton
                     text={creatorAddress}
                     className="p-2 rounded-lg hover:bg-white/8 shrink-0"
-                    title="Copy address"
-                    resetMs={2000}
-                    copiedIconClassName="w-4 h-4 text-green-500"
+                    {...copyButtonProps}
                   />
                 </div>
               </div>
@@ -810,9 +815,7 @@ export function ExploreCreatorDetail() {
                 <div className="flex items-center gap-2">
                   <ExploreCopyButton
                     text={tokenAddress}
-                    title="Copy address"
-                    resetMs={2000}
-                    copiedIconClassName="w-4 h-4 text-green-500"
+                    {...copyButtonProps}
                   />
                   <button
                     type="button"
@@ -876,43 +879,37 @@ export function ExploreCreatorDetail() {
                 label="Market cap"
                 value={marketCap}
                 icon={<TrendingUp className="w-3 h-3" />}
-                labelClassName="text-sm text-zinc-400"
-                valueClassName="text-sm text-white font-medium"
+                {...statRowStyleProps}
               />
               <ExploreStatRow
                 label="24H volume"
                 value={volume24h}
                 icon={<TrendingUp className="w-3 h-3" />}
-                labelClassName="text-sm text-zinc-400"
-                valueClassName="text-sm text-white font-medium"
+                {...statRowStyleProps}
               />
               <ExploreStatRow
                 label="All-time volume"
                 value={totalVolume}
                 icon={<TrendingUp className="w-3 h-3" />}
-                labelClassName="text-sm text-zinc-400"
-                valueClassName="text-sm text-white font-medium"
+                {...statRowStyleProps}
               />
               <ExploreStatRow
                 label="Holders"
                 value={holders}
                 icon={<Users className="w-3 h-3" />}
-                labelClassName="text-sm text-zinc-400"
-                valueClassName="text-sm text-white font-medium"
+                {...statRowStyleProps}
               />
               <ExploreStatRow
                 label="Created"
                 value={createdAt}
                 icon={<Calendar className="w-3 h-3" />}
-                labelClassName="text-sm text-zinc-400"
-                valueClassName="text-sm text-white font-medium"
+                {...statRowStyleProps}
               />
               <ExploreStatRow
                 label="Content coins"
                 value={String(contentCoins.length)}
                 icon={<Coins className="w-3 h-3" />}
-                labelClassName="text-sm text-zinc-400"
-                valueClassName="text-sm text-white font-medium"
+                {...statRowStyleProps}
               />
             </div>
 

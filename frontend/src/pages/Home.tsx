@@ -24,7 +24,7 @@ const LazyThinWaitlistFlow = lazy(async () => {
   return { default: mod.ThinWaitlistFlow }
 })
 
-const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
+const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}AKITA`
 const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
 const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
 

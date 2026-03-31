@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { classifyManualChunk } from '../../build/viteManualChunks'
+import { classifyManualChunk } from './viteManualChunks'
 
 describe('classifyManualChunk', () => {
   it('keeps Vite preload helpers out of feature chunks', () => {

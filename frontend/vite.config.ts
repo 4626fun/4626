@@ -8,7 +8,7 @@ import { createRequire } from 'module'
 import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
-import { classifyManualChunk } from './build/viteManualChunks'
+import { classifyManualChunk } from './src/lib/viteManualChunks'
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
 const nodeRequire = createRequire(import.meta.url)

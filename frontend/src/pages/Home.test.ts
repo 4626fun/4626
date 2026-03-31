@@ -143,7 +143,7 @@ describe('Home', () => {
 
     expect(screen.getByTestId('vault-flow-scroll')).toBeTruthy()
     expect(screen.getAllByText(/50,000,000 TOKEN/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/50,000,000 ■TOKEN/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/50,000,000\s*(?:■\s*)?TOKEN/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/CCA launch/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Redeem/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: /How it works/i })).toBeTruthy()

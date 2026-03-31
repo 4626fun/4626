@@ -288,6 +288,10 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const vaultSquare = useTransform(scroll, [0.36, 0.42, 0.91, 0.94], [0, 0.45, 0.45, 0])
   // Subtle 3D frame that gives the vault visible depth.
   const vaultDepthOp = useTransform(scroll, [0.36, 0.44, 0.91, 0.94], [0, 0.78, 0.78, 0])
+  // Vault tray (open cradle) — visible BEFORE capture so users see the "landing zone" as the Zorb falls
+  const vaultTrayOp = useTransform(scroll, [0.18, 0.28, 0.91, 0.94], [0, 0.55, 0.55, 0])
+  // Vault lid — snaps closed on capture, turning the open tray into a sealed vault
+  const vaultLidOp = useTransform(scroll, [0.36, 0.44, 0.91, 0.94], [0, 1, 1, 0])
   // Deposit arrival glow — large white ring pulse when dot lands on vault (~0.47)
   const depositArrivalGlow = useTransform(scroll, [0.45, 0.49, 0.53, 0.58], [0, 1, 0.45, 0])
   // Entry radial bloom: peaks as vault rushes, bridges into deploy
@@ -831,126 +835,116 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
               }}
             >
               <div className="relative">
-                {/* 3D vault frame — front/back faces + connecting edges */}
+                {/* ── Vault "cradle" — open tray visible during freefall ────────── */}
+                {/* Bottom + sides: the vault tray waiting to receive the Zorb */}
                 <motion.div
-                  className="pointer-events-none absolute inset-[-18px]"
-                  style={{ opacity: vaultDepthOp }}
+                  className="pointer-events-none absolute"
+                  style={{
+                    inset: -14,
+                    borderRadius: 28,
+                    opacity: vaultTrayOp,
+                    // Only bottom + sides — top is open so the Zorb falls in
+                    borderBottom: '1px solid rgba(180,210,255,0.35)',
+                    borderLeft: '1px solid rgba(180,210,255,0.28)',
+                    borderRight: '1px solid rgba(180,210,255,0.28)',
+                    borderTop: '1px solid transparent',
+                    boxShadow: [
+                      '0 12px 32px -8px rgba(0,60,200,0.22)',
+                      '0 6px 18px -4px rgba(100,160,255,0.14)',
+                    ].join(', '),
+                  }}
+                  aria-hidden="true"
+                />
+                {/* Corner notches — vault aesthetic detail (bottom corners only) */}
+                <motion.div
+                  className="pointer-events-none absolute"
+                  style={{ inset: -14, opacity: vaultTrayOp }}
                   aria-hidden="true"
                 >
-                  <svg viewBox="0 0 184 184" className="h-full w-full" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id={`${uid}-vf-front`} x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
-                        <stop offset="100%" stopColor="rgba(160,190,255,0.06)" />
-                      </linearGradient>
-                      <linearGradient id={`${uid}-vf-top`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(210,225,255,0.18)" />
-                        <stop offset="100%" stopColor="rgba(210,225,255,0.02)" />
-                      </linearGradient>
-                      <linearGradient id={`${uid}-vf-side`} x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="rgba(180,205,255,0.12)" />
-                        <stop offset="100%" stopColor="rgba(180,205,255,0.02)" />
-                      </linearGradient>
-                    </defs>
-
-                    {/* Top/side planes */}
-                    <path d="M24 30 L160 30 L144 16 L40 16 Z" fill={`url(#${uid}-vf-top)`} />
-                    <path d="M24 30 L40 16 L40 120 L24 166 Z" fill={`url(#${uid}-vf-side)`} />
-                    <path d="M160 30 L144 16 L144 120 L160 166 Z" fill={`url(#${uid}-vf-side)`} />
-
-                    {/* Back face */}
-                    <rect
-                      x="40"
-                      y="16"
-                      width="104"
-                      height="104"
-                      rx="26"
-                      fill="none"
-                      stroke="rgba(190,215,255,0.18)"
-                      strokeWidth="1.1"
-                    />
-
-                    {/* Front face */}
-                    <rect
-                      x="24"
-                      y="30"
-                      width="136"
-                      height="136"
-                      rx="34"
-                      fill="none"
-                      stroke={`url(#${uid}-vf-front)`}
-                      strokeWidth="1.4"
-                    />
-
-                    {/* Connecting edges */}
-                    <line x1="24" y1="30" x2="40" y2="16" stroke="rgba(190,215,255,0.24)" strokeWidth="1.1" />
-                    <line x1="160" y1="30" x2="144" y2="16" stroke="rgba(190,215,255,0.24)" strokeWidth="1.1" />
-                    <line x1="24" y1="166" x2="40" y2="120" stroke="rgba(190,215,255,0.2)" strokeWidth="1.1" />
-                    <line x1="160" y1="166" x2="144" y2="120" stroke="rgba(190,215,255,0.2)" strokeWidth="1.1" />
+                  <svg viewBox="0 0 136 136" className="h-full w-full" fill="none">
+                    {/* Bottom-left corner tick */}
+                    <line x1="8" y1="118" x2="8" y2="128" stroke="rgba(140,190,255,0.5)" strokeWidth="1.2" />
+                    <line x1="8" y1="128" x2="18" y2="128" stroke="rgba(140,190,255,0.5)" strokeWidth="1.2" />
+                    {/* Bottom-right corner tick */}
+                    <line x1="128" y1="118" x2="128" y2="128" stroke="rgba(140,190,255,0.5)" strokeWidth="1.2" />
+                    <line x1="118" y1="128" x2="128" y2="128" stroke="rgba(140,190,255,0.5)" strokeWidth="1.2" />
                   </svg>
                 </motion.div>
+
+                {/* ── Vault lid — snaps closed on capture ──────────────────────── */}
+                <motion.div
+                  className="pointer-events-none absolute"
+                  style={{
+                    inset: -14,
+                    borderRadius: 28,
+                    opacity: vaultLidOp,
+                    // Full border (including top) once captured
+                    border: '1px solid rgba(255,255,255,0.30)',
+                    boxShadow: [
+                      '0 0 0 1px rgba(180,200,255,0.10)',
+                      '0 0 18px 4px rgba(160,190,255,0.14)',
+                      '0 0 48px 12px rgba(100,150,255,0.07)',
+                    ].join(', '),
+                  }}
+                  aria-hidden="true"
+                />
+                {/* Top-corner notches to match bottom */}
+                <motion.div
+                  className="pointer-events-none absolute"
+                  style={{ inset: -14, opacity: vaultLidOp }}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 136 136" className="h-full w-full" fill="none">
+                    <line x1="8" y1="18" x2="8" y2="8" stroke="rgba(200,220,255,0.45)" strokeWidth="1.2" />
+                    <line x1="8" y1="8" x2="18" y2="8" stroke="rgba(200,220,255,0.45)" strokeWidth="1.2" />
+                    <line x1="128" y1="18" x2="128" y2="8" stroke="rgba(200,220,255,0.45)" strokeWidth="1.2" />
+                    <line x1="118" y1="8" x2="128" y2="8" stroke="rgba(200,220,255,0.45)" strokeWidth="1.2" />
+                  </svg>
+                </motion.div>
+
                 {/* Ambient blue glow */}
                 <motion.div
                   className="pointer-events-none absolute inset-[-40px] rounded-full"
                   style={{
                     opacity: vaultGlow,
-                    background:
-                      'radial-gradient(circle, rgba(0,82,255,0.14) 0%, transparent 70%)',
+                    background: 'radial-gradient(circle, rgba(0,82,255,0.14) 0%, transparent 70%)',
                     boxShadow: '0 0 70px 24px rgba(0,82,255,0.35)',
                   }}
                   aria-hidden="true"
                 />
-                {/* White outline flash — fades in on deposit, holds through mint */}
+                {/* White capture flash */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    inset: -4,
-                    borderRadius: 31,
+                    inset: -14,
+                    borderRadius: 28,
                     opacity: vaultFlash,
                     boxShadow: [
-                      '0 0 0 1.5px rgba(255,255,255,0.82)',
-                      '0 0 20px 4px rgba(255,255,255,0.50)',
-                      '0 0 55px 14px rgba(220,228,255,0.26)',
-                      '0 0 110px 36px rgba(200,215,255,0.12)',
+                      '0 0 0 1.5px rgba(255,255,255,0.80)',
+                      '0 0 20px 4px rgba(255,255,255,0.48)',
+                      '0 0 55px 14px rgba(220,228,255,0.24)',
+                      '0 0 110px 36px rgba(200,215,255,0.10)',
                     ].join(', '),
                   }}
                   aria-hidden="true"
                 />
-                {/* Deposit arrival glow — large radial pulse when dot lands */}
+                {/* Deposit arrival pulse */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    inset: -20,
-                    borderRadius: 47,
+                    inset: -22,
+                    borderRadius: 40,
                     opacity: depositArrivalGlow,
                     boxShadow: [
-                      '0 0 0 2px rgba(255,255,255,0.95)',
-                      '0 0 36px 10px rgba(255,255,255,0.55)',
-                      '0 0 90px 30px rgba(220,230,255,0.28)',
-                      '0 0 180px 60px rgba(180,200,255,0.12)',
+                      '0 0 0 2px rgba(255,255,255,0.92)',
+                      '0 0 36px 10px rgba(255,255,255,0.52)',
+                      '0 0 90px 30px rgba(220,230,255,0.26)',
+                      '0 0 180px 60px rgba(180,200,255,0.10)',
                     ].join(', '),
                   }}
                   aria-hidden="true"
                 />
-                {/* Persistent vault square — stays visible as the "captured" frame
-                    through all distribution stages. Thinner and cooler than the
-                    flash so it reads as a resting state, not an event. */}
-                <motion.div
-                  className="pointer-events-none absolute"
-                  style={{
-                    inset: -6,
-                    borderRadius: 34,
-                    opacity: vaultSquare,
-                    border: '1px solid rgba(255,255,255,0.32)',
-                    boxShadow: [
-                      '0 0 0 1px rgba(180,200,255,0.12)',
-                      '0 0 14px 3px rgba(180,200,255,0.18)',
-                      '0 0 40px 10px rgba(140,170,255,0.08)',
-                    ].join(', '),
-                  }}
-                  aria-hidden="true"
-                />
-                <ZorbViewer size={148} />
+                <ZorbViewer size={108} />
               </div>
             </motion.div>
 
@@ -1244,8 +1238,13 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                       boxShadow: '0 0 22px -8px rgba(255,255,255,0.2)',
                     }}
                   >
+                    {cameoIcons['akita'] ? (
+                      <img src={cameoIcons['akita']} alt="AKITA" className="h-4 w-4 rounded-full object-cover opacity-80" />
+                    ) : (
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[5px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
+                    )}
                     {depositTokens}&nbsp;
-                    <span className="font-medium text-zinc-500">TOKEN</span>
+                    <span className="font-medium text-zinc-500">■AKITA</span>
                   </div>
                 </motion.div>
 
@@ -1540,7 +1539,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                 }}
                 aria-hidden="true"
               />
-              <ZorbViewer size={120} />
+              <ZorbViewer size={88} />
             </motion.div>
             {/* Share token output */}
             <motion.div
