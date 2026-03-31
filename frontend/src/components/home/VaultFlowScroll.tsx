@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AnimatePresence,
@@ -10,7 +9,6 @@ import {
   useScroll,
   useSpring,
   useTransform,
-  type MotionValue,
 } from 'framer-motion'
 
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
@@ -23,262 +21,6 @@ const CREATOR_CAMEOS = [
   { key: 'akita',   label: 'akita',             initials: 'AK', color: '#f97316', staticIcon: null,                  zoraAddress: '0x5b674196812451b7cec024fe9d22d2c0b172fa75', zoraHandle: null },
   { key: 'gabriel', label: 'gabrielhaines',     initials: 'GH', color: '#8b5cf6', staticIcon: null,                  zoraAddress: null,                                          zoraHandle: 'gabrielhaines' },
 ] as const
-
-// ─── Live activity feed ────────────────────────────────────────────────────
-const FEED_USERS = [
-  'cryptonick_', 'basebro', 'zoradefi', 'onchainval', 'defidave',
-  'vaultmaster', 'wagmiking', 'gm_eth', 'basewhale', 'coinbro420',
-  'liquidityking', 'yieldfarmer', 'gmgmgm', 'cryptovibes', 'ethbull',
-  'basemaxi', 'onchain_og', 'vaultgang', 'defipirate', 'gmfrens',
-  'zk_rolls', 'l2lyfe', 'basebuilder', 'protocolnerd', 'zoraner',
-  'nftfreak', 'degenape', 'coinflip99', 'basecamp', 'satoshifan',
-  'akita', 'jessepollak', 'gabrielhaines',
-]
-const FEED_COINS = ['AKITA', 'JESSE', 'GABRIEL', 'FROG', 'BASED', 'BRETT', 'TOSHI', 'DEGEN']
-const FEED_JACKPOTS = ['$1,592', '$2,841', '$4,103', '$892', '$3,270', '$5,500', '$7,812', '$11,044']
-const FEED_AMOUNTS_USD = ['$47', '$120', '$238', '$500', '$88', '$310', '$1,200', '$75', '$200', '$450']
-const FEED_AMOUNTS_TOK = ['250,000', '1,000,000', '500,000', '2,500,000', '100,000', '750,000', '4,000,000']
-const FEED_YIELDS = ['$12.40', '$28.70', '$6.90', '$47.30', '$18.20', '$94.00', '$3.80']
-const FEED_AMOUNTS_ETH = ['0.05 ETH', '0.12 ETH', '0.4 ETH', '1 ETH', '0.008 ETH', '0.25 ETH', '0.7 ETH']
-const FEED_BID_AMOUNTS = ['$320', '$1,100', '$4,750', '$800', '$2,200', '$650', '$3,800']
-const FEED_LOCK_AMOUNTS = ['50,000 ve4626', '250,000 ve4626', '1,000,000 ve4626', '100,000 ve4626', '500,000 ve4626']
-const FEED_BORROW_AMOUNTS = ['$500 USDC', '$2,400 USDC', '$8,000 USDC', '$1,200 USDC', '$4,500 USDC']
-const FEED_AGENT_CMDS = ['/bid', '/buy', '/sell', '/vaults', '/wallet', '/coin buy', '/intel', '/whois', '/coin info', '/auction', '/keepr check']
-
-type FeedLine = { id: number; user: string; text: string; isBot?: boolean }
-
-// Scripted intro that plays when the chat first fades in
-const INTRO_LINES: FeedLine[] = [
-  { id: -1,  user: 'KeeprBot', text: 'akita joined 4626', isBot: true },
-  { id: -2,  user: 'KeeprBot', text: 'akita linked Coinbase Smart Wallet', isBot: true },
-  { id: -3,  user: 'KeeprBot', text: 'akita initiated ■AKITA vault · 50,000,000 creator coins', isBot: true },
-  { id: -4,  user: 'KeeprBot', text: 'jessepollak joined 4626', isBot: true },
-  { id: -5,  user: 'KeeprBot', text: 'jessepollak linked Coinbase Smart Wallet', isBot: true },
-  { id: -6,  user: 'KeeprBot', text: 'jessepollak deployed ■JESSE vault · 50,000,000 creator coins', isBot: true },
-  { id: -7,  user: 'KeeprBot', text: 'gabrielhaines joined 4626', isBot: true },
-  { id: -8,  user: 'KeeprBot', text: 'gabrielhaines linked Coinbase Smart Wallet', isBot: true },
-  { id: -9,  user: 'KeeprBot', text: 'gabrielhaines deployed ■GABRIEL vault · 50,000,000 creator coins', isBot: true },
-  { id: -10, user: 'KeeprBot', text: '■AKITA vault is now live · accepting deposits', isBot: true },
-  { id: -11, user: 'KeeprBot', text: '■JESSE vault is now live · accepting deposits', isBot: true },
-  { id: -12, user: 'KeeprBot', text: '■GABRIEL vault is now live · accepting deposits', isBot: true },
-]
-
-const FEED_LINES: FeedLine[] = (() => {
-  const lines: FeedLine[] = []
-  // Keeper bot event templates — interleaved as isBot entries
-  const keeperEvents = (c: string) => [
-    `■${c} vault tend() executed · strategy rebalancing`,
-    `■${c} Ajna bucket moved · optimal yield range updated`,
-    `■${c} PayoutRouter.convertAndQueue() triggered`,
-    `■${c} Charm rebalance threshold crossed · executing`,
-    `■${c} CCA auction sweepCurrency() · permissionless settle`,
-    `Solana→Base lottery entry relayed for ■${c}`,
-    `■${c} vault report() filed · epoch rewards recorded`,
-    `■${c} Ajna setMinBucketIndex() · rebucket complete`,
-  ]
-  for (let i = 0; i < 150; i++) {
-    const u = FEED_USERS[(i * 7 + i * i * 3) % FEED_USERS.length]
-    const c = FEED_COINS[(i * 5 + 2) % FEED_COINS.length]
-    const j = FEED_JACKPOTS[(i * 3 + 1) % FEED_JACKPOTS.length]
-    const usd = FEED_AMOUNTS_USD[(i * 4 + 1) % FEED_AMOUNTS_USD.length]
-    const tok = FEED_AMOUNTS_TOK[(i * 3 + 2) % FEED_AMOUNTS_TOK.length]
-    const yield_ = FEED_YIELDS[(i * 6 + 3) % FEED_YIELDS.length]
-    const eth = FEED_AMOUNTS_ETH[(i * 3 + 1) % FEED_AMOUNTS_ETH.length]
-    const bid = FEED_BID_AMOUNTS[(i * 4 + 2) % FEED_BID_AMOUNTS.length]
-    const lock = FEED_LOCK_AMOUNTS[(i * 2 + 1) % FEED_LOCK_AMOUNTS.length]
-    const borrow = FEED_BORROW_AMOUNTS[(i * 3 + 2) % FEED_BORROW_AMOUNTS.length]
-    const cmd = FEED_AGENT_CMDS[(i * 5 + 3) % FEED_AGENT_CMDS.length]
-    const pct = (0.001 + (i % 8) * 0.0015).toFixed(3)
-
-    // Every ~8th message is a KeeprBot automated keeper event
-    if (i % 8 === 7) {
-      const kc = FEED_COINS[(i * 3 + 1) % FEED_COINS.length]
-      const events = keeperEvents(kc)
-      lines.push({ id: i, user: 'KeeprBot', text: events[i % events.length], isBot: true })
-      continue
-    }
-
-    const templates: Array<[string, string]> = [
-      // User trading actions
-      [u, `swapped ${usd} of ■${c} on /swap`],
-      [u, `bought ${eth} of ■${c} via /swap · ${pct}% jackpot · pot ${j}`],
-      [u, `placed ${bid} bid on ■${c} CCA auction`],
-      [u, `won CCA auction for ■${c} · ${usd} allocated`],
-      // Vault / deposit / yield actions
-      [u, `deposited ${usd} into ■${c} vault`],
-      [u, `deposited ${tok} ■${c} · ${usd} value`],
-      [u, `withdrew ${usd} from ■${c} vault`],
-      [u, `deposited ${usd} into ■${c} · yield streak 14d`],
-      [u, `earned ${yield_} from ■${c} Charm strategy`],
-      [u, `earned ${yield_} from ■${c} Ajna pool`],
-      [u, `claim: ${yield_} yield from ■${c} strategy`],
-      [`■${c}`, `vault TVL crossed ${j} · Charm rebalancing`],
-      [`■${c}`, `distributed ${yield_} to vault holders`],
-      // AMOE lottery
-      [u, `entered AMOE lottery for ■${c} · ${pct}% win chance · pot ${j}`],
-      [u, `bought ${usd} of ■${c} · jackpot now ${j}`],
-      // Governance / ve4626
-      [u, `locked ${lock} for ■${c} gauge weight`],
-      [u, `voted ■${c} gauge · ${pct}% allocation`],
-      [u, `extended ve4626 lock · 52-week duration`],
-      // Ajna borrow / lending
-      [u, `borrowed ${borrow} against ■${c} collateral via Ajna`],
-      [u, `added ${tok} ■${c} as Ajna collateral`],
-      [u, `repaid ${borrow} Ajna loan · collateral unlocked`],
-      // Keepr agent chat commands
-      [u, `used ${cmd} via Keepr agent`],
-      [u, `ran /intel on ■${c} vault · checking onchain reputation`],
-      [u, `ran /whois on ■${c} creator · on-chain identity resolved`],
-      [u, `/coin buy ■${c} ${eth} via Keepr — tx queued`],
-      [u, `/send ${usd} USDC to vault via Keepr agent`],
-      // Platform onboarding
-      [u, `joined 4626`],
-      [u, `linked Coinbase Smart Wallet`],
-      [u, `launched ■${c} vault · 50,000,000 tokens`],
-      [`■${c}`, `vault TVL crossed ${j}`],
-    ]
-    const [user, text] = templates[i % templates.length]
-    lines.push({ id: i, user, text })
-  }
-  return lines
-})()
-const USER_PALETTE = [
-  '#60a5fa', '#34d399', '#f472b6', '#fb923c', '#a78bfa',
-  '#38bdf8', '#4ade80', '#fbbf24', '#f87171', '#c084fc',
-]
-function feedUserColor(name: string) {
-  let h = 0
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) & 0x7fffffff
-  return USER_PALETTE[h % USER_PALETTE.length]
-}
-
-const BOT_COLOR = '#fbbf24' // amber — distinct from regular user palette
-
-function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
-  // Start empty — intro messages arrive one by one as the chat fades in
-  const [lines, setLines] = useState<FeedLine[]>([])
-  const introIdx = useRef(0)   // which INTRO_LINE to drop next
-  const feedCursor = useRef(0) // which FEED_LINE to drop after intro
-  const msgCount = useRef(0)   // total messages delivered (for acceleration)
-
-  useEffect(() => {
-    let t: ReturnType<typeof setTimeout>
-
-    const tick = () => {
-      msgCount.current++
-
-      if (introIdx.current < INTRO_LINES.length) {
-        // --- Intro phase: scripted KeeprBot story ---
-        const line = INTRO_LINES[introIdx.current]
-        introIdx.current++
-        setLines(prev => [...prev, line].slice(-18))
-        // Intro messages arrive every 2.8 s — slow enough to read each one
-        t = setTimeout(tick, 2800)
-      } else {
-        // --- Organic phase: gradually speeds up but stays readable ---
-        const line = FEED_LINES[feedCursor.current % FEED_LINES.length]
-        feedCursor.current++
-        setLines(prev => [...prev, line].slice(-18))
-        // Starts at 4 s per message, eases down to a floor of 1.8 s after ~30 messages
-        const organicCount = msgCount.current - INTRO_LINES.length
-        const interval = Math.max(1800, 4000 - organicCount * 75)
-        t = setTimeout(tick, interval)
-      }
-    }
-
-    // First KeeprBot message arrives 2 s after the chat fades in
-    t = setTimeout(tick, 2000)
-    return () => clearTimeout(t)
-  }, [])
-
-  return createPortal(
-    <motion.div
-      className="fixed inset-0 z-[9999]"
-      style={{ opacity: feedOp, pointerEvents: 'none' }}
-      aria-hidden="true"
-    >
-      {/* ── Desktop: message-only overlay, offset from app chrome ── */}
-      <div
-        className="pointer-events-none absolute right-4 hidden w-[250px] flex-col md:flex"
-        style={{ top: 'calc(3.5rem + 0.75rem)', bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-      >
-        <div className="relative flex h-full flex-col justify-end overflow-hidden px-1.5 py-1.5">
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16"
-            style={{ background: 'linear-gradient(to bottom, rgba(2,2,2,0.92) 0%, transparent 100%)' }}
-          />
-          <AnimatePresence initial={false}>
-            {lines.slice(-16).map(line => (
-              <motion.div
-                key={line.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, transition: { duration: 0.2 } }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                className="py-[3px]"
-              >
-                {line.isBot ? (
-                  <p className="break-words text-[10px] leading-[1.45]" style={{ wordBreak: 'break-word', textShadow: '0 1px 4px rgba(0,0,0,0.95)' }}>
-                    <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
-                    <span style={{ color: 'rgba(255,255,255,0.78)' }}>: {line.text}</span>
-                  </p>
-                ) : (
-                  <p className="break-words text-[10px] leading-[1.45]" style={{ wordBreak: 'break-word', textShadow: '0 1px 4px rgba(0,0,0,0.95)' }}>
-                    <span style={{ color: feedUserColor(line.user) }} className="font-bold">
-                      {line.user}
-                    </span>
-                    <span style={{ color: 'rgba(255,255,255,0.9)' }}>: {line.text}</span>
-                  </p>
-                )}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* ── Mobile: message-only overlay above bottom nav ── */}
-      <div
-        className="absolute left-3 w-[min(72vw,220px)] sm:hidden"
-        style={{ pointerEvents: 'none', bottom: 'calc(env(safe-area-inset-bottom) + 4.5rem)' }}
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="flex flex-col gap-[2px]"
-        >
-          <AnimatePresence initial={false}>
-            {lines.slice(-5).map(line => (
-              <motion.div
-                key={line.id}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, transition: { duration: 0.25 } }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-              >
-                {line.isBot ? (
-                  <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
-                    <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
-                    <span style={{ color: 'rgba(255,255,255,0.65)' }}>: {line.text}</span>
-                  </p>
-                ) : (
-                  <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
-                    <span style={{ color: feedUserColor(line.user) }} className="font-bold">
-                      {line.user}
-                    </span>
-                    <span style={{ color: 'rgba(255,255,255,0.8)' }}>: {line.text}</span>
-                  </p>
-                )}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      </div>
-    </motion.div>,
-    document.body,
-  )
-}
-// ──────────────────────────────────────────────────────────────────────────
 
 type Props = {
   depositTokens: string
@@ -380,9 +122,9 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   })
 
   const scroll = useSpring(scrollYProgress, {
-    stiffness: 58,
-    damping: 24,
-    mass: 1.4,
+    stiffness: 100,
+    damping: 30,
+    mass: 0.9,
   })
 
   const [activeStageIdx, setActiveStageIdx] = useState(0)
@@ -476,9 +218,6 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // HUD / camera
   const progressH = useTransform(scroll, [0, 1], ['0%', '100%'])
   const cueOpacity = useTransform(scroll, [0, 0.10, 0.24], [0.88, 0.88, 0])
-  // Activity feed: visible from the moment the section enters view
-  // Feed fades in when creator coin cameos start descending (~stage 2)
-  const feedOp = useTransform(scroll, [0.44, 0.50, 0.91, 0.95], [0, 1, 1, 0])
 
   // Camera — continuous slow drift, no kinks
   const worldY = useTransform(scroll, [0, 1], [0, -6])
@@ -1655,8 +1394,6 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
             </svg>
           </motion.div>
 
-          {/* Live activity feed — bottom-right, outside 3D world */}
-          <LiveActivityFeed feedOp={feedOp} />
         </div>
       </div>
 

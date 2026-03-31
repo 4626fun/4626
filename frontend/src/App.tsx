@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, type ReactNode } from 'react'
+import { Suspense, lazy, useMemo, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AdminLayout } from './components/AdminLayout'
@@ -43,7 +43,7 @@ function MarketingOnlyRoute(props: { children: ReactNode }) {
   return null
 }
 
-function AppLayoutWithAccountContext() {
+function AuthenticatedAppLayout() {
   return (
     <AccountContextProvider>
       <Layout />
@@ -51,7 +51,7 @@ function AppLayoutWithAccountContext() {
   )
 }
 
-function AppLayoutWithoutAccountContext() {
+function PublicAppLayout() {
   return <Layout interactive={false} chatEnabled={false} />
 }
 
@@ -74,7 +74,26 @@ export function getGenericNotFoundCta(hostMode: import('@/lib/host').HostMode): 
   }
 }
 
-const LazyAuthWalletShell = lazy(async () => {
+function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
+  loader: () => Promise<TModule>,
+  exportName: TKey,
+) {
+  return lazy(async () => {
+    const mod = await loader()
+    return { default: mod[exportName] as ComponentType<any> }
+  })
+}
+
+function lazyDefault<TModule extends { default: ComponentType<any> }>(
+  loader: () => Promise<TModule>,
+) {
+  return lazy(async () => {
+    const mod = await loader()
+    return { default: mod.default }
+  })
+}
+
+const LazyAuthWalletBoundary = lazy(async () => {
   const [privyModule, web3Module] = await Promise.all([
     import('@/lib/privy/client'),
     import('./web3/Web3Providers'),
@@ -82,7 +101,7 @@ const LazyAuthWalletShell = lazy(async () => {
   const PrivyClientProvider = privyModule.PrivyClientProvider
   const WalletProviders = web3Module.WalletProviders
   return {
-    default: function AuthWalletBoundary() {
+    default: function AuthenticatedWalletBoundary() {
       return (
         <PrivyClientProvider>
           <WalletProviders>
@@ -98,7 +117,7 @@ const LazyPrivyBoundary = lazy(async () => {
   const m = await import('@/lib/privy/client')
   const PrivyClientProvider = m.PrivyClientProvider
   return {
-    default: function PrivyBoundary() {
+    default: function PrivyRouteBoundary() {
       return (
         <PrivyClientProvider>
           <Outlet />
@@ -116,7 +135,7 @@ const LazyAccessBoundary = lazy(async () => {
   const AccessStateProvider = accessModule.AccessStateProvider
   const WalletProviders = web3Module.WalletProviders
   return {
-    default: function AccessBoundary() {
+    default: function AccessRouteBoundary() {
       return (
         <WalletProviders>
           <AccessStateProvider>
@@ -128,205 +147,160 @@ const LazyAccessBoundary = lazy(async () => {
   }
 })
 
-const LazyRequireSession = lazy(async () => {
-  const m = await import('./app/accessRuntime')
-  return { default: m.RequireSession }
-})
-
-const LazyRequireAccepted = lazy(async () => {
-  const m = await import('./app/accessRuntime')
-  return { default: m.RequireAccepted }
-})
-
-const LazyRequireAdmin = lazy(async () => {
-  const m = await import('./app/accessRuntime')
-  return { default: m.RequireAdmin }
-})
+const LazyRequireSession = lazyNamed(() => import('./app/accessRuntime'), 'RequireSession')
+const LazyRequireAccepted = lazyNamed(() => import('./app/accessRuntime'), 'RequireAccepted')
+const LazyRequireAdmin = lazyNamed(() => import('./app/accessRuntime'), 'RequireAdmin')
 
 function LazyRouteBoundary(props: { children: ReactNode }) {
   return <Suspense fallback={<AppLoadingState />}>{props.children}</Suspense>
 }
 
-const Vault = lazy(async () => {
-  const m = await import('./pages/Vault')
-  return { default: m.Vault }
-})
+type LazyRouteComponent = ComponentType<any> | LazyExoticComponent<ComponentType<any>>
 
-const CompleteAuction = lazy(async () => {
-  const m = await import('./pages/CompleteAuction')
-  return { default: m.CompleteAuction }
-})
+function LazyGuardedOutlet(props: { guard: LazyRouteComponent }) {
+  const Guard = props.guard
+  return (
+    <LazyRouteBoundary>
+      <Guard />
+    </LazyRouteBoundary>
+  )
+}
 
-const AuctionBid = lazy(async () => {
-  const m = await import('./pages/AuctionBid')
-  return { default: m.AuctionBid }
-})
+function SmartWalletRoute(props: { children: ReactNode }) {
+  return <SmartWalletsRouteProvider>{props.children}</SmartWalletsRouteProvider>
+}
 
-const DeployVault = lazy(async () => {
-  const m = await import('./pages/DeployVault')
-  return { default: m.DeployVault }
-})
+function marketingOnlyElement(element: ReactNode) {
+  return <MarketingOnlyRoute>{element}</MarketingOnlyRoute>
+}
 
-const SmartWalletsRouteProvider = lazy(async () => {
-  const m = await import('@/lib/privy/SmartWalletsRouteProvider')
-  return { default: m.SmartWalletsRouteProvider }
-})
+function SessionAcceptedRoute(props: { children?: ReactNode }) {
+  return (
+    <LazyRouteBoundary>
+      <LazyRequireSession>
+        <LazyRouteBoundary>
+          <LazyRequireAccepted>{props.children}</LazyRequireAccepted>
+        </LazyRouteBoundary>
+      </LazyRequireSession>
+    </LazyRouteBoundary>
+  )
+}
 
-const Leaderboard = lazy(async () => {
-  const m = await import('./pages/Leaderboard')
-  return { default: m.Leaderboard }
-})
+const Vault = lazyNamed(() => import('./pages/Vault'), 'Vault')
+const CompleteAuction = lazyNamed(() => import('./pages/CompleteAuction'), 'CompleteAuction')
+const AuctionBid = lazyNamed(() => import('./pages/AuctionBid'), 'AuctionBid')
+const DeployVault = lazyNamed(() => import('./pages/DeployVault'), 'DeployVault')
+const SmartWalletsRouteProvider = lazyNamed(() => import('@/lib/privy/SmartWalletsRouteProvider'), 'SmartWalletsRouteProvider')
+const Leaderboard = lazyNamed(() => import('./pages/Leaderboard'), 'Leaderboard')
+const CoinManage = lazyNamed(() => import('./pages/CoinManage'), 'CoinManage')
+const CreatorEarnings = lazyNamed(() => import('./pages/CreatorEarnings'), 'CreatorEarnings')
+const Faq = lazyNamed(() => import('./pages/Faq'), 'Faq')
+const FaqHowItWorks = lazyNamed(() => import('./pages/FaqHowItWorks'), 'FaqHowItWorks')
+const DistributeCcaLaunch = lazyNamed(() => import('./pages/DistributeCcaLaunch'), 'DistributeCcaLaunch')
+const Status = lazyNamed(() => import('./pages/Status'), 'Status')
+const AdminCreatorAccess = lazyNamed(() => import('./pages/AdminCreatorAccess'), 'AdminCreatorAccess')
+const AdminWaitlist = lazyNamed(() => import('./pages/AdminWaitlist'), 'AdminWaitlist')
+const AdminOps = lazyNamed(() => import('./pages/AdminOps'), 'AdminOps')
+const AdminDeployStrategies = lazyNamed(() => import('./pages/AdminDeployStrategies'), 'AdminDeployStrategies')
+const AdminAgentSetup = lazyNamed(() => import('./pages/AdminAgentSetup'), 'AdminAgentSetup')
+const AdminImageGeneration = lazyNamed(() => import('./pages/AdminImageGeneration'), 'AdminImageGeneration')
+const GaugeVoting = lazyDefault(() => import('./pages/GaugeVoting'))
+const AuctionDemo = lazyDefault(() => import('./pages/AuctionDemo'))
+const AgentDirectory = lazyNamed(() => import('./pages/AgentDirectory'), 'AgentDirectory')
+const AgentRegister = lazyNamed(() => import('./pages/AgentRegister'), 'AgentRegister')
+const AgentUriService = lazyNamed(() => import('./pages/AgentUriService'), 'AgentUriService')
+const ExploreCreators = lazyNamed(() => import('./pages/ExploreCreators'), 'ExploreCreators')
+const ExploreContent = lazyNamed(() => import('./pages/ExploreContent'), 'ExploreContent')
+const ExploreTrends = lazyNamed(() => import('./pages/ExploreTrends'), 'ExploreTrends')
+const ExploreTransactions = lazyNamed(() => import('./pages/ExploreTransactions'), 'ExploreTransactions')
+const ExploreCreatorDetail = lazyNamed(() => import('./pages/ExploreCreatorDetail'), 'ExploreCreatorDetail')
+const ExploreContentDetail = lazyNamed(() => import('./pages/ExploreContentDetail'), 'ExploreContentDetail')
+const ExploreCreatorTransactions = lazyNamed(() => import('./pages/ExploreCreatorTransactions'), 'ExploreCreatorTransactions')
+const ExploreContentTransactions = lazyNamed(() => import('./pages/ExploreContentTransactions'), 'ExploreContentTransactions')
+const ExploreContentPoolAlias = lazyNamed(() => import('./pages/ExploreContentPoolAlias'), 'ExploreContentPoolAlias')
+const Swap = lazyNamed(() => import('./pages/Swap'), 'Swap')
+const Positions = lazyNamed(() => import('./pages/Positions'), 'Positions')
+const Portfolio = lazyNamed(() => import('./pages/Portfolio'), 'Portfolio')
+const AccountsPage = lazyNamed(() => import('./pages/accounts/AccountsPage'), 'AccountsPage')
+const AppContinue = lazyNamed(() => import('./pages/AppContinue'), 'AppContinue')
 
-const CoinManage = lazy(async () => {
-  const m = await import('./pages/CoinManage')
-  return { default: m.CoinManage }
-})
+const MARKETING_ONLY_ROUTES: Array<{ path: string; element: ReactNode }> = [
+  { path: '/faq', element: <Faq /> },
+  { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
+  { path: '/cca', element: <DistributeCcaLaunch /> },
+  { path: '/distribute/cca-launch', element: <DistributeCcaLaunch /> },
+  { path: '/status', element: <Status /> },
+]
 
-const CreatorEarnings = lazy(async () => {
-  const m = await import('./pages/CreatorEarnings')
-  return { default: m.CreatorEarnings }
-})
+type PathRouteDef = { path: string; element: ReactNode }
 
-const Faq = lazy(async () => {
-  const m = await import('./pages/Faq')
-  return { default: m.Faq }
-})
+const ACCOUNT_ROUTES: PathRouteDef[] = [
+  { path: '/continue', element: <AppContinue /> },
+  { path: '/accounts', element: <AccountsPage /> },
+  { path: '/account', element: <AccountsPage /> },
+]
 
-const FaqHowItWorks = lazy(async () => {
-  const m = await import('./pages/FaqHowItWorks')
-  return { default: m.FaqHowItWorks }
-})
+const EXPLORE_ROUTES: PathRouteDef[] = [
+  { path: '/explore/creators', element: <ExploreCreators /> },
+  { path: '/explore/content', element: <ExploreContent /> },
+  { path: '/explore/trends', element: <ExploreTrends /> },
+  { path: '/explore/transactions', element: <ExploreTransactions /> },
+  { path: '/explore/creators/:chain/:tokenAddress', element: <ExploreCreatorDetail /> },
+  { path: '/explore/creators/:chain/:tokenAddress/transactions', element: <ExploreCreatorTransactions /> },
+  { path: '/explore/content/:chain/:contentCoinAddress', element: <ExploreContentDetail /> },
+  { path: '/explore/content/:chain/:contentCoinAddress/transactions', element: <ExploreContentTransactions /> },
+  { path: '/explore/content/:chain/pool/:poolIdOrPoolKeyHash', element: <ExploreContentPoolAlias /> },
+  { path: '/positions', element: <Positions /> },
+]
 
-const DistributeCcaLaunch = lazy(async () => {
-  const m = await import('./pages/DistributeCcaLaunch')
-  return { default: m.DistributeCcaLaunch }
-})
+const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
+  { path: '/swap', element: <Swap /> },
+  { path: '/portfolio', element: <Portfolio /> },
+  { path: '/portfolio/:address', element: <Portfolio /> },
+  {
+    path: '/deploy',
+    element: (
+      <SmartWalletRoute>
+        <DeployVault />
+      </SmartWalletRoute>
+    ),
+  },
+  { path: '/coin/:address/manage', element: <CoinManage /> },
+  { path: '/creator/earnings', element: <CreatorEarnings /> },
+  { path: '/creator/:identifier/earnings', element: <CreatorEarnings /> },
+  { path: '/vote', element: <GaugeVoting /> },
+  { path: '/auction/bid/:address', element: <AuctionBid /> },
+  { path: '/complete-auction', element: <CompleteAuction /> },
+  { path: '/complete-auction/:strategy', element: <CompleteAuction /> },
+  { path: '/vault/:address', element: <Vault /> },
+  { path: '/agents', element: <AgentDirectory /> },
+  { path: '/agents/register', element: <AgentRegister /> },
+  { path: '/agents/uri-service', element: <AgentUriService /> },
+  { path: '/auction-demo', element: <AuctionDemo /> },
+]
 
-const Status = lazy(async () => {
-  const m = await import('./pages/Status')
-  return { default: m.Status }
-})
-
-const AdminCreatorAccess = lazy(async () => {
-  const m = await import('./pages/AdminCreatorAccess')
-  return { default: m.AdminCreatorAccess }
-})
-
-const AdminWaitlist = lazy(async () => {
-  const m = await import('./pages/AdminWaitlist')
-  return { default: m.AdminWaitlist }
-})
-
-const AdminOps = lazy(async () => {
-  const m = await import('./pages/AdminOps')
-  return { default: m.AdminOps }
-})
-
-const AdminDeployStrategies = lazy(async () => {
-  const m = await import('./pages/AdminDeployStrategies')
-  return { default: m.AdminDeployStrategies }
-})
-
-const AdminAgentSetup = lazy(async () => {
-  const m = await import('./pages/AdminAgentSetup')
-  return { default: m.AdminAgentSetup }
-})
-const AdminImageGeneration = lazy(async () => {
-  const m = await import('./pages/AdminImageGeneration')
-  return { default: m.AdminImageGeneration }
-})
-
-const GaugeVoting = lazy(async () => {
-  const m = await import('./pages/GaugeVoting')
-  return { default: m.default }
-})
-
-const AuctionDemo = lazy(async () => {
-  const m = await import('./pages/AuctionDemo')
-  return { default: m.default }
-})
-const AgentDirectory = lazy(async () => {
-  const m = await import('./pages/AgentDirectory')
-  return { default: m.AgentDirectory }
-})
-const AgentRegister = lazy(async () => {
-  const m = await import('./pages/AgentRegister')
-  return { default: m.AgentRegister }
-})
-const AgentUriService = lazy(async () => {
-  const m = await import('./pages/AgentUriService')
-  return { default: m.AgentUriService }
-})
-
-const ExploreCreators = lazy(async () => {
-  const m = await import('./pages/ExploreCreators')
-  return { default: m.ExploreCreators }
-})
-
-const ExploreContent = lazy(async () => {
-  const m = await import('./pages/ExploreContent')
-  return { default: m.ExploreContent }
-})
-
-const ExploreTrends = lazy(async () => {
-  const m = await import('./pages/ExploreTrends')
-  return { default: m.ExploreTrends }
-})
-
-const ExploreTransactions = lazy(async () => {
-  const m = await import('./pages/ExploreTransactions')
-  return { default: m.ExploreTransactions }
-})
-
-const ExploreCreatorDetail = lazy(async () => {
-  const m = await import('./pages/ExploreCreatorDetail')
-  return { default: m.ExploreCreatorDetail }
-})
-
-const ExploreContentDetail = lazy(async () => {
-  const m = await import('./pages/ExploreContentDetail')
-  return { default: m.ExploreContentDetail }
-})
-
-const ExploreCreatorTransactions = lazy(async () => {
-  const m = await import('./pages/ExploreCreatorTransactions')
-  return { default: m.ExploreCreatorTransactions }
-})
-
-const ExploreContentTransactions = lazy(async () => {
-  const m = await import('./pages/ExploreContentTransactions')
-  return { default: m.ExploreContentTransactions }
-})
-
-const ExploreContentPoolAlias = lazy(async () => {
-  const m = await import('./pages/ExploreContentPoolAlias')
-  return { default: m.ExploreContentPoolAlias }
-})
-
-const Swap = lazy(async () => {
-  const m = await import('./pages/Swap')
-  return { default: m.Swap }
-})
-
-const Positions = lazy(async () => {
-  const m = await import('./pages/Positions')
-  return { default: m.Positions }
-})
-
-const Portfolio = lazy(async () => {
-  const m = await import('./pages/Portfolio')
-  return { default: m.Portfolio }
-})
-
-const AccountsPage = lazy(async () => {
-  const m = await import('./pages/accounts/AccountsPage')
-  return { default: m.AccountsPage }
-})
-
-const AppContinue = lazy(async () => {
-  const m = await import('./pages/AppContinue')
-  return { default: m.AppContinue }
-})
+const ADMIN_CHILD_ROUTES: PathRouteDef[] = [
+  { path: 'creator-access', element: <AdminCreatorAccess /> },
+  { path: 'waitlist', element: <AdminWaitlist /> },
+  { path: 'agent-setup', element: <AdminAgentSetup /> },
+  { path: 'imagegen', element: <AdminImageGeneration /> },
+  {
+    path: 'ops',
+    element: (
+      <SmartWalletRoute>
+        <AdminOps />
+      </SmartWalletRoute>
+    ),
+  },
+  {
+    path: 'deploy-strategies',
+    element: (
+      <SmartWalletRoute>
+        <AdminDeployStrategies />
+      </SmartWalletRoute>
+    ),
+  },
+]
 
 function NotFoundPage() {
   const location = useLocation()
@@ -390,193 +364,48 @@ function App() {
         <Route path="/404" element={<NotFoundPage />} />
 
         <Route element={<Layout interactive={false} />}>
-          <Route
-            path="/faq"
-            element={
-              <MarketingOnlyRoute>
-                <Faq />
-              </MarketingOnlyRoute>
-            }
-          />
-          <Route
-            path="/faq/how-it-works"
-            element={
-              <MarketingOnlyRoute>
-                <FaqHowItWorks />
-              </MarketingOnlyRoute>
-            }
-          />
-          <Route
-            path="/cca"
-            element={
-              <MarketingOnlyRoute>
-                <DistributeCcaLaunch />
-              </MarketingOnlyRoute>
-            }
-          />
-          <Route
-            path="/distribute/cca-launch"
-            element={
-              <MarketingOnlyRoute>
-                <DistributeCcaLaunch />
-              </MarketingOnlyRoute>
-            }
-          />
+          {MARKETING_ONLY_ROUTES.map((route) => (
+            <Route key={route.path} path={route.path} element={marketingOnlyElement(route.element)} />
+          ))}
           <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route
-            path="/status"
-            element={
-              <MarketingOnlyRoute>
-                <Status />
-              </MarketingOnlyRoute>
-            }
-          />
         </Route>
 
         <Route
-          element={
-              <LazyRouteBoundary>
-              <LazyAuthWalletShell />
-              </LazyRouteBoundary>
-          }
+          element={<LazyGuardedOutlet guard={LazyAuthWalletBoundary} />}
         >
-          <Route
-          element={
-              <LazyRouteBoundary>
-              <AppLayoutWithAccountContext />
-            </LazyRouteBoundary>
-          }
-        >
-            <Route path="/continue" element={<AppContinue />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="/account" element={<AccountsPage />} />
+          <Route element={<AuthenticatedAppLayout />}>
+            {ACCOUNT_ROUTES.map((route) => (
+              <Route key={route.path} path={route.path} element={route.element} />
+            ))}
           </Route>
         </Route>
 
         <Route
-          element={
-            <LazyRouteBoundary>
-              <LazyAccessBoundary />
-            </LazyRouteBoundary>
-          }
+          element={<LazyGuardedOutlet guard={LazyAccessBoundary} />}
         >
-          <Route
-          element={
-            <LazyRouteBoundary>
-              <AppLayoutWithoutAccountContext />
-            </LazyRouteBoundary>
-          }
-        >
-            <Route
-              element={
-                <LazyRouteBoundary>
-                  <LazyRequireSession />
-                </LazyRouteBoundary>
-              }
-            >
-              <Route
-                element={
-                  <LazyRouteBoundary>
-                    <LazyRequireAccepted />
-                  </LazyRouteBoundary>
-                }
-              >
-                <Route path="/explore/creators" element={<ExploreCreators />} />
-                <Route path="/explore/content" element={<ExploreContent />} />
-                <Route path="/explore/trends" element={<ExploreTrends />} />
-                <Route path="/explore/transactions" element={<ExploreTransactions />} />
-                <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
-                <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
-                <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
-                <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
-                <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-                <Route path="/positions" element={<Positions />} />
-              </Route>
+          <Route element={<PublicAppLayout />}>
+            <Route element={<SessionAcceptedRoute />}>
+              {EXPLORE_ROUTES.map((route) => (
+                <Route key={route.path} path={route.path} element={route.element} />
+              ))}
             </Route>
           </Route>
 
           <Route
-            element={
-              <LazyRouteBoundary>
-                <LazyPrivyBoundary />
-              </LazyRouteBoundary>
-            }
+            element={<LazyGuardedOutlet guard={LazyPrivyBoundary} />}
           >
-            <Route
-              element={
-                <LazyRouteBoundary>
-                  <AppLayoutWithAccountContext />
-                </LazyRouteBoundary>
-              }
-            >
-              <Route
-                element={
-                  <LazyRouteBoundary>
-                    <LazyRequireSession />
-                  </LazyRouteBoundary>
-                }
-              >
-                <Route
-                  element={
-                    <LazyRouteBoundary>
-                      <LazyRequireAccepted />
-                    </LazyRouteBoundary>
-                  }
-                >
-                  <Route path="/swap" element={<Swap />} />
-                  <Route path="/portfolio" element={<Portfolio />} />
-                  <Route path="/portfolio/:address" element={<Portfolio />} />
-                  <Route
-                    path="/deploy"
-                    element={
-                      <SmartWalletsRouteProvider>
-                        <DeployVault />
-                      </SmartWalletsRouteProvider>
-                    }
-                  />
-                  <Route path="/coin/:address/manage" element={<CoinManage />} />
-                  <Route path="/creator/earnings" element={<CreatorEarnings />} />
-                  <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-                  <Route path="/vote" element={<GaugeVoting />} />
-                  <Route path="/auction/bid/:address" element={<AuctionBid />} />
-                  <Route path="/complete-auction" element={<CompleteAuction />} />
-                  <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-                  <Route path="/vault/:address" element={<Vault />} />
-                  <Route path="/agents" element={<AgentDirectory />} />
-                  <Route path="/agents/register" element={<AgentRegister />} />
-                  <Route path="/agents/uri-service" element={<AgentUriService />} />
-                  <Route path="/auction-demo" element={<AuctionDemo />} />
-                </Route>
+            <Route element={<AuthenticatedAppLayout />}>
+              <Route element={<SessionAcceptedRoute />}>
+                {APP_ACCEPTED_ROUTES.map((route) => (
+                  <Route key={route.path} path={route.path} element={route.element} />
+                ))}
 
-                <Route
-                  element={
-                    <LazyRouteBoundary>
-                      <LazyRequireAdmin />
-                    </LazyRouteBoundary>
-                  }
-                >
+                <Route element={<LazyGuardedOutlet guard={LazyRequireAdmin} />}>
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<Navigate to="/admin/waitlist" replace />} />
-                    <Route path="creator-access" element={<AdminCreatorAccess />} />
-                    <Route path="waitlist" element={<AdminWaitlist />} />
-                    <Route path="agent-setup" element={<AdminAgentSetup />} />
-                    <Route path="imagegen" element={<AdminImageGeneration />} />
-                    <Route
-                      path="ops"
-                      element={
-                        <SmartWalletsRouteProvider>
-                          <AdminOps />
-                        </SmartWalletsRouteProvider>
-                      }
-                    />
-                    <Route
-                      path="deploy-strategies"
-                      element={
-                        <SmartWalletsRouteProvider>
-                          <AdminDeployStrategies />
-                        </SmartWalletsRouteProvider>
-                      }
-                    />
+                    {ADMIN_CHILD_ROUTES.map((route) => (
+                      <Route key={route.path} path={route.path} element={route.element} />
+                    ))}
                   </Route>
                 </Route>
               </Route>

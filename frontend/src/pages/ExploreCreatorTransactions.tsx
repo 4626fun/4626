@@ -4,10 +4,7 @@ import { getAddress, isAddress } from 'viem'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { PageMeta } from '@/components/seo/PageMeta'
-
-function isSupportedChain(chain: string): boolean {
-  return chain.toLowerCase() === 'base'
-}
+import { isSupportedExploreChain } from './exploreShared'
 
 export function ExploreCreatorTransactions() {
   const params = useParams()
@@ -15,7 +12,7 @@ export function ExploreCreatorTransactions() {
   const tokenAddressRaw = String(params.tokenAddress ?? '').trim()
   const tokenAddress = isAddress(tokenAddressRaw) ? getAddress(tokenAddressRaw) : null
 
-  if (!chain || !isSupportedChain(chain) || !tokenAddress) {
+  if (!chain || !isSupportedExploreChain(chain) || !tokenAddress) {
     return <Navigate replace to="/explore/transactions" />
   }
 
@@ -56,4 +53,3 @@ export function ExploreCreatorTransactions() {
     </div>
   )
 }
-

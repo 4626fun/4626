@@ -13,11 +13,7 @@ import {
   getZoraExploreVolumeHeaderLabel,
   getZoraExploreVolumeNote,
 } from '@/lib/zora/exploreVolume'
-
-function formatAddress(address: string | undefined): string {
-  if (!address) return '-'
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
-}
+import { formatShortAddress } from './exploreShared'
 
 function formatTimeAgo(dateStr: string | undefined): string {
   if (!dateStr) return '-'
@@ -144,7 +140,7 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
       </div>
 
       {/* Account */}
-      <span className="hidden sm:block text-sm text-zinc-400">{formatAddress(creatorAddress)}</span>
+      <span className="hidden sm:block text-sm text-zinc-400">{formatShortAddress(creatorAddress)}</span>
 
       {/* External link */}
       <a

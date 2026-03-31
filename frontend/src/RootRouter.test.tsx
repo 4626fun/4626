@@ -13,8 +13,11 @@ vi.mock('@/lib/host', async () => {
   }
 })
 
-vi.mock('./ProtectedApp', () => ({
+vi.mock('./App', () => ({
   default: () => <div data-testid="protected-app">protected app</div>,
+}))
+vi.mock('./web3/Web3Providers', () => ({
+  AppQueryProvider: ({ children }: { children: unknown }) => <>{children}</>,
 }))
 
 vi.mock('./pages/Home', () => ({
@@ -34,7 +37,7 @@ describe('RootRouter', () => {
   })
 
   it.each(['/telegram/link', '/telegram/menu'])(
-    'redirects %s requests to the standalone html without loading ProtectedApp',
+    'redirects %s requests to the standalone html without loading the protected app',
     async (pathname) => {
     const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
 
@@ -52,7 +55,7 @@ describe('RootRouter', () => {
     },
   )
 
-  it('keeps non-telegram routes on ProtectedApp', async () => {
+  it('keeps non-telegram routes on the protected app boundary', async () => {
     render(
       <MemoryRouter initialEntries={['/swap']}>
         <RootRouter />

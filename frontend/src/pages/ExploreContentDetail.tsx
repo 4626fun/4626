@@ -22,10 +22,17 @@ import { fetchZoraCoin } from '@/lib/zora/client'
 import { usePoolHistory } from '@/lib/uniswap/hooks'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
-
-function isSupportedChain(chain: string): boolean {
-  return chain.toLowerCase() === 'base'
-}
+import {
+  formatCount,
+  formatDateLabel,
+  formatShortAddress,
+  formatTimestamp,
+  formatTokenAmount,
+  formatUsd,
+  isSupportedExploreChain,
+  parseNumber,
+  toDisplayAssetUrl,
+} from './exploreShared'
 
 type PeriodKey = '1H' | '1D' | '1W' | '1M' | '1Y'
 type MetricKey = 'liquidity' | 'volume' | 'fees' | 'price'
@@ -47,26 +54,6 @@ const METRICS: Array<{ key: MetricKey; label: string; icon: React.ReactNode }> =
   { key: 'price', label: 'Price', icon: <TrendingUp className="w-3.5 h-3.5" /> },
 ]
 
-const IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
-
-function parseNumber(value: string | number | null | undefined): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
-  if (typeof value === 'string') {
-    const n = Number.parseFloat(value)
-    return Number.isFinite(n) ? n : 0
-  }
-  return 0
-}
-
-function formatUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '$0.00'
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`
-  if (value < 0.01) return `$${value.toFixed(6)}`
-  return `$${value.toFixed(2)}`
-}
-
 function formatTokenPrice(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '$0.00'
   if (value < 0.0001) return `$${value.toExponential(2)}`
@@ -82,65 +69,12 @@ function formatPercent(value: number): string {
   return `${sign}${Math.abs(value).toFixed(2)}%`
 }
 
-function formatCount(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '0'
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`
-  return value.toLocaleString()
-}
-
 function formatSupply(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '-'
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
   if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`
   return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
-}
-
-function formatCreatedAt(value?: string): string {
-  if (!value) return '-'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function toDisplayAssetUrl(value?: string): string | undefined {
-  const v = value?.trim()
-  if (!v) return undefined
-  if (v.startsWith('ipfs://')) {
-    const path = v.slice('ipfs://'.length).replace(/^ipfs\//, '').replace(/^\/+/, '')
-    if (!path) return undefined
-    return `${IPFS_GATEWAY}${path}`
-  }
-  return v
-}
-
-function formatTokenAmount(value: number): string {
-  const abs = Math.abs(value)
-  if (!Number.isFinite(abs) || abs === 0) return '0'
-  if (abs < 0.0001) return abs.toExponential(2)
-  if (abs < 1) return abs.toFixed(6)
-  if (abs < 1000) return abs.toFixed(4)
-  return abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
-}
-
-function shortAddress(addr: string): string {
-  if (!addr) return ''
-  if (addr.length <= 12) return addr
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
-}
-
-function formatTimestamp(ts: number): string {
-  const ms = ts < 1_000_000_000_000 ? ts * 1000 : ts
-  const d = new Date(ms)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 function calcCoefficientOfVariation(values: number[]): number | null {
@@ -343,13 +277,15 @@ export function ExploreContentDetail() {
     })
   }, [swaps, contentCoinAddress])
 
-  if (!chain || !isSupportedChain(chain)) {
+  if (!chain || !isSupportedExploreChain(chain)) {
     return <Navigate replace to="/explore/content" />
   }
 
   if (!contentCoinAddress) {
     return <Navigate replace to="/explore/content" />
   }
+
+  const shortAddress = (addr: string) => formatShortAddress(addr, '')
 
   const symbol = coin?.symbol || 'CONTENT'
   const name = coin?.name || 'Content Coin'
@@ -359,7 +295,7 @@ export function ExploreContentDetail() {
   const holdersCount = parseNumber(coin?.uniqueHolders)
   const totalSupplyCount = parseNumber(coin?.totalSupply)
   const marketCapUsd = parseNumber(coin?.marketCap)
-  const createdLabel = formatCreatedAt(coin?.createdAt)
+  const createdLabel = formatDateLabel(coin?.createdAt)
   const canonicalPath = `/explore/content/${chain.toLowerCase()}/${contentCoinAddress}`
 
   const pairLabel = primaryPool ? `${primaryPool.token0.symbol} / ${primaryPool.token1.symbol}` : `${symbol} / ZORA`

@@ -11,12 +11,17 @@ import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
+import {
+  formatDateLabel,
+  formatShortAddress,
+  formatTimestamp,
+  formatTokenAmount,
+  formatUsd,
+  isSupportedExploreChain,
+  parseNumber,
+} from './exploreShared'
 
 const CONTENT_COINS_PAGE_SIZE = 20
-
-function isSupportedChain(chain: string): boolean {
-  return chain.toLowerCase() === 'base'
-}
 
 function formatNumber(value: string | number | undefined): string {
   if (!value) return '-'
@@ -28,58 +33,8 @@ function formatNumber(value: string | number | undefined): string {
   return `$${num.toFixed(2)}`
 }
 
-function formatDate(dateString: string | undefined): string {
-  if (!dateString) return '-'
-  try {
-    return new Date(dateString).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return '-'
-  }
-}
-
 function shortAddress(addr: string): string {
-  if (addr.length <= 12) return addr
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
-}
-
-function parseNumber(value: string | number | undefined | null): number {
-  if (value == null) return 0
-  const n = typeof value === 'number' ? value : Number.parseFloat(value)
-  return Number.isFinite(n) ? n : 0
-}
-
-function formatUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '$0.00'
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`
-  if (value < 0.01) return `$${value.toFixed(6)}`
-  return `$${value.toFixed(2)}`
-}
-
-function formatTokenAmount(value: number): string {
-  const abs = Math.abs(value)
-  if (!Number.isFinite(abs) || abs === 0) return '0'
-  if (abs < 0.0001) return abs.toExponential(2)
-  if (abs < 1) return abs.toFixed(6)
-  if (abs < 1000) return abs.toFixed(4)
-  return abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
-}
-
-function formatTimestamp(ts: number): string {
-  const ms = ts < 1_000_000_000_000 ? ts * 1000 : ts
-  const d = new Date(ms)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatShortAddress(addr, '')
 }
 
 // Dexscreener Chart Embed Component
@@ -458,7 +413,7 @@ export function ExploreCreatorDetail() {
     })
   }, [swaps, tokenAddress, symbol])
 
-  if (!chain || !isSupportedChain(chain)) {
+  if (!chain || !isSupportedExploreChain(chain)) {
     return <Navigate replace to="/explore/creators" />
   }
 
@@ -477,7 +432,7 @@ export function ExploreCreatorDetail() {
   const volume24h = formatNumber(coin?.volume24h)
   const totalVolume = formatNumber(coin?.totalVolume)
   const holders = coin?.uniqueHolders ? coin.uniqueHolders.toLocaleString() : '-'
-  const createdAt = formatDate(coin?.createdAt)
+  const createdAt = formatDateLabel(coin?.createdAt)
   const totalCoinsCreated = createdCoins.length
   const creatorChatPeer = profile?.publicWallet?.walletAddress || creatorAddress || coin?.payoutRecipientAddress || ''
   const creatorChatHref =

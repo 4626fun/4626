@@ -14,7 +14,23 @@ const WaitlistInviteEntry = lazy(async () => {
   const m = await import('./pages/WaitlistInviteEntry')
   return { default: m.WaitlistInviteEntry }
 })
-const ProtectedApp = lazy(async () => import('./ProtectedApp'))
+const LazyProtectedAppBoundary = lazy(async () => {
+  const [appModule, web3Module] = await Promise.all([
+    import('./App'),
+    import('./web3/Web3Providers'),
+  ])
+  const App = appModule.default
+  const AppQueryProvider = web3Module.AppQueryProvider
+  return {
+    default: function ProtectedAppBoundary() {
+      return (
+        <AppQueryProvider>
+          <App />
+        </AppQueryProvider>
+      )
+    },
+  }
+})
 
 function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) {
   const location = useLocation()
@@ -86,7 +102,7 @@ export function RootRouter() {
           path="*"
           element={
             <Suspense fallback={<AppLoadingState />}>
-              <ProtectedApp />
+              <LazyProtectedAppBoundary />
             </Suspense>
           }
         />

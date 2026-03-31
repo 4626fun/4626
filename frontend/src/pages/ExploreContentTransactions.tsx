@@ -9,81 +9,17 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { getPoolsByToken, getPoolSwaps } from '@/lib/uniswap/client'
 import type { UniswapPool } from '@/lib/uniswap/types'
 import { fetchZoraCoin } from '@/lib/zora/client'
-
-function isSupportedChain(chain: string): boolean {
-  return chain.toLowerCase() === 'base'
-}
-
-const IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
-
-function parseNumber(value: string | number | null | undefined): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
-  if (typeof value === 'string') {
-    const n = Number.parseFloat(value)
-    return Number.isFinite(n) ? n : 0
-  }
-  return 0
-}
-
-function formatTimestamp(ts: number): string {
-  const d = new Date(ts * 1000)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function formatUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '$0.00'
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`
-  if (value < 0.01) return `$${value.toFixed(6)}`
-  return `$${value.toFixed(2)}`
-}
-
-function formatCount(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '0'
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`
-  return value.toLocaleString()
-}
-
-function formatCreatedAt(value?: string): string {
-  if (!value) return '-'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function toDisplayAssetUrl(value?: string): string | undefined {
-  const v = value?.trim()
-  if (!v) return undefined
-  if (v.startsWith('ipfs://')) {
-    const path = v.slice('ipfs://'.length).replace(/^ipfs\//, '').replace(/^\/+/, '')
-    if (!path) return undefined
-    return `${IPFS_GATEWAY}${path}`
-  }
-  return v
-}
-
-function formatAmount(value: number): string {
-  const abs = Math.abs(value)
-  if (!Number.isFinite(abs) || abs === 0) return '0'
-  if (abs < 0.0001) return abs.toExponential(2)
-  if (abs < 1) return abs.toFixed(6)
-  if (abs < 1000) return abs.toFixed(4)
-  return abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
-}
-
-function shortAddress(addr: string): string {
-  if (!addr) return '-'
-  if (addr.length <= 12) return addr
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
-}
+import {
+  formatCount,
+  formatDateLabel,
+  formatShortAddress,
+  formatTimestamp,
+  formatTokenAmount,
+  formatUsd,
+  isSupportedExploreChain,
+  parseNumber,
+  toDisplayAssetUrl,
+} from './exploreShared'
 
 export function ExploreContentTransactions() {
   const params = useParams()
@@ -91,7 +27,7 @@ export function ExploreContentTransactions() {
   const contentCoinAddressRaw = String(params.contentCoinAddress ?? '').trim()
   const contentCoinAddress = isAddress(contentCoinAddressRaw) ? getAddress(contentCoinAddressRaw) : null
 
-  const isValid = Boolean(chain && isSupportedChain(chain) && contentCoinAddress)
+  const isValid = Boolean(chain && isSupportedExploreChain(chain) && contentCoinAddress)
   const queryAddress = (contentCoinAddress ?? '0x0000000000000000000000000000000000000000') as `0x${string}`
 
   const { data: coin } = useQuery({
@@ -156,7 +92,7 @@ export function ExploreContentTransactions() {
   const mediaUrl = toDisplayAssetUrl(coin?.mediaContent?.previewImage?.medium || coin?.mediaContent?.originalUri)
   const marketCapUsd = parseNumber(coin?.marketCap)
   const holders = parseNumber(coin?.uniqueHolders)
-  const createdLabel = formatCreatedAt(coin?.createdAt)
+  const createdLabel = formatDateLabel(coin?.createdAt)
   const canonicalPath = `/explore/content/${chain.toLowerCase()}/${contentCoinAddress}/transactions`
 
   return (
@@ -299,12 +235,12 @@ export function ExploreContentTransactions() {
                         </td>
                         <td className="px-3 py-3 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
                         <td className="px-3 py-3 text-right text-zinc-300 tabular-nums">
-                          {formatAmount(row.amount0)} {row.token0Symbol}
+                          {formatTokenAmount(row.amount0)} {row.token0Symbol}
                         </td>
                         <td className="px-3 py-3 text-right text-zinc-300 tabular-nums">
-                          {formatAmount(row.amount1)} {row.token1Symbol}
+                          {formatTokenAmount(row.amount1)} {row.token1Symbol}
                         </td>
-                        <td className="px-3 py-3 text-right text-zinc-300">{shortAddress(row.wallet)}</td>
+                        <td className="px-3 py-3 text-right text-zinc-300">{formatShortAddress(row.wallet)}</td>
                         <td className="px-3 py-3 text-right">
                           {row.txHash ? (
                             <a

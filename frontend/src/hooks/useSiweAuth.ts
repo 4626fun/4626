@@ -40,6 +40,7 @@ export const PRIVY_INTERACTIVE_LOGIN_METHODS = ['email', 'wallet'] as const
 let lastPrivyBridgeAttemptAt = 0
 let lastPrivyBridgeFailureAt = 0
 let lastPrivyBridgeFailureReason = ''
+let autoPrivyBridgeInFlight = false
 const AUTH_ME_CACHE_TTL_MS = 1_500
 let authMeCacheToken: string | null = null
 let authMeCacheAddress: string | null = null
@@ -68,6 +69,18 @@ function shouldSkipAutoPrivyBridge(): boolean {
     return now - lastPrivyBridgeFailureAt < 60_000
   }
   return false
+}
+
+function beginAutoPrivyBridgeAttempt(): boolean {
+  if (shouldSkipAutoPrivyBridge()) return false
+  if (autoPrivyBridgeInFlight) return false
+  lastPrivyBridgeAttemptAt = Date.now()
+  autoPrivyBridgeInFlight = true
+  return true
+}
+
+function endAutoPrivyBridgeAttempt() {
+  autoPrivyBridgeInFlight = false
 }
 
 export function shouldResetPrivyBridgeState(message: string): boolean {
@@ -382,12 +395,15 @@ export function useSiweAuth() {
   }, [refresh])
 
   const signInWithPrivyToken = useCallback(
-    async (privyAccessToken: string | null): Promise<string | null> => {
+    async (privyAccessToken: string | null, opts?: { background?: boolean }): Promise<string | null> => {
+      const background = opts?.background === true
       const token = typeof privyAccessToken === 'string' ? privyAccessToken.trim() : ''
       if (!token) return null
 
-      setBusy(true)
-      setError(null)
+      if (!background) {
+        setBusy(true)
+        setError(null)
+      }
       try {
         lastPrivyBridgeAttemptAt = Date.now()
         const res = await apiFetch('/api/auth/privy', {
@@ -443,10 +459,10 @@ export function useSiweAuth() {
           autoPrivyAttemptKeyRef.current = ''
           autoPrivyGlobalAttemptRef.current = false
         }
-        setError(message)
+        if (!background) setError(message)
         return null
       } finally {
-        setBusy(false)
+        if (!background) setBusy(false)
       }
     },
     [supersedePendingRefresh],
@@ -460,18 +476,20 @@ export function useSiweAuth() {
   useEffect(() => {
     if (busy) return
     if (!privyReady || !privyAuthenticated || !getPrivyAccessToken) return
-    if (shouldSkipAutoPrivyBridge()) return
     const existing = getStoredSessionToken()
     if (existing) return
     if (autoPrivyGlobalAttemptRef.current) return
+    if (!beginAutoPrivyBridgeAttempt()) return
     autoPrivyGlobalAttemptRef.current = true
     void (async () => {
       try {
         const token = await getPrivyAccessToken()
         if (!token) return
-        await signInWithPrivyToken(token)
+        await signInWithPrivyToken(token, { background: true })
       } catch {
         // ignore; user can always click "Sign in"
+      } finally {
+        endAutoPrivyBridgeAttempt()
       }
     })()
   }, [busy, getPrivyAccessToken, privyAuthenticated, privyReady, signInWithPrivyToken])
@@ -485,20 +503,23 @@ export function useSiweAuth() {
       privyReady,
       privyAuthenticated,
       hasPrivyAccessTokenReader: Boolean(getPrivyAccessToken),
-      skipAutoBridge: shouldSkipAutoPrivyBridge(),
+      skipAutoBridge: false,
       hasStoredSessionToken: Boolean(getStoredSessionToken()),
       alreadyAttempted: autoPrivyGlobalAttemptRef.current,
     })
     if (!shouldAutoBridge || !getPrivyAccessToken) return
+    if (!beginAutoPrivyBridgeAttempt()) return
 
     autoPrivyGlobalAttemptRef.current = true
     void (async () => {
       try {
         const token = await getPrivyAccessToken()
         if (!token) return
-        await signInWithPrivyToken(token)
+        await signInWithPrivyToken(token, { background: true })
       } catch {
         // ignore
+      } finally {
+        endAutoPrivyBridgeAttempt()
       }
     })()
   }, [authAddress, busy, getPrivyAccessToken, privyAuthenticated, privyReady, signInWithPrivyToken])
@@ -517,10 +538,11 @@ export function useSiweAuth() {
       privyReady,
       privyAuthenticated,
       hasPrivyAccessTokenReader: Boolean(getPrivyAccessToken),
-      skipAutoBridge: shouldSkipAutoPrivyBridge(),
+      skipAutoBridge: false,
       attemptedForAddress: autoPrivyAttemptKeyRef.current,
     })
     if (!shouldAutoBridge || !getPrivyAccessToken || !address) return
+    if (!beginAutoPrivyBridgeAttempt()) return
 
     autoPrivyAttemptKeyRef.current = address.toLowerCase()
 
@@ -528,9 +550,11 @@ export function useSiweAuth() {
       try {
         const token = await getPrivyAccessToken()
         if (!token) return
-        await signInWithPrivyToken(token)
+        await signInWithPrivyToken(token, { background: true })
       } catch {
         // ignore; user can always click "Sign in"
+      } finally {
+        endAutoPrivyBridgeAttempt()
       }
     })()
   }, [address, authAddress, autoPrivyAttemptKeyRef, busy, getPrivyAccessToken, isConnected, privyAuthenticated, privyReady, signInWithPrivyToken])

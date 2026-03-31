@@ -3,17 +3,14 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { getAddress, isAddress } from 'viem'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-
-function isSupportedChain(chain: string): boolean {
-  return chain.toLowerCase() === 'base'
-}
+import { isSupportedExploreChain } from './exploreShared'
 
 export function ExploreContentPoolAlias() {
   const params = useParams()
   const chain = String(params.chain ?? '').trim()
   const poolIdOrPoolKeyHashRaw = String(params.poolIdOrPoolKeyHash ?? '').trim()
 
-  if (!chain || !isSupportedChain(chain)) {
+  if (!chain || !isSupportedExploreChain(chain)) {
     return <Navigate replace to="/explore/content" />
   }
 
@@ -59,4 +56,3 @@ export function ExploreContentPoolAlias() {
     </div>
   )
 }
-
