@@ -4,6 +4,7 @@ import {
   PRIVY_INTERACTIVE_LOGIN_METHODS,
   deriveSiweSessionState,
   shouldAutoBridgeConnectedPrivySession,
+  shouldAutoBridgeRestoredPrivySession,
   shouldResetPrivyBridgeState,
 } from './useSiweAuth'
 
@@ -122,5 +123,37 @@ describe('shouldAutoBridgeConnectedPrivySession', () => {
         attemptedForAddress: '0x1111111111111111111111111111111111111111',
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldAutoBridgeRestoredPrivySession', () => {
+  it('guards auto-bridge when a global attempt already ran', () => {
+    expect(
+      shouldAutoBridgeRestoredPrivySession({
+        authAddress: '0x1111111111111111111111111111111111111111',
+        busy: false,
+        privyReady: true,
+        privyAuthenticated: true,
+        hasPrivyAccessTokenReader: true,
+        skipAutoBridge: false,
+        hasStoredSessionToken: false,
+        alreadyAttempted: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('allows one restored-session bridge when bearer token is missing', () => {
+    expect(
+      shouldAutoBridgeRestoredPrivySession({
+        authAddress: '0x1111111111111111111111111111111111111111',
+        busy: false,
+        privyReady: true,
+        privyAuthenticated: true,
+        hasPrivyAccessTokenReader: true,
+        skipAutoBridge: false,
+        hasStoredSessionToken: false,
+        alreadyAttempted: false,
+      }),
+    ).toBe(true)
   })
 })

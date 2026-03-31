@@ -173,22 +173,22 @@ function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
         const line = INTRO_LINES[introIdx.current]
         introIdx.current++
         setLines(prev => [...prev, line].slice(-18))
-        // Intro messages arrive every 1.8 s for a deliberate, readable cadence
-        t = setTimeout(tick, 1800)
+        // Intro messages arrive every 2.8 s — slow enough to read each one
+        t = setTimeout(tick, 2800)
       } else {
-        // --- Organic phase: accelerating random feed ---
+        // --- Organic phase: gradually speeds up but stays readable ---
         const line = FEED_LINES[feedCursor.current % FEED_LINES.length]
         feedCursor.current++
         setLines(prev => [...prev, line].slice(-18))
-        // Starts at ~2.5 s after intro ends, speeds up to ~700 ms over 30 messages
+        // Starts at 4 s per message, eases down to a floor of 1.8 s after ~30 messages
         const organicCount = msgCount.current - INTRO_LINES.length
-        const interval = Math.max(700, 2500 - organicCount * 75)
+        const interval = Math.max(1800, 4000 - organicCount * 75)
         t = setTimeout(tick, interval)
       }
     }
 
-    // First KeeprBot message arrives 1 s after the chat fades in
-    t = setTimeout(tick, 1000)
+    // First KeeprBot message arrives 2 s after the chat fades in
+    t = setTimeout(tick, 2000)
     return () => clearTimeout(t)
   }, [])
 
@@ -260,22 +260,19 @@ function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
         </div>
       </div>
 
-      {/* ── Mobile: transparent overlay with minimize toggle ── */}
+      {/* ── Mobile: fully transparent overlay — text floats over the scene ── */}
       <div className="absolute bottom-20 left-3 sm:hidden" style={{ pointerEvents: 'none' }}>
-        {/* Minimize / restore pill — always pointer-events-auto */}
+        {/* Tiny hide/show toggle — transparent, just text + drop shadow */}
         <button
           onClick={() => setMobileMinimized(v => !v)}
-          className="mb-1 flex items-center gap-1 rounded-full px-2 py-1"
-          style={{
-            pointerEvents: 'auto',
-            background: 'rgba(0,0,0,0.55)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(6px)',
-          }}
+          className="mb-1.5"
+          style={{ pointerEvents: 'auto', background: 'none', border: 'none', padding: 0 }}
         >
-          <span className="h-1 w-1 rounded-full bg-red-400" style={{ boxShadow: '0 0 4px #f87171' }} />
-          <span className="text-[9px] font-semibold text-white/80">
-            {mobileMinimized ? '💬 Chat' : '✕ Hide'}
+          <span
+            className="text-[9px] font-semibold"
+            style={{ color: 'rgba(255,255,255,0.55)', textShadow: '0 1px 4px rgba(0,0,0,0.9)', letterSpacing: '0.03em' }}
+          >
+            {mobileMinimized ? '[ show chat ]' : '[ hide ]'}
           </span>
         </button>
 
@@ -287,31 +284,28 @@ function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
               transition={{ duration: 0.2 }}
-              className="flex w-[200px] flex-col gap-[3px]"
+              className="flex w-[200px] flex-col gap-[2px]"
             >
               <AnimatePresence initial={false}>
-                {lines.slice(-6).map(line => (
+                {lines.slice(-5).map(line => (
                   <motion.div
                     key={line.id}
                     initial={{ opacity: 0, x: -6 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, transition: { duration: 0.2 } }}
-                    transition={{ duration: 0.28, ease: 'easeOut' }}
+                    exit={{ opacity: 0, transition: { duration: 0.25 } }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
                   >
                     {line.isBot ? (
-                      <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
-                        <span className="mr-0.5 rounded px-0.5 text-[7px] font-bold uppercase" style={{ color: BOT_COLOR }}>
-                          🤖
-                        </span>
+                      <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
                         <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
-                        <span className="text-white/70">: {line.text}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.65)' }}>: {line.text}</span>
                       </p>
                     ) : (
-                      <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
+                      <p className="break-words text-[9px] leading-snug" style={{ wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)' }}>
                         <span style={{ color: feedUserColor(line.user) }} className="font-bold">
                           {line.user}
                         </span>
-                        <span className="text-white/90">: {line.text}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.8)' }}>: {line.text}</span>
                       </p>
                     )}
                   </motion.div>

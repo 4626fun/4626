@@ -125,6 +125,27 @@ export function shouldAutoBridgeConnectedPrivySession(
   return true
 }
 
+type ShouldAutoBridgeRestoredPrivySessionInput = {
+  authAddress: string | null | undefined
+  busy: boolean
+  privyReady: boolean
+  privyAuthenticated: boolean
+  hasPrivyAccessTokenReader: boolean
+  skipAutoBridge: boolean
+  hasStoredSessionToken: boolean
+  alreadyAttempted: boolean
+}
+
+export function shouldAutoBridgeRestoredPrivySession(input: ShouldAutoBridgeRestoredPrivySessionInput): boolean {
+  if (!input.authAddress || input.authAddress.trim().length === 0) return false
+  if (input.busy) return false
+  if (!input.privyReady || !input.privyAuthenticated || !input.hasPrivyAccessTokenReader) return false
+  if (input.skipAutoBridge) return false
+  if (input.hasStoredSessionToken) return false
+  if (input.alreadyAttempted) return false
+  return true
+}
+
 function coerceErrorMessage(e: unknown, fallback: string): string {
   if (typeof e === 'string' && e.trim().length > 0) return e
   if (e instanceof Error && typeof e.message === 'string' && e.message.trim().length > 0) return e.message
@@ -458,12 +479,19 @@ export function useSiweAuth() {
   // If we learned from `/api/auth/me` that a cookie/bearer session exists but sessionStorage is missing,
   // re-bridge via Privy to restore the bearer token for environments where cookies won't be used.
   useEffect(() => {
-    if (busy) return
-    if (!privyReady || !privyAuthenticated || !getPrivyAccessToken) return
-    if (!authAddress) return
-    if (shouldSkipAutoPrivyBridge()) return
-    const existing = getStoredSessionToken()
-    if (existing) return
+    const shouldAutoBridge = shouldAutoBridgeRestoredPrivySession({
+      authAddress,
+      busy,
+      privyReady,
+      privyAuthenticated,
+      hasPrivyAccessTokenReader: Boolean(getPrivyAccessToken),
+      skipAutoBridge: shouldSkipAutoPrivyBridge(),
+      hasStoredSessionToken: Boolean(getStoredSessionToken()),
+      alreadyAttempted: autoPrivyGlobalAttemptRef.current,
+    })
+    if (!shouldAutoBridge || !getPrivyAccessToken) return
+
+    autoPrivyGlobalAttemptRef.current = true
     void (async () => {
       try {
         const token = await getPrivyAccessToken()
