@@ -13,8 +13,12 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
-import { makeSessionToken } from '../../../../../server/auth/_shared.js'
-import { getApiContracts } from '../../../../../server/_lib/contracts.js'
+import {
+  makeSessionToken,
+  getApiContracts,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import { asTrimmed } from '../utils.js'
 
 declare const process: { env: Record<string, string | undefined> }

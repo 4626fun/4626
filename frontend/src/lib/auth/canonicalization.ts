@@ -1,9 +1,7 @@
 import { apiFetch, type ApiFetchInit } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
-type ApiEnvelope<T> = {
-  success: boolean
-  data?: T
-  error?: string
+type CanonicalizationApiEnvelope<T> = ApiEnvelope<T> & {
   code?: string
   retryable?: boolean
   needsEmbeddedWallet?: boolean
@@ -57,7 +55,7 @@ function normalizeToken(token: string | null | undefined): string {
 
 function isRecoveryRequiredAuthFailure(params: {
   status: number
-  payload: ApiEnvelope<unknown> | null
+  payload: CanonicalizationApiEnvelope<unknown> | null
 }): boolean {
   if (params.status === 409) return true
   const recoveryRequired = (params.payload as any)?.recoveryRequired
@@ -70,7 +68,7 @@ function isRecoveryRequiredAuthFailure(params: {
 
 function isTransientOnboardingBootstrapFailure(params: {
   status: number
-  payload: ApiEnvelope<OnboardingBootstrapResponse> | null
+  payload: CanonicalizationApiEnvelope<OnboardingBootstrapResponse> | null
 }): boolean {
   if (params.status !== 503) return false
 
@@ -115,7 +113,7 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
       Accept: 'application/json',
     },
   })
-  const authPayload = (await authRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+  const authPayload = (await authRes.json().catch(() => null)) as CanonicalizationApiEnvelope<unknown> | null
   if (!authRes.ok || !authPayload?.success) {
     const recoveryRequired = isRecoveryRequiredAuthFailure({
       status: authRes.status,
@@ -142,7 +140,8 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
     },
     body: JSON.stringify({}),
   })
-  const onboardingPayload = (await onboardingRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+  const onboardingPayload =
+    (await onboardingRes.json().catch(() => null)) as CanonicalizationApiEnvelope<OnboardingBootstrapResponse> | null
   if (onboardingRes.ok && onboardingPayload?.success && onboardingPayload.data) {
     return {
       privySynced: true,

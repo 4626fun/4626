@@ -19,8 +19,12 @@ import {
   setCors,
   setNoStore,
   readJsonBody,
-} from '../../../server/auth/_shared.js'
-import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+} from '../../../packages/server-core/src/index.js'
+
+
 
 declare const process: { env: Record<string, string | undefined> }
 

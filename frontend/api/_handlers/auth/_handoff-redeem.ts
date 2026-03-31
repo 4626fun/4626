@@ -9,10 +9,15 @@ import {
   setCookie,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
+  getDb,
+  getClientIp,
+  checkRateLimit,
+  rateLimitKey,
+} from '../../../packages/server-core/src/index.js'
+
 import { consumeHandoffCode, ensureHandoffSchema } from '../../../server/auth/_handoff.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { getClientIp, checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+
+
 
 type RedeemBody = {
   code?: string

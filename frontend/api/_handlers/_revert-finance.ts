@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { logger } from '../../server/_lib/logger.js';
-import { handleOptions, setCors } from '../../server/auth/_shared.js'
+import {
+  logger,
+  handleOptions,
+  setCors,
+} from '../../packages/server-core/src/index.js'
+
+
 import { fetchExternalJson } from '../../server/_lib/externalFetch.js'
 
 export default async function handler(

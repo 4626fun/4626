@@ -17,9 +17,11 @@ import {
   setCors,
   setNoStore,
   verifySiweSignature,
-} from '../../../server/auth/_shared.js'
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
 import { isCswOwner } from '../../../server/_lib/cswOwner.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 import { getTrustedRequestOrigins, isAddressLike, normalizeOrigin } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'

@@ -10,6 +10,8 @@ import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explo
 import { getExploreColumns } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
 import { apiFetch } from '@/lib/apiBase'
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
@@ -29,7 +31,6 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ExploreMetrics = {
   scope: 'creators'
   updatedAt: string
@@ -63,7 +64,7 @@ type ExploreMetrics = {
 async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
   // Prefer server-side metrics (fast + cached) via apiFetch (alias-aware).
   try {
-    const res = await apiFetch('/api/zora/metrics?scope=creators', { method: 'GET' })
+    const res = await apiFetch(`${API_ENDPOINTS.zora.metrics}?scope=creators`, { method: 'GET' })
     const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreMetrics | null> | null
     if (res.ok && json?.success) return json.data ?? null
   } catch {

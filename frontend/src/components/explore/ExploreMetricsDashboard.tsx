@@ -2,9 +2,9 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '@/lib/apiBase'
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import type { ExploreMetricHistoryPoint } from './ExploreMetricSparkline'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type ExploreMetrics = {
   scope: 'creators'
@@ -27,7 +27,7 @@ type ExploreMetricsDashboardProps = {
 
 async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
   try {
-    const res = await apiFetch('/api/zora/metrics?scope=creators', { method: 'GET' })
+    const res = await apiFetch(`${API_ENDPOINTS.zora.metrics}?scope=creators`, { method: 'GET' })
     const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreMetrics | null> | null
     if (res.ok && json?.success) return json.data ?? null
   } catch {

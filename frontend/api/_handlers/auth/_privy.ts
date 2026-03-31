@@ -8,8 +8,10 @@ import {
   setCors,
   setNoStore,
   makeSessionToken,
-} from '../../../server/auth/_shared.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { classifyLinkedAccounts, type ClassifiedLinkedAccounts } from '../../../server/_lib/walletMapping.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'

@@ -13,14 +13,13 @@ import {
 import { getDeploymentsForOwner } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 
 export { AjnaAutomationOptInCard } from '@/components/DeploymentSuccess'
 export { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type AgentData = {
   creatorAddress: string

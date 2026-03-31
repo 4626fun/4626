@@ -1,7 +1,8 @@
 import { apiFetch } from '@/lib/apiBase'
+import { resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { base } from 'viem/chains'
-
-export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+export type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 export type OwnerDelegationFlags = {
   needsEmbeddedWallet?: boolean
@@ -36,11 +37,7 @@ export type ConfirmOwnerResponse = {
 }
 
 export function readApiError(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object') {
-    const maybeError = (payload as { error?: unknown }).error
-    if (typeof maybeError === 'string' && maybeError.trim()) return maybeError
-  }
-  return fallback
+  return resolveApiErrorMessage(payload, fallback)
 }
 
 export function readOwnerDelegationFlags(payload: unknown): OwnerDelegationFlags {

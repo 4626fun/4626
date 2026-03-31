@@ -4,7 +4,7 @@ import { dedupeReferralCodeCandidates, normalizeReferralCode, referralCodeFromEm
 
 describe('referrals helpers', () => {
   it('derives referral codes from email usernames', () => {
-    expect(referralCodeFromEmail('4626dotfun@gmail.com')).toBe('4626DOTFUN')
+    expect(referralCodeFromEmail('hello@4626.fun')).toBe('HELLO')
     expect(referralCodeFromEmail('')).toBeNull()
   })
 

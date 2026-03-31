@@ -4,12 +4,21 @@ import { createSIWANonce } from '@buildersgarden/siwa'
 import { createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+  readRequestPrincipal,
+} from '../../../packages/server-core/src/index.js'
+
 import { ensureSiwaNonceSchema, isAddressLike, parseAgentRegistryRef, storeSiwaNonce } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+
+
 
 declare const process: { env: Record<string, string | undefined> }
 

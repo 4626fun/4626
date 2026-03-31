@@ -1,10 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

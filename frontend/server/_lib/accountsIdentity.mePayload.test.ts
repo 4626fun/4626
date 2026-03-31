@@ -34,8 +34,12 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('from account_points')) {
-          return { rows: [{ points: 0, tier: 0 }] }
+        if (query.includes('select id') && query.includes('from profiles') && query.includes('where privy_user_id')) {
+          return { rows: [{ id: 42 }] }
+        }
+
+        if (query.includes('from points p') && query.includes('where p.signup_id in')) {
+          return { rows: [{ points: 0 }] }
         }
 
         if (query.includes('select app_access_status') && query.includes('from profiles')) {

@@ -1,9 +1,20 @@
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 import { normalizeReferralCode } from '../../../server/_lib/referrals.js'
-import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { ensureWaitlistPointsSchema } from '../../../server/_lib/waitlistPoints.js'
 
@@ -129,7 +140,26 @@ export default async function handler(req: any, res: any) {
   const referralCodeOut = typeof row?.referral_code === 'string' ? String(row.referral_code) : null
 
   const totalAgg = await db.sql`
-    SELECT COALESCE(SUM(amount), 0)::int AS total
+    SELECT COALESCE(
+      ROUND(
+        SUM(
+          CASE
+            WHEN source = 'amoe_entry_spend' THEN amount
+            WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
+            WHEN source = 'waitlist_signup' THEN amount * 1.00
+            WHEN source = 'csw_link' THEN amount * 1.00
+            WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+            WHEN source LIKE 'social_%' THEN amount * 0.50
+            WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+            WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+            WHEN source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+              THEN amount * 0.60
+            ELSE amount * 0.30
+          END
+        )
+      ),
+      0
+    )::int AS total
     FROM points
     WHERE signup_id = ${signupId};
   `

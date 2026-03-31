@@ -1,9 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAddress, isAddress, type Address } from 'viem'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+} from '../../../../packages/server-core/src/index.js'
+
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
-import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
+
 import { validateRoutePolicy, validateTokenPolicy } from '../../../../server/uniswap/guards.js'
 import { isObject, toCleanErrorMessage, uniswapTradeFetch } from '../../../../server/uniswap/trading.js'
 

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { executeKeeprAction } from '../../../../server/keepr/xmtpQueueExecutor.js'
 
 declare const process: { env: Record<string, string | undefined> }

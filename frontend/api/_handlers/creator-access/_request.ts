@@ -6,10 +6,15 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
-import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
+  ensureCreatorAccessSchema,
+  getDb,
+  isDbConfigured,
+  getSessionAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/supabaseAdmin.js'
-import { getSessionAddress } from '../../../server/_lib/session.js'
+
 
 type RequestBody = {
   coin?: string

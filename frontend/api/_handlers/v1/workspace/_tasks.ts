@@ -5,8 +5,10 @@ import {
   handleOptions,
   setCors,
   setNoStore,
-} from '../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
+  guardAgentApiRequest,
+} from '../../../../packages/server-core/src/index.js'
+
+
 import { resolveWorkspaceTasks } from '../../../../server/_lib/workspace/service.js'
 import {
   normalizeVaultAddressFromQuery,

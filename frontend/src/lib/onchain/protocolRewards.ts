@@ -1,5 +1,6 @@
 import { Address, createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
 
 const PROTOCOL_REWARDS_ADDRESS = `0x${'7777777F279eba3d3Ad8F4E708545291A6fDBA8B'}` as Address
 
@@ -76,12 +77,6 @@ export async function fetchProtocolRewardsBalances(accounts: Address[]): Promise
   return balances
 }
 
-type ApiEnvelope<T> = {
-  success: boolean
-  data: T | null
-  error?: string
-}
-
 export async function fetchProtocolRewardsBalancesFromApi(accounts: Address[]): Promise<Record<string, bigint>> {
   const qs = new URLSearchParams({
     recipients: accounts.join(','),
@@ -92,18 +87,18 @@ export async function fetchProtocolRewardsBalancesFromApi(accounts: Address[]): 
   })
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
-    const msg = body?.error || `HTTP ${res.status}`
+    const body = await parseApiEnvelope<unknown>(res)
+    const msg = resolveApiErrorMessage(body, `HTTP ${res.status}`)
     const err: any = new Error(msg)
     err.status = res.status
     throw err
   }
 
-  const body = (await res.json()) as ApiEnvelope<{
+  const body = await parseApiEnvelope<{
     claimableByRecipient: Record<string, string>
-  }>
+  }>(res)
 
-  if (!body.success) throw new Error(body.error || 'Failed to fetch claimable rewards')
+  if (!body?.success) throw new Error(resolveApiErrorMessage(body, 'Failed to fetch claimable rewards'))
 
   const map: Record<string, bigint> = {}
   const raw = body.data?.claimableByRecipient ?? {}
@@ -127,18 +122,18 @@ export async function fetchProtocolRewardsWithdrawnFromApi(accounts: Address[]):
   })
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
-    const msg = body?.error || `HTTP ${res.status}`
+    const body = await parseApiEnvelope<unknown>(res)
+    const msg = resolveApiErrorMessage(body, `HTTP ${res.status}`)
     const err: any = new Error(msg)
     err.status = res.status
     throw err
   }
 
-  const body = (await res.json()) as ApiEnvelope<{
+  const body = await parseApiEnvelope<{
     withdrawnByRecipient: Record<string, string>
-  }>
+  }>(res)
 
-  if (!body.success) throw new Error(body.error || 'Failed to fetch withdrawn rewards')
+  if (!body?.success) throw new Error(resolveApiErrorMessage(body, 'Failed to fetch withdrawn rewards'))
   const map: Record<string, bigint> = {}
   const raw = body.data?.withdrawnByRecipient ?? {}
   for (const [k, v] of Object.entries(raw)) {

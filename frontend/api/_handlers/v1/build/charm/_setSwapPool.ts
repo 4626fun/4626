@@ -1,8 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { encodeFunctionData, type Address } from 'viem'
 
-import { handleOptions, readJsonBody } from '../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import type { BuildTxResponse } from '../_types.js'
 import { CREATOR_CHARM_STRATEGY_ABI } from './_abi.js'
 import { requireAddress, setPublicCors } from './_shared.js'

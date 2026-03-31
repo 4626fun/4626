@@ -5,8 +5,7 @@ import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 type PendingRequest = {
   id: number

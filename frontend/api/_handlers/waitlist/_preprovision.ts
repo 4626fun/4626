@@ -12,10 +12,18 @@ import {
   handleOptions,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
-import { getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
-import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+  getDb,
+  isDbConfigured,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+  readRequestPrincipalAddress,
+  resolveAuthorizedRequestPrincipal,
+} from '../../../packages/server-core/src/index.js'
+
+
+
+
 import { preprovisionWaitlistUser } from '../../../server/_lib/waitlistPreprovision.js'
 
 declare const process: { env: Record<string, string | undefined> }

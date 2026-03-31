@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 
 type MeResponse = { address: string } | null
 

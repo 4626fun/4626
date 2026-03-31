@@ -1,6 +1,14 @@
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  resolveAuthorizedRequestPrincipal,
+} from '../../../packages/server-core/src/index.js'
+
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type PointsType = 'total' | 'invite' | 'agent'
@@ -157,17 +165,36 @@ export default async function handler(req: any, res: any) {
         w.wallet_key AS primary_wallet,
         w.referral_code,
         w.border_tier,
-        COALESCE(SUM(l.amount), 0)::int AS total_points,
         COALESCE(
-          SUM(
-            CASE
-              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount
-              ELSE 0
-            END
+          ROUND(
+            SUM(
+              CASE
+                WHEN l.source = 'amoe_entry_spend' THEN l.amount
+                WHEN l.source = 'amoe_twitter_daily' THEN l.amount * 1.00
+                WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
+                WHEN l.source = 'csw_link' THEN l.amount * 1.00
+                WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
+                WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
+                WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
+                WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
+                WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+                  THEN l.amount * 0.60
+                ELSE l.amount * 0.30
+              END
+            )
           ),
           0
+        )::int AS total_points,
+        COALESCE(
+          ROUND(SUM(
+            CASE
+              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
+              ELSE 0
+            END
+          )),
+          0
         )::int AS invite_points,
-        COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
+        COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
       FROM wallet_rollup w
       LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
       LEFT JOIN points l ON l.signup_id = e.id
@@ -259,17 +286,36 @@ export default async function handler(req: any, res: any) {
         w.wallet_key AS primary_wallet,
         w.referral_code,
         w.border_tier,
-            COALESCE(SUM(l.amount), 0)::int AS total_points,
             COALESCE(
-              SUM(
-                CASE
-                  WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount
-                  ELSE 0
-                END
+              ROUND(
+                SUM(
+                  CASE
+                    WHEN l.source = 'amoe_entry_spend' THEN l.amount
+                    WHEN l.source = 'amoe_twitter_daily' THEN l.amount * 1.00
+                    WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
+                    WHEN l.source = 'csw_link' THEN l.amount * 1.00
+                    WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
+                    WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
+                    WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
+                    WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
+                    WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+                      THEN l.amount * 0.60
+                    ELSE l.amount * 0.30
+                  END
+                )
               ),
               0
+            )::int AS total_points,
+            COALESCE(
+              ROUND(SUM(
+                CASE
+                  WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
+                  ELSE 0
+                END
+              )),
+              0
             )::int AS invite_points,
-            COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
+            COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
           FROM wallet_rollup w
           LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
           LEFT JOIN points l ON l.signup_id = e.id

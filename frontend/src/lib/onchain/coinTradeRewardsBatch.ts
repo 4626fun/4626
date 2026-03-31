@@ -1,10 +1,5 @@
 import type { Address } from 'viem'
-
-type ApiEnvelope<T> = {
-  success: boolean
-  data: T | null
-  error?: string
-}
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
 
 export async function fetchCoinTradeRewardsBatchFromApi(params: {
   recipient: Address
@@ -26,15 +21,15 @@ export async function fetchCoinTradeRewardsBatchFromApi(params: {
   })
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
-    const msg = body?.error || `HTTP ${res.status}`
+    const body = await parseApiEnvelope<unknown>(res)
+    const msg = resolveApiErrorMessage(body, `HTTP ${res.status}`)
     const err: any = new Error(msg)
     err.status = res.status
     throw err
   }
 
-  const body = (await res.json()) as ApiEnvelope<{ totalsByCoin: Record<string, string> }>
-  if (!body.success) throw new Error(body.error || 'Failed to fetch coin trade rewards')
+  const body = await parseApiEnvelope<{ totalsByCoin: Record<string, string> }>(res)
+  if (!body?.success) throw new Error(resolveApiErrorMessage(body, 'Failed to fetch coin trade rewards'))
 
   const raw = body.data?.totalsByCoin ?? {}
   const out: Record<string, bigint> = {}

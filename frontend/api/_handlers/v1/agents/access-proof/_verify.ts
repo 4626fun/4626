@@ -5,8 +5,15 @@ import {
   agentAccessProofSubmitSchema,
   type AgentMembership,
 } from '../_accessSchemas.js'
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import {
   issueAgentRoomAccessToken,
   verifyAgentAccessProofSubmission,

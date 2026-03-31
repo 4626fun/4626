@@ -3,14 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { shouldNavigateAfterAppEntryHandoff } from '@/lib/auth/appContinueGate'
 import { APP_ENTRY_DEFAULT_NEXT, readSafeNextPath } from '@/lib/auth/appEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { ensureTelegramMiniAppSession, isTelegramMiniAppContext, loadTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useSiweAuth, writeStoredSessionToken } from '@/hooks/useSiweAuth'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
 

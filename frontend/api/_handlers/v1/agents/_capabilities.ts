@@ -1,8 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { agentCapabilityResponseSchema } from './_accessSchemas.js'
-import { handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  setCors,
+  setNoStore,
+  guardAgentApiRequest,
+} from '../../../../packages/server-core/src/index.js'
+
+
 import { resolveAgentCapabilityResponse } from '../../../../server/_lib/agentAccessResolver.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }

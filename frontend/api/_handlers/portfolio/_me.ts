@@ -6,10 +6,13 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
+  getDb,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { resolveOnchainIdentityProfile } from '../../../server/_lib/onchainIdentityProfile.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type WalletItem = {

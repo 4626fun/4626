@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, encodeAbiParameters, getAddress, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 

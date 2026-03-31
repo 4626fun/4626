@@ -2,9 +2,20 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { creatorVaultCharacter } from '../../../server/agent/eliza/character.js'
 import { getElizaLlmService } from '../../../server/agent/eliza/llm.js'
-import { createCorrelationId, logger } from '../../../server/_lib/logger.js'
-import { handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { RATE_LIMITS, checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import {
+  createCorrelationId,
+  logger,
+  handleOptions,
+  readSessionFromRequest,
+  setCors,
+  setNoStore,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
+} from '../../../packages/server-core/src/index.js'
+
+
+
 
 const STREAM_MESSAGE_MAX_CHARS = 4_000
 const STREAM_CONTEXT_MAX_CHARS = 8_000

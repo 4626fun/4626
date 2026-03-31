@@ -14,13 +14,12 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — Quick Start</b>')
-    expect(result.response).toContain('🎮 <b>Start Here</b>')
-    expect(result.response).toContain('/buy | /sell | /bid')
-    expect(result.response).toContain('/help core|coin|social|ops|wallet')
+    expect(result.response).toContain('🎮 <b>Commands</b>')
+    expect(result.response).toContain('<code>/start</code>')
+    expect(result.response).toContain('Need more?')
+    expect(result.response).toContain('/help core')
     expect(result.response).toContain('/help all')
-    expect(result.response).toContain('/wallet')
-    expect(result.response).not.toContain('/coin trend funnel')
-    expect(result.response).not.toContain('/inline')
+    expect(result.response).toContain('/help wallet')
   })
 
   it('treats removed market help as an unknown topic', async () => {
@@ -47,7 +46,7 @@ describe('keepr help commands', () => {
     expect(result.response).toContain('<b>Keepr — Quick Start</b>')
   })
 
-  it('returns ops topic help with canonical Solana action names', async () => {
+  it('returns ops topic help', async () => {
     const result = await executeCommand({
       groupId: 'group-help-2c',
       senderWallet: TEST_WALLET,
@@ -55,9 +54,9 @@ describe('keepr help commands', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.response).toContain('<b>Keepr — ops</b>')
-    expect(result.response).toContain('<code>/cre settle-fees</code>')
-    expect(result.response).toContain('<code>/cre relay-entries</code>')
+    expect(result.response).toContain('🛠 <b>Ops Commands</b>')
+    expect(result.response).toContain('<code>/keepr status</code>')
+    expect(result.response).toContain('<code>/keepr rules</code>')
   })
 
   it('returns full help with /help all', async () => {
@@ -69,22 +68,16 @@ describe('keepr help commands', () => {
 
     expect(result.ok).toBe(true)
     expect(result.response).toContain('<b>Keepr — Help</b>')
-    expect(result.response).toContain('Use <code>/help</code> for quick start')
     expect(result.response).toContain('🎮 <b>Core Commands</b>')
-    expect(result.response).toContain('└ <code>/id</code> — pick a user, group, or channel ID')
-    expect(result.response).toContain('🛠 <b>Operator / Admin</b>')
-    expect(result.response).toContain('📚 <b>Topic Guides</b>')
-    expect(result.response).toContain('<code>/wallet</code> — balances and positions')
-    expect(result.response).toContain('<code>/coin create &lt;name&gt; &lt;symbol&gt; &lt;uri&gt;</code>')
-    expect(result.response).toContain('<code>/coin trend funnel &lt;ticker&gt; &lt;eth-amount&gt;</code>')
-    expect(result.response).toContain('<code>/cre status | /cre health | /cre auction | /cre solana</code>')
-    expect(result.response).toContain('<code>/cre tend | /cre report | /cre settle-fees | /cre relay-entries</code>')
+    expect(result.response).toContain('🪙 <b>Coin Commands</b>')
+    expect(result.response).toContain('🛠 <b>Ops Commands</b>')
+    expect(result.response).toContain('👛 <b>Wallet Commands</b>')
+    expect(result.response).toContain('👥 <b>Group Commands</b>')
+    expect(result.response).toContain('<code>/wallet</code> — wallet balances, positions, and activity')
+    expect(result.response).toContain('<code>/coin trend check &lt;ticker&gt;</code>')
     expect(result.response).toContain('/reputation')
-    expect(result.response).toContain('/coin trend funnel')
     expect(result.response).toContain('/ai &lt;question&gt;')
     expect(result.response).not.toContain('/ai <question>')
-    expect(result.response).not.toContain('/mkt')
-    expect(result.response).not.toContain('<blockquote expandable>')
   })
 
   it('falls back to quick help with an unknown topic', async () => {

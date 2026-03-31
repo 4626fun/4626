@@ -3,8 +3,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, getAddress, http, isAddress, type Address } from 'viem'
 import { base, mainnet } from 'viem/chains'
 
-import { handleOptions } from '../../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import { buildAgentRegistration, type RegistrationFile } from '../../../../../server/_lib/agentRegistration.js'
 import { IDENTITY_REGISTRY_ABI } from '../../../../../server/_lib/erc8004.js'
 import { getCanonicalOrigin } from '../../../../../server/_lib/origin.js'

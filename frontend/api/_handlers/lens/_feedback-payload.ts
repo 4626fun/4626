@@ -19,11 +19,18 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { keccak256, toHex } from 'viem'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  readRequestPrincipal,
+} from '../../../packages/server-core/src/index.js'
+
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
 import type { FeedbackPayload } from '../../../server/_lib/erc8004.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+
 
 declare const process: { env: Record<string, string | undefined> }
 

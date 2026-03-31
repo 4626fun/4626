@@ -1,6 +1,7 @@
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
-export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+export type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 export type PostJsonWithTimeout = <T>(params: {
   url: string

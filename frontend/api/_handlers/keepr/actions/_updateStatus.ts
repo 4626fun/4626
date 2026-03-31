@@ -1,8 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+} from '../../../../packages/server-core/src/index.js'
+
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
-import { getDb } from '../../../../server/_lib/postgres.js'
+
 import { normalizeKeeprActionStatusForWorkspace } from '../../../../server/_lib/workspace/normalizer.js'
 
 declare const process: { env: Record<string, string | undefined> }

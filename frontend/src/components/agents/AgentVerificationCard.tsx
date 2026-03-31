@@ -3,8 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 type VerificationData = {
   chainId: number

@@ -1,7 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getSessionAddress, isAdminAddress } from '../../../server/_lib/session.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getSessionAddress,
+  isAdminAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 
 export type ImageMutationBody = {
   projectId?: string

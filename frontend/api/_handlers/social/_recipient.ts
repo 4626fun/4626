@@ -1,9 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type RecipientResolution = {

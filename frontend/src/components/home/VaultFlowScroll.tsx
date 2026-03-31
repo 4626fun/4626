@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AnimatePresence,
@@ -8,6 +9,7 @@ import {
   useScroll,
   useSpring,
   useTransform,
+  type MotionValue,
 } from 'framer-motion'
 
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
@@ -20,6 +22,278 @@ const CREATOR_CAMEOS = [
   { key: 'akita',   label: 'akita',             initials: 'AK', color: '#f97316', staticIcon: null,                  zoraAddress: '0x5b674196812451b7cec024fe9d22d2c0b172fa75', zoraHandle: null },
   { key: 'gabriel', label: 'gabrielhaines',     initials: 'GH', color: '#8b5cf6', staticIcon: null,                  zoraAddress: null,                                          zoraHandle: 'gabrielhaines' },
 ] as const
+
+// ─── Live activity feed ────────────────────────────────────────────────────
+const FEED_USERS = [
+  'cryptonick_', 'basebro', 'zoradefi', 'onchainval', 'defidave',
+  'vaultmaster', 'wagmiking', 'gm_eth', 'basewhale', 'coinbro420',
+  'liquidityking', 'yieldfarmer', 'gmgmgm', 'cryptovibes', 'ethbull',
+  'basemaxi', 'onchain_og', 'vaultgang', 'defipirate', 'gmfrens',
+  'zk_rolls', 'l2lyfe', 'basebuilder', 'protocolnerd', 'zoraner',
+  'nftfreak', 'degenape', 'coinflip99', 'basecamp', 'satoshifan',
+  'akita', 'jessepollak', 'gabrielhaines',
+]
+const FEED_COINS = ['AKITA', 'JESSE', 'GABRIEL', 'FROG', 'BASED', 'BRETT', 'TOSHI', 'DEGEN']
+const FEED_JACKPOTS = ['$1,592', '$2,841', '$4,103', '$892', '$3,270', '$5,500', '$7,812', '$11,044']
+const FEED_AMOUNTS_USD = ['$47', '$120', '$238', '$500', '$88', '$310', '$1,200', '$75', '$200', '$450']
+const FEED_AMOUNTS_TOK = ['250,000', '1,000,000', '500,000', '2,500,000', '100,000', '750,000', '4,000,000']
+const FEED_YIELDS = ['$12.40', '$28.70', '$6.90', '$47.30', '$18.20', '$94.00', '$3.80']
+const FEED_AMOUNTS_ETH = ['0.05 ETH', '0.12 ETH', '0.4 ETH', '1 ETH', '0.008 ETH', '0.25 ETH', '0.7 ETH']
+const FEED_BID_AMOUNTS = ['$320', '$1,100', '$4,750', '$800', '$2,200', '$650', '$3,800']
+const FEED_LOCK_AMOUNTS = ['50,000 ve4626', '250,000 ve4626', '1,000,000 ve4626', '100,000 ve4626', '500,000 ve4626']
+const FEED_BORROW_AMOUNTS = ['$500 USDC', '$2,400 USDC', '$8,000 USDC', '$1,200 USDC', '$4,500 USDC']
+const FEED_AGENT_CMDS = ['/bid', '/buy', '/sell', '/vaults', '/wallet', '/coin buy', '/intel', '/whois', '/coin info', '/auction', '/keepr check']
+
+type FeedLine = { id: number; user: string; text: string; isBot?: boolean }
+
+// Scripted intro that plays when the chat first fades in
+const INTRO_LINES: FeedLine[] = [
+  { id: -1,  user: 'KeeprBot', text: 'akita joined 4626', isBot: true },
+  { id: -2,  user: 'KeeprBot', text: 'akita linked Coinbase Smart Wallet', isBot: true },
+  { id: -3,  user: 'KeeprBot', text: 'akita initiated ■AKITA vault · 50,000,000 creator coins', isBot: true },
+  { id: -4,  user: 'KeeprBot', text: 'jessepollak joined 4626', isBot: true },
+  { id: -5,  user: 'KeeprBot', text: 'jessepollak linked Coinbase Smart Wallet', isBot: true },
+  { id: -6,  user: 'KeeprBot', text: 'jessepollak deployed ■JESSE vault · 50,000,000 creator coins', isBot: true },
+  { id: -7,  user: 'KeeprBot', text: 'gabrielhaines joined 4626', isBot: true },
+  { id: -8,  user: 'KeeprBot', text: 'gabrielhaines linked Coinbase Smart Wallet', isBot: true },
+  { id: -9,  user: 'KeeprBot', text: 'gabrielhaines deployed ■GABRIEL vault · 50,000,000 creator coins', isBot: true },
+  { id: -10, user: 'KeeprBot', text: '■AKITA vault is now live · accepting deposits', isBot: true },
+  { id: -11, user: 'KeeprBot', text: '■JESSE vault is now live · accepting deposits', isBot: true },
+  { id: -12, user: 'KeeprBot', text: '■GABRIEL vault is now live · accepting deposits', isBot: true },
+]
+
+const FEED_LINES: FeedLine[] = (() => {
+  const lines: FeedLine[] = []
+  // Keeper bot event templates — interleaved as isBot entries
+  const keeperEvents = (c: string) => [
+    `■${c} vault tend() executed · strategy rebalancing`,
+    `■${c} Ajna bucket moved · optimal yield range updated`,
+    `■${c} PayoutRouter.convertAndQueue() triggered`,
+    `■${c} Charm rebalance threshold crossed · executing`,
+    `■${c} CCA auction sweepCurrency() · permissionless settle`,
+    `Solana→Base lottery entry relayed for ■${c}`,
+    `■${c} vault report() filed · epoch rewards recorded`,
+    `■${c} Ajna setMinBucketIndex() · rebucket complete`,
+  ]
+  for (let i = 0; i < 150; i++) {
+    const u = FEED_USERS[(i * 7 + i * i * 3) % FEED_USERS.length]
+    const c = FEED_COINS[(i * 5 + 2) % FEED_COINS.length]
+    const j = FEED_JACKPOTS[(i * 3 + 1) % FEED_JACKPOTS.length]
+    const usd = FEED_AMOUNTS_USD[(i * 4 + 1) % FEED_AMOUNTS_USD.length]
+    const tok = FEED_AMOUNTS_TOK[(i * 3 + 2) % FEED_AMOUNTS_TOK.length]
+    const yield_ = FEED_YIELDS[(i * 6 + 3) % FEED_YIELDS.length]
+    const eth = FEED_AMOUNTS_ETH[(i * 3 + 1) % FEED_AMOUNTS_ETH.length]
+    const bid = FEED_BID_AMOUNTS[(i * 4 + 2) % FEED_BID_AMOUNTS.length]
+    const lock = FEED_LOCK_AMOUNTS[(i * 2 + 1) % FEED_LOCK_AMOUNTS.length]
+    const borrow = FEED_BORROW_AMOUNTS[(i * 3 + 2) % FEED_BORROW_AMOUNTS.length]
+    const cmd = FEED_AGENT_CMDS[(i * 5 + 3) % FEED_AGENT_CMDS.length]
+    const pct = (0.001 + (i % 8) * 0.0015).toFixed(3)
+
+    // Every ~8th message is a KeeprBot automated keeper event
+    if (i % 8 === 7) {
+      const kc = FEED_COINS[(i * 3 + 1) % FEED_COINS.length]
+      const events = keeperEvents(kc)
+      lines.push({ id: i, user: 'KeeprBot', text: events[i % events.length], isBot: true })
+      continue
+    }
+
+    const templates: Array<[string, string]> = [
+      // User trading actions
+      [u, `swapped ${usd} of ■${c} on /swap`],
+      [u, `bought ${eth} of ■${c} via /swap · ${pct}% jackpot · pot ${j}`],
+      [u, `placed ${bid} bid on ■${c} CCA auction`],
+      [u, `won CCA auction for ■${c} · ${usd} allocated`],
+      // Vault / deposit / yield actions
+      [u, `deposited ${usd} into ■${c} vault`],
+      [u, `deposited ${tok} ■${c} · ${usd} value`],
+      [u, `withdrew ${usd} from ■${c} vault`],
+      [u, `deposited ${usd} into ■${c} · yield streak 14d`],
+      [u, `earned ${yield_} from ■${c} Charm strategy`],
+      [u, `earned ${yield_} from ■${c} Ajna pool`],
+      [u, `claim: ${yield_} yield from ■${c} strategy`],
+      [`■${c}`, `vault TVL crossed ${j} · Charm rebalancing`],
+      [`■${c}`, `distributed ${yield_} to vault holders`],
+      // AMOE lottery
+      [u, `entered AMOE lottery for ■${c} · ${pct}% win chance · pot ${j}`],
+      [u, `bought ${usd} of ■${c} · jackpot now ${j}`],
+      // Governance / ve4626
+      [u, `locked ${lock} for ■${c} gauge weight`],
+      [u, `voted ■${c} gauge · ${pct}% allocation`],
+      [u, `extended ve4626 lock · 52-week duration`],
+      // Ajna borrow / lending
+      [u, `borrowed ${borrow} against ■${c} collateral via Ajna`],
+      [u, `added ${tok} ■${c} as Ajna collateral`],
+      [u, `repaid ${borrow} Ajna loan · collateral unlocked`],
+      // Keepr agent chat commands
+      [u, `used ${cmd} via Keepr agent`],
+      [u, `ran /intel on ■${c} vault · checking onchain reputation`],
+      [u, `ran /whois on ■${c} creator · on-chain identity resolved`],
+      [u, `/coin buy ■${c} ${eth} via Keepr — tx queued`],
+      [u, `/send ${usd} USDC to vault via Keepr agent`],
+      // Platform onboarding
+      [u, `joined 4626`],
+      [u, `linked Coinbase Smart Wallet`],
+      [u, `launched ■${c} vault · 50,000,000 tokens`],
+      [`■${c}`, `vault TVL crossed ${j}`],
+    ]
+    const [user, text] = templates[i % templates.length]
+    lines.push({ id: i, user, text })
+  }
+  return lines
+})()
+const USER_PALETTE = [
+  '#60a5fa', '#34d399', '#f472b6', '#fb923c', '#a78bfa',
+  '#38bdf8', '#4ade80', '#fbbf24', '#f87171', '#c084fc',
+]
+function feedUserColor(name: string) {
+  let h = 0
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) & 0x7fffffff
+  return USER_PALETTE[h % USER_PALETTE.length]
+}
+
+const BOT_COLOR = '#fbbf24' // amber — distinct from regular user palette
+
+function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
+  // Start empty — intro messages arrive one by one as the chat fades in
+  const [lines, setLines] = useState<FeedLine[]>([])
+  const introIdx = useRef(0)   // which INTRO_LINE to drop next
+  const feedCursor = useRef(0) // which FEED_LINE to drop after intro
+  const msgCount = useRef(0)   // total messages delivered (for acceleration)
+
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>
+
+    const tick = () => {
+      msgCount.current++
+
+      if (introIdx.current < INTRO_LINES.length) {
+        // --- Intro phase: scripted KeeprBot story ---
+        const line = INTRO_LINES[introIdx.current]
+        introIdx.current++
+        setLines(prev => [...prev, line].slice(-18))
+        // Intro messages arrive every 1.8 s for a deliberate, readable cadence
+        t = setTimeout(tick, 1800)
+      } else {
+        // --- Organic phase: accelerating random feed ---
+        const line = FEED_LINES[feedCursor.current % FEED_LINES.length]
+        feedCursor.current++
+        setLines(prev => [...prev, line].slice(-18))
+        // Starts at ~2.5 s after intro ends, speeds up to ~700 ms over 30 messages
+        const organicCount = msgCount.current - INTRO_LINES.length
+        const interval = Math.max(700, 2500 - organicCount * 75)
+        t = setTimeout(tick, interval)
+      }
+    }
+
+    // First KeeprBot message arrives 1 s after the chat fades in
+    t = setTimeout(tick, 1000)
+    return () => clearTimeout(t)
+  }, [])
+
+  return createPortal(
+    <motion.div
+      className="pointer-events-none fixed inset-0 z-[9999]"
+      style={{ opacity: feedOp }}
+      aria-hidden="true"
+    >
+      {/* ── Desktop: full Twitch-style sidebar, starts below nav (h-14 = 56px) ── */}
+      <div
+        className="absolute right-0 hidden w-[240px] flex-col sm:flex"
+        style={{ background: '#18181b', top: '3.5rem', bottom: 0 }}
+      >
+        {/* Header */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-white/[0.06] px-4 py-2.5" style={{ background: '#0e0e10' }}>
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+          <span className="text-[10px] font-semibold text-[#efeff1]">
+            Stream Chat
+          </span>
+        </div>
+
+        {/* Messages — newest at bottom, fill from bottom, top gradient masks overflow */}
+        <div className="relative flex flex-1 flex-col justify-end overflow-hidden px-3 py-2">
+          {/* Top fade-out so old messages dissolve instead of hard-clip */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16"
+            style={{ background: 'linear-gradient(to bottom, #18181b 0%, transparent 100%)' }}
+          />
+          <AnimatePresence initial={false}>
+            {lines.map(line => (
+              <motion.div
+                key={line.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="py-[3px]"
+              >
+                {line.isBot ? (
+                  <p className="break-words text-[10px] leading-[1.5]" style={{ wordBreak: 'break-word' }}>
+                    <span className="mr-1 rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide" style={{ background: 'rgba(251,191,36,0.15)', color: BOT_COLOR, border: '1px solid rgba(251,191,36,0.3)' }}>
+                      Bot
+                    </span>
+                    <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
+                    <span style={{ color: '#a8a29e' }}>: {line.text}</span>
+                  </p>
+                ) : (
+                  <p className="break-words text-[10px] leading-[1.5]" style={{ wordBreak: 'break-word' }}>
+                    <span style={{ color: feedUserColor(line.user) }} className="font-bold">
+                      {line.user}
+                    </span>
+                    <span style={{ color: '#efeff1' }}>: {line.text}</span>
+                  </p>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* Footer input bar */}
+        <div className="shrink-0 border-t border-white/[0.06] px-3 py-2" style={{ background: '#0e0e10' }}>
+          <div
+            className="flex h-7 items-center rounded px-2 text-[10px] text-zinc-600"
+            style={{ background: '#1f1f23', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            Send a message
+          </div>
+        </div>
+      </div>
+
+      {/* ── Mobile: pure floating text, no panel, no background ── */}
+      <div className="absolute bottom-24 left-3 flex w-[210px] flex-col gap-[3px] sm:hidden">
+        <AnimatePresence initial={false}>
+          {lines.slice(-6).map(line => (
+            <motion.div
+              key={line.id}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.2 } }}
+              transition={{ duration: 0.28, ease: 'easeOut' }}
+            >
+              {line.isBot ? (
+                <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
+                  <span className="mr-0.5 rounded px-0.5 text-[7px] font-bold uppercase" style={{ color: BOT_COLOR }}>
+                    🤖
+                  </span>
+                  <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
+                  <span className="text-white/70">: {line.text}</span>
+                </p>
+              ) : (
+                <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
+                  <span style={{ color: feedUserColor(line.user) }} className="font-bold">
+                    {line.user}
+                  </span>
+                  <span className="text-white/90">: {line.text}</span>
+                </p>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </motion.div>,
+    document.body,
+  )
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 type Props = {
   depositTokens: string
@@ -126,6 +400,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const [activeStageIdx, setActiveStageIdx] = useState(0)
   const [cameoIdx, setCameoIdx] = useState(0)
   const [cameoIcons, setCameoIcons] = useState<Record<string, string>>({})
+  const [vaultOsPillVisible, setVaultOsPillVisible] = useState(false)
 
   const smoothstep = (t: number) => t * t * (3 - 2 * t)
 
@@ -144,7 +419,9 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
     return () => clearInterval(id)
   }, [])
 
-  // Prefetch real token/profile images for creator cameos
+  // Prefetch real token/profile images for creator cameos.
+  // Tries multiple fallback paths because the Zora API returns images at
+  // different fields depending on coin vs profile vs creator wallet lookup.
   useEffect(() => {
     const run = async () => {
       const updates: Record<string, string> = {}
@@ -152,24 +429,51 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
         CREATOR_CAMEOS.map(async (c) => {
           if (c.staticIcon) { updates[c.key] = c.staticIcon; return }
           try {
+            // ── Path A: coin address → coin media / coin creatorProfile avatar
             if (c.zoraAddress) {
               const coin = await fetchZoraCoin(c.zoraAddress as `0x${string}`)
-              const img = coin?.mediaContent?.previewImage?.small ?? coin?.creatorProfile?.avatar?.previewImage?.small
+              const coinAny = coin as any
+              const img =
+                coin?.mediaContent?.previewImage?.small ??
+                coin?.mediaContent?.previewImage?.medium ??
+                coin?.creatorProfile?.avatar?.previewImage?.small ??
+                coinAny?.image ??
+                coinAny?.metadata?.image
               if (img) { updates[c.key] = img; return }
+
+              // A2: coin has a creatorAddress → look up that profile's avatar
+              const creatorAddr = coin?.creatorAddress
+              if (creatorAddr) {
+                const creatorProfile = await fetchZoraProfile(creatorAddr)
+                const avatar =
+                  creatorProfile?.avatar?.small ??
+                  creatorProfile?.avatar?.medium
+                if (avatar) { updates[c.key] = avatar; return }
+              }
             }
+
+            // ── Path B: handle → profile avatar (direct, most reliable)
             if (c.zoraHandle) {
               const profile = await fetchZoraProfile(c.zoraHandle)
+              const avatar =
+                profile?.avatar?.small ??
+                profile?.avatar?.medium
+              if (avatar) { updates[c.key] = avatar; return }
+
+              // B2: profile has a creator coin → coin's media image
               const coinAddr = profile?.creatorCoin?.address
               if (coinAddr) {
                 const coin = await fetchZoraCoin(coinAddr as `0x${string}`)
-                const img = coin?.mediaContent?.previewImage?.small
+                const coinAny = coin as any
+                const img =
+                  coin?.mediaContent?.previewImage?.small ??
+                  coinAny?.image ??
+                  coin?.creatorProfile?.avatar?.previewImage?.small
                 if (img) { updates[c.key] = img; return }
               }
-              const avatar = profile?.avatar?.small
-              if (avatar) { updates[c.key] = avatar }
             }
           } catch {
-            // fall back to initials circle
+            // silently fall back to coloured initials circle
           }
         }),
       )
@@ -183,15 +487,17 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // HUD / camera
   const progressH = useTransform(scroll, [0, 1], ['0%', '100%'])
   const cueOpacity = useTransform(scroll, [0, 0.10, 0.24], [0.88, 0.88, 0])
+  // Activity feed: visible from the moment the section enters view
+  // Feed fades in when creator coin cameos start descending (~stage 2)
+  const feedOp = useTransform(scroll, [0.44, 0.50, 0.91, 0.95], [0, 1, 1, 0])
 
   // Camera — continuous slow drift, no kinks
   const worldY = useTransform(scroll, [0, 1], [0, -6])
-  // Stays flat (1.0) through freefall + ALL distribution stages, then a slow cinematic
-  // zoom into the deploy phase — starts at 0.86 and reaches full depth at 1.0,
-  // giving ~210 vh of zoom travel at 1500 vh total (≈ 3–4 s of comfortable scroll).
-  // Capped at 1.75 so the deployment cards stay at a readable distance.
-  const worldScale = useTransform(scroll, [0, 0.86, 0.93, 1.0], [1, 1.0, 1.3, 1.75])
-  // Tilt eases once freefall settles, holds flat for vault fly-through
+  // Flat through freefall + distributions. At 0.91 the camera rushes through the vault:
+  // peaks around 2.1× at 0.95 (the "passing through" moment) then settles to 1.45× for
+  // deploy content so stage 4 remains legible on narrower screens.
+  const worldScale = useTransform(scroll, [0, 0.86, 0.91, 0.95, 1.0], [1, 1.0, 1.25, 2.1, 1.45])
+  // Eases freefall tilt to 0° by 0.62, stays flat for the rest of the scroll.
   const worldRotateX = useTransform(scroll, [0, 0.44, 0.62, 1], [8, 2, 0, 0])
   const worldTransform = useMotionTemplate`
     translate3d(0, ${worldY}%, 0)
@@ -238,13 +544,16 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Scale locks at 1 once captured — no shrinking until it fades out
   const vaultScale = useTransform(scroll, [0, 0.08, 0.28, 0.36, 0.88], [1.55, 1.38, 1.06, 1, 1])
   // Stays visible as a container through distributions, fades as world zooms through
-  const vaultOpacity = useTransform(scroll, [0, 0.06, 0.50, 0.58, 0.80, 0.88], [0, 0.65, 1, 0.45, 0.45, 0])
+  // At 0.91 the vault briefly brightens (camera approaching), then goes dark as we
+  // rush through it — the white flash reinforces the "passing through the portal" feel.
+  // Zorb stays bright through all of stage 3 — only dims as zoom begins (0.91+)
+  const vaultOpacity = useTransform(scroll, [0, 0.06, 0.50, 0.58, 0.91, 0.93, 1.0], [0, 0.65, 1, 0.72, 0.9, 0, 0])
   // Glow/flash: mint phase only — starts after deposit dot arrives (~0.47)
   const vaultGlow = useTransform(scroll, [0.44, 0.52, 0.56, 0.60], [0, 1, 0.3, 0])
   const vaultFlash = useTransform(scroll, [0.40, 0.48, 0.54, 0.58], [0, 1, 0.2, 0])
   // Persistent vault square — fades in at capture, holds through ALL distribution
   // stages, only dissolves as the world zooms into the deploy phase
-  const vaultSquare = useTransform(scroll, [0.36, 0.42, 0.88, 0.95], [0, 0.45, 0.45, 0])
+  const vaultSquare = useTransform(scroll, [0.36, 0.42, 0.91, 0.94], [0, 0.45, 0.45, 0])
   // Deposit arrival glow — large white ring pulse when dot lands on vault (~0.47)
   const depositArrivalGlow = useTransform(scroll, [0.45, 0.49, 0.53, 0.58], [0, 1, 0.45, 0])
   // Entry radial bloom: peaks as vault rushes, bridges into deploy
@@ -252,9 +561,10 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
   // ── Distribution fan chart — one curved path + card revealed at a time ─
   // Section envelope fades in at 0.52, holds, fades as vault rushes at 0.88
-  // Dist section fades in AFTER the deposit connector finishes (~0.60) giving
-  // the cameo cycle a clear pause before distributions start
-  const distSectionOp = useTransform(scroll, [0.58, 0.64, 0.84, 0.90], [0, 1, 1, 0])
+  // Dist section fades in AFTER the deposit connector finishes (~0.60) and stays
+  // fully opaque well into the zoom phase so users can see it during the zoom-in
+  // Distributions hold visible all through stage 3, then fade together with the Zorb (0.91-0.94)
+  const distSectionOp = useTransform(scroll, [0.58, 0.64, 0.91, 0.94], [0, 1, 1, 0])
 
   // Path + card 0 (CCA Launch — left): 0.62 start — extra gap after cameos
   const _n0Raw = useTransform(scroll, [0.62, 0.68], [0, 1])
@@ -263,7 +573,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const _ot0Raw = useTransform(scroll, [0.62, 0.67], [0, 1])
   const orbitTrav0 = useTransform(_ot0Raw, smoothstep)
   // Border glow: dot arrives → soft persistent glow stays until section fades
-  const nodeGlow0 = useTransform(scroll, [0.66, 0.70, 0.84, 0.90], [0, 1, 1, 0])
+  const nodeGlow0 = useTransform(scroll, [0.66, 0.70, 0.90, 0.94], [0, 1, 1, 0])
 
   // Path + card 1 (Creator Vesting — center): 0.72 start
   const _n1Raw = useTransform(scroll, [0.72, 0.77], [0, 1])
@@ -271,7 +581,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist1CardY = useTransform(scroll, [0.72, 0.77], [20, 0])
   const _ot1Raw = useTransform(scroll, [0.72, 0.77], [0, 1])
   const orbitTrav1 = useTransform(_ot1Raw, smoothstep)
-  const nodeGlow1 = useTransform(scroll, [0.76, 0.80, 0.84, 0.90], [0, 1, 1, 0])
+  const nodeGlow1 = useTransform(scroll, [0.76, 0.80, 0.90, 0.94], [0, 1, 1, 0])
 
   // Path + card 2 (LP Reserve — right): 0.80 start
   const _n2Raw = useTransform(scroll, [0.80, 0.84], [0, 1])
@@ -279,15 +589,15 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist2CardY = useTransform(scroll, [0.80, 0.84], [20, 0])
   const _ot2Raw = useTransform(scroll, [0.80, 0.84], [0, 1])
   const orbitTrav2 = useTransform(_ot2Raw, smoothstep)
-  const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.90, 0.94], [0, 1, 1, 0])
+  const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.91, 0.94], [0, 1, 1, 0])
 
-  // "× ERC-4626" reveals as the vault captures the Zorb (~0.34) so the full
-  // title is on screen BEFORE the freeze pause. zoraShiftX keeps "Zora" centred.
-  const ercRevealOp = useTransform(scroll, [0.32, 0.42], [0, 1])
-  const ercRevealX = useTransform(scroll, [0.32, 0.42], [-14, 0])
-  const zoraShiftX = useTransform(scroll, [0.32, 0.42], ['6.5vw', '0vw'])
+  // Keep headline as a single centered "Zora" word throughout stage 1.
   // 4626 pill appears during the pause so users see the full identity at rest
   const vaultOsPillOp = useTransform(scroll, [0.38, 0.46], [0, 1])
+  // Mount the 4626 pill in the DOM only once it becomes visible (prevents layout shift)
+  useMotionValueEvent(vaultOsPillOp, 'change', (v) => {
+    if (v > 0.02) setVaultOsPillVisible(true)
+  })
 
   // Freefall entrance — two-speed design:
   //   0→0.08  : fast off-screen rush (user doesn't see this)
@@ -306,15 +616,14 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Share node — appears ABOVE vault after minting, stays through all distributions
   const shareZ = useTransform(scroll, [0.48, 0.60], [-180, 0])
   const shareScale = useTransform(scroll, [0.52, 0.58], [0.94, 1])
-  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.80, 0.88], [0, 1, 1, 0])
+  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.89, 0.93], [0, 1, 1, 0])
   const shareTransform = useMotionTemplate`
     translate3d(-50%, 0px, ${shareZ}px)
     scale(${shareScale})
   `
 
-  // Cube interior POV — fades in as vault rushes through camera into deploy phase
-  // Cube POV fades in once zoom has built enough momentum (~0.91)
-  const cubeOp = useTransform(scroll, [0.90, 0.96, 1.0], [0, 0.85, 0.75])
+  // Cube interior POV — flashes in at peak zoom (0.93-0.94), then settles for deploy
+  const cubeOp = useTransform(scroll, [0.90, 0.93, 0.95, 1.0], [0, 1.0, 0.85, 0.8])
 
   // Dot positions along each distribution bezier path (cubic Bezier formula)
   // Path 0: M 400 10 C 400 60 130 60 130 100
@@ -343,47 +652,46 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
 
 
-  // Deploy chamber — begins as bloom fades out (0.88); all 4 cards in by 1.0
-  // Deploy content arrives while the zoom is in full swing (0.93+)
-  const deployZ = useTransform(scroll, [0.93, 0.99, 1], [-180, 0, 0])
-  const deployOpacity = useTransform(scroll, [0.93, 0.98], [0, 1])
-  const deployBlur = useTransform(scroll, [0.92, 0.97, 1], [10, 0, 0])
+  // Deploy chamber — slides in after zoom peak (0.93); all 4 cards fully visible by 0.97 and hold to 1.0.
+  const deployZ = useTransform(scroll, [0.93, 0.97, 1.0], [-180, 0, 0])
+  const deployOpacity = useTransform(scroll, [0.93, 0.97], [0, 1])
+  const deployBlur = useTransform(scroll, [0.93, 0.97, 1.0], [10, 0, 0])
   const deployTransform = useMotionTemplate`translate3d(0px, 0px, ${deployZ}px)`
   const deployFilter = useMotionTemplate`blur(${deployBlur}px)`
   const deployTitleOp = useTransform(scroll, [0.93, 0.97], [0, 1])
   const deployTitleY = useTransform(scroll, [0.93, 0.97], [18, 0])
 
-  const s4PillOp = useTransform(scroll, [0.94, 0.98], [0, 1])
-  const s4PillY = useTransform(scroll, [0.94, 0.98], [12, 0])
+  const s4PillOp = useTransform(scroll, [0.93, 0.97], [0, 1])
+  const s4PillY = useTransform(scroll, [0.97, 1.0], [12, 0])
 
-  // Stage 4 sequential fan — 4 cards packed into 0.92–1.0
-  const _s4p0r = useTransform(scroll, [0.91, 0.94], [0, 1])
+  // Stage 4 sequential fan — 4 cards across 0.94–1.0 (shifted +0.03 from previous 0.91)
+  const _s4p0r = useTransform(scroll, [0.94, 0.97], [0, 1])
   const s4p0 = useTransform(_s4p0r, smoothstep)
-  const s4pOp0 = useTransform(scroll, [0.91, 0.94], [0, 1])
-  const s4d0 = useTransform(scroll, [0.93, 0.95], [0, 1])
-  const s4c0o = useTransform(scroll, [0.93, 0.96], [0, 1])
-  const s4c0y = useTransform(scroll, [0.93, 0.96], [24, 0])
+  const s4pOp0 = useTransform(scroll, [0.94, 0.97], [0, 1])
+  const s4d0 = useTransform(scroll, [0.95, 0.97], [0, 1])
+  const s4c0o = useTransform(scroll, [0.95, 0.97], [0, 1])
+  const s4c0y = useTransform(scroll, [0.95, 0.97], [24, 0])
 
-  const _s4p1r = useTransform(scroll, [0.93, 0.96], [0, 1])
+  const _s4p1r = useTransform(scroll, [0.95, 0.98], [0, 1])
   const s4p1 = useTransform(_s4p1r, smoothstep)
-  const s4pOp1 = useTransform(scroll, [0.93, 0.96], [0, 1])
-  const s4d1 = useTransform(scroll, [0.95, 0.97], [0, 1])
-  const s4c1o = useTransform(scroll, [0.95, 0.98], [0, 1])
-  const s4c1y = useTransform(scroll, [0.95, 0.98], [24, 0])
+  const s4pOp1 = useTransform(scroll, [0.95, 0.98], [0, 1])
+  const s4d1 = useTransform(scroll, [0.96, 0.98], [0, 1])
+  const s4c1o = useTransform(scroll, [0.96, 0.99], [0, 1])
+  const s4c1y = useTransform(scroll, [0.96, 0.99], [24, 0])
 
-  const _s4p2r = useTransform(scroll, [0.95, 0.97], [0, 1])
+  const _s4p2r = useTransform(scroll, [0.96, 0.98], [0, 1])
   const s4p2 = useTransform(_s4p2r, smoothstep)
-  const s4pOp2 = useTransform(scroll, [0.95, 0.97], [0, 1])
-  const s4d2 = useTransform(scroll, [0.96, 0.98], [0, 1])
-  const s4c2o = useTransform(scroll, [0.96, 0.99], [0, 1])
-  const s4c2y = useTransform(scroll, [0.96, 0.99], [24, 0])
+  const s4pOp2 = useTransform(scroll, [0.96, 0.98], [0, 1])
+  const s4d2 = useTransform(scroll, [0.97, 0.99], [0, 1])
+  const s4c2o = useTransform(scroll, [0.97, 1.0], [0, 1])
+  const s4c2y = useTransform(scroll, [0.97, 1.0], [24, 0])
 
-  const _s4p3r = useTransform(scroll, [0.96, 0.98], [0, 1])
+  const _s4p3r = useTransform(scroll, [0.97, 1.0], [0, 1])
   const s4p3 = useTransform(_s4p3r, smoothstep)
-  const s4pOp3 = useTransform(scroll, [0.96, 0.98], [0, 1])
-  const s4d3 = useTransform(scroll, [0.97, 0.99], [0, 1])
-  const s4c3o = useTransform(scroll, [0.97, 1.0], [0, 1])
-  const s4c3y = useTransform(scroll, [0.97, 1.0], [24, 0])
+  const s4pOp3 = useTransform(scroll, [0.97, 1.0], [0, 1])
+  const s4d3 = useTransform(scroll, [0.98, 1.0], [0, 1])
+  const s4c3o = useTransform(scroll, [0.98, 1.0], [0, 1])
+  const s4c3y = useTransform(scroll, [0.98, 1.0], [24, 0])
 
   const s4CardMotions = [
     { opacity: s4c0o, y: s4c0y },
@@ -398,7 +706,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
       <div
         ref={outerRef}
         className="relative hidden sm:block"
-        style={{ height: '1500vh' }}
+        style={{ height: '2000vh' }}
       >
         <div
           className="sticky top-0 h-screen overflow-hidden bg-black"
@@ -532,7 +840,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
             {/* HERO / Deposit plane */}
             <motion.div
-              className="absolute left-1/2 top-[20vh] w-full max-w-4xl px-8 text-center"
+              className="absolute left-1/2 top-[20vh] flex w-full max-w-4xl flex-col items-center px-8 text-center"
               style={{
                 transform: heroTransform,
                 opacity: heroOpacity,
@@ -555,74 +863,52 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                 className="font-mono font-black leading-none text-center overflow-hidden"
                 style={{ fontSize: 'clamp(1.8rem, 5.2vw, 5.2rem)', whiteSpace: 'nowrap' }}
               >
-                {/* "Zora" starts centred; shifts left as ERC-4626 expands in */}
+                {/* Single-word headline */}
                 <motion.span
                   style={{
                     display: 'inline-block',
-                    x: zoraShiftX,
                     background: 'linear-gradient(170deg, #ffffff 28%, #9da3b3 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                   }}
                 >
-                  Zora
-                </motion.span>
-                {/* "× ERC-4626" slides and fades in from the right */}
-                <motion.span
-                  style={{
-                    display: 'inline-block',
-                    opacity: ercRevealOp,
-                    x: ercRevealX,
-                    background: 'linear-gradient(170deg, #ffffff 28%, #9da3b3 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}
-                >
-                  <span style={{ WebkitTextFillColor: 'rgba(160,180,255,0.82)' }}>&thinsp;×&thinsp;</span>ERC-4626
+                  Zora&thinsp;<span style={{ WebkitTextFillColor: 'rgba(160,180,255,0.82)' }}>×</span>
+                  &thinsp;ERC-4626
                 </motion.span>
               </div>
 
-              <div className="mt-5 flex items-center justify-center gap-2">
-                {/* Zora pill — visible from the start */}
+              {/* Pills — Zora Creator Coin always centred; 4626 pill mounts only
+                  once the vault captures the Zorb so it never shifts layout */}
+              <div className="mx-auto mt-5 flex w-full max-w-lg items-center justify-center gap-2">
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5">
-                  <img
-                    src="/protocols/zora.svg"
-                    alt="Zora"
-                    className="h-4 w-4 rounded-full"
-                    loading="lazy"
-                  />
+                  <img src="/protocols/zora.svg" alt="Zora" className="h-4 w-4 rounded-full" loading="lazy" />
                   <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
                     Zora Creator Coin
                   </span>
                 </div>
-                {/* 4626 pill — appears once vault captures Zorb */}
-                <motion.div
-                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5"
-                  style={{ opacity: vaultOsPillOp }}
-                >
-                  <img
-                    src="/app-icon.svg"
-                    alt="4626"
-                    className="h-4 w-4 rounded-[4px]"
-                    loading="lazy"
-                  />
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-                    4626 Vault OS
-                  </span>
-                </motion.div>
+                {vaultOsPillVisible && (
+                  <motion.div
+                    className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5"
+                    style={{ opacity: vaultOsPillOp }}
+                  >
+                    <img src="/app-icon.svg" alt="4626" className="h-4 w-4 rounded-[4px]" loading="lazy" />
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                      4626 Vault OS
+                    </span>
+                  </motion.div>
+                )}
               </div>
 
-              <p className="mx-auto mt-8 max-w-lg text-[13px] font-light leading-[1.85] text-zinc-600">
+              <p className="mx-auto mt-8 max-w-lg text-center text-[13px] font-light leading-[1.85] text-zinc-600">
                 Every deposit lives inside a single protocol vault, and
                 <span className="text-zinc-500"> only the verified creator of that coin can open the door.</span>
               </p>
             </motion.div>
 
-            {/* Compressed deposit node */}
+            {/* Deposit pill — descends from above, overlaps the Zorb on arrival */}
             <motion.div
-              className="absolute left-1/2 top-[40vh] z-20"
+              className="absolute left-1/2 top-[44vh] z-30"
               style={{
                 transform: depositNodeTransform,
                 opacity: depositNodeOpacity,
@@ -1253,203 +1539,179 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
             </motion.section>
           </motion.div>
 
-          {/* Cube interior POV — you're inside the ERC-4626 vault cube,
-              looking out through its walls at the surrounding Zorb sphere.
-              The cube wireframe shows the vault structure; the sphere rings
-              beyond it show the Zorb/Zora world that contains everything. */}
+          {/* Cube interior POV — faint perspective box outline, you're inside the vault */}
           <motion.div
             className="pointer-events-none absolute inset-0 z-[8]"
             style={{ opacity: cubeOp }}
             aria-hidden="true"
           >
-            {/* Ambient glow from the sphere surface illuminating the cube interior */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background: [
-                  'radial-gradient(ellipse 55% 55% at 50% 50%, rgba(140,170,255,0.06) 0%, transparent 70%)',
-                  'radial-gradient(ellipse 90% 40% at 50% 0%,   rgba(180,200,255,0.04) 0%, transparent 60%)',
-                  'radial-gradient(ellipse 90% 40% at 50% 100%, rgba(180,200,255,0.04) 0%, transparent 60%)',
-                ].join(', '),
-              }}
-            />
-
             <svg
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
               className="absolute inset-0 h-full w-full"
             >
-              <defs>
-                {/* Radial fade: sphere rings are brightest at edge, fading to centre */}
-                <radialGradient id="sphere-fade" cx="50%" cy="50%" r="50%">
-                  <stop offset="55%"  stopColor="rgba(200,215,255,0)"   />
-                  <stop offset="80%"  stopColor="rgba(200,215,255,0.08)" />
-                  <stop offset="100%" stopColor="rgba(200,215,255,0.18)" />
-                </radialGradient>
-              </defs>
-
-              {/* ── SPHERE SURFACE (Zorb surrounding the cube) ─────────────────
-                  The sphere is larger than the cube. From inside we see its
-                  inner surface as partial arcs peeking past the cube edges.    */}
-
-              {/* Equatorial ring of the sphere — just visible at mid-height */}
-              <ellipse
-                cx="50" cy="50" rx="52" ry="10"
-                fill="none"
-                stroke="rgba(180,200,255,0.09)"
-                strokeWidth="0.22"
-                strokeDasharray="1.4 2.2"
-              />
-              {/* Upper latitude ring */}
-              <ellipse
-                cx="50" cy="22" rx="40" ry="7"
-                fill="none"
-                stroke="rgba(180,200,255,0.06)"
-                strokeWidth="0.16"
-                strokeDasharray="1.2 2.6"
-              />
-              {/* Lower latitude ring */}
-              <ellipse
-                cx="50" cy="78" rx="40" ry="7"
-                fill="none"
-                stroke="rgba(180,200,255,0.06)"
-                strokeWidth="0.16"
-                strokeDasharray="1.2 2.6"
-              />
-              {/* Vertical meridian — sphere longitude line through centre */}
-              <ellipse
-                cx="50" cy="50" rx="9" ry="52"
-                fill="none"
-                stroke="rgba(180,200,255,0.07)"
-                strokeWidth="0.16"
-                strokeDasharray="1.2 2.8"
-              />
-              {/* Radial fill — gives the cube interior a sphere-lit ambience */}
-              <rect x="0" y="0" width="100" height="100" fill="url(#sphere-fade)" />
-
-              {/* ── CUBE INTERIOR WALLS ─────────────────────────────────────── */}
-
-              {/* Back wall — the far face of the cube */}
+              {/* Back wall — the far face of the cube, rounded corners */}
               <rect
                 x="30" y="26" width="40" height="48"
                 rx="2.6" ry="2.6"
                 fill="none"
-                stroke="rgba(255,255,255,0.09)"
-                strokeWidth="0.20"
+                stroke="rgba(255,255,255,0.07)"
+                strokeWidth="0.18"
               />
-              {/* 4 perspective edges — back wall corner → screen corner */}
-              <line x1="30" y1="26" x2="0"   y2="0"   stroke="rgba(255,255,255,0.06)" strokeWidth="0.16" />
-              <line x1="70" y1="26" x2="100" y2="0"   stroke="rgba(255,255,255,0.06)" strokeWidth="0.16" />
-              <line x1="70" y1="74" x2="100" y2="100" stroke="rgba(255,255,255,0.06)" strokeWidth="0.16" />
-              <line x1="30" y1="74" x2="0"   y2="100" stroke="rgba(255,255,255,0.06)" strokeWidth="0.16" />
-              {/* Horizontal mid-wall depth guides */}
-              <line x1="30" y1="50" x2="0"   y2="50"  stroke="rgba(255,255,255,0.03)" strokeWidth="0.12" />
-              <line x1="70" y1="50" x2="100" y2="50"  stroke="rgba(255,255,255,0.03)" strokeWidth="0.12" />
-              {/* Vertical mid-wall depth guides */}
-              <line x1="50" y1="26" x2="50"  y2="0"   stroke="rgba(255,255,255,0.03)" strokeWidth="0.12" />
-              <line x1="50" y1="74" x2="50"  y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="0.12" />
+              {/* 4 perspective edges — corner of back wall → corner of screen */}
+              <line x1="30" y1="26" x2="0"   y2="0"   stroke="rgba(255,255,255,0.05)" strokeWidth="0.14" />
+              <line x1="70" y1="26" x2="100" y2="0"   stroke="rgba(255,255,255,0.05)" strokeWidth="0.14" />
+              <line x1="70" y1="74" x2="100" y2="100" stroke="rgba(255,255,255,0.05)" strokeWidth="0.14" />
+              <line x1="30" y1="74" x2="0"   y2="100" stroke="rgba(255,255,255,0.05)" strokeWidth="0.14" />
+              {/* Wall midpoint lines — horizontal depth guides */}
+              <line x1="30" y1="50" x2="0"   y2="50"  stroke="rgba(255,255,255,0.025)" strokeWidth="0.1" />
+              <line x1="70" y1="50" x2="100" y2="50"  stroke="rgba(255,255,255,0.025)" strokeWidth="0.1" />
+              {/* Wall midpoint lines — vertical depth guides */}
+              <line x1="50" y1="26" x2="50"  y2="0"   stroke="rgba(255,255,255,0.025)" strokeWidth="0.1" />
+              <line x1="50" y1="74" x2="50"  y2="100" stroke="rgba(255,255,255,0.025)" strokeWidth="0.1" />
             </svg>
           </motion.div>
+
+          {/* Live activity feed — bottom-right, outside 3D world */}
+          <LiveActivityFeed feedOp={feedOp} />
         </div>
       </div>
 
-      {/* MOBILE — keep this simpler / stacked */}
+      {/* ── MOBILE ── Optimized static version matching desktop visual language */}
       <div className="sm:hidden">
+
+        {/* Stage 1 — Deposit / Hero */}
         <section className="cinematic-section no-divider-top no-divider-bottom !py-20">
-          <div className="mx-auto max-w-sm px-5 text-center">
-            <p className="mb-5 text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
+          <div className="mx-auto max-w-sm px-6 text-center">
+            <p className="mb-6 text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               01 · Deposit
             </p>
+            {/* Headline — mirrors desktop */}
             <p
-              className="font-mono font-black leading-none"
+              className="text-center font-mono font-black leading-none"
               style={{
-                fontSize: '3.2rem',
-                background: 'linear-gradient(170deg, #ffffff 30%, #a0a0b0 100%)',
+                fontSize: 'clamp(2.2rem, 10vw, 3.4rem)',
+                background: 'linear-gradient(170deg, #ffffff 28%, #9da3b3 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                whiteSpace: 'nowrap',
               }}
             >
-              {depositTokens}
+              Zora&thinsp;<span style={{ WebkitTextFillColor: 'rgba(160,180,255,0.82)' }}>×</span>&thinsp;ERC-4626
             </p>
-            <p className="mt-3 font-mono text-sm tracking-[0.28em] text-zinc-500">TOKEN</p>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
-              <img src="/protocols/zora.svg" alt="Zora" className="h-3.5 w-3.5 rounded-full" loading="lazy" />
-              <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-                Zora Creator Coin
-              </span>
+            {/* Pills */}
+            <div className="mx-auto mt-5 flex w-full max-w-xs flex-wrap items-center justify-center gap-2">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
+                <img src="/protocols/zora.svg" alt="Zora" className="h-3.5 w-3.5 rounded-full" loading="lazy" />
+                <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                  Zora Creator Coin
+                </span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
+                <img src="/app-icon.svg" alt="4626" className="h-3.5 w-3.5 rounded-[3px]" loading="lazy" />
+                <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                  4626 Vault OS
+                </span>
+              </div>
             </div>
-            <p className="mt-6 text-sm font-light leading-relaxed text-zinc-600">
-              Depositing into ERC-4626 vault — minting share tokens 1:1.
+            <p className="mt-5 text-center text-sm font-light leading-relaxed text-zinc-600">
+              Every deposit lives inside a single protocol vault, and only the verified creator of that coin can open the door.
             </p>
           </div>
         </section>
 
+        {/* Stage 2 — Vault / Mint */}
         <section className="cinematic-section no-divider-top no-divider-bottom !py-16">
-          <div className="mx-auto flex max-w-sm flex-col items-center px-5 text-center">
-            <p className="mb-4 text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
+          <div className="mx-auto flex max-w-sm flex-col items-center px-6 text-center">
+            <p className="mb-6 text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               02 · Mint
             </p>
-            <p className="mb-5 font-mono text-xs text-zinc-500">{depositTokens} TOKEN →</p>
+            {/* Zorb inside vault square — mirrors desktop capture moment */}
+            <div className="relative">
+              <div
+                className="pointer-events-none absolute inset-[-6px] rounded-[30px]"
+                style={{
+                  border: '1px solid rgba(255,255,255,0.28)',
+                  boxShadow: [
+                    '0 0 0 1px rgba(180,200,255,0.10)',
+                    '0 0 18px 4px rgba(180,200,255,0.16)',
+                    '0 0 50px 12px rgba(140,170,255,0.07)',
+                  ].join(', '),
+                }}
+                aria-hidden="true"
+              />
+              <ZorbViewer size={140} />
+            </div>
+            {/* Share token output */}
             <div
-              className="relative flex flex-col items-center justify-center overflow-hidden rounded-[16px] bg-black/95"
+              className="mt-8 inline-flex items-center gap-2.5 rounded-full px-4 py-2"
               style={{
-                width: 124,
-                height: 124,
-                border: '1px solid rgba(255,255,255,0.06)',
-                boxShadow: '0 0 44px -8px rgba(0,82,255,0.6)',
+                border: '1px solid rgba(96,165,250,0.35)',
+                background: 'linear-gradient(135deg, rgba(96,165,250,0.12), rgba(59,130,246,0.06))',
+                boxShadow: '0 0 20px 4px rgba(96,165,250,0.15)',
               }}
             >
-              <div
-                className="pointer-events-none absolute inset-0 opacity-[0.07]"
-                style={{
-                  backgroundImage:
-                    'radial-gradient(circle, rgba(0,82,255,0.7) 1px, transparent 1px)',
-                  backgroundSize: '10px 10px',
-                }}
-              />
-              <span className="relative font-mono text-[7px] uppercase tracking-widest text-zinc-600">ERC</span>
-              <span
-                className="relative font-mono text-2xl font-black text-brand-primary"
-                style={{ textShadow: '0 0 20px rgba(0,82,255,0.7)' }}
-              >
-                4626
-              </span>
-              <span className="relative mt-1 font-mono text-[7px] uppercase tracking-widest text-zinc-700">
-                VAULT
+              <span className="font-mono text-sm font-black text-blue-300">{shareTokens}</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-blue-400/60">
+                share tokens minted
               </span>
             </div>
-            <p className="mt-5 font-mono text-sm font-semibold text-brand-primary">→ {shareTokens}</p>
-            <p className="mt-1 font-mono text-[9px] tracking-[0.28em] text-brand-primary/45">MINTED</p>
           </div>
         </section>
 
+        {/* Stage 3 — Distribute */}
         <section className="cinematic-section no-divider-top no-divider-bottom !py-16">
-          <div className="mx-auto max-w-sm px-5">
+          <div className="mx-auto max-w-sm px-6">
             <p className="mb-2 text-center text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               03 · Distribute
             </p>
-            <p className="mb-7 text-center font-mono text-lg font-bold text-brand-primary">
-              {shareTokens}
-            </p>
+            <p className="mb-6 text-center font-mono text-xs text-zinc-500">{shareTokens} share tokens</p>
+            {/* Simplified fan SVG — same geometry as desktop */}
+            <div className="relative mx-auto mb-6 w-full">
+              <svg viewBox="0 0 800 110" className="w-full" style={{ height: 72 }} aria-hidden="true">
+                <defs>
+                  <linearGradient id="mob-dg" gradientUnits="userSpaceOnUse" x1="400" y1="10" x2="400" y2="100">
+                    <stop offset="0%"   stopColor="rgba(147,197,253,0.6)" />
+                    <stop offset="100%" stopColor="rgba(147,197,253,0.08)" />
+                  </linearGradient>
+                </defs>
+                {/* Fan paths */}
+                <path d={DIST_PATHS[0]} stroke="url(#mob-dg)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                <path d={DIST_PATHS[1]} stroke="url(#mob-dg)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                <path d={DIST_PATHS[2]} stroke="url(#mob-dg)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                {/* Origin dot */}
+                <circle cx={400} cy={10} r={4.5} fill="#93c5fd" opacity={0.9} />
+                {/* Endpoint dots */}
+                {DIST_DESTS.map((d) => (
+                  <circle key={`${d.cx}-${d.cy}`} cx={d.cx} cy={d.cy} r={4} fill="#93c5fd" opacity={0.75} />
+                ))}
+              </svg>
+            </div>
+            {/* Distribution cards — white/zinc palette matching desktop */}
             <div className="space-y-3">
               {SHARE_DISTRIBUTION_ROWS.map((row) => (
                 <div
                   key={row.title}
-                  className="relative overflow-hidden rounded-[16px] p-4"
+                  className="relative overflow-hidden rounded-[18px] p-4"
                   style={{
-                    border: '1px solid rgba(0,82,255,0.18)',
-                    background: 'linear-gradient(160deg, rgba(0,82,255,0.08), transparent)',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    background: 'linear-gradient(160deg, rgba(255,255,255,0.04), transparent)',
                   }}
                 >
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-primary/45 to-transparent" />
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                   <div className="flex items-baseline justify-between">
-                    <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
-                      {row.title}
-                    </p>
+                    <div>
+                      {row.icon && (
+                        <img src={row.icon} alt={row.title} className="mb-1.5 h-4 w-4 rounded-full object-cover" loading="lazy" />
+                      )}
+                      <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                        {row.title}
+                      </p>
+                    </div>
                     <div className="text-right">
-                      <p className="font-mono text-2xl font-black text-brand-primary">{row.percent}</p>
-                      <p className="font-mono text-[9px] text-brand-primary/50">{row.amount}</p>
+                      <p className="font-mono text-2xl font-black text-zinc-100">{row.percent}</p>
+                      <p className="font-mono text-[9px] text-zinc-600">{row.amount}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-[11px] font-light leading-relaxed text-zinc-500">
@@ -1457,7 +1719,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   </p>
                   <Link
                     to={row.route}
-                    className="mt-2 block text-right text-[9px] font-medium text-brand-primary/45 hover:text-brand-primary/70"
+                    className="mt-2 block text-right text-[9px] font-medium text-zinc-600 hover:text-zinc-400"
                   >
                     Learn more →
                   </Link>
@@ -1467,43 +1729,60 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
           </div>
         </section>
 
-        <section className="cinematic-section no-divider-top no-divider-bottom !py-16">
-          <div className="mx-auto max-w-sm px-5">
-            <p className="mb-2 text-center text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
+        {/* Stage 4 — Deploy */}
+        <section className="cinematic-section no-divider-top no-divider-bottom !py-12">
+          <div className="mx-auto max-w-[340px] px-4">
+            <p className="mb-1.5 text-center text-[8px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               04 · Deploy
             </p>
-            <p className="mb-7 text-center font-mono text-lg font-bold text-zinc-200">
-              {depositTokens} <span className="text-zinc-500">TOKEN</span>
-            </p>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="mb-4 text-center font-mono text-[10px] text-zinc-500">{depositTokens} token · principal</p>
+            {/* Strategy fan SVG */}
+            <div className="relative mx-auto mb-4 w-full">
+              <svg viewBox="0 0 800 130" className="w-full" style={{ height: 52 }} aria-hidden="true">
+                <defs>
+                  <linearGradient id="mob-sg" gradientUnits="userSpaceOnUse" x1="400" y1="18" x2="400" y2="108">
+                    <stop offset="0%"   stopColor="rgba(255,255,255,0.45)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0.05)" />
+                  </linearGradient>
+                </defs>
+                {STRAT_PATHS.map((p, i) => (
+                  <path key={i} d={p} stroke="url(#mob-sg)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                ))}
+                <circle cx={400} cy={18} r={4.5} fill="rgba(255,255,255,0.7)" />
+                {STRAT_DESTS.map((d) => (
+                  <circle key={`${d.cx}-${d.cy}`} cx={d.cx} cy={d.cy} r={3.5} fill="rgba(255,255,255,0.45)" />
+                ))}
+              </svg>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               {STRATEGY_CARDS.map((card) => (
                 <div
                   key={card.label}
-                  className="relative overflow-hidden rounded-[16px] p-4"
+                  className="relative overflow-hidden rounded-2xl p-3"
                   style={{
-                    border: '1px solid rgba(255,255,255,0.09)',
-                    background: 'linear-gradient(160deg, rgba(255,255,255,0.05), transparent)',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    background: 'linear-gradient(160deg, rgba(255,255,255,0.04), transparent)',
                   }}
                 >
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
-                  <div className="mb-2.5 flex items-center gap-1.5">
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                  <div className="mb-2 flex items-center gap-1">
                     {card.icon ? (
                       <img src={card.icon} alt={card.iconAlt} className={card.iconClassName} loading="lazy" />
                     ) : (
-                      <div className="h-1.5 w-1.5 rounded-full bg-white/15" aria-hidden="true" />
+                      <div className="h-1 w-1 rounded-full bg-white/15" aria-hidden="true" />
                     )}
-                    <p className="text-[8px] font-semibold uppercase tracking-widest text-zinc-600">
+                    <p className="text-[7px] font-semibold uppercase tracking-widest text-zinc-600">
                       {card.label}
                     </p>
                   </div>
-                  <p className="font-mono text-2xl font-black text-zinc-100">{card.percent}</p>
-                  <p className="font-mono text-[9px] text-zinc-600">{card.amount}</p>
-                  <p className="mt-1.5 text-[11px] font-light leading-relaxed text-zinc-500">
+                  <p className="font-mono text-xl font-black text-zinc-100">{card.percent}</p>
+                  <p className="font-mono text-[8px] text-zinc-600">{card.amount}</p>
+                  <p className="mt-1 text-[10px] font-light leading-relaxed text-zinc-500">
                     {card.description}
                   </p>
                   <Link
                     to={card.route}
-                    className="mt-2 block text-right text-[9px] font-medium text-zinc-600 hover:text-zinc-400"
+                    className="mt-1.5 block text-right text-[8px] font-medium text-zinc-600 hover:text-zinc-400"
                   >
                     Learn more →
                   </Link>

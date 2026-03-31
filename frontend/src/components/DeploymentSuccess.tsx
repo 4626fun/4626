@@ -7,10 +7,10 @@ import { usePublicClient } from 'wagmi'
 import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles } from 'lucide-react'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',

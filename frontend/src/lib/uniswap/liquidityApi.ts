@@ -1,6 +1,5 @@
 import { normalizeUniswapError } from './error'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 export type LiquidityAction = 'positions' | 'quote-create' | 'create' | 'add' | 'remove' | 'claim' | 'migrate'
 

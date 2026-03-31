@@ -1,9 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions } from '../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
-import { resolveAmoeWallet } from '../../../server/_lib/amoeWalletResolver.js'
-import { getAmoeCreditSnapshot } from '../../../server/_lib/lotteryAmoe.js'
+import {
+  handleOptions,
+  guardAgentApiRequest,
+} from '../../../../packages/server-core/src/index.js'
+
+
+import { resolveAmoeWallet } from '../../../../server/_lib/amoeWalletResolver.js'
+import { getAmoeCreditSnapshot } from '../../../../server/_lib/lotteryAmoe.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

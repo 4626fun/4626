@@ -11,7 +11,9 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
 import {
   consumeSiwaNonce,
   createSiwaReceiptToken,
@@ -22,7 +24,7 @@ import {
 } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 
 declare const process: { env: Record<string, string | undefined> }
 

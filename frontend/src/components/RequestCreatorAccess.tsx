@@ -5,8 +5,8 @@ import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 type CreatorAccessStatus =
   | {
@@ -26,7 +26,7 @@ type CreatorAccessStatus =
   | null
 
 async function fetchCreatorAccessStatus(): Promise<CreatorAccessStatus> {
-  const res = await apiFetch('/api/creator-access/status', { method: 'GET', headers: { Accept: 'application/json' } })
+  const res = await apiFetch(API_ENDPOINTS.creator.accessStatus, { method: 'GET', headers: { Accept: 'application/json' } })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<CreatorAccessStatus> | null
   if (!res.ok || !json) throw new Error('Failed to load access status')
   if (!json.success) throw new Error(json.error || 'Failed to load access status')
@@ -34,7 +34,7 @@ async function fetchCreatorAccessStatus(): Promise<CreatorAccessStatus> {
 }
 
 async function requestCreatorAccess(params: { coin?: string | null }): Promise<{ status: 'approved' | 'pending' }> {
-  const res = await apiFetch('/api/creator-access/request', {
+  const res = await apiFetch(API_ENDPOINTS.creator.accessRequest, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ coin: params.coin ?? undefined }),

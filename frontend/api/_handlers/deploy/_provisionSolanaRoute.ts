@@ -13,8 +13,10 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
-import { logger } from '../../../server/_lib/logger.js'
+  logger,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { evaluateCanonicalBridgeTokenPolicy } from '../../../server/_lib/solanaBridgePolicy.js'
 
 type ProvisionRouteRequest = {

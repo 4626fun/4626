@@ -9,17 +9,25 @@ import {
   setCors,
   setNoStore,
   type ApiEnvelope,
-} from '../../../server/auth/_shared.js'
-import { isAdminAddress } from '../../../server/_lib/session.js'
-import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+  isAdminAddress,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+  readRequestPrincipalAddress,
+  logger,
+} from '../../../packages/server-core/src/index.js'
+
+
+
+
 import {
   getRepoRootPath,
   resolveSkill,
   resolveSkillScriptPath,
   type ResolvedSkill,
 } from '../../../server/_lib/skills.js'
-import { logger } from '../../../server/_lib/logger.js'
+
 
 declare const process: { env: Record<string, string | undefined> }
 

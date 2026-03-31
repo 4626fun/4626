@@ -4,13 +4,23 @@ import { PrivyClient } from '@privy-io/server-auth'
 import { createPublicClient, encodeFunctionData, erc20Abi, formatUnits, getAddress, http, parseEther, type Address } from 'viem'
 import { base } from 'viem/chains'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+  checkRateLimit,
+  rateLimitKey,
+} from '../../../packages/server-core/src/index.js'
+
 import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
 import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/accountsIdentity.js'
 import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 import { extractCreatorCoinAddressFromProfile, fetchZoraProfile } from '../../../server/_lib/zoraProfile.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
 import {
   isCoinbaseSmartWalletHelperError,
@@ -53,7 +63,7 @@ import {
   upsertHolderRoomMember,
 } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import {
   areHolderRoomsEnabled as areHolderRoomsEnabledShared,

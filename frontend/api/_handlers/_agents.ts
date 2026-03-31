@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { guardAgentApiRequest } from '../server/_lib/agentApiGuard.js'
+import { guardAgentApiRequest } from '../../packages/server-core/src/index.js'
 import { getCanonicalOrigin } from '../../server/_lib/origin.js'
 
 declare const process: { env: Record<string, string | undefined> }

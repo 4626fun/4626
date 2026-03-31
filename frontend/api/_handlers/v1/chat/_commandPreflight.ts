@@ -7,7 +7,7 @@ import {
   readSessionFromRequest,
   setCors,
   setNoStore,
-} from '../../../../server/auth/_shared.js'
+} from '../../../../packages/server-core/src/index.js'
 import { getKeeprVaultByGroupId } from '../../../../server/_lib/keeprRegistry.js'
 import { isCreWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
 

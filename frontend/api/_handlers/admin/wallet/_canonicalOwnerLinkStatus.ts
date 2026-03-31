@@ -1,12 +1,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  isDbConfigured,
+  getSessionAddress,
+  isAdminAddress,
+} from '../../../../packages/server-core/src/index.js'
+
 import {
   CSW_OWNER_LINK_STATUSES,
   ensureCswOwnerLinkStatusSchema,
 } from '../../../../server/_lib/cswOwnerLinkStatus.js'
-import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
-import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
+
+
 
 type StatusItem = {
   profileId: number

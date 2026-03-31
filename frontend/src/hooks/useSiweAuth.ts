@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type MeResponse = { address: string } | null
 type CswOwnershipAttestation = {

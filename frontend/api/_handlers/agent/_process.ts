@@ -20,7 +20,12 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { isDbConfigured, getDb } from '../../../server/_lib/postgres.js'
+import {
+  isDbConfigured,
+  getDb,
+  logger,
+} from '../../../packages/server-core/src/index.js'
+
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../../server/_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../../server/_lib/privyXmtpSigner.js'
 import {
@@ -29,7 +34,7 @@ import {
   resolveXmtpDbDirectory,
 } from '../../../server/_lib/xmtpDbDirectory.js'
 import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
-import { logger } from '../../../server/_lib/logger.js'
+
 
 declare const process: { env: Record<string, string | undefined> }
 

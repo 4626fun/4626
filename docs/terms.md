@@ -59,6 +59,21 @@ The Service is provided "as is" and "as available." To the maximum extent permit
 
 We may update these Terms from time to time. We will update the "Last updated" date above. Your continued use of the Service constitutes acceptance of the updated Terms.
 
-## 12. Contact
+## 12. Lottery AMOE Official Rules (California)
 
-Questions about these Terms can be sent to: 4626dotfun@gmail.com
+This section governs the no-purchase AMOE lane for lottery entries made through the Service.
+
+NO PURCHASE OR PAYMENT OF ANY KIND IS NECESSARY TO ENTER OR WIN THIS SWEEPSTAKES.
+
+A PURCHASE OR PAYMENT WILL NOT INCREASE YOUR CHANCES OF WINNING.
+
+- Free-entry (AMOE) and purchase-linked entry lanes are both eligible under the lottery winner-selection flow.
+- Entries submitted without a purchase are not subjected to a disability or disadvantage in winner selection relative to entries accompanied by a purchase.
+- Winners are determined when qualifying lottery events are settled onchain through the protocol randomness flow.
+- The AMOE method is available in-product via the AMOE Free Entry flow (daily check-in credits and entry submission path), including protocol-relayed AMOE submission when relay service is enabled.
+- Odds depend on the number of eligible entries received and protocol-level lottery parameters at settlement time.
+- Void where prohibited. Additional eligibility restrictions may apply based on jurisdiction and wallet/account status.
+
+## 13. Contact
+
+Questions about these Terms can be sent to: hello@4626.fun

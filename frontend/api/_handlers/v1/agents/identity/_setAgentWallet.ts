@@ -25,8 +25,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
 import {
   getIdentityRegistryAddress,

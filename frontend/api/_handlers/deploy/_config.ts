@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getApiContracts } from '../../../server/_lib/contracts.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getApiContracts,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { resolvePayoutRouterFeeConfig, resolvePayoutRouterKeeperAddress } from '../../../server/_lib/payoutRouterRuntime.js'
 
 declare const process: { env: Record<string, string | undefined> }

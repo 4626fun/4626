@@ -6,8 +6,13 @@ import { encodeFunctionData, type Address } from 'viem'
  * This matches Ajna ERC20Pool behavior (see `ERC20Pool.drawDebt` in ajna-core).
  */
 
-import { handleOptions, readJsonBody } from '../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import type { BuildTxResponse } from '../_types.js'
 import { AJNA_ERC20_POOL_ABI } from './_abi.js'
 import { assertBucketIndex, assertPositive, requireAddress, setBuildCors, toBigIntStrict } from './_shared.js'

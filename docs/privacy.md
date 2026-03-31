@@ -61,4 +61,4 @@ We may update this Privacy Policy from time to time. We will update the "Last up
 
 ## 9. Contact
 
-Questions about this Privacy Policy can be sent to: 4626dotfun@gmail.com
+Questions about this Privacy Policy can be sent to: hello@4626.fun

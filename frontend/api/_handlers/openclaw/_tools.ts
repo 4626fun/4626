@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { handleOptions, setCors, setNoStore } from '../../../packages/server-core/src/index.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

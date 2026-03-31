@@ -6,7 +6,7 @@ import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'

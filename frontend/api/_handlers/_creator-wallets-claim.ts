@@ -6,11 +6,14 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-} from '../../server/auth/_shared.js'
-import { getDb } from '../../server/_lib/postgres.js'
+  getDb,
+  readRequestPrincipalAddress,
+} from '../../packages/server-core/src/index.js'
+
+
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { isAddressLike, resolveCoinPartiesAndOwner } from '../../server/_lib/coinParties.js'
-import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
+
 
 type ClaimBody = { coinAddress?: string }
 type WalletRole = 'creator' | 'payout'

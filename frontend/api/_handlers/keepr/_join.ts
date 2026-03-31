@@ -1,10 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
 import { checkSharesEligibility, getKeeprBaseRpcUrls } from '../../../server/_lib/keeprGating.js'
 import { enqueueKeeprAction, getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 import { verifyKeeprJoinProof } from '../../../server/_lib/keeprProof.js'
 
 type JoinBody = {

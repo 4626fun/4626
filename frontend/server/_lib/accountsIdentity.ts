@@ -6,6 +6,7 @@ import { verifyPrivyRequest } from './canonicalCswDelegation.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
 import { extractPrivyVerifiedEmail } from './trust.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
+import { ensureWaitlistPointsSchema } from './waitlistPoints.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
 import { resolveCanonicalCsw } from './canonicalCswDelegation.js'
 import { fetchZoraProfile } from './zoraProfile.js'
@@ -323,29 +324,6 @@ export async function ensureAccountsIdentitySchema(db: Db): Promise<void> {
         END IF;
       END $$;
     `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS account_points (
-        privy_user_id TEXT PRIMARY KEY REFERENCES accounts(privy_user_id) ON DELETE CASCADE,
-        points INT NOT NULL DEFAULT 0,
-        tier INT NOT NULL DEFAULT 0,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS account_point_events (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        privy_user_id TEXT NOT NULL REFERENCES accounts(privy_user_id) ON DELETE CASCADE,
-        event_type TEXT NOT NULL,
-        event_key TEXT NOT NULL,
-        points INT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE (privy_user_id, event_key)
-      );
-    `
-      await db.sql`
-      CREATE INDEX IF NOT EXISTS account_point_events_privy_created_idx
-      ON account_point_events (privy_user_id, created_at DESC);
-    `
       accountsIdentitySchemaEnsured = true
     } catch {
       accountsIdentitySchemaEnsured = false
@@ -458,21 +436,82 @@ export async function removeLinkedMethod(params: {
   `
 }
 
-async function refreshScore(db: Db, privyUserId: string): Promise<AccountScore> {
+async function listProfileIdsForPrivyUser(db: Db, privyUserId: string): Promise<number[]> {
+  const rows = await db.sql`
+    SELECT id
+    FROM profiles
+    WHERE privy_user_id = ${privyUserId}
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC;
+  `
+  const ids: number[] = []
+  for (const row of rows.rows ?? []) {
+    const idRaw = row?.id
+    const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
+    if (!Number.isFinite(id) || id <= 0) continue
+    ids.push(Math.floor(id))
+  }
+  return ids
+}
+
+async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId: string): Promise<number> {
+  const existing = await listProfileIdsForPrivyUser(db, privyUserId)
+  if (existing.length > 0) return existing[0]
+
+  await db.sql`
+    INSERT INTO profiles (privy_user_id, created_at, updated_at)
+    VALUES (${privyUserId}, NOW(), NOW());
+  `
+  const created = await listProfileIdsForPrivyUser(db, privyUserId)
+  if (created.length > 0) return created[0]
+  throw new Error('accounts_profile_upsert_failed')
+}
+
+async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountScore> {
+  await ensureWaitlistSchema(db)
+  await ensureWaitlistPointsSchema(db as any)
+  const profileIds = await listProfileIdsForPrivyUser(db, privyUserId)
+  if (profileIds.length === 0) return { points: 0, tier: 0 }
+
   const totalResult = await db.sql`
-    SELECT COALESCE(SUM(points), 0)::INT AS points
-    FROM account_point_events
-    WHERE privy_user_id = ${privyUserId};
+    SELECT COALESCE(
+      ROUND(
+        SUM(
+          CASE
+            WHEN p.source = 'amoe_entry_spend' THEN p.amount
+            WHEN p.source = 'amoe_twitter_daily' THEN p.amount * 1.00
+            WHEN p.source = 'waitlist_signup' THEN p.amount * 1.00
+            WHEN p.source = 'csw_link' THEN p.amount * 1.00
+            WHEN p.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN p.amount * 0.60
+            WHEN p.source LIKE 'social_%' THEN p.amount * 0.50
+            WHEN p.source LIKE 'bonus_%' OR p.source = 'task' THEN p.amount * 0.30
+            WHEN p.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN p.amount * 0.40
+            WHEN p.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+              THEN p.amount * 0.60
+            ELSE p.amount * 0.30
+          END
+        )
+      ),
+      0
+    )::INT AS points
+    FROM points p
+    WHERE p.signup_id IN (
+      SELECT id
+      FROM profiles
+      WHERE privy_user_id = ${privyUserId}
+    );
   `
   const total = Number(totalResult.rows?.[0]?.points ?? 0) || 0
   const tier = toScoreTier(total)
-  await db.sql`
-    INSERT INTO account_points (privy_user_id, points, tier, updated_at)
-    VALUES (${privyUserId}, ${total}, ${tier}, NOW())
-    ON CONFLICT (privy_user_id) DO UPDATE
-    SET points = EXCLUDED.points, tier = EXCLUDED.tier, updated_at = NOW();
-  `
   return { points: total, tier }
+}
+
+async function refreshScore(db: Db, privyUserId: string): Promise<AccountScore> {
+  try {
+    await resolveOrCreateCanonicalProfileIdForPrivyUser(db, privyUserId)
+  } catch {
+    // Points should never block identity flows when profile persistence is unavailable.
+  }
+  return await readUnifiedScore(db, privyUserId)
 }
 
 export async function applyPointEvent(params: {
@@ -486,26 +525,30 @@ export async function applyPointEvent(params: {
   const normalizedType = normalizeLower(eventType)
   const normalizedKey = normalizeString(eventKey)
   const amount = Number(points)
-  if (!normalizedType || !normalizedKey || !Number.isFinite(amount) || amount === 0) {
+  if (
+    !normalizedType ||
+    !normalizedKey ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    normalizedType.length > 64 ||
+    normalizedKey.length > 256
+  ) {
+    return { awarded: false, score: await refreshScore(db, privyUserId) }
+  }
+
+  await ensureWaitlistSchema(db)
+  await ensureWaitlistPointsSchema(db as any)
+  let canonicalProfileId = 0
+  try {
+    canonicalProfileId = await resolveOrCreateCanonicalProfileIdForPrivyUser(db, privyUserId)
+  } catch {
     return { awarded: false, score: await refreshScore(db, privyUserId) }
   }
 
   const inserted = await db.sql`
-    INSERT INTO account_point_events (
-      privy_user_id,
-      event_type,
-      event_key,
-      points,
-      created_at
-    )
-    VALUES (
-      ${privyUserId},
-      ${normalizedType},
-      ${normalizedKey},
-      ${Math.trunc(amount)},
-      NOW()
-    )
-    ON CONFLICT (privy_user_id, event_key) DO NOTHING
+    INSERT INTO points (signup_id, source, source_id, amount, created_at)
+    VALUES (${canonicalProfileId}, ${normalizedType}, ${normalizedKey}, ${Math.trunc(amount)}, NOW())
+    ON CONFLICT DO NOTHING
     RETURNING id;
   `
   const awarded = Array.isArray(inserted.rows) && inserted.rows.length > 0
@@ -581,17 +624,7 @@ function mergeLinkedMethods(dbMethods: Record<string, string[]>, derivedMethods:
 }
 
 async function readScore(db: Db, privyUserId: string): Promise<AccountScore> {
-  const pointsResult = await db.sql`
-    SELECT points, tier
-    FROM account_points
-    WHERE privy_user_id = ${privyUserId}
-    LIMIT 1;
-  `
-  const row = pointsResult.rows?.[0] ?? null
-  const points = Number(row?.points ?? 0) || 0
-  const tier = Number(row?.tier ?? toScoreTier(points)) || 0
-  if (!row) return await refreshScore(db, privyUserId)
-  return { points, tier }
+  return await refreshScore(db, privyUserId)
 }
 
 export async function syncEmailIdentity(params: {

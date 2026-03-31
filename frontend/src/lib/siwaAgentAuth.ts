@@ -1,7 +1,7 @@
 import { apiFetch } from './apiBase'
+import type { ApiEnvelope } from './apiEnvelope'
+import { parseApiEnvelope } from './apiEnvelope'
 import { clearStoredSiwaReceipt, setStoredSiwaReceipt } from './siwaReceiptStorage'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type AgentNonceResponse = {
   nonce: string
@@ -82,11 +82,7 @@ function toErrorMessage(value: unknown, fallback: string): string {
 }
 
 async function readApiEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | null> {
-  try {
-    return (await res.json()) as ApiEnvelope<T>
-  } catch {
-    return null
-  }
+  return parseApiEnvelope<T>(res)
 }
 
 export async function signInWithSiwaAgent(params: SignInWithSiwaAgentParams): Promise<SignInWithSiwaAgentResult> {

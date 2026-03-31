@@ -1,8 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
+
 import { ensureReferralsSchema } from '../../../server/_lib/referrals.js'
 
 type ReferralsMeResponse = {

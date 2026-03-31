@@ -1,8 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, COOKIE_NONCE, ensureNonceSchema, handleOptions, makeNonce, makeNonceToken, setCookie, setCors, setNoStore, storeNonce } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  COOKIE_NONCE,
+  ensureNonceSchema,
+  handleOptions,
+  makeNonce,
+  makeNonceToken,
+  setCookie,
+  setCors,
+  setNoStore,
+  storeNonce,
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 
 type NonceResponse = {
   nonce: string

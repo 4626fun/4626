@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import { AKITA } from '@/config/contracts'
 import { VaultCard } from '@/components/swap/VaultCard'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { useAccountContext } from '@/wallet/accountContext'
 
 type VaultConfig = {
@@ -19,7 +20,7 @@ type VaultConfig = {
   shareOFTAddress?: `0x${string}`
 }
 
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; message?: string }
+type VaultApiEnvelope<T> = ApiEnvelope<T> & { message?: string }
 type AuctionStatusSnapshot = {
   auction?: string | null
   isActive: boolean
@@ -37,7 +38,7 @@ async function fetchActiveVaults(chainId: number): Promise<VaultConfig[]> {
     const message = typeof payload?.error === 'string' ? payload.error : 'Failed to load vaults'
     throw new Error(message)
   }
-  const payload = (await res.json()) as ApiEnvelope<{ vaults: VaultConfig[]; count: number }>
+  const payload = (await res.json()) as VaultApiEnvelope<{ vaults: VaultConfig[]; count: number }>
   if (!payload.success || !payload.data) throw new Error(payload.message ?? payload.error ?? 'Failed to load vaults')
   return payload.data.vaults
 }

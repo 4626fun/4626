@@ -4,34 +4,34 @@ let waitlistPointsSchemaEnsured = false
 
 export const WAITLIST_POINTS = {
   // Core actions
-  signup: 100,
-  linkCsw: 250,
+  signup: 5,
+  linkCsw: 10,
   
   // Referral points (awarded to referrer)
-  referralSignup: 50,        // When referred user signs up
-  referralCswLink: 100,      // When referred user links CSW
-  qualifiedReferral: 150,    // When referred user completes profile
+  referralSignup: 2,         // When referred user signs up
+  referralCswLink: 4,        // When referred user links CSW
+  qualifiedReferral: 6,      // When referred user completes profile
   
   // Social actions - verified
-  baseApp: 50,
-  zora: 50,
-  x: 50,
-  discord: 50,
-  telegram: 50,
+  baseApp: 2,
+  zora: 2,
+  x: 2,
+  discord: 2,
+  telegram: 2,
   
   // Bonus actions - honor system
-  github: 10,
-  tiktok: 10,
-  instagram: 10,
-  reddit: 10,
+  github: 1,
+  tiktok: 1,
+  instagram: 1,
+  reddit: 1,
 
   // Agent gamification
-  agentFeedback: 20,
-  agentReputation: 200,
+  agentFeedback: 1,
+  agentReputation: 8,
 
   // Lens + Grove identity/proof
-  lensIdentity: 80,
-  groveProof: 40,
+  lensIdentity: 3,
+  groveProof: 2,
 } as const
 
 export type WaitlistPointSource = 
@@ -39,6 +39,7 @@ export type WaitlistPointSource =
   | 'csw_link'
   | 'referral_signup'
   | 'referral_csw_link'
+  | 'referral_qualified'
   | 'social_base_app'
   | 'social_zora'
   | 'social_x'
@@ -53,6 +54,32 @@ export type WaitlistPointSource =
   | 'lens_identity'
   | 'grove_proof'
   | 'task' // Compatibility
+
+const WAITLIST_POINT_SOURCE_SET: ReadonlySet<WaitlistPointSource> = new Set<WaitlistPointSource>([
+  'waitlist_signup',
+  'csw_link',
+  'referral_signup',
+  'referral_csw_link',
+  'referral_qualified',
+  'social_base_app',
+  'social_zora',
+  'social_x',
+  'social_discord',
+  'social_telegram',
+  'bonus_github',
+  'bonus_tiktok',
+  'bonus_instagram',
+  'bonus_reddit',
+  'agent_feedback',
+  'agent_reputation',
+  'lens_identity',
+  'grove_proof',
+  'task',
+])
+
+export function isWaitlistPointSource(value: string): value is WaitlistPointSource {
+  return WAITLIST_POINT_SOURCE_SET.has(value as WaitlistPointSource)
+}
 
 export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
   if (waitlistPointsSchemaEnsured) return
@@ -103,14 +130,24 @@ export async function awardWaitlistPoints(params: {
   source: string
   sourceId: string
   amount: number
-}): Promise<void> {
+}): Promise<boolean> {
   const { db, signupId, source, sourceId, amount } = params
-  await db.sql`
+  const normalizedSource = String(source || '').trim()
+  if (!isWaitlistPointSource(normalizedSource)) {
+    throw new Error('invalid_waitlist_point_source')
+  }
+  const normalizedAmount = Number(amount)
+  if (!Number.isFinite(normalizedAmount) || normalizedAmount < 0) {
+    throw new Error('invalid_waitlist_point_amount')
+  }
+
+  const inserted = await db.sql`
     INSERT INTO points (signup_id, source, source_id, amount, created_at)
-    VALUES (${signupId}, ${source}, ${sourceId}, ${amount}, NOW())
+    VALUES (${signupId}, ${normalizedSource}, ${sourceId}, ${Math.trunc(normalizedAmount)}, NOW())
     -- points_unique_source is a partial unique index in some envs, so a column-targeted
     -- ON CONFLICT can throw "no unique or exclusion constraint..." in Postgres.
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT DO NOTHING
+    RETURNING id;
   `
+  return Boolean(inserted?.rows?.[0]?.id)
 }
-

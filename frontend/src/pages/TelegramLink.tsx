@@ -5,6 +5,7 @@ import { useLinkAccount, useLoginWithEmail, usePrivy } from '@privy-io/react-aut
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import {
   clearStoredTelegramMiniAppLinkContext,
   resolveTelegramMiniAppLinkContext,
@@ -28,12 +29,7 @@ import {
   type TelegramSessionProof,
 } from './telegramLinkFlow'
 
-type ApiEnvelope<T> = {
-  success: boolean
-  data?: T
-  error?: string
-  code?: string
-}
+type TelegramApiEnvelope<T> = ApiEnvelope<T> & { code?: string }
 
 type TelegramLinkReadyData = {
   ready: boolean
@@ -893,7 +889,7 @@ export function TelegramLink() {
               email: expectedEmail,
             }),
           })
-          const json = (await response.json().catch(() => null)) as ApiEnvelope<TelegramLinkReadyData> | null
+          const json = (await response.json().catch(() => null)) as TelegramApiEnvelope<TelegramLinkReadyData> | null
           const account =
             response.ok && json?.data?.ready === true ? parseTelegramLinkReadyAccount(json.data.account, expectedEmail) : null
           if (account) {
@@ -1042,7 +1038,7 @@ export function TelegramLink() {
             flowId: flowIdRef.current,
           }),
         })
-        const json = (await response.json().catch(() => null)) as ApiEnvelope<TelegramLinkCompleteData> | null
+        const json = (await response.json().catch(() => null)) as TelegramApiEnvelope<TelegramLinkCompleteData> | null
         if (cancelled) return
 
         if (!response.ok || !json?.success || !json.data?.link) {

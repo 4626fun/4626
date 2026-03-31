@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/Alert'
 import { apiFetch } from '@/lib/apiBase'
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
 
@@ -27,8 +29,6 @@ type LeaderboardResponse = {
   me: LeaderboardRow | null
 }
 
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-
 function formatWholeNumber(value: number | null | undefined): string {
   const n = typeof value === 'number' ? value : Number(value ?? 0)
   return Number.isFinite(n) ? new Intl.NumberFormat('en-US').format(Math.floor(n)) : '0'
@@ -53,7 +53,7 @@ export function Leaderboard() {
         setError(null)
       }
       try {
-        const res = await apiFetch('/api/waitlist/leaderboard?pointsType=total&page=1&limit=50', {
+        const res = await apiFetch(`${API_ENDPOINTS.waitlist.leaderboard}?pointsType=total&page=1&limit=50`, {
           method: 'GET',
           headers: { Accept: 'application/json' },
         })

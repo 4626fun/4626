@@ -5,9 +5,12 @@ import {
   handleOptions,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+  getDb,
+  resolveAuthorizedRequestPrincipal,
+} from '../../../packages/server-core/src/index.js'
+
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type ConnectedAccount = {

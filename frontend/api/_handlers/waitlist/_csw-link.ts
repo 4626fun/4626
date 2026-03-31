@@ -1,11 +1,24 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
+  getClientIp,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
 import { isCswOwner, verifyCswProvenance } from '../../../server/_lib/cswOwner.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
-import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
+
 
 type Body = {
   email?: string

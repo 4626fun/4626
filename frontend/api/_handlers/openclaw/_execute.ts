@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address } from 'viem'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  guardAgentApiRequest,
+} from '../../../packages/server-core/src/index.js'
+
 import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
 import {
   publishAgentRegistrationToGrove,
@@ -15,7 +22,7 @@ import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { requireServerKey } from '../../../server/zora/_shared.js'
 import { executeUniswapSkill, type UniswapSkillName } from '../../../server/uniswap/agentSkills.js'
-import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

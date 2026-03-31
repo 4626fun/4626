@@ -1,8 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions } from '../../../server/auth/_shared.js'
-import { getApiContracts } from '../../../server/_lib/contracts.js'
-import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  getApiContracts,
+  guardAgentApiRequest,
+} from '../../../../packages/server-core/src/index.js'
+
+
+
 
 declare const process: { env: Record<string, string | undefined> }
 

@@ -6,6 +6,7 @@ on:
       - 'frontend/server/agent/eliza/**'
       - 'frontend/server/_lib/privyWalletApi.ts'
       - 'frontend/server/_lib/teeAttestationGate.ts'
+      - 'frontend/packages/server-core/**'
       - 'frontend/server/keepr/sendCommand.ts'
       - 'frontend/api/_handlers/v1/agents/identity/_verification.ts'
       - 'frontend/.env.example'

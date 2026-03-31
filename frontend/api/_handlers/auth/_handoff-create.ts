@@ -1,10 +1,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+  getClientIp,
+  checkRateLimit,
+  rateLimitKey,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { createHandoffCode, ensureHandoffSchema } from '../../../server/auth/_handoff.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { getClientIp, checkRateLimit, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
+
+
 
 type HandoffCreateBody = {
   privyToken?: string

@@ -1,8 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions } from '../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
-import { listCreatorXmtpAgents } from '../../../../server/_lib/creatorXmtpAgents.js'
+import {
+  handleOptions,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
+import { listCreatorXmtpAgents } from '../../../../../server/_lib/creatorXmtpAgents.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

@@ -1,8 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 import { trackTelegramLinkEvent } from '../../../server/_lib/telegramLinkTelemetry.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'

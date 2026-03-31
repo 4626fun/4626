@@ -1,9 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  ensureCreatorAccessSchema,
+  getDb,
+  isDbConfigured,
+  getSessionAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/supabaseAdmin.js'
-import { getSessionAddress } from '../../../server/_lib/session.js'
+
 
 type CreatorAccessStatus =
   | {

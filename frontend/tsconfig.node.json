@@ -13,6 +13,7 @@
   },
   "include": [
     "vite.config.ts",
+    "packages/server-core/src/**/*.ts",
     "api/**/*.ts",
     "api/_handlers/**/*.ts",
     "server/_lib/**/*.ts",
@@ -28,6 +29,7 @@
     "server/agent/**/*.ts",
     "src/config/contracts.defaults.ts",
     "src/deploy/**/*.ts",
+    "src/lib/deploy/create2Salts.ts",
     "src/lib/viteManualChunks.ts",
     "src/wallet/canonicalWalletPolicy.ts"
   ]

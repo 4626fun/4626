@@ -6,7 +6,7 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-} from '../../../server/auth/_shared.js'
+} from '../../../packages/server-core/src/index.js'
 
 const DEFAULT_BASE_RPCS = [
   'https://mainnet.base.org',

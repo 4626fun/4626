@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from './postgres.js'
+import { ensureWaitlistSchema } from './waitlistSchema.js'
+import { ensureWaitlistPointsSchema } from './waitlistPoints.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -120,6 +122,8 @@ function nowIso(): string {
 
 async function ensureAmoeSchema(db: Db): Promise<void> {
   if (amoeSchemaEnsured) return
+  await ensureWaitlistSchema(db as any)
+  await ensureWaitlistPointsSchema(db as any)
   await db.sql`
     CREATE TABLE IF NOT EXISTS lottery_amoe_nonces (
       nonce TEXT PRIMARY KEY,
@@ -145,24 +149,6 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
     );
   `
   await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_credits (
-      wallet_address TEXT PRIMARY KEY,
-      credits BIGINT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_credit_ledger (
-      id BIGSERIAL PRIMARY KEY,
-      wallet_address TEXT NOT NULL,
-      delta BIGINT NOT NULL,
-      reason TEXT NOT NULL,
-      ref_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS lottery_amoe_credit_ledger_wallet_idx ON lottery_amoe_credit_ledger (wallet_address, created_at DESC);`
-  await db.sql`
     CREATE TABLE IF NOT EXISTS lottery_amoe_daily_twitter_checkins (
       wallet_address TEXT NOT NULL,
       checkin_date DATE NOT NULL,
@@ -171,6 +157,87 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
     );
   `
   amoeSchemaEnsured = true
+}
+
+function normalizeRefId(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  return raw.length > 0 ? raw.slice(0, 190) : null
+}
+
+async function resolveOrCreateProfileForWallet(db: Db, wallet: `0x${string}`): Promise<number> {
+  const normalizedWallet = wallet.toLowerCase()
+  const existing = await db.sql`
+    SELECT p.id
+    FROM profiles p
+    WHERE LOWER(p.primary_wallet) = ${normalizedWallet}
+       OR LOWER(p.embedded_wallet) = ${normalizedWallet}
+       OR LOWER(p.primary_embedded_eoa) = ${normalizedWallet}
+       OR LOWER(p.csw_address) = ${normalizedWallet}
+       OR LOWER(p.primary_smart_wallet) = ${normalizedWallet}
+       OR LOWER(p.base_sub_account) = ${normalizedWallet}
+       OR EXISTS (
+         SELECT 1
+         FROM profile_wallets pw
+         WHERE pw.profile_id = p.id
+           AND LOWER(pw.address) = ${normalizedWallet}
+       )
+    ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+    LIMIT 1;
+  `
+  const existingIdRaw = existing.rows?.[0]?.id
+  const existingId = typeof existingIdRaw === 'number' ? existingIdRaw : Number(existingIdRaw)
+  if (Number.isFinite(existingId) && existingId > 0) return Math.floor(existingId)
+
+  const syntheticEmail = `amoe-${sha256Hex(normalizedWallet).slice(0, 24)}@wallet.4626.fun`
+  await db.sql`
+    INSERT INTO profiles (email, primary_wallet, created_at, updated_at)
+    VALUES (${syntheticEmail}, ${normalizedWallet}, NOW(), NOW())
+    ON CONFLICT (email) DO UPDATE
+      SET primary_wallet = COALESCE(profiles.primary_wallet, EXCLUDED.primary_wallet),
+          updated_at = NOW();
+  `
+  const created = await db.sql`
+    SELECT id
+    FROM profiles
+    WHERE email = ${syntheticEmail}
+    LIMIT 1;
+  `
+  const createdIdRaw = created.rows?.[0]?.id
+  const createdId = typeof createdIdRaw === 'number' ? createdIdRaw : Number(createdIdRaw)
+  if (!Number.isFinite(createdId) || createdId <= 0) {
+    throw new Error('amoe_profile_resolve_failed')
+  }
+  return Math.floor(createdId)
+}
+
+async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<number> {
+  const result = await db.sql`
+    SELECT COALESCE(
+      ROUND(
+        SUM(
+          CASE
+            WHEN source = 'amoe_entry_spend' THEN amount
+            WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
+            WHEN source = 'waitlist_signup' THEN amount * 1.00
+            WHEN source = 'csw_link' THEN amount * 1.00
+            WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+            WHEN source LIKE 'social_%' THEN amount * 0.50
+            WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+            WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+            WHEN source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+              THEN amount * 0.60
+            ELSE amount * 0.30
+          END
+        )
+      ),
+      0
+    )::bigint AS points
+    FROM points
+    WHERE signup_id = ${signupId};
+  `
+  const valueRaw = Number(result.rows?.[0]?.points ?? 0)
+  const value = Number.isFinite(valueRaw) ? Math.floor(valueRaw) : 0
+  return Math.max(0, value)
 }
 
 function normalizeWallet(wallet: `0x${string}`): `0x${string}` {
@@ -211,15 +278,9 @@ export async function getAmoeCreditSnapshot(params: { wallet: `0x${string}` }): 
   }
 
   await ensureAmoeSchema(db)
-  const result = await db.sql`
-    SELECT credits
-    FROM lottery_amoe_credits
-    WHERE wallet_address = ${wallet}
-    LIMIT 1;
-  `
-  const row = result.rows?.[0]
-  const credits = Number(row?.credits ?? 0)
-  return toCreditSnapshot(wallet, Number.isFinite(credits) ? credits : 0)
+  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const credits = await readUnifiedPointsForSignup(db, signupId)
+  return toCreditSnapshot(wallet, credits)
 }
 
 export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }): Promise<{
@@ -261,32 +322,18 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
     RETURNING wallet_address;
   `
   const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
+  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
 
-  let credits = 0
   if (awarded) {
-    const upsert = await db.sql`
-      INSERT INTO lottery_amoe_credits (wallet_address, credits)
-      VALUES (${wallet}, ${AMOE_DAILY_TWITTER_CREDIT})
-      ON CONFLICT (wallet_address)
-      DO UPDATE SET credits = lottery_amoe_credits.credits + ${AMOE_DAILY_TWITTER_CREDIT}, updated_at = NOW()
-      RETURNING credits;
-    `
-    credits = Number(upsert.rows?.[0]?.credits ?? 0)
     await db.sql`
-      INSERT INTO lottery_amoe_credit_ledger (wallet_address, delta, reason, ref_id)
-      VALUES (${wallet}, ${AMOE_DAILY_TWITTER_CREDIT}, ${'twitter_daily_checkin'}, ${dayKey});
+      INSERT INTO points (signup_id, source, source_id, amount, created_at)
+      VALUES (${signupId}, ${'amoe_twitter_daily'}, ${dayKey}, ${AMOE_DAILY_TWITTER_CREDIT}, NOW())
+      ON CONFLICT DO NOTHING;
     `
-  } else {
-    const current = await db.sql`
-      SELECT credits
-      FROM lottery_amoe_credits
-      WHERE wallet_address = ${wallet}
-      LIMIT 1;
-    `
-    credits = Number(current.rows?.[0]?.credits ?? 0)
   }
 
-  const snapshot = toCreditSnapshot(wallet, Number.isFinite(credits) ? credits : 0)
+  const credits = await readUnifiedPointsForSignup(db, signupId)
+  const snapshot = toCreditSnapshot(wallet, credits)
   return {
     wallet,
     awarded,
@@ -331,23 +378,64 @@ export async function consumeAmoeCreditsForEntry(params: {
   }
 
   await ensureAmoeSchema(db)
-  const updated = await db.sql`
-    UPDATE lottery_amoe_credits
-    SET credits = credits - ${requiredCredits}, updated_at = NOW()
-    WHERE wallet_address = ${wallet}
-      AND credits >= ${requiredCredits}
-    RETURNING credits;
-  `
-  const row = updated.rows?.[0]
-  if (!row) throw new Error('insufficient_amoe_credits')
+  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const spendRefId =
+    normalizeRefId(params.refId) ??
+    `amoe-spend:${wallet}:${Date.now().toString(36)}:${randomBytes(6).toString('hex')}`
 
-  const creditsRemainingRaw = Number(row.credits ?? 0)
-  const creditsRemaining = Number.isFinite(creditsRemainingRaw) ? creditsRemainingRaw : 0
-
-  await db.sql`
-    INSERT INTO lottery_amoe_credit_ledger (wallet_address, delta, reason, ref_id)
-    VALUES (${wallet}, ${-requiredCredits}, ${'amoe_entry_spend'}, ${params.refId ?? ''});
+  const spendAttempt = await db.sql`
+    WITH current AS (
+      SELECT COALESCE(
+        ROUND(
+          SUM(
+            CASE
+              WHEN source = 'amoe_entry_spend' THEN amount
+              WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
+              WHEN source = 'waitlist_signup' THEN amount * 1.00
+              WHEN source = 'csw_link' THEN amount * 1.00
+              WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+              WHEN source LIKE 'social_%' THEN amount * 0.50
+              WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+              WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+              WHEN source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+                THEN amount * 0.60
+              ELSE amount * 0.30
+            END
+          )
+        ),
+        0
+      )::bigint AS credits
+      FROM points
+      WHERE signup_id = ${signupId}
+    ),
+    ins AS (
+      INSERT INTO points (signup_id, source, source_id, amount, created_at)
+      SELECT ${signupId}, ${'amoe_entry_spend'}, ${spendRefId}, ${-requiredCredits}, NOW()
+      FROM current
+      WHERE current.credits >= ${requiredCredits}
+      ON CONFLICT DO NOTHING
+      RETURNING id
+    )
+    SELECT
+      (SELECT credits FROM current) AS credits_before,
+      EXISTS(SELECT 1 FROM ins) AS inserted;
   `
+  const inserted = spendAttempt.rows?.[0]?.inserted === true
+  if (!inserted) {
+    const existingSpend = await db.sql`
+      SELECT id
+      FROM points
+      WHERE signup_id = ${signupId}
+        AND source = ${'amoe_entry_spend'}
+        AND source_id = ${spendRefId}
+        AND amount = ${-requiredCredits}
+      LIMIT 1;
+    `
+    const alreadySpent = Boolean(existingSpend.rows?.[0]?.id)
+    if (!alreadySpent) throw new Error('insufficient_amoe_credits')
+  }
+
+  const creditsRemaining = await readUnifiedPointsForSignup(db, signupId)
 
   const snapshot = toCreditSnapshot(wallet, creditsRemaining)
   return {

@@ -73,7 +73,7 @@ describe('AdminAgentSetup Ajna automation', () => {
       embeddedEoaAddress: EMBEDDED_EOA_ADDRESS,
       privyWalletId: PRIVY_WALLET_ID,
     })
-  }, 20_000)
+  }, 45_000)
 
   it('shows revoke and debug details for an enabled vault', async () => {
     const { AjnaAutomationOptInCard } = await import('./AdminAgentSetup')

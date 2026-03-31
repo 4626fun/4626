@@ -1,8 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
-import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  isDbConfigured,
+  getSessionAddress,
+  isAdminAddress,
+} from '../../../../packages/server-core/src/index.js'
+
+
+
 
 type CandidateRow = {
   schemaname: string

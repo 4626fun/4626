@@ -68,11 +68,23 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm --dir frontend install --frozen-lockfile
 
+      - name: Guard deprecated api/server shim imports
+        run: pnpm --dir frontend guard:api-server-shims
+
+      - name: Guard server-core boundary for API runtime
+        run: pnpm --dir frontend guard:server-core-boundary
+
       - name: Frontend ESLint
         run: pnpm --dir frontend lint
 
       - name: No TODO/FIXME markers (first-party)
         run: bash scripts/check-no-todo-markers.sh
+
+      - name: Guard generated output remains untracked
+        run: pnpm --dir frontend guard:generated-output
+
+      - name: Guard runtime boundaries
+        run: pnpm --dir frontend guard:runtime-boundaries
 
       - name: Frontend TypeScript
         run: pnpm --dir frontend typecheck

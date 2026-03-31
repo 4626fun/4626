@@ -1,8 +1,19 @@
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type WaitlistPositionResponse = {
@@ -156,13 +167,32 @@ export default async function handler(req: any, res: any) {
 
   const pointsAgg = await db.sql`
     SELECT
-      COALESCE(SUM(amount), 0)::int AS total,
-      COALESCE(SUM(CASE WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount ELSE 0 END), 0)::int AS invite,
-      COALESCE(SUM(CASE WHEN source = 'waitlist_signup' THEN amount ELSE 0 END), 0)::int AS signup,
-      COALESCE(SUM(CASE WHEN source = 'task' THEN amount ELSE 0 END), 0)::int AS tasks,
-      COALESCE(SUM(CASE WHEN source = 'csw_link' THEN amount ELSE 0 END), 0)::int AS csw,
-      COALESCE(SUM(CASE WHEN source LIKE 'social_%' THEN amount ELSE 0 END), 0)::int AS social,
-      COALESCE(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount ELSE 0 END), 0)::int AS bonus
+      COALESCE(
+        ROUND(
+          SUM(
+            CASE
+              WHEN source = 'amoe_entry_spend' THEN amount
+              WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
+              WHEN source = 'waitlist_signup' THEN amount * 1.00
+              WHEN source = 'csw_link' THEN amount * 1.00
+              WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+              WHEN source LIKE 'social_%' THEN amount * 0.50
+              WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+              WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+              WHEN source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+                THEN amount * 0.60
+              ELSE amount * 0.30
+            END
+          )
+        ),
+        0
+      )::int AS total,
+      COALESCE(ROUND(SUM(CASE WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount * 0.60 ELSE 0 END)), 0)::int AS invite,
+      COALESCE(ROUND(SUM(CASE WHEN source = 'waitlist_signup' THEN amount * 1.00 ELSE 0 END)), 0)::int AS signup,
+      COALESCE(ROUND(SUM(CASE WHEN source = 'task' THEN amount * 0.30 ELSE 0 END)), 0)::int AS tasks,
+      COALESCE(ROUND(SUM(CASE WHEN source = 'csw_link' THEN amount * 1.00 ELSE 0 END)), 0)::int AS csw,
+      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'social_%' THEN amount * 0.50 ELSE 0 END)), 0)::int AS social,
+      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount * 0.30 ELSE 0 END)), 0)::int AS bonus
     FROM points
     WHERE signup_id = ${signupId};
   `
@@ -217,17 +247,36 @@ export default async function handler(req: any, res: any) {
     scored AS (
       SELECT
         e.id AS signup_id,
-        COALESCE(SUM(l.amount), 0)::int AS total_points,
         COALESCE(
-          SUM(
-            CASE
-              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount
-              ELSE 0
-            END
+          ROUND(
+            SUM(
+              CASE
+                WHEN l.source = 'amoe_entry_spend' THEN l.amount
+                WHEN l.source = 'amoe_twitter_daily' THEN l.amount * 1.00
+                WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
+                WHEN l.source = 'csw_link' THEN l.amount * 1.00
+                WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
+                WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
+                WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
+                WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
+                WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+                  THEN l.amount * 0.60
+                ELSE l.amount * 0.30
+              END
+            )
           ),
           0
+        )::int AS total_points,
+        COALESCE(
+          ROUND(SUM(
+            CASE
+              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
+              ELSE 0
+            END
+          )),
+          0
         )::int AS invite_points,
-        COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
+        COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
       FROM eligible e
       LEFT JOIN points l ON l.signup_id = e.id
       GROUP BY e.id
@@ -254,17 +303,36 @@ export default async function handler(req: any, res: any) {
     scored AS (
       SELECT
         e.id AS signup_id,
-        COALESCE(SUM(l.amount), 0)::int AS total_points,
         COALESCE(
-          SUM(
-            CASE
-              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount
-              ELSE 0
-            END
+          ROUND(
+            SUM(
+              CASE
+                WHEN l.source = 'amoe_entry_spend' THEN l.amount
+                WHEN l.source = 'amoe_twitter_daily' THEN l.amount * 1.00
+                WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
+                WHEN l.source = 'csw_link' THEN l.amount * 1.00
+                WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
+                WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
+                WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
+                WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
+                WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
+                  THEN l.amount * 0.60
+                ELSE l.amount * 0.30
+              END
+            )
           ),
           0
+        )::int AS total_points,
+        COALESCE(
+          ROUND(SUM(
+            CASE
+              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
+              ELSE 0
+            END
+          )),
+          0
         )::int AS invite_points,
-        COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
+        COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
       FROM eligible e
       LEFT JOIN points l ON l.signup_id = e.id
       GROUP BY e.id
@@ -302,4 +370,3 @@ export default async function handler(req: any, res: any) {
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistPositionResponse>)
 }
-

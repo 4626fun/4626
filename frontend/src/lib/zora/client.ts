@@ -1,10 +1,10 @@
 import type { Address } from 'viem'
 import { base } from 'viem/chains'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 import { initZoraCoinsSdk } from './init'
 import type { ZoraCoin, ZoraExploreList, ZoraExploreListType, ZoraProfile } from './types'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 function hasPublicKey(): boolean {
   return typeof import.meta.env.VITE_ZORA_PUBLIC_API_KEY === 'string' && import.meta.env.VITE_ZORA_PUBLIC_API_KEY.length > 0
@@ -13,8 +13,8 @@ function hasPublicKey(): boolean {
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
-    const msg = body?.error || `HTTP ${res.status}`
+    const body = await parseApiEnvelope<unknown>(res)
+    const msg = resolveApiErrorMessage(body, `HTTP ${res.status}`)
     const err: any = new Error(msg)
     err.status = res.status
     throw err

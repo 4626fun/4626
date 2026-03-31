@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getSessionAddress } from '../../../server/_lib/session.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getSessionAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { buildKeeprJoinMessage, issueKeeprJoinNonce } from '../../../server/_lib/keeprProof.js'
 
 type KeeprNonceResponse = {

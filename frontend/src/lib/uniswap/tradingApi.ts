@@ -1,9 +1,9 @@
 import { normalizeUniswapError } from './error'
 import type { components } from './generated/tradeApi'
 import { apiFetch } from '@/lib/apiBase'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
 
 const DEFAULT_RETRIES = 1
 const RETRY_BASE_DELAY_MS = 500
@@ -124,10 +124,10 @@ async function post<T>(path: string, body: Record<string, unknown>, retries = DE
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+    const json = await parseApiEnvelope<T>(res)
     if (res.ok && json?.success) return json.data as T
 
-    const message = json?.error || `Request failed (${res.status})`
+    const message = resolveApiErrorMessage(json, `Request failed (${res.status})`)
     const normalized = normalizeUniswapError(message)
     if (attempt < retries && isRetryableHttpStatus(res.status)) {
       await sleep(RETRY_BASE_DELAY_MS * 2 ** attempt)
@@ -140,9 +140,9 @@ async function post<T>(path: string, body: Record<string, unknown>, retries = DE
 
 async function get<T>(path: string): Promise<T> {
   const res = await requestApi(path)
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  const json = await parseApiEnvelope<T>(res)
   if (!res.ok || !json?.success) {
-    const message = json?.error || `Request failed (${res.status})`
+    const message = resolveApiErrorMessage(json, `Request failed (${res.status})`)
     throw new Error(normalizeUniswapError(message).message)
   }
   return json.data as T
@@ -154,9 +154,9 @@ async function patch<T>(path: string, body: Record<string, unknown>): Promise<T>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  const json = await parseApiEnvelope<T>(res)
   if (!res.ok || !json?.success) {
-    const message = json?.error || `Request failed (${res.status})`
+    const message = resolveApiErrorMessage(json, `Request failed (${res.status})`)
     throw new Error(normalizeUniswapError(message).message)
   }
   return json.data as T
@@ -258,7 +258,7 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
   if (pending) return pending
 
   const { walletModeKey: _wm, ...upstreamBody } = normalizedBody
-  const request = post<TradeQuoteResponse>('/api/uniswap/quote', upstreamBody)
+  const request = post<TradeQuoteResponse>(API_ENDPOINTS.uniswap.quote, upstreamBody)
     .then((data) => {
       quoteCache.set(key, { at: Date.now(), data })
       quoteInFlight.delete(key)
@@ -275,7 +275,7 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
 
 export async function checkTradeApproval(body: ApprovalRequest): Promise<TradeApprovalResponse> {
   const rawAmount = typeof (body as any).amount === 'string' ? ((body as any).amount as string) : ''
-  return post<TradeApprovalResponse>('/api/uniswap/checkApproval', {
+  return post<TradeApprovalResponse>(API_ENDPOINTS.uniswap.checkApproval, {
     ...(body as Record<string, unknown>),
     amount: normalizeAmountString(rawAmount),
     urgency: (body as any).urgency ?? 'normal',
@@ -294,7 +294,7 @@ export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapRespon
     throw new Error('Permit2 signature and permitData must be provided together.')
   }
 
-  const response = await post<CreateSwapResponse>('/api/uniswap/swap', body)
+  const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, body)
   assertValidSwapTransaction(response.swap)
   return response
 }
@@ -306,7 +306,7 @@ export type CreateOrderParams = Omit<OrderRequest, 'quote'> & {
 export async function createOrder(body: CreateOrderParams): Promise<OrderResponse> {
   // /order has side-effects (submits to filler network). Caller should ensure
   // the user has confirmed before invoking.
-  return post<OrderResponse>('/api/uniswap/order', body)
+  return post<OrderResponse>(API_ENDPOINTS.uniswap.order, body)
 }
 
 export function assertValidSwapTransaction(tx: TransactionRequest): void {
@@ -328,7 +328,7 @@ export function assertValidSwapTransaction(tx: TransactionRequest): void {
 }
 
 export async function buildSwap5792(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  return post<Record<string, unknown>>('/api/uniswap/swap5792', body)
+  return post<Record<string, unknown>>(API_ENDPOINTS.uniswap.swap5792, body)
 }
 
 export function toUserOpCallsFrom5792(batch: Record<string, unknown>): UserOpCall[] {
@@ -344,23 +344,23 @@ export function toUserOpCallsFrom5792(batch: Record<string, unknown>): UserOpCal
 }
 
 export async function buildSwap7702(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  return post<Record<string, unknown>>('/api/uniswap/swap7702', body)
+  return post<Record<string, unknown>>(API_ENDPOINTS.uniswap.swap7702, body)
 }
 
 export async function fetchDelegationStatus(
   body: WalletCheckDelegationRequestBody,
 ): Promise<WalletCheckDelegationResponseBody & Record<string, unknown>> {
-  return post<WalletCheckDelegationResponseBody & Record<string, unknown>>('/api/uniswap/checkDelegation', body as any)
+  return post<WalletCheckDelegationResponseBody & Record<string, unknown>>(API_ENDPOINTS.uniswap.checkDelegation, body as any)
 }
 
 export async function createCrossChainPlan(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  return post<Record<string, unknown>>('/api/uniswap/plan', body)
+  return post<Record<string, unknown>>(API_ENDPOINTS.uniswap.plan, body)
 }
 
 export async function getCrossChainPlan(planId: string): Promise<Record<string, unknown>> {
-  return get<Record<string, unknown>>(`/api/uniswap/plan?planId=${encodeURIComponent(planId)}`)
+  return get<Record<string, unknown>>(`${API_ENDPOINTS.uniswap.plan}?planId=${encodeURIComponent(planId)}`)
 }
 
 export async function updateCrossChainPlan(planId: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  return patch<Record<string, unknown>>('/api/uniswap/plan', { planId, ...body })
+  return patch<Record<string, unknown>>(API_ENDPOINTS.uniswap.plan, { planId, ...body })
 }

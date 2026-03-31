@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { type ApiEnvelope, handleOptions, setCors } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  getDb,
+  isDbConfigured,
+} from '../../../packages/server-core/src/index.js'
+
 import { listKeeprVaultAutomationByVaultAddresses } from '../../../server/_lib/keeprAutomation.js'
-import { getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
+
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 
 export interface VaultAutomationConfig {

@@ -40,9 +40,18 @@ Key outcomes:
 - `PayoutRouter` owner is expected/validated as protocol treasury (not creator).
 - `setPayoutRecipient(expectedPayoutRouter)` is no longer a silent best-effort path; mismatch/unauthorized execution is treated as a hard policy failure in deploy flow/paymaster checks.
 - CreatorCoin ownership transfer target is enforced to the expected `CreatorCoinPolicyController`.
+- Paymaster now enforces phase tuple policy fields and codeIds (not only selector allowlists), including:
+  - phase-2 deploy lanes (`creatorTreasury`, `payoutRecipient`)
+  - phase-3 keeper lanes (`ajnaKeeper`, `solanaKeeper`)
+  - canonical phase-2 / phase-3 codeId sets
 - Phase-3 strategy deploy now binds auth to actual onchain vault owner (`vault.owner() == params.owner`).
 - Ajna auth admin handoff is protocol treasury.
 - CCA migration config and treasury lanes in phase-2/phase-3 paths are protocol-owned by default.
+
+Onchain policy tightening in `DeploymentBatcher`:
+
+- phase-2 rejects non-protocol `creatorTreasury` overrides
+- phase-2 rejects non-zero `payoutRecipient` (recipient wiring is now explicit via router/policy-controller path)
 
 ### 3) Router execution path support for protocol rewards
 
@@ -99,6 +108,17 @@ Job behavior (per vault with router configured):
 3. `convertAndQueue` for `ZORA`.
 4. Optional `convertAndQueue` for `WETH` (for claimed rewards path).
 
+### 6) Legacy strategy-batcher lane protocolized
+
+Updated:
+
+- `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`
+
+Hardening:
+
+- `batchDeployStrategies` is now protocol-owner-gated (`onlyProtocolOwner`).
+- This prevents arbitrary caller-controlled strategy ownership/admin setup through that legacy surface.
+
 ## Role / Ownership Posture After This Change
 
 Protocol-controlled by default:
@@ -107,6 +127,7 @@ Protocol-controlled by default:
 - `CreatorCoinPolicyController.owner` (CreatorCoin policy admin).
 - Ajna auth admin handoff target.
 - CCA migration config treasury lanes.
+- `StrategyDeploymentBatcher.batchDeployStrategies` caller lane.
 
 Creator-controlled where still intended:
 
@@ -137,11 +158,12 @@ Updated test files:
 
 Executed and passing:
 
-- `pnpm -C frontend exec vitest run api/__tests__/paymasterDeploySessionSetup.test.ts api/__tests__/paymasterLegacyWithdraw.test.ts api/__tests__/paymasterPhase2Finalize.test.ts api/__tests__/deploySessionOwnership.test.ts api/__tests__/deployConfig.test.ts`
-- Result: `5 files passed, 41 tests passed`.
+- `pnpm -C frontend exec vitest run api/__tests__/paymasterDeploySessionSetup.test.ts api/__tests__/paymasterLegacyWithdraw.test.ts api/__tests__/paymasterPhase2Finalize.test.ts`
+- Result: `3 files passed, 21 tests passed`.
 
 ## Follow-up Items
 
 1. Run full `forge test` in a non-interrupted session for complete suite confirmation.
 2. Add dedicated unit tests for new `PayoutRouter` protocol-rewards claim methods.
-3. Add explicit regression tests for `CreatorCoinPolicyController` deployment and paymaster enforcement path.
+3. Add explicit regression tests for `CreatorCoinPolicyController` deployment + transfer path.
+

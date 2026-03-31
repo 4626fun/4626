@@ -14,6 +14,7 @@ const {
   verifyAuthTokenMock,
   getUserByIdMock,
   isAuthorizedWalletForProfileMock,
+  awardWaitlistPointsMock,
 } = vi.hoisted(() => ({
   readSessionFromRequestMock: vi.fn(),
   readSiwaAgentFromRequestMock: vi.fn(),
@@ -25,6 +26,7 @@ const {
   verifyAuthTokenMock: vi.fn(),
   getUserByIdMock: vi.fn(),
   isAuthorizedWalletForProfileMock: vi.fn(async () => true),
+  awardWaitlistPointsMock: vi.fn(async () => true),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -53,6 +55,7 @@ vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
 
 vi.mock('../../server/_lib/waitlistPoints.js', () => ({
   WAITLIST_POINTS: { x: 50 },
+  awardWaitlistPoints: awardWaitlistPointsMock,
 }))
 
 vi.mock('../../server/_lib/rateLimit.js', () => ({
@@ -224,4 +227,3 @@ describe('waitlist/verify-x', () => {
     expect(String(res.body?.error ?? '')).toContain('Not authorized')
   })
 })
-

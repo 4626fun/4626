@@ -1,4 +1,5 @@
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
 
 export type DebankChainBalance = {
   id: string
@@ -40,8 +41,8 @@ export type DebankTokenList = {
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
-    const msg = body?.error || `HTTP ${res.status}`
+    const body = await parseApiEnvelope<unknown>(res)
+    const msg = resolveApiErrorMessage(body, `HTTP ${res.status}`)
     const err: any = new Error(msg)
     err.status = res.status
     throw err

@@ -2,8 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { isAddress } from 'viem'
 
 import { handleOptions, setCors } from '../../../server/zora/_shared.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
-import { isAdminAddress } from '../../../server/_lib/session.js'
+import {
+  readRequestPrincipal,
+  isAdminAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 import {
   markTrendOpDeployed,
   markTrendOpDeploying,

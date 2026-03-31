@@ -4,6 +4,7 @@ import { getAddress, isAddress } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { pickCanonicalSmartWalletAddress, type WaitlistMeData } from '@/hooks/canonicalWalletUtils'
 import { probeWalletCapabilities } from './getCapabilities'
 import { detectSignerType } from './detectSignerType'
@@ -18,8 +19,6 @@ import {
   shouldApplyCanonicalEnforcement,
 } from '../canonicalWalletPolicy'
 import type { AccountCapabilities, AccountModePreference, ResolvedAccountContext } from './types'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 const BASE_CHAIN_ID = 8453
 const EMPTY_CAPABILITIES: AccountCapabilities = {

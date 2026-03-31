@@ -7,6 +7,10 @@ sidebar_position: 5
 
 4626 inherits Yearn V3's battle-tested security model with additional safeguards.
 
+## Recent Hardening Notes
+
+- [Payout Router + CreatorCoin Control Hardening (March 2026)](./payout-router-ownership-hardening-2026-03.md)
+
 ## Anti-Inflation Attack
 
 | Protection | Description |

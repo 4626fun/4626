@@ -17,8 +17,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, http, isAddress, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 
-import { handleOptions } from '../../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import {
   getReputationRegistryAddress,
   REPUTATION_REGISTRY_ABI,

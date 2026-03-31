@@ -1,7 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { ensureTelegramTradingSchema, getTelegramLinkByUserId, revokeTelegramLink } from '../../../server/_lib/telegramTrading.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'

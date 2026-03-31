@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 
-import { handleOptions, setCors } from '../../../server/auth/_shared.js'
+import { handleOptions, setCors } from '../../../packages/server-core/src/index.js'
 
 const FETCH_TIMEOUT_MS = 8_000
 const MAX_IMAGE_BYTES = 2_000_000

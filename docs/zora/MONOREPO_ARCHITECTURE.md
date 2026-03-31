@@ -1,3 +1,5 @@
+https://github.com/ourzora/zora-protocol/blob/main/MONOREPO_ARCHITECTURE.md
+
 # Zora Protocol Monorepo Architecture Guide
 
 This comprehensive technical guide documents the monorepo setup, build system architecture, and patterns that future agents need to understand to work effectively with the Zora Protocol codebase.

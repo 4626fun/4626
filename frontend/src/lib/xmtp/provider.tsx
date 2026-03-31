@@ -17,6 +17,7 @@ import {
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { shouldBlockSelfDm } from '@/lib/xmtp/dmGuard'
 import { getBasenameName } from '@/lib/xmtp/socialIdentity'
 import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from '@/lib/xmtp/identityResolver'
@@ -125,7 +126,6 @@ type XmtpContextValue = {
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
 }
 
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type WaitlistMeData = {
   cswAddress?: string | null
   primarySmartWallet?: string | null

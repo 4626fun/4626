@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from './useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
 type AdminResponse = { address: string; isAdmin: boolean } | null
 
 type DeriveAdminStatusInput = {
@@ -19,14 +19,14 @@ type DeriveAdminStatusOutput = {
 }
 
 async function fetchAdminStatus(): Promise<AdminResponse> {
-  const res = await apiFetch('/api/auth/admin', {
+  const res = await apiFetch(API_ENDPOINTS.auth.admin, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'include',
   })
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<AdminResponse> | null
+  const json = await parseApiEnvelope<AdminResponse>(res)
   if (!res.ok || !json) throw new Error(`Admin check failed (${res.status})`)
-  if (!json.success) throw new Error(json.error || 'Admin check failed')
+  if (!json.success) throw new Error(resolveApiErrorMessage(json, 'Admin check failed'))
   return json.data ?? null
 }
 

@@ -5,8 +5,7 @@ import { base } from 'viem/chains'
 import { usePublicClient, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
 type CreditSnapshot = {
   wallet: Address
@@ -27,8 +26,10 @@ type NonceResponse = CreditSnapshot & {
 }
 
 type SubmitResponse = {
-  to: Address
-  callData: Hex
+  to?: Address
+  callData?: Hex
+  txHash?: Hex
+  relayMode?: 'server' | 'client'
   creditsConsumed: number
   creditsRemaining: number
   creditsPerEntry: number
@@ -67,6 +68,9 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
   const { walletAddress, creatorCoin } = props
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient({ chainId: base.id })
+  const officialRulesUrl = (
+    import.meta.env.VITE_AMOE_OFFICIAL_RULES_URL ?? 'https://4626.fun/terms#lottery-amoe-official-rules'
+  ).trim()
 
   const [credits, setCredits] = useState(0)
   const [creditsPerEntry, setCreditsPerEntry] = useState(100)
@@ -173,46 +177,67 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
         { method: 'GET', withCredentials: true },
       )
       const nonceJson = parseJsonSafe<NonceResponse>(await nonceRes.json().catch(() => null))
-      if (!nonceRes.ok || !nonceJson?.success || !nonceJson.data) {
+      const nonceData = nonceJson?.data
+      if (!nonceRes.ok || !nonceJson?.success || !nonceData) {
         throw new Error(nonceJson?.error || 'Failed to fetch AMOE nonce')
       }
 
-      setCredits(Number(nonceJson.data.credits ?? 0))
-      setCreditsPerEntry(Number(nonceJson.data.creditsPerEntry ?? 100))
-      setEntriesAvailable(Number(nonceJson.data.entriesAvailable ?? 0))
-      setNextEntryAtCredits(Number(nonceJson.data.nextEntryAtCredits ?? 100))
-      if (Number(nonceJson.data.entriesAvailable ?? 0) < 1) {
-        throw new Error(`Need ${nonceJson.data.creditsPerEntry} credits for one free entry`)
+      setCredits(Number(nonceData.credits ?? 0))
+      setCreditsPerEntry(Number(nonceData.creditsPerEntry ?? 100))
+      setEntriesAvailable(Number(nonceData.entriesAvailable ?? 0))
+      setNextEntryAtCredits(Number(nonceData.nextEntryAtCredits ?? 100))
+      if (Number(nonceData.entriesAvailable ?? 0) < 1) {
+        throw new Error(`Need ${nonceData.creditsPerEntry} credits for one free entry`)
       }
 
       const signature = (await walletClient.signMessage({
-        message: nonceJson.data.message,
+        message: nonceData.message,
       })) as Hex
 
-      const submitRes = await apiFetch('/api/v1/lottery/amoe/submit', {
-        method: 'POST',
-        withCredentials: true,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creatorCoin,
-          message: nonceJson.data.message,
-          signature,
-        }),
-      })
-      const submitJson = parseJsonSafe<SubmitResponse>(await submitRes.json().catch(() => null))
+      const submitRequest = async (relay: boolean) => {
+        const res = await apiFetch('/api/v1/lottery/amoe/submit', {
+          method: 'POST',
+          withCredentials: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            creatorCoin,
+            message: nonceData.message,
+            signature,
+            relay,
+          }),
+        })
+        const json = parseJsonSafe<SubmitResponse>(await res.json().catch(() => null))
+        return { res, json }
+      }
+
+      let { res: submitRes, json: submitJson } = await submitRequest(true)
+      if ((!submitRes.ok || !submitJson?.success || !submitJson.data) && submitJson?.error === 'amoe_relay_unavailable') {
+        ;({ res: submitRes, json: submitJson } = await submitRequest(false))
+      }
       if (!submitRes.ok || !submitJson?.success || !submitJson.data) {
         throw new Error(submitJson?.error || 'Failed to build AMOE transaction')
       }
 
       const tx = submitJson.data
-      const hash = await walletClient.sendTransaction({
-        chain: base,
-        to: tx.to,
-        data: tx.callData,
-        value: 0n,
-      })
+      let hash = tx.txHash ?? null
+      if (!hash) {
+        if (!tx.to || !tx.callData) {
+          throw new Error('amoe_submit_missing_calldata')
+        }
+        hash = await walletClient.sendTransaction({
+          chain: base,
+          to: tx.to,
+          data: tx.callData,
+          value: 0n,
+        })
+      }
+
       setTxHash(hash)
-      setStatusMessage('AMOE entry submitted. Waiting for confirmation…')
+      setStatusMessage(
+        tx.relayMode === 'server'
+          ? 'AMOE entry relayed by protocol. Waiting for confirmation…'
+          : 'AMOE entry submitted. Waiting for confirmation…',
+      )
 
       await publicClient.waitForTransactionReceipt({ hash })
       setCredits(Number(tx.creditsRemaining ?? 0))
@@ -245,6 +270,26 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
       <p className="text-sm text-zinc-500">
         Complete your daily Twitter check-in to earn 1 credit. You need {creditsPerEntry} credits to submit 1 free entry.
       </p>
+      <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-200">
+          No purchase or payment of any kind is necessary to enter or win this sweepstakes.
+        </p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-300">
+          A purchase will not improve your chances of winning.
+        </p>
+        <p className="text-[11px] text-zinc-400">
+          Free-entry and paid-entry lanes are processed under the same winner-selection flow. See Official Rules for
+          eligibility, winner determination timing, odds, and restrictions.
+        </p>
+        <a
+          href={officialRulesUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-[11px] text-brand-accent hover:text-brand-primary"
+        >
+          Official Rules (California) <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-zinc-400">

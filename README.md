@@ -450,6 +450,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Deployment operations: `docs/operations/deployment/index.md`
 - Current contract inventory: `docs/current-contract-inventory.md`
 - Security docs: `docs/security/index.md`
+- Payout router + ownership hardening memo: `docs/security/payout-router-ownership-hardening-2026-03.md`
 - Internal audit / CI security index: `docs/audits/README.md`
 - Frontend guide: `frontend/README.md`
 - Swap integration/runtime notes: `frontend/docs/uniswap-integration-notes.md`

@@ -1,8 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { encodeFunctionData, type Address, type Hex } from 'viem'
 
-import { handleOptions, readJsonBody } from '../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import type { BuildTxResponse } from '../_types.js'
 import {
   BASE_CHAIN_ID,

@@ -10,8 +10,13 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody } from '../../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/creatorAgentWallets.js'
 

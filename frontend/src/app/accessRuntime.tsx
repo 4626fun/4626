@@ -9,6 +9,8 @@ import { useCreatorAllowlist } from '@/hooks'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import {
   AccessContext,
@@ -22,8 +24,6 @@ import {
   type RouteId,
   useAccessContext,
 } from './accessShared'
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type CreatorAllowlistStatus = {
   address: string | null
@@ -64,7 +64,7 @@ function useResolvedAccessState(): AccessState {
   const allowlistModeQuery = useQuery({
     queryKey: ['creatorAllowlist', 'mode'],
     queryFn: async (): Promise<CreatorAllowlistStatus> => {
-      const res = await apiFetch('/api/creator-allowlist', { method: 'GET' })
+      const res = await apiFetch(API_ENDPOINTS.creator.allowlist, { method: 'GET' })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<CreatorAllowlistStatus> | null
       if (!res.ok || !json) throw new Error('Allowlist check failed')
       if (!json.success || !json.data) throw new Error(json.error || 'Allowlist check failed')

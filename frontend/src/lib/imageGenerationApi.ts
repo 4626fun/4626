@@ -1,4 +1,6 @@
 import { apiFetch } from './apiBase'
+import { parseApiEnvelope, resolveApiErrorMessage } from './apiEnvelope'
+import { API_ENDPOINTS } from './apiEndpoints'
 
 type ProjectStatus = 'draft' | 'queued' | 'generating' | 'evaluating' | 'completed' | 'failed'
 type JobStatus = 'pending' | 'processing' | 'completed' | 'failed'
@@ -27,9 +29,9 @@ export type ImageGenerationJob = {
 }
 
 async function readJson<T>(response: Response): Promise<T> {
-  const json = await response.json()
+  const json = await parseApiEnvelope<T>(response)
   if (!response.ok || json?.success !== true) {
-    throw new Error(String(json?.error ?? 'Request failed'))
+    throw new Error(resolveApiErrorMessage(json, `Request failed (${response.status})`))
   }
   return json.data as T
 }
@@ -52,7 +54,7 @@ export async function createImageGenerationProject(input: {
   stylePreset?: string | null
   brandContext?: string[]
 }): Promise<ImageGenerationProject> {
-  const response = await apiFetch('/api/image/projects/create', {
+  const response = await apiFetch(API_ENDPOINTS.image.createProject, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -67,7 +69,7 @@ export async function uploadImageGenerationAsset(input: {
   file: File
 }): Promise<void> {
   const dataBase64 = await fileToBase64(input.file)
-  const response = await apiFetch('/api/image/projects/assets/upload', {
+  const response = await apiFetch(API_ENDPOINTS.image.uploadAsset, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -82,7 +84,7 @@ export async function uploadImageGenerationAsset(input: {
 }
 
 export async function enqueueImageGeneration(projectId: string): Promise<ImageGenerationJob> {
-  const response = await apiFetch('/api/image/projects/generate', {
+  const response = await apiFetch(API_ENDPOINTS.image.generate, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ projectId }),
@@ -95,7 +97,7 @@ export async function enqueueImageRefine(input: {
   projectId: string
   refineInstruction: string
 }): Promise<ImageGenerationJob> {
-  const response = await apiFetch('/api/image/projects/refine', {
+  const response = await apiFetch(API_ENDPOINTS.image.refine, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -105,13 +107,13 @@ export async function enqueueImageRefine(input: {
 }
 
 export async function getImageGenerationJob(jobId: string): Promise<ImageGenerationJob> {
-  const response = await apiFetch(`/api/image/jobs/status?jobId=${encodeURIComponent(jobId)}`)
+  const response = await apiFetch(`${API_ENDPOINTS.image.jobStatus}?jobId=${encodeURIComponent(jobId)}`)
   const data = await readJson<{ job: ImageGenerationJob }>(response)
   return data.job
 }
 
 export async function getImageGenerationProject(projectId: string): Promise<ImageGenerationProject> {
-  const response = await apiFetch(`/api/image/projects/get?projectId=${encodeURIComponent(projectId)}`)
+  const response = await apiFetch(`${API_ENDPOINTS.image.getProject}?projectId=${encodeURIComponent(projectId)}`)
   const data = await readJson<{ project: ImageGenerationProject }>(response)
   return data.project
 }
@@ -120,7 +122,7 @@ export async function directComposeProject(projectId: string): Promise<{
   outputBlobUrl: string
   breakoutApplied: boolean
 }> {
-  const response = await apiFetch('/api/image/projects/direct-compose', {
+  const response = await apiFetch(API_ENDPOINTS.image.directCompose, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ projectId }),
@@ -134,7 +136,7 @@ export async function autoProvisionProjectAssets(input: {
   creatorCoinAddress: string
   chainId?: number
 }): Promise<{ subjectImageUrl: string }> {
-  const response = await apiFetch('/api/image/projects/auto-assets', {
+  const response = await apiFetch(API_ENDPOINTS.image.autoAssets, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -147,7 +149,7 @@ export async function getVaultImage(vaultAddress: string): Promise<{
   outputBlobUrl: string
 } | null> {
   const response = await apiFetch(
-    `/api/image/projects/vault-image?vaultAddress=${encodeURIComponent(vaultAddress)}`,
+    `${API_ENDPOINTS.image.vaultImage}?vaultAddress=${encodeURIComponent(vaultAddress)}`,
   )
   const data = await readJson<{ outputBlobUrl: string } | null>(response)
   return data
@@ -156,7 +158,7 @@ export async function associateImageProjectToVault(input: {
   projectId: string
   vaultAddress: string
 }): Promise<void> {
-  const response = await apiFetch('/api/image/projects/associate-vault', {
+  const response = await apiFetch(API_ENDPOINTS.image.associateVault, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),

@@ -6,13 +6,15 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-} from "../../../../server/auth/_shared.js"
+  logger,
+} from "../../../../packages/server-core/src/index.js"
+
 import {
   authenticateRuntimeRequest,
   listRuntimeRecords,
   storeRuntimeRecord,
 } from "../../../../server/_lib/cre/runtimeBridge.js"
-import { logger } from "../../../../server/_lib/logger.js"
+
 import { normalizeRuntimeRecordForWorkspace } from "../../../../server/_lib/workspace/normalizer.js"
 
 type IngestBody = {

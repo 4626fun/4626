@@ -1,9 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { PrivyClient } from '@privy-io/server-auth'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
-import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  isDbConfigured,
+  getSessionAddress,
+  isAdminAddress,
+} from '../../../../packages/server-core/src/index.js'
+
+
+
 import { normalizeReferralCode } from '../../../../server/_lib/referrals.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'

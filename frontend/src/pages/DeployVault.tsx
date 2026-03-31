@@ -35,6 +35,7 @@ import { VaultImageGenerator } from '@/components/VaultImageGenerator'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { logger } from '@/lib/logger'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
@@ -54,6 +55,11 @@ import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonce } from '@/lib/deploy/permit2'
+import {
+  deriveCreatorCoinPolicyControllerSalt,
+  derivePayoutRouterSalt,
+  deriveVaultShareBurnStreamSalt,
+} from '@/lib/deploy/create2Salts'
 import {
   postDeploySessionRequestWithAuthRetry,
   resumeAndPollDeploySession,
@@ -77,9 +83,6 @@ const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
 const BASE_CHAINLINK_ETH_USD = addr('71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70')
 const DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE = 10_000
 const DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE = 10_000
-const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
-const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
-const CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG = '4626:CreatorCoinPolicyController' as const
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
@@ -598,7 +601,6 @@ async function waitForPhase1CoreState(params: {
   }
 }
 
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type DeployRuntimeConfigResponse = {
   creatorVaultBatcher: Address | null
@@ -919,27 +921,6 @@ export function DeployVault() {
 
 function saltFor(baseSalt: Hex, label: string): Hex {
   return keccak256(encodePacked(['bytes32', 'string'], [baseSalt, label]))
-}
-
-function derivePayoutRouterSalt(params: { creatorToken: Address; owner: Address }): Hex {
-  return keccak256(
-    encodePacked(['string', 'address', 'address'], [PAYOUT_ROUTER_SALT_TAG, params.creatorToken, params.owner]),
-  )
-}
-
-function deriveVaultShareBurnStreamSalt(params: { creatorToken: Address; owner: Address }): Hex {
-  return keccak256(
-    encodePacked(['string', 'address', 'address'], [BURN_STREAM_SALT_TAG, params.creatorToken, params.owner]),
-  )
-}
-
-function deriveCreatorCoinPolicyControllerSalt(params: { creatorToken: Address; owner: Address }): Hex {
-  return keccak256(
-    encodePacked(
-      ['string', 'address', 'address'],
-      [CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG, params.creatorToken, params.owner],
-    ),
-  )
 }
 
 function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; version: string }): Hex {
@@ -3559,8 +3540,8 @@ function DeployVaultBatcher({
             } as const)
           : null
 
-      const payoutRouterSetSwapPathCalls = senderCanAdminPayoutRouter
-        ? (payoutRouterDesiredSwapPaths
+      const payoutRouterSetSwapPathCalls: Array<{ target: Address; value: bigint; data: Hex }> = senderCanAdminPayoutRouter
+        ? payoutRouterDesiredSwapPaths
             .filter(({ tokenIn, path }) => {
               const current = currentRouterPaths.get(tokenIn.toLowerCase()) ?? ('0x' as Hex)
               return String(current).toLowerCase() !== String(path).toLowerCase()
@@ -3573,8 +3554,8 @@ function DeployVaultBatcher({
                 functionName: 'setSwapPath',
                 args: [tokenIn, path],
               }),
-            })) as const)
-        : ([] as const)
+            }))
+        : []
 
       if (!payoutRouterKeeperAddress) {
         logger.warn('[DeployVault] Missing payoutRouter keeper runtime config; skipping setKeeper auto-config')

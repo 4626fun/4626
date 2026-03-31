@@ -1,7 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions } from '../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  guardAgentApiRequest,
+} from '../../../packages/server-core/src/index.js'
+
+
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 
 type OpenApiSpec = Record<string, any>

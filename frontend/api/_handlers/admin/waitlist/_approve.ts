@@ -1,13 +1,26 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
-import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+  isDbConfigured,
+  getSessionAddress,
+  isAdminAddress,
+  getClientIp,
+  logger,
+} from '../../../../packages/server-core/src/index.js'
+
+
+
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
-import { getClientIp } from '../../../../server/_lib/rateLimit.js'
+
 import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
-import { logger } from '../../../../server/_lib/logger.js'
+
 
 declare const process: { env: Record<string, string | undefined> }
 

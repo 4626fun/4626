@@ -12,7 +12,7 @@ Internal engineering and release-readiness notes. These are **not** a substitute
 
 **Automation**
 
-- `.github/workflows/security-scanning.yml` — gitleaks (incremental), pnpm audit summaries (root, `frontend/`, `cre/`, `apps/docs-site/`), blocking Semgrep on `frontend/api` + `frontend/server/_lib`, Slither (report-only).
+- `.github/workflows/security-scanning.yml` — gitleaks (incremental), pnpm audit summaries (root, `frontend/`, `cre/`, `apps/docs-site/`), blocking Semgrep on `frontend/api` + `frontend/server/_lib` + `frontend/packages/server-core/src`, Slither (report-only).
 - `.github/workflows/dependency-review.yml` — on PRs, blocks **new** **high** or **critical** vulnerabilities in **runtime and development** dependencies. Setup: [github-supply-chain-setup.md](./github-supply-chain-setup.md).
 - `.github/workflows/test.yml` — Forge tests, frontend lint/typecheck/tests.
 - `gitleaks.toml` — allowlists for vendored snapshots and test/doc noise.

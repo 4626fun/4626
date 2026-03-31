@@ -3,9 +3,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, createWalletClient, getAddress, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  isDbConfigured,
+} from '../../../../packages/server-core/src/index.js'
+
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
-import { isDbConfigured } from '../../../../server/_lib/postgres.js'
+
 
 import {
   type ApiEnvelope,

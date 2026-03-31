@@ -2,8 +2,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 
 import { agentAccessProofRequestSchema } from '../_accessSchemas.js'
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import { issueAgentAccessProofRequest } from '../../../../../server/_lib/agentAccessProof.js'
 import { resolveMembershipForRoom } from '../../../../../server/_lib/agentAccessResolver.js'
 

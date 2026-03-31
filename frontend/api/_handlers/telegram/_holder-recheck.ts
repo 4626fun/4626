@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address } from 'viem'
 
 import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+import { getDb } from '../../../packages/server-core/src/index.js'
 import {
   ensureTelegramTradingSchema,
   listHolderRoomMembersNeedingRecheck,

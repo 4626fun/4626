@@ -21,7 +21,7 @@ describe('keepr conversational fallback behavior', () => {
     vi.clearAllMocks()
   })
 
-  it('returns deterministic command fallback for plain text when vault is not configured', async () => {
+  it('ignores plain text when vault is not configured (no prefixed command)', async () => {
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
     const { executeCommand } = await import('../../commands/execute.ts')
 
@@ -32,12 +32,11 @@ describe('keepr conversational fallback behavior', () => {
     })
 
     expect(result.ok).toBe(false)
-    expect(result.response).toContain('Keepr is not configured for this group')
-    expect(result.response).toContain('/help')
+    expect(result.response).toBe('')
     expect(generateLlmResponseMock).not.toHaveBeenCalled()
   })
 
-  it('returns deterministic connect guidance for unconfigured groups', async () => {
+  it('does not auto-route unprefixed group setup chatter for unconfigured groups', async () => {
     getKeeprVaultByGroupIdMock.mockResolvedValueOnce(null)
     const { executeCommand } = await import('../../commands/execute.ts')
 
@@ -47,13 +46,8 @@ describe('keepr conversational fallback behavior', () => {
       text: 'How do I connect this group in 4626?',
     })
 
-    expect(result.ok).toBe(true)
-    expect(result.response).toContain('Group Setup (4626)')
-    expect(result.response).toContain('/start')
-    expect(result.response).toContain('/link')
-    expect(result.response).toContain('/linked')
-    expect(result.response).toContain('/vaults')
-    expect(result.response).toContain('telegram:-100123456')
+    expect(result.ok).toBe(false)
+    expect(result.response).toBe('')
     expect(generateLlmResponseMock).not.toHaveBeenCalled()
   })
 
@@ -85,7 +79,7 @@ describe('keepr conversational fallback behavior', () => {
 
     expect(result.ok).toBe(false)
     expect(result.response).toContain('Assistant-only mode')
-    expect(result.response).toContain('/send is disabled')
+    expect(result.response).toContain('<code>/send</code> is disabled')
     expect(result.response).toContain('/link')
   })
 

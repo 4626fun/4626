@@ -11,7 +11,7 @@ import {
 } from '../../../server/zora/_shared.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+import { readRequestPrincipal } from '../../../packages/server-core/src/index.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

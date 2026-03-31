@@ -1,9 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { setNoStore } from '../../../server/auth/_shared.js'
+import {
+  setNoStore,
+  readRequestPrincipal,
+  isAdminAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { getNumberQuery, getStringQuery, handleOptions, setCors } from '../../../server/zora/_shared.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
-import { isAdminAddress } from '../../../server/_lib/session.js'
+
+
 import { getTrendOpByTickerHash, listRecentTrendOps } from '../../../server/_lib/zoraTrendOpsStore.js'
 import { preflightTrendTicker } from '../../../server/zora/trends.js'
 

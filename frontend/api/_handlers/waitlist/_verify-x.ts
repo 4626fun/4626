@@ -1,10 +1,22 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+  readRequestPrincipalAddress,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+} from '../../../packages/server-core/src/index.js'
+
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
-import { getDb } from '../../../server/_lib/postgres.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
-import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
+
 import { PrivyClient } from '@privy-io/server-auth'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -289,13 +301,13 @@ export default async function handler(req: any, res: any) {
     // Best-effort: ensure points exist, but do not re-hit X API.
     let awarded = false
     try {
-      const ins = await db.sql`
-        INSERT INTO points (signup_id, source, source_id, amount, created_at)
-        VALUES (${signupId}, 'social_x', 'x', ${WAITLIST_POINTS.x}, NOW())
-        ON CONFLICT DO NOTHING
-        RETURNING id;
-      `
-      awarded = Boolean(ins?.rows?.[0]?.id)
+      awarded = await awardWaitlistPoints({
+        db: db as any,
+        signupId,
+        source: 'social_x',
+        sourceId: 'x',
+        amount: WAITLIST_POINTS.x,
+      })
     } catch {
       // ignore
     }
@@ -312,13 +324,13 @@ export default async function handler(req: any, res: any) {
 
   let awarded = false
   try {
-    const pointInsert = await db.sql`
-      INSERT INTO points (signup_id, source, source_id, amount, created_at)
-      VALUES (${signupId}, 'social_x', 'x', ${WAITLIST_POINTS.x}, NOW())
-      ON CONFLICT DO NOTHING
-      RETURNING id;
-    `
-    awarded = Boolean(pointInsert?.rows?.[0]?.id)
+    awarded = await awardWaitlistPoints({
+      db: db as any,
+      signupId,
+      source: 'social_x',
+      sourceId: 'x',
+      amount: WAITLIST_POINTS.x,
+    })
   } catch {
     // Best-effort: don't block verification on points ledger issues.
     awarded = false
@@ -339,4 +351,3 @@ export default async function handler(req: any, res: any) {
   const data: VerifyXResponse = { email, verified: true, awarded, borderTier }
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<VerifyXResponse>)
 }
-

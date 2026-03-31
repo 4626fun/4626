@@ -15,15 +15,32 @@ import {
   type Hex,
 } from 'viem'
 
-import { getApiContracts } from '../../server/_lib/contracts.js'
-import { logger } from '../../server/_lib/logger.js'
+import {
+  getApiContracts,
+  logger,
+  ensureCreatorAccessSchema,
+  getDb,
+  isDbConfigured,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  readRequestPrincipalAddress,
+} from '../../packages/server-core/src/index.js'
+
+
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
-import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../server/_lib/postgres.js'
+import {
+  deriveCreatorCoinPolicyControllerSalt,
+  derivePayoutRouterSalt,
+  deriveVaultShareBurnStreamSalt,
+} from '../../src/lib/deploy/create2Salts.js'
+
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../server/auth/_shared.js'
-import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
+
+
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { resolvePayoutRouterKeeperAddress } from '../../server/_lib/payoutRouterRuntime.js'
 
@@ -914,9 +931,6 @@ const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
 // Uniswap Universal Router on Base (compatibility + current deployments).
 const BASE_SWAP_ROUTER_LEGACY = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
 const BASE_SWAP_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
-const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
-const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
-const CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG = '4626:CreatorCoinPolicyController' as const
 const CREATOR_OVAULT_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex)
 
 const UNISWAP_UNIVERSAL_ROUTER_ABI = [
@@ -1212,6 +1226,7 @@ export async function validateSponsoredSmartWalletCalls(params: {
     expectedVault?: Address | null
     expectedBurnStream?: Address | null
     expectedPayoutRouter?: Address | null
+    expectedCreatorCoinPolicyController?: Address | null
     payoutRouterBurnStreamArg?: Address | null
     vaultBurnStreamArg?: Address | null
   }) => void
@@ -1501,27 +1516,6 @@ function decodeAddressFromPackedPath(path: Hex, byteOffset: number): Address | n
   return getAddress(raw)
 }
 
-function expectedPayoutRouterSalt(params: { creatorToken: Address; sender: Address }): Hex {
-  return keccak256(
-    encodePacked(['string', 'address', 'address'], [PAYOUT_ROUTER_SALT_TAG, params.creatorToken, params.sender]),
-  )
-}
-
-function expectedBurnStreamSalt(params: { creatorToken: Address; sender: Address }): Hex {
-  return keccak256(
-    encodePacked(['string', 'address', 'address'], [BURN_STREAM_SALT_TAG, params.creatorToken, params.sender]),
-  )
-}
-
-function expectedCreatorCoinPolicyControllerSalt(params: { creatorToken: Address; sender: Address }): Hex {
-  return keccak256(
-    encodePacked(
-      ['string', 'address', 'address'],
-      [CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG, params.creatorToken, params.sender],
-    ),
-  )
-}
-
 function decodeBoolArgFromCalldata(data: Hex, argIndex: number): boolean | null {
   const start = 10 + argIndex * 64
   const word = data.slice(start, start + 64)
@@ -1753,6 +1747,7 @@ async function validateInnerCalls(params: {
     expectedVault?: Address | null
     expectedBurnStream?: Address | null
     expectedPayoutRouter?: Address | null
+    expectedCreatorCoinPolicyController?: Address | null
     payoutRouterBurnStreamArg?: Address | null
     vaultBurnStreamArg?: Address | null
   }) => void
@@ -2397,7 +2392,7 @@ async function validateInnerCalls(params: {
       }
     }
 
-    const burnSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
+    const burnSalt = deriveVaultShareBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, owner: params.sender })
     expectedBurnStream = await computeCreate2AddressFromStore({
       store: bytecodeStore,
       deployer: create2DeployerFromStore,
@@ -2406,7 +2401,7 @@ async function validateInnerCalls(params: {
       constructorArgs: abiEncodeAddresses([expectedVault]),
     })
 
-    const routerSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
+    const routerSalt = derivePayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, owner: params.sender })
     if (!expectedProtocolTreasury) throw new Error('protocol_treasury_not_configured')
     expectedPayoutRouter = await computeCreate2AddressFromStore({
       store: bytecodeStore,
@@ -2422,9 +2417,9 @@ async function validateInnerCalls(params: {
         BASE_WETH,
       ]),
     })
-    const policyControllerSalt = expectedCreatorCoinPolicyControllerSalt({
+    const policyControllerSalt = deriveCreatorCoinPolicyControllerSalt({
       creatorToken: expectedCreatorToken as Address,
-      sender: params.sender,
+      owner: params.sender,
     })
     expectedCreatorCoinPolicyController = await computeCreate2AddressFromStore({
       store: bytecodeStore,
@@ -2600,12 +2595,12 @@ async function validateInnerCalls(params: {
 
       const codeIdLc = String(codeId).toLowerCase()
       if (codeIdLc === String(VAULT_SHARE_BURN_STREAM_CODE_ID).toLowerCase()) {
-        const expectedSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
+        const expectedSalt = deriveVaultShareBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, owner: params.sender })
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
         const vaultArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
         if (!vaultArg || vaultArg !== expectedVault) throw new Error('burn_stream_vault_mismatch')
       } else if (codeIdLc === String(PAYOUT_ROUTER_CODE_ID).toLowerCase()) {
-        const expectedSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
+        const expectedSalt = derivePayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, owner: params.sender })
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
 
         // PayoutRouter constructor args:
@@ -2636,9 +2631,9 @@ async function validateInnerCalls(params: {
         if (!swapRouterArg || !allowedSwapRouters.has(swapRouterArg)) throw new Error('payout_router_swap_router_mismatch')
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
       } else if (codeIdLc === String(CREATOR_COIN_POLICY_CONTROLLER_CODE_ID).toLowerCase()) {
-        const expectedSalt = expectedCreatorCoinPolicyControllerSalt({
+        const expectedSalt = deriveCreatorCoinPolicyControllerSalt({
           creatorToken: expectedCreatorToken as Address,
-          sender: params.sender,
+          owner: params.sender,
         })
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
 

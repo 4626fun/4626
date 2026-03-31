@@ -1,4 +1,6 @@
 import { apiFetch } from '@/lib/apiBase'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type {
   WorkspaceActionResult,
   WorkspaceActivityResponse,
@@ -9,20 +11,6 @@ import type {
   WorkspaceSummary,
   WorkspaceTasksResponse,
 } from './types'
-
-type ApiEnvelope<T> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
-function resolveErrorMessage(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object' && typeof (payload as any).error === 'string') {
-    const error = (payload as any).error.trim()
-    if (error) return error
-  }
-  return fallback
-}
 
 function buildUrl(pathname: string, query: Record<string, string | number | boolean | null | undefined>) {
   const params = new URLSearchParams()
@@ -44,28 +32,28 @@ async function requestJson<T>(params: {
     headers: params.body ? { 'Content-Type': 'application/json' } : undefined,
     body: params.body ? JSON.stringify(params.body) : undefined,
   })
-  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null
+  const payload = await parseApiEnvelope<T>(response)
   if (!response.ok || !payload?.success || payload?.data === undefined) {
-    throw new Error(resolveErrorMessage(payload, `Workspace API request failed (${response.status})`))
+    throw new Error(resolveApiErrorMessage(payload, `Workspace API request failed (${response.status})`))
   }
   return payload.data
 }
 
 export async function getWorkspaceSummary(vault: `0x${string}`): Promise<WorkspaceSummary> {
   return requestJson<WorkspaceSummary>({
-    path: buildUrl('/api/v1/workspace/summary', { vault }),
+    path: buildUrl(API_ENDPOINTS.workspace.summary, { vault }),
   })
 }
 
 export async function getWorkspaceStrategies(vault: `0x${string}`): Promise<WorkspaceStrategiesResponse> {
   return requestJson<WorkspaceStrategiesResponse>({
-    path: buildUrl('/api/v1/workspace/strategies', { vault }),
+    path: buildUrl(API_ENDPOINTS.workspace.strategies, { vault }),
   })
 }
 
 export async function getWorkspaceMonitoring(vault: `0x${string}`): Promise<WorkspaceMonitoringResponse> {
   return requestJson<WorkspaceMonitoringResponse>({
-    path: buildUrl('/api/v1/workspace/monitoring', { vault }),
+    path: buildUrl(API_ENDPOINTS.workspace.monitoring, { vault }),
   })
 }
 
@@ -75,7 +63,7 @@ export async function getWorkspaceActivity(params: {
   limit?: number
 }): Promise<WorkspaceActivityResponse> {
   return requestJson<WorkspaceActivityResponse>({
-    path: buildUrl('/api/v1/workspace/activity', {
+    path: buildUrl(API_ENDPOINTS.workspace.activity, {
       vault: params.vault,
       includeSystem: params.includeSystem ?? true,
       limit: params.limit ?? 150,
@@ -85,7 +73,7 @@ export async function getWorkspaceActivity(params: {
 
 export async function getWorkspaceRooms(vault: `0x${string}`): Promise<WorkspaceRoomsResponse> {
   return requestJson<WorkspaceRoomsResponse>({
-    path: buildUrl('/api/v1/workspace/rooms', { vault }),
+    path: buildUrl(API_ENDPOINTS.workspace.rooms, { vault }),
   })
 }
 
@@ -95,7 +83,7 @@ export async function getWorkspaceTasks(params: {
   approvalStatus?: string
 }): Promise<WorkspaceTasksResponse> {
   return requestJson<WorkspaceTasksResponse>({
-    path: buildUrl('/api/v1/workspace/tasks', {
+    path: buildUrl(API_ENDPOINTS.workspace.tasks, {
       vault: params.vault,
       taskStatus: params.taskStatus ?? null,
       approvalStatus: params.approvalStatus ?? null,
@@ -105,7 +93,7 @@ export async function getWorkspaceTasks(params: {
 
 export async function getWorkspaceSettings(vault: `0x${string}`): Promise<WorkspaceSettingsResponse> {
   return requestJson<WorkspaceSettingsResponse>({
-    path: buildUrl('/api/v1/workspace/settings', { vault }),
+    path: buildUrl(API_ENDPOINTS.workspace.settings, { vault }),
   })
 }
 
@@ -115,7 +103,7 @@ export async function postWorkspaceAction(params: {
   payload?: Record<string, unknown>
 }): Promise<WorkspaceActionResult> {
   return requestJson<WorkspaceActionResult>({
-    path: buildUrl('/api/v1/workspace/actions', { vault: params.vault }),
+    path: buildUrl(API_ENDPOINTS.workspace.actions, { vault: params.vault }),
     method: 'POST',
     body: {
       action: params.action,

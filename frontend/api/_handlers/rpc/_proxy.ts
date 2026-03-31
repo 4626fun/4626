@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 
 type JsonRpcRequest = { jsonrpc?: string; id?: unknown; method?: unknown; params?: unknown }
 

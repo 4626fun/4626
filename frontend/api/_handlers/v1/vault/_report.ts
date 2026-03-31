@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import vaultReport from '../../status/_vaultReport.js'
-import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import { guardAgentApiRequest } from '../../../../packages/server-core/src/index.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/vault/report', kind: 'read' })

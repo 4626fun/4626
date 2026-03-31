@@ -2,8 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, getAddress, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { getSessionAddress } from '../../../../server/_lib/session.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getSessionAddress,
+} from '../../../../packages/server-core/src/index.js'
+
+
 import { computeConfigHash, type KeeprConfigV1, upsertKeeprVault } from '../../../../server/_lib/keeprRegistry.js'
 import { validateCreatorRegistryBinding } from '../../../../server/_lib/creatorRegistryVerification.js'
 

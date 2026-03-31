@@ -12,6 +12,7 @@ import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { apiFetch } from '@/lib/apiBase'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { signInWithSiwaAgent } from '@/lib/siwaAgentAuth'
 import { ensureProviderOnBase, ensureWagmiChainOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { useZoraProfile } from '@/lib/zora/hooks'
@@ -59,7 +60,6 @@ const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
     outputs: [],
   },
 ] as const
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type WaitlistMeData = {
   profileId: number

@@ -101,7 +101,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   semgrep-api:
-    name: Semgrep (frontend API + server lib)
+    name: Semgrep (frontend API surfaces)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -118,13 +118,14 @@ jobs:
             --config=p/javascript \
             /src/frontend/api \
             /src/frontend/server/_lib \
+            /src/frontend/packages/server-core/src \
             2>&1 | tee "$RUNNER_TEMP/semgrep.txt"
 
       - name: Semgrep summary
         if: always()
         run: |
           echo "## Semgrep (blocking)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Rulesets \`p/typescript\` + \`p/javascript\` on \`frontend/api\` and \`frontend/server/_lib\`. Any finding fails the job." >> "$GITHUB_STEP_SUMMARY"
+          echo "Rulesets \`p/typescript\` + \`p/javascript\` on \`frontend/api\`, \`frontend/server/_lib\`, and \`frontend/packages/server-core/src\`. Any finding fails the job." >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           head -200 "$RUNNER_TEMP/semgrep.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no semgrep output)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

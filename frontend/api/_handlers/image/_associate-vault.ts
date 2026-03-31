@@ -4,8 +4,12 @@ import { isAddress } from 'viem'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 import { getImageGenerationProject, setImageProjectVaultAddress } from '../../../server/_lib/imageProjects.js'
 import { resolveCoinPartiesAndOwner } from '../../../server/_lib/coinParties.js'
-import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
-import { isAdminAddress } from '../../../server/_lib/session.js'
+import {
+  resolveAuthorizedRequestPrincipal,
+  isAdminAddress,
+} from '../../../packages/server-core/src/index.js'
+
+
 
 type Body = {
   projectId?: string

@@ -45,7 +45,7 @@ describe('waitlist/leaderboard', () => {
               {
                 rank: 1,
                 signup_id: 42,
-                email: '4626dotfun@gmail.com',
+                email: 'hello@4626.fun',
                 primary_wallet: '0x00000000000000000000000000000000000000aa',
                 referral_code: 'C2',
                 border_tier: 0,
@@ -81,7 +81,7 @@ describe('waitlist/leaderboard', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.leaderboard?.[0]?.display).toBe('4626dotfun')
+    expect(res.body?.data?.leaderboard?.[0]?.display).toBe('hello')
     expect(res.body?.data?.leaderboard?.[1]?.display).toBe('AKITA')
   })
 })

@@ -12,10 +12,17 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  readRequestPrincipal,
+} from '../../../packages/server-core/src/index.js'
+
 import { buildReputationGraph } from '../../../server/_lib/reputationGraph.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

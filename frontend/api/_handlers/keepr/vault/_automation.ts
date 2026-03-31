@@ -1,6 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getSessionAddress,
+} from '../../../../packages/server-core/src/index.js'
+
 import {
   disableKeeprVaultAutomation,
   getKeeprVaultAutomationByVaultAddress,
@@ -9,7 +17,7 @@ import {
 } from '../../../../server/_lib/keeprAutomation.js'
 import { getKeeprVaultByVaultAddress } from '../../../../server/_lib/keeprRegistry.js'
 import { resolvePersistedWalletIdentity } from '../../../../server/_lib/canonicalWalletResolver.js'
-import { getSessionAddress } from '../../../../server/_lib/session.js'
+
 
 type AutomationBody = {
   vaultAddress?: string

@@ -10,7 +10,7 @@ import {
   setCors,
 } from '../../../server/debank/_shared.js'
 import { checkDurableRateLimit } from '../../../server/_lib/durableRateLimit.js'
-import { rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { rateLimitKey } from '../../../packages/server-core/src/index.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

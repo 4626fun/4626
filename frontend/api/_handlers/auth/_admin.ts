@@ -1,8 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getSessionAddress, isAdminAddress, isAdminEmail } from '../../../server/_lib/session.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getSessionAddress,
+  isAdminAddress,
+  isAdminEmail,
+  getDb,
+} from '../../../packages/server-core/src/index.js'
+
+
+
 
 type AdminResponse = { address: string; isAdmin: boolean } | null
 

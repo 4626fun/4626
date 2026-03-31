@@ -1,13 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  readRequestPrincipal,
+} from '../../../packages/server-core/src/index.js'
+
 import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
 import {
   publishAgentRegistrationToGrove,
   resolveAgentRegistrationKey,
 } from '../../../server/_lib/agentRegistrationPublisher.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }
 

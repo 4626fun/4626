@@ -54,10 +54,18 @@ Required input:
 ## Build workflow (fast vs full)
 
 - **Frontend-only (fast)**: `pnpm build` (Vite build for the SPA)
+- **Clean frontend build**: `pnpm build:clean` (clears generated `dist`/`build` first)
 - **Type safety (fast)**: `pnpm typecheck`
 - **Contracts (slow)**: done from repo root via Foundry (`forge build`, `forge test`) when you’re actively changing Solidity
 
 This mirrors the “build vs build:js” split described in Zora’s monorepo architecture doc: keep the default loop fast, and only pay the heavy compile cost when you need it.
+
+## Runtime boundary guardrails
+
+- `pnpm guard:api-server-shims` blocks imports that resolve into deprecated `frontend/api/server/*` shim paths.
+- `pnpm guard:server-core-boundary` enforces shared API primitives to flow through `packages/server-core` instead of direct `server/auth/_shared` or `server/_lib/*` imports.
+- `pnpm guard:runtime-boundaries` enforces that browser code in `frontend/src/*` does not import server/api/service runtime modules.
+- `pnpm guard:generated-output` enforces `dist`/`build` as generated-only outputs (untracked by git).
 
 ## Tech Stack
 
@@ -72,16 +80,13 @@ This mirrors the “build vs build:js” split described in Zora’s monorepo ar
 
 ```
 frontend/
-  public/
-    manifest.json        # Base Mini App manifest
-  src/
-    components/          # UI components
-    config/              # Contract addresses, wagmi config
-    hooks/               # Custom React hooks
-    pages/               # Route pages
-    main.tsx             # Entry point
-  abis/                  # Contract ABIs
-  api/                   # Vercel API routes
+  packages/
+    server-core/         # Staged shared server-core exports
+  public/                # Static asset source (copied to dist at build)
+  src/                   # Browser app source
+  api/                   # Canonical API handlers/runtime source
+  server/                # Node runtime source (migration in progress)
+  dist/                  # Generated build output (do not treat as source)
 ```
 
 ## API routing & bundling (important)
@@ -90,13 +95,13 @@ Vercel routes all API traffic through `frontend/api/[...path].ts`, which dispatc
 
 - **Do not** add new API handlers and rely on dynamic imports.
 - **Do** register new endpoints in `frontend/api/_handlers/_routes.ts` (static loader map) so Vercel’s bundler includes them.
-- For local dev, `frontend/vite.config.ts` also maps a subset of `/api/*` to handlers.
+- For local dev, `frontend/vite.config.ts` also maps a subset of `/api/*` to handlers and the API catch-all route.
 
 ## Runtime split (important)
 
 - Vercel hosts the SPA plus request/response API handlers.
 - The long-lived XMTP / Eliza primary runtime does not run on Vercel in production.
-- Production XMTP consumes from exactly one Railway primary using `frontend/Dockerfile.agent`.
+- Production XMTP consumes from exactly one Railway primary using `frontend/Dockerfile.agent` and `frontend/server/agent/eliza/index.ts`.
 - Do not add or re-enable a Vercel cron for `/api/agent/process`; that path is not part of the production Vercel topology.
 
 ## Pages

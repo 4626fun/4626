@@ -1,11 +1,20 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getDb,
+  readRequestPrincipalAddress,
+} from '../../../packages/server-core/src/index.js'
+
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
-import { getDb } from '../../../server/_lib/postgres.js'
+
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
 import { getGroveChainId, tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
+
 
 type Body = { email?: string }
 

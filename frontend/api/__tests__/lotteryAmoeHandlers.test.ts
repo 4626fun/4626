@@ -31,6 +31,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
 }))
 
 vi.mock('../../server/_lib/lotteryAmoe.js', () => ({
+  AMOE_CREDITS_PER_ENTRY: 100,
   issueAmoeNonce: issueAmoeNonceMock,
   buildAmoeEntryMessage: buildAmoeEntryMessageMock,
   verifyAmoeEntryProof: verifyAmoeEntryProofMock,

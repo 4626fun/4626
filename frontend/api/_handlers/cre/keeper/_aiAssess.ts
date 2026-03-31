@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { getElizaLlmService } from '../../../../server/agent/eliza/llm.js'
 
 type AlertSeverity = 'info' | 'warning' | 'critical'

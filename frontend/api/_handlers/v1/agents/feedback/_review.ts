@@ -2,8 +2,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { encodeFunctionData, keccak256, toHex } from 'viem'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../../server/auth/_shared.js'
-import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  guardAgentApiRequest,
+} from '../../../../../packages/server-core/src/index.js'
+
+
 import { type FeedbackPayload, getIdentityRegistryAddress, getReputationRegistryAddress, REPUTATION_REGISTRY_ABI } from '../../../../../server/_lib/erc8004.js'
 import { buildErc8004TechnicalReview } from '../../../../../server/_lib/erc8004Review.js'
 import { tryUploadImmutableJson } from '../../../../../server/_lib/lensGrove.js'

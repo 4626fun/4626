@@ -1,11 +1,25 @@
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../server/auth/_shared.js'
-import { getDb, getDbInitError, isDbConfigured } from '../../server/_lib/postgres.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  getDb,
+  getDbInitError,
+  isDbConfigured,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
+  getClientIp as getRateLimitIp,
+  readRequestPrincipalAddress,
+} from '../../packages/server-core/src/index.js'
+
+
 import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } from '../../server/_lib/referrals.js'
-import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
+
 import { resolveBasenameHandle } from '../../server/_lib/basenameResolver.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
-import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
+
 import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 import { isCswOwner } from '../../server/_lib/cswOwner.js'

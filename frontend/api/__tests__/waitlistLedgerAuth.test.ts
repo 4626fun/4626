@@ -107,7 +107,7 @@ function createDb() {
       if (text.includes('from profile_wallets')) {
         return { rows: [] }
       }
-      if (text.includes('sum(amount)')) {
+      if (text.includes('from points') && text.includes('as total') && text.includes('where signup_id')) {
         return { rows: [{ total: 120 }] }
       }
       if (text.includes('from points') && text.includes('order by created_at desc')) {
@@ -165,7 +165,7 @@ function createDbHistoricalLinkedWallet() {
       if (text.includes('from profile_wallets')) {
         return { rows: [{ exists: 1 }] }
       }
-      if (text.includes('sum(amount)')) {
+      if (text.includes('from points') && text.includes('as total') && text.includes('where signup_id')) {
         return { rows: [{ total: 120 }] }
       }
       if (text.includes('from points') && text.includes('order by created_at desc')) {
