@@ -81,6 +81,13 @@ function getSslMode(connectionString: string): string | null {
   }
 }
 
+function getPgSslModeFromEnv(): string | null {
+  const mode = String(process.env.PGSSLMODE ?? '')
+    .trim()
+    .toLowerCase()
+  return mode || null
+}
+
 function stripQueryParams(connectionString: string, keys: string[]): string {
   try {
     const u = new URL(connectionString)
@@ -98,7 +105,8 @@ function sslOptionsForConnection(connectionString: string): any | undefined {
   const envOverride = parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED)
   if (envOverride !== undefined) return { rejectUnauthorized: envOverride }
 
-  const mode = getSslMode(connectionString)
+  // Respect PGSSLMODE env when present (common provider guidance), then URL sslmode.
+  const mode = getPgSslModeFromEnv() ?? getSslMode(connectionString)
   if (mode === 'no-verify') return { rejectUnauthorized: false }
   if (mode === 'disable') return undefined
   return { rejectUnauthorized: true }
@@ -481,6 +489,15 @@ export async function getDb(): Promise<DbPool | null> {
             )
           }
         } else {
+          if (
+            isSelfSignedCertChainError(err) &&
+            parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED) === true
+          ) {
+            console.error(
+              'Postgres TLS validation failed with SELF_SIGNED_CERT_IN_CHAIN while POSTGRES_SSL_REJECT_UNAUTHORIZED=true. ' +
+                'Set POSTGRES_SSL_REJECT_UNAUTHORIZED=false (or PGSSLMODE=no-verify) for this provider chain.',
+            )
+          }
           if (shouldLogInitError(signature, retryWindow)) {
             console.error('Failed to initialize Postgres pool', err)
           }

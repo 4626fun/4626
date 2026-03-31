@@ -6,7 +6,6 @@ const SESSION_MODE_ERROR_MSG =
 let queryCallCount = 0
 let queryBehavior: 'succeed' | 'session_error' | 'other_error' | 'fail_then_succeed' | 'self_signed_once' = 'succeed'
 let failThenSucceedThreshold = 0
-
 const mockPoolEnd = vi.fn(async () => {})
 const mockPoolQuery = vi.fn(async () => {
   queryCallCount++
@@ -32,12 +31,13 @@ const mockPoolQuery = vi.fn(async () => {
   err.code = 'XX000'
   throw err
 })
+const mockPoolCtor = vi.fn(() => ({
+  query: mockPoolQuery,
+  end: mockPoolEnd,
+}))
 
 vi.mock('pg', () => ({
-  Pool: vi.fn(() => ({
-    query: mockPoolQuery,
-    end: mockPoolEnd,
-  })),
+  Pool: mockPoolCtor,
 }))
 
 vi.mock('@vercel/postgres', () => ({}))
@@ -53,6 +53,7 @@ describe('postgres session-mode retry', () => {
     failThenSucceedThreshold = 0
     mockPoolEnd.mockClear()
     mockPoolQuery.mockClear()
+    mockPoolCtor.mockClear()
 
     vi.stubEnv('DATABASE_URL', 'postgresql://user:pass@db.supabase.co:5432/postgres')
     vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co')
@@ -62,6 +63,7 @@ describe('postgres session-mode retry', () => {
     delete process.env.POSTGRES_URL_NON_POOLING
     delete process.env.VERCEL
     delete process.env.VERCEL_ENV
+    delete process.env.PGSSLMODE
     delete process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED
     delete process.env.POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK
 
@@ -156,5 +158,14 @@ describe('postgres session-mode retry', () => {
     expect(db).toBeNull()
     expect(getDbInitError()).toMatch(/self-signed certificate in certificate chain/i)
     expect(queryCallCount).toBe(1)
+  })
+
+  it('honors PGSSLMODE=no-verify when building pg SSL options', async () => {
+    vi.stubEnv('PGSSLMODE', 'no-verify')
+    queryBehavior = 'succeed'
+    const db = await getDb()
+    expect(db).not.toBeNull()
+    const firstCtorArgs = mockPoolCtor.mock.calls[0]?.[0] as { ssl?: { rejectUnauthorized?: boolean } } | undefined
+    expect(firstCtorArgs?.ssl?.rejectUnauthorized).toBe(false)
   })
 })

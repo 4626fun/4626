@@ -243,8 +243,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const heroOpacity = useTransform(scroll, [0, 0.24, 0.32, 0.46, 0.60], [0, 0, 1, 1, 0])
   const heroTitleOpacity = useTransform(scroll, [0.24, 0.32], [0, 1])
   const heroTitleY = useTransform(scroll, [0.24, 0.32], [14, 0])
-  const heroPillsOpacity = useTransform(scroll, [0.30, 0.38], [0, 1])
-  const heroPillsY = useTransform(scroll, [0.30, 0.38], [12, 0])
+  const heroPillsOpacity = useTransform(scroll, [0.24, 0.32], [0, 1])
+  const heroPillsY = useTransform(scroll, [0.24, 0.32], [12, 0])
   const heroBodyOpacity = useTransform(scroll, [0.34, 0.42], [0, 1])
   const heroBodyY = useTransform(scroll, [0.34, 0.42], [10, 0])
   const heroBlur = useTransform(scroll, [0.48, 0.58], [0, 7])
@@ -325,12 +325,26 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const orbitTrav2 = useTransform(_ot2Raw, smoothstep)
   const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.88, 0.90], [0, 1, 1, 0])
 
-  // Keep headline as a single centered "Zora" word throughout stage 1.
+  // "× ERC-4626" suffix appears only after the vault captures the Zorb (~0.36)
+  const ercSuffixOp = useTransform(scroll, [0.36, 0.44], [0, 1])
   // 4626 pill appears during the pause so users see the full identity at rest
   const vaultOsPillOp = useTransform(scroll, [0.38, 0.46], [0, 1])
+  // Phase 2 corner badge — visible during mint / deposit phase only
+  const stage2LabelOp = useTransform(scroll, [0.44, 0.50, 0.64, 0.70], [0, 1, 1, 0])
+  // Deposit fill — drives the counter and progress bar in the deposit pill
+  const depositFillPct = useTransform(scroll, [0.46, 0.58], [0, 1])
+  const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
+  // "Vault initiated" confirmation badge — flashes after fill completes
+  const vaultInitOp = useTransform(scroll, [0.57, 0.60, 0.64, 0.68], [0, 1, 1, 0])
   // Mount the 4626 pill in the DOM only once it becomes visible (prevents layout shift)
   useMotionValueEvent(vaultOsPillOp, 'change', (v) => {
     if (v > 0.02) setVaultOsPillVisible(true)
+  })
+
+  // Drive a React state integer so the deposit counter renders correctly in JSX
+  const [depositCount, setDepositCount] = useState(0)
+  useMotionValueEvent(depositFillPct, 'change', (v) => {
+    setDepositCount(Math.round(Math.min(v, 1) * 50_000_000))
   })
 
   // Freefall entrance — two-speed design:
@@ -544,6 +558,24 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
             <StepChip n={currentStage.n} label={currentStage.label} active />
           </div>
 
+          {/* Phase 2 corner badge — appears during the mint / deposit window */}
+          <motion.div
+            className="pointer-events-none absolute right-4 top-10 z-30 hidden sm:flex items-center gap-1.5"
+            style={{ opacity: stage2LabelOp }}
+            aria-hidden="true"
+          >
+            <span className="font-mono text-[8px] font-semibold uppercase tracking-[0.28em] text-zinc-600">
+              Phase
+            </span>
+            <span className="font-mono text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-400">
+              02
+            </span>
+            <span className="h-px w-3 bg-zinc-700" />
+            <span className="font-mono text-[8px] uppercase tracking-[0.28em] text-zinc-600">
+              Mint
+            </span>
+          </motion.div>
+
           {/* Scroll cue */}
           <motion.div
             className="pointer-events-none absolute inset-x-0 bottom-10 z-30 flex flex-col items-center gap-2"
@@ -621,8 +653,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   y: heroTitleY,
                 }}
               >
-                {/* Single-word headline */}
-                <motion.span
+                {/* "Zora" appears during freefall; "× ERC-4626" fades in after vault captures Zorb */}
+                <span
                   style={{
                     display: 'inline-block',
                     background: 'linear-gradient(170deg, #ffffff 28%, #9da3b3 100%)',
@@ -631,7 +663,19 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                     backgroundClip: 'text',
                   }}
                 >
-                  Zora&thinsp;<span style={{ WebkitTextFillColor: 'rgba(160,180,255,0.82)' }}>×</span>
+                  Zora
+                </span>
+                <motion.span
+                  style={{
+                    display: 'inline-block',
+                    opacity: ercSuffixOp,
+                    background: 'linear-gradient(170deg, #ffffff 28%, #9da3b3 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  &thinsp;<span style={{ WebkitTextFillColor: 'rgba(160,180,255,0.82)' }}>×</span>
                   &thinsp;ERC-4626
                 </motion.span>
               </motion.div>
@@ -670,7 +714,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
               </motion.p>
             </motion.div>
 
-            {/* Deposit pill — descends from above, overlaps the Zorb on arrival */}
+            {/* Deposit card — descends from above and shows a live fill counter */}
             <motion.div
               className="absolute left-1/2 top-[44vh] z-30"
               style={{
@@ -678,7 +722,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                 opacity: depositNodeOpacity,
               }}
             >
-              <div className="inline-flex items-center gap-2 overflow-hidden rounded-full border border-white/[0.08] bg-white/[0.035] px-4 py-1.5 shadow-[0_0_32px_-12px_rgba(255,255,255,0.18)]">
+              <div className="flex w-[210px] flex-col gap-2 overflow-hidden rounded-xl border border-white/[0.07] bg-black/60 px-4 py-3 shadow-[0_0_40px_-12px_rgba(0,82,255,0.35)] backdrop-blur-sm">
+                {/* Creator identity row */}
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={CREATOR_CAMEOS[cameoIdx].key}
@@ -692,24 +737,58 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                       <img
                         src={cameoIcons[CREATOR_CAMEOS[cameoIdx].key]}
                         alt={CREATOR_CAMEOS[cameoIdx].label}
-                        className="h-3.5 w-3.5 rounded-full object-cover opacity-80"
+                        className="h-4 w-4 rounded-full object-cover opacity-90"
                         loading="lazy"
                       />
                     ) : (
                       <span
-                        className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[5px] font-black text-white"
+                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[5px] font-black text-white"
                         style={{ background: CREATOR_CAMEOS[cameoIdx].color }}
                       >
                         {CREATOR_CAMEOS[cameoIdx].initials}
                       </span>
                     )}
-                    <span className="font-mono text-xs text-zinc-400">{depositTokens}</span>
-                    <span className="font-mono text-xs lowercase tracking-wider text-zinc-300">
+                    <span className="font-mono text-[11px] lowercase tracking-wider text-zinc-300">
                       {CREATOR_CAMEOS[cameoIdx].label}
+                    </span>
+                    <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.22em] text-zinc-600">
+                      depositing
                     </span>
                   </motion.div>
                 </AnimatePresence>
+
+                {/* Live counter */}
+                <div className="flex items-baseline gap-1">
+                  <span className="font-mono text-sm font-bold tabular-nums text-white">
+                    {depositCount.toLocaleString()}
+                  </span>
+                  <span className="font-mono text-[9px] text-zinc-600">
+                    / {depositTokens}
+                  </span>
+                </div>
+
+                {/* Fill bar */}
+                <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/[0.05]">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{
+                      width: depositFillWidth,
+                      background: 'linear-gradient(90deg, #1a4fff, #60a5fa)',
+                    }}
+                  />
+                </div>
               </div>
+
+              {/* "Vault initiated" confirmation — fades in once fill is complete */}
+              <motion.div
+                className="mt-2 flex items-center justify-center gap-1.5"
+                style={{ opacity: vaultInitOp }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                <span className="font-mono text-[8px] uppercase tracking-[0.28em] text-blue-400">
+                  Vault initiated
+                </span>
+              </motion.div>
             </motion.div>
 
             {/* Connector: deposit -> vault */}
