@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, ArrowLeft, Copy, Check, Share2, Globe, Users, Coins, TrendingUp, Calendar, MessageSquare } from 'lucide-react'
+import { ExternalLink, ArrowLeft, Share2, Globe, Users, Coins, TrendingUp, Calendar, MessageSquare } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
+import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
@@ -90,39 +91,6 @@ function TikTokIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
     </svg>
-  )
-}
-
-function CopyButton({ text, className = '' }: { text: string; className?: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className={`text-zinc-400 hover:text-white transition-colors ${className}`}
-      title="Copy address"
-    >
-      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-    </button>
-  )
-}
-
-function StatRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-white/8 last:border-0">
-      <span className="text-sm text-zinc-400 flex items-center gap-2">
-        {icon}
-        {label}
-      </span>
-      <span className="text-sm text-white font-medium">{value}</span>
-    </div>
   )
 }
 
@@ -530,7 +498,13 @@ export function ExploreCreatorDetail() {
                   <div className="text-[11px] font-medium text-zinc-500">Creator Coin</div>
                   <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(tokenAddress)}</div>
                 </div>
-                <CopyButton text={tokenAddress} className="p-2 rounded-lg hover:bg-white/8 shrink-0" />
+                <ExploreCopyButton
+                  text={tokenAddress}
+                  className="p-2 rounded-lg hover:bg-white/8 shrink-0"
+                  title="Copy address"
+                  resetMs={2000}
+                  copiedIconClassName="w-4 h-4 text-green-500"
+                />
               </div>
             </div>
 
@@ -541,7 +515,13 @@ export function ExploreCreatorDetail() {
                     <div className="text-[11px] font-medium text-zinc-500">Creator Wallet</div>
                     <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(creatorAddress)}</div>
                   </div>
-                  <CopyButton text={creatorAddress} className="p-2 rounded-lg hover:bg-white/8 shrink-0" />
+                  <ExploreCopyButton
+                    text={creatorAddress}
+                    className="p-2 rounded-lg hover:bg-white/8 shrink-0"
+                    title="Copy address"
+                    resetMs={2000}
+                    copiedIconClassName="w-4 h-4 text-green-500"
+                  />
                 </div>
               </div>
             ) : (
@@ -828,7 +808,12 @@ export function ExploreCreatorDetail() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CopyButton text={tokenAddress} />
+                  <ExploreCopyButton
+                    text={tokenAddress}
+                    title="Copy address"
+                    resetMs={2000}
+                    copiedIconClassName="w-4 h-4 text-green-500"
+                  />
                   <button
                     type="button"
                     className="text-zinc-400 hover:text-white transition-colors"
@@ -887,12 +872,48 @@ export function ExploreCreatorDetail() {
             {/* Stats Card */}
             <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
               <h3 className="text-sm font-medium text-zinc-400 mb-2">Creator Coin Stats</h3>
-              <StatRow label="Market cap" value={marketCap} icon={<TrendingUp className="w-3 h-3" />} />
-              <StatRow label="24H volume" value={volume24h} icon={<TrendingUp className="w-3 h-3" />} />
-              <StatRow label="All-time volume" value={totalVolume} icon={<TrendingUp className="w-3 h-3" />} />
-              <StatRow label="Holders" value={holders} icon={<Users className="w-3 h-3" />} />
-              <StatRow label="Created" value={createdAt} icon={<Calendar className="w-3 h-3" />} />
-              <StatRow label="Content coins" value={String(contentCoins.length)} icon={<Coins className="w-3 h-3" />} />
+              <ExploreStatRow
+                label="Market cap"
+                value={marketCap}
+                icon={<TrendingUp className="w-3 h-3" />}
+                labelClassName="text-sm text-zinc-400"
+                valueClassName="text-sm text-white font-medium"
+              />
+              <ExploreStatRow
+                label="24H volume"
+                value={volume24h}
+                icon={<TrendingUp className="w-3 h-3" />}
+                labelClassName="text-sm text-zinc-400"
+                valueClassName="text-sm text-white font-medium"
+              />
+              <ExploreStatRow
+                label="All-time volume"
+                value={totalVolume}
+                icon={<TrendingUp className="w-3 h-3" />}
+                labelClassName="text-sm text-zinc-400"
+                valueClassName="text-sm text-white font-medium"
+              />
+              <ExploreStatRow
+                label="Holders"
+                value={holders}
+                icon={<Users className="w-3 h-3" />}
+                labelClassName="text-sm text-zinc-400"
+                valueClassName="text-sm text-white font-medium"
+              />
+              <ExploreStatRow
+                label="Created"
+                value={createdAt}
+                icon={<Calendar className="w-3 h-3" />}
+                labelClassName="text-sm text-zinc-400"
+                valueClassName="text-sm text-white font-medium"
+              />
+              <ExploreStatRow
+                label="Content coins"
+                value={String(contentCoins.length)}
+                icon={<Coins className="w-3 h-3" />}
+                labelClassName="text-sm text-zinc-400"
+                valueClassName="text-sm text-white font-medium"
+              />
             </div>
 
           </motion.div>

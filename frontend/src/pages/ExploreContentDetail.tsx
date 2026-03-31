@@ -4,8 +4,6 @@ import {
   Activity,
   ArrowLeft,
   BarChart3,
-  Check,
-  Copy,
   Droplets,
   ExternalLink,
   Image as ImageIcon,
@@ -18,6 +16,7 @@ import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
 import { PageMeta } from '@/components/seo/PageMeta'
+import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { usePoolHistory } from '@/lib/uniswap/hooks'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
@@ -85,39 +84,6 @@ function calcCoefficientOfVariation(values: number[]): number | null {
   const variance = cleaned.reduce((acc, v) => acc + (v - mean) ** 2, 0) / cleaned.length
   const std = Math.sqrt(variance)
   return (std / mean) * 100
-}
-
-function CopyButton({ text, className = '' }: { text: string; className?: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1800)
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className={`text-zinc-400 hover:text-white transition-colors ${className}`}
-      title="Copy"
-    >
-      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-    </button>
-  )
-}
-
-function StatRow({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="py-3 border-b border-white/8 last:border-0">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-zinc-500 font-medium">{label}</span>
-        <span className="text-sm text-white font-medium tabular-nums">{value}</span>
-      </div>
-      {note ? <div className="text-[11px] text-zinc-600 mt-1">{note}</div> : null}
-    </div>
-  )
 }
 
 function MetricBarsChart({
@@ -424,7 +390,7 @@ export function ExploreContentDetail() {
                     )}
                     <h1 className="text-2xl sm:text-3xl text-white font-semibold tracking-tight">{pairLabel}</h1>
                     <span className="text-zinc-500 text-sm">{shortAddress(contentCoinAddress)}</span>
-                    <CopyButton text={contentCoinAddress} />
+                    <ExploreCopyButton text={contentCoinAddress} />
                   </div>
                   <div className="mt-2 space-y-1 text-zinc-300 text-sm">
                     {token0Price > 0 && token1Price > 0 ? (
@@ -619,16 +585,16 @@ export function ExploreContentDetail() {
                 </button>
               </div>
 
-              <StatRow label="TVL" value={formatUsd(tvlUsd)} />
-              <StatRow label={`Volume (${selectedPeriod})`} value={formatUsd(volumeUsd)} />
-              <StatRow label={`Fees (${selectedPeriod})`} value={formatUsd(feesUsd ?? 0)} note="Based on subgraph pool history." />
-              <StatRow label="Token Price" value={formatTokenPrice(priceUsd)} note="Secondary signal - can be noisy in thin liquidity." />
-              <StatRow
+              <ExploreStatRow label="TVL" value={formatUsd(tvlUsd)} />
+              <ExploreStatRow label={`Volume (${selectedPeriod})`} value={formatUsd(volumeUsd)} />
+              <ExploreStatRow label={`Fees (${selectedPeriod})`} value={formatUsd(feesUsd ?? 0)} note="Based on subgraph pool history." />
+              <ExploreStatRow label="Token Price" value={formatTokenPrice(priceUsd)} note="Secondary signal - can be noisy in thin liquidity." />
+              <ExploreStatRow
                 label="Price Change"
                 value={formatPercent(priceDelta)}
                 note="Use liquidity + volume for more stable market read."
               />
-              <StatRow
+              <ExploreStatRow
                 label="Fee Tier"
                 value={primaryPool ? `${(parseNumber(primaryPool.feeTier) / 10_000).toFixed(2)}%` : '-'}
               />
@@ -640,8 +606,8 @@ export function ExploreContentDetail() {
                 In low-liquidity markets, spot price can swing hard between CONTENT, CREATOR, ZORA, and ETH paths.
                 Liquidity variation is generally a better stability anchor.
               </div>
-              <StatRow label="Liquidity Variance" value={liquidityCV == null ? '-' : `${liquidityCV.toFixed(2)}% CV`} />
-              <StatRow label="Price Variance" value={priceCV == null ? '-' : `${priceCV.toFixed(2)}% CV`} />
+              <ExploreStatRow label="Liquidity Variance" value={liquidityCV == null ? '-' : `${liquidityCV.toFixed(2)}% CV`} />
+              <ExploreStatRow label="Price Variance" value={priceCV == null ? '-' : `${priceCV.toFixed(2)}% CV`} />
             </div>
 
             <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
@@ -659,7 +625,7 @@ export function ExploreContentDetail() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-white font-medium">{name}</span>
                   <span className="text-xs text-zinc-500">{symbol}</span>
-                  <CopyButton text={contentCoinAddress} />
+                  <ExploreCopyButton text={contentCoinAddress} />
                 </div>
                 {creatorHandle ? <div className="text-xs text-zinc-500 mt-2">Creator: @{creatorHandle}</div> : null}
               </div>
