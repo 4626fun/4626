@@ -39,6 +39,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@chainlink/cre-sdk": "^1.0.7",
     "@coral-xyz/anchor": "^0.32.1",
     "@meteora-ag/alpha-vault": "^1.1.15",
     "@meteora-ag/dlmm": "^1.9.3",

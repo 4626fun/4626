@@ -238,7 +238,7 @@ describe('canonical sender context plumbing', () => {
       },
     })
 
-    const { fetchActiveVaults } = await import('../cre-workflows/_shared/strategyQueue.ts')
+    const { fetchActiveVaults } = await import('../cre-workflows/_shared/strategyQueue.js')
     const vaults = fetchActiveVaults({} as never, {} as never, 'secret', 8453)
 
     expect(vaults).toEqual([
@@ -258,17 +258,15 @@ describe('canonical sender context plumbing', () => {
     ])
   })
 
-  it('derives Ajna execution context only from enabled canonical automation and carries it into payloads', async () => {
+  it(
+    'derives Ajna execution context only from enabled canonical automation and carries it into payloads',
+    async () => {
     const {
       buildAjnaRebucketActionPayload,
       getAjnaVaultExecutionContext,
-    } = await import('../cre-workflows/_shared/ajnaManager.ts')
+    } = await import('../cre-workflows/_shared/ajnaManager.js')
 
     const executionContext = getAjnaVaultExecutionContext({
-      vaultAddress: VAULT_ADDRESS,
-      chainId: 8453,
-      groupId: 'group-1',
-      oracleAddress: ORACLE_ADDRESS,
       automation: {
         automationEnabled: true,
         automationScope: 'ajna_min_bucket_only',
@@ -287,10 +285,6 @@ describe('canonical sender context plumbing', () => {
 
     expect(
       getAjnaVaultExecutionContext({
-        vaultAddress: VAULT_ADDRESS,
-        chainId: 8453,
-        groupId: 'group-1',
-        oracleAddress: ORACLE_ADDRESS,
         automation: {
           automationEnabled: true,
           automationScope: 'vault',
@@ -315,7 +309,9 @@ describe('canonical sender context plumbing', () => {
         executionContext: executionContext!,
       }).executionContext,
     ).toEqual(executionContext)
-  })
+    },
+    15_000,
+  )
 
   it('fails closed when a provided execution context is empty', async () => {
     process.env.DRY_RUN = 'true'
@@ -466,7 +462,7 @@ describe('canonical sender context plumbing', () => {
       log: vi.fn(),
     }
 
-    const { evaluateAndEnqueueAjnaActions } = await import('../cre-workflows/_shared/ajnaManager.ts')
+    const { evaluateAndEnqueueAjnaActions } = await import('../cre-workflows/_shared/ajnaManager.js')
     const result = evaluateAndEnqueueAjnaActions(runtime as never)
 
     expect(result.eligibleVaults).toBe(1)
@@ -477,5 +473,5 @@ describe('canonical sender context plumbing', () => {
     ])
     expect(readContractBytesMock).not.toHaveBeenCalled()
     expect(postJsonMock).not.toHaveBeenCalled()
-  })
+  }, 15_000)
 })

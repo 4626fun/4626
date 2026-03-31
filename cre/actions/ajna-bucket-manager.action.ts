@@ -548,22 +548,22 @@ async function resolveVaults(): Promise<ResolvedAjnaVault[]> {
 
   const allVaults = await fetchActiveVaults(CHAINS.base.id);
   const candidates = filterVaultsForWorkflow(allVaults, 'ajna-bucket-manager');
-  return candidates
-    .map((v: VaultConfig) => {
-      const vault = v as VaultAutomationAwareConfig;
-      const vaultAddress = asAddress(v.vaultAddress);
-      const oracleAddress = asAddress(v.oracleAddress);
-      if (!vaultAddress || !oracleAddress) return null;
-      if (vault.automation?.automationEnabled !== true) return null;
-      const executionContext = getVaultExecutionContext(vault);
-      return {
-        vaultAddress,
-        oracleAddress,
-        executionContext,
-        source: 'feed' as const,
-      };
-    })
-    .filter((v): v is ResolvedAjnaVault => Boolean(v));
+  const resolved: ResolvedAjnaVault[] = [];
+  for (const v of candidates) {
+    const vault = v as VaultAutomationAwareConfig;
+    const vaultAddress = asAddress(v.vaultAddress);
+    const oracleAddress = asAddress(v.oracleAddress);
+    if (!vaultAddress || !oracleAddress) continue;
+    if (vault.automation?.automationEnabled !== true) continue;
+    const executionContext = getVaultExecutionContext(vault);
+    resolved.push({
+      vaultAddress,
+      oracleAddress,
+      executionContext,
+      source: 'feed',
+    });
+  }
+  return resolved;
 }
 
 export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult> {

@@ -29,7 +29,7 @@ import {
 } from '../../packages/server-core/src/index.js'
 
 
-import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
+import { DEPLOY_BYTECODE } from '../../shared/deploy/bytecode.generated.js'
 import {
   deriveCreatorCoinPolicyControllerSalt,
   derivePayoutRouterSalt,

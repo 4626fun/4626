@@ -20,7 +20,8 @@
     "workflows/**/*.ts",
     "actions/**/*.ts",
     "utils/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "types/**/*.d.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

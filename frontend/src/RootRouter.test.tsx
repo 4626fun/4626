@@ -2,7 +2,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/host', async () => {
   const actual = await vi.importActual<typeof import('@/lib/host')>('@/lib/host')
@@ -25,9 +25,14 @@ vi.mock('./pages/WaitlistInviteEntry', () => ({
   WaitlistInviteEntry: () => <div data-testid="waitlist-invite-entry">waitlist invite</div>,
 }))
 
-import { RootRouter } from './RootRouter'
+let RootRouter: (typeof import('./RootRouter'))['RootRouter']
 
 describe('RootRouter', () => {
+  beforeEach(async () => {
+    vi.resetModules()
+    ;({ RootRouter } = await import('./RootRouter'))
+  })
+
   it.each(['/telegram/link', '/telegram/menu'])(
     'redirects %s requests to the standalone html without loading ProtectedApp',
     async (pathname) => {

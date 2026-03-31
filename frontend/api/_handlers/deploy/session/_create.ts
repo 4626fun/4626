@@ -42,7 +42,7 @@ import { readProfileWalletAuthority } from '../../../../server/_lib/canonicalWal
 import {
   normalizeSolanaAssetMintOrigin,
 } from '../../../../server/_lib/solanaOvaultCompatibility.js'
-import { hasContractBytecode } from '../../../../src/wallet/canonicalWalletPolicy'
+import { hasContractBytecode } from '../../../../shared/wallet/bytecode.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
