@@ -357,6 +357,7 @@ export function Swap() {
     authAddress,
     hasSession,
     sessionHydrated,
+    refresh: refreshAuthSession,
     signInWithPrivyToken,
     signIn,
     busy: authBusy,
@@ -625,8 +626,6 @@ export function Swap() {
     }
   }, [getPrivyEmbeddedEoaProvider, privyEmbeddedEoaAddress])
 
-  const preferredExecutionMode: WalletMode =
-    accountContext.preferredMode === 'SMART_WALLET' ? 'canonical' : 'eoa'
   const executionMode: WalletMode =
     accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
   const canonicalAuthStatus = useMemo<CanonicalAuthStatus>(() => {
@@ -707,7 +706,6 @@ export function Swap() {
       publicClient &&
       (executionMode !== 'canonical' || canonicalSignerGate.ready),
   )
-  const executionFallbackActive = executionMode !== preferredExecutionMode
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
   const needsPrivyCanonicalAuth = useMemo(
@@ -940,6 +938,54 @@ export function Swap() {
       : canonicalSubmitSession.code === 'session-mismatch'
         ? 'Canonical session needs refresh'
         : '4626 session required for submit'
+  const [canonicalSessionRefreshBusy, setCanonicalSessionRefreshBusy] = useState(false)
+  const canonicalSessionRefreshAttemptKeyRef = useRef<string>('')
+
+  useEffect(() => {
+    if (executionMode !== 'canonical' || !canonicalSignerGate.ready) return
+    if (canonicalSubmitSession.ok) {
+      canonicalSessionRefreshAttemptKeyRef.current = ''
+      setCanonicalSessionRefreshBusy(false)
+      return
+    }
+    if (!canonicalSubmitSession.shouldAttemptRefresh) return
+    const attemptKey = [
+      canonicalSubmitSession.code,
+      executionAddress ?? '',
+      authAddress ?? '',
+      hasSession ? '1' : '0',
+    ].join(':')
+    if (canonicalSessionRefreshAttemptKeyRef.current === attemptKey) return
+    canonicalSessionRefreshAttemptKeyRef.current = attemptKey
+
+    let cancelled = false
+    setCanonicalSessionRefreshBusy(true)
+    void (async () => {
+      try {
+        await ensureCanonicalSession()
+        await refreshAuthSession()
+      } catch {
+        // Keep banner fallback behavior when auto-refresh fails.
+      } finally {
+        if (!cancelled) setCanonicalSessionRefreshBusy(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    authAddress,
+    canonicalSignerGate.ready,
+    canonicalSubmitSession.code,
+    canonicalSubmitSession.ok,
+    canonicalSubmitSession.shouldAttemptRefresh,
+    ensureCanonicalSession,
+    executionAddress,
+    executionMode,
+    hasSession,
+    refreshAuthSession,
+  ])
 
   const selectedQuote = useMemo<QuoteShape | null>(() => {
     if (!quote) return null
@@ -1245,7 +1291,7 @@ export function Swap() {
               }}
               onConfirmUnverified={confirmUnverifiedSelection}
               executionMode={executionMode}
-              fallbackActive={executionFallbackActive}
+              fallbackActive={false}
               needsUnverifiedConfirmation={unverifiedSelectionMode}
               unverifiedTokenLabel={unverifiedTokenLabel}
             />
@@ -1331,7 +1377,7 @@ export function Swap() {
         </div>
       ) : null}
 
-      {showCanonicalSessionGuardHint ? (
+      {showCanonicalSessionGuardHint && !canonicalSessionRefreshBusy ? (
         <div className="mx-auto mt-4 max-w-4xl">
           <Alert variant="warning" title={canonicalSessionGuardTitle}>
             {canonicalSubmitSession.message}
