@@ -5,10 +5,7 @@ import { ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import {
-  DEFAULT_AUCTION_EPOCH,
-  DEFAULT_AUCTION_WINDOW,
   DEFAULT_DEPOSIT_TOKENS,
-  SHARE_SPLIT_LABEL,
 } from '@/components/home/launchConfig'
 import { VaultFlowScroll } from '@/components/home/VaultFlowScroll'
 import {
@@ -130,8 +127,8 @@ export function Home() {
                       </div>
                     }
                   >
-                    <Web3Providers>
-                      <PrivyClientProvider showWalletLoginFirst={false}>
+                    <PrivyClientProvider showWalletLoginFirst={false}>
+                      <Web3Providers>
                         <div className="rounded-[28px] border border-white/10 bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
                           <LazyThinWaitlistFlow
                             variant="embedded"
@@ -140,8 +137,8 @@ export function Home() {
                             suppressAuthShell
                           />
                         </div>
-                      </PrivyClientProvider>
-                    </Web3Providers>
+                      </Web3Providers>
+                    </PrivyClientProvider>
                   </Suspense>
                 </div>
               ) : (
@@ -247,38 +244,25 @@ export function Home() {
               ) : null}
             </div>
 
-            <div
-              className="space-y-0 rounded-2xl border border-white/6 bg-white/[0.015] px-4 py-3 sm:px-5 sm:py-4"
-              data-launch-section="launch-profile"
-            >
-              <div className="label text-[9px] sm:text-[10px]">Launch profile</div>
-              <div className="mt-3 space-y-0 sm:mt-4">
-                <div className="data-row">
-                  <span className="label">Minimum deposit</span>
-                  <div className="value mono text-sm sm:text-base" data-launch-key="depositTokens">
-                    {DEFAULT_DEPOSIT_TOKENS} TOKEN
-                  </div>
-                </div>
-                <div className="data-row">
-                  <span className="label">Minted shares</span>
-                  <div className="value mono text-sm sm:text-base text-brand-primary" data-launch-key="shareTokens">
-                    {DEFAULT_SHARE_TOKENS}
-                  </div>
-                </div>
-                <div className="data-row">
-                  <span className="label">Auction window</span>
-                  <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_WINDOW}</div>
-                </div>
-                <div className="data-row">
-                  <span className="label">Launch epoch</span>
-                  <div className="value mono text-sm sm:text-base">{DEFAULT_AUCTION_EPOCH}</div>
-                </div>
-                <div className="data-row">
-                  <span className="label">Share split</span>
-                  <div className="value mono text-right text-[11px] leading-relaxed text-sm sm:text-base">
-                    {SHARE_SPLIT_LABEL}
-                  </div>
-                </div>
+            <div className="space-y-4 rounded-2xl border border-white/6 bg-white/[0.015] px-5 py-5 sm:px-6 sm:py-6">
+              <div className="label text-[9px] sm:text-[10px]">CCA launch</div>
+              <h3 className="text-lg font-medium text-zinc-100 sm:text-xl">Launch profile moved to its own page</h3>
+              <p className="text-sm font-light leading-relaxed text-zinc-400">
+                View the full CCA profile and mechanics in one dedicated surface under the CCA route.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300">
+                  {DEFAULT_DEPOSIT_TOKENS} token
+                </span>
+                <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300">
+                  Uniswap CCA
+                </span>
+              </div>
+              <div className="pt-2">
+                <Link to="/cca" className="btn-secondary inline-flex items-center gap-2">
+                  Open CCA page
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
             </div>
           </motion.div>

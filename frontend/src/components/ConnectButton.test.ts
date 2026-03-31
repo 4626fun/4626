@@ -5,7 +5,7 @@ import {
   deriveWalletIdentityPresentation,
   shouldAllowExternalWalletButtons,
   shouldResolveConnectIdentity,
-} from './ConnectButtonWeb3'
+} from './ConnectButton'
 
 describe('deriveConnectButtonState', () => {
   it('stays in hydrating mode until the session has finished loading', () => {

@@ -358,6 +358,14 @@ function App() {
             }
           />
           <Route
+            path="/cca"
+            element={
+              <MarketingOnlyRoute>
+                <DistributeCcaLaunch />
+              </MarketingOnlyRoute>
+            }
+          />
+          <Route
             path="/distribute/cca-launch"
             element={
               <MarketingOnlyRoute>

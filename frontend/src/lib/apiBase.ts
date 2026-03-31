@@ -30,6 +30,27 @@ function isProbablyHtml(res: Response): boolean {
   return ct.includes('text/html')
 }
 
+async function shouldTreat404AsRouteMiss(res: Response): Promise<boolean> {
+  const ct = (res.headers.get('content-type') ?? '').toLowerCase()
+  if (!ct.includes('application/json')) return true
+  const responseReader =
+    typeof (res as { clone?: unknown }).clone === 'function'
+      ? (res as Response).clone()
+      : (res as { json?: () => Promise<unknown> })
+  const payload =
+    typeof (responseReader as { json?: unknown }).json === 'function'
+      ? await (responseReader as { json: () => Promise<unknown> }).json().catch(() => null)
+      : null
+  const error =
+    payload && typeof payload === 'object' && typeof (payload as { error?: unknown }).error === 'string'
+      ? (payload as { error: string }).error.trim().toLowerCase()
+      : ''
+
+  // Our catch-all resolver returns this for unknown routes. Retry remaining
+  // alias/base candidates in that case.
+  return error === 'not found'
+}
+
 /**
  * Fetch an API route with a best-effort alias fallback:
  * - try `/__api/*` first (to avoid extension blocks on `/api/*`)
@@ -90,9 +111,10 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}, bases?: st
         const res = await fetch(url, baseInit)
         // In dev, Vite may serve index.html for unknown paths; treat that as a miss.
         if (isProbablyHtml(res)) continue
-        // Try any remaining path/base fallbacks first (alias -> canonical, app origin -> marketing origin).
-        // If this is the final attempt, return the 404 so callers can surface its JSON error message.
-        if (res.status === 404 && hasNextAttempt) continue
+        // Try remaining path/base fallbacks only when 404 looks like a route
+        // miss. Some APIs (including Uniswap routes) use 404 for meaningful
+        // business errors, and those should be surfaced immediately.
+        if (res.status === 404 && hasNextAttempt && (await shouldTreat404AsRouteMiss(res))) continue
         // Some deployments serve `/__api/*` as static content, which returns 405 on POST.
         // Treat that as a miss so we fall back to the real `/api/*` handlers.
         if (alias && p === alias && res.status === 405) {

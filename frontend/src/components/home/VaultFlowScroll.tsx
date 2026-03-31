@@ -6,6 +6,7 @@ import {
   motion,
   useMotionTemplate,
   useMotionValueEvent,
+  useReducedMotion,
   useScroll,
   useSpring,
   useTransform,
@@ -156,6 +157,7 @@ const BOT_COLOR = '#fbbf24' // amber — distinct from regular user palette
 function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
   // Start empty — intro messages arrive one by one as the chat fades in
   const [lines, setLines] = useState<FeedLine[]>([])
+  const [mobileMinimized, setMobileMinimized] = useState(false)
   const introIdx = useRef(0)   // which INTRO_LINE to drop next
   const feedCursor = useRef(0) // which FEED_LINE to drop after intro
   const msgCount = useRef(0)   // total messages delivered (for acceleration)
@@ -192,8 +194,8 @@ function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
 
   return createPortal(
     <motion.div
-      className="pointer-events-none fixed inset-0 z-[9999]"
-      style={{ opacity: feedOp }}
+      className="fixed inset-0 z-[9999]"
+      style={{ opacity: feedOp, pointerEvents: 'none' }}
       aria-hidden="true"
     >
       {/* ── Desktop: full Twitch-style sidebar, starts below nav (h-14 = 56px) ── */}
@@ -258,35 +260,65 @@ function LiveActivityFeed({ feedOp }: { feedOp: MotionValue<number> }) {
         </div>
       </div>
 
-      {/* ── Mobile: pure floating text, no panel, no background ── */}
-      <div className="absolute bottom-24 left-3 flex w-[210px] flex-col gap-[3px] sm:hidden">
-        <AnimatePresence initial={false}>
-          {lines.slice(-6).map(line => (
+      {/* ── Mobile: transparent overlay with minimize toggle ── */}
+      <div className="absolute bottom-20 left-3 sm:hidden" style={{ pointerEvents: 'none' }}>
+        {/* Minimize / restore pill — always pointer-events-auto */}
+        <button
+          onClick={() => setMobileMinimized(v => !v)}
+          className="mb-1 flex items-center gap-1 rounded-full px-2 py-1"
+          style={{
+            pointerEvents: 'auto',
+            background: 'rgba(0,0,0,0.55)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <span className="h-1 w-1 rounded-full bg-red-400" style={{ boxShadow: '0 0 4px #f87171' }} />
+          <span className="text-[9px] font-semibold text-white/80">
+            {mobileMinimized ? '💬 Chat' : '✕ Hide'}
+          </span>
+        </button>
+
+        {/* Messages — hidden when minimized */}
+        <AnimatePresence>
+          {!mobileMinimized && (
             <motion.div
-              key={line.id}
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, transition: { duration: 0.2 } }}
-              transition={{ duration: 0.28, ease: 'easeOut' }}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.2 }}
+              className="flex w-[200px] flex-col gap-[3px]"
             >
-              {line.isBot ? (
-                <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
-                  <span className="mr-0.5 rounded px-0.5 text-[7px] font-bold uppercase" style={{ color: BOT_COLOR }}>
-                    🤖
-                  </span>
-                  <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
-                  <span className="text-white/70">: {line.text}</span>
-                </p>
-              ) : (
-                <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
-                  <span style={{ color: feedUserColor(line.user) }} className="font-bold">
-                    {line.user}
-                  </span>
-                  <span className="text-white/90">: {line.text}</span>
-                </p>
-              )}
+              <AnimatePresence initial={false}>
+                {lines.slice(-6).map(line => (
+                  <motion.div
+                    key={line.id}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                    transition={{ duration: 0.28, ease: 'easeOut' }}
+                  >
+                    {line.isBot ? (
+                      <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
+                        <span className="mr-0.5 rounded px-0.5 text-[7px] font-bold uppercase" style={{ color: BOT_COLOR }}>
+                          🤖
+                        </span>
+                        <span style={{ color: BOT_COLOR }} className="font-semibold">KeeprBot</span>
+                        <span className="text-white/70">: {line.text}</span>
+                      </p>
+                    ) : (
+                      <p className="break-words text-[9px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ wordBreak: 'break-word' }}>
+                        <span style={{ color: feedUserColor(line.user) }} className="font-bold">
+                          {line.user}
+                        </span>
+                        <span className="text-white/90">: {line.text}</span>
+                      </p>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </motion.div>
-          ))}
+          )}
         </AnimatePresence>
       </div>
     </motion.div>,
@@ -401,6 +433,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const [cameoIdx, setCameoIdx] = useState(0)
   const [cameoIcons, setCameoIcons] = useState<Record<string, string>>({})
   const [vaultOsPillVisible, setVaultOsPillVisible] = useState(false)
+  const prefersReducedMotion = useReducedMotion()
 
   const smoothstep = (t: number) => t * t * (3 - 2 * t)
 
@@ -563,8 +596,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Section envelope fades in at 0.52, holds, fades as vault rushes at 0.88
   // Dist section fades in AFTER the deposit connector finishes (~0.60) and stays
   // fully opaque well into the zoom phase so users can see it during the zoom-in
-  // Distributions hold visible all through stage 3, then fade together with the Zorb (0.91-0.94)
-  const distSectionOp = useTransform(scroll, [0.58, 0.64, 0.91, 0.94], [0, 1, 1, 0])
+  // Distributions hold through stage 3, then fade as the camera zoom begins (0.86) and are gone by 0.93
+  const distSectionOp = useTransform(scroll, [0.58, 0.64, 0.86, 0.93], [0, 1, 1, 0])
 
   // Path + card 0 (CCA Launch — left): 0.62 start — extra gap after cameos
   const _n0Raw = useTransform(scroll, [0.62, 0.68], [0, 1])
@@ -573,7 +606,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const _ot0Raw = useTransform(scroll, [0.62, 0.67], [0, 1])
   const orbitTrav0 = useTransform(_ot0Raw, smoothstep)
   // Border glow: dot arrives → soft persistent glow stays until section fades
-  const nodeGlow0 = useTransform(scroll, [0.66, 0.70, 0.90, 0.94], [0, 1, 1, 0])
+  const nodeGlow0 = useTransform(scroll, [0.66, 0.70, 0.86, 0.93], [0, 1, 1, 0])
 
   // Path + card 1 (Creator Vesting — center): 0.72 start
   const _n1Raw = useTransform(scroll, [0.72, 0.77], [0, 1])
@@ -581,7 +614,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist1CardY = useTransform(scroll, [0.72, 0.77], [20, 0])
   const _ot1Raw = useTransform(scroll, [0.72, 0.77], [0, 1])
   const orbitTrav1 = useTransform(_ot1Raw, smoothstep)
-  const nodeGlow1 = useTransform(scroll, [0.76, 0.80, 0.90, 0.94], [0, 1, 1, 0])
+  const nodeGlow1 = useTransform(scroll, [0.76, 0.80, 0.86, 0.93], [0, 1, 1, 0])
 
   // Path + card 2 (LP Reserve — right): 0.80 start
   const _n2Raw = useTransform(scroll, [0.80, 0.84], [0, 1])
@@ -589,7 +622,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist2CardY = useTransform(scroll, [0.80, 0.84], [20, 0])
   const _ot2Raw = useTransform(scroll, [0.80, 0.84], [0, 1])
   const orbitTrav2 = useTransform(_ot2Raw, smoothstep)
-  const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.91, 0.94], [0, 1, 1, 0])
+  const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.88, 0.93], [0, 1, 1, 0])
 
   // Keep headline as a single centered "Zora" word throughout stage 1.
   // 4626 pill appears during the pause so users see the full identity at rest
@@ -616,7 +649,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Share node — appears ABOVE vault after minting, stays through all distributions
   const shareZ = useTransform(scroll, [0.48, 0.60], [-180, 0])
   const shareScale = useTransform(scroll, [0.52, 0.58], [0.94, 1])
-  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.89, 0.93], [0, 1, 1, 0])
+  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.86, 0.93], [0, 1, 1, 0])
   const shareTransform = useMotionTemplate`
     translate3d(-50%, 0px, ${shareZ}px)
     scale(${shareScale})
@@ -699,6 +732,25 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
     { opacity: s4c2o, y: s4c2y },
     { opacity: s4c3o, y: s4c3y },
   ] as const
+
+  const mobileSectionMotion = prefersReducedMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 18 },
+        whileInView: { opacity: 1, y: 0 },
+        viewport: { once: true, amount: 0.2 },
+        transition: { duration: 0.5, ease: 'easeOut' as const },
+      }
+
+  const mobileCardMotion = (delay = 0) =>
+    prefersReducedMotion
+      ? {}
+      : {
+          initial: { opacity: 0, y: 14 },
+          whileInView: { opacity: 1, y: 0 },
+          viewport: { once: true, amount: 0.2 },
+          transition: { duration: 0.42, delay, ease: 'easeOut' as const },
+        }
 
   return (
     <>
@@ -1581,7 +1633,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
       <div className="sm:hidden">
 
         {/* Stage 1 — Deposit / Hero */}
-        <section className="cinematic-section no-divider-top no-divider-bottom !py-20">
+        <motion.section className="cinematic-section no-divider-top no-divider-bottom !py-20" {...mobileSectionMotion}>
           <div className="mx-auto max-w-sm px-6 text-center">
             <p className="mb-6 text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               01 · Deposit
@@ -1619,16 +1671,16 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
               Every deposit lives inside a single protocol vault, and only the verified creator of that coin can open the door.
             </p>
           </div>
-        </section>
+        </motion.section>
 
         {/* Stage 2 — Vault / Mint */}
-        <section className="cinematic-section no-divider-top no-divider-bottom !py-16">
-          <div className="mx-auto flex max-w-sm flex-col items-center px-6 text-center">
-            <p className="mb-6 text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
+        <motion.section className="cinematic-section no-divider-top no-divider-bottom !py-12" {...mobileSectionMotion}>
+          <div className="mx-auto flex max-w-sm flex-col items-center px-5 text-center">
+            <p className="mb-4 text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               02 · Mint
             </p>
             {/* Zorb inside vault square — mirrors desktop capture moment */}
-            <div className="relative">
+            <motion.div className="relative" {...mobileCardMotion(0.04)}>
               <div
                 className="pointer-events-none absolute inset-[-6px] rounded-[30px]"
                 style={{
@@ -1641,35 +1693,36 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                 }}
                 aria-hidden="true"
               />
-              <ZorbViewer size={140} />
-            </div>
+              <ZorbViewer size={120} />
+            </motion.div>
             {/* Share token output */}
-            <div
-              className="mt-8 inline-flex items-center gap-2.5 rounded-full px-4 py-2"
+            <motion.div
+              className="mt-6 inline-flex items-center gap-2.5 rounded-full px-4 py-2"
               style={{
                 border: '1px solid rgba(96,165,250,0.35)',
                 background: 'linear-gradient(135deg, rgba(96,165,250,0.12), rgba(59,130,246,0.06))',
                 boxShadow: '0 0 20px 4px rgba(96,165,250,0.15)',
               }}
+              {...mobileCardMotion(0.1)}
             >
-              <span className="font-mono text-sm font-black text-blue-300">{shareTokens}</span>
+              <span className="font-mono text-[13px] font-black text-blue-300">{shareTokens}</span>
               <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-blue-400/60">
                 share tokens minted
               </span>
-            </div>
+            </motion.div>
           </div>
-        </section>
+        </motion.section>
 
         {/* Stage 3 — Distribute */}
-        <section className="cinematic-section no-divider-top no-divider-bottom !py-16">
-          <div className="mx-auto max-w-sm px-6">
+        <motion.section className="cinematic-section no-divider-top no-divider-bottom !py-12" {...mobileSectionMotion}>
+          <div className="mx-auto max-w-sm px-5">
             <p className="mb-2 text-center text-[9px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               03 · Distribute
             </p>
-            <p className="mb-6 text-center font-mono text-xs text-zinc-500">{shareTokens} share tokens</p>
+            <p className="mb-4 text-center font-mono text-xs text-zinc-500">{shareTokens} share tokens</p>
             {/* Simplified fan SVG — same geometry as desktop */}
-            <div className="relative mx-auto mb-6 w-full">
-              <svg viewBox="0 0 800 110" className="w-full" style={{ height: 72 }} aria-hidden="true">
+            <motion.div className="relative mx-auto mb-6 w-full" {...mobileCardMotion(0.04)}>
+              <svg viewBox="0 0 800 110" className="w-full" style={{ height: 58 }} aria-hidden="true">
                 <defs>
                   <linearGradient id="mob-dg" gradientUnits="userSpaceOnUse" x1="400" y1="10" x2="400" y2="100">
                     <stop offset="0%"   stopColor="rgba(147,197,253,0.6)" />
@@ -1687,17 +1740,18 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   <circle key={`${d.cx}-${d.cy}`} cx={d.cx} cy={d.cy} r={4} fill="#93c5fd" opacity={0.75} />
                 ))}
               </svg>
-            </div>
+            </motion.div>
             {/* Distribution cards — white/zinc palette matching desktop */}
-            <div className="space-y-3">
-              {SHARE_DISTRIBUTION_ROWS.map((row) => (
-                <div
+            <div className="space-y-2.5">
+              {SHARE_DISTRIBUTION_ROWS.map((row, idx) => (
+                <motion.div
                   key={row.title}
-                  className="relative overflow-hidden rounded-[18px] p-4"
+                  className="relative overflow-hidden rounded-[16px] p-3.5"
                   style={{
                     border: '1px solid rgba(255,255,255,0.07)',
                     background: 'linear-gradient(160deg, rgba(255,255,255,0.04), transparent)',
                   }}
+                  {...mobileCardMotion(0.06 + idx * 0.05)}
                 >
                   <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                   <div className="flex items-baseline justify-between">
@@ -1710,12 +1764,21 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-2xl font-black text-zinc-100">{row.percent}</p>
+                      <p className="font-mono text-xl font-black text-zinc-100">{row.percent}</p>
                       <p className="font-mono text-[9px] text-zinc-600">{row.amount}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-[11px] font-light leading-relaxed text-zinc-500">
-                    {row.description}
+                    <span
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {row.description}
+                    </span>
                   </p>
                   <Link
                     to={row.route}
@@ -1723,22 +1786,22 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   >
                     Learn more →
                   </Link>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
-        </section>
+        </motion.section>
 
         {/* Stage 4 — Deploy */}
-        <section className="cinematic-section no-divider-top no-divider-bottom !py-12">
+        <motion.section className="cinematic-section no-divider-top no-divider-bottom !py-10" {...mobileSectionMotion}>
           <div className="mx-auto max-w-[340px] px-4">
             <p className="mb-1.5 text-center text-[8px] font-medium uppercase tracking-[0.3em] text-zinc-600">
               04 · Deploy
             </p>
-            <p className="mb-4 text-center font-mono text-[10px] text-zinc-500">{depositTokens} token · principal</p>
+            <p className="mb-3 text-center font-mono text-[10px] text-zinc-500">{depositTokens} token · principal</p>
             {/* Strategy fan SVG */}
-            <div className="relative mx-auto mb-4 w-full">
-              <svg viewBox="0 0 800 130" className="w-full" style={{ height: 52 }} aria-hidden="true">
+            <motion.div className="relative mx-auto mb-4 w-full" {...mobileCardMotion(0.04)}>
+              <svg viewBox="0 0 800 130" className="w-full" style={{ height: 46 }} aria-hidden="true">
                 <defs>
                   <linearGradient id="mob-sg" gradientUnits="userSpaceOnUse" x1="400" y1="18" x2="400" y2="108">
                     <stop offset="0%"   stopColor="rgba(255,255,255,0.45)" />
@@ -1753,16 +1816,17 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   <circle key={`${d.cx}-${d.cy}`} cx={d.cx} cy={d.cy} r={3.5} fill="rgba(255,255,255,0.45)" />
                 ))}
               </svg>
-            </div>
+            </motion.div>
             <div className="grid grid-cols-2 gap-2">
-              {STRATEGY_CARDS.map((card) => (
-                <div
+              {STRATEGY_CARDS.map((card, idx) => (
+                <motion.div
                   key={card.label}
-                  className="relative overflow-hidden rounded-2xl p-3"
+                  className="relative overflow-hidden rounded-2xl p-2.5"
                   style={{
                     border: '1px solid rgba(255,255,255,0.07)',
                     background: 'linear-gradient(160deg, rgba(255,255,255,0.04), transparent)',
                   }}
+                  {...mobileCardMotion(0.06 + idx * 0.04)}
                 >
                   <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                   <div className="mb-2 flex items-center gap-1">
@@ -1775,10 +1839,19 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                       {card.label}
                     </p>
                   </div>
-                  <p className="font-mono text-xl font-black text-zinc-100">{card.percent}</p>
+                  <p className="font-mono text-lg font-black text-zinc-100">{card.percent}</p>
                   <p className="font-mono text-[8px] text-zinc-600">{card.amount}</p>
                   <p className="mt-1 text-[10px] font-light leading-relaxed text-zinc-500">
-                    {card.description}
+                    <span
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {card.description}
+                    </span>
                   </p>
                   <Link
                     to={card.route}
@@ -1786,11 +1859,11 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   >
                     Learn more →
                   </Link>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
-        </section>
+        </motion.section>
       </div>
     </>
   )

@@ -76,6 +76,7 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   const appId = enabled ? getPrivyAppId() : null
   const clientId = enabled ? getPrivyClientId() : null
   const hasRuntimeConfig = Boolean(enabled && appId)
+  const providerCollision = detectEthereumProviderCollision()
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
   const handleRuntimeStatus = useCallback((next: PrivyClientStatus) => {
     setRuntimeStatus((prev) => (prev === next ? prev : next))
@@ -96,20 +97,24 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
   )
   const externalWallets = useMemo(
     () => ({
+      // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
+      // provider discovery can trigger extension-side assignment crashes.
+      ...(providerCollision.shouldDisableInjectedConnector
+        ? { disableAllExternalWallets: true as const }
+        : null),
       walletConnect: { enabled: false },
       crossApp: {
         providerAppIds: [ZORA_PRIVY_APP_ID],
       },
       solana: { connectors: solanaConnectors },
     }),
-    [solanaConnectors],
+    [providerCollision.shouldDisableInjectedConnector, solanaConnectors],
   )
 
   if (!hasRuntimeConfig || !appId) {
     return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>
   }
 
-  const providerCollision = detectEthereumProviderCollision()
   const appearance = createPrivyAppearance({
     showWalletLoginFirst,
     walletCollisionDetected: providerCollision.shouldDisableInjectedConnector,

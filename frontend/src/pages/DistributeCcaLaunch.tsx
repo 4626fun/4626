@@ -30,7 +30,7 @@ export function DistributeCcaLaunch() {
       <PageMeta
         title="CCA Launch Distribution · 4626.fun"
         description={`${CCA_AMOUNT} ${SHARE_TOKEN} (${CCA_PERCENT} of the minted supply) is allocated to a weekly Uniswap CCA auction for market price discovery.`}
-        canonicalPath="/distribute/cca-launch"
+        canonicalPath="/cca"
       />
 
       {/* Back nav */}

@@ -14,6 +14,50 @@ import {
 import '@4626/brand-kit/styles'
 import './index.css'
 
+function stabilizeWindowEthereumSlot() {
+  if (typeof window === 'undefined') return
+  try {
+    // If a wallet extension exposes getter-only `ethereum` on Window.prototype,
+    // later `window.ethereum = ...` assignments throw. Shadow it with an own,
+    // writable data property so provider announcement flows do not crash.
+    const ownDescriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
+    if (ownDescriptor) return
+
+    let cursor: object | null = window
+    let inheritedDescriptor: PropertyDescriptor | null = null
+    while (cursor) {
+      const descriptor = Object.getOwnPropertyDescriptor(cursor, 'ethereum')
+      if (descriptor) {
+        inheritedDescriptor = descriptor
+        break
+      }
+      cursor = Object.getPrototypeOf(cursor)
+    }
+
+    const getterOnlyInherited =
+      Boolean(inheritedDescriptor) &&
+      typeof inheritedDescriptor?.get === 'function' &&
+      typeof inheritedDescriptor?.set !== 'function'
+    if (!getterOnlyInherited) return
+
+    let currentProvider: unknown = undefined
+    try {
+      currentProvider = (window as any).ethereum
+    } catch {
+      currentProvider = undefined
+    }
+
+    Object.defineProperty(window, 'ethereum', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: currentProvider,
+    })
+  } catch {
+    // ignore: best-effort hardening
+  }
+}
+
 const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Cannot redefine property:\s*ethereum/i,
   /Cannot set property ethereum of #<Window> which has only a getter/i,
@@ -46,6 +90,8 @@ function isKnownExtensionWalletError(message: string, source: string): boolean {
 
 if (typeof window !== 'undefined') {
   try {
+    stabilizeWindowEthereumSlot()
+
     // Keep app rendering stable when multiple wallet extensions race to inject window.ethereum.
     window.addEventListener(
       'error',

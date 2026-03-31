@@ -141,7 +141,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
 
   const ccaStrategy = vault.ccaStrategyAddress ?? (vault.shareOFTAddress ? SHARE_TO_CCA[vault.shareOFTAddress.toLowerCase()] : undefined)
   const auctionQuery = useQuery({
-    queryKey: ['auction-status', ccaStrategy],
+    queryKey: ['auction-status', vault.chainId, ccaStrategy],
     queryFn: () => fetchAuctionStatus(ccaStrategy!),
     enabled: Boolean(ccaStrategy),
     staleTime: 20_000,
@@ -160,7 +160,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
     (auctionQuery.data?.lifecycleFailedFinalized === true || auctionQuery.data?.lifecyclePhase === 6)
   const auctionStatusUnavailable = Boolean(ccaStrategy) && auctionQuery.isError === true
   const activityQuery = useQuery({
-    queryKey: ['auction-activity', ccaStrategy],
+    queryKey: ['auction-activity', vault.chainId, ccaStrategy],
     queryFn: () => fetchAuctionActivity(ccaStrategy!),
     enabled: Boolean(ccaStrategy && auctionLive),
     staleTime: 20_000,

@@ -105,7 +105,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
     queries: featuredVaults.map((vault) => {
       const ccaStrategy = resolveVaultCcaStrategy(vault)
       return {
-        queryKey: ['swap', 'vault-auction-status', ccaStrategy],
+        queryKey: ['swap', 'vault-auction-status', chainId, ccaStrategy],
         queryFn: () => fetchAuctionStatusSnapshot(ccaStrategy!),
         enabled: Boolean(ccaStrategy),
         staleTime: 20_000,
@@ -119,8 +119,15 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
       if (vault.graduatedAt || vault.settledAt) return false
       const ccaStrategy = resolveVaultCcaStrategy(vault)
       if (!ccaStrategy) return true
-      const status = featuredStatusQueries[index]?.data
-      if (!status) return true
+      const statusQuery = featuredStatusQueries[index]
+      const status = statusQuery?.data
+      // Avoid rendering newly fetched vaults before their auction snapshot arrives.
+      // This prevents stale/retired vault cards from flashing in briefly.
+      if (!status) {
+        if (statusQuery?.isError) return false
+        if (statusQuery?.isLoading || statusQuery?.isFetching) return false
+        return false
+      }
       const hasAuction = isOnchainAuctionAddress(status.auction)
       if (status.auctionLifecycleDegraded === true) return false
       if (status.auctionLifecycleDegraded === undefined && !hasAuction && !status.isGraduated) return false
@@ -198,7 +205,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
       ) : (
         <div className="space-y-2">
           {list.map((vault) => (
-            <VaultCard key={vault.vaultAddress} vault={vault} withMyVault={effectiveTab === 'mine'} />
+            <VaultCard key={`${vault.chainId}:${vault.vaultAddress}`} vault={vault} withMyVault={effectiveTab === 'mine'} />
           ))}
         </div>
       )}

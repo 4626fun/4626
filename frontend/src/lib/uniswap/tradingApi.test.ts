@@ -211,7 +211,7 @@ describe('fetchTradeQuote', () => {
         ok: false,
         status: 404,
         headers: { get: () => 'application/json' },
-        json: async () => ({ success: false, error: 'Alias route not found' }),
+        json: async () => ({ success: false, error: 'Not found' }),
       })
       .mockResolvedValueOnce({
         ok: false,
@@ -225,6 +225,33 @@ describe('fetchTradeQuote', () => {
       await expect(fetchTradeQuote(quoteRequest('791358'))).rejects.toThrow('No route for pair')
       const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
       expect(calledUrls).toEqual(['/__api/uniswap/quote', '/api/uniswap/quote'])
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as any).window
+      } else {
+        ;(globalThis as any).window = originalWindow
+      }
+    }
+  })
+
+  it('does not retry cross-origin on meaningful json 404 errors', async () => {
+    const originalWindow = (globalThis as any).window
+    ;(globalThis as any).window = { location: { origin: 'https://v1.4626.fun' } }
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'Insufficient balance for swap amount' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      await expect(fetchTradeQuote(quoteRequest('791359'))).rejects.toThrow('Insufficient token balance')
+      const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+      expect(calledUrls).toEqual(['https://v1.4626.fun/__api/uniswap/quote'])
     } finally {
       if (originalWindow === undefined) {
         delete (globalThis as any).window
