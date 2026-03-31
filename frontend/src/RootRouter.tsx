@@ -13,7 +13,14 @@ const WaitlistInviteEntry = lazy(async () => {
   const m = await import('./pages/WaitlistInviteEntry')
   return { default: m.WaitlistInviteEntry }
 })
-const LayoutWithoutAccountContext = lazy(async () => import('./app/LayoutWithoutAccountContext'))
+const RootMarketingLayout = lazy(async () => {
+  const m = await import('./components/Layout')
+  return {
+    default: function RootMarketingLayout() {
+      return <m.Layout interactive={false} chatEnabled={false} />
+    },
+  }
+})
 const ProtectedApp = lazy(async () => import('./ProtectedApp'))
 
 function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) {
@@ -56,8 +63,8 @@ export function RootRouter() {
       <Routes>
         <Route
           element={
-            <Suspense fallback={<AppLoadingState />}>
-              <LayoutWithoutAccountContext />
+              <Suspense fallback={<AppLoadingState />}>
+              <RootMarketingLayout />
             </Suspense>
           }
         >

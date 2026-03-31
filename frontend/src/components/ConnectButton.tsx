@@ -1,5 +1,5 @@
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -208,6 +208,27 @@ function IdentityButton({
   )
 }
 
+function DropdownLayer({
+  onClose,
+  panelClassName,
+  children,
+}: {
+  onClose: () => void
+  panelClassName: string
+  children: ReactNode
+}) {
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className={panelClassName}>{children}</div>
+    </>
+  )
+}
+
 export function ConnectButton({
   variant = 'default',
 }: {
@@ -220,6 +241,8 @@ export function ConnectButton({
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
+  const menuPanelClassName = 'absolute right-0 top-full mt-4 w-56 card p-4 z-50 space-y-2'
+  const optionsPanelClassName = 'absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1'
 
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
@@ -244,6 +267,14 @@ export function ConnectButton({
   const basenameAvatar = shouldResolveIdentity ? sharedIdentity.basenameAvatar : null
   const sharedAgentIdentity = shouldResolveIdentity ? getAgentIdentity(identityAddress) : null
   const unifiedAvatar = sharedAgentIdentity?.avatar ?? sharedIdentity.avatar ?? basenameAvatar
+  const toggleMenu = () => {
+    setShowOptions(false)
+    setShowMenu((current) => !current)
+  }
+  const toggleOptions = () => {
+    setShowMenu(false)
+    setShowOptions((current) => !current)
+  }
 
   if (buttonState === 'hydrating') {
     return (
@@ -274,15 +305,10 @@ export function ConnectButton({
 
     return (
       <div className="relative">
-        <IdentityButton presentation={presentation} connected menuOpen={showMenu} onToggle={() => setShowMenu(!showMenu)} />
+        <IdentityButton presentation={presentation} connected menuOpen={showMenu} onToggle={toggleMenu} />
 
         {showMenu && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowMenu(false)}
-            />
-            <div className="absolute right-0 top-full mt-4 w-56 card p-4 z-50 space-y-2">
+          <DropdownLayer onClose={() => setShowMenu(false)} panelClassName={menuPanelClassName}>
               <a
                 href={`https://basescan.org/address/${address}`}
                 target="_blank"
@@ -348,8 +374,7 @@ export function ConnectButton({
               >
                 <span className="label block text-zinc-600">Disconnect</span>
               </button>
-            </div>
-          </>
+          </DropdownLayer>
         )}
       </div>
     )
@@ -370,15 +395,10 @@ export function ConnectButton({
 
     return (
       <div className="relative">
-        <IdentityButton presentation={presentation} connected={false} menuOpen={showMenu} onToggle={() => setShowMenu(!showMenu)} />
+        <IdentityButton presentation={presentation} connected={false} menuOpen={showMenu} onToggle={toggleMenu} />
 
         {showMenu && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowMenu(false)}
-            />
-            <div className="absolute right-0 top-full mt-4 w-56 card p-4 z-50 space-y-2">
+          <DropdownLayer onClose={() => setShowMenu(false)} panelClassName={menuPanelClassName}>
               <div className="px-4 py-3">
                 <div className="label text-emerald-200">Signed in</div>
                 <div className="app-meta-value text-zinc-600 mt-1">4626 session is active.</div>
@@ -413,26 +433,19 @@ export function ConnectButton({
                 <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
               </button>
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
-            </div>
-          </>
+          </DropdownLayer>
         )}
 
         {showOptions && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowOptions(false)}
+          <DropdownLayer onClose={() => setShowOptions(false)} panelClassName={optionsPanelClassName}>
+            <ExternalWalletOptions
+              authBusy={auth.busy}
+              hasMultipleInjectedProviders={hasMultipleInjectedProviders}
+              lockedEthereumProviderGlobal={lockedEthereumProviderGlobal}
+              shouldHideInjectedConnector={shouldHideInjectedConnector}
+              onClose={() => setShowOptions(false)}
             />
-            <div className="absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1">
-              <ExternalWalletOptions
-                authBusy={auth.busy}
-                hasMultipleInjectedProviders={hasMultipleInjectedProviders}
-                lockedEthereumProviderGlobal={lockedEthereumProviderGlobal}
-                shouldHideInjectedConnector={shouldHideInjectedConnector}
-                onClose={() => setShowOptions(false)}
-              />
-            </div>
-          </>
+          </DropdownLayer>
         )}
       </div>
     )
@@ -448,10 +461,13 @@ export function ConnectButton({
           if (prefersPrivyWalletLogin) {
             void (async () => {
               const signed = await auth.signIn({ method: 'privy' })
-              setShowOptions(!signed)
+              if (!signed) {
+                setShowMenu(false)
+                setShowOptions(true)
+              }
             })()
           } else {
-            setShowOptions(!showOptions)
+            toggleOptions()
           }
         }}
         className={
@@ -468,12 +484,7 @@ export function ConnectButton({
       {auth.error ? <div className="mt-2 max-w-[280px] text-[11px] text-red-400/90">{auth.error}</div> : null}
 
       {showOptions && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowOptions(false)}
-          />
-          <div className="absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1">
+        <DropdownLayer onClose={() => setShowOptions(false)} panelClassName={optionsPanelClassName}>
             {prefersPrivyWalletLogin ? (
               <>
                 <button
@@ -498,8 +509,7 @@ export function ConnectButton({
               showPrivyDivider={prefersPrivyWalletLogin}
               onClose={() => setShowOptions(false)}
             />
-          </div>
-        </>
+        </DropdownLayer>
       )}
     </div>
   )

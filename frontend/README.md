@@ -60,6 +60,21 @@ Required input:
 
 This mirrors the “build vs build:js” split described in Zora’s monorepo architecture doc: keep the default loop fast, and only pay the heavy compile cost when you need it.
 
+## Why multiple config files exist
+
+Several files share extensions but target different runtimes/tools:
+
+- `tsconfig.base.json` - shared TypeScript defaults used across frontend configs.
+- `tsconfig.app.json` - browser app typecheck scope (`src/**`).
+- `tsconfig.node.json` - Node/Vite/API/server typecheck scope.
+- `tsconfig.docs.json` - docs/TypeDoc extraction scope.
+- `tsconfig.json` - root/editor entry that points at app + node configs.
+- `index.html` - default SPA shell for marketing/public host routing.
+- `app.html` - app-origin shell (for app host and miniapp-specific metadata).
+- `telegram-link.html` - standalone Telegram link/auth entry document.
+- `.env.example` - primary local/server env template.
+- `.env.deploy-dry-run.example` - local Base-fork deploy dry-run preset template.
+
 ## Runtime boundary guardrails
 
 - `pnpm guard:api-server-shims` blocks imports that resolve into deprecated `frontend/api/server/*` shim paths.

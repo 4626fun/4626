@@ -43,7 +43,7 @@ These must be done first. They represent broken or confusing states that block u
 | P1-S5 | Add `AccountModeIndicator` to Swap page | Execution mode always visible | `src/pages/Swap.tsx` |
 | P1-S6 | Migrate Swap buttons to `Button` primitive | Consistent interactive states | `src/pages/Swap.tsx`, `src/components/trade/` |
 | P1-S7 | Add Skeleton to Swap quote loading | No blank output slot during fetch | `src/components/trade/TokenAmountSurface.tsx` |
-| P1-S8 | Improve Swap settings `Input` + slippage `Alert` | Professional settings form | `src/components/trade/SwapSettingsSheet.tsx` |
+| P1-S8 | Improve Swap settings `Input` + slippage `Alert` | Professional settings form | `src/components/trade/SwapSettingsModal.tsx` |
 | P1-V5 | Add `AccountModeIndicator` to Vault + CSW nudge | EOA users see upgrade path | `src/pages/Vault.tsx` |
 | P1-V6 | Add Vault contract read Skeletons | Balance panels never appear blank | `src/pages/Vault.tsx` |
 | P1-V7 | Add Vault post-success confirmation card | Users get clear confirmation of completed actions | `src/pages/Vault.tsx` |

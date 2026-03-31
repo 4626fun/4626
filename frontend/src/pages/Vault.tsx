@@ -29,6 +29,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
+import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokenSymbols'
 import { CreatorWorkspacePanel } from '@/components/workspace/CreatorWorkspacePanel'
 import { parseVaultWorkspaceQuery, updateVaultWorkspaceQuery } from './vaultWorkspaceQuery'
@@ -68,42 +69,6 @@ const tabs = ['Deposit', 'Withdraw'] as const
 type TabType = typeof tabs[number]
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
-
-function TokenAvatar({
-  image,
-  symbol,
-  badge,
-}: {
-  image: string
-  symbol: string
-  badge?: string
-}) {
-  return (
-    <div className="relative w-11 h-11 shrink-0">
-      <div className="absolute inset-0 rounded-full overflow-hidden bg-black border border-white/10 shadow-[inset_0_0_24px_rgba(0,0,0,0.9)]">
-        {image ? (
-          <img src={image} alt={symbol} className="w-full h-full object-cover" loading="lazy" />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-white/6 via-black to-black">
-            <span className="font-serif text-white/80 select-none">{symbol.trim()?.[0]?.toUpperCase() || '?'}</span>
-          </div>
-        )}
-        <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_32px_rgba(0,0,0,0.85)]" />
-        <div className="absolute inset-0 pointer-events-none opacity-35 mix-blend-overlay bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.75)_0%,transparent_60%)]" />
-      </div>
-
-      {badge ? (
-        <div
-          className="absolute -bottom-1 -right-1 rounded-full backdrop-blur-md border border-brand-primary/20 bg-black/70 text-brand-accent leading-none text-[10px] px-2 py-0.5"
-          aria-label={badge === SHARE_SYMBOL_PREFIX ? `Share token (${SHARE_SYMBOL_PREFIX}TOKEN)` : badge}
-          title={badge === SHARE_SYMBOL_PREFIX ? `Share token (${SHARE_SYMBOL_PREFIX}TOKEN)` : badge}
-        >
-          {badge}
-        </div>
-      ) : null}
-    </div>
-  )
-}
 
 function VaultChatCard() {
   return (
@@ -1070,7 +1035,15 @@ export function Vault() {
                 <div className="vault-surface-muted vault-hover-lift p-5 sm:p-8">
                   <div className="space-y-5">
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center">
-                      <TokenAvatar image={heroImage} symbol={underlyingSymbol} badge={SHARE_SYMBOL_PREFIX} />
+                      <TokenAvatar
+                        token={{ address: tokenAddress ?? ZERO_ADDRESS, logoUrl: heroImage, logoUrls: [] }}
+                        imageUrl={heroImage}
+                        symbol={underlyingSymbol}
+                        size={44}
+                        variant="hero"
+                        badge={SHARE_SYMBOL_PREFIX}
+                        badgeLabel={`Share token (${SHARE_SYMBOL_PREFIX}TOKEN)`}
+                      />
                       <div className="min-w-0">
                         <div className="text-[10px] tracking-[0.34em] uppercase text-zinc-600">Vault token</div>
                         <div className="text-sm text-zinc-200 mt-1 font-light truncate">{shareSymbol}</div>
@@ -1092,7 +1065,13 @@ export function Vault() {
                     <div className="h-px bg-white/5" />
 
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center">
-                      <TokenAvatar image={heroImage} symbol={underlyingSymbol} />
+                      <TokenAvatar
+                        token={{ address: tokenAddress ?? ZERO_ADDRESS, logoUrl: heroImage, logoUrls: [] }}
+                        imageUrl={heroImage}
+                        symbol={underlyingSymbol}
+                        size={44}
+                        variant="hero"
+                      />
                       <div className="min-w-0">
                         <div className="text-[10px] tracking-[0.34em] uppercase text-zinc-600">Creator token</div>
                         <div className="text-sm text-zinc-200 mt-1 font-light truncate">{underlyingSymbol}</div>

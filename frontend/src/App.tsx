@@ -4,6 +4,7 @@ import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AdminLayout } from './components/AdminLayout'
 import { AppLoadingState } from '@/components/AppLoadingState'
 import { Layout } from './components/Layout'
+import { AccountContextProvider } from '@/wallet/accountContext'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { getHostMode, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
 import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
@@ -46,6 +47,18 @@ function LayoutOnly() {
   return <Layout interactive={false} />
 }
 
+function LayoutWithAccountContextOnly() {
+  return (
+    <AccountContextProvider>
+      <Layout />
+    </AccountContextProvider>
+  )
+}
+
+function LayoutWithoutAccountContextOnly() {
+  return <Layout interactive={false} chatEnabled={false} />
+}
+
 export function getGenericNotFoundCta(hostMode: import('@/lib/host').HostMode): {
   href: string
   label: string
@@ -65,15 +78,59 @@ export function getGenericNotFoundCta(hostMode: import('@/lib/host').HostMode): 
   }
 }
 
-const LazyAppAuthShell = lazy(() => import('./app/AppAuthShell'))
+const LazyAuthWalletShell = lazy(async () => {
+  const [privyModule, web3Module] = await Promise.all([
+    import('@/lib/privy/client'),
+    import('./web3/Web3Providers'),
+  ])
+  const PrivyClientProvider = privyModule.PrivyClientProvider
+  const WalletProviders = web3Module.WalletProviders
+  return {
+    default: function AppAuthShellBoundary() {
+      return (
+        <PrivyClientProvider>
+          <WalletProviders>
+            <Outlet />
+          </WalletProviders>
+        </PrivyClientProvider>
+      )
+    },
+  }
+})
 
-const LazyAppPrivyShell = lazy(() => import('./app/AppPrivyShell'))
+const LazyAppPrivyShell = lazy(async () => {
+  const m = await import('@/lib/privy/client')
+  const PrivyClientProvider = m.PrivyClientProvider
+  return {
+    default: function AppPrivyShellBoundary() {
+      return (
+        <PrivyClientProvider>
+          <Outlet />
+        </PrivyClientProvider>
+      )
+    },
+  }
+})
 
-const LazyAppAccessShell = lazy(() => import('./app/AppAccessShell'))
-
-const LazyLayoutWithAccountContext = lazy(() => import('./app/LayoutWithAccountContext'))
-
-const LazyLayoutWithoutAccountContext = lazy(() => import('./app/LayoutWithoutAccountContext'))
+const LazyAppAccessShell = lazy(async () => {
+  const [accessModule, web3Module] = await Promise.all([
+    import('./app/accessRuntime'),
+    import('./web3/Web3Providers'),
+  ])
+  const AccessStateProvider = accessModule.AccessStateProvider
+  const WalletProviders = web3Module.WalletProviders
+  return {
+    default: function AppAccessShellBoundary() {
+      return (
+        <WalletProviders>
+          <AccessStateProvider>
+            <Outlet />
+          </AccessStateProvider>
+        </WalletProviders>
+      )
+    },
+  }
+})
 
 const LazyRequireSession = lazy(async () => {
   const m = await import('./app/accessRuntime')
@@ -386,18 +443,18 @@ function App() {
 
         <Route
           element={
-            <LazyRouteBoundary>
-              <LazyAppAuthShell />
-            </LazyRouteBoundary>
+              <LazyRouteBoundary>
+              <LazyAuthWalletShell />
+              </LazyRouteBoundary>
           }
         >
           <Route
-            element={
-              <LazyRouteBoundary>
-                <LazyLayoutWithAccountContext />
-              </LazyRouteBoundary>
-            }
-          >
+          element={
+            <LazyRouteBoundary>
+              <LayoutWithAccountContextOnly />
+            </LazyRouteBoundary>
+          }
+        >
             <Route path="/continue" element={<AppContinue />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account" element={<AccountsPage />} />
@@ -412,12 +469,12 @@ function App() {
           }
         >
           <Route
-            element={
-              <LazyRouteBoundary>
-                <LazyLayoutWithoutAccountContext />
-              </LazyRouteBoundary>
-            }
-          >
+          element={
+            <LazyRouteBoundary>
+              <LayoutWithoutAccountContextOnly />
+            </LazyRouteBoundary>
+          }
+        >
             <Route
               element={
                 <LazyRouteBoundary>
@@ -456,7 +513,7 @@ function App() {
             <Route
               element={
                 <LazyRouteBoundary>
-                  <LazyLayoutWithAccountContext />
+                  <LayoutWithAccountContextOnly />
                 </LazyRouteBoundary>
               }
             >

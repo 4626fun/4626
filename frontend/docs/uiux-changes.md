@@ -138,7 +138,7 @@
 |--------|-----------------|
 | WaitlistFlow step transitions respect `useReducedMotion` | Users with motion sensitivity see instant transitions. |
 | SwapConfirmModal: focus trap + role=dialog + aria-modal + reduced motion | Tab key stays inside the modal. Screen readers announce dialog context. Animations skip for reduced motion. |
-| SwapSettingsSheet: focus trap + role=dialog + aria-modal + Escape close | Same a11y treatment as confirm modal. |
+| SwapSettingsModal: focus trap + role=dialog + aria-modal + Escape close | Same a11y treatment as confirm modal. |
 
 ### P2 — Vault, Portfolio, Account deep polish
 

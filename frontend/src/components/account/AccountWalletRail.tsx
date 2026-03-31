@@ -39,7 +39,7 @@ function modeButtonTitle(params: {
     : `${params.label}: ${params.address} (click to switch)`
 }
 
-export function AccountModeIndicator() {
+export function AccountWalletRail() {
   const { connector } = useAccount()
   const account = useAccountContext()
   const [hoveredMode, setHoveredMode] = useState<'EOA' | 'SMART_WALLET' | null>(null)
@@ -265,4 +265,3 @@ export function AccountModeIndicator() {
     </div>
   )
 }
-

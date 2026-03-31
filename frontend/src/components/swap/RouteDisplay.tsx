@@ -1,4 +1,4 @@
-import { RouteViz } from '@/components/trade/RouteViz'
+import { RouteVisualization } from '@/components/trade/RouteVisualization'
 
 type RouteDisplayProps = {
   routeSummary: string | null
@@ -16,7 +16,7 @@ export function RouteDisplay({ routeSummary, aggregator, executionPrice, marketP
     <div className="rounded-xl border border-white/12 bg-linear-to-b from-white/8 to-white/3 p-3 backdrop-blur-sm">
       <div className="mb-2 text-xs font-medium text-zinc-300">Route preview</div>
       {routeSummary ? (
-        <RouteViz routeSummary={routeSummary} compact />
+        <RouteVisualization routeSummary={routeSummary} compact />
       ) : (
         <div className="text-xs text-zinc-500">Route unknown</div>
       )}

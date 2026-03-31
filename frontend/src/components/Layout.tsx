@@ -14,19 +14,14 @@ const LazyVaultNavBar = lazy(async () => {
   return { default: mod.VaultNavBar }
 })
 
-const LazyVaultNavBarPublic = lazy(async () => {
-  const mod = await import('./brand/VaultNavBarPublic')
-  return { default: mod.VaultNavBarPublic }
-})
-
 const LazyChatWidgetShell = lazy(async () => {
   const mod = await import('./chat/ChatWidgetShell')
   return { default: mod.ChatWidgetShell }
 })
 
-const LazyAccountModeIndicator = lazy(async () => {
-  const mod = await import('./account/AccountModeIndicator')
-  return { default: mod.AccountModeIndicator }
+const LazyAccountWalletRail = lazy(async () => {
+  const mod = await import('./account/AccountWalletRail')
+  return { default: mod.AccountWalletRail }
 })
 
 type MobileNavItem = {
@@ -155,12 +150,12 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       <div aria-hidden="true" className="noise-overlay" />
       {showTopNavBar ? (
         <Suspense fallback={null}>
-          {interactive ? <LazyVaultNavBar /> : <LazyVaultNavBarPublic />}
+          <LazyVaultNavBar interactive={interactive} />
         </Suspense>
       ) : null}
       {showAccountMode ? (
         <Suspense fallback={null}>
-          <LazyAccountModeIndicator />
+          <LazyAccountWalletRail />
         </Suspense>
       ) : null}
 

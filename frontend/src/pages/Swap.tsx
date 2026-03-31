@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 
-import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
+import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
@@ -1506,7 +1506,7 @@ export function Swap() {
       />
 
       {/* ─── Sheets / Modals ────────────────────────────────────────────── */}
-      <SwapSettingsSheet
+      <SwapSettingsModal
         open={showAdvanced}
         busy={busy !== null}
         slippagePct={slippagePct}

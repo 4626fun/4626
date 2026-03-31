@@ -13,10 +13,30 @@ import {
   type CheckSection,
   type CheckStatus,
   type ProtocolReportResponse,
+  type ResolvedStatusFixContext,
   type VaultReportResponse,
 } from './statusShared'
 
-const LazyStatusFixPanel = lazy(() => import('./StatusFixPanelWithProviders'))
+const LazyStatusFixPanel = lazy(async () => {
+  const [statusFixPanelModule, web3Module] = await Promise.all([
+    import('./StatusFixPanel'),
+    import('@/web3/Web3Providers'),
+  ])
+  const StatusFixPanel = statusFixPanelModule.default
+  const WalletProviders = web3Module.WalletProviders
+  return {
+    default: function StatusFixPanelBoundary(props: {
+      context: ResolvedStatusFixContext
+      onApplied: () => void
+    }) {
+      return (
+        <WalletProviders>
+          <StatusFixPanel {...props} />
+        </WalletProviders>
+      )
+    },
+  }
+})
 
 function StatusPill({ status }: { status: CheckStatus }) {
   const styles =

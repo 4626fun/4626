@@ -83,7 +83,7 @@ Current steps: `'persona' | 'verify' | 'email' | 'done'` — in practice only `v
 
 ### 2. Swap (P1)
 
-**Components**: `pages/Swap.tsx`, `components/trade/SwapPanel.tsx`, `SwapConfirmModal.tsx`, `SwapSettingsSheet.tsx`, `TransactionLifecycle.tsx`
+**Components**: `pages/Swap.tsx`, `components/trade/SwapPanel.tsx`, `SwapConfirmModal.tsx`, `SwapSettingsModal.tsx`, `TransactionLifecycle.tsx`
 
 | Issue | Severity | Detail |
 |-------|----------|--------|

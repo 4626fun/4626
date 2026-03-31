@@ -37,7 +37,7 @@
 
 ### `src/components/ui/Modal.tsx` (new)
 **What changed**: Created a generic `Modal` with focus trap, Escape-to-close, `aria-modal`, backdrop blur, and framer-motion `scaleIn` animation (with `prefers-reduced-motion` fallback).
-**Why better**: Existing modals (SwapConfirmModal, SwapSettingsSheet) had no focus trap and no consistent aria structure. The owner revocation flow in Account had no confirmation modal at all.
+**Why better**: Existing modals (SwapConfirmModal, SwapSettingsModal) had no focus trap and no consistent aria structure. The owner revocation flow in Account had no confirmation modal at all.
 
 ### `src/components/ui/AccountModeIndicator.tsx` (new)
 **What changed**: Created a compact pill component showing "Acting as: Smart Wallet / EOA" + "1-click available / Limited mode" using `useCanonicalWallet` and `walletMode.ts`.
@@ -63,7 +63,7 @@
 ### `src/components/trade/TokenAmountSurface.tsx` (modified)
 - **Quote skeleton**: Added `Skeleton` rows in output slot during quote fetch.
 
-### `src/components/trade/SwapSettingsSheet.tsx` (modified)
+### `src/components/trade/SwapSettingsModal.tsx` (modified)
 - **Input migration**: Slippage inputs use `Input` primitive.
 - **Slippage warning**: Uses `Alert` for high-slippage warnings.
 

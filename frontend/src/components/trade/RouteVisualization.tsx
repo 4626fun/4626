@@ -30,7 +30,7 @@ function buildNodes(routeSummary: string | null | undefined): RouteNode[] {
   ]
 }
 
-export function RouteViz(props: {
+export function RouteVisualization(props: {
   routeSummary?: string | null
   className?: string
   compact?: boolean

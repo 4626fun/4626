@@ -38,7 +38,7 @@
 | S5 | No `AccountModeIndicator` — swap mode switching is buried in `WalletModeToggle` only | `Swap.tsx` | Add `AccountModeIndicator` near execution bar |
 | S6 | Action buttons are inline Tailwind — no consistent disabled/loading state | `Swap.tsx`, `SwapPanel.tsx` | Migrate to `Button` primitive |
 | S7 | Quote loading shows blank output slot — no skeleton during fetch | `TokenAmountSurface.tsx` | Add `Skeleton` rows in output area during quote fetch |
-| S8 | Settings sheet inputs are unstyled HTML inputs — no label/error/helper text pattern | `SwapSettingsSheet.tsx` | Migrate to `Input` primitive with slippage warning `Alert` |
+| S8 | Settings sheet inputs are unstyled HTML inputs — no label/error/helper text pattern | `SwapSettingsModal.tsx` | Migrate to `Input` primitive with slippage warning `Alert` |
 | S9 | Mobile: sticky CTA at `bottom-[calc(env(safe-area-inset-bottom)+4.35rem)]` may overlap on small viewports | `Swap.tsx` | Test and adjust safe area calculation |
 
 ### P2 — Nice-to-Have
@@ -46,7 +46,7 @@
 | # | Issue | Component | Fix |
 |---|-------|-----------|-----|
 | S10 | Route comparison card copy is terse — users don't know what "compare routes" means | `RouteCompareCard.tsx` | Improve labels and tooltip copy |
-| S11 | No `prefers-reduced-motion` on slide-up/scale-in animations for settings/confirm modals | `SwapConfirmModal.tsx`, `SwapSettingsSheet.tsx` | Wrap animations in `useReducedMotion()` guard |
+| S11 | No `prefers-reduced-motion` on slide-up/scale-in animations for settings/confirm modals | `SwapConfirmModal.tsx`, `SwapSettingsModal.tsx` | Wrap animations in `useReducedMotion()` guard |
 
 ---
 
