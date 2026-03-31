@@ -270,11 +270,15 @@ export function resolveTokenDisplay(params: {
     ? (optionName || optionSymbol || shortAddress(params.address))
     : (preferOptionName ? optionName : onchainName || optionName || optionSymbol || shortAddress(params.address))
 
-  const fallbackUrls = isAddress(params.address) ? tokenLogoFallbacks(params.address) : []
+  const allowExternalRegistryFallbacks = isCore
+  const internalImageFallback = isAddress(params.address) ? shareTokenLogo(params.address, BASE_CHAIN_ID) : null
+  const fallbackUrls =
+    isAddress(params.address) && allowExternalRegistryFallbacks ? tokenLogoFallbacks(params.address) : []
   const logoCandidates = [
     params.option?.logoUrl,
     ...(params.option?.logoUrls ?? []),
     params.imageUrl,
+    internalImageFallback,
     ...fallbackUrls,
   ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
   const uniqueLogoCandidates = Array.from(new Set(logoCandidates))

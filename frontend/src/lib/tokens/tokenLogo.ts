@@ -2,11 +2,7 @@ import { getAddress } from 'viem'
 
 import {
   BASE_CHAIN_ID,
-  tokenLogoFallbacks,
   tokenLogoFallbacksForChain,
-  trustWalletBaseLogo,
-  uniswapChainLogo,
-  z0r0zBaseLogo,
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
 
@@ -107,6 +103,10 @@ function getKnownTokenLogo(address: string, chainId: number): string | null {
   return normalizeUrl(knownTokenLogoSeedByChainAndAddress[key] || knownTokenLogoSeedByChainAndAddress[`${chainId}:${address}`])
 }
 
+function canonicalTokenImageUrl(address: string, chainId: number): string {
+  return `/api/v1/token/${address.toLowerCase()}/image?chain=${chainId}&format=png&style=raw`
+}
+
 /**
  * Build a deterministic logo list in priority order.
  * It includes curated metadata first, then curated fallbacks by chain.
@@ -128,24 +128,18 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
     }
   }
 
-  const fallbackCandidates = dedupe([
+  const knownTokenLogo = getKnownTokenLogo(token.address || '', chainId)
+  const knownCoreToken = Boolean(knownTokenLogo)
+  const shouldUseExternalRegistryFallbacks = token.group === 'core' || knownCoreToken
+  const internalRendererFallback = address ? canonicalTokenImageUrl(address, chainId) : null
+  const externalRegistryFallbacks = shouldUseExternalRegistryFallbacks && address ? tokenLogoFallbacksForChain(address, chainId) : []
+
+  const groupedFallbacks = dedupe([
     token.logoUrl,
     ...(token.logoUrls ?? []),
-    address ? tokenLogoFallbacks(address)[0] : undefined,
-    address ? tokenLogoFallbacks(address)[1] : undefined,
-    getKnownTokenLogo(token.address || '', chainId),
-    address ? trustWalletBaseLogo(address) : undefined,
-    address ? uniswapChainLogo(address, chainId) : undefined,
-    address ? z0r0zBaseLogo(address) : undefined,
-    address ? tokenLogoFallbacksForChain(address, chainId)[0] : undefined,
-    address ? tokenLogoFallbacksForChain(address, chainId)[1] : undefined,
-  ])
-
-  const chainFallbacks = address ? tokenLogoFallbacksForChain(address, chainId) : []
-  const groupedFallbacks = dedupe([
-    ...fallbackCandidates,
-    ...chainFallbacks,
-    ...dedupe([token.logoUrl, ...(token.logoUrls ?? [])]).filter((candidate) => !fallbackCandidates.includes(candidate)),
+    knownTokenLogo,
+    internalRendererFallback,
+    ...externalRegistryFallbacks,
   ])
 
   return {
