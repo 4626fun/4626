@@ -43,11 +43,7 @@ function MarketingOnlyRoute(props: { children: ReactNode }) {
   return null
 }
 
-function LayoutOnly() {
-  return <Layout interactive={false} />
-}
-
-function LayoutWithAccountContextOnly() {
+function AppLayoutWithAccountContext() {
   return (
     <AccountContextProvider>
       <Layout />
@@ -55,7 +51,7 @@ function LayoutWithAccountContextOnly() {
   )
 }
 
-function LayoutWithoutAccountContextOnly() {
+function AppLayoutWithoutAccountContext() {
   return <Layout interactive={false} chatEnabled={false} />
 }
 
@@ -86,7 +82,7 @@ const LazyAuthWalletShell = lazy(async () => {
   const PrivyClientProvider = privyModule.PrivyClientProvider
   const WalletProviders = web3Module.WalletProviders
   return {
-    default: function AppAuthShellBoundary() {
+    default: function AuthWalletBoundary() {
       return (
         <PrivyClientProvider>
           <WalletProviders>
@@ -98,11 +94,11 @@ const LazyAuthWalletShell = lazy(async () => {
   }
 })
 
-const LazyAppPrivyShell = lazy(async () => {
+const LazyPrivyBoundary = lazy(async () => {
   const m = await import('@/lib/privy/client')
   const PrivyClientProvider = m.PrivyClientProvider
   return {
-    default: function AppPrivyShellBoundary() {
+    default: function PrivyBoundary() {
       return (
         <PrivyClientProvider>
           <Outlet />
@@ -112,7 +108,7 @@ const LazyAppPrivyShell = lazy(async () => {
   }
 })
 
-const LazyAppAccessShell = lazy(async () => {
+const LazyAccessBoundary = lazy(async () => {
   const [accessModule, web3Module] = await Promise.all([
     import('./app/accessRuntime'),
     import('./web3/Web3Providers'),
@@ -120,7 +116,7 @@ const LazyAppAccessShell = lazy(async () => {
   const AccessStateProvider = accessModule.AccessStateProvider
   const WalletProviders = web3Module.WalletProviders
   return {
-    default: function AppAccessShellBoundary() {
+    default: function AccessBoundary() {
       return (
         <WalletProviders>
           <AccessStateProvider>
@@ -175,10 +171,6 @@ const SmartWalletsRouteProvider = lazy(async () => {
   const m = await import('@/lib/privy/SmartWalletsRouteProvider')
   return { default: m.SmartWalletsRouteProvider }
 })
-
-function WithSmartWallets(props: { children: ReactNode }) {
-  return <SmartWalletsRouteProvider>{props.children}</SmartWalletsRouteProvider>
-}
 
 const Leaderboard = lazy(async () => {
   const m = await import('./pages/Leaderboard')
@@ -397,7 +389,7 @@ function App() {
       >
         <Route path="/404" element={<NotFoundPage />} />
 
-        <Route element={<LayoutOnly />}>
+        <Route element={<Layout interactive={false} />}>
           <Route
             path="/faq"
             element={
@@ -450,8 +442,8 @@ function App() {
         >
           <Route
           element={
-            <LazyRouteBoundary>
-              <LayoutWithAccountContextOnly />
+              <LazyRouteBoundary>
+              <AppLayoutWithAccountContext />
             </LazyRouteBoundary>
           }
         >
@@ -464,14 +456,14 @@ function App() {
         <Route
           element={
             <LazyRouteBoundary>
-              <LazyAppAccessShell />
+              <LazyAccessBoundary />
             </LazyRouteBoundary>
           }
         >
           <Route
           element={
             <LazyRouteBoundary>
-              <LayoutWithoutAccountContextOnly />
+              <AppLayoutWithoutAccountContext />
             </LazyRouteBoundary>
           }
         >
@@ -506,14 +498,14 @@ function App() {
           <Route
             element={
               <LazyRouteBoundary>
-                <LazyAppPrivyShell />
+                <LazyPrivyBoundary />
               </LazyRouteBoundary>
             }
           >
             <Route
               element={
                 <LazyRouteBoundary>
-                  <LayoutWithAccountContextOnly />
+                  <AppLayoutWithAccountContext />
                 </LazyRouteBoundary>
               }
             >
@@ -537,9 +529,9 @@ function App() {
                   <Route
                     path="/deploy"
                     element={
-                      <WithSmartWallets>
+                      <SmartWalletsRouteProvider>
                         <DeployVault />
-                      </WithSmartWallets>
+                      </SmartWalletsRouteProvider>
                     }
                   />
                   <Route path="/coin/:address/manage" element={<CoinManage />} />
@@ -572,17 +564,17 @@ function App() {
                     <Route
                       path="ops"
                       element={
-                        <WithSmartWallets>
+                        <SmartWalletsRouteProvider>
                           <AdminOps />
-                        </WithSmartWallets>
+                        </SmartWalletsRouteProvider>
                       }
                     />
                     <Route
                       path="deploy-strategies"
                       element={
-                        <WithSmartWallets>
+                        <SmartWalletsRouteProvider>
                           <AdminDeployStrategies />
-                        </WithSmartWallets>
+                        </SmartWalletsRouteProvider>
                       }
                     />
                   </Route>

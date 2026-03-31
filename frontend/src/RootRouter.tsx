@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode } from '@/lib/host'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AppLoadingState } from '@/components/AppLoadingState'
+import { Layout } from '@/components/Layout'
 
 const Home = lazy(async () => {
   const m = await import('./pages/Home')
@@ -12,14 +13,6 @@ const Home = lazy(async () => {
 const WaitlistInviteEntry = lazy(async () => {
   const m = await import('./pages/WaitlistInviteEntry')
   return { default: m.WaitlistInviteEntry }
-})
-const RootMarketingLayout = lazy(async () => {
-  const m = await import('./components/Layout')
-  return {
-    default: function RootMarketingLayout() {
-      return <m.Layout interactive={false} chatEnabled={false} />
-    },
-  }
 })
 const ProtectedApp = lazy(async () => import('./ProtectedApp'))
 
@@ -62,11 +55,7 @@ export function RootRouter() {
       />
       <Routes>
         <Route
-          element={
-              <Suspense fallback={<AppLoadingState />}>
-              <RootMarketingLayout />
-            </Suspense>
-          }
+          element={<Layout interactive={false} chatEnabled={false} />}
         >
           <Route
             path="/"

@@ -34,8 +34,7 @@ Telegram must never become the canonical recovery key or replace verified email.
 
 Authoritative files:
 
-- `frontend/src/App.tsx`
-- `frontend/src/app/AppPrivyShell.tsx`
+- `frontend/src/App.tsx` (route admission + Privy route boundary for authenticated app routes)
 - `frontend/src/app/accessRuntime.tsx`
 - `frontend/src/app/accessShared.tsx`
 - `frontend/src/lib/telegramMiniAppLink.ts`
@@ -209,7 +208,7 @@ If one of these changes, review the whole chain:
 - `AGENTS.md`
 - `frontend/docs/account-auth-invariants.md`
 - `frontend/docs/telegram-miniapp-link-architecture.md`
-- `frontend/src/app/AppPrivyShell.tsx`
+- `frontend/src/App.tsx` (Privy route boundary)
 - `frontend/src/app/accessShared.tsx`
 - `frontend/src/pages/TelegramLink.tsx`
 - `frontend/src/pages/telegramLinkFlow.ts`

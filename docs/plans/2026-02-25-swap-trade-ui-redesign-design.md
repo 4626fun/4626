@@ -97,7 +97,7 @@ Reasoning:
 - `frontend/src/components/trade/TokenSelectorSheet.tsx`
 - `frontend/src/components/trade/InfoStrip.tsx`
 - `frontend/src/components/trade/FlipButton.tsx`
-- `frontend/src/components/trade/SwapSettingsSheet.tsx`
+- `frontend/src/components/trade/SwapSettingsModal.tsx`
 - `frontend/src/index.css`
 
 ## Validation
@@ -111,4 +111,3 @@ Reasoning:
   - settings sheet
   - sticky CTA
   - icon loading/fallback behavior
-

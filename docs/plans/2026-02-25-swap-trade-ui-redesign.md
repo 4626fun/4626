@@ -89,7 +89,7 @@ Run relevant tests.
 - Modify: `frontend/src/components/trade/TokenAmountSurface.tsx`
 - Modify: `frontend/src/components/trade/InfoStrip.tsx`
 - Modify: `frontend/src/components/trade/FlipButton.tsx`
-- Modify: `frontend/src/components/trade/SwapSettingsSheet.tsx`
+- Modify: `frontend/src/components/trade/SwapSettingsModal.tsx`
 - Modify: `frontend/src/index.css`
 
 **Step 1: Write/adjust expectation tests**
@@ -124,7 +124,7 @@ Also run `ReadLints` on modified files and fix introduced issues.
 
 **Step 5: Commit**
 
-`git add frontend/src/pages/Swap.tsx frontend/src/components/trade/SwapPanel.tsx frontend/src/components/trade/TokenAmountSurface.tsx frontend/src/components/trade/InfoStrip.tsx frontend/src/components/trade/FlipButton.tsx frontend/src/components/trade/SwapSettingsSheet.tsx frontend/src/index.css`
+`git add frontend/src/pages/Swap.tsx frontend/src/components/trade/SwapPanel.tsx frontend/src/components/trade/TokenAmountSurface.tsx frontend/src/components/trade/InfoStrip.tsx frontend/src/components/trade/FlipButton.tsx frontend/src/components/trade/SwapSettingsModal.tsx frontend/src/index.css`
 
 ---
 
@@ -182,4 +182,3 @@ Run lint/tests one final time.
 **Step 4: Commit**
 
 `git add docs/plans/2026-02-25-swap-trade-ui-redesign-design.md docs/plans/2026-02-25-swap-trade-ui-redesign.md`
-
