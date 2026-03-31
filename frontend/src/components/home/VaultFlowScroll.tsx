@@ -217,7 +217,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
   // HUD / camera
   const progressH = useTransform(scroll, [0, 1], ['0%', '100%'])
-  const cueOpacity = useTransform(scroll, [0, 0.10, 0.24], [0.88, 0.88, 0])
+  const cueOpacity = useTransform(scroll, [0, 0.07, 0.16], [0.88, 0.88, 0])
 
   // Camera — continuous slow drift, no kinks
   const worldY = useTransform(scroll, [0, 1], [0, -6])
@@ -226,7 +226,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // deploy content so stage 4 remains legible on narrower screens.
   const worldScale = useTransform(scroll, [0, 0.86, 0.91, 0.95, 1.0], [1, 1.0, 1.25, 2.1, 1.45])
   // Eases freefall tilt to 0° by 0.62, stays flat for the rest of the scroll.
-  const worldRotateX = useTransform(scroll, [0, 0.44, 0.62, 1], [8, 2, 0, 0])
+  const worldRotateX = useTransform(scroll, [0, 0.36, 0.52, 1], [8, 2, 0, 0])
   const worldTransform = useMotionTemplate`
     translate3d(0, ${worldY}%, 0)
     scale(${worldScale})
@@ -237,17 +237,17 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
   // Hero plane — stays hidden during the initial Zorb drop, then reveals in steps.
   // We keep the same hold/fade window later so stage transitions remain stable.
-  const heroZ = useTransform(scroll, [0, 0.28, 0.46, 0.58], [170, 40, 40, -60])
-  const heroY = useTransform(scroll, [0, 0.58], [0, -12])
-  const heroScale = useTransform(scroll, [0, 0.28, 0.46, 0.58], [1, 0.94, 0.94, 0.88])
-  const heroOpacity = useTransform(scroll, [0, 0.24, 0.32, 0.46, 0.60], [0, 0, 1, 1, 0])
-  const heroTitleOpacity = useTransform(scroll, [0.24, 0.32], [0, 1])
-  const heroTitleY = useTransform(scroll, [0.24, 0.32], [14, 0])
-  const heroPillsOpacity = useTransform(scroll, [0.24, 0.32], [0, 1])
-  const heroPillsY = useTransform(scroll, [0.24, 0.32], [12, 0])
-  const heroBodyOpacity = useTransform(scroll, [0.34, 0.42], [0, 1])
-  const heroBodyY = useTransform(scroll, [0.34, 0.42], [10, 0])
-  const heroBlur = useTransform(scroll, [0.48, 0.58], [0, 7])
+  const heroZ = useTransform(scroll, [0, 0.20, 0.44, 0.56], [170, 40, 40, -60])
+  const heroY = useTransform(scroll, [0, 0.56], [0, -12])
+  const heroScale = useTransform(scroll, [0, 0.20, 0.44, 0.56], [1, 0.94, 0.94, 0.88])
+  const heroOpacity = useTransform(scroll, [0, 0.15, 0.22, 0.44, 0.58], [0, 0, 1, 1, 0])
+  const heroTitleOpacity = useTransform(scroll, [0.15, 0.22], [0, 1])
+  const heroTitleY = useTransform(scroll, [0.15, 0.22], [14, 0])
+  const heroPillsOpacity = useTransform(scroll, [0.15, 0.22], [0, 1])
+  const heroPillsY = useTransform(scroll, [0.15, 0.22], [12, 0])
+  const heroBodyOpacity = useTransform(scroll, [0.24, 0.32], [0, 1])
+  const heroBodyY = useTransform(scroll, [0.24, 0.32], [10, 0])
+  const heroBlur = useTransform(scroll, [0.44, 0.54], [0, 7])
   const heroFilter = useMotionTemplate`blur(${heroBlur}px)`
   const heroTransform = useMotionTemplate`
     translate3d(-50%, ${heroY}px, ${heroZ}px)
@@ -272,23 +272,23 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Vault — rockets toward camera while off-screen, slows to a crawl once visible,
   // then settles into the vault anchor with a tiny overshoot before the deposit sequence
   // Vault stays at Z=0 after capture — world zooms in around it for "entering" feel
-  const vaultZ = useTransform(scroll, [0, 0.08, 0.28, 0.36, 0.80, 0.88], [260, 180, 18, 0, 0, -120])
+  const vaultZ = useTransform(scroll, [0, 0.05, 0.20, 0.28, 0.80, 0.88], [260, 180, 18, 0, 0, -120])
   // Scale locks at 1 once captured — no shrinking until it fades out
-  const vaultScale = useTransform(scroll, [0, 0.08, 0.28, 0.36, 0.88], [1.55, 1.38, 1.06, 1, 1])
+  const vaultScale = useTransform(scroll, [0, 0.05, 0.20, 0.28, 0.88], [1.55, 1.38, 1.06, 1, 1])
   // Stays visible as a container through distributions, fades as world zooms through
   // At 0.91 the vault briefly brightens (camera approaching), then goes dark as we
   // rush through it — the white flash reinforces the "passing through the portal" feel.
   // Zorb stays bright through all of stage 3 — only dims as zoom begins (0.91+)
-  const vaultOpacity = useTransform(scroll, [0, 0.06, 0.50, 0.58, 0.91, 0.93, 1.0], [0, 0.65, 1, 0.72, 0.9, 0, 0])
-  // Glow/flash: mint phase only — starts after deposit dot arrives (~0.47)
-  const vaultGlow = useTransform(scroll, [0.44, 0.52, 0.56, 0.60], [0, 1, 0.3, 0])
-  const vaultFlash = useTransform(scroll, [0.40, 0.48, 0.54, 0.58], [0, 1, 0.2, 0])
+  const vaultOpacity = useTransform(scroll, [0, 0.03, 0.50, 0.58, 0.91, 0.93, 1.0], [0, 0.65, 1, 0.72, 0.9, 0, 0])
+  // Glow/flash: mint phase only — starts after deposit dot arrives
+  const vaultGlow = useTransform(scroll, [0.36, 0.44, 0.48, 0.52], [0, 1, 0.3, 0])
+  const vaultFlash = useTransform(scroll, [0.32, 0.40, 0.46, 0.50], [0, 1, 0.2, 0])
   // Vault tray (open cradle) — visible BEFORE capture so users see the "landing zone" as the Zorb falls
-  const vaultTrayOp = useTransform(scroll, [0.18, 0.28, 0.91, 0.94], [0, 0.55, 0.55, 0])
+  const vaultTrayOp = useTransform(scroll, [0.10, 0.20, 0.91, 0.94], [0, 0.55, 0.55, 0])
   // Vault lid — snaps closed on capture, turning the open tray into a sealed vault
-  const vaultLidOp = useTransform(scroll, [0.36, 0.44, 0.91, 0.94], [0, 1, 1, 0])
-  // Deposit arrival glow — large white ring pulse when dot lands on vault (~0.47)
-  const depositArrivalGlow = useTransform(scroll, [0.45, 0.49, 0.53, 0.58], [0, 1, 0.45, 0])
+  const vaultLidOp = useTransform(scroll, [0.28, 0.36, 0.91, 0.94], [0, 1, 1, 0])
+  // Deposit arrival glow — large white ring pulse when dot lands on vault
+  const depositArrivalGlow = useTransform(scroll, [0.37, 0.41, 0.45, 0.50], [0, 1, 0.45, 0])
   // Entry radial bloom: peaks as vault rushes, bridges into deploy
   const vaultEntry = useTransform(scroll, [0.82, 0.87, 0.94], [0, 1, 0])
 
@@ -324,10 +324,10 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const orbitTrav2 = useTransform(_ot2Raw, smoothstep)
   const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.88, 0.90], [0, 1, 1, 0])
 
-  // "× ERC-4626" suffix appears only after the vault captures the Zorb (~0.36)
-  const ercSuffixOp = useTransform(scroll, [0.36, 0.44], [0, 1])
+  // "× ERC-4626" suffix appears only after the vault captures the Zorb (~0.28)
+  const ercSuffixOp = useTransform(scroll, [0.28, 0.36], [0, 1])
   // 4626 pill appears during the pause so users see the full identity at rest
-  const vaultOsPillOp = useTransform(scroll, [0.38, 0.46], [0, 1])
+  const vaultOsPillOp = useTransform(scroll, [0.30, 0.38], [0, 1])
   // Phase 2 corner badge — visible during mint / deposit phase only
   const stage2LabelOp = useTransform(scroll, [0.44, 0.50, 0.64, 0.70], [0, 1, 1, 0])
   // Deposit fill — drives the counter and progress bar in the deposit pill
@@ -347,12 +347,12 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   })
 
   // Freefall entrance — two-speed design:
-  //   0→0.08  : fast off-screen rush (user doesn't see this)
-  //   0.08→0.28: slow visible hang — the Zorb drifts down for ~1-2 seconds of scrolling
-  //   0.28→0.32: tiny overshoot past the anchor (bounce feel)
-  //   0.32→0.36: settles back to 0 (vault capture)
-  const zorbFallY = useTransform(scroll, [0, 0.08, 0.28, 0.32, 0.36], [-240, -70, -5, 4, 0])
-  const zorbFallRotZ = useTransform(scroll, [0, 0.08, 0.28, 0.36], [-24, -19, -3, 0])
+  //   0→0.05  : fast off-screen rush (user doesn't see this)
+  //   0.05→0.20: slow visible hang — the Zorb drifts down
+  //   0.20→0.24: tiny overshoot past the anchor (bounce feel)
+  //   0.24→0.28: settles back to 0 (vault capture)
+  const zorbFallY = useTransform(scroll, [0, 0.05, 0.20, 0.24, 0.28], [-240, -70, -5, 4, 0])
+  const zorbFallRotZ = useTransform(scroll, [0, 0.05, 0.20, 0.28], [-24, -19, -3, 0])
 
   const vaultTransform = useMotionTemplate`
     translate3d(-50%, ${zorbFallY}vh, ${vaultZ}px)
@@ -472,7 +472,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
       <div
         ref={outerRef}
         className="relative hidden sm:block"
-        style={{ height: '2000vh' }}
+        style={{ height: '1500vh' }}
       >
         <div
           className="sticky top-0 h-screen overflow-hidden bg-black"

@@ -939,24 +939,21 @@ export function Swap() {
         ? 'Canonical session needs refresh'
         : '4626 session required for submit'
   const [canonicalSessionRefreshBusy, setCanonicalSessionRefreshBusy] = useState(false)
-  const canonicalSessionRefreshAttemptKeyRef = useRef<string>('')
+  const canonicalSessionAutoRefreshAttemptedRef = useRef(false)
+  const canonicalSessionAutoRefreshInFlightRef = useRef(false)
 
   useEffect(() => {
     if (executionMode !== 'canonical' || !canonicalSignerGate.ready) return
     if (canonicalSubmitSession.ok) {
-      canonicalSessionRefreshAttemptKeyRef.current = ''
       setCanonicalSessionRefreshBusy(false)
       return
     }
     if (!canonicalSubmitSession.shouldAttemptRefresh) return
-    const attemptKey = [
-      canonicalSubmitSession.code,
-      executionAddress ?? '',
-      authAddress ?? '',
-      hasSession ? '1' : '0',
-    ].join(':')
-    if (canonicalSessionRefreshAttemptKeyRef.current === attemptKey) return
-    canonicalSessionRefreshAttemptKeyRef.current = attemptKey
+    if (canonicalSessionAutoRefreshAttemptedRef.current) return
+    if (canonicalSessionAutoRefreshInFlightRef.current) return
+
+    canonicalSessionAutoRefreshAttemptedRef.current = true
+    canonicalSessionAutoRefreshInFlightRef.current = true
 
     let cancelled = false
     setCanonicalSessionRefreshBusy(true)
@@ -967,6 +964,7 @@ export function Swap() {
       } catch {
         // Keep banner fallback behavior when auto-refresh fails.
       } finally {
+        canonicalSessionAutoRefreshInFlightRef.current = false
         if (!cancelled) setCanonicalSessionRefreshBusy(false)
       }
     })()
@@ -975,15 +973,11 @@ export function Swap() {
       cancelled = true
     }
   }, [
-    authAddress,
     canonicalSignerGate.ready,
-    canonicalSubmitSession.code,
     canonicalSubmitSession.ok,
     canonicalSubmitSession.shouldAttemptRefresh,
     ensureCanonicalSession,
-    executionAddress,
     executionMode,
-    hasSession,
     refreshAuthSession,
   ])
 
