@@ -79,10 +79,10 @@ function pickPrivySessionAddress(params: {
 }): string | null {
   const currentLinked = collectCurrentLinkedEvmAddresses(params.classified)
   const candidates = [
-    params.syncedCanonicalAddress,
-    params.syncedPrimaryAddress,
     params.syncedActiveOwnerAddress,
     params.classifiedSessionAddress,
+    params.syncedPrimaryAddress,
+    params.syncedCanonicalAddress,
     params.persistedSessionAddress,
   ].map((value) => normalizeEvmAddress(value))
 
@@ -194,8 +194,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await client.getUserById(claims.userId)
 
     const classified = classifyLinkedAccounts(user as any)
+    // Session principal should prefer the active owner signer used for canonical execution.
+    // This keeps paymaster ownership checks and canonical submit guards aligned.
     const classifiedSessionAddress =
-      classified.canonicalSmartWallet?.address ?? classified.primaryWalletAddress ?? null
+      classified.activeOwnerWallet?.address ??
+      classified.canonicalSmartWallet?.address ??
+      classified.primaryWalletAddress ??
+      null
     let sessionAddress = classifiedSessionAddress
 
     try {

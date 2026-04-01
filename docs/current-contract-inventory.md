@@ -17,7 +17,8 @@ Scope: `v1.7.1` deployment reset materials and canonical Base defaults.
 | `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
 | `bytecodeStore` | `0x6A578022609cdb65C614FF28912C49FC1EC97071` |
 | `create2DeployerFromStore` | `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a` |
-| `deploymentBatcher` | `0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB` |
+| `deploymentBatcher` | `0x5069961b6B1EC031a60344b4D615243054f594B3` |
+| `deploymentBatcherPhase3Helper` | `0x6786374787e434c8ba8101666e60e55978c29ad0` |
 | `creatorOVaultCoreModule` | `0x4890776DA44f014A932dF4a9a1F8dBE648E91e3D` |
 | `creatorOVaultStrategiesModule` | `0x1E357B6B7a837CAF75Eb14016d2733779FEed9CE` |
 | `creatorOVaultAdminModule` | `0xBF2ab516BAA04aeac061f359a483622Ff006f153` |
@@ -34,8 +35,8 @@ From `frontend/src/config/contracts.defaults.ts`:
 | Key | Address |
 |---|---|
 | `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
-| `creatorVaultBatcher` | `0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB` |
-| `creatorVaultBatcherAutoHandoff` | `0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB` |
+| `creatorVaultBatcher` | `0x5069961b6B1EC031a60344b4D615243054f594B3` |
+| `creatorVaultBatcherAutoHandoff` | `0x5069961b6B1EC031a60344b4D615243054f594B3` |
 | `universalBytecodeStore` | `0x6A578022609cdb65C614FF28912C49FC1EC97071` |
 | `universalCreate2DeployerFromStore` | `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a` |
 

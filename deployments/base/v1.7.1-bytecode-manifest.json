@@ -1,6 +1,6 @@
 {
   "release": "v1.7.1",
-  "generatedAt": "2026-04-01T07:39:45.477Z",
+  "generatedAt": "2026-04-01T08:51:03Z",
   "chain": "base",
   "chainId": 8453,
   "contracts": {
@@ -78,6 +78,16 @@
       "creationBytecodeHash": "0x8bb4d3e9b50c7af7215593faf4fb3daaf5d876960196667e35b246e703f93adf",
       "codeId": "0x8bb4d3e9b50c7af7215593faf4fb3daaf5d876960196667e35b246e703f93adf",
       "creationBytecodeBytes": 5344
+    },
+    "DeploymentBatcher": {
+      "creationBytecodeHash": "0x574c0db35c4a9c805f0cd33d1770eacddf798255bad00f4c49695f890a7b101b",
+      "codeId": "0x574c0db35c4a9c805f0cd33d1770eacddf798255bad00f4c49695f890a7b101b",
+      "creationBytecodeBytes": 29443
+    },
+    "DeploymentBatcherPhase3Helper": {
+      "creationBytecodeHash": "0x2be98f246ce8d1b8d4c8a8649e7b3675f17640f72256fc671c3a04973d9e054c",
+      "codeId": "0x2be98f246ce8d1b8d4c8a8649e7b3675f17640f72256fc671c3a04973d9e054c",
+      "creationBytecodeBytes": 6708
     }
   }
 }

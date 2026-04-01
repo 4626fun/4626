@@ -18,6 +18,172 @@ interface IUniversalCreate2DeployerFromStore {
     function computeAddress(bytes32 salt, bytes32 initCodeHash) external view returns (address);
 }
 
+contract DeploymentBatcherPhase3Helper {
+    uint24 internal constant V3_FEE_TIER = 3000;
+    int24 internal constant CHARM_MAX_TWAP_DEVIATION = 500;
+    uint32 internal constant CHARM_TWAP_DURATION = 300;
+
+    address internal constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
+    address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
+    address internal constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
+
+    error NotBatcher();
+    error MissingInitialSqrtPriceX96();
+    error V3PoolMissing();
+    error CharmFactoryGovernanceMismatch(address expected, address actual);
+    error CharmVaultManagerMismatch(address expected, address actual);
+
+    IUniversalCreate2DeployerFromStore public immutable create2Deployer;
+    address public immutable protocolTreasury;
+    address public immutable usdc;
+    address public immutable uniswapV3Factory;
+    address public immutable uniswapRouter;
+    address public immutable ajnaFactory;
+    address public immutable batcher;
+
+    constructor(
+        address _create2Deployer,
+        address _protocolTreasury,
+        address _usdc,
+        address _uniswapV3Factory,
+        address _uniswapRouter,
+        address _ajnaFactory
+    ) {
+        create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
+        protocolTreasury = _protocolTreasury;
+        usdc = _usdc;
+        uniswapV3Factory = _uniswapV3Factory;
+        uniswapRouter = _uniswapRouter;
+        ajnaFactory = _ajnaFactory;
+        batcher = msg.sender;
+    }
+
+    function deployPhase3Strategies(
+        DeploymentBatcher.Phase3Params calldata params,
+        DeploymentBatcher.StrategyCodeIds calldata codeIds,
+        bytes32 baseSalt
+    ) external returns (DeploymentBatcher.Phase3Result memory out) {
+        if (msg.sender != batcher) revert NotBatcher();
+
+        address v3Pool = IUniswapV3Factory(uniswapV3Factory).getPool(params.creatorToken, usdc, V3_FEE_TIER);
+        if (v3Pool == address(0)) {
+            if (params.initialSqrtPriceX96 == 0) revert MissingInitialSqrtPriceX96();
+            v3Pool = IUniswapV3Factory(uniswapV3Factory).createPool(params.creatorToken, usdc, V3_FEE_TIER);
+            if (v3Pool == address(0)) revert V3PoolMissing();
+            IUniswapV3Pool(v3Pool).initialize(params.initialSqrtPriceX96);
+        }
+        out.v3Pool = v3Pool;
+
+        _enforceCharmFactoryGovernance();
+        out.charmVault = ICharmFactory(CHARM_FACTORY)
+            .createVault(
+                ICharmFactory.VaultParams({
+                pool: v3Pool,
+                manager: protocolTreasury,
+                managerFee: 0,
+                rebalanceDelegate: address(0),
+                maxTotalSupply: type(uint256).max,
+                baseThreshold: 3000,
+                limitThreshold: 6000,
+                fullRangeWeight: 0,
+                period: 1800,
+                minTickMove: int24(0),
+                maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
+                twapDuration: CHARM_TWAP_DURATION,
+                name: params.charmVaultName,
+                symbol: params.charmVaultSymbol
+            })
+            );
+        _enforceCharmVaultManager(out.charmVault, protocolTreasury);
+
+        bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
+        bytes memory charmStratArgs =
+            abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, out.charmVault, v3Pool, address(this));
+        out.charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
+        ICreatorCharmStrategy(out.charmStrategy).initializeApprovals();
+        IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
+
+        bytes32 subsetHash = IAjnaPoolFactory(ajnaFactory).ERC20_NON_SUBSET_HASH();
+        address ajnaPool = IAjnaPoolFactory(ajnaFactory).deployedPools(subsetHash, usdc, params.creatorToken);
+        if (ajnaPool == address(0)) {
+            uint256 ajnaInterestRate = 5e16;
+            uint256 minRate = IAjnaPoolFactory(ajnaFactory).MIN_RATE();
+            uint256 maxRate = IAjnaPoolFactory(ajnaFactory).MAX_RATE();
+            if (ajnaInterestRate < minRate) ajnaInterestRate = minRate;
+            if (ajnaInterestRate > maxRate) ajnaInterestRate = maxRate;
+            ajnaPool = IAjnaPoolFactory(ajnaFactory).deployPool(usdc, params.creatorToken, ajnaInterestRate);
+        }
+
+        bytes32 ajnaAuthSalt = _saltFor(baseSalt, "ajnaVaultAuth");
+        out.ajnaVaultAuth = create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, abi.encode(address(this)));
+
+        if (params.ajnaBufferRatioBps != 0) {
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setBufferRatio(params.ajnaBufferRatioBps);
+        }
+        if (params.ajnaMinBucketIndex != 0) {
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setMinBucketIndex(params.ajnaMinBucketIndex);
+        }
+        if (params.ajnaKeeper != address(0)) {
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(params.ajnaKeeper, true);
+        }
+
+        bytes32 ajnaVaultSalt = _saltFor(baseSalt, "ajnaVault");
+        bytes memory ajnaVaultArgs =
+            abi.encode(ajnaPool, params.creatorToken, params.ajnaVaultName, params.ajnaVaultSymbol, out.ajnaVaultAuth);
+        out.ajnaVault = create2Deployer.deploy(ajnaVaultSalt, codeIds.ajnaVault, ajnaVaultArgs);
+
+        bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategyAdapter");
+        bytes memory ajnaArgs = abi.encode(params.vault, out.ajnaVault, address(this));
+        out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.erc4626StrategyAdapter, ajnaArgs);
+        IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
+        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setSwapper(out.ajnaStrategy);
+        IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
+        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(protocolTreasury);
+
+        bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
+        bytes memory solanaArgs = abi.encode(
+            params.vault,
+            params.creatorToken,
+            address(this),
+            params.solanaKeeper,
+            params.solanaMaxNavAge,
+            params.solanaMaxNavDeltaBpsPerUpdate,
+            params.solanaMinBaseLiquidityBps,
+            params.solanaBridgeAddress
+        );
+        out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
+        IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
+    }
+
+    function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(baseSalt, label));
+    }
+
+    function _enforceCharmFactoryGovernance() internal view {
+        try ICharmFactory(CHARM_FACTORY).governance() returns (address governance) {
+            if (!_isAllowedCharmFactoryGovernance(governance)) {
+                revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, governance);
+            }
+        } catch {
+            revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, address(0));
+        }
+    }
+
+    function _enforceCharmVaultManager(address charmVault, address expectedManager) internal view {
+        try ICharmVaultManager(charmVault).manager() returns (address manager) {
+            if (manager != expectedManager) {
+                revert CharmVaultManagerMismatch(expectedManager, manager);
+            }
+        } catch {
+            revert CharmVaultManagerMismatch(expectedManager, address(0));
+        }
+    }
+
+    function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool) {
+        return governance == CHARM_FACTORY_GOVERNANCE || governance == CHARM_FACTORY_GOVERNANCE_LEGACY;
+    }
+}
+
 interface IUniversalBytecodeStore {
     function get(bytes32 codeId) external view returns (bytes memory);
 }
@@ -152,16 +318,8 @@ interface IERC4626StrategyAdapterAdmin {
 contract DeploymentBatcher is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint24 internal constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
-    int24 internal constant CHARM_MAX_TWAP_DEVIATION = 500;
-    uint32 internal constant CHARM_TWAP_DURATION = 300;
-
-    /// @notice Charm Finance Alpha Vault Factory on Base
-    /// @dev Vaults created via this factory appear on alpha.charm.fi UI
+    /// @notice Charm Finance Alpha Vault Factory on Base.
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
-    /// @notice Pinned Charm governance allowlist on Base. Deployments fail closed outside this set.
-    address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
-    address internal constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
 
     // ── Fixed Three-Way Split Constants ──────────────────────────────
     /// @notice Minimum deposit amount (50M tokens, 18 decimals)
@@ -398,6 +556,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     bytes32 public solanaDestination;
     /// @notice OVault runtime wiring used for Solana compose orchestration.
     OVaultRuntimeConfig private ovaultRuntimeConfig;
+    /// @notice Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
+    DeploymentBatcherPhase3Helper public immutable phase3Helper;
 
     event Phase1Deployed(
         address indexed creatorToken,
@@ -532,6 +692,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         vaultCoreModule = _vaultCoreModule;
         vaultStrategiesModule = _vaultStrategiesModule;
         vaultAdminModule = _vaultAdminModule;
+
+        phase3Helper = new DeploymentBatcherPhase3Helper(
+            _create2Deployer, _protocolTreasury, _usdc, _uniswapV3Factory, _uniswapRouter, _ajnaFactory
+        );
     }
 
     // ================================
@@ -821,7 +985,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         ICCALaunchStrategy(out.ccaStrategy).setRecipients(out.ccaStrategy, out.ccaStrategy);
         ICCALaunchStrategy(out.ccaStrategy).setBackingVault(params.vault);
         // Position manager can be set later by governance if not known at deploy-time.
-        ICCALaunchStrategy(out.ccaStrategy).setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
+        ICCALaunchStrategy(out.ccaStrategy)
+            .setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
         ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
         // Launch floor/tick are derived onchain from oracle data; wire explicit defaults here.
         ICCALaunchStrategy(out.ccaStrategy).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
@@ -955,116 +1120,8 @@ contract DeploymentBatcher is ReentrancyGuard {
             revert ZeroAddress();
         }
 
-        // ───────────────────────────────
-        // 1) Ensure CREATOR/USDC V3 pool exists (0.3% fee)
-        // ───────────────────────────────
-        address v3Pool = IUniswapV3Factory(uniswapV3Factory).getPool(params.creatorToken, usdc, V3_FEE_TIER);
-        if (v3Pool == address(0)) {
-            if (params.initialSqrtPriceX96 == 0) revert MissingInitialSqrtPriceX96();
-            v3Pool = IUniswapV3Factory(uniswapV3Factory).createPool(params.creatorToken, usdc, V3_FEE_TIER);
-            if (v3Pool == address(0)) revert V3PoolMissing();
-            IUniswapV3Pool(v3Pool).initialize(params.initialSqrtPriceX96);
-        }
-        out.v3Pool = v3Pool;
-
-        // ───────────────────────────────
-        // 2) Deploy Charm alpha vault via Charm Factory (shows on alpha.charm.fi UI)
-        // ───────────────────────────────
-        _enforceCharmFactoryGovernance();
-        // NOTE: Using Charm's official factory ensures vault appears on their UI
-        // Parameters: manager=protocolTreasury can rebalance, baseThreshold=3000 ticks,
-        //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
-        out.charmVault = ICharmFactory(CHARM_FACTORY)
-            .createVault(
-                ICharmFactory.VaultParams({
-                pool: v3Pool,
-                manager: protocolTreasury, // manager (can call rebalance)
-                managerFee: 0,
-                rebalanceDelegate: address(0),
-                maxTotalSupply: type(uint256).max, // maxTotalSupply (unlimited)
-                baseThreshold: 3000, // baseThreshold (ticks, must be multiple of tickSpacing)
-                limitThreshold: 6000, // limitThreshold (ticks)
-                fullRangeWeight: 0, // fullRangeWeight (0 = no full range position)
-                period: 1800, // period (30 minutes between rebalances)
-                minTickMove: int24(0),
-                maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
-                twapDuration: CHARM_TWAP_DURATION,
-                name: params.charmVaultName,
-                symbol: params.charmVaultSymbol
-            })
-            );
-        _enforceCharmVaultManager(out.charmVault, protocolTreasury);
-
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-
-        // ───────────────────────────────
-        // 3) Deploy Charm strategy adapter + initialize approvals
-        // ───────────────────────────────
-        bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
-        bytes memory charmStratArgs =
-            abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, out.charmVault, v3Pool, address(this));
-        out.charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
-        ICreatorCharmStrategy(out.charmStrategy).initializeApprovals();
-        IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
-
-        // ───────────────────────────────
-        // 4) Deploy nested Ajna stack (auth + inner ERC4626 vault + adapter)
-        // ───────────────────────────────
-        bytes32 subsetHash = IAjnaPoolFactory(ajnaFactory).ERC20_NON_SUBSET_HASH();
-        address ajnaPool = IAjnaPoolFactory(ajnaFactory).deployedPools(subsetHash, usdc, params.creatorToken);
-        if (ajnaPool == address(0)) {
-            uint256 ajnaInterestRate = 5e16; // 5% APR default
-            uint256 minRate = IAjnaPoolFactory(ajnaFactory).MIN_RATE();
-            uint256 maxRate = IAjnaPoolFactory(ajnaFactory).MAX_RATE();
-            if (ajnaInterestRate < minRate) ajnaInterestRate = minRate;
-            if (ajnaInterestRate > maxRate) ajnaInterestRate = maxRate;
-            ajnaPool = IAjnaPoolFactory(ajnaFactory).deployPool(usdc, params.creatorToken, ajnaInterestRate);
-        }
-
-        bytes32 ajnaAuthSalt = _saltFor(baseSalt, "ajnaVaultAuth");
-        bytes memory ajnaAuthArgs = abi.encode(address(this));
-        out.ajnaVaultAuth = create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, ajnaAuthArgs);
-
-        if (params.ajnaBufferRatioBps != 0) {
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setBufferRatio(params.ajnaBufferRatioBps);
-        }
-        if (params.ajnaMinBucketIndex != 0) {
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setMinBucketIndex(params.ajnaMinBucketIndex);
-        }
-        if (params.ajnaKeeper != address(0)) {
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(params.ajnaKeeper, true);
-        }
-
-        bytes32 ajnaVaultSalt = _saltFor(baseSalt, "ajnaVault");
-        bytes memory ajnaVaultArgs =
-            abi.encode(ajnaPool, params.creatorToken, params.ajnaVaultName, params.ajnaVaultSymbol, out.ajnaVaultAuth);
-        out.ajnaVault = create2Deployer.deploy(ajnaVaultSalt, codeIds.ajnaVault, ajnaVaultArgs);
-
-        bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategyAdapter");
-        bytes memory ajnaArgs = abi.encode(params.vault, out.ajnaVault, address(this));
-        out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.erc4626StrategyAdapter, ajnaArgs);
-        IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
-        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setSwapper(out.ajnaStrategy);
-        IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
-        // Protocol controls Ajna auth admin surface (keepers/swapper/fee controls).
-        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(protocolTreasury);
-
-        // ───────────────────────────────
-        // 4b) Deploy Solana strategy + transfer ownership
-        // ───────────────────────────────
-        bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
-        bytes memory solanaArgs = abi.encode(
-            params.vault,
-            params.creatorToken,
-            address(this),
-            params.solanaKeeper,
-            params.solanaMaxNavAge,
-            params.solanaMaxNavDeltaBpsPerUpdate,
-            params.solanaMinBaseLiquidityBps,
-            params.solanaBridgeAddress
-        );
-        out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
-        IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
+        out = phase3Helper.deployPhase3Strategies(params, codeIds, baseSalt);
 
         // ───────────────────────────────
         // 5) Register strategies on the vault (batcher remains `management` from Phase 1)
@@ -1233,29 +1290,5 @@ contract DeploymentBatcher is ReentrancyGuard {
             }
         }
         return string(b);
-    }
-
-    function _enforceCharmFactoryGovernance() internal view {
-        try ICharmFactory(CHARM_FACTORY).governance() returns (address governance) {
-            if (!_isAllowedCharmFactoryGovernance(governance)) {
-                revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, governance);
-            }
-        } catch {
-            revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, address(0));
-        }
-    }
-
-    function _enforceCharmVaultManager(address charmVault, address expectedManager) internal view {
-        try ICharmVaultManager(charmVault).manager() returns (address manager) {
-            if (manager != expectedManager) {
-                revert CharmVaultManagerMismatch(expectedManager, manager);
-            }
-        } catch {
-            revert CharmVaultManagerMismatch(expectedManager, address(0));
-        }
-    }
-
-    function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool) {
-        return governance == CHARM_FACTORY_GOVERNANCE || governance == CHARM_FACTORY_GOVERNANCE_LEGACY;
     }
 }

@@ -2,13 +2,15 @@
   "contractName": "DeploymentBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB",
+  "address": "0x5069961b6B1EC031a60344b4D615243054f594B3",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-01T00:00:00Z",
-  "status": "predicted-v1.7.1",
+  "deployedAt": "2026-04-01T08:43:05Z",
+  "status": "deployed-v1.7.1",
   "notes": [
     "Deterministic address derived from INFRA_DEPLOYMENT_BATCHER_SALT_TAG=4626:DeploymentBatcher:v1.7.1",
-    "Finalize by running script/deploy-infra-v2.sh with broadcast using the same salt tags",
-    "Constructor dependencies for this epoch: UniversalBytecodeStoreV2=0x6A578022609cdb65C614FF28912C49FC1EC97071, UniversalCreate2DeployerFromStore=0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a"
+    "Broadcast tx: 0xcae7783bc700b84a2243e96397911f36099084675d45547778ebd5e8a8658793 (Base mainnet)",
+    "Constructor dependencies for this epoch: UniversalBytecodeStoreV2=0x6A578022609cdb65C614FF28912C49FC1EC97071, UniversalCreate2DeployerFromStore=0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a",
+    "Constructor-created phase-3 helper: DeploymentBatcherPhase3Helper=0x6786374787e434c8ba8101666e60e55978c29ad0",
+    "Explorer verification remains pending for DeploymentBatcher creation bytecode; verify helper/modules/store/deployer are confirmed."
   ]
 }

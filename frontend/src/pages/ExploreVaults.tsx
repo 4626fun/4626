@@ -38,9 +38,21 @@ const BASE_CHAIN_ID = 8453
 const VAULT_SORT_OPTIONS = [
   { label: '24h volume', value: 'volume' },
   { label: 'Market cap', value: 'marketCap' },
-  { label: '24h fees', value: 'priceChange' },
+  { label: '24h fees', value: 'fees24h' },
   { label: 'Recently updated', value: 'new' },
 ] as const
+const VAULT_TIME_FILTERS = [
+  { label: '24H', value: '1d' },
+  { label: '7D', value: '1w' },
+  { label: 'All', value: '1y' },
+] as const
+
+function normalizeVaultSort(value: string | null): string {
+  if (!value) return 'volume'
+  if (value === 'priceChange') return 'fees24h'
+  if (value === 'volume' || value === 'marketCap' || value === 'fees24h' || value === 'new') return value
+  return 'volume'
+}
 
 function formatMetricUsd(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '-'
@@ -105,7 +117,7 @@ export function ExploreVaults() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const currentTimeFilter = searchParams.get('time') || '1d'
-  const currentSort = searchParams.get('sort') || 'volume'
+  const currentSort = normalizeVaultSort(searchParams.get('sort'))
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
   const {
@@ -189,6 +201,7 @@ export function ExploreVaults() {
             currentSort={currentSort}
             volumeColumnNote="24h volume/fees come from creator coin snapshots; market cap reflects latest sampled value."
             sortOptions={VAULT_SORT_OPTIONS}
+            timeFilters={VAULT_TIME_FILTERS}
             disableUniswapTimeGating
           />
         </motion.div>

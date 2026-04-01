@@ -11,7 +11,7 @@ import {
 import { ensureCreatorMetricsSchema } from '../../../../server/_lib/creatorMetricsSync.js'
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
 
-type ExploreVaultSort = 'volume' | 'marketCap' | 'priceChange' | 'new'
+type ExploreVaultSort = 'volume' | 'marketCap' | 'fees24h' | 'new'
 type ExploreVaultTimeFilter = '1d' | '1w' | '1y'
 
 type ExploreVaultRow = {
@@ -44,7 +44,8 @@ const MAX_LIMIT = 100
 const VALID_SORTS: Record<string, ExploreVaultSort> = {
   volume: 'volume',
   marketCap: 'marketCap',
-  priceChange: 'priceChange',
+  fees24h: 'fees24h',
+  priceChange: 'fees24h',
   new: 'new',
 }
 
@@ -192,7 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ORDER BY
         CASE WHEN ${sort} = 'marketCap' THEN COALESCE(cc.market_cap_usd, 0) END DESC NULLS LAST,
         CASE WHEN ${sort} = 'volume' THEN COALESCE(cc.volume_24h_usd, 0) END DESC NULLS LAST,
-        CASE WHEN ${sort} = 'priceChange' THEN COALESCE(cc.fees_24h_usd, 0) END DESC NULLS LAST,
+        CASE WHEN ${sort} = 'fees24h' THEN COALESCE(cc.fees_24h_usd, 0) END DESC NULLS LAST,
         CASE WHEN ${sort} = 'new' THEN EXTRACT(EPOCH FROM COALESCE(v.created_at, v.updated_at, NOW())) END DESC NULLS LAST,
         COALESCE(v.updated_at, v.created_at, NOW()) DESC,
         LOWER(v.vault_address) ASC

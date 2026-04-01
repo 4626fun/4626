@@ -621,6 +621,15 @@ function getHexByteLength(hex: string): number | null {
   return body.length / 2
 }
 
+function utf8ToHex(value: string): Hex {
+  const bytes = new TextEncoder().encode(value)
+  let hex = '0x'
+  for (const byte of bytes) {
+    hex += byte.toString(16).padStart(2, '0')
+  }
+  return hex as Hex
+}
+
 function signatureMeta(signature: Hex) {
   const byteLength = getHexByteLength(signature)
   return {
@@ -1364,7 +1373,7 @@ function createWalletBackedLocalAccount(params: {
             ? (message.raw as Hex)
             : typeof message === 'string'
               ? message
-              : `0x${Buffer.from(String(message)).toString('hex')}`
+              : utf8ToHex(String(message))
         rawSig = await withTimeout(
           walletClient.request({
             method: 'personal_sign',
