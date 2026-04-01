@@ -137,18 +137,19 @@ const AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL = `
 `
 
 const PGVECTOR_EXTENSION_SQL = `
-  CREATE EXTENSION IF NOT EXISTS vector;
+  CREATE SCHEMA IF NOT EXISTS extensions;
+  CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
 `
 
 const AGENT_MEMORY_EMBEDDING_COLUMN_SQL = `
   ALTER TABLE agent_message_memory
-  ADD COLUMN IF NOT EXISTS embedding vector(1536);
+  ADD COLUMN IF NOT EXISTS embedding extensions.vector(1536);
 `
 
 const AGENT_MEMORY_EMBEDDING_INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS agent_message_memory_embedding_ivfflat_idx
     ON agent_message_memory
-    USING ivfflat (embedding vector_cosine_ops)
+    USING ivfflat (embedding extensions.vector_cosine_ops)
     WITH (lists = 100);
 `
 

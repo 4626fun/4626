@@ -15,6 +15,7 @@ const v1RouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'workspace/tasks': () => import('./v1/workspace/_tasks.js'),
   'workspace/settings': () => import('./v1/workspace/_settings.js'),
   'workspace/actions': () => import('./v1/workspace/_actions.js'),
+  'explore/vaults': () => import('./v1/explore/_vaults.js'),
   'auction/status': () => import('./v1/auction/_status.js'),
   'auction/activity': () => import('./v1/auction/_activity.js'),
   'auction/recentBids': () => import('./v1/auction/_recentBids.js'),

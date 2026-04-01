@@ -10,6 +10,7 @@ type Tab = {
 const TABS: Tab[] = [
   { label: 'Creators', to: '/explore/creators' },
   { label: 'Content', to: '/explore/content' },
+  { label: 'Vaults', to: '/explore/vaults' },
   { label: 'Trends', to: '/explore/trends' },
   { label: 'Transactions', to: '/explore/transactions' },
 ]
@@ -174,4 +175,3 @@ export function ExploreSubnav({
     </div>
   )
 }
-

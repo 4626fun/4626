@@ -16,6 +16,7 @@ import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
+import { flattenExplorePagedNodes, matchesCoinSearchQuery, normalizeCoinSearchQuery } from './exploreShared'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
@@ -31,6 +32,12 @@ const LIVE_METRICS_REFETCH_MS = 10_000
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
+const CREATOR_SEARCH_MATCH_OPTIONS = {
+  includeCreatorAddress: true,
+  includePayoutAddress: true,
+  includeQueryVariants: true,
+  includeHandleBasenameVariant: true,
+} as const
 
 type ExploreMetrics = {
   scope: 'creators'
@@ -97,44 +104,6 @@ function coalesceMetricValue(...values: Array<number | null | undefined>): numbe
   return null
 }
 
-function normalizeSearchQuery(query: string): { raw: string; withoutAt: string; withoutBasenameSuffix: string } {
-  const raw = query.trim().toLowerCase()
-  const withoutAt = raw.startsWith('@') ? raw.slice(1) : raw
-  const withoutBasenameSuffix = withoutAt.endsWith('.base.eth') ? withoutAt.slice(0, -'.base.eth'.length) : withoutAt
-  return { raw, withoutAt, withoutBasenameSuffix }
-}
-
-function matchesCreatorSearchQuery(coin: ZoraCoin, query: string): boolean {
-  const normalized = normalizeSearchQuery(query)
-  if (!normalized.raw) return true
-
-  const name = (coin.name || '').toLowerCase()
-  const symbol = (coin.symbol || '').toLowerCase()
-  const address = (coin.address || '').toLowerCase()
-  const payout = (coin.payoutRecipientAddress || '').toLowerCase()
-  const creator = (coin.creatorAddress || '').toLowerCase()
-  const creatorHandle = (coin.creatorProfile?.handle || '').toLowerCase()
-  const creatorHandleWithoutBasename = creatorHandle.endsWith('.base.eth')
-    ? creatorHandle.slice(0, -'.base.eth'.length)
-    : creatorHandle
-
-  const candidates = [
-    normalized.raw,
-    normalized.withoutAt,
-    normalized.withoutBasenameSuffix,
-  ].filter(Boolean)
-
-  return candidates.some((candidate) =>
-    name.includes(candidate) ||
-    symbol.includes(candidate) ||
-    address.includes(candidate) ||
-    payout.includes(candidate) ||
-    creator.includes(candidate) ||
-    creatorHandle.includes(candidate) ||
-    creatorHandleWithoutBasename.includes(candidate),
-  )
-}
-
 function dedupeCoinsByAddress(coins: ZoraCoin[]): ZoraCoin[] {
   const out: ZoraCoin[] = []
   const seen = new Set<string>()
@@ -150,7 +119,7 @@ function dedupeCoinsByAddress(coins: ZoraCoin[]): ZoraCoin[] {
 }
 
 function buildProfileIdentifierCandidates(query: string): string[] {
-  const normalized = normalizeSearchQuery(query)
+  const normalized = normalizeCoinSearchQuery(query)
   const base = normalized.withoutAt
   if (!base) return []
 
@@ -313,26 +282,17 @@ export function ExploreCreators() {
 
   // Flatten all pages into a single array of coins
   const allCoins = useMemo(() => {
-    if (!data?.pages) return []
-    const coins: ZoraCoin[] = []
-    for (const page of data.pages) {
-      if (page?.edges) {
-        for (const edge of page.edges) {
-          if (edge?.node) {
-            coins.push(edge.node)
-          }
-        }
-      }
-    }
-    return coins
-  }, [data])
+    return flattenExplorePagedNodes(data?.pages)
+  }, [data?.pages])
 
   const trimmedSearchQuery = searchQuery.trim()
 
   // Local filtering over currently loaded ranking pages.
   const localFilteredCoins = useMemo(() => {
     if (!trimmedSearchQuery) return allCoins
-    return allCoins.filter((coin) => matchesCreatorSearchQuery(coin, trimmedSearchQuery))
+    return allCoins.filter((coin) =>
+      matchesCoinSearchQuery(coin, trimmedSearchQuery, CREATOR_SEARCH_MATCH_OPTIONS),
+    )
   }, [allCoins, trimmedSearchQuery])
 
   // Fallback search resolves by creator handle/profile/address so creators outside
@@ -349,7 +309,9 @@ export function ExploreCreators() {
   const directSearchCoins = useMemo(() => {
     const data = directSearchQuery.data
     if (!Array.isArray(data) || !trimmedSearchQuery) return []
-    return data.filter((coin) => matchesCreatorSearchQuery(coin, trimmedSearchQuery))
+    return data.filter((coin) =>
+      matchesCoinSearchQuery(coin, trimmedSearchQuery, CREATOR_SEARCH_MATCH_OPTIONS),
+    )
   }, [directSearchQuery.data, trimmedSearchQuery])
 
   const filteredCoins = useMemo(() => {

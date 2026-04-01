@@ -47,6 +47,7 @@ let authMeCacheAddress: string | null = null
 let authMeCacheResolvedAt = 0
 let authMeInFlightToken: string | null = null
 let authMeInFlight: Promise<string | null> | null = null
+let autoPrivyBridgeAttempted = false
 
 function shouldSkipAutoPrivyBridge(): boolean {
   const now = Date.now()
@@ -73,7 +74,9 @@ function shouldSkipAutoPrivyBridge(): boolean {
 
 function beginAutoPrivyBridgeAttempt(): boolean {
   if (shouldSkipAutoPrivyBridge()) return false
+  if (autoPrivyBridgeAttempted) return false
   if (autoPrivyBridgeInFlight) return false
+  autoPrivyBridgeAttempted = true
   lastPrivyBridgeAttemptAt = Date.now()
   autoPrivyBridgeInFlight = true
   return true
@@ -269,6 +272,7 @@ export function writeStoredSessionToken(token: string | null) {
   } catch {
     // ignore
   }
+  if (persisted && !nextToken) autoPrivyBridgeAttempted = false
   if (persisted) invalidateAuthMeCache()
   if (persisted) notifyStoredSessionTokenChanged()
 }

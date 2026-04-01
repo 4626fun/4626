@@ -45,23 +45,25 @@ describe('evaluateCanonicalSubmitSession', () => {
         hasSession: true,
         sessionAddress: '0x1111111111111111111111111111111111111111',
         executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        expectedSessionAddress: '0x2222222222222222222222222222222222222222',
       }),
     ).toEqual({
       ok: false,
       code: 'session-mismatch',
-      message: 'Your restored 4626 session does not match the canonical swap wallet. Restore your account connection and try again.',
+      message: 'Your restored 4626 session does not match the canonical owner signer. Restore your account connection and try again.',
       shouldAttemptRefresh: true,
     })
   })
 
-  it('allows canonical submit when the restored session matches the execution wallet', () => {
+  it('allows canonical submit when the restored session matches the canonical owner signer', () => {
     expect(
       evaluateCanonicalSubmitSession({
         executionMode: 'canonical',
         sessionHydrated: true,
         hasSession: true,
-        sessionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        sessionAddress: '0x1111111111111111111111111111111111111111',
         executionAddress: '0xAB6D5C10B03300326CD7FAB7267AE192842967B5',
+        expectedSessionAddress: '0x1111111111111111111111111111111111111111',
       }),
     ).toEqual({
       ok: true,
@@ -123,13 +125,14 @@ describe('resolveCanonicalSubmitSession', () => {
           hasSession: true,
           sessionAddress: '0x1111111111111111111111111111111111111111',
           executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+          expectedSessionAddress: '0x2222222222222222222222222222222222222222',
         },
         ensureCanonicalSession,
       ),
     ).resolves.toEqual({
       ok: false,
       code: 'session-mismatch',
-      message: 'Your restored 4626 session does not match the canonical swap wallet. Restore your account connection and try again.',
+      message: 'Your restored 4626 session does not match the canonical owner signer. Restore your account connection and try again.',
       shouldAttemptRefresh: true,
     })
   })

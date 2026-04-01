@@ -87,6 +87,7 @@ type CanonicalSubmitSessionInput = {
   hasSession: boolean
   sessionAddress: string | null | undefined
   executionAddress: string | null | undefined
+  expectedSessionAddress?: string | null | undefined
 }
 
 type CanonicalSubmitSessionResult =
@@ -174,13 +175,17 @@ export function evaluateCanonicalSubmitSession(input: CanonicalSubmitSessionInpu
     }
   }
 
-  const executionAddress =
-    typeof input.executionAddress === 'string' && input.executionAddress.trim().length > 0 ? input.executionAddress : null
-  if (executionAddress && input.sessionAddress.toLowerCase() !== executionAddress.toLowerCase()) {
+  const expectedSessionAddress =
+    typeof input.expectedSessionAddress === 'string' && input.expectedSessionAddress.trim().length > 0
+      ? input.expectedSessionAddress
+      : typeof input.executionAddress === 'string' && input.executionAddress.trim().length > 0
+        ? input.executionAddress
+        : null
+  if (expectedSessionAddress && input.sessionAddress.toLowerCase() !== expectedSessionAddress.toLowerCase()) {
     return {
       ok: false,
       code: 'session-mismatch',
-      message: 'Your restored 4626 session does not match the canonical swap wallet. Restore your account connection and try again.',
+      message: 'Your restored 4626 session does not match the canonical owner signer. Restore your account connection and try again.',
       shouldAttemptRefresh: true,
     }
   }
@@ -631,6 +636,7 @@ export function useSwapExecution(params: {
         hasSession: Boolean(params.hasSession),
         sessionAddress: params.sessionAddress ?? null,
         executionAddress: params.executionAddress ?? null,
+        expectedSessionAddress: params.signerAddress ?? null,
       }),
     [params.executionAddress, params.executionMode, params.hasSession, params.sessionAddress, params.sessionHydrated],
   )
@@ -1251,6 +1257,7 @@ export function useSwapExecution(params: {
           hasSession: Boolean(params.hasSession),
           sessionAddress: params.sessionAddress ?? null,
           executionAddress: params.executionAddress ?? null,
+          expectedSessionAddress: params.signerAddress ?? null,
         },
           params.ensureCanonicalSession,
         )

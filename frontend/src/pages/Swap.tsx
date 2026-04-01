@@ -109,6 +109,7 @@ const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
 ] as const
 
 let warnedSwapPrivyHookFailure = false
+let canonicalSessionAutoRefreshAttemptedGlobal = false
 function warnSwapPrivyHookFailure(scope: string, error: unknown) {
   if (warnedSwapPrivyHookFailure) return
   warnedSwapPrivyHookFailure = true
@@ -949,9 +950,11 @@ export function Swap() {
       return
     }
     if (!canonicalSubmitSession.shouldAttemptRefresh) return
+    if (canonicalSessionAutoRefreshAttemptedGlobal) return
     if (canonicalSessionAutoRefreshAttemptedRef.current) return
     if (canonicalSessionAutoRefreshInFlightRef.current) return
 
+    canonicalSessionAutoRefreshAttemptedGlobal = true
     canonicalSessionAutoRefreshAttemptedRef.current = true
     canonicalSessionAutoRefreshInFlightRef.current = true
 

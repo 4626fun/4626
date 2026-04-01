@@ -14,7 +14,7 @@ import {
   getZoraExploreVolumeHeaderLabel,
   getZoraExploreVolumeNote,
 } from '@/lib/zora/exploreVolume'
-import { formatShortAddress } from './exploreShared'
+import { flattenExplorePagedNodes, formatShortAddress } from './exploreShared'
 
 function formatTimeAgo(dateStr: string | undefined): string {
   if (!dateStr) return '-'
@@ -230,19 +230,9 @@ export function ExploreTransactions() {
 
   // Flatten all pages into a single array
   const allActivity = useMemo(() => {
-    if (!data?.pages) return []
-    const items: ZoraCoin[] = []
-    for (const page of data.pages) {
-      if (page?.edges) {
-        for (const edge of page.edges) {
-          if (edge?.node) {
-            items.push(edge.node)
-          }
-        }
-      }
-    }
+    const items = flattenExplorePagedNodes(data?.pages)
     return [...items].sort((a, b) => activityTimestamp(b) - activityTimestamp(a))
-  }, [data])
+  }, [data?.pages])
 
   // Filter based on search query
   const filteredActivity = useMemo(() => {

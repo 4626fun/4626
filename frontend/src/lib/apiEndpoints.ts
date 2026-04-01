@@ -23,6 +23,9 @@ export const API_ENDPOINTS = {
     settings: '/api/v1/workspace/settings',
     actions: '/api/v1/workspace/actions',
   },
+  explore: {
+    vaults: '/api/v1/explore/vaults',
+  },
   image: {
     createProject: '/api/image/projects/create',
     uploadAsset: '/api/image/projects/assets/upload',

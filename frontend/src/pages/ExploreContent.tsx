@@ -9,8 +9,9 @@ import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/
 import { fetchZoraExplore } from '@/lib/zora/client'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
-import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
+import type { ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
+import { flattenExplorePagedNodes, matchesCoinSearchQuery } from './exploreShared'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_24H',
@@ -62,34 +63,15 @@ export function ExploreContent() {
 
   // Flatten all pages into a single array of content coins
   const allCoins = useMemo(() => {
-    if (!data?.pages) return []
-    const coins: ZoraCoin[] = []
-    for (const page of data.pages) {
-      if (page?.edges) {
-        for (const edge of page.edges) {
-          if (edge?.node) {
-            // Filter to only CONTENT type coins
-            if (edge.node.coinType === 'CONTENT') {
-              coins.push(edge.node)
-            }
-          }
-        }
-      }
-    }
-    return coins
-  }, [data])
+    return flattenExplorePagedNodes(data?.pages, {
+      filter: (coin) => coin.coinType === 'CONTENT',
+    })
+  }, [data?.pages])
 
   // Filter coins based on search query
   const filteredCoins = useMemo(() => {
     if (!searchQuery.trim()) return allCoins
-    const query = searchQuery.toLowerCase()
-    return allCoins.filter((coin) => {
-      const name = (coin.name || '').toLowerCase()
-      const symbol = (coin.symbol || '').toLowerCase()
-      const address = (coin.address || '').toLowerCase()
-      const creator = (coin.creatorProfile?.handle || '').toLowerCase()
-      return name.includes(query) || symbol.includes(query) || address.includes(query) || creator.includes(query)
-    })
+    return allCoins.filter((coin) => matchesCoinSearchQuery(coin, searchQuery))
   }, [allCoins, searchQuery])
 
   useWindowInfiniteScrollLoadMore({

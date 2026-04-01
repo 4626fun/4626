@@ -211,6 +211,7 @@ const AgentRegister = lazyNamed(() => import('./pages/AgentRegister'), 'AgentReg
 const AgentUriService = lazyNamed(() => import('./pages/AgentUriService'), 'AgentUriService')
 const ExploreCreators = lazyNamed(() => import('./pages/ExploreCreators'), 'ExploreCreators')
 const ExploreContent = lazyNamed(() => import('./pages/ExploreContent'), 'ExploreContent')
+const ExploreVaults = lazyNamed(() => import('./pages/ExploreVaults'), 'ExploreVaults')
 const ExploreTrends = lazyNamed(() => import('./pages/ExploreTrends'), 'ExploreTrends')
 const ExploreTransactions = lazyNamed(() => import('./pages/ExploreTransactions'), 'ExploreTransactions')
 const ExploreCreatorDetail = lazyNamed(() => import('./pages/ExploreCreatorDetail'), 'ExploreCreatorDetail')
@@ -256,6 +257,7 @@ const ACCOUNT_ROUTES: PathRouteDef[] = [
 const EXPLORE_ROUTES: PathRouteDef[] = [
   { path: '/explore/creators', element: <ExploreCreators /> },
   { path: '/explore/content', element: <ExploreContent /> },
+  { path: '/explore/vaults', element: <ExploreVaults /> },
   { path: '/explore/trends', element: <ExploreTrends /> },
   { path: '/explore/transactions', element: <ExploreTransactions /> },
   { path: '/explore/creators/:chain/:tokenAddress', element: <ExploreCreatorDetail /> },
