@@ -224,7 +224,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Flat through freefall + distributions. At 0.91 the camera rushes through the vault:
   // peaks around 2.1× at 0.95 (the "passing through" moment) then settles to 1.45× for
   // deploy content so stage 4 remains legible on narrower screens.
-  const worldScale = useTransform(scroll, [0, 0.86, 0.91, 0.95, 1.0], [1, 1.0, 1.25, 2.1, 1.45])
+  const worldScale = useTransform(scroll, [0, 0.86, 0.91, 0.95, 1.0], [1.25, 1.25, 1.55, 2.40, 1.65])
   // Eases freefall tilt to 0° by 0.62, stays flat for the rest of the scroll.
   const worldRotateX = useTransform(scroll, [0, 0.36, 0.52, 1], [8, 2, 0, 0])
   const worldTransform = useMotionTemplate`
@@ -254,14 +254,21 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
     scale(${heroScale})
   `
 
+  // Akita token — drops from sky into the sealed vault, reinforcing the deposit narrative.
+  // Pure Y animation (no Z) so it's always rendered in front of the Zorb.
+  const akitaDropY = useTransform(scroll, [0.28, 0.46], [-32, 5])
+  const akitaDropOp = useTransform(scroll, [0.28, 0.33, 0.44, 0.50], [0, 1, 1, 0])
+  const akitaDropScale = useTransform(scroll, [0.28, 0.38], [0.7, 1])
+  const akitaDropTransform = useMotionTemplate`translate3d(-50%, ${akitaDropY}vh, 0px) scale(${akitaDropScale})`
+
   // Pill -> vault connector — starts only after the freeze pause ends (0.46)
   const _topRaw = useTransform(scroll, [0.46, 0.56], [0, 1])
   const topTrail = useTransform(_topRaw, smoothstep)
   const topDotY = useTransform(topTrail, (t) => 108 * t)
   const topDotOp = useTransform(scroll, [0.46, 0.48, 0.55, 0.57], [0, 1, 1, 0])
 
-  // Deposit node — rides the connector wire with the white dot
-  const depositNodeZ = useTransform(scroll, [0.46, 0.54, 0.66], [-220, 20, -90])
+  // Deposit node (stage 2 fill counter) — stays at positive Z so it's always in front
+  const depositNodeZ = useTransform(scroll, [0.46, 0.54, 0.66], [40, 30, 0])
   const depositNodeScale = useTransform(scroll, [0.46, 0.54, 0.62], [1.08, 1, 0.94])
   const depositNodeOpacity = useTransform(scroll, [0.46, 0.50, 0.58, 0.62], [0, 1, 1, 0])
   const depositNodeTransform = useMotionTemplate`
@@ -721,40 +728,31 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                 opacity: depositNodeOpacity,
               }}
             >
-              <div className="flex w-[210px] flex-col gap-2 overflow-hidden rounded-xl border border-white/[0.07] bg-black/60 px-4 py-3 shadow-[0_0_40px_-12px_rgba(0,82,255,0.35)] backdrop-blur-sm">
-                {/* Creator identity row */}
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={CREATOR_CAMEOS[cameoIdx].key}
-                    className="flex items-center gap-2"
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.35 }}
-                  >
-                    {cameoIcons[CREATOR_CAMEOS[cameoIdx].key] ? (
-                      <img
-                        src={cameoIcons[CREATOR_CAMEOS[cameoIdx].key]}
-                        alt={CREATOR_CAMEOS[cameoIdx].label}
-                        className="h-4 w-4 rounded-full object-cover opacity-90"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span
-                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[5px] font-black text-white"
-                        style={{ background: CREATOR_CAMEOS[cameoIdx].color }}
-                      >
-                        {CREATOR_CAMEOS[cameoIdx].initials}
-                      </span>
-                    )}
-                    <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-200">
-                      {CREATOR_CAMEOS[cameoIdx].label.toUpperCase()}
+              <div className="flex w-[210px] flex-col gap-2 overflow-hidden rounded-xl border border-white/[0.07] bg-black/60 px-4 py-3 shadow-[0_0_40px_-12px_rgba(249,115,22,0.25)] backdrop-blur-sm">
+                {/* Creator identity row — Akita */}
+                <div className="flex items-center gap-2">
+                  {cameoIcons['akita'] ? (
+                    <img
+                      src={cameoIcons['akita']}
+                      alt="AKITA"
+                      className="h-4 w-4 rounded-full object-cover opacity-90"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[5px] font-black text-white"
+                      style={{ background: '#f97316' }}
+                    >
+                      AK
                     </span>
-                    <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.22em] text-zinc-600">
-                      Creator Coin
-                    </span>
-                  </motion.div>
-                </AnimatePresence>
+                  )}
+                  <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-200">
+                    AKITA
+                  </span>
+                  <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.22em] text-zinc-600">
+                    Creator Coin
+                  </span>
+                </div>
 
                 {/* Live counter — fills as you scroll */}
                 <div className="flex items-baseline gap-1.5">
@@ -878,31 +876,6 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   </svg>
                 </motion.div>
 
-                {/* Side wall guides — extend from floor up along the vault sides */}
-                <motion.div
-                  className="pointer-events-none absolute"
-                  style={{
-                    left: -14,
-                    bottom: -14,
-                    width: 1,
-                    height: '60%',
-                    background: 'linear-gradient(to top, rgba(110,170,255,0.30), transparent)',
-                    opacity: vaultTrayOp,
-                  }}
-                  aria-hidden="true"
-                />
-                <motion.div
-                  className="pointer-events-none absolute"
-                  style={{
-                    right: -14,
-                    bottom: -14,
-                    width: 1,
-                    height: '60%',
-                    background: 'linear-gradient(to top, rgba(110,170,255,0.30), transparent)',
-                    opacity: vaultTrayOp,
-                  }}
-                  aria-hidden="true"
-                />
 
                 {/* ── X-Z vault seal — snaps to horizontal plane on capture ──────── *
                  *  A flat foreshortened grid lying in depth beneath the Zorb,        *
@@ -990,23 +963,81 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   }}
                   aria-hidden="true"
                 />
-                {/* Deposit arrival pulse */}
+                {/* Deposit arrival pulse — circular ring so it doesn't clip the sphere */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
                     inset: -22,
-                    borderRadius: 36,
+                    borderRadius: '50%',
                     opacity: depositArrivalGlow,
                     boxShadow: [
-                      '0 0 0 2px rgba(255,255,255,0.90)',
-                      '0 0 36px 10px rgba(255,255,255,0.50)',
-                      '0 0 90px 30px rgba(220,230,255,0.24)',
-                      '0 0 180px 60px rgba(180,200,255,0.09)',
+                      '0 0 0 2px rgba(255,255,255,0.85)',
+                      '0 0 36px 10px rgba(255,255,255,0.45)',
+                      '0 0 90px 30px rgba(220,230,255,0.22)',
+                      '0 0 180px 60px rgba(180,200,255,0.08)',
                     ].join(', '),
                   }}
                   aria-hidden="true"
                 />
                 <ZorbViewer size={108} />
+              </div>
+            </motion.div>
+
+            {/* ── Akita token drop — falls from sky into vault ──────────────────── *
+             *  Pure Y animation at z-40 so it always renders in FRONT of the Zorb. *
+             *  Reinforces the narrative: deposit your creator coin, earn together.  */}
+            <motion.div
+              className="absolute left-1/2 top-[44vh] z-40"
+              style={{
+                transform: akitaDropTransform,
+                opacity: akitaDropOp,
+              }}
+            >
+              <div className="relative flex -translate-x-1/2 flex-col items-center">
+                {/* Light trail above the token — shows descent path */}
+                <div
+                  className="pointer-events-none absolute bottom-full left-1/2 w-px -translate-x-1/2"
+                  style={{
+                    height: '20vh',
+                    background: 'linear-gradient(to top, rgba(249,115,22,0.38), rgba(249,115,22,0.06), transparent)',
+                  }}
+                  aria-hidden="true"
+                />
+                {/* Token avatar + orange glow halo */}
+                <div className="relative mb-2 flex items-center justify-center">
+                  <div
+                    className="pointer-events-none absolute rounded-full"
+                    style={{
+                      inset: -12,
+                      background: 'radial-gradient(circle, rgba(249,115,22,0.22) 0%, transparent 70%)',
+                      boxShadow: '0 0 22px 7px rgba(249,115,22,0.28)',
+                    }}
+                    aria-hidden="true"
+                  />
+                  {cameoIcons['akita'] ? (
+                    <img
+                      src={cameoIcons['akita']}
+                      alt="AKITA"
+                      className="relative z-10 h-11 w-11 rounded-full object-cover ring-1 ring-orange-400/40"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div
+                      className="relative z-10 flex h-11 w-11 items-center justify-center rounded-full text-[11px] font-black text-white"
+                      style={{
+                        background: 'linear-gradient(135deg, #f97316, #c2440e)',
+                        boxShadow: '0 0 16px 4px rgba(249,115,22,0.35)',
+                      }}
+                    >
+                      AK
+                    </div>
+                  )}
+                </div>
+                {/* Token identity */}
+                <span className="font-mono text-[12px] font-bold tracking-wide text-white/90">■AKITA</span>
+                <span className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.22em] text-zinc-500">
+                  50,000,000 tokens
+                </span>
               </div>
             </motion.div>
 
