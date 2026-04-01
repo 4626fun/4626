@@ -2,15 +2,18 @@
   "contractName": "DeploymentBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x5069961b6B1EC031a60344b4D615243054f594B3",
+  "address": "0x14435cc4A8D307b4d3979148E5AB71Af1ed19088",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-01T08:43:05Z",
+  "deployedAt": "2026-04-01T16:23:45Z",
   "status": "deployed-v1.7.1",
   "notes": [
-    "Deterministic address derived from INFRA_DEPLOYMENT_BATCHER_SALT_TAG=4626:DeploymentBatcher:v1.7.1",
-    "Broadcast tx: 0xcae7783bc700b84a2243e96397911f36099084675d45547778ebd5e8a8658793 (Base mainnet)",
+    "Deterministic address derived from INFRA_DEPLOYMENT_BATCHER_SALT_TAG=4626:DeploymentBatcher:v1.7.1-r2-lottery3f7",
+    "Broadcast tx: 0xc3df8459353cf8fdc695bd48daba482fde15bfcd5aa9aaf6e5699d668e5c3f77 (Base mainnet)",
     "Constructor dependencies for this epoch: UniversalBytecodeStoreV2=0x6A578022609cdb65C614FF28912C49FC1EC97071, UniversalCreate2DeployerFromStore=0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a",
-    "Constructor-created phase-3 helper: DeploymentBatcherPhase3Helper=0x6786374787e434c8ba8101666e60e55978c29ad0",
-    "Explorer verification remains pending for DeploymentBatcher creation bytecode; verify helper/modules/store/deployer are confirmed."
+    "Constructor-created phase-3 helper: DeploymentBatcherPhase3Helper=0x74F204C95F959B7f4f4e927B6c56CF1026f4789F",
+    "Explorer verification remains pending for DeploymentBatcher creation bytecode; verify helper/modules/store/deployer are confirmed.",
+    "Redeployed epoch verify attempts failed with deployment bytecode mismatch: bdrlmtmukcj5vfbtxrzukqgptg2x749asufuzixqg3crsdvkbr, zrxxzknbigrgngtke1q7tpjjdieqxqkgwg4i4vuv7qqqq1evx7",
+    "Forensics: local initcode+constructor args matches the CREATE2 deployment payload byte-for-byte (excluding 32-byte salt prefix).",
+    "Disposition: forensically matched and intentionally explorer-unverified for this epoch; verification retries closed unless explorer behavior changes."
   ]
 }

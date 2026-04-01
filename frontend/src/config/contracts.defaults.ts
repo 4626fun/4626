@@ -37,9 +37,9 @@ export const BASE_DEFAULTS = {
   vaultActivationBatcher: addr('d17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB'),
   // v2 deployment batcher (deterministic, deployed via CREATE2 factory)
   // NOTE: This is the phased batcher for Phases 1-3.
-  creatorVaultBatcher: addr('5069961b6B1EC031a60344b4D615243054f594B3'),
+  creatorVaultBatcher: addr('14435cc4A8D307b4d3979148E5AB71Af1ed19088'),
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: addr('5069961b6B1EC031a60344b4D615243054f594B3'),
+  creatorVaultBatcherAutoHandoff: addr('14435cc4A8D307b4d3979148E5AB71Af1ed19088'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

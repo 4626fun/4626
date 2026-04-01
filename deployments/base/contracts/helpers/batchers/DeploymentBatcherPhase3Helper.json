@@ -2,12 +2,13 @@
   "contractName": "DeploymentBatcherPhase3Helper",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x6786374787e434c8ba8101666e60e55978c29ad0",
-  "deployedBy": "0x5069961b6B1EC031a60344b4D615243054f594B3",
-  "deployedAt": "2026-04-01T08:43:05Z",
+  "address": "0x74F204C95F959B7f4f4e927B6c56CF1026f4789F",
+  "deployedBy": "0x14435cc4A8D307b4d3979148E5AB71Af1ed19088",
+  "deployedAt": "2026-04-01T16:23:45Z",
   "status": "deployed-v1.7.1",
   "notes": [
     "Created inside DeploymentBatcher constructor during CREATE2 deployment",
-    "Parent tx: 0xcae7783bc700b84a2243e96397911f36099084675d45547778ebd5e8a8658793"
+    "Parent tx: 0xc3df8459353cf8fdc695bd48daba482fde15bfcd5aa9aaf6e5699d668e5c3f77",
+    "Basescan verify GUID: uwjvtywawhi1jryhnh1bv1hrbrfsfq7ruth4wx2biqzbjxh5rk"
   ]
 }

@@ -5,6 +5,7 @@ import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
+import { useDebounceValue } from 'usehooks-ts'
 
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
@@ -18,6 +19,9 @@ import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/apiBase'
+import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import {
   claimLiquidityFees,
   createPosition,
@@ -37,6 +41,7 @@ import {
   NATIVE_TOKEN_ADDRESS,
   buildTokenOptions,
   getCoreTokensForChain,
+  shortAddress,
   tokenLogoFallbacks,
   uniswapBaseLogo,
   type TokenOption,
@@ -96,6 +101,63 @@ const CORE_TOKENS: TokenOption[] = [
     logoUrls: tokenLogoFallbacks(CONTRACTS.zora),
   },
 ]
+
+type ExploreSwapTokenRow = {
+  chainId: number
+  creatorCoinAddress: `0x${string}` | null
+  groupId: string
+}
+
+type ExploreSwapTokenResponse = {
+  items: ExploreSwapTokenRow[]
+}
+
+function normalizeCreatorCoinLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed
+}
+
+async function fetchSwapCreatorCoinOptions(params: {
+  query: string
+  limit: number
+  chainId: number
+}): Promise<SwapTokenOption[]> {
+  const searchParams = new URLSearchParams()
+  searchParams.set('limit', String(params.limit))
+  searchParams.set('sort', 'volume')
+  searchParams.set('time', '1y')
+  searchParams.set('chainId', String(params.chainId))
+  const query = params.query.trim()
+  if (query) searchParams.set('query', query)
+
+  const res = await apiFetch(`${API_ENDPOINTS.explore.vaults}?${searchParams.toString()}`, { method: 'GET' })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreSwapTokenResponse> | null
+  if (!res.ok || !json?.success || !json.data || !Array.isArray(json.data.items)) return []
+
+  const out: SwapTokenOption[] = []
+  const seen = new Set<string>()
+  for (const item of json.data.items) {
+    const creatorCoinAddress = item?.creatorCoinAddress
+    if (!creatorCoinAddress || !isAddress(creatorCoinAddress)) continue
+    const normalizedAddress = getAddress(creatorCoinAddress).toLowerCase()
+    if (seen.has(normalizedAddress)) continue
+    seen.add(normalizedAddress)
+
+    const groupLabel = normalizeCreatorCoinLabel(item?.groupId)
+    const symbol = groupLabel ?? shortAddress(normalizedAddress)
+    out.push({
+      address: normalizedAddress,
+      symbol,
+      name: groupLabel ? `${groupLabel} creator coin` : 'Creator coin',
+      group: 'creator',
+      chainId: params.chainId,
+      verified: true,
+    })
+  }
+  return out
+}
 
 type QuoteShape = Record<string, unknown>
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
@@ -399,6 +461,21 @@ export function Swap() {
   const [extraTokenOptions, setExtraTokenOptions] = useState<SwapTokenOption[]>([])
   const [unverifiedSelectionMode, setUnverifiedSelectionMode] = useState(false)
   const [unverifiedTokenLabel, setUnverifiedTokenLabel] = useState<string | null>(null)
+  const [debouncedTokenSelectorQuery] = useDebounceValue(tokenSelectorQuery, 250)
+  const normalizedTokenSelectorQuery = debouncedTokenSelectorQuery.trim().toLowerCase()
+  const discoveredCreatorTokenOptionsQuery = useQuery({
+    queryKey: ['swap', 'creator-coin-options', swapChainId, normalizedTokenSelectorQuery],
+    enabled: tokenSelectorOpen && swapChainId === BASE_CHAIN_ID,
+    staleTime: 30_000,
+    queryFn: async () => {
+      return await fetchSwapCreatorCoinOptions({
+        query: normalizedTokenSelectorQuery,
+        chainId: BASE_CHAIN_ID,
+        limit: 100,
+      })
+    },
+  })
+  const discoveredCreatorTokenOptions = discoveredCreatorTokenOptionsQuery.data ?? []
 
   // ─── LP state ─────────────────────────────────────────────────────────────
   const [lpBusy, setLpBusy] = useState<string | null>(null)
@@ -767,8 +844,17 @@ export function Swap() {
   }, [dynamicCoreTokens, normalizedRequestedShareToken, requestedTradeToken, swapChainId])
 
   const allTokenOptions = useMemo<SwapTokenOption[]>(() => {
-    return [...tokenOptions, ...extraTokenOptions]
-  }, [extraTokenOptions, tokenOptions])
+    const merged = [...tokenOptions, ...discoveredCreatorTokenOptions, ...extraTokenOptions]
+    const seen = new Set<string>()
+    const unique: SwapTokenOption[] = []
+    for (const option of merged) {
+      const normalized = option.address.toLowerCase()
+      if (seen.has(normalized)) continue
+      seen.add(normalized)
+      unique.push(option)
+    }
+    return unique
+  }, [discoveredCreatorTokenOptions, extraTokenOptions, tokenOptions])
 
   const swapTokenOptions = useMemo<SwapTokenOption[]>(() => {
     return allTokenOptions.map((option) => ({

@@ -52,7 +52,7 @@ Production override safety:
 ### Split Phase-1 rollout (Base mainnet + Vercel)
 
 Current canonical Base defaults (`v1.7.1` reset target):
-- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0x5069961b6B1EC031a60344b4D615243054f594B3`
+- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`
 - `UniversalBytecodeStoreV2`: `0x6A578022609cdb65C614FF28912C49FC1EC97071`
 - `UniversalCreate2DeployerFromStoreV2`: `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a`
 
@@ -89,7 +89,7 @@ If you use `./script/deploy.sh infra-v2` or `./script/deploy-infra-v2.sh`, this 
 
 ```bash
 export BASE_RPC_URL=https://mainnet.base.org
-export NEW_BATCHER=0x5069961b6B1EC031a60344b4D615243054f594B3
+export NEW_BATCHER=0x14435cc4A8D307b4d3979148E5AB71Af1ed19088
 
 # infra wiring
 cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
@@ -110,7 +110,7 @@ cast call 0x6A578022609cdb65C614FF28912C49FC1EC97071 \
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export DEPLOYMENT_BATCHER=0x5069961b6B1EC031a60344b4D615243054f594B3
+export DEPLOYMENT_BATCHER=0x14435cc4A8D307b4d3979148E5AB71Af1ed19088
 export SOLANA_BRIDGE_ADAPTER=0x2414b595c4f18532A5836B6e2E6d536832c572e8
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1

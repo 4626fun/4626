@@ -82,6 +82,26 @@ function timeFilterWindowMs(filter: string): number | null {
   }
 }
 
+const TRANSACTIONS_SORT_OPTIONS = [
+  { label: 'Newest', value: 'new' },
+  { label: 'Volume', value: 'volume' },
+  { label: 'Market cap', value: 'marketCap' },
+  { label: 'Price change', value: 'priceChange' },
+] as const
+
+function normalizeTransactionsSort(value: string | null): string {
+  if (!value) return 'new'
+  if (value === 'fees24h') return 'priceChange'
+  if (value === 'new' || value === 'volume' || value === 'marketCap' || value === 'priceChange') return value
+  return 'new'
+}
+
+function toNumber(value: string | undefined): number {
+  if (!value) return 0
+  const n = Number.parseFloat(value)
+  return Number.isFinite(n) ? n : 0
+}
+
 function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string }) {
   const change = formatChange(coin.marketCapDelta24h)
   const isBuy = change.positive // Use price change as proxy for buy/sell indication
@@ -200,7 +220,7 @@ export function ExploreTransactions() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const currentTimeFilter = searchParams.get('time') || '1d'
-  const currentSort = searchParams.get('sort') || 'volume'
+  const currentSort = normalizeTransactionsSort(searchParams.get('sort'))
 
   const {
     data,
@@ -234,7 +254,7 @@ export function ExploreTransactions() {
     return [...items].sort((a, b) => activityTimestamp(b) - activityTimestamp(a))
   }, [data?.pages])
 
-  // Filter based on search query
+  // Filter + sort based on current controls.
   const filteredActivity = useMemo(() => {
     const windowMs = timeFilterWindowMs(currentTimeFilter)
     const newestActivityMs = allActivity.length > 0 ? activityTimestamp(allActivity[0]) : 0
@@ -243,15 +263,41 @@ export function ExploreTransactions() {
       ? allActivity.filter((coin) => activityTimestamp(coin) >= cutoff)
       : allActivity
 
-    if (!searchQuery.trim()) return timeScoped
-    const query = searchQuery.toLowerCase()
-    return timeScoped.filter((coin) => {
-      const name = (coin.name || '').toLowerCase()
-      const symbol = (coin.symbol || '').toLowerCase()
-      const address = (coin.address || '').toLowerCase()
-      return name.includes(query) || symbol.includes(query) || address.includes(query)
-    })
-  }, [allActivity, currentTimeFilter, searchQuery])
+    const filtered = !searchQuery.trim()
+      ? timeScoped
+      : timeScoped.filter((coin) => {
+          const query = searchQuery.toLowerCase()
+          const name = (coin.name || '').toLowerCase()
+          const symbol = (coin.symbol || '').toLowerCase()
+          const address = (coin.address || '').toLowerCase()
+          return name.includes(query) || symbol.includes(query) || address.includes(query)
+        })
+
+    if (filtered.length <= 1) return filtered
+
+    const sorted = [...filtered]
+    if (currentSort === 'volume') {
+      sorted.sort((a, b) => {
+        const av = toNumber(getZoraExploreVolumeColumnRaw(a, currentTimeFilter))
+        const bv = toNumber(getZoraExploreVolumeColumnRaw(b, currentTimeFilter))
+        return bv - av
+      })
+      return sorted
+    }
+
+    if (currentSort === 'marketCap') {
+      sorted.sort((a, b) => toNumber(b.marketCap) - toNumber(a.marketCap))
+      return sorted
+    }
+
+    if (currentSort === 'priceChange') {
+      sorted.sort((a, b) => Math.abs(toNumber(b.marketCapDelta24h)) - Math.abs(toNumber(a.marketCapDelta24h)))
+      return sorted
+    }
+
+    sorted.sort((a, b) => activityTimestamp(b) - activityTimestamp(a))
+    return sorted
+  }, [allActivity, currentSort, currentTimeFilter, searchQuery])
 
   useWindowInfiniteScrollLoadMore({
     hasNextPage: Boolean(hasNextPage),
@@ -306,6 +352,8 @@ export function ExploreTransactions() {
             currentTimeFilter={currentTimeFilter}
             currentSort={currentSort}
             volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
+            sortOptions={TRANSACTIONS_SORT_OPTIONS}
+            disableUniswapTimeGating
           />
         </motion.div>
 

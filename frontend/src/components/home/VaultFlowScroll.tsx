@@ -211,6 +211,11 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Opening curtain — scene begins in near-darkness and reveals itself on first scroll.
   // Lifts quickly so the cold-open feel doesn't overstay its welcome.
   const openingCurtain = useTransform(scroll, [0, 0.04, 0.14], [0.82, 0.32, 0])
+  // Dive flash — the camera "punches through" the Zorb surface as we enter the vault.
+  // A short bright white wash that sells the transition from deposit to distribution.
+  // Dive flash peaks at 0.635 — the moment the Zorb surface passes through the camera.
+  // 0.82 opacity gives a convincing "blinding white light as you enter" without total whiteout.
+  const diveFlash = useTransform(scroll, [0.61, 0.635, 0.655, 0.72], [0, 0.82, 0.55, 0])
 
   // Camera — continuous slow drift, no kinks
   const worldY = useTransform(scroll, [0, 1], [0, -6])
@@ -218,7 +223,13 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // peaks around 2.1× at 0.95 (the "passing through" moment) then settles to 1.45× for
   // deploy content so stage 4 remains legible on narrower screens.
   // Holds flat after 0.90 so stage-4 content stays locked in place while the user reads cards.
-  const worldScale = useTransform(scroll, [0, 0.80, 0.90, 1.0], [1.25, 1.25, 1.30, 1.30])
+  // Camera dive: world zooms to 2.2× exactly as the Zorb fills the screen, then snaps back.
+  // The combined vaultZ+worldScale peak makes the sphere genuinely overflow the viewport.
+  const worldScale = useTransform(
+    scroll,
+    [0,    0.58,  0.62,  0.68,  0.80,  0.90,  1.0],
+    [1.25, 1.25,  2.20,  1.25,  1.25,  1.30,  1.30],
+  )
   // Deep cinematic opening tilt: 10° bird's-eye → unlocks to flat as Zorb descends and lands.
   const worldRotateX = useTransform(scroll, [0, 0.14, 0.32, 0.50, 1], [10, 5, 1.5, 0, 0])
   const worldTransform = useMotionTemplate`
@@ -230,11 +241,12 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Dark cold-open: atmosphere starts at 0 (near-black sky), builds as Zorb lands and scene unfolds.
   const atmosphereOpacity = useTransform(scroll, [0, 0.14, 0.30, 1], [0, 0.04, 0.22, 0.44])
 
-  // Hero plane — stays hidden during the initial Zorb drop, then reveals in steps.
-  // We keep the same hold/fade window later so stage transitions remain stable.
-  const heroZ = useTransform(scroll, [0, 0.20, 0.44, 0.56], [170, 40, 40, -60])
+  // Hero plane — waits in the deep while the Zorb takes its solo moment, then sweeps in
+  // from 260px behind camera and locks into position as the title cross-fades up.
+  const heroZ = useTransform(scroll, [0, 0.24, 0.44, 0.56], [260, 32, 32, -60])
   const heroY = useTransform(scroll, [0, 0.56], [0, -12])
-  const heroScale = useTransform(scroll, [0, 0.20, 0.44, 0.56], [1, 0.94, 0.94, 0.88])
+  // Slight scale-down on arrival: the plane "punches through" the depth field and settles.
+  const heroScale = useTransform(scroll, [0, 0.24, 0.44, 0.56], [1.08, 0.96, 0.96, 0.88])
   // Hero text waits until after the landing flash (0.28) so the Zorb gets its full
   // dramatic solo moment before the scene's story is told.
   const heroOpacity = useTransform(scroll, [0, 0.20, 0.28, 0.44, 0.58], [0, 0, 1, 1, 0])
@@ -258,7 +270,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const topDotY = useTransform(topTrail, (t) => -90 + 198 * t)
   const topDotOp = useTransform(scroll, [0.46, 0.48, 0.55, 0.57], [0, 1, 1, 0])
 
-  const depositNodeScale = useTransform(scroll, [0.46, 0.54, 0.84, 0.90], [1.08, 1, 1, 0.94])
+  // Card entrance: pop-overshoot (1.20) → micro-bounce (1.04) → settle (1.0).
+  const depositNodeScale = useTransform(scroll, [0.46, 0.49, 0.54, 0.84, 0.90], [1.20, 1.04, 1, 1, 0.94])
   // Card stays visible through all of stage 3 (distributions); deposited side fades independently
   const depositNodeOpacity = useTransform(scroll, [0.46, 0.50, 0.84, 0.90], [0, 1, 1, 0])
   // Left column + arrow fade out when distributions begin, leaving only the minted side
@@ -271,18 +284,23 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Zorb starts as a near-invisible spark at extreme depth, accelerates toward viewer in two phases:
   //   Phase 1 (0→0.08): ultra-fast rush from deep space (the "comet" phase — mostly hidden by curtain)
   //   Phase 2 (0.08→0.28): visible descent, overshoots, lands with precision.
-  const vaultZ = useTransform(scroll, [0, 0.08, 0.14, 0.22, 0.28, 0.80, 0.88], [-600, -80, -20, 18, 0, 0, -120])
+  // At scroll 0.60-0.64 the Zorb rockets toward the perspective plane (Z→900px).
+  // With perspective=1100px, Z=900 → 5.5× apparent scale → sphere fills + overflows screen.
+  // Combined with worldScale peak this sells the camera diving INTO the Zorb.
+  const vaultZ = useTransform(scroll, [0, 0.08, 0.14, 0.22, 0.28, 0.60, 0.64, 0.80, 0.88], [-600, -80, -20, 18, 0, 0, 900, 900, -120])
   // Scale: invisible point → rapid growth → 1.4× overshoot → soft landing at 1.0
   const vaultScale = useTransform(scroll, [0, 0.06, 0.14, 0.21, 0.28, 0.88], [0.04, 0.10, 1.40, 1.06, 1, 1])
   // Starts dark (matches curtain), ignites to full brightness as it clears the veil.
-  const vaultOpacity = useTransform(scroll, [0, 0.04, 0.10, 0.50, 0.58, 0.91, 0.93, 1.0], [0, 0.35, 1, 1, 0.72, 0.9, 0, 0])
+  // Zorb brightens briefly as it rushes at the camera (0.58→0.61), then hits 0 at 0.64
+  // — the sphere has filled the screen and we're now inside. Stays invisible for the rest.
+  const vaultOpacity = useTransform(scroll, [0, 0.04, 0.10, 0.50, 0.58, 0.61, 0.64, 1.0], [0, 0.35, 1, 1, 0.72, 1.0, 0, 0])
   // Landing unlock flash — bright burst the moment the Zorb settles on the platform
   const landingFlash = useTransform(scroll, [0.27, 0.31, 0.36, 0.42], [0, 1, 0.45, 0])
   // Glow/flash: mint phase only — starts after deposit dot arrives
   const vaultGlow = useTransform(scroll, [0.36, 0.44, 0.48, 0.52], [0, 1, 0.3, 0])
   // vaultFlash removed — coinEntryGlow at 0.60+ is the single glow event
-  // Vault tray — only appears just before landing so it doesn't clutter the initial drop
-  const vaultTrayOp = useTransform(scroll, [0.20, 0.26, 0.91, 0.94], [0, 0.55, 0.55, 0])
+  // Vault tray — fades in with more presence as the landing zone materialises.
+  const vaultTrayOp = useTransform(scroll, [0.22, 0.30, 0.91, 0.94], [0, 0.78, 0.78, 0])
   // Vault lid — snaps closed on capture, turning the open tray into a sealed vault
   const vaultLidOp = useTransform(scroll, [0.28, 0.36, 0.91, 0.94], [0, 1, 1, 0])
   // depositArrivalGlow removed — coinEntryGlow at 0.60+ is the single glow event
@@ -299,7 +317,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Dist section fades in AFTER the deposit connector finishes (~0.60) and stays
   // fully opaque well into the zoom phase so users can see it during the zoom-in
   // Distributions hold through stage 3, then clear slightly earlier to give stage 4 more runway.
-  const distSectionOp = useTransform(scroll, [0.58, 0.64, 0.84, 0.90], [0, 1, 1, 0])
+  // Distribution section fades in only AFTER the dive flash clears — we're now inside the vault.
+  const distSectionOp = useTransform(scroll, [0.66, 0.71, 0.84, 0.90], [0, 1, 1, 0])
 
   // Path + card 0 (CCA Launch — left): 0.62 start — extra gap after cameos
   const _n0Raw = useTransform(scroll, [0.62, 0.68], [0, 1])
@@ -326,14 +345,6 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const orbitTrav2 = useTransform(_ot2Raw, smoothstep)
   const nodeGlow2 = useTransform(scroll, [0.83, 0.86, 0.88, 0.90], [0, 1, 1, 0])
 
-  // Remaining ■AKITA shares — starts at total minted (50M) and decreases as each
-  // distribution orbit line completes: CCA 20M, vesting 20M, LP 10M.
-  const remainingMinted = useTransform(
-    [orbitTrav0, orbitTrav1, orbitTrav2],
-    ([t0, t1, t2]) =>
-      Math.round(50_000_000 - ((t0 as number) * 20_000_000 + (t1 as number) * 20_000_000 + (t2 as number) * 10_000_000)),
-  )
-
   // "× ERC-4626" suffix appears only after the vault captures the Zorb (~0.28)
   // ercSuffixOp removed — title is now static "Welcome to 4626.fun"
   // 4626 pill appears during the pause so users see the full identity at rest
@@ -342,6 +353,21 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const stage2LabelOp = useTransform(scroll, [0.44, 0.50, 0.64, 0.70], [0, 1, 1, 0])
   // Deposit fill — drives the counter and progress bar in the deposit pill
   const depositFillPct = useTransform(scroll, [0.46, 0.58], [0, 1])
+  // Distributing counter: counts UP with deposit fill (0→50M in sync with left column),
+  // then drains as each distribution orbit completes. Starting at 0 ensures both
+  // counters animate together during the fill phase.
+  const remainingMinted = useTransform(
+    [depositFillPct, orbitTrav0, orbitTrav1, orbitTrav2],
+    ([fill, t0, t1, t2]) => {
+      const minted = Math.round((fill as number) * 50_000_000)
+      const distributed = Math.round(
+        (t0 as number) * 20_000_000 +
+        (t1 as number) * 20_000_000 +
+        (t2 as number) * 10_000_000,
+      )
+      return Math.max(0, minted - distributed)
+    },
+  )
   const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
   // "Vault initiated" confirmation badge — flashes after fill completes
   const vaultInitOp = useTransform(scroll, [0.60, 0.63, 0.66, 0.70], [0, 1, 1, 0])
@@ -355,8 +381,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   useMotionValueEvent(depositFillPct, 'change', (v) => {
     setDepositCount(Math.round(Math.min(v, 1) * 50_000_000))
   })
-  // Drive remaining-shares counter — drains as each orbit distribution line completes
-  const [remainingCount, setRemainingCount] = useState(50_000_000)
+  // Drive remaining-shares counter — counts up with deposit fill, then drains with distributions
+  const [remainingCount, setRemainingCount] = useState(0)
   useMotionValueEvent(remainingMinted, 'change', (v) => setRemainingCount(v))
 
   // Freefall: Zorb descends from high in the frame, gaining speed as it approaches.
@@ -375,7 +401,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const shareY = useTransform(scroll, [0.48, 0.60], [30, 0])
   const shareScale = useTransform(scroll, [0.52, 0.58], [0.94, 1])
   // Visible from stage-2 mint through end of stage-3 distributions
-  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.84, 0.90], [0, 1, 1, 0])
+  // Share pill fades out AS the dive begins — it's "going inside" with the Zorb.
+  const shareOpacity = useTransform(scroll, [0.52, 0.58, 0.61, 0.65], [0, 1, 1, 0])
   const shareTransform = useMotionTemplate`translate3d(-50%, ${shareY}px, 0px) scale(${shareScale})`
 
   // Cube interior POV — fades in during the vault-rush moment, then holds steady through all of stage 4.
@@ -420,9 +447,10 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const deployTitleOp = useTransform(scroll, [0.82, 0.91], [0, 1])
   const deployTitleY = useTransform(scroll, [0.82, 0.91], [28, 0])
 
-  // Principal amount pill — arrives after title, drifts up slowly
-  const s4PillOp = useTransform(scroll, [0.85, 0.92], [0, 1])
-  const s4PillY = useTransform(scroll, [0.85, 0.97], [16, 0])
+  // Principal card — cross-fades IN as the deposit card fades OUT (both window 0.84-0.90),
+  // so users see the same asset identity carrying through into the deploy stage.
+  const s4PillOp = useTransform(scroll, [0.84, 0.90], [0, 1])
+  const s4PillY = useTransform(scroll, [0.84, 0.96], [20, 0])
 
   // Stage 4 sequential fan — 0.03 stagger per path so each fan arm has room to breathe.
   // With 2000vh total: 0.03 × 2000 = 60vh between each path start. Each card window
@@ -531,15 +559,15 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                 key={s.n}
                 className="flex items-center gap-3"
                 animate={{ opacity: activeStageIdx === i ? 1 : 0.16 }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
+                transition={{ duration: 0.65, ease: [0.32, 0, 0.67, 0] }}
               >
                 <motion.div
                   className="h-px rounded-full bg-white"
                   animate={{
-                    width: activeStageIdx === i ? 18 : 6,
-                    opacity: activeStageIdx === i ? 0.7 : 0.3,
+                    width: activeStageIdx === i ? 20 : 6,
+                    opacity: activeStageIdx === i ? 0.75 : 0.25,
                   }}
-                  transition={{ duration: 0.4 }}
+                  transition={{ duration: 0.65, ease: [0.32, 0, 0.67, 0] }}
                 />
                 <span className="text-[8px] font-semibold uppercase tracking-[0.24em] text-zinc-400">
                   {s.label}
@@ -705,13 +733,20 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
               }}
             >
               <div
-                className="flex w-[256px] flex-col overflow-hidden rounded-xl backdrop-blur-sm"
+                className="relative flex w-[256px] flex-col overflow-hidden rounded-xl backdrop-blur-md"
                 style={{
-                  border: '1px solid rgba(255,255,255,0.07)',
-                  background: 'rgba(6,6,12,0.72)',
-                  boxShadow: '0 0 40px -12px rgba(249,115,22,0.16), 0 0 40px -12px rgba(0,82,255,0.16)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'rgba(5,5,14,0.80)',
+                  boxShadow: [
+                    '0 0 0 1px rgba(255,255,255,0.04)',
+                    '0 0 36px -8px rgba(249,115,22,0.28)',
+                    '0 0 36px -8px rgba(0,82,255,0.28)',
+                    '0 8px 40px -6px rgba(0,0,0,0.65)',
+                  ].join(', '),
                 }}
               >
+                {/* Top edge highlight — premium glass edge */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden="true" />
                 {/* Two-column token identity headers — each column owns its token name */}
                 <div className="flex border-b border-white/[0.05]">
                   {/* Left header — Zora Creator Coin (the input, orange) */}
@@ -765,6 +800,9 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                     <span className="font-mono text-[13px] font-bold tabular-nums text-white/90">
                       {depositCount.toLocaleString()}
                     </span>
+                    <span className="font-mono text-[5.5px] tracking-[0.18em]" style={{ color: 'rgba(249,115,22,0.28)' }}>
+                      min 50,000,000
+                    </span>
                   </motion.div>
 
                   {/* Arrow — fades with deposited side */}
@@ -794,6 +832,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                     style={{
                       width: depositFillWidth,
                       background: 'linear-gradient(90deg, #f97316 0%, #3b5fff 55%, #60a5fa 100%)',
+                      boxShadow: '0 0 10px 2px rgba(59,95,255,0.50), 0 0 24px 6px rgba(249,115,22,0.20)',
                     }}
                   />
                 </motion.div>
@@ -951,37 +990,38 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   </svg>
                 </motion.div>
 
-                {/* Ambient blue glow — elliptical to suggest the horizontal plane */}
+                {/* Ambient blue glow — flush with sphere surface */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    bottom: -50,
-                    left: -80,
-                    right: -80,
-                    height: 80,
+                    inset: 20,
                     borderRadius: '50%',
                     opacity: vaultGlow,
-                    background: 'radial-gradient(ellipse 100% 60% at 50% 80%, rgba(0,82,255,0.18) 0%, transparent 70%)',
-                    boxShadow: '0 14px 60px 20px rgba(0,82,255,0.28)',
+                    background: 'transparent',
+                    boxShadow: [
+                      '0 0 26px 10px rgba(0,82,255,0.60)',
+                      '0 0 60px 22px rgba(0,82,255,0.30)',
+                      '0 0 110px 44px rgba(0,82,255,0.12)',
+                    ].join(', '),
                   }}
                   aria-hidden="true"
                 />
 
                 {/* ── Landing unlock flash ─────────────────────────────────────
                  *  Fires the moment the Zorb touches down and the vault seals.
-                 *  Pure white radial burst — "the vault has been unlocked."      */}
+                 *  Circular burst flush with the sphere surface. */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    inset: -70,
+                    inset: 20,
                     borderRadius: '50%',
                     opacity: landingFlash,
-                    background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.28) 0%, rgba(200,220,255,0.14) 42%, transparent 72%)',
+                    background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.20) 0%, rgba(210,230,255,0.08) 50%, transparent 75%)',
                     boxShadow: [
-                      '0 0 0 1.5px rgba(255,255,255,0.70)',
-                      '0 0 28px 8px rgba(255,255,255,0.45)',
-                      '0 0 70px 24px rgba(200,220,255,0.28)',
-                      '0 0 150px 56px rgba(140,180,255,0.10)',
+                      '0 0 0 1px rgba(255,255,255,0.75)',
+                      '0 0 16px 5px rgba(255,255,255,0.50)',
+                      '0 0 42px 14px rgba(210,230,255,0.28)',
+                      '0 0 100px 36px rgba(140,180,255,0.12)',
                     ].join(', '),
                   }}
                   aria-hidden="true"
@@ -989,21 +1029,20 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
                 {/* ── Coin entry glow ─────────────────────────────────────────────
                  *  Fires when deposit fill hits 100% — the creator coin has locked
-                 *  into the vault. Orange-core → deep blue halo: the raw creator
-                 *  energy is transmuted into vault share energy.
+                 *  into the vault. Soft orange halo → wide blue atmospheric: the
+                 *  energy transfer rendered as light emanating from the sphere itself.
                  *  Sustains through all of stage 3 to show the vault is "live". */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    inset: -56,
+                    inset: 20,
                     borderRadius: '50%',
                     opacity: coinEntryGlow,
-                    background: 'radial-gradient(circle at 50% 52%, rgba(255,110,20,0.13) 0%, rgba(0,82,255,0.20) 44%, transparent 72%)',
+                    background: 'transparent',
                     boxShadow: [
-                      '0 0 0 1px rgba(249,115,22,0.18)',
-                      '0 0 24px 7px rgba(249,115,22,0.32)',
-                      '0 0 60px 20px rgba(0,82,255,0.24)',
-                      '0 0 130px 50px rgba(0,82,255,0.10)',
+                      '0 0 22px 8px rgba(249,115,22,0.50)',
+                      '0 0 55px 20px rgba(0,82,255,0.36)',
+                      '0 0 105px 42px rgba(0,82,255,0.16)',
                     ].join(', '),
                   }}
                   aria-hidden="true"
@@ -1279,7 +1318,14 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   ].join(', '),
                 }}
               >
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/[0.88] p-[2px] shadow-[0_0_16px_-6px_rgba(255,255,255,0.8)]">
+                <span
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full p-[1.5px]"
+                  style={{
+                    background: 'rgba(6,10,28,0.75)',
+                    border: '1px solid rgba(100,160,255,0.38)',
+                    boxShadow: '0 0 12px -3px rgba(0,82,255,0.70)',
+                  }}
+                >
                   <img src="/protocols/zora.svg" alt="Zora creator coin" className="h-full w-full rounded-full object-cover" loading="lazy" />
                 </span>
                 <span>Creator Coins</span>
@@ -1319,24 +1365,44 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   </p>
                 </motion.div>
 
+                {/* Principal card — same visual identity as the deposit card so users
+                  * immediately recognise the same asset transitioning into strategies. */}
                 <motion.div
                   className="mb-6 flex justify-center"
                   style={{ opacity: s4PillOp, y: s4PillY }}
                 >
                   <div
-                    className="inline-flex items-center gap-2 rounded-full border border-white/[0.16] px-5 py-2 font-mono text-xs font-semibold text-zinc-200"
+                    className="flex items-stretch overflow-hidden rounded-xl backdrop-blur-md"
                     style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      boxShadow: '0 0 22px -8px rgba(255,255,255,0.2)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'rgba(5,5,14,0.82)',
+                      boxShadow: [
+                        '0 0 0 1px rgba(255,255,255,0.04)',
+                        '0 0 36px -8px rgba(249,115,22,0.28)',
+                        '0 0 36px -8px rgba(0,82,255,0.28)',
+                        '0 8px 32px -4px rgba(0,0,0,0.60)',
+                      ].join(', '),
                     }}
                   >
-                    {cameoIcons['akita'] ? (
-                      <img src={cameoIcons['akita']} alt="AKITA" className="h-4 w-4 rounded-full object-cover opacity-80" />
-                    ) : (
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[5px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
-                    )}
-                    {depositTokens}&nbsp;
-                    <span className="font-medium text-zinc-500">akita</span>
+                    {/* Left — akita identity (mirrors deposit card left column) */}
+                    <div className="flex items-center gap-2.5 border-r border-white/[0.06] px-4 py-3">
+                      {cameoIcons['akita'] ? (
+                        <img src={cameoIcons['akita']} alt="AKITA" className="h-5 w-5 rounded-full object-cover" style={{ opacity: 0.85 }} loading="lazy" />
+                      ) : (
+                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[5px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
+                      )}
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-[6px] uppercase tracking-[0.22em]" style={{ color: 'rgba(249,115,22,0.55)' }}>akita · deposited</span>
+                        <span className="font-mono text-[13px] font-bold tabular-nums text-white/90">{depositTokens}</span>
+                      </div>
+                    </div>
+
+                    {/* Right — ■AKITA share deployment (mirrors deposit card right column) */}
+                    <div className="flex flex-col justify-center gap-0.5 px-4 py-3">
+                      <span className="font-mono text-[6px] uppercase tracking-[0.20em]" style={{ color: 'rgba(100,160,255,0.55)' }}>■AKITA · deploying across</span>
+                      <span className="font-mono text-[11px] font-semibold" style={{ color: 'rgba(140,180,255,0.90)' }}>4 yield strategies</span>
+                      <span className="font-mono text-[5.5px] uppercase tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.42)' }}>generating APY ↓</span>
+                    </div>
                   </div>
                 </motion.div>
 
@@ -1537,6 +1603,18 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
             style={{
               opacity: openingCurtain,
               background: 'linear-gradient(180deg, #000008 0%, rgba(0,0,10,0.92) 55%, rgba(0,0,14,0.78) 100%)',
+            }}
+            aria-hidden="true"
+          />
+
+          {/* Dive flash — camera punches through the Zorb surface at the deposit→distribution
+              transition. A radial white-to-blue burst centred on the sphere, selling the
+              "we are now inside the vault" moment before distributions appear.             */}
+          <motion.div
+            className="pointer-events-none absolute inset-0 z-[49]"
+            style={{
+              opacity: diveFlash,
+              background: 'radial-gradient(ellipse 60% 55% at 50% 44%, rgba(255,255,255,0.92) 0%, rgba(220,235,255,0.60) 28%, rgba(140,180,255,0.24) 56%, transparent 78%)',
             }}
             aria-hidden="true"
           />

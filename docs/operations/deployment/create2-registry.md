@@ -18,7 +18,7 @@ For `v1.7.1` the canonical tags are:
 - `INFRA_VAULT_CORE_MODULE_SALT_TAG=4626:CreatorOVaultCoreModule:v1.7.1`
 - `INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=4626:CreatorOVaultStrategiesModule:v1.7.1`
 - `INFRA_VAULT_ADMIN_MODULE_SALT_TAG=4626:CreatorOVaultAdminModule:v1.7.1`
-- `INFRA_DEPLOYMENT_BATCHER_SALT_TAG=4626:DeploymentBatcher:v1.7.1`
+- `INFRA_DEPLOYMENT_BATCHER_SALT_TAG=4626:DeploymentBatcher:v1.7.1-r2-lottery3f7`
 
 ## v1.7.1 Target Addresses
 
@@ -29,8 +29,8 @@ For `v1.7.1` the canonical tags are:
 | `CreatorOVaultCoreModule` | `0x4890776DA44f014A932dF4a9a1F8dBE648E91e3D` |
 | `CreatorOVaultStrategiesModule` | `0x1E357B6B7a837CAF75Eb14016d2733779FEed9CE` |
 | `CreatorOVaultAdminModule` | `0xBF2ab516BAA04aeac061f359a483622Ff006f153` |
-| `DeploymentBatcher` | `0x5069961b6B1EC031a60344b4D615243054f594B3` |
-| `DeploymentBatcherPhase3Helper` | `0x6786374787e434c8ba8101666e60e55978c29ad0` |
+| `DeploymentBatcher` | `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088` |
+| `DeploymentBatcherPhase3Helper` | `0x74F204C95F959B7f4f4e927B6c56CF1026f4789F` |
 
 `DeploymentBatcherPhase3Helper` is created inside the `DeploymentBatcher` constructor (same broadcast transaction), not via a standalone CREATE2 salt tag.
 

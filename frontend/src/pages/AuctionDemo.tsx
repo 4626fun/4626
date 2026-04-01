@@ -279,7 +279,7 @@ export default function AuctionDemo() {
                 </p>
               </div>
               <a
-                href="/deploy"
+                href="/deploy/vault"
                 className="inline-flex items-center justify-center rounded-full bg-uniswap px-6 py-3 text-sm font-medium text-white hover:opacity-90 transition"
               >
                 Deploy a vault <ArrowUpRight className="w-4 h-4 ml-2" />

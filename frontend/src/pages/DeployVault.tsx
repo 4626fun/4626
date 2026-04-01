@@ -18,7 +18,7 @@ import {
   toHex,
   toBytes,
 } from 'viem'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
 import { ChevronDown } from 'lucide-react'
@@ -7636,7 +7636,7 @@ function DeployVaultMain() {
 
   return (
     <div className="vault-shell relative">
-      <PageMeta title={META.deploy.title} description={META.deploy.description} canonicalPath="/deploy" />
+      <PageMeta title={META.deploy.title} description={META.deploy.description} canonicalPath="/deploy/vault" />
       <section className="cinematic-section">
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="space-y-8">
@@ -7648,6 +7648,12 @@ function DeployVaultMain() {
                 <p className="text-zinc-600 text-sm font-light">
                   Deploy a vault for your Creator Coin on Base. Only the creator or current payout recipient can deploy.
                 </p>
+                <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 p-1 text-[11px]">
+                  <Link className="rounded-lg px-3 py-1 text-zinc-400 hover:text-white" to="/deploy/coin">
+                    Coin
+                  </Link>
+                  <span className="rounded-lg bg-white/12 px-3 py-1 text-white">Vault</span>
+                </div>
                 {privyReady && privyAuthenticated && !smartWalletCapabilityReady ? (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}

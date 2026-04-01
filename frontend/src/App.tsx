@@ -189,6 +189,8 @@ function SessionAcceptedRoute(props: { children?: ReactNode }) {
 const Vault = lazyNamed(() => import('./pages/Vault'), 'Vault')
 const CompleteAuction = lazyNamed(() => import('./pages/CompleteAuction'), 'CompleteAuction')
 const AuctionBid = lazyNamed(() => import('./pages/AuctionBid'), 'AuctionBid')
+const Deploy = lazyNamed(() => import('./pages/Deploy'), 'Deploy')
+const DeployCoin = lazyNamed(() => import('./pages/DeployCoin'), 'DeployCoin')
 const DeployVault = lazyNamed(() => import('./pages/DeployVault'), 'DeployVault')
 const SmartWalletsRouteProvider = lazyNamed(() => import('@/lib/privy/SmartWalletsRouteProvider'), 'SmartWalletsRouteProvider')
 const Leaderboard = lazyNamed(() => import('./pages/Leaderboard'), 'Leaderboard')
@@ -274,6 +276,22 @@ const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
   { path: '/portfolio/:address', element: <Portfolio /> },
   {
     path: '/deploy',
+    element: (
+      <SmartWalletRoute>
+        <Deploy />
+      </SmartWalletRoute>
+    ),
+  },
+  {
+    path: '/deploy/coin',
+    element: (
+      <SmartWalletRoute>
+        <DeployCoin />
+      </SmartWalletRoute>
+    ),
+  },
+  {
+    path: '/deploy/vault',
     element: (
       <SmartWalletRoute>
         <DeployVault />
