@@ -1,0 +1,14 @@
+{
+  "contractName": "DeploymentBatcher",
+  "network": "Base",
+  "chainId": 8453,
+  "address": "0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB",
+  "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+  "deployedAt": "2026-04-01T00:00:00Z",
+  "status": "predicted-v1.7.1",
+  "notes": [
+    "Deterministic address derived from INFRA_DEPLOYMENT_BATCHER_SALT_TAG=4626:DeploymentBatcher:v1.7.1",
+    "Finalize by running script/deploy-infra-v2.sh with broadcast using the same salt tags",
+    "Constructor dependencies for this epoch: UniversalBytecodeStoreV2=0x6A578022609cdb65C614FF28912C49FC1EC97071, UniversalCreate2DeployerFromStore=0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a"
+  ]
+}

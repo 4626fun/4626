@@ -2,9 +2,9 @@
   "contractName": "CreatorLotteryManager",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xA02A858E67c98320dCFB218831B645692E8f3483",
+  "address": "0x77705A2f173dd52F28300447506Dc35086c34626",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-01-14",
+  "deployedAt": "2026-04-01T00:00:00Z",
   "abi": [
     {
       "type": "constructor",

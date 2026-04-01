@@ -30,16 +30,16 @@ export const BASE_DEFAULTS = {
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
   // Phase-2 v2 bytecode store (chunked) + deterministic CREATE2 deployer-from-store
   // (rolled to match phased split Phase-1 deployment-batcher infra)
-  universalBytecodeStore: addr('4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A'),
-  universalCreate2DeployerFromStore: addr('6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0'),
+  universalBytecodeStore: addr('6A578022609cdb65C614FF28912C49FC1EC97071'),
+  universalCreate2DeployerFromStore: addr('5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a'),
 
   // AA helpers
   vaultActivationBatcher: addr('d17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB'),
   // v2 deployment batcher (deterministic, deployed via CREATE2 factory)
   // NOTE: This is the phased batcher for Phases 1-3.
-  creatorVaultBatcher: addr('19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e'),
+  creatorVaultBatcher: addr('8DD90086281E0Bd70E8362eCE021e6eC57167fdB'),
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: addr('19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e'),
+  creatorVaultBatcherAutoHandoff: addr('8DD90086281E0Bd70E8362eCE021e6eC57167fdB'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

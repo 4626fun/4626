@@ -2,9 +2,9 @@
   "contractName": "CreatorRegistry",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x02c8031c39E10832A831b954Df7a2c1bf9Df052D",
+  "address": "0x888506B92181c57A2fD06516FFFb6F375b7A4626",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-01-14",
+  "deployedAt": "2026-04-01T00:00:00Z",
   "abi": [
     {
       "type": "constructor",

@@ -391,7 +391,7 @@ describe('AdminAgentSetup Ajna automation', () => {
         {
           creatorToken: CREATOR_TOKEN_ADDRESS,
           owner: CANONICAL_CSW_ADDRESS,
-          version: 'v1.4.3',
+          version: 'v1.7.1',
           deployedAt: Date.now(),
           contracts: {
             vault: VAULT_ADDRESS,

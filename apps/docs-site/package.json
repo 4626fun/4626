@@ -1,6 +1,6 @@
 {
   "name": "4626-docs-site",
-  "version": "1.4.3",
+  "version": "1.7.1",
   "private": true,
   "scripts": {
     "generate:contracts": "cd ../.. && ([ \"$DOCS_SKIP_FORGE\" = \"1\" ] && echo 'Skipping forge doc (DOCS_SKIP_FORGE=1)' || (command -v forge >/dev/null && forge doc || echo 'Skipping forge doc (not installed)'))",

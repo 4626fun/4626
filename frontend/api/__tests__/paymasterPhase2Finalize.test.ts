@@ -25,7 +25,7 @@ const creatorVaultBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c
 const vaultActivationBatcher = getAddress('0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB')
 const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
 const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
-const bytecodeStore = getAddress('0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13')
+const bytecodeStore = getAddress('0x6A578022609cdb65C614FF28912C49FC1EC97071')
 
 const readRequestPrincipalMock = vi.fn()
 const getApiContractsMock = vi.fn()

@@ -2,9 +2,9 @@
   "contractName": "UniversalBytecodeStore",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xCDf45B94348DBBABba4bE6f4a5341badb83D4dC4",
+  "address": "0x6A578022609cdb65C614FF28912C49FC1EC97071",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-01-14",
+  "deployedAt": "2026-04-01T00:00:00Z",
   "abi": [
     {
       "type": "function",

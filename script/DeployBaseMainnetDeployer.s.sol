@@ -57,16 +57,16 @@ contract DeployBaseMainnetDeployer is Script {
     // Default salt tags. Scripts may override with:
     // - raw bytes32: INFRA_*_SALT
     // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
-    string constant DEFAULT_STORE_SALT_TAG = "4626:UniversalBytecodeStore:v2";
-    string constant DEFAULT_DEPLOYER_FROM_STORE_SALT_TAG = "4626:UniversalCreate2DeployerFromStore:v2";
+    string constant DEFAULT_STORE_SALT_TAG = "4626:UniversalBytecodeStore:v1.7.1";
+    string constant DEFAULT_DEPLOYER_FROM_STORE_SALT_TAG = "4626:UniversalCreate2DeployerFromStore:v1.7.1";
 
     // CreatorOVault module salts (shared logic contracts; no constructor args).
-    string constant DEFAULT_VAULT_CORE_MODULE_SALT_TAG = "4626:CreatorOVaultCoreModule:v1";
-    string constant DEFAULT_VAULT_STRATEGIES_MODULE_SALT_TAG = "4626:CreatorOVaultStrategiesModule:v1";
-    string constant DEFAULT_VAULT_ADMIN_MODULE_SALT_TAG = "4626:CreatorOVaultAdminModule:v1";
+    string constant DEFAULT_VAULT_CORE_MODULE_SALT_TAG = "4626:CreatorOVaultCoreModule:v1.7.1";
+    string constant DEFAULT_VAULT_STRATEGIES_MODULE_SALT_TAG = "4626:CreatorOVaultStrategiesModule:v1.7.1";
+    string constant DEFAULT_VAULT_ADMIN_MODULE_SALT_TAG = "4626:CreatorOVaultAdminModule:v1.7.1";
 
     // DeploymentBatcher salt (constructor args are chain-specific ⇒ address is chain-specific).
-    string constant DEFAULT_DEPLOYMENT_BATCHER_SALT_TAG = "4626:DeploymentBatcher:v4";
+    string constant DEFAULT_DEPLOYMENT_BATCHER_SALT_TAG = "4626:DeploymentBatcher:v1.7.1";
 
     // Defaults (Base mainnet) — can be overridden via env.
     address constant DEFAULT_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;

@@ -2,9 +2,9 @@
   "contractName": "VaultActivationBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x4b67e3a4284090e5191c27B8F24248eC82DF055D",
+  "address": "0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-01-14",
+  "deployedAt": "2026-04-01T00:00:00Z",
   "abi": [
     {
       "type": "constructor",

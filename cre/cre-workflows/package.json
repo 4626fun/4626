@@ -1,7 +1,7 @@
 {
   "name": "cre-workflows-shared",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.7.1",
   "description": "Shared dependencies for CRE workflow shared modules",
   "scripts": {
     "postinstall": "bunx cre-setup"

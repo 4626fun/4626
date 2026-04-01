@@ -5624,7 +5624,7 @@ describe('telegram webhook handler', () => {
         update_id: 18_8_2,
         message: {
           message_id: 39,
-          text: '/vaultdeploy akita v1.6.1',
+          text: '/vaultdeploy akita v1.7.1',
           chat: { id: -100123 },
           from: { id: 99 },
         },
@@ -5655,7 +5655,7 @@ describe('telegram webhook handler', () => {
       intentPayload: {
         deployType: 'vault',
         token: 'akita',
-        version: 'v1.6.1',
+        version: 'v1.7.1',
         creatorToken: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
         smartWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       },
@@ -5745,7 +5745,7 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     expect(startAkitaVaultDeployFromTelegramMock).toHaveBeenCalledWith({
       canonicalSmartWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      version: 'v1.6.1',
+      version: 'v1.7.1',
     })
     expect(fetchVaultDeployStatusFromTelegramMock).toHaveBeenCalledWith({
       canonicalSmartWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',

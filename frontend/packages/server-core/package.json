@@ -1,7 +1,7 @@
 {
   "name": "@4626/server-core",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.7.1",
   "type": "module",
   "main": "./src/index.ts"
 }

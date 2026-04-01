@@ -2,9 +2,9 @@
   "contractName": "CreatorOVaultFactory",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD",
+  "address": "0x90D25129072059ed5AfF321434f36d40B4556Cfc",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-01-14",
+  "deployedAt": "2026-04-01T00:00:00Z",
   "abi": [
     {
       "type": "constructor",

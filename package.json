@@ -1,4 +1,5 @@
 {
+  "version": "1.7.1",
   "scripts": {
     "check:no-todo-markers": "bash scripts/check-no-todo-markers.sh",
     "security:local": "bash scripts/security-audit-local.sh",

@@ -69,7 +69,7 @@ describe('deploy config handler', () => {
     process.env.ALLOW_API_CONTRACT_OVERRIDES = '1'
     process.env.VITE_DEPLOY_USE_SERVER_CONTINUE = 'false'
     process.env.VITE_DEPLOY_MODE = 'no_eoa_strict'
-    process.env.VITE_DEPLOYMENT_VERSION = 'v1.4.3-dryrun'
+    process.env.VITE_DEPLOYMENT_VERSION = 'v1.7.1-dryrun'
 
     const req = createMockReq({ method: 'GET' })
     const res = createMockRes()
@@ -79,7 +79,7 @@ describe('deploy config handler', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).toMatchObject({
       creatorVaultBatcher: '0x2222222222222222222222222222222222222222',
-      deploymentVersion: 'v1.4.3-dryrun',
+      deploymentVersion: 'v1.7.1-dryrun',
       allowApiContractOverrides: true,
       deployMode: 'no_eoa_strict',
       serverContinue: false,

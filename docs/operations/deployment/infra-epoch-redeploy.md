@@ -19,7 +19,7 @@ This path assumes legacy per-creator scripts are retired and `/deploy` is the ca
 - `PRIVATE_KEY`
 - `BASE_RPC_URL`
 - `ETHERSCAN_API_KEY` (or `BASESCAN_API_KEY`)
-- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `2026-03-e1`)
+- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.7.1`)
 
 Optional:
 
@@ -28,10 +28,10 @@ Optional:
 
 ## 1) Choose Epoch Tag
 
-Pick an immutable epoch token (example: `2026-03-e1`) and keep it in release notes.
+Pick an immutable epoch token (example: `v1.7.1`) and keep it in release notes.
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG="2026-03-e1"
+export DEPLOYMENT_EPOCH_TAG="v1.7.1"
 ```
 
 Deployment scripts derive salts from this tag automatically unless raw `INFRA_*_SALT` values are provided.
@@ -96,6 +96,10 @@ Repeat for:
 - `CCALaunchStrategy`
 - `CreatorOracle`
 - `OFTBootstrapRegistry`
+
+Record the release hash snapshot after regenerating deploy bytecode:
+
+- `deployments/base/v1.7.1-bytecode-manifest.json`
 
 ## 6) App/API Cutover
 

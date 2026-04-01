@@ -1,0 +1,13 @@
+{
+  "snapshot": "2026-01-base-mainnet",
+  "archivedAt": "2026-04-01T00:00:00Z",
+  "contracts": {
+    "CreatorRegistry": "0x02c8031c39E10832A831b954Df7a2c1bf9Df052D",
+    "CreatorOVaultFactory": "0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD",
+    "UniversalCreate2DeployerFromStore": "0xDb65C152B0496208A117FF7C04ddd5039F3035c6",
+    "VaultActivationBatcher": "0x4b67e3a4284090e5191c27B8F24248eC82DF055D",
+    "UniversalBytecodeStore": "0xCDf45B94348DBBABba4bE6f4a5341badb83D4dC4",
+    "CreatorLotteryManager": "0xA02A858E67c98320dCFB218831B645692E8f3483",
+    "CreatorVRFConsumerV2_5": "0x0265236984DE964CB0422BaeFbDb2de7C9d590F5"
+  }
+}

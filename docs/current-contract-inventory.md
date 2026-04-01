@@ -1,109 +1,78 @@
 # Current Contract Inventory (Base)
 
-Generated on: 2026-03-21  
-Scope: 4626 deploy stack and related infra used by this repo.
+Generated on: 2026-04-01  
+Scope: `v1.7.1` deployment reset materials and canonical Base defaults.
 
 ## Sources
 
-1. Live onchain batcher (phased deployer): `0x19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e`
+1. Fresh epoch deterministic outputs (`INFRA_*_SALT_TAG` set to `...:v1.7.1`)
 2. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
-3. Deployment manifests: `deployments/base/contracts/**/*.json`
-4. Local env snapshot: `.env`
+3. Active manifests: `deployments/base/contracts/**/*.json`
+4. Archived prior snapshot: `deployments/base/archive/2026-01-addresses.json`
 
-## Live Onchain (Authoritative For Current Deploy Path)
-
-Queried from the deployment batcher at `0x19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e`:
+## Canonical v1.7.1 Infra Targets
 
 | Contract / Field | Address |
 |---|---|
 | `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
-| `bytecodeStore` | `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A` |
-| `create2Deployer` | `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0` |
-| `protocolTreasury` | `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` |
-| `poolManager` | `0x498581fF718922c3f8e6A244956aF099B2652b2b` |
-| `taxHook` | `0xca975B9dAF772C71161f3648437c3616E5Be0088` |
-| `chainlinkEthUsd` | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70` |
+| `bytecodeStore` | `0x6A578022609cdb65C614FF28912C49FC1EC97071` |
+| `create2DeployerFromStore` | `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a` |
+| `deploymentBatcher` | `0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB` |
+| `creatorOVaultCoreModule` | `0x4890776DA44f014A932dF4a9a1F8dBE648E91e3D` |
+| `creatorOVaultStrategiesModule` | `0x1E357B6B7a837CAF75Eb14016d2733779FEed9CE` |
+| `creatorOVaultAdminModule` | `0xBF2ab516BAA04aeac061f359a483622Ff006f153` |
 | `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
 | `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
 | `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
-| `solanaDestination` | `0x5f38e34ec3b546c53e682f2cf84d35d2edcbd15b498367651835942416f8d4d1` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| `uniswapV3Factory` | `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` |
-| `uniswapRouter` | `0x2626664c2603336E57B271c5C0b26F421741e481` |
-| `ajnaFactory` | `0x214f62B5836D83f3D6c4f71F174209097B1A779C` |
-| `CHARM_FACTORY` | `0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa` |
 
-## Frontend Defaults (Runtime Config Defaults)
+## Frontend/API Defaults
 
 From `frontend/src/config/contracts.defaults.ts`:
 
 | Key | Address |
 |---|---|
 | `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
-| `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
-| `vrfConsumer` | `0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304` |
-| `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
-| `creatorVaultBatcher` | `0x19Dd622b7c29705dAEf60f4a6D68623C8FE3C11e` |
-| `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
-| `universalBytecodeStore` | `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A` |
-| `universalCreate2DeployerFromStore` | `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0` |
+| `creatorVaultBatcher` | `0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB` |
+| `creatorVaultBatcherAutoHandoff` | `0x8DD90086281E0Bd70E8362eCE021e6eC57167fdB` |
+| `universalBytecodeStore` | `0x6A578022609cdb65C614FF28912C49FC1EC97071` |
+| `universalCreate2DeployerFromStore` | `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a` |
 
-## Deployment Manifests (Historical/Script Outputs)
+## Active Manifests
 
-From `deployments/base/contracts/**/*.json`:
+Current canonical manifests live in `deployments/base/contracts/**/*.json` and are aligned to this reset packet.
 
-| Contract | Address | Deployed At |
-|---|---|---|
-| CreatorRegistry | `0x02c8031c39E10832A831b954Df7a2c1bf9Df052D` | `2026-01-14` |
-| CreatorOVaultFactory | `0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD` | `2026-01-14` |
-| UniversalCreate2DeployerFromStore | `0xDb65C152B0496208A117FF7C04ddd5039F3035c6` | `2026-01-14` |
-| VaultActivationBatcher | `0x4b67e3a4284090e5191c27B8F24248eC82DF055D` | `2026-01-14` |
-| UniversalBytecodeStore | `0xCDf45B94348DBBABba4bE6f4a5341badb83D4dC4` | `2026-01-14` |
-| CreatorLotteryManager | `0xA02A858E67c98320dCFB218831B645692E8f3483` | `2026-01-14` |
-| CreatorVRFConsumerV2_5 | `0x0265236984DE964CB0422BaeFbDb2de7C9d590F5` | `2026-01-14` |
-| SolanaBridgeAdapter | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` | `2026-02-22T06:16:05Z` |
+The previous `2026-01` address set is archived in:
 
-## Current Drift (Needs Canonical Decision)
+- `deployments/base/archive/2026-01-addresses.json`
 
-1. Deployment manifests are historical and still include older infra addresses (`0xA02A...`, `0xDb65...`, `0xCDf4...`).
-2. Live phased deployer Solana routing must be configured via Safe (`setSolanaConfig`) after each new batcher rotation.
-3. Legacy `CreatorOVaultFactory` remains in manifests/scripts but is not used in phased deploy runtime.
+## Bytecode / CodeId Evidence
 
-## Usage Notes
+Release bytecode manifest:
 
-1. `CreatorOVaultFactory` is not part of the current phased deploy execution (deployment-batcher path).
-2. Runtime app paths now resolve `ccaStrategy` from batcher events / registry-derived resolution and do not require factory reads.
-3. Remaining `CreatorOVaultFactory` references are legacy scripts/docs and optional historical manifests.
+- `deployments/base/v1.7.1-bytecode-manifest.json`
+
+For each deployment contract this includes:
+
+- `creationBytecodeHash`
+- `codeId` (`keccak256(creationCode)`)
+- bytecode size in bytes
 
 ## Canonical Ajna Strategy Inventory
 
-The canonical phase-3 Ajna sleeve is now a bundle, not a single direct strategy contract:
+The canonical phase-3 Ajna sleeve remains:
 
 1. `ERC4626StrategyAdapter`
 2. `AjnaERC4626Vault`
 3. `AjnaVaultAuth`
-4. `AjnaVaultBuffer` (owned by the inner vault)
 
-Operationally:
+Deploy/codeId manifests must include all three entries.
 
-- `CreatorOVault` should register the adapter address as the Ajna strategy
-- `ERC4626StrategyAdapter.ERC4626_VAULT()` should resolve to `AjnaERC4626Vault`
-- `AjnaERC4626Vault.AUTH()` should resolve to `AjnaVaultAuth`
+## Cutover Checklist
 
-Bytecode-store / deployer inventories for the phased deploy path should therefore include:
+After broadcast of the v1.7.1 epoch:
 
-- `AjnaVaultAuth`
-- `AjnaERC4626Vault`
-- `ERC4626StrategyAdapter`
-
-The old direct Ajna contract path has been removed from the repo. Contract inventories and generated docs should only reference the nested adapter-backed Ajna bundle.
-
-## Recommended Canonical Source
-
-For deploy-path correctness, treat live phased deployer immutables as canonical until you rotate to a new deployer address, then update:
-
-1. `frontend/src/config/contracts.defaults.ts`
-2. `frontend/server/_lib/contracts.ts` (via same defaults file)
-3. Vercel env overrides (remove stale overrides unless intentionally set)
-4. `deployments/base/contracts/**/*.json` (backfill with current infra generation)
+1. Verify `DeploymentBatcher.bytecodeStore()` and `.create2Deployer()` match this inventory.
+2. Verify bytecode pointers for all `v1.7.1` `codeId`s in `UniversalBytecodeStore`.
+3. Keep `frontend/src/config/contracts.defaults.ts` and env examples in sync with final onchain values.
