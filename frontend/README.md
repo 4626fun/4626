@@ -60,6 +60,7 @@ Required input:
 
 This mirrors the “build vs build:js” split described in Zora’s monorepo architecture doc: keep the default loop fast, and only pay the heavy compile cost when you need it.
 
+wow
 ## Why multiple config files exist
 
 Several files share extensions but target different runtimes/tools:
@@ -111,6 +112,22 @@ Vercel routes all API traffic through `frontend/api/[...path].ts`, which dispatc
 - **Do not** add new API handlers and rely on dynamic imports.
 - **Do** register new endpoints in `frontend/api/_handlers/_routes.ts` (static loader map) so Vercel’s bundler includes them.
 - For local dev, `frontend/vite.config.ts` also maps a subset of `/api/*` to handlers and the API catch-all route.
+
+### Zora CLI compatibility endpoints
+
+`/api/zora/cli/*` provides CLI-shaped, read-only JSON contracts for agent/tooling use:
+
+- `/api/zora/cli/explore`
+- `/api/zora/cli/get`
+- `/api/zora/cli/profile`
+- `/api/zora/cli/priceHistory`
+- `/api/zora/cli/authStatus`
+
+Guardrails:
+
+- keep these endpoints GET-only and read-only
+- keep buy/sell/send execution on the existing `/api/zora/coin` path and canonical signer model
+- do not introduce `ZORA_PRIVATE_KEY` server execution paths for production API flows
 
 ## Runtime split (important)
 
@@ -172,7 +189,7 @@ pnpm build
 | `VITE_CDP_PAYMASTER_URL`         | Recommended        | client | Paymaster/bundler endpoint override (set to `/api/paymaster` to use same-origin proxy)             |
 | `CDP_PAYMASTER_URL`              | Recommended (prod) | server | Real CDP paymaster/bundler endpoint used by `/api/paymaster` (keep secret)                         |
 | `VITE_ZORA_PUBLIC_API_KEY`       | Recommended        | client | Zora public key (restrict allowed origins)                                                         |
-| `ZORA_SERVER_API_KEY`            | Recommended        | server | Zora server key for Vercel Functions                                                               |
+| `ZORA_SERVER_API_KEY`            | Recommended        | server | Zora server key for Vercel Functions (also powers read-only `/api/zora/cli/*` compatibility routes) |
 | `VITE_BASE_RPC`                  | No                 | client | Base RPC used by the browser (default: public)                                                     |
 | `BASE_RPC_URL`                   | No                 | server | Base RPC used by Vercel Functions (defaults to `https://mainnet.base.org`)                         |
 | `DATABASE_URL`                   | Optional           | server | Postgres connection string for local dev                                                           |

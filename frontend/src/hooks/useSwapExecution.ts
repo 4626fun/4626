@@ -281,7 +281,6 @@ export function useSwapExecution(params: {
   const [error, setError] = useState<string>('')
   const [confirmIntent, setConfirmIntent] = useState<'approval' | 'swap' | 'order' | null>(null)
   const [quoteUpdatedAt, setQuoteUpdatedAt] = useState<number | null>(null)
-  const [quoteClockMs, setQuoteClockMs] = useState<number>(() => Date.now())
   const [permitSignatureRequired, setPermitSignatureRequired] = useState(false)
   const [permitSignaturePending, setPermitSignaturePending] = useState(false)
   const [permitSignatureReady, setPermitSignatureReady] = useState(false)
@@ -627,7 +626,11 @@ export function useSwapExecution(params: {
 
   const approvalTx = approvalData?.approval as Record<string, unknown> | undefined
   const approvalRequired = Boolean(approvalTx?.to && approvalTx?.data)
-  const quoteIsStale = quoteUpdatedAt ? quoteClockMs - quoteUpdatedAt > QUOTE_TTL_MS : true
+  const isQuoteStale = useCallback(
+    (referenceTime = Date.now()): boolean => !quoteUpdatedAt || referenceTime - quoteUpdatedAt > QUOTE_TTL_MS,
+    [quoteUpdatedAt],
+  )
+  const quoteIsStale = isQuoteStale()
   const canonicalSubmitSession = useMemo(
     () =>
       evaluateCanonicalSubmitSession({
@@ -640,12 +643,6 @@ export function useSwapExecution(params: {
       }),
     [params.executionAddress, params.executionMode, params.hasSession, params.sessionAddress, params.sessionHydrated],
   )
-
-  useEffect(() => {
-    if (!quoteUpdatedAt) return
-    const tick = window.setInterval(() => setQuoteClockMs(Date.now()), 1_000)
-    return () => window.clearInterval(tick)
-  }, [quoteUpdatedAt])
 
   const getTokenDecimals = useCallback(async (token: string): Promise<number> => {
     if (!params.publicClient || !isAddress(token)) return 18
@@ -1402,7 +1399,7 @@ export function useSwapExecution(params: {
   const confirmAndExecute = useCallback(async () => {
     if (!confirmIntent || busy) return
     const action = confirmIntent
-    if ((action === 'swap' || action === 'order') && quoteIsStale) {
+    if ((action === 'swap' || action === 'order') && isQuoteStale()) {
       setConfirmIntent(null)
       setError('')
       setStatus('Quote expired. Refreshing quote and rebuilding review…')
@@ -1442,7 +1439,7 @@ export function useSwapExecution(params: {
     executeSwapNow,
     getApprovalExecutionTx,
     handleReviewTrade,
-    quoteIsStale,
+    isQuoteStale,
   ])
 
   return {

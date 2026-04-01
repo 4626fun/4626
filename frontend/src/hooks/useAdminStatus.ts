@@ -57,6 +57,8 @@ function useAdminStatusQueryState(params: {
     queryFn: fetchAdminStatus,
     staleTime: 30_000,
     retry: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
   const derived = deriveAdminStatus({

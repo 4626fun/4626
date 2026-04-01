@@ -35,6 +35,12 @@ type ExploreVaultsPage = {
 
 const PAGE_SIZE = 30
 const BASE_CHAIN_ID = 8453
+const VAULT_SORT_OPTIONS = [
+  { label: '24h volume', value: 'volume' },
+  { label: 'Market cap', value: 'marketCap' },
+  { label: '24h fees', value: 'priceChange' },
+  { label: 'Recently updated', value: 'new' },
+] as const
 
 function formatMetricUsd(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '-'
@@ -182,6 +188,8 @@ export function ExploreVaults() {
             currentTimeFilter={currentTimeFilter}
             currentSort={currentSort}
             volumeColumnNote="24h volume/fees come from creator coin snapshots; market cap reflects latest sampled value."
+            sortOptions={VAULT_SORT_OPTIONS}
+            disableUniswapTimeGating
           />
         </motion.div>
 

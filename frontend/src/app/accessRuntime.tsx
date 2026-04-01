@@ -82,11 +82,12 @@ function useResolvedAccessState(): AccessState {
   const allowlistEnforced = allowlistMode !== 'disabled'
   const allowlisted = allowQuery.data?.allowed === true
   const accepted = computeAcceptedFromAllowlist({ mode: allowlistMode, allowlisted })
-  const allowlistModeLoading = allowlistModeQuery.isLoading || allowlistModeQuery.isFetching
+  // Keep route guards stable during background refetches; only initial loads should block rendering.
+  const allowlistModeLoading = allowlistModeQuery.isLoading
   const allowlistAddressLoading =
     allowlistEnforced &&
     !!effectiveAddress &&
-    (allowQuery.isLoading || allowQuery.isFetching)
+    allowQuery.isLoading
 
   const loading =
     !siwe.sessionHydrated ||

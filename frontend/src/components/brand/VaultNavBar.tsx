@@ -39,9 +39,9 @@ function isActiveLink(location: { pathname: string }, item: NavItem): boolean {
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
-function useSafeAdminStatus() {
+function useSafeAdminStatus(enabled: boolean) {
   try {
-    return useAdminStatus()
+    return useAdminStatus({ enabled })
   } catch {
     return { isAdmin: false }
   }
@@ -52,7 +52,8 @@ export function VaultNavBar(props: { interactive?: boolean }) {
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
-  const { isAdmin } = useSafeAdminStatus()
+  const shouldLoadAdminStatus = interactive && hostMode !== 'marketing' && !publicMode
+  const { isAdmin } = useSafeAdminStatus(shouldLoadAdminStatus)
   const [brandHovered, setBrandHovered] = useState(false)
   const canonicalMarketingWaitlistHref =
     hostMode === 'marketing'

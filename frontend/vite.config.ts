@@ -9,6 +9,7 @@ import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
 import { classifyManualChunk } from './src/lib/viteManualChunks'
+import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
 const nodeRequire = createRequire(import.meta.url)
@@ -183,6 +184,11 @@ function localApiRoutesPlugin(): Plugin {
         '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
         '/api/token/image': () => import('./api/_handlers/token/_image'),
         '/api/zora/coin': () => import('./api/_handlers/zora/_coin'),
+        [zoraCliRoutePaths.authStatus]: () => import('./api/_handlers/zora/cli/_authStatus'),
+        [zoraCliRoutePaths.explore]: () => import('./api/_handlers/zora/cli/_explore'),
+        [zoraCliRoutePaths.get]: () => import('./api/_handlers/zora/cli/_get'),
+        [zoraCliRoutePaths.priceHistory]: () => import('./api/_handlers/zora/cli/_priceHistory'),
+        [zoraCliRoutePaths.profile]: () => import('./api/_handlers/zora/cli/_profile'),
         '/api/zora/explore': () => import('./api/_handlers/zora/_explore'),
         '/api/zora/link/status': () => import('./api/_handlers/zora/link/_status'),
         '/api/zora/metrics': () => import('./api/_handlers/zora/_metrics'),
