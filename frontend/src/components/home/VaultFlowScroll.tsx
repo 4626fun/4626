@@ -1336,7 +1336,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                       <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[5px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
                     )}
                     {depositTokens}&nbsp;
-                    <span className="font-medium text-zinc-500">■AKITA</span>
+                    <span className="font-medium text-zinc-500">akita</span>
                   </div>
                 </motion.div>
 
