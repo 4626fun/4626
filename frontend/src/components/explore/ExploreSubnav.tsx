@@ -7,6 +7,16 @@ type Tab = {
   to: string
 }
 
+type ExploreTimeFilterOption = {
+  label: string
+  value: string
+}
+
+type ExploreSortOption = {
+  label: string
+  value: string
+}
+
 const TABS: Tab[] = [
   { label: 'Creators', to: '/explore/creators' },
   { label: 'Content', to: '/explore/content' },
@@ -17,18 +27,18 @@ const TABS: Tab[] = [
 
 // Zora explore volume is 24h or all-time (`totalVolume`); 1W is labeled honestly in copy when selected.
 // Pill availability: 1D always; others when Uniswap historical service is configured (see useUniswapServiceStatus).
-const TIME_FILTERS = [
+const DEFAULT_TIME_FILTERS: readonly ExploreTimeFilterOption[] = [
   { label: '1D', value: '1d' },
   { label: '1W', value: '1w' },
   { label: 'All-time', value: '1y' },
-] as const
+]
 
-const SORT_OPTIONS = [
+const DEFAULT_SORT_OPTIONS: readonly ExploreSortOption[] = [
   { label: 'Volume', value: 'volume' },
   { label: 'Market cap', value: 'marketCap' },
   { label: 'Price change', value: 'priceChange' },
   { label: 'Recently added', value: 'new' },
-] as const
+]
 
 function isActive(pathname: string, to: string): boolean {
   if (pathname === to) return true
@@ -43,6 +53,9 @@ export function ExploreSubnav({
   currentTimeFilter = '1d',
   currentSort = 'volume',
   volumeColumnNote = null,
+  timeFilters = DEFAULT_TIME_FILTERS,
+  sortOptions = DEFAULT_SORT_OPTIONS,
+  disableUniswapTimeGating = false,
 }: {
   searchPlaceholder?: string
   onSearch?: (query: string) => void
@@ -52,6 +65,9 @@ export function ExploreSubnav({
   currentSort?: string
   /** Explains how Zora explore volume relates to the selected time pill (API has no 1H–1M windows; 1Y uses all-time). */
   volumeColumnNote?: string | null
+  timeFilters?: readonly ExploreTimeFilterOption[]
+  sortOptions?: readonly ExploreSortOption[]
+  disableUniswapTimeGating?: boolean
 }) {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -120,9 +136,9 @@ export function ExploreSubnav({
           <div className="flex flex-col items-start gap-1.5">
             {/* Time filter pills */}
             <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
-              {TIME_FILTERS.map((filter) => {
+              {timeFilters.map((filter) => {
                 const active = currentTimeFilter === filter.value
-                const isAvailable = filter.value === '1d' || uniswapAvailable
+                const isAvailable = disableUniswapTimeGating || filter.value === '1d' || uniswapAvailable
                 const disabled = !isAvailable
                 return (
                   <button
@@ -154,7 +170,7 @@ export function ExploreSubnav({
       {/* Sort options row — visible below lg, horizontally scrollable */}
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide lg:hidden -mx-1 px-1">
         <span className="text-[11px] sm:text-xs text-zinc-500 shrink-0">Sort:</span>
-        {SORT_OPTIONS.map((option) => {
+        {sortOptions.map((option) => {
           const active = currentSort === option.value
           return (
             <button
