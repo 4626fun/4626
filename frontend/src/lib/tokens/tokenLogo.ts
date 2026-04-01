@@ -103,8 +103,13 @@ function getKnownTokenLogo(address: string, chainId: number): string | null {
   return normalizeUrl(knownTokenLogoSeedByChainAndAddress[key] || knownTokenLogoSeedByChainAndAddress[`${chainId}:${address}`])
 }
 
-function canonicalTokenImageUrl(address: string, chainId: number): string {
-  return `/api/v1/token/${address.toLowerCase()}/image?chain=${chainId}&format=png&style=raw`
+function canonicalTokenImageUrl(
+  address: string,
+  chainId: number,
+  tokenKind?: 'creator' | 'share',
+): string {
+  const tokenKindSuffix = tokenKind ? `&tokenKind=${tokenKind}` : ''
+  return `/api/v1/token/${address.toLowerCase()}/image?chain=${chainId}&format=png&style=raw${tokenKindSuffix}`
 }
 
 /**
@@ -131,7 +136,13 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
   const knownTokenLogo = getKnownTokenLogo(token.address || '', chainId)
   const knownCoreToken = Boolean(knownTokenLogo)
   const shouldUseExternalRegistryFallbacks = token.group === 'core' || knownCoreToken
-  const internalRendererFallback = address ? canonicalTokenImageUrl(address, chainId) : null
+  const internalRendererFallback = address
+    ? token.group === 'creator'
+      ? canonicalTokenImageUrl(address, chainId, 'creator')
+      : token.group === 'share'
+        ? canonicalTokenImageUrl(address, chainId, 'share')
+        : canonicalTokenImageUrl(address, chainId)
+    : null
   const externalRegistryFallbacks = shouldUseExternalRegistryFallbacks && address ? tokenLogoFallbacksForChain(address, chainId) : []
 
   const groupedFallbacks = dedupe([

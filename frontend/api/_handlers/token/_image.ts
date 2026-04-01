@@ -190,6 +190,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const format: 'png' | 'svg' = formatRaw === 'svg' ? 'svg' : 'png'
   const styleRaw = (getStringQuery(req, 'style') ?? '').trim().toLowerCase()
   const preferRawSourceImage = styleRaw === 'raw'
+  const tokenKindRaw = (getStringQuery(req, 'tokenKind') ?? '').trim().toLowerCase()
+  const requestedTokenKind: 'creator' | 'share' | null =
+    tokenKindRaw === 'creator' ? 'creator'
+    : tokenKindRaw === 'share' ? 'share'
+    : null
   const presetRaw = (getStringQuery(req, 'preset') ?? '').trim().toLowerCase()
   const renderPreset =
     presetRaw === 'hero' ? 'hero'
@@ -209,22 +214,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'vault' }).catch(() => null),
     ])
 
-    // Check for a creator-customized AI-generated image first.
-    // Generated projects are keyed by vault address, not the ShareOFT address.
     let preferredSourceBytes: Uint8Array | null = null
     let preferredSourceFingerprint: string | null = null
     const vaultAddress = typeof vault === 'string' && isAddress(vault) ? (vault.toLowerCase() as Address) : null
-    if (vaultAddress) {
-      const aiOverride = await getCompletedImageProjectForVault(vaultAddress).catch(() => null)
-      if (aiOverride) {
-        const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
-        const rawBytes = fetched?.bytes
-        if (isSafeSourceByteLength(rawBytes)) {
-          preferredSourceBytes = rawBytes
-          preferredSourceFingerprint = sha256Hex(Buffer.from(rawBytes).toString('base64'))
-        }
-      }
-    }
 
     // Get underlying creator coin (ShareOFT path)
     let creatorCoin: Address | null = null
@@ -247,6 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let creatorTokenArtwork: CreatorTokenArtwork | null = null
     let zoraResolvedSymbol: string | null = null
     let zoraResolvedHandle: string | null = null
+    let requestedAddressIsCreatorCoin = requestedTokenKind === 'creator'
     const zoraKey = requireServerKey()
     if (zoraKey) {
       try {
@@ -274,6 +267,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Try requested address first (handles direct creator coin lookups).
         const requestedCoin = await readCoin(address as Address).catch(() => null)
         if (requestedCoin) {
+          requestedAddressIsCreatorCoin = true
           const artwork = pickCoinArtwork(requestedCoin)
           if (artwork) creatorTokenArtwork = artwork
           const handleCandidate = readCreatorHandle(requestedCoin)
@@ -293,6 +287,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       } catch (e) {
         console.warn('[token/image] Failed to fetch Zora coin image:', e)
+      }
+    }
+
+    // Vault-scoped AI overrides are for Share token renders only.
+    // Direct creator-coin lookups must always prefer creator coin artwork.
+    if (vaultAddress && requestedTokenKind !== 'creator' && !requestedAddressIsCreatorCoin) {
+      const aiOverride = await getCompletedImageProjectForVault(vaultAddress).catch(() => null)
+      if (aiOverride) {
+        const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
+        const rawBytes = fetched?.bytes
+        if (isSafeSourceByteLength(rawBytes)) {
+          preferredSourceBytes = rawBytes
+          preferredSourceFingerprint = sha256Hex(Buffer.from(rawBytes).toString('base64'))
+        }
       }
     }
 

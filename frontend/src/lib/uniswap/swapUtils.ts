@@ -112,6 +112,10 @@ export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, size = 
   return `/api/token/image?address=${getAddress(address)}&chain=${chainId}&size=${normalizedSize}`
 }
 
+export function creatorCoinRawLogo(address: string, chainId = BASE_CHAIN_ID): string {
+  return `/api/v1/token/${getAddress(address).toLowerCase()}/image?chain=${chainId}&format=png&style=raw&tokenKind=creator`
+}
+
 function isGenericLabel(value: string | undefined, group: TokenOption['group'] | undefined, address: string): boolean {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (!normalized) return true
@@ -271,7 +275,12 @@ export function resolveTokenDisplay(params: {
     : (preferOptionName ? optionName : onchainName || optionName || optionSymbol || shortAddress(params.address))
 
   const allowExternalRegistryFallbacks = isCore
-  const internalImageFallback = isAddress(params.address) ? shareTokenLogo(params.address, BASE_CHAIN_ID) : null
+  const internalImageFallback =
+    isAddress(params.address) && params.option?.group === 'creator'
+      ? creatorCoinRawLogo(params.address, BASE_CHAIN_ID)
+      : isAddress(params.address)
+        ? shareTokenLogo(params.address, BASE_CHAIN_ID)
+        : null
   const fallbackUrls =
     isAddress(params.address) && allowExternalRegistryFallbacks ? tokenLogoFallbacks(params.address) : []
   const logoCandidates = [

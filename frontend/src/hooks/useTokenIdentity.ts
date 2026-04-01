@@ -4,7 +4,7 @@ import { erc20Abi, getAddress, isAddress } from 'viem'
 import { usePublicClient } from 'wagmi'
 
 import { useTokenImage } from '@/hooks/useTokenMetadata'
-import { resolveTokenDisplay, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
+import { creatorCoinRawLogo, resolveTokenDisplay, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
 
 export function useTokenIdentity(params: {
   address: string
@@ -25,7 +25,7 @@ export function useTokenIdentity(params: {
   const creatorCoinImageUrl = useMemo(() => {
     if (params.option?.group !== 'creator') return null
     if (!isAddress(params.address)) return null
-    return `/api/v1/token/${getAddress(params.address).toLowerCase()}/image?chain=8453&format=png&style=raw`
+    return creatorCoinRawLogo(getAddress(params.address), 8453)
   }, [params.address, params.option?.group])
 
   const tokenMetadataQuery = useQuery({

@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   createPublicClientMock: vi.fn(),
   getCompletedImageProjectForVaultMock: vi.fn(),
   fetchBytesMock: vi.fn(),
+  sdkSetApiKeyMock: vi.fn(),
+  sdkGetCoinMock: vi.fn(),
 }))
 
 vi.mock('../../server/zora/_shared.js', () => ({
@@ -49,6 +51,11 @@ vi.mock('../../server/_lib/blob.js', () => ({
 
 vi.mock('../../server/_lib/imageProjects.js', () => ({
   getCompletedImageProjectForVault: mocks.getCompletedImageProjectForVaultMock,
+}))
+
+vi.mock('@zoralabs/coins-sdk', () => ({
+  setApiKey: mocks.sdkSetApiKeyMock,
+  getCoin: mocks.sdkGetCoinMock,
 }))
 
 vi.mock('viem/chains', () => ({
@@ -79,6 +86,9 @@ describe('token image AI override lookup', () => {
         throw new Error(`unexpected_function:${functionName}`)
       }),
     })
+    mocks.requireServerKeyMock.mockReturnValue('')
+    mocks.sdkSetApiKeyMock.mockReset()
+    mocks.sdkGetCoinMock.mockReset()
   })
 
   it('resolves generated override by vault address (not shareOFT address)', async () => {
@@ -108,5 +118,44 @@ describe('token image AI override lookup', () => {
     expect(res.statusCode).toBe(200)
     expect(String(res.getHeader('content-type') ?? '')).toBe('image/svg+xml')
     expect(String(res.body ?? '')).toContain('data:image/png;base64,')
+  }, 30_000)
+
+  it('skips vault-scoped AI override for creator-coin image lookups', async () => {
+    const sourcePng = await createSourcePng()
+    mocks.getStringQueryMock.mockImplementation((_req: any, key: string) => {
+      if (key === 'address') return SHARE_OFT
+      if (key === 'format') return 'svg'
+      if (key === 'tokenKind') return 'creator'
+      return null
+    })
+    mocks.requireServerKeyMock.mockReturnValue('zora_test_key')
+    mocks.sdkGetCoinMock.mockResolvedValue({
+      data: {
+        zora20Token: {
+          symbol: 'AKITA',
+          mediaContent: { originalUri: 'https://cdn.example/akita.png' },
+          creatorProfile: { handle: 'akita' },
+        },
+      },
+    })
+    mocks.fetchBytesMock.mockResolvedValue({
+      bytes: sourcePng,
+      contentType: 'image/png',
+    })
+
+    const mod = await import('../_handlers/token/_image.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { address: SHARE_OFT, format: 'svg', tokenKind: 'creator' },
+      headers: { host: 'v1.4626.fun' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(mocks.getCompletedImageProjectForVaultMock).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(String(res.getHeader('content-type') ?? '')).toBe('image/svg+xml')
   }, 30_000)
 })

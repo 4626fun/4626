@@ -62,6 +62,16 @@ Standard commands are documented in `frontend/package.json` scripts:
 - **Do not add new ad hoc session polling around `useSiweAuth()`**: session restoration already dedupes shared `/api/auth/me` work. New auth consumers should reuse the existing hook/provider path instead of layering separate refresh effects.
 - **Railway primary must fail fast if misconfigured**: standby mode or `AGENT_CONSUME_XMTP=false` on Railway is a startup error, not a healthy passive mode. When Postgres is configured, the DB-backed runtime lease lock is expected to stay enabled for the Railway primary.
 
+### Token identity invariants
+
+Creator Coins and Share tokens are separate assets and must never be treated as interchangeable.
+
+- **Creator Coin address != Share token address.** Do not infer one from the other without explicit contract lookup.
+- **Creator Coin UI must use creator-coin artwork.** Never apply Share-token (vault-framed) branding to Creator Coin token rows, selectors, or quote surfaces.
+- **Share token UI may use vault-branded renders.** Share token imagery can include framed/derived branding from vault context.
+- **Token-kind intent must be explicit in image pipelines.** When requesting token images, pass token kind context (`creator` vs `share`) so caches and fallbacks do not cross-contaminate.
+- **Token search/dedup logic must preserve token type.** If symbol/name collides, keep token-kind metadata so rendering and labels remain correct.
+
 ### Account and auth invariants
 
 These are product-level rules, not implementation suggestions. Future auth/onboarding work must preserve them unless product explicitly changes direction.
