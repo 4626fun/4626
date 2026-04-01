@@ -722,16 +722,16 @@ export function Swap() {
     executionMode === 'canonical' && canonicalSignerGate.code === 'privy-client-disabled'
   const showPrivyLoadingHint = executionMode === 'canonical' && canonicalSignerGate.code === 'privy-auth-loading'
   const canonicalSignInMethod = 'privy' as const
-  const ensureCanonicalSession = useCallback(async (): Promise<boolean> => {
-    if (executionMode !== 'canonical') return true
-    if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return false
+  const ensureCanonicalSession = useCallback(async (): Promise<string | null> => {
+    if (executionMode !== 'canonical') return null
+    if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return null
     try {
       const token = await getAccessToken()
-      if (!token) return false
+      if (!token) return null
       const bridgedAddress = await signInWithPrivyToken(token)
-      return Boolean(bridgedAddress)
+      return typeof bridgedAddress === 'string' && bridgedAddress.trim().length > 0 ? bridgedAddress : null
     } catch {
-      return false
+      return null
     }
   }, [executionMode, getAccessToken, signInWithPrivyToken])
   const identityReady = Boolean(

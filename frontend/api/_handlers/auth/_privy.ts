@@ -90,10 +90,8 @@ function pickPrivySessionAddress(params: {
     if (candidate && currentLinked.has(candidate)) return candidate
   }
 
-  for (const candidate of candidates) {
-    if (candidate) return candidate
-  }
-
+  // Fail closed for production safety: never mint a session for an address that
+  // is not currently linked on the verified Privy user object.
   return null
 }
 

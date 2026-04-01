@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { getTokenLogo, markTokenLogoSuccess, type TokenLogoSeed } from '@/lib/tokens/tokenLogo'
 
@@ -51,11 +51,20 @@ export function TokenAvatar(props: {
     return ordered
   }, [props.imageUrl, tokenLogo.preferred, tokenLogo.fallbackUrls])
 
-  const current = candidates[index]
+  const candidateKey = useMemo(() => candidates.join('|'), [candidates])
+  const resolvedIndex = index < candidates.length ? index : 0
+  const current = candidates[resolvedIndex]
   const finalRingClass = props.ringClass ?? 'border-white/12'
 
+  useEffect(() => {
+    // Reset failed/image cursor whenever the token candidate list changes.
+    // Without this, one failed token can leave subsequent tokens stuck on fallback initials.
+    setIndex(0)
+    setFailed(false)
+  }, [candidateKey])
+
   function handleImageError() {
-    if (index < candidates.length - 1) {
+    if (resolvedIndex < candidates.length - 1) {
       setIndex((value) => value + 1)
       setFailed(false)
       return

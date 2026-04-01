@@ -8,6 +8,7 @@ import {
   hashTypedData,
   http,
   isAddress,
+  toHex,
 } from 'viem'
 import { toAccount } from 'viem/accounts'
 import {
@@ -619,15 +620,6 @@ function getHexByteLength(hex: string): number | null {
   const body = hex.slice(2)
   if (body.length % 2 !== 0) return null
   return body.length / 2
-}
-
-function utf8ToHex(value: string): Hex {
-  const bytes = new TextEncoder().encode(value)
-  let hex = '0x'
-  for (const byte of bytes) {
-    hex += byte.toString(16).padStart(2, '0')
-  }
-  return hex as Hex
 }
 
 function signatureMeta(signature: Hex) {
@@ -1368,12 +1360,19 @@ function createWalletBackedLocalAccount(params: {
           'signMessage',
         )
       } else if (typeof walletClient.request === 'function') {
-        const msg =
-          typeof message === 'object' && message !== null && 'raw' in message
-            ? (message.raw as Hex)
-            : typeof message === 'string'
-              ? message
-              : utf8ToHex(String(message))
+        let msg: Hex
+        if (typeof message === 'object' && message !== null && 'raw' in message) {
+          const raw = (message as { raw?: unknown }).raw
+          if (typeof raw === 'string') {
+            msg = (raw.startsWith('0x') ? raw : toHex(raw)) as Hex
+          } else {
+            msg = toHex(raw as any) as Hex
+          }
+        } else if (typeof message === 'string') {
+          msg = (message.startsWith('0x') ? message : toHex(message)) as Hex
+        } else {
+          msg = toHex(String(message)) as Hex
+        }
         rawSig = await withTimeout(
           walletClient.request({
             method: 'personal_sign',

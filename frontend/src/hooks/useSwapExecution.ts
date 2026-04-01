@@ -99,16 +99,43 @@ type CanonicalSubmitSessionResult =
       shouldAttemptRefresh: boolean
     }
 
+type EnsureCanonicalSessionResult = boolean | string | null
+
+function resolveExpectedSessionAddress(input: {
+  expectedSessionAddress?: string | null | undefined
+  executionAddress: string | null | undefined
+}): string | null {
+  return typeof input.expectedSessionAddress === 'string' && input.expectedSessionAddress.trim().length > 0
+    ? input.expectedSessionAddress
+    : typeof input.executionAddress === 'string' && input.executionAddress.trim().length > 0
+      ? input.executionAddress
+      : null
+}
+
 export async function resolveCanonicalSubmitSession(
   input: CanonicalSubmitSessionInput,
-  ensureCanonicalSession?: (() => Promise<boolean>) | null,
+  ensureCanonicalSession?: (() => Promise<EnsureCanonicalSessionResult>) | null,
 ): Promise<CanonicalSubmitSessionResult> {
   const current = evaluateCanonicalSubmitSession(input)
   if (current.ok) return current
   if (!current.shouldAttemptRefresh || typeof ensureCanonicalSession !== 'function') return current
 
-  const refreshed = await ensureCanonicalSession().catch(() => false)
-  if (!refreshed) return current
+  const refreshed = await ensureCanonicalSession().catch(() => null)
+  const refreshedAddress =
+    typeof refreshed === 'string' && refreshed.trim().length > 0 && isAddress(refreshed) ? refreshed : null
+  const refreshedOk = typeof refreshed === 'boolean' ? refreshed : Boolean(refreshedAddress)
+  if (!refreshedOk) return current
+
+  // Production hardening: never bypass a session mismatch unless we have an
+  // explicit refreshed address that matches the expected canonical signer.
+  if (current.code === 'session-mismatch') {
+    const expectedSessionAddress = resolveExpectedSessionAddress({
+      expectedSessionAddress: input.expectedSessionAddress,
+      executionAddress: input.executionAddress,
+    })
+    if (!refreshedAddress) return current
+    if (expectedSessionAddress && refreshedAddress.toLowerCase() !== expectedSessionAddress.toLowerCase()) return current
+  }
 
   return {
     ok: true,
@@ -175,12 +202,10 @@ export function evaluateCanonicalSubmitSession(input: CanonicalSubmitSessionInpu
     }
   }
 
-  const expectedSessionAddress =
-    typeof input.expectedSessionAddress === 'string' && input.expectedSessionAddress.trim().length > 0
-      ? input.expectedSessionAddress
-      : typeof input.executionAddress === 'string' && input.executionAddress.trim().length > 0
-        ? input.executionAddress
-        : null
+  const expectedSessionAddress = resolveExpectedSessionAddress({
+    expectedSessionAddress: input.expectedSessionAddress,
+    executionAddress: input.executionAddress,
+  })
   if (expectedSessionAddress && input.sessionAddress.toLowerCase() !== expectedSessionAddress.toLowerCase()) {
     return {
       ok: false,
@@ -260,7 +285,7 @@ export function useSwapExecution(params: {
   sessionHydrated?: boolean
   hasSession?: boolean
   sessionAddress?: string | null
-  ensureCanonicalSession?: (() => Promise<boolean>) | null
+  ensureCanonicalSession?: (() => Promise<EnsureCanonicalSessionResult>) | null
 }) {
   const swapDebugEnabled = useMemo(() => isSwapDebugEnabled(), [])
   const [estimatedOut, setEstimatedOut] = useState<string>('')

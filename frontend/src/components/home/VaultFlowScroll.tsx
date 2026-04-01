@@ -208,6 +208,9 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const progressH = useTransform(scroll, [0, 1], ['0%', '100%'])
   // Brief delay before cue reveals so the cold-open curtain lifts first.
   const cueOpacity = useTransform(scroll, [0, 0.018, 0.055, 0.13], [0, 0.88, 0.88, 0])
+  // Opening curtain — scene begins in near-darkness and reveals itself on first scroll.
+  // Lifts quickly so the cold-open feel doesn't overstay its welcome.
+  const openingCurtain = useTransform(scroll, [0, 0.04, 0.14], [0.82, 0.32, 0])
 
   // Camera — continuous slow drift, no kinks
   const worldY = useTransform(scroll, [0, 1], [0, -6])
@@ -216,8 +219,8 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // deploy content so stage 4 remains legible on narrower screens.
   // Holds flat after 0.90 so stage-4 content stays locked in place while the user reads cards.
   const worldScale = useTransform(scroll, [0, 0.80, 0.90, 1.0], [1.25, 1.25, 1.30, 1.30])
-  // Eases freefall tilt to 0° by 0.62, stays flat for the rest of the scroll.
-  const worldRotateX = useTransform(scroll, [0, 0.36, 0.52, 1], [4, 1, 0, 0])
+  // Deep cinematic opening tilt: 10° bird's-eye → unlocks to flat as Zorb descends and lands.
+  const worldRotateX = useTransform(scroll, [0, 0.14, 0.32, 0.50, 1], [10, 5, 1.5, 0, 0])
   const worldTransform = useMotionTemplate`
     translate3d(0, ${worldY}%, 0)
     scale(${worldScale})
@@ -232,13 +235,15 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const heroZ = useTransform(scroll, [0, 0.20, 0.44, 0.56], [170, 40, 40, -60])
   const heroY = useTransform(scroll, [0, 0.56], [0, -12])
   const heroScale = useTransform(scroll, [0, 0.20, 0.44, 0.56], [1, 0.94, 0.94, 0.88])
-  const heroOpacity = useTransform(scroll, [0, 0.15, 0.22, 0.44, 0.58], [0, 0, 1, 1, 0])
-  const heroTitleOpacity = useTransform(scroll, [0.15, 0.22], [0, 1])
-  const heroTitleY = useTransform(scroll, [0.15, 0.22], [14, 0])
-  const heroPillsOpacity = useTransform(scroll, [0.15, 0.22], [0, 1])
-  const heroPillsY = useTransform(scroll, [0.15, 0.22], [12, 0])
-  const heroBodyOpacity = useTransform(scroll, [0.24, 0.32], [0, 1])
-  const heroBodyY = useTransform(scroll, [0.24, 0.32], [10, 0])
+  // Hero text waits until after the landing flash (0.28) so the Zorb gets its full
+  // dramatic solo moment before the scene's story is told.
+  const heroOpacity = useTransform(scroll, [0, 0.20, 0.28, 0.44, 0.58], [0, 0, 1, 1, 0])
+  const heroTitleOpacity = useTransform(scroll, [0.20, 0.28], [0, 1])
+  const heroTitleY = useTransform(scroll, [0.20, 0.28], [20, 0])
+  const heroPillsOpacity = useTransform(scroll, [0.20, 0.28], [0, 1])
+  const heroPillsY = useTransform(scroll, [0.20, 0.28], [14, 0])
+  const heroBodyOpacity = useTransform(scroll, [0.28, 0.37], [0, 1])
+  const heroBodyY = useTransform(scroll, [0.28, 0.37], [12, 0])
   const heroBlur = useTransform(scroll, [0.44, 0.54], [0, 7])
   const heroFilter = useMotionTemplate`blur(${heroBlur}px)`
   const heroTransform = useMotionTemplate`
@@ -263,12 +268,14 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   // Vault — rockets toward camera while off-screen, slows to a crawl once visible,
   // then settles into the vault anchor with a tiny overshoot before the deposit sequence
   // Vault stays at Z=0 after capture — world zooms in around it for "entering" feel
-  // Zorb approaches from far away (negative Z = distance), rushes toward viewer, lands at Z=0
-  const vaultZ = useTransform(scroll, [0, 0.14, 0.22, 0.28, 0.80, 0.88], [-360, -24, 16, 0, 0, -120])
-  // Scale: tiny (distant) → overshoots 1.3× (closest) → settles to 1 on landing
-  const vaultScale = useTransform(scroll, [0, 0.14, 0.21, 0.28, 0.88], [0.26, 1.3, 1.04, 1, 1])
-  // Visible from the very first frame — Zorb is always present in the sky
-  const vaultOpacity = useTransform(scroll, [0, 0.50, 0.58, 0.91, 0.93, 1.0], [1, 1, 0.72, 0.9, 0, 0])
+  // Zorb starts as a near-invisible spark at extreme depth, accelerates toward viewer in two phases:
+  //   Phase 1 (0→0.08): ultra-fast rush from deep space (the "comet" phase — mostly hidden by curtain)
+  //   Phase 2 (0.08→0.28): visible descent, overshoots, lands with precision.
+  const vaultZ = useTransform(scroll, [0, 0.08, 0.14, 0.22, 0.28, 0.80, 0.88], [-600, -80, -20, 18, 0, 0, -120])
+  // Scale: invisible point → rapid growth → 1.4× overshoot → soft landing at 1.0
+  const vaultScale = useTransform(scroll, [0, 0.06, 0.14, 0.21, 0.28, 0.88], [0.04, 0.10, 1.40, 1.06, 1, 1])
+  // Starts dark (matches curtain), ignites to full brightness as it clears the veil.
+  const vaultOpacity = useTransform(scroll, [0, 0.04, 0.10, 0.50, 0.58, 0.91, 0.93, 1.0], [0, 0.35, 1, 1, 0.72, 0.9, 0, 0])
   // Landing unlock flash — bright burst the moment the Zorb settles on the platform
   const landingFlash = useTransform(scroll, [0.27, 0.31, 0.36, 0.42], [0, 1, 0.45, 0])
   // Glow/flash: mint phase only — starts after deposit dot arrives
@@ -352,10 +359,10 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const [remainingCount, setRemainingCount] = useState(50_000_000)
   useMotionValueEvent(remainingMinted, 'change', (v) => setRemainingCount(v))
 
-  // Freefall: Zorb is a small distant dot at the top of viewport from scroll 0,
-  // drifts down as it zooms toward the viewer, lands with a tiny overshoot at 0.28.
-  const zorbFallY = useTransform(scroll, [0, 0.14, 0.22, 0.26, 0.28], [-16, -7, -1, 3.5, 0])
-  const zorbFallRotZ = useTransform(scroll, [0, 0.14, 0.22, 0.28], [-8, -4, -1, 0])
+  // Freefall: Zorb descends from high in the frame, gaining speed as it approaches.
+  // -32vh start → overshoot +4.5vh → snap to 0 on landing. Rotation unwinds simultaneously.
+  const zorbFallY = useTransform(scroll, [0, 0.08, 0.18, 0.24, 0.28], [-32, -22, -2, 4.5, 0])
+  const zorbFallRotZ = useTransform(scroll, [0, 0.08, 0.18, 0.28], [-18, -12, -2.5, 0])
 
   const vaultTransform = useMotionTemplate`
     translate3d(-50%, ${zorbFallY}vh, ${vaultZ}px)
@@ -1523,6 +1530,16 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
               </div>
             </motion.section>
           </motion.div>
+
+          {/* Opening curtain — lifts as scene awakens, reveals Zorb emerging from darkness */}
+          <motion.div
+            className="pointer-events-none absolute inset-0 z-50"
+            style={{
+              opacity: openingCurtain,
+              background: 'linear-gradient(180deg, #000008 0%, rgba(0,0,10,0.92) 55%, rgba(0,0,14,0.78) 100%)',
+            }}
+            aria-hidden="true"
+          />
 
           {/* Cube interior POV — faint perspective box outline, you're inside the vault */}
           <motion.div

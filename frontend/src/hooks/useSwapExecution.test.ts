@@ -114,8 +114,77 @@ describe('resolveCanonicalSubmitSession', () => {
     })
   })
 
+  it('does not bypass mismatch when refresh reports success without an address', async () => {
+    const ensureCanonicalSession = async () => true
+
+    await expect(
+      resolveCanonicalSubmitSession(
+        {
+          executionMode: 'canonical',
+          sessionHydrated: true,
+          hasSession: true,
+          sessionAddress: '0x1111111111111111111111111111111111111111',
+          executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+          expectedSessionAddress: '0x2222222222222222222222222222222222222222',
+        },
+        ensureCanonicalSession,
+      ),
+    ).resolves.toEqual({
+      ok: false,
+      code: 'session-mismatch',
+      message: 'Your restored 4626 session does not match the canonical owner signer. Restore your account connection and try again.',
+      shouldAttemptRefresh: true,
+    })
+  })
+
+  it('allows mismatch recovery only when refreshed address matches the canonical signer', async () => {
+    const ensureCanonicalSession = async () => '0x2222222222222222222222222222222222222222'
+
+    await expect(
+      resolveCanonicalSubmitSession(
+        {
+          executionMode: 'canonical',
+          sessionHydrated: true,
+          hasSession: true,
+          sessionAddress: '0x1111111111111111111111111111111111111111',
+          executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+          expectedSessionAddress: '0x2222222222222222222222222222222222222222',
+        },
+        ensureCanonicalSession,
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      code: 'ok',
+      message: null,
+      shouldAttemptRefresh: false,
+    })
+  })
+
   it('keeps blocking canonical submit when the pre-send re-bridge fails', async () => {
     const ensureCanonicalSession = async () => false
+
+    await expect(
+      resolveCanonicalSubmitSession(
+        {
+          executionMode: 'canonical',
+          sessionHydrated: true,
+          hasSession: true,
+          sessionAddress: '0x1111111111111111111111111111111111111111',
+          executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+          expectedSessionAddress: '0x2222222222222222222222222222222222222222',
+        },
+        ensureCanonicalSession,
+      ),
+    ).resolves.toEqual({
+      ok: false,
+      code: 'session-mismatch',
+      message: 'Your restored 4626 session does not match the canonical owner signer. Restore your account connection and try again.',
+      shouldAttemptRefresh: true,
+    })
+  })
+
+  it('keeps blocking mismatch when refreshed session address does not match signer', async () => {
+    const ensureCanonicalSession = async () => '0x3333333333333333333333333333333333333333'
 
     await expect(
       resolveCanonicalSubmitSession(
