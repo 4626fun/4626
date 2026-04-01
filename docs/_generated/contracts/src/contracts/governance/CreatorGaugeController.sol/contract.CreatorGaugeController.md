@@ -23,20 +23,6 @@ uint256 public constant MAX_BPS = 10000
 ```
 
 
-### MAX_CREATOR_SHARE
-
-```solidity
-uint256 public constant MAX_CREATOR_SHARE = 5000
-```
-
-
-### MAX_PROTOCOL_SHARE
-
-```solidity
-uint256 public constant MAX_PROTOCOL_SHARE = 1000
-```
-
-
 ### WETH
 WETH on Base
 
@@ -223,9 +209,12 @@ IVoterRewardsDistributor public voterRewardsDistributor
 ### burnShareBps
 Percentage to burn (increases PPS for all holders)
 
+Public constant names preserve legacy getter selectors (`burnShareBps()`, etc.) for
+off-chain monitors (e.g. CRE payout-integrity) and integrators. Do not rename.
+
 
 ```solidity
-uint256 public burnShareBps = 2139
+uint256 public constant burnShareBps = 2139
 ```
 
 
@@ -234,7 +223,7 @@ Percentage to lottery reserve (jackpot)
 
 
 ```solidity
-uint256 public lotteryShareBps = 6900
+uint256 public constant lotteryShareBps = 6900
 ```
 
 
@@ -243,16 +232,16 @@ Percentage to creator treasury
 
 
 ```solidity
-uint256 public creatorShareBps = 0
+uint256 public constant creatorShareBps = 0
 ```
 
 
 ### protocolShareBps
-Percentage to protocol treasury (multisig)
+Voter / protocol slice (routed via voterRewardsDistributor or treasury fallbacks)
 
 
 ```solidity
-uint256 public protocolShareBps = 961
+uint256 public constant protocolShareBps = 961
 ```
 
 
@@ -817,26 +806,6 @@ If unset, we fall back to protocolTreasury (or jackpot if that is unset).
 function setVoterRewardsDistributor(address _distributor) external onlyOwner;
 ```
 
-### setFeeSplit
-
-Update fee split
-
-
-```solidity
-function setFeeSplit(uint256 _burnBps, uint256 _lotteryBps, uint256 _creatorBps, uint256 _protocolBps)
-    external
-    onlyOwner;
-```
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`_burnBps`|`uint256`|Percentage to burn (increases PPS)|
-|`_lotteryBps`|`uint256`|Percentage to lottery (jackpot)|
-|`_creatorBps`|`uint256`|Percentage to creator|
-|`_protocolBps`|`uint256`|Percentage to protocol (multisig)|
-
-
 ### setDistributionThreshold
 
 Set distribution threshold
@@ -873,7 +842,7 @@ Get current fee split configuration
 
 
 ```solidity
-function getFeeSplit() external view returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol);
+function getFeeSplit() external pure returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol);
 ```
 
 ### previewDistribution
@@ -1104,12 +1073,6 @@ event ProtocolTreasurySet(address indexed treasury);
 event CreatorCoinSet(address indexed coin);
 ```
 
-### FeeSplitUpdated
-
-```solidity
-event FeeSplitUpdated(uint256 burnBps, uint256 lotteryBps, uint256 creatorBps, uint256 protocolBps);
-```
-
 ### ThresholdUpdated
 
 ```solidity
@@ -1163,12 +1126,6 @@ event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool aut
 
 ```solidity
 error ZeroAddress();
-```
-
-### InvalidSplit
-
-```solidity
-error InvalidSplit();
 ```
 
 ### NothingToDistribute
@@ -1235,5 +1192,11 @@ error MinOutputUnavailable();
 
 ```solidity
 error NotAuthorized();
+```
+
+### CreatorTreasuryRequired
+
+```solidity
+error CreatorTreasuryRequired();
 ```
 

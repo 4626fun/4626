@@ -55,7 +55,7 @@ Defined in: [src/lib/host.ts:97](https://github.com/wenakita/4626/blob/main/fron
 
 Base URL for the app (explore, deploy, vault, admin).
 
-When on marketing domain, returns app.4626.fun so links point to the app.
+When on marketing domain, returns v1.4626.fun so links point to the app.
 When on app domain, returns current origin.
 
 #### Returns
@@ -73,7 +73,7 @@ Defined in: [src/lib/host.ts:83](https://github.com/wenakita/4626/blob/main/fron
 Host mode detection.
 
 - 4626.fun (or www.4626.fun) = marketing (waitlist landing)
-- app.4626.fun (or localhost) = app
+- v1.4626.fun (or localhost) = app
 
 #### Returns
 

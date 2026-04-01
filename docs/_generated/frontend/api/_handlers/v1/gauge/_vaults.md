@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/gauge/\_vaults.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/gauge/_vaults.ts#L35)
+Defined in: [api/\_handlers/v1/gauge/\_vaults.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/gauge/_vaults.ts#L40)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

@@ -116,7 +116,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:95](https://github.com/wenakita/462
 
 > **fetchCreatorCoinInfo**\<`TTransport`, `TChain`\>(`publicClient`, `token`): `Promise`\<[`CreatorCoinInfo`](#creatorcoininfo) \| `null`\>
 
-Defined in: [src/lib/onchain/vaultResolve.ts:143](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/vaultResolve.ts#L143)
+Defined in: [src/lib/onchain/vaultResolve.ts:155](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/vaultResolve.ts#L155)
 
 #### Type Parameters
 
@@ -172,11 +172,41 @@ Defined in: [src/lib/onchain/vaultResolve.ts:112](https://github.com/wenakita/46
 
 ***
 
+### resolveCreatorTradeTokenAddress()
+
+> **resolveCreatorTradeTokenAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addressLike`): `Promise`\<`` `0x${string}` `` \| `null`\>
+
+Defined in: [src/lib/onchain/vaultResolve.ts:143](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/vaultResolve.ts#L143)
+
+#### Type Parameters
+
+##### TTransport
+
+`TTransport` *extends* `Transport` = `Transport`
+
+##### TChain
+
+`TChain` *extends* `Chain` \| `undefined` = `Chain` \| `undefined`
+
+#### Parameters
+
+##### publicClient
+
+##### addressLike
+
+`string`
+
+#### Returns
+
+`Promise`\<`` `0x${string}` `` \| `null`\>
+
+***
+
 ### resolveVaultByAnyAddress()
 
 > **resolveVaultByAnyAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addressLike`): `Promise`\<[`VaultResolved`](#vaultresolved) \| `null`\>
 
-Defined in: [src/lib/onchain/vaultResolve.ts:369](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/vaultResolve.ts#L369)
+Defined in: [src/lib/onchain/vaultResolve.ts:381](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/vaultResolve.ts#L381)
 
 #### Type Parameters
 

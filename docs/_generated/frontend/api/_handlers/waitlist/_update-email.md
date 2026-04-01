@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_update-email.ts:295](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_update-email.ts#L295)
+Defined in: [api/\_handlers/waitlist/\_update-email.ts:309](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_update-email.ts#L309)
 
 #### Parameters
 

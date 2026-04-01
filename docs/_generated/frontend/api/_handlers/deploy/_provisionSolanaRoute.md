@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/\_provisionSolanaRoute.ts:350](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_provisionSolanaRoute.ts#L350)
+Defined in: [api/\_handlers/deploy/\_provisionSolanaRoute.ts:353](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_provisionSolanaRoute.ts#L353)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

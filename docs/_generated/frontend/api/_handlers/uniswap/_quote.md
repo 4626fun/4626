@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/uniswap/\_quote.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_quote.ts#L23)
+Defined in: [api/\_handlers/uniswap/\_quote.ts:33](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_quote.ts#L33)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

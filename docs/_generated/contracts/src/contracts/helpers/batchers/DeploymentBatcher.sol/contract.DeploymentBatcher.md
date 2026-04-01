@@ -20,37 +20,12 @@ This contract splits deployment into multiple calls:
 
 
 ## State Variables
-### V3_FEE_TIER
-
-```solidity
-uint24 internal constant V3_FEE_TIER = 3000
-```
-
-
 ### CHARM_FACTORY
-Charm Finance Alpha Vault Factory on Base
-
-Vaults created via this factory appear on alpha.charm.fi UI
+Charm Finance Alpha Vault Factory on Base.
 
 
 ```solidity
 address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
-```
-
-
-### CHARM_FACTORY_GOVERNANCE
-Pinned Charm governance allowlist on Base. Deployments fail closed outside this set.
-
-
-```solidity
-address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1
-```
-
-
-### CHARM_FACTORY_GOVERNANCE_LEGACY
-
-```solidity
-address internal constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6
 ```
 
 
@@ -77,7 +52,7 @@ Percentage of ■TOKENs allocated to CCA auction
 
 
 ```solidity
-uint8 public constant AUCTION_PERCENT = 50
+uint8 public constant AUCTION_PERCENT = 40
 ```
 
 
@@ -86,7 +61,34 @@ Percentage of ■TOKENs vested to the creator
 
 
 ```solidity
-uint8 public constant VESTING_PERCENT = 50
+uint8 public constant VESTING_PERCENT = 40
+```
+
+
+### LP_RESERVE_PERCENT
+Percentage of ■TOKENs reserved on strategy for LP migration
+
+
+```solidity
+uint8 public constant LP_RESERVE_PERCENT = 20
+```
+
+
+### DEFAULT_LAUNCH_DISCOUNT_BPS
+Default launch discount (80% of oracle-derived reference price).
+
+
+```solidity
+uint16 public constant DEFAULT_LAUNCH_DISCOUNT_BPS = 8_000
+```
+
+
+### DEFAULT_LAUNCH_TICK_SPACING_BPS
+Default launch tick spacing (1% of derived floor price).
+
+
+```solidity
+uint16 public constant DEFAULT_LAUNCH_TICK_SPACING_BPS = 100
 ```
 
 
@@ -251,6 +253,15 @@ OVault runtime wiring used for Solana compose orchestration.
 
 ```solidity
 OVaultRuntimeConfig private ovaultRuntimeConfig
+```
+
+
+### phase3Helper
+Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
+
+
+```solidity
+DeploymentBatcherPhase3Helper public immutable phase3Helper
 ```
 
 
@@ -509,13 +520,6 @@ function _deriveShareOftSalt(address owner, string memory shareSymbolLower, stri
     returns (bytes32);
 ```
 
-### _defaultTickSpacingQ96
-
-
-```solidity
-function _defaultTickSpacingQ96(uint256 floorPriceQ96) internal pure returns (uint256);
-```
-
 ### _toLower
 
 
@@ -528,27 +532,6 @@ function _toLower(string memory input) internal pure returns (string memory);
 
 ```solidity
 function _toUpper(string memory input) internal pure returns (string memory);
-```
-
-### _enforceCharmFactoryGovernance
-
-
-```solidity
-function _enforceCharmFactoryGovernance() internal view;
-```
-
-### _enforceCharmVaultManager
-
-
-```solidity
-function _enforceCharmVaultManager(address charmVault, address expectedManager) internal view;
-```
-
-### _isAllowedCharmFactoryGovernance
-
-
-```solidity
-function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool);
 ```
 
 ## Events
@@ -611,7 +594,8 @@ event AuctionDeferred(
     address indexed owner,
     address indexed shareOFT,
     address ccaStrategy,
-    uint256 amount
+    uint256 amount,
+    uint256 lpReserveAmount
 );
 ```
 
@@ -800,6 +784,18 @@ error PermitAmountTooLow();
 error Phase1ShareOFTMissing();
 ```
 
+### InvalidCreatorTreasury
+
+```solidity
+error InvalidCreatorTreasury(address provided);
+```
+
+### InvalidPayoutRecipient
+
+```solidity
+error InvalidPayoutRecipient();
+```
+
 ### CharmFactoryGovernanceMismatch
 
 ```solidity
@@ -848,7 +844,7 @@ struct Phase2Params {
     address creatorToken;
     address owner;
     address creatorTreasury;
-    address payoutRecipient;
+    address payoutRecipient; // CreatorCoin payout recipient.
     address vault;
     address wrapper;
     address shareOFT;
@@ -856,7 +852,7 @@ struct Phase2Params {
     string version;
     uint256 depositAmount;
     uint128 requiredRaise;
-    uint256 floorPriceQ96;
+    uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
     bytes auctionSteps;
 }
 ```
@@ -868,13 +864,13 @@ struct Phase2CoreParams {
     address creatorToken;
     address owner;
     address creatorTreasury;
-    address payoutRecipient;
+    address payoutRecipient; // CreatorCoin payout recipient.
     address vault;
     address wrapper;
     address shareOFT;
     string shareSymbol;
     string version;
-    uint256 floorPriceQ96;
+    uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
 }
 ```
 
@@ -893,7 +889,7 @@ struct Phase2FinalizeParams {
     string version;
     uint256 depositAmount;
     uint128 requiredRaise;
-    uint256 floorPriceQ96;
+    uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
     bytes auctionSteps;
     bytes32 meteoraAlphaVault;
     IBaseSolanaBridge.Ix[] solanaIxs;
@@ -945,6 +941,7 @@ struct PendingAuction {
     address shareOFT;
     address ccaStrategy;
     uint256 amount;
+    uint256 lpReserveAmount;
 }
 ```
 
@@ -956,7 +953,7 @@ struct DeferredAuctionParams {
     address owner;
     address shareOFT;
     string version;
-    uint256 floorPriceQ96;
+    uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
     uint128 requiredRaise;
     bytes auctionSteps;
 }

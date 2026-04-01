@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/\_creator-allowlist.ts:189](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_creator-allowlist.ts#L189)
+Defined in: [api/\_handlers/\_creator-allowlist.ts:206](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_creator-allowlist.ts#L206)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

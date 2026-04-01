@@ -29,7 +29,7 @@ FEE MECHANISM:
 - Buys (from SwapOnly → user) = 6.9% fee
 - Hub: fee → GaugeController → unwrap → distribute (21.39% burn, 69% lottery, 9.61% voter rewards)
 - Remote: fee → pendingFees → flushFees() bridges OFT back to Base gauge
-- Sells: taxed by SimpleSellTaxHook on Base only (V4 hook, not in this contract)
+- Sells: can be taxed by a Base V4 hook when hook config is explicitly activated
 
 BUILDS ON TOP OF ZORAS CREATOR COINS
 Each creator deploys their own ShareOFT (e.g., ■AKITA for AKITA vault)
@@ -964,7 +964,7 @@ function getRemoteStatus()
 ERC-7572 contract-level metadata URI
 
 ERC-7572 is contract-level metadata for fungible tokens (not ERC-721 tokenURI).
-If `_contractURI` is explicitly set, return it as-is for backward compatibility.
+If `_contractURI` is explicitly set, return it as-is.
 Otherwise, return the canonical HTTPS metadata endpoint for this token so that
 Uniswap, DEX aggregators, and wallets can fetch the JSON over HTTP and display
 the token image. A `data:application/json;base64,...` default was the previous
@@ -1031,17 +1031,16 @@ function _jsonAddressOrNull(address addr) internal pure returns (string memory);
 function _buildRendererImageUrl(string memory format) internal view returns (string memory);
 ```
 
-### payoutRecipient
+### tradeFeeCollector
 
-Returns the address that should receive trade fees
+Returns the canonical trade-fee collector address.
 
-Called by external tax hooks (like the 6.9% V4 sell hook on Base) to determine
-where to send collected fees. Returns the GaugeController which handles
-distribution (21.39% burn, 69% lottery, 9.61% voter rewards).
+Canonical terminology: `tradeFeeCollector`.
+Returns GaugeController when configured, otherwise owner fallback.
 
 
 ```solidity
-function payoutRecipient() external view returns (address);
+function tradeFeeCollector() public view returns (address);
 ```
 **Returns**
 
@@ -1052,7 +1051,7 @@ function payoutRecipient() external view returns (address);
 
 ### isOwner
 
-Check if caller is the payout recipient (for Zora compatibility)
+Helper used by integrations that check ownership-style access.
 
 
 ```solidity
@@ -1068,7 +1067,7 @@ function isOwner(address account) external view returns (bool);
 
 |Name|Type|Description|
 |----|----|-----------|
-|`<none>`|`bool`|True if account is the payout recipient|
+|`<none>`|`bool`|True if account is owner or current trade-fee collector|
 
 
 ### receive
@@ -1297,6 +1296,12 @@ error NotHub();
 
 ```solidity
 error InvalidCallback();
+```
+
+### MissingLayerZeroEid
+
+```solidity
+error MissingLayerZeroEid(uint256 chainId);
 ```
 
 ### PendingLotteryEntryNotFound

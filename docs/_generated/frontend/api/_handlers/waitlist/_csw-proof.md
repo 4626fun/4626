@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/waitlist/\_csw-proof.ts:325](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_csw-proof.ts#L325)
+Defined in: [api/\_handlers/waitlist/\_csw-proof.ts:327](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_csw-proof.ts#L327)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

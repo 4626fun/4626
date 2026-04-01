@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/session/\_status.ts:2491](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_status.ts#L2491)
+Defined in: [api/\_handlers/deploy/session/\_status.ts:2531](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_status.ts#L2531)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

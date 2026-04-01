@@ -127,7 +127,7 @@ The Telegram Mini App account-link/onboarding flow must follow strict architectu
 ### Current Preserved Link Path
 
 The currently working Telegram -> Privy -> canonical-account path is preserved in
-`docs/telegram-canonical-link-preservation.md`.
+`docs/operations/telegram-canonical-link-preservation.md`.
 
 Any simplification must keep this semantic order:
 
@@ -152,7 +152,7 @@ resolution.
 
 Authoritative implementation notes live in:
 
-- `docs/telegram-canonical-link-preservation.md`
+- `docs/operations/telegram-canonical-link-preservation.md`
 - `frontend/docs/account-auth-invariants.md`
 - `frontend/docs/waitlist-accounts-architecture.md`
 

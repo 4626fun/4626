@@ -6,6 +6,14 @@
 
 # api/\_handlers/\_routes.auth
 
+## Variables
+
+### authRouteLoaders
+
+> `const` **authRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+
+Defined in: [api/\_handlers/\_routes.auth.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.auth.ts#L6)
+
 ## Functions
 
 ### getAuthApiHandler()

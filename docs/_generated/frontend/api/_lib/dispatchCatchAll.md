@@ -10,9 +10,9 @@
 
 ### dispatchCatchAllRequest()
 
-> **dispatchCatchAllRequest**(`params`): `Promise`\<`any`\>
+> **dispatchCatchAllRequest**(`params`): `Promise`\<`unknown`\>
 
-Defined in: [api/\_lib/dispatchCatchAll.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_lib/dispatchCatchAll.ts#L50)
+Defined in: [api/\_lib/dispatchCatchAll.ts:62](https://github.com/wenakita/4626/blob/main/frontend/api/_lib/dispatchCatchAll.ts#L62)
 
 #### Parameters
 
@@ -28,11 +28,11 @@ Defined in: [api/\_lib/dispatchCatchAll.ts:50](https://github.com/wenakita/4626/
 
 ###### req
 
-`any`
+`VercelRequest`
 
 ###### res
 
-`any`
+`VercelResponse`
 
 ###### resolveHandler
 
@@ -44,4 +44,4 @@ Defined in: [api/\_lib/dispatchCatchAll.ts:50](https://github.com/wenakita/4626/
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`unknown`\>

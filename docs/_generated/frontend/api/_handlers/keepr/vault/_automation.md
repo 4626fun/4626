@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/keepr/vault/\_automation.ts:83](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/vault/_automation.ts#L83)
+Defined in: [api/\_handlers/keepr/vault/\_automation.ts:91](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/vault/_automation.ts#L91)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

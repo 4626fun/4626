@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/wallet/solana/sweep/\_enqueue.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/solana/sweep/_enqueue.ts#L48)
+Defined in: [api/\_handlers/wallet/solana/sweep/\_enqueue.ts:58](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/solana/sweep/_enqueue.ts#L58)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

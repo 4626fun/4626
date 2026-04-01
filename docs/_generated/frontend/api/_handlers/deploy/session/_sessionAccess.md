@@ -68,7 +68,7 @@ Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:18](https://github
 
 ###### req
 
-`any`
+`VercelRequest`
 
 ###### sessionId
 

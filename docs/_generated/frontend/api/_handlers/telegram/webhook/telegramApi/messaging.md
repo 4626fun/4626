@@ -6,13 +6,29 @@
 
 # api/\_handlers/telegram/webhook/telegramApi/messaging
 
+## Type Aliases
+
+### TelegramSentMessage
+
+> **TelegramSentMessage** = `object`
+
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:7](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L7)
+
+#### Properties
+
+##### messageId
+
+> **messageId**: `number` \| `null`
+
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:8](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L8)
+
 ## Functions
 
 ### deleteTelegramMessage()
 
 > **deleteTelegramMessage**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:245](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L245)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:275](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L275)
 
 #### Parameters
 
@@ -40,7 +56,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:245](https
 
 > **editTelegramInlineMessage**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:193](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L193)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:223](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L223)
 
 #### Parameters
 
@@ -72,7 +88,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:193](https
 
 > **editTelegramMessage**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:175](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L175)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:200](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L200)
 
 #### Parameters
 
@@ -85,6 +101,10 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:175](https
 ###### chatId
 
 `string`
+
+###### dismissOwnerUserId?
+
+`string` \| `null`
 
 ###### messageId
 
@@ -106,9 +126,9 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:175](https
 
 ### replaceTelegramMenuMessage()
 
-> **replaceTelegramMenuMessage**(`params`): `Promise`\<`void`\>
+> **replaceTelegramMenuMessage**(`params`): `Promise`\<[`TelegramSentMessage`](#telegramsentmessage)\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:269](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L269)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:299](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L299)
 
 #### Parameters
 
@@ -121,6 +141,10 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:269](https
 ###### chatId
 
 `string`
+
+###### dismissOwnerUserId?
+
+`string` \| `null`
 
 ###### messageId
 
@@ -136,15 +160,15 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:269](https
 
 #### Returns
 
-`Promise`\<`void`\>
+`Promise`\<[`TelegramSentMessage`](#telegramsentmessage)\>
 
 ***
 
 ### sendTelegramMessage()
 
-> **sendTelegramMessage**(`params`): `Promise`\<`void`\>
+> **sendTelegramMessage**(`params`): `Promise`\<[`TelegramSentMessage`](#telegramsentmessage)\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:58](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L58)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L73)
 
 #### Parameters
 
@@ -157,6 +181,10 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:58](https:
 ###### chatId
 
 `string`
+
+###### dismissOwnerUserId?
+
+`string` \| `null`
 
 ###### messageThreadId?
 
@@ -176,15 +204,15 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:58](https:
 
 #### Returns
 
-`Promise`\<`void`\>
+`Promise`\<[`TelegramSentMessage`](#telegramsentmessage)\>
 
 ***
 
 ### sendTelegramPhoto()
 
-> **sendTelegramPhoto**(`params`): `Promise`\<`void`\>
+> **sendTelegramPhoto**(`params`): `Promise`\<[`TelegramSentMessage`](#telegramsentmessage)\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:134](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L134)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:154](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/messaging.ts#L154)
 
 #### Parameters
 
@@ -205,6 +233,10 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:134](https
 ###### contentType?
 
 `string`
+
+###### dismissOwnerUserId?
+
+`string` \| `null`
 
 ###### filename?
 
@@ -228,4 +260,4 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/messaging.ts:134](https
 
 #### Returns
 
-`Promise`\<`void`\>
+`Promise`\<[`TelegramSentMessage`](#telegramsentmessage)\>

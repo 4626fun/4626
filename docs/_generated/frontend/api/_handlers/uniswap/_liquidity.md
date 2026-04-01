@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/uniswap/\_liquidity.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_liquidity.ts#L43)
+Defined in: [api/\_handlers/uniswap/\_liquidity.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_liquidity.ts#L52)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

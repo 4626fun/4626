@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/auth/\_nonce.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_nonce.ts#L24)
+Defined in: [api/\_handlers/auth/\_nonce.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_nonce.ts#L37)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

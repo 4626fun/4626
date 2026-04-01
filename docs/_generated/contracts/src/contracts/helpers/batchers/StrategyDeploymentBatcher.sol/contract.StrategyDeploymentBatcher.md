@@ -71,6 +71,13 @@ address public immutable ajnaStrategyFactory
 ```
 
 
+### protocolOwner
+
+```solidity
+address public immutable protocolOwner
+```
+
+
 ### ADD_STRATEGY_SELECTOR
 
 ```solidity
@@ -78,7 +85,28 @@ bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(ad
 ```
 
 
+### CHARM_MAX_TWAP_DEVIATION
+
+```solidity
+int24 private constant CHARM_MAX_TWAP_DEVIATION = 500
+```
+
+
+### CHARM_TWAP_DURATION
+
+```solidity
+uint32 private constant CHARM_TWAP_DURATION = 300
+```
+
+
 ## Functions
+### onlyProtocolOwner
+
+
+```solidity
+modifier onlyProtocolOwner() ;
+```
+
 ### constructor
 
 
@@ -108,7 +136,7 @@ function batchDeployStrategies(
     address owner,
     string memory vaultName,
     string memory vaultSymbol
-) external nonReentrant returns (DeploymentResult memory result);
+) external nonReentrant onlyProtocolOwner returns (DeploymentResult memory result);
 ```
 **Parameters**
 
@@ -211,6 +239,12 @@ error ZeroQuote();
 
 ```solidity
 error ZeroVault();
+```
+
+### NotProtocolOwner
+
+```solidity
+error NotProtocolOwner();
 ```
 
 ### CharmFactoryGovernanceMismatch

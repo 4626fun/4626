@@ -10,7 +10,7 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
 Defined in: [api/\_handlers/status/\_vaultReport.ts:261](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/status/_vaultReport.ts#L261)
 
@@ -18,12 +18,12 @@ Defined in: [api/\_handlers/status/\_vaultReport.ts:261](https://github.com/wena
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

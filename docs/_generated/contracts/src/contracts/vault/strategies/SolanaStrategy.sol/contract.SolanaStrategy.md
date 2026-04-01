@@ -34,6 +34,13 @@ uint256 public remoteNav
 ```
 
 
+### remoteNavAnchor
+
+```solidity
+uint256 public remoteNavAnchor
+```
+
+
 ### remoteNavUpdatedAt
 
 ```solidity

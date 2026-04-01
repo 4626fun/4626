@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/creator-access/\_status.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/creator-access/_status.ts#L25)
+Defined in: [api/\_handlers/creator-access/\_status.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/creator-access/_status.ts#L35)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

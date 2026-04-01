@@ -44,7 +44,7 @@ Defined in: [src/lib/apiBase.ts:16](https://github.com/wenakita/4626/blob/main/f
 
 > **apiFetch**(`path`, `init`, `bases?`): `Promise`\<`Response`\>
 
-Defined in: [src/lib/apiBase.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/apiBase.ts#L40)
+Defined in: [src/lib/apiBase.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/apiBase.ts#L61)
 
 Fetch an API route with a best-effort alias fallback:
 - try `/__api/*` first (to avoid extension blocks on `/api/*`)

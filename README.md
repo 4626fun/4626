@@ -232,7 +232,7 @@ flowchart LR
 
 ## Supported Chains (Current Configuration)
 
-Source of truth: `docs/chains.md`.
+Source of truth: `docs/reference/chains.md`.
 
 | Network   | Chain ID | LayerZero Endpoint ID | Status     |
 | --------- | -------- | --------------------- | ---------- |
@@ -448,7 +448,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Narrative architecture model: `docs/compressions/index.md`
 - Primitive model (account/market/game loop): `docs/primitives/index.md`
 - Deployment operations: `docs/operations/deployment/index.md`
-- Current contract inventory: `docs/current-contract-inventory.md`
+- Current contract inventory: `docs/reference/current-contract-inventory.md`
 - Security docs: `docs/security/index.md`
 - Payout router + ownership hardening memo: `docs/security/payout-router-ownership-hardening-2026-03.md`
 - Internal audit / CI security index: `docs/audits/README.md`

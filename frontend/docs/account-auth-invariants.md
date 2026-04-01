@@ -172,7 +172,7 @@ The Telegram Mini App flow must follow these implementation-level guarantees:
 
 The current preserved implementation is documented in:
 
-- `docs/telegram-canonical-link-preservation.md`
+- `docs/operations/telegram-canonical-link-preservation.md`
 - `frontend/docs/telegram-miniapp-link-architecture.md`
 
 ### Required States

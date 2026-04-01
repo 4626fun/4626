@@ -18,8 +18,8 @@ We just need to configure it for our ■AKITA/ETH pool.
 
 CONFIGURATION:
 - Set 6.9% (690 bps) fee on swaps
-- Route fees to CreatorGaugeController
-- GaugeController then distributes: 50% burn, 31% lottery, 19% creator
+- Route fees to the configured tradeFeeCollector (typically CreatorGaugeController)
+- Gauge split behavior is configurable on GaugeController; do not assume fixed percentages here
 
 
 ## Functions

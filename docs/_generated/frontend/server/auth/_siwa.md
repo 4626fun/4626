@@ -158,7 +158,7 @@ Defined in: [server/auth/\_siwa.ts:71](https://github.com/wenakita/4626/blob/mai
 
 ##### req
 
-`any`
+`VercelRequest`
 
 #### Returns
 
@@ -176,7 +176,7 @@ Defined in: [server/auth/\_siwa.ts:41](https://github.com/wenakita/4626/blob/mai
 
 ##### req
 
-`any`
+`VercelRequest`
 
 #### Returns
 

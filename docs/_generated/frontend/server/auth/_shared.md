@@ -114,11 +114,11 @@ Defined in: [server/auth/\_shared.ts:333](https://github.com/wenakita/4626/blob/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 ##### name
 
@@ -180,11 +180,11 @@ Defined in: [server/auth/\_shared.ts:266](https://github.com/wenakita/4626/blob/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
@@ -287,7 +287,7 @@ Defined in: [server/auth/\_shared.ts:275](https://github.com/wenakita/4626/blob/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 #### Returns
 
@@ -329,7 +329,7 @@ Defined in: [server/auth/\_shared.ts:337](https://github.com/wenakita/4626/blob/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### opts
 
@@ -371,7 +371,7 @@ Defined in: [server/auth/\_shared.ts:246](https://github.com/wenakita/4626/blob/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 #### Returns
 
@@ -407,11 +407,11 @@ Defined in: [server/auth/\_shared.ts:318](https://github.com/wenakita/4626/blob/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 ##### name
 
@@ -447,11 +447,11 @@ Defined in: [server/auth/\_shared.ts:222](https://github.com/wenakita/4626/blob/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
@@ -469,7 +469,7 @@ Defined in: [server/auth/\_shared.ts:169](https://github.com/wenakita/4626/blob/
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 

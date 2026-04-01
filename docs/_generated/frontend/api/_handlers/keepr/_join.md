@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/keepr/\_join.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/_join.ts#L81)
+Defined in: [api/\_handlers/keepr/\_join.ts:89](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/_join.ts#L89)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

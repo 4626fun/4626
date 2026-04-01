@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/waitlist/\_join.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_join.ts#L18)
+Defined in: [api/\_handlers/waitlist/\_join.ts:26](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_join.ts#L26)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

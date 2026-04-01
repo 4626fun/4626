@@ -12,7 +12,7 @@
 
 > **ImageGenerationJob** = `object`
 
-Defined in: [src/lib/imageGenerationApi.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L23)
+Defined in: [src/lib/imageGenerationApi.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L25)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/imageGenerationApi.ts:23](https://github.com/wenakita/4626/
 
 > **id**: `string`
 
-Defined in: [src/lib/imageGenerationApi.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L24)
+Defined in: [src/lib/imageGenerationApi.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L26)
 
 ##### latestError?
 
 > `optional` **latestError**: `string` \| `null`
 
-Defined in: [src/lib/imageGenerationApi.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L26)
+Defined in: [src/lib/imageGenerationApi.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L28)
 
 ##### status
 
 > **status**: `JobStatus`
 
-Defined in: [src/lib/imageGenerationApi.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L25)
+Defined in: [src/lib/imageGenerationApi.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L27)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/imageGenerationApi.ts:25](https://github.com/wenakita/4626/
 
 > **ImageGenerationProject** = `object`
 
-Defined in: [src/lib/imageGenerationApi.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L6)
+Defined in: [src/lib/imageGenerationApi.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L8)
 
 #### Properties
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/imageGenerationApi.ts:6](https://github.com/wenakita/4626/b
 
 > `optional` **assets**: `object`[]
 
-Defined in: [src/lib/imageGenerationApi.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L9)
+Defined in: [src/lib/imageGenerationApi.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L11)
 
 ###### blobUrl
 
@@ -74,7 +74,7 @@ Defined in: [src/lib/imageGenerationApi.ts:9](https://github.com/wenakita/4626/b
 
 > `optional` **attempts**: `object`[]
 
-Defined in: [src/lib/imageGenerationApi.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L16)
+Defined in: [src/lib/imageGenerationApi.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L18)
 
 ###### id
 
@@ -92,13 +92,13 @@ Defined in: [src/lib/imageGenerationApi.ts:16](https://github.com/wenakita/4626/
 
 > **id**: `string`
 
-Defined in: [src/lib/imageGenerationApi.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L7)
+Defined in: [src/lib/imageGenerationApi.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L9)
 
 ##### status
 
 > **status**: `ProjectStatus`
 
-Defined in: [src/lib/imageGenerationApi.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L8)
+Defined in: [src/lib/imageGenerationApi.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L10)
 
 ## Functions
 
@@ -106,7 +106,7 @@ Defined in: [src/lib/imageGenerationApi.ts:8](https://github.com/wenakita/4626/b
 
 > **associateImageProjectToVault**(`input`): `Promise`\<`void`\>
 
-Defined in: [src/lib/imageGenerationApi.ts:155](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L155)
+Defined in: [src/lib/imageGenerationApi.ts:157](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L157)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [src/lib/imageGenerationApi.ts:155](https://github.com/wenakita/4626
 
 > **autoProvisionProjectAssets**(`input`): `Promise`\<\{ `subjectImageUrl`: `string`; \}\>
 
-Defined in: [src/lib/imageGenerationApi.ts:132](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L132)
+Defined in: [src/lib/imageGenerationApi.ts:134](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L134)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [src/lib/imageGenerationApi.ts:132](https://github.com/wenakita/4626
 
 > **createImageGenerationProject**(`input`): `Promise`\<[`ImageGenerationProject`](#imagegenerationproject)\>
 
-Defined in: [src/lib/imageGenerationApi.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L50)
+Defined in: [src/lib/imageGenerationApi.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L52)
 
 #### Parameters
 
@@ -186,7 +186,7 @@ Defined in: [src/lib/imageGenerationApi.ts:50](https://github.com/wenakita/4626/
 
 > **directComposeProject**(`projectId`): `Promise`\<\{ `breakoutApplied`: `boolean`; `outputBlobUrl`: `string`; \}\>
 
-Defined in: [src/lib/imageGenerationApi.ts:119](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L119)
+Defined in: [src/lib/imageGenerationApi.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L121)
 
 #### Parameters
 
@@ -204,7 +204,7 @@ Defined in: [src/lib/imageGenerationApi.ts:119](https://github.com/wenakita/4626
 
 > **enqueueImageGeneration**(`projectId`): `Promise`\<[`ImageGenerationJob`](#imagegenerationjob)\>
 
-Defined in: [src/lib/imageGenerationApi.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L84)
+Defined in: [src/lib/imageGenerationApi.ts:86](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L86)
 
 #### Parameters
 
@@ -222,7 +222,7 @@ Defined in: [src/lib/imageGenerationApi.ts:84](https://github.com/wenakita/4626/
 
 > **enqueueImageRefine**(`input`): `Promise`\<[`ImageGenerationJob`](#imagegenerationjob)\>
 
-Defined in: [src/lib/imageGenerationApi.ts:94](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L94)
+Defined in: [src/lib/imageGenerationApi.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L96)
 
 #### Parameters
 
@@ -246,7 +246,7 @@ Defined in: [src/lib/imageGenerationApi.ts:94](https://github.com/wenakita/4626/
 
 > **fileToBase64**(`file`): `Promise`\<`string`\>
 
-Defined in: [src/lib/imageGenerationApi.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L45)
+Defined in: [src/lib/imageGenerationApi.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L47)
 
 #### Parameters
 
@@ -264,7 +264,7 @@ Defined in: [src/lib/imageGenerationApi.ts:45](https://github.com/wenakita/4626/
 
 > **getImageGenerationJob**(`jobId`): `Promise`\<[`ImageGenerationJob`](#imagegenerationjob)\>
 
-Defined in: [src/lib/imageGenerationApi.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L107)
+Defined in: [src/lib/imageGenerationApi.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L109)
 
 #### Parameters
 
@@ -282,7 +282,7 @@ Defined in: [src/lib/imageGenerationApi.ts:107](https://github.com/wenakita/4626
 
 > **getImageGenerationProject**(`projectId`): `Promise`\<[`ImageGenerationProject`](#imagegenerationproject)\>
 
-Defined in: [src/lib/imageGenerationApi.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L113)
+Defined in: [src/lib/imageGenerationApi.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L115)
 
 #### Parameters
 
@@ -300,7 +300,7 @@ Defined in: [src/lib/imageGenerationApi.ts:113](https://github.com/wenakita/4626
 
 > **getVaultImage**(`vaultAddress`): `Promise`\<\{ `outputBlobUrl`: `string`; \} \| `null`\>
 
-Defined in: [src/lib/imageGenerationApi.ts:146](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L146)
+Defined in: [src/lib/imageGenerationApi.ts:148](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L148)
 
 #### Parameters
 
@@ -318,7 +318,7 @@ Defined in: [src/lib/imageGenerationApi.ts:146](https://github.com/wenakita/4626
 
 > **uploadImageGenerationAsset**(`input`): `Promise`\<`void`\>
 
-Defined in: [src/lib/imageGenerationApi.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L64)
+Defined in: [src/lib/imageGenerationApi.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/imageGenerationApi.ts#L66)
 
 #### Parameters
 

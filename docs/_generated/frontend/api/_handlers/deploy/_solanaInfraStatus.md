@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/\_solanaInfraStatus.ts:258](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_solanaInfraStatus.ts#L258)
+Defined in: [api/\_handlers/deploy/\_solanaInfraStatus.ts:261](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_solanaInfraStatus.ts#L261)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

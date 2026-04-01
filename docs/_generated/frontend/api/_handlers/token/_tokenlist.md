@@ -10,7 +10,7 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
 Defined in: [api/\_handlers/token/\_tokenlist.ts:61](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_tokenlist.ts#L61)
 
@@ -22,12 +22,12 @@ canonical extension-based aliases (/logo.png and /logo.svg).
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

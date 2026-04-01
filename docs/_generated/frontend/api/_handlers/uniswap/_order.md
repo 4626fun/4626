@@ -10,23 +10,23 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/uniswap/\_order.ts:30](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_order.ts#L30)
+Defined in: [api/\_handlers/uniswap/\_order.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_order.ts#L39)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/uniswap/\_order.ts:30](https://github.com/wenakita/4
 
 > **validateOrderResponsePayload**(`payload`): `string` \| `null`
 
-Defined in: [api/\_handlers/uniswap/\_order.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_order.ts#L16)
+Defined in: [api/\_handlers/uniswap/\_order.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_order.ts#L25)
 
 #### Parameters
 

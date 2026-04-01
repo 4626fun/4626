@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_recentWinners.ts:61](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_recentWinners.ts#L61)
+Defined in: [api/\_handlers/v1/lottery/\_recentWinners.ts:66](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_recentWinners.ts#L66)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

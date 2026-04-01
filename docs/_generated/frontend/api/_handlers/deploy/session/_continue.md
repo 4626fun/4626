@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `null` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/session/\_continue.ts:527](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_continue.ts#L527)
+Defined in: [api/\_handlers/deploy/session/\_continue.ts:539](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_continue.ts#L539)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `null` \| `undefined`\>

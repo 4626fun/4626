@@ -870,10 +870,22 @@ error ResponseAlreadySent();
 error RelayFeeMismatch(uint256 provided, uint256 expected);
 ```
 
+### MissingLayerZeroEid
+
+```solidity
+error MissingLayerZeroEid(uint256 chainId);
+```
+
 ### InvalidRateLimitConfig
 
 ```solidity
 error InvalidRateLimitConfig();
+```
+
+### CrossChainRateLimitExceeded
+
+```solidity
+error CrossChainRateLimitExceeded(uint32 sourceChainEid, uint64 sequence);
 ```
 
 ## Structs

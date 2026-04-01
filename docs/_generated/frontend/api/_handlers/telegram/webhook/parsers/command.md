@@ -80,12 +80,6 @@ Re-exports [isHelpCommand](../utils.md#ishelpcommand)
 
 ***
 
-### isInlineLauncherCommand
-
-Re-exports [isInlineLauncherCommand](../utils.md#isinlinelaunchercommand)
-
-***
-
 ### isLikelyCommandText
 
 Re-exports [isLikelyCommandText](../utils.md#islikelycommandtext)

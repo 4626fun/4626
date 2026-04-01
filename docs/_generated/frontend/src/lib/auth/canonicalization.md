@@ -58,7 +58,7 @@ Defined in: [src/lib/auth/canonicalization.ts:20](https://github.com/wenakita/46
 
 > **runCanonicalizationPipeline**(`params`): `Promise`\<[`CanonicalizationResult`](#canonicalizationresult)\>
 
-Defined in: [src/lib/auth/canonicalization.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/canonicalization.ts#L69)
+Defined in: [src/lib/auth/canonicalization.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/canonicalization.ts#L90)
 
 #### Parameters
 

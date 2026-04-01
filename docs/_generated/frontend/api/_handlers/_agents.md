@@ -10,7 +10,7 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
 Defined in: [api/\_handlers/\_agents.ts:92](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_agents.ts#L92)
 
@@ -23,12 +23,12 @@ If XMTP_AGENT_ADDRESS is configured, returns a single 4626 agent entry.
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

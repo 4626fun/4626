@@ -26,19 +26,25 @@ Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:6](https://github
 
 > **aliases**: `string`[]
 
-Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L11)
 
 ##### analyzeLabel
 
 > **analyzeLabel**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:9](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L9)
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L10)
 
 ##### buyLabel
 
 > **buyLabel**: `string`
 
 Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:8](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L8)
+
+##### queryLabel
+
+> **queryLabel**: `string`
+
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:9](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L9)
 
 ##### symbol
 
@@ -52,7 +58,7 @@ Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:7](https://github
 
 > `const` **TELEGRAM\_APPROVED\_INLINE\_TOKENS**: [`TelegramApprovedInlineToken`](#telegramapprovedinlinetoken)[]
 
-Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L21)
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L22)
 
 ## Functions
 
@@ -60,7 +66,7 @@ Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:21](https://githu
 
 > **buildTelegramAnalyzeInlineDraft**(`token`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:64](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L64)
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L71)
 
 #### Parameters
 
@@ -78,7 +84,7 @@ Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:64](https://githu
 
 > **filterTelegramApprovedTradeVaults**\<`T`\>(`vaults`): `T` & `object`[]
 
-Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:68](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L68)
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:75](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L75)
 
 #### Type Parameters
 
@@ -102,7 +108,7 @@ Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:68](https://githu
 
 > **getTelegramApprovedInlineTokenByAddress**(`value`): [`TelegramApprovedInlineToken`](#telegramapprovedinlinetoken) \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L49)
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:51](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L51)
 
 #### Parameters
 
@@ -120,7 +126,7 @@ Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:49](https://githu
 
 > **resolveTelegramApprovedInlineTokenQuery**(`rawQuery`): [`TelegramApprovedInlineToken`](#telegramapprovedinlinetoken) \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L55)
+Defined in: [api/\_handlers/telegram/webhook/approvedTokens.ts:57](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/approvedTokens.ts#L57)
 
 #### Parameters
 

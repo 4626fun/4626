@@ -114,7 +114,7 @@ Serves two purposes:
 2. Ensures creator launches have real liquidity
 
 **Notes:**
-- security: Prevents "dust deposit → inflate → drain" attack vector
+- security: Prevents "dust deposit → inflate → value-extraction" attack vector
 
 - economics: TEMP: 50M tokens = 5% of typical 1B supply
 

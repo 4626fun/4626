@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_verify-social.ts:96](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_verify-social.ts#L96)
+Defined in: [api/\_handlers/waitlist/\_verify-social.ts:108](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_verify-social.ts#L108)
 
 #### Parameters
 

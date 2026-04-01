@@ -28,6 +28,26 @@ Get all owners of a CreatorCoin (capped to prevent DoS from malicious contracts)
 
 ***
 
+### getCreatorCoinPayoutRecipient()
+
+> **getCreatorCoinPayoutRecipient**(`coinAddress`): `Promise`\<`` `0x${string}` `` \| `null`\>
+
+Defined in: [src/lib/creator-coin-resolver.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creator-coin-resolver.ts#L70)
+
+Resolve CreatorCoin payoutRecipient.
+
+#### Parameters
+
+##### coinAddress
+
+`` `0x${string}` ``
+
+#### Returns
+
+`Promise`\<`` `0x${string}` `` \| `null`\>
+
+***
+
 ### getOwnerAt()
 
 > **getOwnerAt**(`coinAddress`, `index`): `Promise`\<`` `0x${string}` `` \| `null`\>
@@ -48,26 +68,6 @@ Index 2: Main EOA (Externally Owned Account)
 ##### index
 
 `number`
-
-#### Returns
-
-`Promise`\<`` `0x${string}` `` \| `null`\>
-
-***
-
-### getPayoutRecipient()
-
-> **getPayoutRecipient**(`coinAddress`): `Promise`\<`` `0x${string}` `` \| `null`\>
-
-Defined in: [src/lib/creator-coin-resolver.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creator-coin-resolver.ts#L70)
-
-Get the payout recipient (creator's main address) from a CreatorCoin contract
-
-#### Parameters
-
-##### coinAddress
-
-`` `0x${string}` ``
 
 #### Returns
 
@@ -103,7 +103,7 @@ Defined in: [src/lib/creator-coin-resolver.ts:146](https://github.com/wenakita/4
 
 Resolve a CreatorCoin address to the creator's main wallet
 Priority:
-1. Payout recipient (most reliable)
+1. payoutRecipient (most reliable)
 2. Owner at index 2 (main EOA)
 3. Fallback to the contract address itself
 

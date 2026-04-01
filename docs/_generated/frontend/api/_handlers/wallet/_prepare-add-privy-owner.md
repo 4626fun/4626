@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/wallet/\_prepare-add-privy-owner.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/_prepare-add-privy-owner.ts#L42)
+Defined in: [api/\_handlers/wallet/\_prepare-add-privy-owner.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/_prepare-add-privy-owner.ts#L49)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

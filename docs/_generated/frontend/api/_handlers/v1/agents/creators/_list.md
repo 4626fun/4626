@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/agents/creators/\_list.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/creators/_list.ts#L43)
+Defined in: [api/\_handlers/v1/agents/creators/\_list.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/creators/_list.ts#L47)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

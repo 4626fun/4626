@@ -70,7 +70,7 @@ Defined in: [src/lib/siwaAgentAuth.ts:73](https://github.com/wenakita/4626/blob/
 
 > **signInWithSiwaAgent**(`params`): `Promise`\<`AgentVerifyResponse`\>
 
-Defined in: [src/lib/siwaAgentAuth.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siwaAgentAuth.ts#L92)
+Defined in: [src/lib/siwaAgentAuth.ts:88](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siwaAgentAuth.ts#L88)
 
 #### Parameters
 

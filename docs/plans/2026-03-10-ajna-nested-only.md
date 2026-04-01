@@ -171,7 +171,7 @@ Expected: PASS.
 - Modify: `docs/primitives/market/vault.md`
 - Modify: `docs/guides/deploy-vault.md`
 - Modify: `docs/operations/deployment/launch/verification.md`
-- Modify: `docs/current-contract-inventory.md`
+- Modify: `docs/reference/current-contract-inventory.md`
 - Modify: `docs/developers/index.md`
 - Delete or regenerate: `docs/_generated/contracts/src/contracts/vault/strategies/AjnaStrategy.sol/contract.AjnaStrategy.md`
 - Delete or regenerate: `docs/_generated/contracts/src/contracts/helpers/batchers/StrategyDeploymentFactories.sol/interface.IAjnaStrategyFactory.md`

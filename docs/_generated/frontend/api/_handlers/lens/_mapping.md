@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/lens/\_mapping.ts:64](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/lens/_mapping.ts#L64)
+Defined in: [api/\_handlers/lens/\_mapping.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/lens/_mapping.ts#L81)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

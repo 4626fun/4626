@@ -12,7 +12,7 @@
 
 > `const` **\_\_testables**: `object`
 
-Defined in: [api/\_handlers/token/\_image.ts:2501](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2501)
+Defined in: [api/\_handlers/token/\_image.ts:2557](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2557)
 
 #### Type Declaration
 
@@ -104,6 +104,10 @@ Defined in: [api/\_handlers/token/\_image.ts:2501](https://github.com/wenakita/4
 
 `"standard"` \| `"hero"` \| `"pixel"`
 
+###### signatureText?
+
+`string`
+
 ###### size
 
 `number`
@@ -162,9 +166,9 @@ Defined in: [api/\_handlers/token/\_image.ts:2501](https://github.com/wenakita/4
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/token/\_image.ts:161](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L161)
+Defined in: [api/\_handlers/token/\_image.ts:171](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L171)
 
 Token Image Generator API
 
@@ -183,12 +187,12 @@ Response: PNG by default (wallet-friendly), or SVG with `?format=svg`
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

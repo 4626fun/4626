@@ -12,7 +12,7 @@
 
 > **TokenLogoLookup** = `object`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L19)
+Defined in: [src/lib/tokens/tokenLogo.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L15)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [src/lib/tokens/tokenLogo.ts:19](https://github.com/wenakita/4626/bl
 
 > **cacheHit**: `boolean`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L22)
+Defined in: [src/lib/tokens/tokenLogo.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L18)
 
 ##### cacheKey
 
 > **cacheKey**: `string`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L23)
+Defined in: [src/lib/tokens/tokenLogo.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L19)
 
 ##### fallbackUrls
 
 > **fallbackUrls**: `string`[]
 
-Defined in: [src/lib/tokens/tokenLogo.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L21)
+Defined in: [src/lib/tokens/tokenLogo.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L17)
 
 ##### preferred
 
 > **preferred**: `string` \| `null`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L20)
+Defined in: [src/lib/tokens/tokenLogo.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L16)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/tokens/tokenLogo.ts:20](https://github.com/wenakita/4626/bl
 
 > **TokenLogoSeed** = `Pick`\<[`TokenOption`](../uniswap/swapUtils.md#tokenoption), `"address"` \| `"logoUrl"` \| `"logoUrls"`\> & `object`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L13)
+Defined in: [src/lib/tokens/tokenLogo.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L9)
 
 #### Type Declaration
 
@@ -90,7 +90,7 @@ Returns the cached successful URL separately to avoid stale broken chains.
 
 > **markTokenLogoSuccess**(`cacheKey`, `url`): `void`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:159](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L159)
+Defined in: [src/lib/tokens/tokenLogo.ts:153](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L153)
 
 #### Parameters
 

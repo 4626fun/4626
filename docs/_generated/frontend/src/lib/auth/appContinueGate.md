@@ -16,41 +16,29 @@ Defined in: [src/lib/auth/appContinueGate.ts:1](https://github.com/wenakita/4626
 
 #### Properties
 
-##### autoLogin
-
-> **autoLogin**: `boolean`
-
-Defined in: [src/lib/auth/appContinueGate.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L2)
-
-##### fromWaitlist
-
-> **fromWaitlist**: `boolean`
-
-Defined in: [src/lib/auth/appContinueGate.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L3)
-
 ##### privyAuthenticated
 
 > **privyAuthenticated**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L7)
+Defined in: [src/lib/auth/appContinueGate.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L5)
 
 ##### privyClientStatus
 
 > **privyClientStatus**: `"disabled"` \| `"loading"` \| `"ready"`
 
-Defined in: [src/lib/auth/appContinueGate.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L5)
+Defined in: [src/lib/auth/appContinueGate.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L3)
 
 ##### privyReady
 
 > **privyReady**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L6)
+Defined in: [src/lib/auth/appContinueGate.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L4)
 
 ##### siweAuthAddress
 
 > **siweAuthAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [src/lib/auth/appContinueGate.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L4)
+Defined in: [src/lib/auth/appContinueGate.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L2)
 
 ***
 
@@ -58,7 +46,7 @@ Defined in: [src/lib/auth/appContinueGate.ts:4](https://github.com/wenakita/4626
 
 > **AppContinuePrivyWaitInput** = `object`
 
-Defined in: [src/lib/auth/appContinueGate.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L23)
+Defined in: [src/lib/auth/appContinueGate.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L19)
 
 #### Properties
 
@@ -66,39 +54,39 @@ Defined in: [src/lib/auth/appContinueGate.ts:23](https://github.com/wenakita/462
 
 > **handoffRedeemed**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L24)
+Defined in: [src/lib/auth/appContinueGate.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L20)
 
 ##### privyAuthenticated
 
 > **privyAuthenticated**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L28)
+Defined in: [src/lib/auth/appContinueGate.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L24)
 
 ##### privyClientStatus
 
 > **privyClientStatus**: `"disabled"` \| `"loading"` \| `"ready"`
 
-Defined in: [src/lib/auth/appContinueGate.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L26)
+Defined in: [src/lib/auth/appContinueGate.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L22)
 
 ##### privyReady
 
 > **privyReady**: `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L27)
+Defined in: [src/lib/auth/appContinueGate.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L23)
 
 ##### siweAuthAddress
 
 > **siweAuthAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [src/lib/auth/appContinueGate.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L25)
+Defined in: [src/lib/auth/appContinueGate.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L21)
 
 ## Functions
 
-### shouldNavigateAfterWaitlistHandoff()
+### shouldNavigateAfterAppEntryHandoff()
 
-> **shouldNavigateAfterWaitlistHandoff**(`input`): `boolean`
+> **shouldNavigateAfterAppEntryHandoff**(`input`): `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L10)
+Defined in: [src/lib/auth/appContinueGate.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L8)
 
 #### Parameters
 
@@ -116,7 +104,7 @@ Defined in: [src/lib/auth/appContinueGate.ts:10](https://github.com/wenakita/462
 
 > **shouldWaitForPrivyRehydrationAfterHandoff**(`_input`): `boolean`
 
-Defined in: [src/lib/auth/appContinueGate.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L31)
+Defined in: [src/lib/auth/appContinueGate.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appContinueGate.ts#L27)
 
 #### Parameters
 

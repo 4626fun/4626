@@ -61,7 +61,7 @@ There are multiple layers:
   - `contracts/utilities/routers/PayoutRouter.sol`
 - “Required approvals” reminder:
   - `docs/guides/deploy-vault.md`
-  - `docs/current-contract-inventory.md`
+  - `docs/reference/current-contract-inventory.md`
   - `AGENTS.md`
 
 ## Read-only Preflight (do before any state changes)

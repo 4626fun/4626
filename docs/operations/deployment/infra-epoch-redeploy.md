@@ -110,13 +110,21 @@ Update environment/config to the new epoch addresses:
   - `UNIVERSAL_BYTECODE_STORE`
   - `UNIVERSAL_CREATE2_FROM_STORE`
   - `CREATOR_VAULT_BATCHER`
+  - `CREATOR_VAULT_BATCHER_AUTO_HANDOFF`
+  - `DEPLOYMENT_BATCHER`
+  - `CREATOR_LOTTERY_MANAGER`
+  - `LOTTERY_MANAGER`
 - frontend env:
   - `VITE_REGISTRY`
   - `VITE_UNIVERSAL_BYTECODE_STORE`
   - `VITE_UNIVERSAL_CREATE2_DEPLOYER`
   - `VITE_CREATOR_VAULT_BATCHER`
+  - `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF`
+  - `VITE_LOTTERY_MANAGER`
 - bump deploy namespace:
   - `VITE_DEPLOYMENT_VERSION` (new value for this epoch)
+
+Apply these in both local env files and Vercel project env scopes (`production`, `preview`, `development`) before traffic cutover.
 
 If running with repo defaults in production, also update:
 

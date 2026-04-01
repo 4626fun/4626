@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_verify-x.ts:164](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_verify-x.ts#L164)
+Defined in: [api/\_handlers/waitlist/\_verify-x.ts:176](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_verify-x.ts#L176)
 
 #### Parameters
 

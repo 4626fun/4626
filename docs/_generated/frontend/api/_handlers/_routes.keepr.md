@@ -6,6 +6,14 @@
 
 # api/\_handlers/\_routes.keepr
 
+## Variables
+
+### keeprRouteLoaders
+
+> `const` **keeprRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+
+Defined in: [api/\_handlers/\_routes.keepr.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.keepr.ts#L6)
+
 ## Functions
 
 ### getKeeprApiHandler()

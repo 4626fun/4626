@@ -232,6 +232,48 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
         return `](${apiRoot.generatedBasePath}${cleanPath})`;
       }
     );
+
+    // Pattern 1b: Repo-root docs links from generated contract READMEs.
+    // Example: (docs/audits/README.md) -> (/audits/README)
+    content = content.replace(
+      /\]\((docs\/[^)#]+)(#[^)]+)?\)/g,
+      (_match, docsPath, hashPart) => {
+        const cleanPath = String(docsPath)
+          .replace(/^docs\//, '')
+          .replace(/\.md$/, '');
+        fileRewrites++;
+        return `](/${cleanPath}${hashPart ?? ''})`;
+      }
+    );
+
+    // Pattern 1c: Frontend docs links from generated contract READMEs.
+    // Example: (frontend/docs/foo.md) -> (/frontend/foo)
+    content = content.replace(
+      /\]\((frontend\/docs\/[^)#]+)(#[^)]+)?\)/g,
+      (_match, frontendDocPath, hashPart) => {
+        const cleanPath = String(frontendDocPath)
+          .replace(/^frontend\/docs\//, '')
+          .replace(/\.md$/, '');
+        fileRewrites++;
+        return `](/frontend/${cleanPath}${hashPart ?? ''})`;
+      }
+    );
+
+    // Pattern 1d: Frontend and CRE README references from repo root docs.
+    content = content.replace(/\]\(frontend\/README\.md\)/g, () => {
+      fileRewrites++;
+      return '](/frontend/overview)';
+    });
+    content = content.replace(/\]\(cre\/README\.md\)/g, () => {
+      fileRewrites++;
+      return '](/operations/cre/)';
+    });
+
+    // Pattern 1e: AGENTS.md is not part of docs-site content; link to GitHub.
+    content = content.replace(/\]\((?:\.\/)?AGENTS(?:\.md)?\)/g, () => {
+      fileRewrites++;
+      return '](https://github.com/wenakita/4626/blob/main/AGENTS.md)';
+    });
   }
 
   // Pattern 2: Local markdown links should omit the extension for Docusaurus

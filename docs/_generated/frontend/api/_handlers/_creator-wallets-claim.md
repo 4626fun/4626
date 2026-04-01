@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/\_creator-wallets-claim.ts:124](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_creator-wallets-claim.ts#L124)
+Defined in: [api/\_handlers/\_creator-wallets-claim.ts:147](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_creator-wallets-claim.ts#L147)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

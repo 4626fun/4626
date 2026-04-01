@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/agents/feedback/\_submit.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/feedback/_submit.ts#L50)
+Defined in: [api/\_handlers/v1/agents/feedback/\_submit.ts:57](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/feedback/_submit.ts#L57)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

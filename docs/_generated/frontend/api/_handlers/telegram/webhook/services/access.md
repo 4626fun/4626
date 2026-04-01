@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/access.ts:16](https://gith
 
 > **isTelegramMiniAppSessionEnabled**(`params`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/access.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/access.ts#L49)
+Defined in: [api/\_handlers/telegram/webhook/services/access.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/access.ts#L48)
 
 #### Parameters
 
@@ -72,13 +72,13 @@ Defined in: [api/\_handlers/telegram/webhook/services/access.ts:49](https://gith
 
 > **verifyBotConfigSecret**(`req`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/access.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/access.ts#L35)
+Defined in: [api/\_handlers/telegram/webhook/services/access.ts:34](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/access.ts#L34)
 
 #### Parameters
 
 ##### req
 
-`Pick`\<[`VercelRequest`](../../../../../src/types/vercel-node.md#vercelrequest), `"headers"`\>
+`Pick`\<`VercelRequest`, `"headers"`\>
 
 #### Returns
 
@@ -90,13 +90,13 @@ Defined in: [api/\_handlers/telegram/webhook/services/access.ts:35](https://gith
 
 > **verifyTelegramLinkApiSecret**(`req`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/access.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/access.ts#L42)
+Defined in: [api/\_handlers/telegram/webhook/services/access.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/access.ts#L41)
 
 #### Parameters
 
 ##### req
 
-`Pick`\<[`VercelRequest`](../../../../../src/types/vercel-node.md#vercelrequest), `"headers"`\>
+`Pick`\<`VercelRequest`, `"headers"`\>
 
 #### Returns
 

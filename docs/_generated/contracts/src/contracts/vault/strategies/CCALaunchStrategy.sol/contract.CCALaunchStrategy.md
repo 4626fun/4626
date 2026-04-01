@@ -57,6 +57,51 @@ uint256 public constant Q96 = 2 ** 96
 ```
 
 
+### BPS_DENOMINATOR
+Basis points denominator.
+
+
+```solidity
+uint256 public constant BPS_DENOMINATOR = 10_000
+```
+
+
+### AUCTION_SPLIT_MPS
+Auction allocation: 40%
+
+
+```solidity
+uint24 public constant AUCTION_SPLIT_MPS = 4_000_000
+```
+
+
+### VESTING_SPLIT_MPS
+Creator vesting allocation: 40%
+
+
+```solidity
+uint24 public constant VESTING_SPLIT_MPS = 4_000_000
+```
+
+
+### LP_RESERVE_SPLIT_MPS
+LP reserve allocation: 20%
+
+
+```solidity
+uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000
+```
+
+
+### THURSDAY_EPOCH_SECONDS
+Unix epoch (1970-01-01 00:00 UTC) was a Thursday, so weekly boundaries align to Thursday 00:00 UTC.
+
+
+```solidity
+uint256 internal constant THURSDAY_EPOCH_SECONDS = 7 days
+```
+
+
 ### auctionToken
 Token being auctioned (e.g., ■AKITA)
 
@@ -149,6 +194,33 @@ address public taxHook
 ```
 
 
+### positionManager
+V4 PositionManager used to mint post-auction LP
+
+
+```solidity
+IPositionManager public positionManager
+```
+
+
+### positionRecipient
+Recipient of the migrated v4 LP position
+
+
+```solidity
+address public positionRecipient
+```
+
+
+### operator
+Operator allowed to sweep residual balances after sweepBlock
+
+
+```solidity
+address public operator
+```
+
+
 ### feeRecipient
 Fee recipient for the tax hook (GaugeController)
 
@@ -194,6 +266,51 @@ mapping(address => bool) public approvedLaunchers
 ```
 
 
+### backingVault
+Optional vault used only for non-blocking launch telemetry.
+
+
+```solidity
+address public backingVault
+```
+
+
+### currentLaunch
+Latest lifecycle data for the active auction.
+
+
+```solidity
+LaunchLifecycle public currentLaunch
+```
+
+
+### launchByAuction
+Lifecycle snapshots by auction address.
+
+
+```solidity
+mapping(address => LaunchLifecycle) public launchByAuction
+```
+
+
+### phase
+Current phase for API/UI/keeper state machines.
+
+
+```solidity
+LifecyclePhase public phase = LifecyclePhase.Idle
+```
+
+
+### lastSweepBlock
+Last sweep block target used for operator residual sweeps.
+
+
+```solidity
+uint64 public lastSweepBlock
+```
+
+
 ### defaultDuration
 Default auction duration in blocks (~1 week on Base at 2s blocks)
 
@@ -209,6 +326,15 @@ Default claim delay after auction ends
 
 ```solidity
 uint64 public defaultClaimDelay = 3600
+```
+
+
+### launchBlockTimeSeconds
+Average seconds per block used to convert Thursday UTC boundaries into CCA block schedules.
+
+
+```solidity
+uint64 public launchBlockTimeSeconds = 2
 ```
 
 
@@ -231,6 +357,60 @@ Default floor price in Q96
 
 ```solidity
 uint256 public defaultFloorPrice = Q96 / 1000
+```
+
+
+### launchDiscountBps
+Discount applied to oracle-derived floor price for launch (8000 = 80%).
+
+
+```solidity
+uint16 public launchDiscountBps = 8000
+```
+
+
+### launchTickSpacingBps
+Tick spacing (in bps of derived floor) used for CCA launch params (100 = 1%).
+
+
+```solidity
+uint16 public launchTickSpacingBps = 100
+```
+
+
+### launchOracleMaxAge
+Maximum accepted age for oracle prices used at launch.
+
+
+```solidity
+uint64 public launchOracleMaxAge = 7200
+```
+
+
+### migrationDelayBlocks
+Delay from auction end to migration eligibility.
+
+
+```solidity
+uint64 public migrationDelayBlocks = 1
+```
+
+
+### defaultSweepDelayBlocks
+Delay from claim block to operator residual sweep eligibility.
+
+
+```solidity
+uint64 public defaultSweepDelayBlocks = 14_400
+```
+
+
+### simpleLaunchEnabled
+If false, `launchAuctionSimple` is disabled.
+
+
+```solidity
+bool public simpleLaunchEnabled
 ```
 
 
@@ -298,6 +478,43 @@ Allows migrating to newer Uniswap factory deployments without redeploying this s
 function setCcaFactory(address newFactory) external onlyOwner;
 ```
 
+### setMigrationConfig
+
+Configure migration path (position manager + recipients + delays).
+
+Position manager may be set to zero during bootstrapping, but migrate() will revert until set.
+
+
+```solidity
+function setMigrationConfig(
+    address _positionManager,
+    address _positionRecipient,
+    address _operator,
+    uint64 _migrationDelayBlocks,
+    uint64 _sweepDelayBlocks
+) external onlyOwner;
+```
+
+### setBackingVault
+
+Configure optional backing-vault telemetry source.
+
+This is non-blocking visibility only; no auction/migration gates depend on it.
+
+
+```solidity
+function setBackingVault(address _backingVault) external onlyOwner;
+```
+
+### setSimpleLaunchEnabled
+
+Enable or disable simplified launch path.
+
+
+```solidity
+function setSimpleLaunchEnabled(bool enabled) external onlyOwner;
+```
+
 ### _launchAuctionInternal
 
 Internal shared implementation for launching an auction.
@@ -306,7 +523,7 @@ That changes `msg.sender` (breaks auth) and also trips ReentrancyGuard (both ent
 
 
 ```solidity
-function _launchAuctionInternal(uint256 amount, uint256 floorPrice, uint128 requiredRaise)
+function _launchAuctionInternal(uint256 amount, uint256 lpReserveAmount, uint128 requiredRaise)
     internal
     returns (address auction);
 ```
@@ -328,10 +545,27 @@ function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise
 |Name|Type|Description|
 |----|----|-----------|
 |`amount`|`uint256`|Amount of tokens to auction|
-|`floorPrice`|`uint256`|Starting floor price (Q96 format)|
+|`floorPrice`|`uint256`|Deprecated. Ignored; launch floor is derived onchain from oracle data.|
 |`requiredRaise`|`uint128`|Minimum currency to raise for graduation|
 |`auctionSteps`|`bytes`|Deprecated. Ignored in favor of strategy-enforced safe schedule.|
 
+
+### launchAuctionWithReserve
+
+Launch auction with explicit LP reserve metadata (for 40/40/20 batch flows).
+
+`lpReserveAmount` is expected to remain in the strategy for post-auction migration.
+
+
+```solidity
+function launchAuctionWithReserve(
+    uint256 amount,
+    uint256 lpReserveAmount,
+    uint256 floorPrice,
+    uint128 requiredRaise,
+    bytes calldata auctionSteps
+) external onlyApprovedOrOwner nonReentrant returns (address auction);
+```
 
 ### launchAuctionSimple
 
@@ -366,15 +600,33 @@ function checkpoint() external;
 
 ### sweepCurrency
 
-Sweep raised currency after auction graduates
+Sweep raised currency after auction graduates.
 
-Also configures the oracle with the V4 pool if oracle is set
-NOTE: Tax hook configuration must be done separately by token owner
-(see getTaxHookCalldata() for the exact call to make)
+This only settles auction funds. Pool migration is performed by `migrate()`.
 
 
 ```solidity
 function sweepCurrency() external nonReentrant;
+```
+
+### finalizeFailedAuction
+
+Finalize a failed auction and unblock relaunchs.
+
+Sweeps unsold auction tokens and clears active auction pointers.
+
+
+```solidity
+function finalizeFailedAuction() external nonReentrant;
+```
+
+### migrate
+
+Migrate graduated CCA liquidity into a Uniswap v4 LP position.
+
+
+```solidity
+function migrate() external nonReentrant;
 ```
 
 ### _configureOracleV4Pool
@@ -409,11 +661,12 @@ function getTaxHookCalldata() external view returns (address target, bytes memor
 
 ### getCompleteAuctionCalldata
 
-Get all calldata needed for "Click 2" (complete auction + configure hook)
+Get all calldata needed for completion flow (sweep + migrate + configure hook)
 
 Returns array of calls for ERC-4337 batching:
 1. sweepCurrency() on this strategy
-2. setTaxConfig() on the tax hook (requires token owner)
+2. migrate() on this strategy
+3. setTaxConfig() on the tax hook (requires token owner)
 
 
 ```solidity
@@ -445,6 +698,111 @@ Sweep unsold tokens after auction ends
 function sweepUnsoldTokens() external nonReentrant;
 ```
 
+### sweepResidualAuctionToken
+
+Sweep residual auction token balance after sweep window.
+
+
+```solidity
+function sweepResidualAuctionToken() external nonReentrant;
+```
+
+### sweepResidualCurrency
+
+Sweep residual raised currency balance after sweep window.
+
+
+```solidity
+function sweepResidualCurrency() external nonReentrant;
+```
+
+### _archiveIfFinished
+
+
+```solidity
+function _archiveIfFinished() internal;
+```
+
+### _setPhase
+
+
+```solidity
+function _setPhase(LifecyclePhase newPhase) internal;
+```
+
+### _derivePhase
+
+
+```solidity
+function _derivePhase(bool isGraduated, LaunchLifecycle memory launchData) internal view returns (LifecyclePhase);
+```
+
+### _persistLifecycleSnapshot
+
+
+```solidity
+function _persistLifecycleSnapshot() internal;
+```
+
+### _snapshotBackingTelemetry
+
+
+```solidity
+function _snapshotBackingTelemetry() internal;
+```
+
+### _deriveScheduledStartBlock
+
+
+```solidity
+function _deriveScheduledStartBlock() internal view returns (uint64 startBlock);
+```
+
+### _nextThursdayStartTimestamp
+
+
+```solidity
+function _nextThursdayStartTimestamp(uint256 currentTimestamp) internal pure returns (uint256);
+```
+
+### _deriveLaunchPricing
+
+
+```solidity
+function _deriveLaunchPricing()
+    internal
+    view
+    returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice);
+```
+
+### _deriveLaunchTickSpacing
+
+
+```solidity
+function _deriveLaunchTickSpacing(uint256 floorPriceQ96) internal view returns (uint256 tickSpacingQ96);
+```
+
+### _currencyBalance
+
+
+```solidity
+function _currencyBalance(address holder) internal view returns (uint256);
+```
+
+### _requireOperatorSweep
+
+
+```solidity
+function _requireOperatorSweep() internal view;
+```
+
+### _buildPoolKey
+
+
+```solidity
+function _buildPoolKey() internal view returns (PoolKey memory key);
+```
+
 ### _encodeAuctionParams
 
 Encode auction parameters for CCA factory
@@ -453,6 +811,7 @@ Encode auction parameters for CCA factory
 ```solidity
 function _encodeAuctionParams(
     uint256 floorPrice,
+    uint256 tickSpacingQ96,
     uint128 requiredRaise,
     uint64 startBlock,
     uint64 endBlock,
@@ -493,7 +852,7 @@ Create a Uniswap-safe default schedule.
 
 Uniswap recommends the final block sells a significant amount of tokens because
 the final clearing price is used to initialize downstream liquidity.
-We allocate 10% over the first half, 40% over the middle, and the remainder in the final block.
+We allocate 20% over the first half, 45% over the middle, and the remainder in the final block.
 
 
 ```solidity
@@ -518,6 +877,33 @@ Update default claim delay
 function setDefaultClaimDelay(uint64 _delay) external onlyOwner;
 ```
 
+### setLaunchBlockTimeSeconds
+
+Update the block-time estimate used for Thursday UTC launch alignment.
+
+
+```solidity
+function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external onlyOwner;
+```
+
+### setMigrationDelayBlocks
+
+Update migration delay after auction end.
+
+
+```solidity
+function setMigrationDelayBlocks(uint64 _delay) external onlyOwner;
+```
+
+### setDefaultSweepDelayBlocks
+
+Update default post-claim sweep delay.
+
+
+```solidity
+function setDefaultSweepDelayBlocks(uint64 _delay) external onlyOwner;
+```
+
 ### setDefaultTickSpacing
 
 Update default tick spacing
@@ -531,9 +917,50 @@ function setDefaultTickSpacing(uint256 _spacing) external onlyOwner;
 
 Update default floor price
 
+Legacy fallback value retained for backwards compatibility. Launch flow derives floor onchain.
+
 
 ```solidity
 function setDefaultFloorPrice(uint256 _price) external onlyOwner;
+```
+
+### setLaunchDiscountBps
+
+Update launch floor discount applied to oracle price.
+
+
+```solidity
+function setLaunchDiscountBps(uint16 _discountBps) external onlyOwner;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`_discountBps`|`uint16`|Discount in bps (10000 = 100%, 8000 = 80%).|
+
+
+### setLaunchTickSpacingBps
+
+Update launch tick spacing (as bps of derived launch floor).
+
+
+```solidity
+function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external onlyOwner;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`_tickSpacingBps`|`uint16`|Tick spacing bps (100 = 1%).|
+
+
+### setLaunchOracleMaxAge
+
+Update maximum accepted oracle staleness for launch pricing.
+
+
+```solidity
+function setLaunchOracleMaxAge(uint64 _maxAge) external onlyOwner;
 ```
 
 ### setRecipients
@@ -625,6 +1052,20 @@ function setPoolTickSpacing(int24 _tickSpacing) external onlyOwner;
 |`_tickSpacing`|`int24`|Tick spacing for the pool|
 
 
+### previewLaunchPricing
+
+Preview onchain launch pricing derived from oracle data.
+
+Reverts when oracle data is missing/stale/invalid.
+
+
+```solidity
+function previewLaunchPricing()
+    external
+    view
+    returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice);
+```
+
 ### getAuctionStatus
 
 Get current auction status
@@ -635,6 +1076,35 @@ function getAuctionStatus()
     external
     view
     returns (address auction, bool isActive, bool isGraduated, uint256 clearingPrice, uint256 currencyRaised);
+```
+
+### getLifecycleStatus
+
+Returns richer lifecycle status for keepers and frontend state machines.
+
+
+```solidity
+function getLifecycleStatus() external view returns (LifecycleStatus memory status);
+```
+
+### getBackingTelemetry
+
+Non-blocking backing telemetry for share-economics visibility.
+
+
+```solidity
+function getBackingTelemetry()
+    external
+    view
+    returns (
+        address vault,
+        uint256 launchTotalAssets,
+        uint256 launchTotalSupply,
+        uint256 currentTotalAssets,
+        uint256 currentTotalSupply,
+        int256 assetsDelta,
+        int256 supplyDelta
+    );
 ```
 
 ### getPastAuctions
@@ -689,6 +1159,24 @@ event AuctionCreated(
 );
 ```
 
+### LifecyclePhaseChanged
+
+```solidity
+event LifecyclePhaseChanged(address indexed auction, LifecyclePhase phase);
+```
+
+### FailedAuctionFinalized
+
+```solidity
+event FailedAuctionFinalized(address indexed auction, uint256 unsoldTokens);
+```
+
+### Migrated
+
+```solidity
+event Migrated(address indexed auction, uint160 sqrtPriceX96, uint256 tokenAmount, uint256 currencyAmount);
+```
+
 ### AuctionGraduated
 
 ```solidity
@@ -705,6 +1193,18 @@ event FundsSwept(address indexed auction, uint256 amount);
 
 ```solidity
 event TokensSwept(address indexed auction, uint256 amount);
+```
+
+### LaunchPricingResolved
+
+```solidity
+event LaunchPricingResolved(
+    address indexed auction,
+    uint256 floorPriceQ96,
+    uint256 tickSpacingQ96,
+    uint256 creatorUsdPrice,
+    uint256 ethUsdPrice
+);
 ```
 
 ### ConfigUpdated
@@ -749,6 +1249,30 @@ event LauncherApproved(address indexed launcher, bool approved);
 event CcaFactoryUpdated(address indexed oldFactory, address indexed newFactory);
 ```
 
+### MigrationConfigUpdated
+
+```solidity
+event MigrationConfigUpdated(
+    address indexed positionManager,
+    address indexed positionRecipient,
+    address indexed operator,
+    uint64 migrationDelayBlocks,
+    uint64 sweepDelayBlocks
+);
+```
+
+### BackingVaultUpdated
+
+```solidity
+event BackingVaultUpdated(address indexed backingVault);
+```
+
+### SimpleLaunchToggled
+
+```solidity
+event SimpleLaunchToggled(bool enabled);
+```
+
 ## Errors
 ### AuctionAlreadyActive
 
@@ -766,6 +1290,90 @@ error NoActiveAuction();
 
 ```solidity
 error AuctionNotGraduated();
+```
+
+### AuctionStillLive
+
+```solidity
+error AuctionStillLive(uint64 endBlock, uint256 currentBlock);
+```
+
+### AuctionNotFailed
+
+```solidity
+error AuctionNotFailed();
+```
+
+### MigrationNotReady
+
+```solidity
+error MigrationNotReady(uint64 migrationBlock, uint256 currentBlock);
+```
+
+### MigrationConfigMissing
+
+```solidity
+error MigrationConfigMissing();
+```
+
+### CurrencyBalanceTooLow
+
+```solidity
+error CurrencyBalanceTooLow(uint256 needed, uint256 available);
+```
+
+### LpReserveTooLow
+
+```solidity
+error LpReserveTooLow(uint256 requiredReserve, uint256 availableBalance);
+```
+
+### SweepNotAllowed
+
+```solidity
+error SweepNotAllowed(uint64 sweepBlock, uint256 currentBlock);
+```
+
+### NotOperator
+
+```solidity
+error NotOperator(address caller, address expected);
+```
+
+### LaunchOracleNotConfigured
+
+```solidity
+error LaunchOracleNotConfigured();
+```
+
+### UnsupportedLaunchCurrency
+
+```solidity
+error UnsupportedLaunchCurrency(address currency);
+```
+
+### LaunchOracleInvalidPrice
+
+```solidity
+error LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice);
+```
+
+### LaunchOracleStale
+
+```solidity
+error LaunchOracleStale(uint256 creatorTimestamp, uint256 ethTimestamp, uint64 maxAge, uint256 currentTimestamp);
+```
+
+### LaunchFloorTooLow
+
+```solidity
+error LaunchFloorTooLow(uint256 rawFloorPriceQ96, uint256 tickSpacingQ96);
+```
+
+### SimpleLaunchDisabled
+
+```solidity
+error SimpleLaunchDisabled();
 ```
 
 ### ZeroAddress
@@ -790,5 +1398,66 @@ error InvalidConfig();
 
 ```solidity
 error Unauthorized();
+```
+
+## Structs
+### LaunchLifecycle
+
+```solidity
+struct LaunchLifecycle {
+    uint64 startBlock;
+    uint64 endBlock;
+    uint64 claimBlock;
+    uint64 migrationBlock;
+    uint64 sweepBlock;
+    uint256 auctionAmount;
+    uint256 lpReserveAmount;
+    uint256 launchVaultTotalAssets;
+    uint256 launchVaultTotalSupply;
+    bool currencySwept;
+    bool unsoldSwept;
+    bool migrated;
+    bool failedFinalized;
+}
+```
+
+### LifecycleStatus
+
+```solidity
+struct LifecycleStatus {
+    uint8 phase;
+    address auction;
+    bool isGraduated;
+    bool auctionWindowOpen;
+    bool claimOpen;
+    bool currencySwept;
+    bool unsoldSwept;
+    bool migrated;
+    bool failedFinalized;
+    uint64 startBlock;
+    uint64 endBlock;
+    uint64 claimBlock;
+    uint64 migrationBlock;
+    uint64 sweepBlock;
+    uint256 lpReserveAmount;
+    uint256 clearingPrice;
+    uint256 currencyRaised;
+}
+```
+
+## Enums
+### LifecyclePhase
+
+```solidity
+enum LifecyclePhase {
+    Idle,
+    AuctionLive,
+    AuctionEndedPending,
+    ClaimReady,
+    PoolInitializing,
+    PoolLive,
+    LaunchFailed,
+    AuctionScheduled
+}
 ```
 

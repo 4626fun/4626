@@ -53,6 +53,8 @@ Production override safety:
 
 Current canonical Base defaults (`v1.7.1` reset target):
 - Deployment batcher (`DeploymentBatcher`, split Phase-1): `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`
+- Deployment batcher auto-handoff alias: `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`
+- Creator lottery manager: `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3`
 - `UniversalBytecodeStoreV2`: `0x6A578022609cdb65C614FF28912C49FC1EC97071`
 - `UniversalCreate2DeployerFromStoreV2`: `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a`
 
@@ -194,7 +196,10 @@ Vercel cutover order:
 
 1. Merge frontend/api split-phase code + paymaster selector support.
 2. Merge repo defaults pointing to the new mainnet infra addresses.
-3. Set production env vars listed in "Required config (1-click)".
+3. Set production env vars listed in "Required config (1-click)" plus canonical contract overrides:
+   - `CREATOR_VAULT_BATCHER`, `CREATOR_VAULT_BATCHER_AUTO_HANDOFF`, `DEPLOYMENT_BATCHER`
+   - `CREATOR_LOTTERY_MANAGER`, `LOTTERY_MANAGER`
+   - `VITE_CREATOR_VAULT_BATCHER`, `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF`, `VITE_LOTTERY_MANAGER`
 4. Keep override flags disabled (`VITE_ALLOW_CONTRACT_OVERRIDES`, `ALLOW_API_CONTRACT_OVERRIDES`).
 5. Keep:
    - `VITE_DEPLOY_USE_SERVER_CONTINUE=true`

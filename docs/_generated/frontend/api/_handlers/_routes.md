@@ -12,17 +12,17 @@
 
 > **ApiHandler** = (`req`, `res`) => `unknown` \| `Promise`\<`unknown`\>
 
-Defined in: [api/\_handlers/\_routes.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L3)
+Defined in: [api/\_handlers/\_routes.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L15)
 
 #### Parameters
 
 ##### req
 
-[`VercelRequest`](../../src/types/vercel-node.md#vercelrequest)
+`VercelRequest`
 
 ##### res
 
-[`VercelResponse`](../../src/types/vercel-node.md#vercelresponse)
+`VercelResponse`
 
 #### Returns
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/\_routes.ts:3](https://github.com/wenakita/4626/blob
 
 > `const` **apiRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
 
-Defined in: [api/\_handlers/\_routes.ts:9](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L9)
+Defined in: [api/\_handlers/\_routes.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L29)
 
 ## Functions
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/\_routes.ts:9](https://github.com/wenakita/4626/blob
 
 > **getApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.ts:101](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L101)
+Defined in: [api/\_handlers/\_routes.ts:133](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L133)
 
 #### Parameters
 

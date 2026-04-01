@@ -6,29 +6,13 @@
 
 # api/\_handlers/telegram/\_webhook
 
-## Functions
-
-### default()
-
-> **default**(`req`, `res`): `Promise`\<`any`\>
-
-Defined in: [api/\_handlers/telegram/\_webhook.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_webhook.ts#L15)
-
-#### Parameters
-
-##### req
-
-`any`
-
-##### res
-
-`any`
-
-#### Returns
-
-`Promise`\<`any`\>
-
 ## References
+
+### default
+
+Re-exports [default](_webhook.runtime.md#default)
+
+***
 
 ### TelegramWebhookConfig
 

@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/lens/\_agent-registration.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/lens/_agent-registration.ts#L29)
+Defined in: [api/\_handlers/lens/\_agent-registration.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/lens/_agent-registration.ts#L36)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

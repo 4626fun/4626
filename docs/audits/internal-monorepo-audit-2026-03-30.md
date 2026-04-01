@@ -72,7 +72,7 @@ The system audit remains the authoritative protocol narrative. Below: **status v
 | Must-inspect checklist (§15) | **Still valid** — use as contract review script for any touch to listed files. |
 | “Would I ship…” posture | **Unchanged** — operational hardening items in system.md remain the release gate, not CI green alone. |
 
-**Related adversarial/Q&A docs** (read alongside system.md for subsystem depth): `docs/ajna-erc4626-cre-master-qna.md`, `docs/charm-alpha-vaults-v2-4626fun-master-qa.md`, `docs/telegram-canonical-link-preservation.md` (app layer).
+**Related adversarial/Q&A docs** (read alongside system.md for subsystem depth): `docs/audits/ajna/master-qna.md`, `docs/audits/charm/master-qa.md`, `docs/operations/telegram-canonical-link-preservation.md` (app layer).
 
 ---
 
@@ -86,7 +86,7 @@ The system audit remains the authoritative protocol narrative. Below: **status v
 | Link-start tokens **single-use / claim-bound** | Token replay across users | `createTelegramLinkStartToken` / `consumeTelegramActionToken` usage in [_webhook.runtime.ts](../../frontend/api/_handlers/telegram/_webhook.runtime.ts) (e.g. vault deploy flows). | Audit any new callback paths for consume-on-success semantics. |
 | Group-scoped Telegram actions **owner-scoped** | Non-owner mutates shared bot state | Enforced in callback/update handlers under [frontend/api/_handlers/telegram/webhook/](../../frontend/api/_handlers/telegram/webhook/) (review diffs when adding group features). | Requires per-feature verification; not exhaustively proven in this pass. |
 
-**Telegram canonical order** (email OTP, Privy sync, link persistence): see [docs/telegram-canonical-link-preservation.md](../telegram-canonical-link-preservation.md) and [frontend/docs/account-auth-invariants.md](../../frontend/docs/account-auth-invariants.md).
+**Telegram canonical order** (email OTP, Privy sync, link persistence): see [docs/operations/telegram-canonical-link-preservation.md](../operations/telegram-canonical-link-preservation.md) and [frontend/docs/account-auth-invariants.md](../../frontend/docs/account-auth-invariants.md).
 
 ---
 

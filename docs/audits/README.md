@@ -1,3 +1,8 @@
+---
+title: Audits
+sidebar_position: 4
+---
+
 # Audits (4626)
 
 Internal engineering and release-readiness notes. These are **not** a substitute for an external smart-contract audit.
@@ -9,6 +14,10 @@ Internal engineering and release-readiness notes. These are **not** a substitute
 | [production-parity-checklist.md](./production-parity-checklist.md) | Pre-release worksheet: bytecode, env, keys, constants. |
 | [github-supply-chain-setup.md](./github-supply-chain-setup.md) | Enable Dependency graph, optional branch protection, workflow policy reference. |
 | [system.md](./system.md) | Protocol/system economic and governance review (long-form). |
+| [ajna/](./ajna/) | Ajna adversarial audit, executive brief, and Q&A compendium. |
+| [charm/](./charm/) | Charm V2 adversarial audit, executive brief, and master Q&A. |
+| [codex/](./codex/) | Codex security review records and archival finding exports. |
+| [token-image/](./token-image/) | Token-image renderer research and breakout analysis notes. |
 
 **Automation**
 

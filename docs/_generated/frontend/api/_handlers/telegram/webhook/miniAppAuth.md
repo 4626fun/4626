@@ -92,7 +92,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniAppAuth.ts:223](https://github.
 
 ###### req
 
-`Pick`\<[`VercelRequest`](../../../../src/types/vercel-node.md#vercelrequest), `"headers"`\>
+`Pick`\<`VercelRequest`, `"headers"`\>
 
 #### Returns
 

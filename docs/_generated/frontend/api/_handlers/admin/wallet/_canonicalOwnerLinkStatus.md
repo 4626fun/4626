@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/admin/wallet/\_canonicalOwnerLinkStatus.ts:63](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/wallet/_canonicalOwnerLinkStatus.ts#L63)
+Defined in: [api/\_handlers/admin/wallet/\_canonicalOwnerLinkStatus.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/wallet/_canonicalOwnerLinkStatus.ts#L73)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

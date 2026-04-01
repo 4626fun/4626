@@ -12,7 +12,7 @@
 
 > **TelegramBotMenuCommand** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:104](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L104)
+Defined in: [server/commands/registry.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L3)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:104](https://github.co
 
 > **command**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:105](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L105)
+Defined in: [server/commands/registry.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L4)
 
 ##### description
 
 > **description**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:106](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L106)
+Defined in: [server/commands/registry.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L5)
 
 ## Variables
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:106](https://github.co
 
 > `const` **CCA\_AUCTION\_ABI**: readonly \[\{ `inputs`: readonly \[\{ `name`: `"maxPrice"`; `type`: `"uint256"`; \}, \{ `name`: `"amount"`; `type`: `"uint128"`; \}, \{ `name`: `"owner"`; `type`: `"address"`; \}, \{ `name`: `"hookData"`; `type`: `"bytes"`; \}\]; `name`: `"submitBid"`; `outputs`: readonly \[\{ `name`: `"bidId"`; `type`: `"uint256"`; \}\]; `stateMutability`: `"payable"`; `type`: `"function"`; \}\]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:192](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L192)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:98](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L98)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:192](https://github.co
 
 > `const` **CCA\_LAUNCH\_STRATEGY\_ABI**: readonly \[\{ `inputs`: readonly \[\]; `name`: `"getAuctionStatus"`; `outputs`: readonly \[\{ `name`: `"auction"`; `type`: `"address"`; \}, \{ `name`: `"isActive"`; `type`: `"bool"`; \}, \{ `name`: `"isGraduated"`; `type`: `"bool"`; \}, \{ `name`: `"clearingPrice"`; `type`: `"uint256"`; \}, \{ `name`: `"currencyRaised"`; `type`: `"uint256"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}, \{ `inputs`: readonly \[\]; `name`: `"auctionToken"`; `outputs`: readonly \[\{ `type`: `"address"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}\]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:152](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L152)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:58](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L58)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:152](https://github.co
 
 > `const` **DEPLOY\_CURRENCY\_VALUES**: [`DeployCurrencyInput`](types.md#deploycurrencyinput)[]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:148](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L148)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L54)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:148](https://github.co
 
 > `const` **ERC20\_VIEW\_ABI**: readonly \[\{ `inputs`: readonly \[\]; `name`: `"decimals"`; `outputs`: readonly \[\{ `type`: `"uint8"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}, \{ `inputs`: readonly \[\]; `name`: `"symbol"`; `outputs`: readonly \[\{ `type`: `"string"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}\]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:175](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L175)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L81)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:175](https://github.co
 
 > `const` **Q96**: `bigint`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:208](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L208)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:114](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L114)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:208](https://github.co
 
 > `const` **SUPPORTED\_METADATA\_URI\_PREFIXES**: readonly \[`"https://"`, `"http://"`, `"ipfs://"`, `"ar://"`, `"data:"`\]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:150](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L150)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:56](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L56)
 
 ***
 
@@ -82,23 +82,23 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:150](https://github.co
 
 > `const` **TELEGRAM\_ADMIN\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](#telegrambotmenucommand)[]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:134](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L134)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L52)
 
 ***
 
 ### TELEGRAM\_COMMAND\_HEADS
 
-> `const` **TELEGRAM\_COMMAND\_HEADS**: readonly \[`"start"`, `"id"`, `"getid"`, `"get_id"`, `"help"`, `"keepr"`, `"link"`, `"linked"`, `"unlink"`, `"zora"`, `"vaultdeploy"`, `"deploy"`, `"join"`, `"rooms"`, `"eligibility"`, `"wallet"`, `"vaults"`, `"list"`, `"auctions"`, `"mybids"`, `"signals"`, `"buy"`, `"sell"`, `"bid"`, `"tip"`, `"inline"`, `"shortcuts"`, `"x"`, `"tweet"`, `"ai"`, `"mkt"`, `"coin"`, `"arena"`\]
+> `const` **TELEGRAM\_COMMAND\_HEADS**: `string`[] = `SHARED_TELEGRAM_COMMAND_HEADS`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:31](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L31)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:17](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L17)
 
 ***
 
 ### TELEGRAM\_COMMAND\_HEADS\_PATTERN
 
-> `const` **TELEGRAM\_COMMAND\_HEADS\_PATTERN**: `string`
+> `const` **TELEGRAM\_COMMAND\_HEADS\_PATTERN**: `string` = `SHARED_TELEGRAM_COMMAND_HEADS_PATTERN`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L67)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L19)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:67](https://github.com
 
 > `const` **TELEGRAM\_COMMAND\_MICRO\_HINTS**: `object`[]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:69](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L69)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L21)
 
 #### Type Declaration
 
@@ -124,7 +124,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:69](https://github.com
 
 > `const` **TELEGRAM\_GROUP\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](#telegrambotmenucommand)[]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:123](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L123)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L50)
 
 ***
 
@@ -132,7 +132,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:123](https://github.co
 
 > `const` **TELEGRAM\_NATIVE\_COMMANDS**: `Set`\<`string`\>
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L15)
 
 ***
 
@@ -140,7 +140,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:5](https://github.com/
 
 > `const` **TELEGRAM\_PRIVATE\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](#telegrambotmenucommand)[]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:109](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L109)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L48)
 
 ***
 
@@ -148,7 +148,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:109](https://github.co
 
 > `const` **TRADE\_ACTION\_PRESET\_BPS**: readonly \[`2500`, `5000`, `7500`, `9900`\]
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:210](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L210)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:116](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L116)
 
 ***
 
@@ -156,7 +156,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:210](https://github.co
 
 > `const` **UINT128\_MAX**: `bigint`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:207](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L207)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:113](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L113)
 
 ***
 
@@ -164,4 +164,4 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:207](https://github.co
 
 > `const` **ZERO\_ADDRESS**: `"0x0000000000000000000000000000000000000000"`
 
-Defined in: [api/\_handlers/telegram/webhook/constants.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/constants.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L11)

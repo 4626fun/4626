@@ -55,6 +55,13 @@ pnpm dev
 
 See [Frontend API](/api/frontend) for auto-generated TypeDoc documentation.
 
+## Product Surfaces
+
+| Surface | Description |
+|---------|-------------|
+| **[Creator Workspace](/frontend/creator-workspace)** | Vault operator dashboard model and role matrix |
+| **[Creator Workspace Implementation Plan](/frontend/creator-workspace-implementation-plan)** | Delivery phases, API surface, and rollout sequence |
+
 ## Key Components
 
 | Component | Purpose |

@@ -10,6 +10,7 @@ sidebar_position: 5
 ## Recent Hardening Notes
 
 - [Payout Router + CreatorCoin Control Hardening (March 2026)](./payout-router-ownership-hardening-2026-03.md)
+- [Security Scan Overview](./scan-overview.md)
 
 ## Anti-Inflation Attack
 

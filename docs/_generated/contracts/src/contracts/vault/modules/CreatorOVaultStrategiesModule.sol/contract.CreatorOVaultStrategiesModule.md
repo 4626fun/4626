@@ -371,3 +371,9 @@ error NothingToBuy();
 error TransferAmountMismatch(uint256 expected, uint256 actual);
 ```
 
+### StrategyWithdrawShortfall
+
+```solidity
+error StrategyWithdrawShortfall(uint256 expected, uint256 actual);
+```
+

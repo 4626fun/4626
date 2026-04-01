@@ -88,3 +88,38 @@ function totalSupply() external view returns (uint128);
 function onTokensReceived() external;
 ```
 
+### startBlock
+
+
+```solidity
+function startBlock() external view returns (uint64);
+```
+
+### endBlock
+
+
+```solidity
+function endBlock() external view returns (uint64);
+```
+
+### claimBlock
+
+
+```solidity
+function claimBlock() external view returns (uint64);
+```
+
+### sweepCurrencyBlock
+
+
+```solidity
+function sweepCurrencyBlock() external view returns (uint256);
+```
+
+### sweepUnsoldTokensBlock
+
+
+```solidity
+function sweepUnsoldTokensBlock() external view returns (uint256);
+```
+

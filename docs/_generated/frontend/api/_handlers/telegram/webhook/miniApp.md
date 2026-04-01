@@ -14,13 +14,21 @@
 
 Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L4)
 
+***
+
+### TELEGRAM\_MINI\_APP\_ORIGIN
+
+> `const` **TELEGRAM\_MINI\_APP\_ORIGIN**: `"https://4626.fun"` = `'https://4626.fun'`
+
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L5)
+
 ## Functions
 
 ### buildMiniAppLaunchButton()
 
 > **buildMiniAppLaunchButton**(`params`): `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L37)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L52)
 
 #### Parameters
 
@@ -48,7 +56,7 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:37](https://github.com/w
 
 > **buildTelegramMiniAppUrl**(`params`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L16)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:31](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L31)
 
 #### Parameters
 
@@ -72,11 +80,29 @@ Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:16](https://github.com/w
 
 ***
 
+### normalizeTelegramMiniAppBaseUrl()
+
+> **normalizeTelegramMiniAppBaseUrl**(`value`): `string`
+
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L11)
+
+#### Parameters
+
+##### value
+
+`string`
+
+#### Returns
+
+`string`
+
+***
+
 ### resolveTelegramMiniAppUrl()
 
 > **resolveTelegramMiniAppUrl**(): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/miniApp.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/miniApp.ts#L25)
 
 #### Returns
 

@@ -216,21 +216,21 @@ docs/hackathon/*secrets*.local.md
 # Dependencies
 **/node_modules/
 bun.lock
-docs/codex-security-findings.md
-docs/codex-security-findings-2026-03-19T04-18-41.400Z.csv
-docs/codex-security-findings-2026-03-19T07-59-43.276Z.csv
-docs/codex-security-second-pass.csv
-docs/codex-security-findings-2026-03-20T08-50-52.178Z.csv
-docs/security-scan-overview.md
+docs/audits/codex/security-findings.md
+docs/audits/codex/codex-security-findings-2026-03-19T04-18-41.400Z.csv
+docs/audits/codex/codex-security-findings-2026-03-19T07-59-43.276Z.csv
+docs/audits/codex/security-second-pass.csv
+docs/audits/codex/codex-security-findings-2026-03-20T08-50-52.178Z.csv
+docs/security/scan-overview.md
 docs/Building-at-the-synthesis.md
 docs/synthesis_llm_Bounties-AgentsOptimized.txt
 docs/synthesis-hackathon.md
 docs/operations/deployment/launch/ship-checklist.md
 frontend/server/solana-provisioner/deploy/solana-provisioner.env.example
-docs/deep-research-report.md
-docs/breakout-report.md
-docs/deep-research-report (1).md
-docs/deep-research-report (2).md
+docs/audits/token-image/deep-research-report.md
+docs/audits/token-image/breakout-report.md
+docs/audits/token-image/deep-research-report-1.md
+docs/audits/token-image/deep-research-report-2.md
 blue.glb
 ZORB3D.glb
-docs/codex-security-findings-2026-03-31T12-07-52.241Z.csv
+docs/audits/codex/codex-security-findings-2026-03-31T12-07-52.241Z.csv

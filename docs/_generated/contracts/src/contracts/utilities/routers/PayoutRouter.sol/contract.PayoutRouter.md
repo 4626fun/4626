@@ -10,10 +10,10 @@ PayoutRouter
 **Author:**
 0xakita.eth
 
-Receives creator earnings and routes value into the vault via an enforceable burn stream.
+Receives external revenue and routes value into the vault via an enforceable burn stream.
 
 Design goals:
-- Safe `payoutRecipient`: never reverts on ERC20 transfers (no hooks needed).
+- Safe CreatorCoin payoutRecipient path: never reverts on ERC20 transfers (no hooks needed).
 - Can accept ETH: wraps to WETH (kept until processed).
 - Converts payout tokens → creator coin via Uniswap V3 (exactInput path), deposits into the vault,
 and queues the minted vault shares into a burn stream (dripped/burned over time).
@@ -58,6 +58,13 @@ address public immutable swapRouter
 
 ```solidity
 address public immutable weth
+```
+
+
+### PROTOCOL_REWARDS
+
+```solidity
+address public constant PROTOCOL_REWARDS = 0x7777777F279eba3d3Ad8F4E708545291A6fDBA8B
 ```
 
 
@@ -130,7 +137,7 @@ function setSwapPath(address tokenIn, bytes calldata path) external onlyOwner;
 
 ### convertAndQueue
 
-Convert a payout token into creatorCoin and inject into the vault (PPS-only).
+Convert external-revenue token into creatorCoin and inject into the vault (PPS-only).
 
 
 ```solidity
@@ -160,11 +167,49 @@ Intended for safety; does not attempt to preserve PPS semantics.
 function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner nonReentrant;
 ```
 
+### protocolRewardsClaimable
+
+Return claimable protocol rewards assigned to this router.
+
+
+```solidity
+function protocolRewardsClaimable() external view returns (uint256);
+```
+
+### claimProtocolRewards
+
+Claim an explicit amount of protocol rewards into this router.
+
+Claimed ETH is wrapped to WETH by `receive()`.
+
+
+```solidity
+function claimProtocolRewards(uint256 amount) external onlyOwnerOrKeeper nonReentrant returns (uint256 claimed);
+```
+
+### claimAllProtocolRewards
+
+Claim all currently claimable protocol rewards into this router.
+
+Claimed ETH is wrapped to WETH by `receive()`.
+
+
+```solidity
+function claimAllProtocolRewards() external onlyOwnerOrKeeper nonReentrant returns (uint256 claimed);
+```
+
 ### _readAddress
 
 
 ```solidity
 function _readAddress(bytes memory data, uint256 offset) internal pure returns (address addr);
+```
+
+### _claimProtocolRewards
+
+
+```solidity
+function _claimProtocolRewards(uint256 amount) internal;
 ```
 
 ## Events
@@ -184,6 +229,12 @@ event SwapPathSet(address indexed tokenIn, bytes path);
 
 ```solidity
 event ConvertedAndQueued(address indexed tokenIn, uint256 amountIn, uint256 creatorOut, uint256 vaultSharesQueued);
+```
+
+### ProtocolRewardsClaimed
+
+```solidity
+event ProtocolRewardsClaimed(address indexed claimer, uint256 amount);
 ```
 
 ### EmergencyWithdraw
@@ -221,5 +272,11 @@ error PathNotSet(address tokenIn);
 
 ```solidity
 error InvalidPath(address tokenIn);
+```
+
+### ProtocolRewardsClaimFailed
+
+```solidity
+error ProtocolRewardsClaimFailed();
 ```
 

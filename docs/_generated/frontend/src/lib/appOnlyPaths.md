@@ -14,7 +14,7 @@
 
 Defined in: [src/lib/appOnlyPaths.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/lib/appOnlyPaths.ts#L2)
 
-App-only paths that should always run on app.4626.fun.
+App-only paths that should always run on v1.4626.fun.
 
 ## Functions
 

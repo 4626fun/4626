@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_csw-link.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_csw-link.ts#L35)
+Defined in: [api/\_handlers/waitlist/\_csw-link.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_csw-link.ts#L48)
 
 #### Parameters
 

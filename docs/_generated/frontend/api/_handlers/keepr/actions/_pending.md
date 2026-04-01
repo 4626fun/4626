@@ -10,9 +10,9 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/keepr/actions/\_pending.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/actions/_pending.ts#L36)
+Defined in: [api/\_handlers/keepr/actions/\_pending.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/actions/_pending.ts#L43)
 
 GET /api/keepr/actions/pending
 
@@ -26,12 +26,12 @@ Query params:
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

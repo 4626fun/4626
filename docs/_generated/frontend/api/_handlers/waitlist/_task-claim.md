@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_task-claim.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_task-claim.ts#L40)
+Defined in: [api/\_handlers/waitlist/\_task-claim.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_task-claim.ts#L49)
 
 #### Parameters
 

@@ -9,25 +9,27 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Shared Infrastructure
+### Shared Infrastructure (`v1.7.1` canonical epoch)
 
 | Contract | Address |
 |----------|---------|
-| CreatorRegistry | `TBD` |
-| CreatorLotteryManager | `TBD` |
-| DeploymentBatcher | `TBD` |
-| VRFConsumer | `TBD` |
+| CreatorRegistry | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
+| VaultActivationBatcher | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
+| CreatorLotteryManager | `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3` |
+| CreatorVRFConsumerV2_5 | `0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304` |
+| UniversalBytecodeStoreV2 | `0x6A578022609cdb65C614FF28912C49FC1EC97071` |
+| UniversalCreate2DeployerFromStore | `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a` |
+| DeploymentBatcher | `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088` |
+| DeploymentBatcherPhase3Helper | `0x74F204C95F959B7f4f4e927B6c56CF1026f4789F` |
+| SolanaBridgeAdapter | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
 
-### First Deployment: akita
+Notes:
+- `DeploymentBatcherPhase3Helper` is created by the `DeploymentBatcher` constructor.
+- `DeploymentBatcher` is forensically matched to onchain deployment payload and intentionally explorer-unverified for this epoch.
 
-| Contract | Address |
-|----------|---------|
-| Creator Coin | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` |
-| Vault (▢AKITA) | `TBD` |
-| Wrapper | `TBD` |
-| ShareOFT (■AKITA) | `TBD` |
-| GaugeController | `TBD` |
-| Oracle | `TBD` |
+### Per-Creator Deployments
+
+Vault, wrapper, share OFT, gauge, and oracle addresses are creator-specific and are emitted during each launch flow. Use the deploy release packet and onchain events for creator-level address lookups.
 
 ## LayerZero Endpoints
 

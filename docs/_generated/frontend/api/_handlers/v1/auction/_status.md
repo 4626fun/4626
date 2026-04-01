@@ -10,20 +10,20 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/auction/\_status.ts:98](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/auction/_status.ts#L98)
+Defined in: [api/\_handlers/v1/auction/\_status.ts:150](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/auction/_status.ts#L150)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

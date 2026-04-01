@@ -288,3 +288,9 @@ error PermitTokenMismatch();
 error PermitAmountTooLow();
 ```
 
+### InvalidReserveRecipient
+
+```solidity
+error InvalidReserveRecipient(address expectedRecipient, address actualRecipient);
+```
+

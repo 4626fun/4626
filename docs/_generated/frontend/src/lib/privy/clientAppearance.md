@@ -12,15 +12,13 @@
 
 > **createPrivyAppearance**(`options?`): `object`
 
-Defined in: [src/lib/privy/clientAppearance.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/clientAppearance.ts#L1)
+Defined in: [src/lib/privy/clientAppearance.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/clientAppearance.ts#L6)
 
 #### Parameters
 
 ##### options?
 
-###### showWalletLoginFirst?
-
-`boolean`
+`PrivyAppearanceOptions`
 
 #### Returns
 
@@ -48,4 +46,4 @@ Defined in: [src/lib/privy/clientAppearance.ts:1](https://github.com/wenakita/46
 
 ##### walletList
 
-> `readonly` **walletList**: readonly \[`"metamask"`, `"coinbase_wallet"`, `"detected_ethereum_wallets"`\]
+> **walletList**: `string`[]

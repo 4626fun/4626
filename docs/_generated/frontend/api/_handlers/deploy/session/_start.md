@@ -10,7 +10,7 @@
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
 Defined in: [api/\_handlers/deploy/session/\_start.ts:107](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_start.ts#L107)
 
@@ -18,12 +18,12 @@ Defined in: [api/\_handlers/deploy/session/\_start.ts:107](https://github.com/we
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

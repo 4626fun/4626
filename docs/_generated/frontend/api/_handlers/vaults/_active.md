@@ -10,7 +10,7 @@
 
 ### VaultAutomationConfig
 
-Defined in: [api/\_handlers/vaults/\_active.ts:7](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L7)
+Defined in: [api/\_handlers/vaults/\_active.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L14)
 
 #### Properties
 
@@ -18,19 +18,19 @@ Defined in: [api/\_handlers/vaults/\_active.ts:7](https://github.com/wenakita/46
 
 > **automationEnabled**: `boolean`
 
-Defined in: [api/\_handlers/vaults/\_active.ts:8](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L8)
+Defined in: [api/\_handlers/vaults/\_active.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L15)
 
 ##### automationScope?
 
 > `optional` **automationScope**: `string`
 
-Defined in: [api/\_handlers/vaults/\_active.ts:9](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L9)
+Defined in: [api/\_handlers/vaults/\_active.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L16)
 
 ***
 
 ### VaultConfig
 
-Defined in: [api/\_handlers/vaults/\_active.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L12)
+Defined in: [api/\_handlers/vaults/\_active.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L19)
 
 #### Properties
 
@@ -38,98 +38,104 @@ Defined in: [api/\_handlers/vaults/\_active.ts:12](https://github.com/wenakita/4
 
 > **automation**: [`VaultAutomationConfig`](#vaultautomationconfig)
 
-Defined in: [api/\_handlers/vaults/\_active.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L25)
+Defined in: [api/\_handlers/vaults/\_active.ts:33](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L33)
 
 ##### burnStreamAddress?
 
 > `optional` **burnStreamAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L21)
+Defined in: [api/\_handlers/vaults/\_active.ts:28](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L28)
 
 ##### ccaStrategyAddress?
 
 > `optional` **ccaStrategyAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L16)
+Defined in: [api/\_handlers/vaults/\_active.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L23)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [api/\_handlers/vaults/\_active.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L14)
+Defined in: [api/\_handlers/vaults/\_active.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L21)
 
 ##### creatorCoinAddress
 
 > **creatorCoinAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L15)
+Defined in: [api/\_handlers/vaults/\_active.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L22)
 
 ##### gaugeControllerAddress?
 
 > `optional` **gaugeControllerAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:20](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L20)
+Defined in: [api/\_handlers/vaults/\_active.ts:27](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L27)
 
 ##### graduatedAt?
 
 > `optional` **graduatedAt**: `string` \| `null`
 
-Defined in: [api/\_handlers/vaults/\_active.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L23)
+Defined in: [api/\_handlers/vaults/\_active.ts:30](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L30)
 
 ##### groupId
 
 > **groupId**: `string`
 
-Defined in: [api/\_handlers/vaults/\_active.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L22)
+Defined in: [api/\_handlers/vaults/\_active.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L29)
 
 ##### oracleAddress?
 
 > `optional` **oracleAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L18)
+Defined in: [api/\_handlers/vaults/\_active.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L25)
 
 ##### settledAt?
 
 > `optional` **settledAt**: `string` \| `null`
 
-Defined in: [api/\_handlers/vaults/\_active.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L24)
+Defined in: [api/\_handlers/vaults/\_active.ts:31](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L31)
+
+##### settlementStage?
+
+> `optional` **settlementStage**: `string` \| `null`
+
+Defined in: [api/\_handlers/vaults/\_active.ts:32](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L32)
 
 ##### shareOFTAddress?
 
 > `optional` **shareOFTAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:17](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L17)
+Defined in: [api/\_handlers/vaults/\_active.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L24)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:13](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L13)
+Defined in: [api/\_handlers/vaults/\_active.ts:20](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L20)
 
 ##### vrfHubAddress?
 
 > `optional` **vrfHubAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/vaults/\_active.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L19)
+Defined in: [api/\_handlers/vaults/\_active.ts:26](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L26)
 
 ## Functions
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/vaults/\_active.ts:32](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L32)
+Defined in: [api/\_handlers/vaults/\_active.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/vaults/_active.ts#L40)
 
 #### Parameters
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

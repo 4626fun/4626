@@ -140,7 +140,7 @@ Defined in: [api/\_handlers/dexscreener/\_tokenStatsBatch.ts:40](https://github.
 
 ### default()
 
-> **default**(`req`, `res`): `Promise`\<`any`\>
+> **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
 Defined in: [api/\_handlers/dexscreener/\_tokenStatsBatch.ts:160](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/dexscreener/_tokenStatsBatch.ts#L160)
 
@@ -148,12 +148,12 @@ Defined in: [api/\_handlers/dexscreener/\_tokenStatsBatch.ts:160](https://github
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<`VercelResponse` \| `undefined`\>

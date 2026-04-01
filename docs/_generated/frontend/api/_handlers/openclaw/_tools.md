@@ -10,7 +10,7 @@
 
 ### default()
 
-> **default**(`req`, `res`): `any`
+> **default**(`req`, `res`): `VercelResponse` \| `undefined`
 
 Defined in: [api/\_handlers/openclaw/\_tools.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/openclaw/_tools.ts#L14)
 
@@ -18,12 +18,12 @@ Defined in: [api/\_handlers/openclaw/\_tools.ts:14](https://github.com/wenakita/
 
 ##### req
 
-`any`
+`VercelRequest`
 
 ##### res
 
-`any`
+`VercelResponse`
 
 #### Returns
 
-`any`
+`VercelResponse` \| `undefined`
