@@ -1,24 +1,34 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Address } from 'viem'
 
-import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins, fetchZoraTopCreators } from './client'
+import {
+  fetchZoraCoin,
+  fetchZoraExplore,
+  fetchZoraProfile,
+  fetchZoraProfileCoins,
+  fetchZoraTopCreators,
+  normalizeZoraCoinAddress,
+  normalizeZoraProfileIdentifier,
+} from './client'
 import type { ZoraExploreListType } from './types'
 
 export function useZoraCoin(address?: Address) {
+  const normalizedAddress = address ? normalizeZoraCoinAddress(address) : undefined
   return useQuery({
-    queryKey: ['zora', 'coin', address],
-    queryFn: async () => fetchZoraCoin(address as Address),
-    enabled: !!address,
+    queryKey: ['zora', 'coin', normalizedAddress],
+    queryFn: async () => fetchZoraCoin(normalizedAddress as Address),
+    enabled: !!normalizedAddress,
     // Coin stats change frequently; keep this fairly fresh.
     staleTime: 1000 * 60,
   })
 }
 
 export function useZoraProfile(identifier?: string) {
+  const normalizedIdentifier = identifier ? normalizeZoraProfileIdentifier(identifier) : undefined
   return useQuery({
-    queryKey: ['zora', 'profile', identifier],
-    queryFn: async () => fetchZoraProfile(identifier as string),
-    enabled: !!identifier,
+    queryKey: ['zora', 'profile', normalizedIdentifier],
+    queryFn: async () => fetchZoraProfile(normalizedIdentifier as string),
+    enabled: !!normalizedIdentifier,
     staleTime: 1000 * 60 * 5,
   })
 }
@@ -33,15 +43,16 @@ export function useZoraExplore(list: ZoraExploreListType, params?: { count?: num
 }
 
 export function useZoraProfileCoins(identifier?: string, params?: { count?: number; after?: string }) {
+  const normalizedIdentifier = identifier ? normalizeZoraProfileIdentifier(identifier) : undefined
   return useQuery({
-    queryKey: ['zora', 'profileCoins', identifier, params?.count, params?.after],
+    queryKey: ['zora', 'profileCoins', normalizedIdentifier, params?.count, params?.after],
     queryFn: async () =>
       fetchZoraProfileCoins({
-        identifier: identifier as string,
+        identifier: normalizedIdentifier as string,
         count: params?.count,
         after: params?.after,
       }),
-    enabled: !!identifier,
+    enabled: !!normalizedIdentifier,
     staleTime: 1000 * 60 * 5,
   })
 }
@@ -54,4 +65,3 @@ export function useZoraTopCreators(params?: { count?: number; after?: string; en
     staleTime: 1000 * 60 * 2,
   })
 }
-

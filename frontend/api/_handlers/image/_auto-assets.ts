@@ -11,6 +11,162 @@ import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, re
 const FRAME_SVG_URL = new URL('../../../public/brand/4626v2.svg', import.meta.url)
 const AUTO_ASSET_MAX_BODY_BYTES = 20_000
 const AUTO_ASSET_MAX_BYTES = 10 * 1024 * 1024
+const AUTO_ASSET_FETCH_TIMEOUT_MS = 8_000
+const AUTO_ASSET_FETCH_MAX_REDIRECTS = 2
+const AUTO_ASSET_MAX_PIXELS = 16_000_000
+const AUTO_ASSET_MAX_DIMENSION = 8192
+const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
+const IPFS_GATEWAY = `${String(process.env.IPFS_GATEWAY ?? DEFAULT_IPFS_GATEWAY).trim().replace(/\/+$/, '')}/`
+
+type HostAllowlist = {
+  exactHosts: Set<string>
+  suffixHosts: string[]
+}
+
+function readHostname(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    const host = parsed.hostname.trim().toLowerCase()
+    return host.length > 0 ? host : null
+  } catch {
+    return null
+  }
+}
+
+function parseAutoAssetHostAllowlist(raw: string | undefined): HostAllowlist {
+  const exactHosts = new Set<string>(['arweave.net'])
+  const suffixHostSet = new Set<string>([
+    'zora.co',
+    'zora.fyi',
+    'decentralized-content.com',
+    'ipfs.io',
+    'w3s.link',
+    'nftstorage.link',
+  ])
+  const gatewayHost = readHostname(IPFS_GATEWAY)
+  if (gatewayHost) exactHosts.add(gatewayHost)
+
+  const extraHosts = String(raw ?? '')
+    .split(/[\s,]+/g)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+  for (const host of extraHosts) {
+    if (host.startsWith('*.')) {
+      const suffix = host.slice(2)
+      if (suffix) suffixHostSet.add(suffix)
+      continue
+    }
+    if (host.startsWith('.')) {
+      const suffix = host.slice(1)
+      if (suffix) suffixHostSet.add(suffix)
+      continue
+    }
+    exactHosts.add(host)
+  }
+
+  return { exactHosts, suffixHosts: [...suffixHostSet] }
+}
+
+const AUTO_ASSET_HOST_ALLOWLIST = parseAutoAssetHostAllowlist(
+  process.env.IMAGE_AUTO_ASSET_ALLOWED_HOSTS,
+)
+
+function isAutoAssetHostAllowed(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase()
+  if (!host) return false
+  if (AUTO_ASSET_HOST_ALLOWLIST.exactHosts.has(host)) return true
+  return AUTO_ASSET_HOST_ALLOWLIST.suffixHosts.some(
+    (suffix) => host === suffix || host.endsWith(`.${suffix}`),
+  )
+}
+
+function normalizeHttpUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'https:') return null
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
+function ipfsToHttpUrl(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+
+  if (raw.startsWith('ipfs://')) {
+    const path = raw.slice('ipfs://'.length).replace(/^ipfs\//i, '').replace(/^\/+/, '')
+    if (!path) return null
+    return `${IPFS_GATEWAY}${path}`
+  }
+
+  if (raw.startsWith('/ipfs/')) {
+    const path = raw.replace(/^\/+ipfs\//i, '')
+    if (!path) return null
+    return `${IPFS_GATEWAY}${path}`
+  }
+
+  if (raw.startsWith('bafy') || raw.startsWith('Qm')) {
+    return `${IPFS_GATEWAY}${raw}`
+  }
+
+  return null
+}
+
+function normalizeAutoAssetSourceUrl(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+
+  const ipfs = ipfsToHttpUrl(raw)
+  if (ipfs) return ipfs
+
+  if (raw.startsWith('ar://')) {
+    const id = raw.slice('ar://'.length).replace(/^\/+/, '')
+    if (!id) return null
+    return `https://arweave.net/${id}`
+  }
+
+  return normalizeHttpUrl(raw)
+}
+
+function isAllowedAutoAssetSourceUrl(value: string | null | undefined): boolean {
+  const normalized = normalizeAutoAssetSourceUrl(value)
+  if (!normalized) return false
+  const host = readHostname(normalized)
+  if (!host) return false
+  return isAutoAssetHostAllowed(host)
+}
+
+function pickSafeZoraSubjectUrl(coinData: any): string | null {
+  const candidates = [
+    coinData?.mediaContent?.previewImage?.medium,
+    coinData?.mediaContent?.previewImage?.small,
+    coinData?.mediaContent?.originalUri,
+  ]
+  for (const candidate of candidates) {
+    const normalized = normalizeAutoAssetSourceUrl(candidate)
+    if (!normalized) continue
+    if (!isAllowedAutoAssetSourceUrl(normalized)) continue
+    return normalized
+  }
+  return null
+}
+
+async function isSafeSubjectImageBytes(bytes: Uint8Array): Promise<boolean> {
+  if (!(bytes.length > 0 && bytes.length <= AUTO_ASSET_MAX_BYTES)) return false
+  try {
+    const metadata = await sharp(Buffer.from(bytes), {
+      limitInputPixels: AUTO_ASSET_MAX_PIXELS,
+    }).metadata()
+    const width = metadata.width ?? 0
+    const height = metadata.height ?? 0
+    if (width <= 0 || height <= 0) return false
+    if (width > AUTO_ASSET_MAX_DIMENSION || height > AUTO_ASSET_MAX_DIMENSION) return false
+    return width * height <= AUTO_ASSET_MAX_PIXELS
+  } catch {
+    return false
+  }
+}
 
 type Body = {
   projectId?: string
@@ -129,11 +285,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const coinResponse = await sdk.getCoin({ address: creatorCoinAddress, chain: chainId })
       const coinData = coinResponse.data?.zora20Token
       if (coinData) {
-        subjectUrl =
-          coinData.mediaContent?.previewImage?.medium ??
-          coinData.mediaContent?.previewImage?.small ??
-          coinData.mediaContent?.originalUri ??
-          null
+        subjectUrl = pickSafeZoraSubjectUrl(coinData)
       }
     } catch (e) {
       console.warn('[image/auto-assets] Failed to fetch Zora coin image:', e)
@@ -141,7 +293,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!subjectUrl) {
-    return res.status(422).json({ success: false, error: 'Could not resolve creator coin image from Zora' })
+    return res.status(422).json({
+      success: false,
+      error: 'Could not resolve an allowed creator coin image URL from Zora',
+    })
   }
 
   let subjectBytes: Uint8Array
@@ -149,12 +304,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const fetched = await fetchBytes(subjectUrl, {
       maxBytes: AUTO_ASSET_MAX_BYTES,
+      timeoutMs: AUTO_ASSET_FETCH_TIMEOUT_MS,
+      maxRedirects: AUTO_ASSET_FETCH_MAX_REDIRECTS,
       requireImageContentType: true,
     })
     subjectBytes = fetched.bytes
     subjectContentType = fetched.contentType
   } catch {
     return res.status(422).json({ success: false, error: 'Could not fetch a safe creator coin image' })
+  }
+  if (!(await isSafeSubjectImageBytes(subjectBytes))) {
+    return res.status(422).json({ success: false, error: 'Creator coin image failed safety validation' })
   }
 
   const [, subjectAsset] = await Promise.all([
@@ -181,4 +341,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       subjectImageUrl: subjectUrl,
     },
   })
+}
+
+export const __testables = {
+  normalizeAutoAssetSourceUrl,
+  isAllowedAutoAssetSourceUrl,
+  pickSafeZoraSubjectUrl,
 }

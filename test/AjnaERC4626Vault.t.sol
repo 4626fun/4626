@@ -137,6 +137,13 @@ contract AjnaERC4626VaultTest is Test {
         assertEq(asset.balanceOf(address(this)), 1e18);
     }
 
+    function testAdminCannotBypassSwapperGuardForDeposit() public {
+        asset.mint(address(this), 100e18);
+        asset.approve(address(vault), type(uint256).max);
+        vm.expectRevert(AjnaERC4626Vault.NotAuthorized.selector);
+        vault.deposit(100e18, address(this));
+    }
+
     function testMintCollectsTollAndMintsRequestedShares() public {
         auth.setToll(100);
 

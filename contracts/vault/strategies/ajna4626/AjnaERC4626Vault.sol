@@ -47,7 +47,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     }
 
     modifier onlyAdapterAuthorized() {
-        if (!AUTH.isAdminOrSwapper(msg.sender)) revert NotAuthorized();
+        if (msg.sender != AUTH.swapper()) revert NotAuthorized();
         _;
     }
 

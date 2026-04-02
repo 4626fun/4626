@@ -17,8 +17,8 @@ contract ERC20MockForLimitOrderBoundary {
 }
 
 contract LimitOrderStrategyHarness is LimitOrderStrategy {
-    constructor(address creatorCoin, address pairedToken, address owner_)
-        LimitOrderStrategy(creatorCoin, pairedToken, address(this), owner_)
+    constructor(address creatorCoin, address pairedToken, address owner_, address hookRegistry_)
+        LimitOrderStrategy(creatorCoin, pairedToken, address(this), owner_, hookRegistry_)
     {}
 
     function pushOrderForTest(int24 tickLower, int24 tickUpper, bool isBuyOrder) external {
@@ -47,7 +47,7 @@ contract LimitOrderStrategyTickBoundaryTest is Test {
     function setUp() public {
         ERC20MockForLimitOrderBoundary creator = new ERC20MockForLimitOrderBoundary("Creator", "CRT", 18);
         ERC20MockForLimitOrderBoundary paired = new ERC20MockForLimitOrderBoundary("Paired", "PRD", 18);
-        strategy = new LimitOrderStrategyHarness(address(creator), address(paired), address(this));
+        strategy = new LimitOrderStrategyHarness(address(creator), address(paired), address(this), address(this));
     }
 
     function test_buyOrder_notFilled_atTickLowerBoundary() public {

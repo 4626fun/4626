@@ -6,6 +6,8 @@ import {
   setCors,
   setNoStore,
   readRequestPrincipalAddress,
+  getClientIp,
+  logger,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -71,6 +73,12 @@ const RPC_RATE_LIMIT_MAX_REQUESTS = clampInteger(
   process.env.NODE_ENV === 'development' ? 240 : 120,
   60,
   2_000,
+)
+const RPC_RATE_LIMIT_MAX_REQUESTS_PER_IP = clampInteger(
+  process.env.RPC_PROXY_RATE_LIMIT_MAX_REQUESTS_PER_IP,
+  process.env.NODE_ENV === 'development' ? 360 : 180,
+ 60,
+ 5_000,
 )
 const RPC_TELEMETRY_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.RPC_PROXY_TELEMETRY ?? '1').trim().toLowerCase(),
@@ -429,14 +437,14 @@ function toRetryAfterSeconds(resetAt: number): number {
 
 function setRateLimitHeaders(
   res: VercelResponse,
-  data: { remaining: number; resetAt: number },
+  data: { remaining: number; resetAt: number; limit: number },
 ) {
-  res.setHeader('X-RateLimit-Limit', String(RPC_RATE_LIMIT_MAX_REQUESTS))
+  res.setHeader('X-RateLimit-Limit', String(data.limit))
   res.setHeader('X-RateLimit-Remaining', String(Math.max(0, data.remaining)))
   res.setHeader('X-RateLimit-Reset', String(Math.floor(data.resetAt / 1000)))
 }
 
-function consumeRateLimitBucket(key: string): RateLimitBucketResult {
+function consumeRateLimitBucket(key: string, maxRequests: number): RateLimitBucketResult {
   const now = Date.now()
   const existing = rpcRateLimitState.get(key)
   if (!existing || existing.resetAt <= now) {
@@ -444,11 +452,11 @@ function consumeRateLimitBucket(key: string): RateLimitBucketResult {
     rpcRateLimitState.set(key, { count: 1, resetAt })
     return {
       allowed: true,
-      remaining: RPC_RATE_LIMIT_MAX_REQUESTS - 1,
+      remaining: maxRequests - 1,
       resetAt,
     }
   }
-  if (existing.count >= RPC_RATE_LIMIT_MAX_REQUESTS) {
+  if (existing.count >= maxRequests) {
     return {
       allowed: false,
       remaining: 0,
@@ -459,13 +467,30 @@ function consumeRateLimitBucket(key: string): RateLimitBucketResult {
   rpcRateLimitState.set(key, existing)
   return {
     allowed: true,
-    remaining: RPC_RATE_LIMIT_MAX_REQUESTS - existing.count,
+    remaining: maxRequests - existing.count,
     resetAt: existing.resetAt,
   }
 }
 
 function buildRateLimitKey(principalAddress: string, chain: RpcChain): string {
-  return `${principalAddress.trim().toLowerCase()}:${chain}`
+  return `principal:${principalAddress.trim().toLowerCase()}:${chain}`
+}
+
+function buildIpRateLimitKey(ip: string, chain: RpcChain): string {
+  return `ip:${ip.trim().toLowerCase()}:${chain}`
+}
+
+function sanitizeUpstreamRpcError(status: number, detail: string | null): string {
+  const fallback =
+    status === 429
+      ? 'Upstream RPC rate limited'
+      : status >= 500
+        ? 'Upstream RPC unavailable'
+        : 'Upstream RPC request failed'
+  const raw = String(detail ?? '').trim()
+  if (!raw) return fallback
+  // Never forward upstream internals (URLs/tokens/stack traces) to clients.
+  return fallback
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -506,10 +531,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       finalizeTelemetry(401, 'unauthenticated')
       return res.status(401).json({ success: false, error: 'Authentication required' })
     }
-    const rateLimit = consumeRateLimitBucket(buildRateLimitKey(principalAddress, chain))
-    setRateLimitHeaders(res, { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt })
-    if (!rateLimit.allowed) {
-      res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimit.resetAt)))
+    const clientIp = getClientIp(req)
+    const principalRateLimit = consumeRateLimitBucket(
+      buildRateLimitKey(principalAddress, chain),
+      RPC_RATE_LIMIT_MAX_REQUESTS,
+    )
+    const ipRateLimit = consumeRateLimitBucket(
+      buildIpRateLimitKey(clientIp, chain),
+      RPC_RATE_LIMIT_MAX_REQUESTS_PER_IP,
+    )
+    const rateLimitRemaining = Math.min(principalRateLimit.remaining, ipRateLimit.remaining)
+    const rateLimitResetAt = Math.min(principalRateLimit.resetAt, ipRateLimit.resetAt)
+    setRateLimitHeaders(res, {
+      limit: RPC_RATE_LIMIT_MAX_REQUESTS,
+      remaining: rateLimitRemaining,
+      resetAt: rateLimitResetAt,
+    })
+    if (!principalRateLimit.allowed || !ipRateLimit.allowed) {
+      res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimitResetAt)))
       finalizeTelemetry(429, 'local_rate_limited')
       return res.status(429).json({
         success: false,
@@ -591,11 +630,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break
           }
 
-          // Forward non-retryable response
-          const contentType = response.headers.get('content-type') || 'application/json'
-          res.setHeader('Content-Type', contentType)
+          logger.warn('[rpc-proxy] non-retryable upstream rejection', {
+            chain,
+            status,
+            upstreamHost: readRpcHost(rpc),
+            bodyPreview: (text || '').slice(0, 240),
+          })
           finalizeTelemetry(status, 'forwarded_non_retryable_error')
-          return res.status(status).send(text)
+          return res.status(status).json({
+            success: false,
+            error: sanitizeUpstreamRpcError(status, text),
+            code: status === 429 ? 'rpc_upstream_rate_limited' : 'rpc_upstream_rejected',
+          })
         } catch (e) {
           if (isAbortError(e)) {
             lastError = 'RPC request timeout'
@@ -616,10 +662,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastStatus,
       lastStatus === 429 ? 'upstream_rate_limited' : 'upstream_failed',
     )
-
+    logger.warn('[rpc-proxy] upstream request failed', {
+      chain,
+      status: lastStatus,
+      attempts: telemetry.attempts,
+      upstreamHost: telemetry.upstreamHost,
+      detail: lastError,
+    })
     return res.status(lastStatus).json({
       success: false,
-      error: lastError || `RPC proxy failed (${chain})`,
+      error: sanitizeUpstreamRpcError(lastStatus, lastError),
       code: lastStatus === 429 ? 'rpc_upstream_rate_limited' : 'rpc_proxy_failed',
     })
   } finally {

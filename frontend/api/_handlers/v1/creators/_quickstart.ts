@@ -4,7 +4,7 @@
  * One-shot creator onboarding endpoint. Given an authenticated session:
  *
  * 1. Resolves the user's Zora profile + creator coin
- * 2. Auto-allowlists the creator
+ * 2. Verifies pre-approved creator access (admin-managed allowlist only)
  * 3. Provisions a Privy server wallet (for CSW agent signing)
  * 4. Registers a CSW-based XMTP agent
  * 5. Creates a default Keepr vault config (if coin found)
@@ -157,21 +157,22 @@ async function checkIsOwner(cswAddress: string, signerAddress: string): Promise<
   }
 }
 
-async function autoAllowlist(db: any, address: string, cswAddress: string | null): Promise<boolean> {
+async function hasApprovedCreatorAccess(db: any, creatorAddress: string): Promise<boolean> {
   try {
-    const addr = address.toLowerCase()
-    const csw = cswAddress?.toLowerCase() ?? addr
-
-    // Check if already allowlisted
+    const addr = creatorAddress.toLowerCase()
+    // Quickstart is strictly read-only for creator access.
+    // Approval writes are admin-only via /api/admin/creator-access/approve.
     const existing = await db.sql`
-      SELECT address FROM allowlist
-      WHERE (lower(address) = ${addr} OR lower(csw_address) = ${csw})
+      SELECT address
+      FROM allowlist
+      WHERE (lower(address) = ${addr} OR lower(csw_address) = ${addr})
         AND revoked_at IS NULL
+        AND approved_at IS NOT NULL
       LIMIT 1;
     `
     return (existing.rows?.length ?? 0) > 0
   } catch (err) {
-    logger.warn('[quickstart] Allowlist check failed', err)
+    logger.warn('[quickstart] Creator access check failed', err)
     return false
   }
 }
@@ -274,7 +275,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ------------------------------------------------------------------
     // 3. Enforce creator allowlist approval
     // ------------------------------------------------------------------
-    const allowlisted = await autoAllowlist(db, creatorAddress, creatorAddress)
+    const allowlisted = await hasApprovedCreatorAccess(db, creatorAddress)
     if (!allowlisted) {
       return res.status(403).json({
         success: false,

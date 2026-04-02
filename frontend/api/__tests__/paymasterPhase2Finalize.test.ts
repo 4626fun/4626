@@ -122,6 +122,150 @@ vi.mock('viem/chains', () => ({
 
 const originalFetch = globalThis.fetch
 
+type ReadContractOverrides = {
+  wrapperVault?: Address
+  wrapperShareOFT?: Address
+  wrapperCreatorCoin?: Address
+  wrapperOwner?: Address | null
+  shareVault?: Address
+  shareOwner?: Address | null
+}
+
+function configureMockReadContract(overrides: ReadContractOverrides = {}): void {
+  const resolved = {
+    wrapperVault: vault,
+    wrapperShareOFT: shareOFT,
+    wrapperCreatorCoin: creatorToken,
+    wrapperOwner: creatorVaultBatcher as Address | null,
+    shareVault: vault,
+    shareOwner: creatorVaultBatcher as Address | null,
+    ...overrides,
+  }
+
+  mockReadContract.mockImplementation((opts: { address?: Address; functionName?: string }) => {
+    const functionName = opts.functionName
+    const address = opts.address ? getAddress(opts.address) : null
+
+    if (functionName === 'isOwnerAddress') return Promise.resolve(true)
+    if (functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+    if (functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
+    if (functionName === 'store') return Promise.resolve(bytecodeStore)
+    if (functionName === 'get') return Promise.resolve('0x60006000')
+    if (functionName === 'asset') return Promise.resolve(creatorToken)
+    if (functionName === 'name') return Promise.resolve('Creator OVault')
+    if (functionName === 'symbol') return Promise.resolve('ovCRT')
+
+    if (address === wrapper && functionName === 'creatorCoin') return Promise.resolve(resolved.wrapperCreatorCoin)
+    if (address === wrapper && functionName === 'vault') return Promise.resolve(resolved.wrapperVault)
+    if (address === wrapper && functionName === 'shareOFT') return Promise.resolve(resolved.wrapperShareOFT)
+    if (address === wrapper && functionName === 'owner') return Promise.resolve(resolved.wrapperOwner)
+
+    if (address === shareOFT && functionName === 'vault') return Promise.resolve(resolved.shareVault)
+    if (address === shareOFT && functionName === 'owner') return Promise.resolve(resolved.shareOwner)
+
+    return Promise.resolve(null)
+  })
+}
+
+const BATCHER_FINALIZE_PHASE2_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const COINBASE_SMART_WALLET_EXECUTE_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'target', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'data', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+] as const
+
+function buildFinalizePhase2CallData(params?: {
+  vault?: Address
+  wrapper?: Address
+  shareOFT?: Address
+}): `0x${string}` {
+  const finalizeData = encodeFunctionData({
+    abi: BATCHER_FINALIZE_PHASE2_ABI,
+    functionName: 'finalizePhase2',
+    args: [
+      {
+        creatorToken,
+        owner: sender,
+        vault: params?.vault ?? vault,
+        wrapper: params?.wrapper ?? wrapper,
+        shareOFT: params?.shareOFT ?? shareOFT,
+        gaugeController,
+        ccaStrategy,
+        oracle,
+        version: 'v1',
+        depositAmount: 5_000_000n * 10n ** 18n,
+        requiredRaise: 100_000_000_000_000_000n,
+        floorPriceQ96: 1_000_000n,
+        auctionSteps: '0x',
+        meteoraAlphaVault: ZERO_BYTES32,
+        solanaIxs: [],
+      },
+    ],
+  })
+
+  return encodeFunctionData({
+    abi: COINBASE_SMART_WALLET_EXECUTE_ABI,
+    functionName: 'execute',
+    args: [creatorVaultBatcher, 0n, finalizeData],
+  })
+}
+
+function buildPaymasterStubBody(callData: `0x${string}`): Record<string, unknown> {
+  return {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'pm_getPaymasterStubData',
+    params: [{ sender, callData, initCode: '0x' }, ENTRYPOINT_V06, 8453],
+  }
+}
+
 describe('paymaster phase2 finalize selector/tuple compatibility', () => {
   let restoreEnv: () => void
 
@@ -147,29 +291,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     readJsonBodyMock.mockImplementation((req: { body?: unknown }) => Promise.resolve(req.body ?? null))
 
     mockGetBytecode.mockResolvedValue('0x1234')
-    mockReadContract.mockImplementation((opts: { address?: Address; functionName?: string }) => {
-      const functionName = opts.functionName
-      const address = opts.address ? getAddress(opts.address) : null
-
-      if (functionName === 'isOwnerAddress') return Promise.resolve(true)
-      if (functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
-      if (functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
-      if (functionName === 'store') return Promise.resolve(bytecodeStore)
-      if (functionName === 'get') return Promise.resolve('0x60006000')
-      if (functionName === 'asset') return Promise.resolve(creatorToken)
-      if (functionName === 'name') return Promise.resolve('Creator OVault')
-      if (functionName === 'symbol') return Promise.resolve('ovCRT')
-
-      if (address === wrapper && functionName === 'creatorCoin') return Promise.resolve(creatorToken)
-      if (address === wrapper && functionName === 'vault') return Promise.resolve(vault)
-      if (address === wrapper && functionName === 'shareOFT') return Promise.resolve(shareOFT)
-      if (address === wrapper && functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
-
-      if (address === shareOFT && functionName === 'vault') return Promise.resolve(vault)
-      if (address === shareOFT && functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
-
-      return Promise.resolve(null)
-    })
+    configureMockReadContract()
     mockGetLogs.mockResolvedValue([])
 
     globalThis.fetch = vi.fn().mockResolvedValue({
@@ -299,6 +421,52 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
 
     expect(errMsg).not.toMatch(/request denied/i)
     expect((globalThis.fetch as any).mock.calls.length).toBe(1)
+  })
+
+  it('rejects finalizePhase2 when wrapper.vault does not match expected vault', async () => {
+    mockGetLogs.mockResolvedValue([{ args: { vault, wrapper, shareOFT } }])
+    configureMockReadContract({
+      wrapperVault: getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: buildPaymasterStubBody(buildFinalizePhase2CallData()),
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+
+    expect(errMsg).toMatch(/request denied/i)
+    expect(errMsg).toMatch(/wrapper_vault_mismatch/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(0)
+  })
+
+  it('rejects finalizePhase2 when shareOFT.vault does not match expected vault', async () => {
+    mockGetLogs.mockResolvedValue([{ args: { vault, wrapper, shareOFT } }])
+    configureMockReadContract({
+      shareVault: getAddress('0xcccccccccccccccccccccccccccccccccccccccc'),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: buildPaymasterStubBody(buildFinalizePhase2CallData()),
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+
+    expect(errMsg).toMatch(/request denied/i)
+    expect(errMsg).toMatch(/shareoft_vault_mismatch/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(0)
   })
 
   it('accepts finalizePhase2WithPermit2 with current tuple shape', async () => {

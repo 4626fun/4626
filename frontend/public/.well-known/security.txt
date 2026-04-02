@@ -1,0 +1,5 @@
+Contact: mailto:keepr@4626.fun
+Expires: 2027-04-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://4626.fun/.well-known/security.txt
+Policy: https://github.com/wenakita/4626/blob/main/SECURITY.md

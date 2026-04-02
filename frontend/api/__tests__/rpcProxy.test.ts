@@ -100,12 +100,76 @@ describe('/api/rpc proxy rate-limit contract', () => {
     expect(res.statusCode).toBe(429)
     expect(res.body).toEqual({
       success: false,
-      error: 'upstream rate limited',
+      error: 'Upstream RPC rate limited',
       code: 'rpc_upstream_rate_limited',
     })
     expect(res.getHeader('retry-after')).toBe('7')
     expect(res.getHeader('x-ratelimit-limit')).toBe('120')
     expect(res.getHeader('x-ratelimit-remaining')).toBe('119')
+  })
+
+  it('redacts sensitive upstream details from client errors', async () => {
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Response('forbidden by https://private-rpc.example.com?apiKey=secret', {
+          status: 403,
+          headers: { 'Content-Type': 'text/plain' },
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    const handler = await loadHandler()
+    const req = createRpcReq()
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toEqual({
+      success: false,
+      error: 'Upstream RPC request failed',
+      code: 'rpc_upstream_rejected',
+    })
+    expect(String(res.body?.error ?? '').toLowerCase()).not.toContain('private-rpc.example.com')
+    expect(String(res.body?.error ?? '').toLowerCase()).not.toContain('apikey')
+  })
+
+  it('enforces per-ip limits even when principal rotates', async () => {
+    const restoreEnv = applyEnv({
+      RPC_PROXY_RATE_LIMIT_MAX_REQUESTS: '500',
+      RPC_PROXY_RATE_LIMIT_MAX_REQUESTS_PER_IP: '60',
+    })
+    let index = 0
+    readRequestPrincipalAddressMock.mockImplementation(() => {
+      index += 1
+      return `0x${index.toString(16).padStart(40, '0')}`
+    })
+    const fetchMock = vi.fn().mockImplementation(() => okRpcResponse())
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    try {
+      const handler = await loadHandler()
+      let blockedRes = createMockRes()
+      for (let i = 0; i < 61; i += 1) {
+        const req = createMockReq({
+          method: 'POST',
+          query: { chain: 'base' },
+          headers: { 'x-forwarded-for': '203.0.113.9' },
+          body: { jsonrpc: '2.0', id: i + 1, method: 'eth_blockNumber', params: [] },
+        })
+        blockedRes = createMockRes()
+        await handler(req, blockedRes)
+      }
+
+      expect(blockedRes.statusCode).toBe(429)
+      expect(blockedRes.body).toEqual({
+        success: false,
+        error: 'Rate limit exceeded',
+        code: 'rpc_local_rate_limited',
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(60)
+    } finally {
+      restoreEnv()
+    }
   })
 
   it('emits windowed rpc telemetry with in-flight peak', async () => {

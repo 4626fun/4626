@@ -859,7 +859,12 @@ const RUNTIME_LEASE_TABLE_SQL = `
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE tablename = 'agent_runtime_leases' AND policyname = 'deny_all_non_service'
     ) THEN
-      CREATE POLICY deny_all_non_service ON agent_runtime_leases FOR ALL USING (false);
+      CREATE POLICY deny_all_non_service
+        ON agent_runtime_leases
+        FOR ALL
+        TO public
+        USING (false)
+        WITH CHECK (false);
     END IF;
   END $$;
 `

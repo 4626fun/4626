@@ -18,6 +18,7 @@ import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
+import {IApprovedV4HooksRegistry} from "./ApprovedV4HooksRegistry.sol";
 
 import {ICreatorOracle} from "../../../interfaces/ICreatorOracle.sol";
 import {V4LiquidityAmounts} from "../../../libraries/V4LiquidityAmounts.sol";
@@ -96,6 +97,9 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /// @notice Permit2 contract used by PosM for token pulls into PoolManager
     address public permit2;
 
+    /// @notice Governance-managed hook allowlist for V4 pool configuration.
+    IApprovedV4HooksRegistry public immutable hookRegistry;
+
     /// @notice Tick spacing for the pool
     int24 public tickSpacing = 60;
 
@@ -157,6 +161,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     event PoolConfigured(
         bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
     );
+    event ApprovalsReconfigured(address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2);
     event ParametersUpdated(
         int24 baseThreshold, uint32 period, int24 minTickMove, int24 maxTwapDeviation, uint32 twapDuration
     );
@@ -178,6 +183,9 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     error InvalidParameters();
     error PoolNotFullyConfigured();
     error TwapOracleNotSet();
+    error PoolAlreadyConfigured();
+    error InvalidHook(address hook);
+    error HookNotApproved(address hook);
 
     // =================================
     // MODIFIERS
@@ -197,13 +205,17 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // =================================
 
-    constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner) Ownable(_owner) {
+    constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
+        Ownable(_owner)
+    {
         if (_creatorCoin == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
+        if (_hookRegistry == address(0)) revert ZeroAddress();
 
         CREATOR_COIN = IERC20(_creatorCoin);
         PAIRED_TOKEN = IERC20(_pairedToken);
         lpManager = _lpManager;
+        hookRegistry = IApprovedV4HooksRegistry(_hookRegistry);
     }
 
     // =================================
@@ -214,6 +226,9 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         external
         onlyOwner
     {
+        if (positionManager != address(0) || permit2 != address(0) || address(poolManager) != address(0)) {
+            revert PoolAlreadyConfigured();
+        }
         if (_poolManager == address(0)) revert ZeroAddress();
         if (_positionManager == address(0)) revert ZeroAddress();
         if (_permit2 == address(0)) revert ZeroAddress();
@@ -225,17 +240,9 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
                     || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert PoolNotFullyConfigured();
         if (_poolKey.tickSpacing == 0) revert PoolNotFullyConfigured();
-
-        address previousPermit2 = permit2;
-        address previousPositionManager = positionManager;
-        if (previousPermit2 != address(0)) {
-            if (previousPositionManager != address(0)) {
-                IAllowanceTransfer(previousPermit2).approve(address(CREATOR_COIN), previousPositionManager, 0, 0);
-                IAllowanceTransfer(previousPermit2).approve(address(PAIRED_TOKEN), previousPositionManager, 0, 0);
-            }
-            CREATOR_COIN.forceApprove(previousPermit2, 0);
-            PAIRED_TOKEN.forceApprove(previousPermit2, 0);
-        }
+        address hook = address(_poolKey.hooks);
+        if (hook == address(0)) revert InvalidHook(hook);
+        if (!hookRegistry.isHookApproved(hook)) revert HookNotApproved(hook);
 
         poolManager = IPoolManager(_poolManager);
         positionManager = _positionManager;
@@ -254,6 +261,38 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
         emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
+    }
+
+    /**
+     * @notice Rotate Permit2/PosM approval targets and revoke stale approvals.
+     * @dev Useful for operator key rotation or explicit approval hygiene.
+     */
+    function reconfigureApprovals(address _positionManager, address _permit2) external onlyOwner {
+        _requireConfigured();
+        if (_positionManager == address(0)) revert ZeroAddress();
+        if (_permit2 == address(0)) revert ZeroAddress();
+
+        address oldPositionManager = positionManager;
+        address oldPermit2 = permit2;
+
+        // Revoke old allowances first so stale pull rights are removed.
+        CREATOR_COIN.forceApprove(oldPermit2, 0);
+        PAIRED_TOKEN.forceApprove(oldPermit2, 0);
+        IAllowanceTransfer(oldPermit2).approve(address(CREATOR_COIN), oldPositionManager, 0, 0);
+        IAllowanceTransfer(oldPermit2).approve(address(PAIRED_TOKEN), oldPositionManager, 0, 0);
+
+        positionManager = _positionManager;
+        permit2 = _permit2;
+
+        // Re-grant current approval targets.
+        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
+
+        emit ApprovalsReconfigured(oldPositionManager, oldPermit2, _positionManager, _permit2);
     }
 
     function setTwapOracle(address _oracle) external onlyOwner {

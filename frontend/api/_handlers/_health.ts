@@ -11,7 +11,7 @@ import {
 } from '../../packages/server-core/src/index.js'
 
 
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
+import { isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -70,10 +70,38 @@ async function checkDb(db: { sql: (strings: TemplateStringsArray, ...values: any
 async function checkSupabase(): Promise<{ ok: boolean; latencyMs: number | null; error: string | null }> {
   const start = Date.now()
   try {
-    const supabase = getSupabaseAdmin()
-    // Minimal query that validates connectivity + schema presence.
-    const q = await supabase.from('allowlist').select('address').limit(1)
-    if (q.error) throw new Error(q.error.message)
+    const supabaseUrl = String(process.env.SUPABASE_URL ?? '').trim().replace(/\/+$/, '')
+    const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Supabase admin not configured')
+    }
+
+    // Probe Auth admin API instead of PostgREST table cache.
+    // This validates URL + service key without coupling health to one table.
+    const ctrl = new AbortController()
+    const timeout = setTimeout(() => ctrl.abort(), 8_000)
+    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users?page=1&per_page=1`, {
+      method: 'GET',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+      signal: ctrl.signal,
+    })
+    clearTimeout(timeout)
+
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try {
+        const body = await res.json()
+        if (typeof body?.msg === 'string' && body.msg.trim().length > 0) msg = body.msg
+        else if (typeof body?.message === 'string' && body.message.trim().length > 0) msg = body.message
+      } catch {
+        // ignore JSON parse errors
+      }
+      throw new Error(msg)
+    }
+
     return { ok: true, latencyMs: Date.now() - start, error: null }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Supabase check failed'

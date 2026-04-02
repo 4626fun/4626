@@ -5,6 +5,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
@@ -16,6 +19,17 @@ import {CreatorLinearVesting} from "../../utilities/vesting/CreatorLinearVesting
 interface IUniversalCreate2DeployerFromStore {
     function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr);
     function computeAddress(bytes32 salt, bytes32 initCodeHash) external view returns (address);
+}
+
+interface IApprovedV4HooksRegistryAdmin {
+    function setHookApproval(address hook, bool approved) external;
+    function transferOwnership(address newOwner) external;
+}
+
+interface IUniV4ConfigurableStrategy {
+    function configurePool(address _poolManager, address _positionManager, address _permit2, PoolKey calldata _poolKey)
+        external;
+    function transferOwnership(address newOwner) external;
 }
 
 contract DeploymentBatcherPhase3Helper {
@@ -181,6 +195,133 @@ contract DeploymentBatcherPhase3Helper {
 
     function _isAllowedCharmFactoryGovernance(address governance) internal pure returns (bool) {
         return governance == CHARM_FACTORY_GOVERNANCE || governance == CHARM_FACTORY_GOVERNANCE_LEGACY;
+    }
+}
+
+contract DeploymentBatcherUniV4Helper {
+    error NotBatcher();
+    error ZeroAddress();
+    error InvalidTickSpacing();
+    error InvalidPoolCurrencies();
+
+    IUniversalCreate2DeployerFromStore public immutable create2Deployer;
+    address public immutable poolManager;
+    address public immutable permit2;
+    address public immutable batcher;
+
+    constructor(address _create2Deployer, address _poolManager, address _permit2) {
+        create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
+        poolManager = _poolManager;
+        permit2 = _permit2;
+        batcher = msg.sender;
+    }
+
+    function deployUniV4Strategies(
+        DeploymentBatcher.UniV4DeployParams calldata params,
+        DeploymentBatcher.UniV4CodeIds calldata codeIds,
+        bytes32 baseSalt
+    ) external returns (DeploymentBatcher.UniV4DeploymentResult memory out) {
+        if (msg.sender != batcher) revert NotBatcher();
+        if (
+            params.creatorToken == address(0) || params.pairedToken == address(0) || params.positionManager == address(0)
+                || params.poolHook == address(0) || params.owner == address(0) || params.registryOwner == address(0)
+        ) revert ZeroAddress();
+        if (params.tickSpacing == 0) revert InvalidTickSpacing();
+        if (params.creatorToken == params.pairedToken) revert InvalidPoolCurrencies();
+
+        bytes32 registrySalt = _saltFor(baseSalt, "univ4HookRegistry");
+        out.hookRegistry = create2Deployer.deploy(
+            registrySalt, codeIds.approvedV4HooksRegistry, abi.encode(address(this))
+        );
+
+        uint256 hooksLength = params.hooksToApprove.length;
+        for (uint256 i = 0; i < hooksLength; i++) {
+            IApprovedV4HooksRegistryAdmin(out.hookRegistry).setHookApproval(params.hooksToApprove[i], true);
+        }
+        IApprovedV4HooksRegistryAdmin(out.hookRegistry).setHookApproval(params.poolHook, true);
+
+        bytes32 managerSalt = _saltFor(baseSalt, "univ4CreatorLPManager");
+        out.creatorLPManager = create2Deployer.deploy(
+            managerSalt,
+            codeIds.creatorLPManager,
+            abi.encode(
+                params.creatorToken,
+                params.pairedToken,
+                params.vault,
+                address(this),
+                out.hookRegistry
+            )
+        );
+
+        bytes32 fullRangeSalt = _saltFor(baseSalt, "univ4FullRangeStrategy");
+        out.fullRangeStrategy = create2Deployer.deploy(
+            fullRangeSalt,
+            codeIds.fullRangeStrategy,
+            abi.encode(
+                params.creatorToken,
+                params.pairedToken,
+                out.creatorLPManager,
+                address(this),
+                out.hookRegistry
+            )
+        );
+
+        bytes32 concentratedSalt = _saltFor(baseSalt, "univ4ConcentratedStrategy");
+        out.concentratedStrategy = create2Deployer.deploy(
+            concentratedSalt,
+            codeIds.concentratedStrategy,
+            abi.encode(
+                params.creatorToken,
+                params.pairedToken,
+                out.creatorLPManager,
+                address(this),
+                out.hookRegistry
+            )
+        );
+
+        bytes32 limitOrderSalt = _saltFor(baseSalt, "univ4LimitOrderStrategy");
+        out.limitOrderStrategy = create2Deployer.deploy(
+            limitOrderSalt,
+            codeIds.limitOrderStrategy,
+            abi.encode(
+                params.creatorToken,
+                params.pairedToken,
+                out.creatorLPManager,
+                address(this),
+                out.hookRegistry
+            )
+        );
+
+        PoolKey memory poolKey = PoolKey({
+            currency0: params.creatorIsCurrency0 ? Currency.wrap(params.creatorToken) : Currency.wrap(params.pairedToken),
+            currency1: params.creatorIsCurrency0 ? Currency.wrap(params.pairedToken) : Currency.wrap(params.creatorToken),
+            fee: params.fee,
+            tickSpacing: params.tickSpacing,
+            hooks: IHooks(params.poolHook)
+        });
+
+        IUniV4ConfigurableStrategy(out.fullRangeStrategy).configurePool(
+            poolManager, params.positionManager, permit2, poolKey
+        );
+        IUniV4ConfigurableStrategy(out.concentratedStrategy).configurePool(
+            poolManager, params.positionManager, permit2, poolKey
+        );
+        IUniV4ConfigurableStrategy(out.limitOrderStrategy).configurePool(
+            poolManager, params.positionManager, permit2, poolKey
+        );
+        IUniV4ConfigurableStrategy(out.creatorLPManager).configurePool(
+            poolManager, params.positionManager, permit2, poolKey
+        );
+
+        IUniV4ConfigurableStrategy(out.fullRangeStrategy).transferOwnership(params.owner);
+        IUniV4ConfigurableStrategy(out.concentratedStrategy).transferOwnership(params.owner);
+        IUniV4ConfigurableStrategy(out.limitOrderStrategy).transferOwnership(params.owner);
+        IUniV4ConfigurableStrategy(out.creatorLPManager).transferOwnership(params.owner);
+        IApprovedV4HooksRegistryAdmin(out.hookRegistry).transferOwnership(params.registryOwner);
+    }
+
+    function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(baseSalt, label));
     }
 }
 
@@ -492,6 +633,37 @@ contract DeploymentBatcher is ReentrancyGuard {
         address solanaStrategy;
     }
 
+    struct UniV4CodeIds {
+        bytes32 approvedV4HooksRegistry;
+        bytes32 fullRangeStrategy;
+        bytes32 concentratedStrategy;
+        bytes32 limitOrderStrategy;
+        bytes32 creatorLPManager;
+    }
+
+    struct UniV4DeployParams {
+        address creatorToken;
+        address pairedToken;
+        address vault;
+        address owner;
+        string version;
+        address positionManager;
+        uint24 fee;
+        int24 tickSpacing;
+        bool creatorIsCurrency0;
+        address poolHook;
+        address registryOwner;
+        address[] hooksToApprove;
+    }
+
+    struct UniV4DeploymentResult {
+        address hookRegistry;
+        address fullRangeStrategy;
+        address concentratedStrategy;
+        address limitOrderStrategy;
+        address creatorLPManager;
+    }
+
     struct OVaultRuntimeConfig {
         address hubComposer;
         uint32 solanaEid;
@@ -523,6 +695,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     error InvalidPayoutRecipient();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmVaultManagerMismatch(address expected, address actual);
+    error InvalidTickSpacing();
+    error InvalidPoolCurrencies();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -558,6 +732,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     OVaultRuntimeConfig private ovaultRuntimeConfig;
     /// @notice Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
     DeploymentBatcherPhase3Helper public immutable phase3Helper;
+    /// @notice Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime limits.
+    DeploymentBatcherUniV4Helper public immutable uniV4Helper;
 
     event Phase1Deployed(
         address indexed creatorToken,
@@ -628,6 +804,19 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint256 solanaWeightBps
     );
 
+    event UniV4StrategiesDeployed(
+        address indexed creatorToken,
+        address indexed owner,
+        address indexed vault,
+        address hookRegistry,
+        address fullRangeStrategy,
+        address concentratedStrategy,
+        address limitOrderStrategy,
+        address creatorLPManager,
+        address poolHook,
+        address registryOwner
+    );
+
     event CreatorShareVestingDeployed(
         address indexed shareOFT,
         address indexed beneficiary,
@@ -696,6 +885,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         phase3Helper = new DeploymentBatcherPhase3Helper(
             _create2Deployer, _protocolTreasury, _usdc, _uniswapV3Factory, _uniswapRouter, _ajnaFactory
         );
+        uniV4Helper = new DeploymentBatcherUniV4Helper(_create2Deployer, _poolManager, _permit2);
     }
 
     // ================================
@@ -1150,6 +1340,48 @@ contract DeploymentBatcher is ReentrancyGuard {
         );
     }
 
+    /**
+     * @notice Deploy + configure UniV4 strategy set with approved-hook enforcement.
+     * @dev Deploys a hook registry + FullRange + Concentrated + LimitOrder + CreatorLPManager,
+     *      configures all pools using the same hook, then transfers ownerships.
+     */
+    function deployUniV4Strategies(UniV4DeployParams calldata params, UniV4CodeIds calldata codeIds)
+        external
+        nonReentrant
+        returns (UniV4DeploymentResult memory out)
+    {
+        if (
+            params.creatorToken == address(0) || params.pairedToken == address(0) || params.vault == address(0)
+                || params.owner == address(0) || params.positionManager == address(0) || params.poolHook == address(0)
+                || params.registryOwner == address(0)
+        ) {
+            revert ZeroAddress();
+        }
+        if (params.tickSpacing == 0) revert InvalidTickSpacing();
+        if (params.creatorToken == params.pairedToken) revert InvalidPoolCurrencies();
+
+        // Bind caller auth to the actual vault owner onchain (not only user-supplied params.owner).
+        if (IOwnableView(params.vault).owner() != params.owner) revert NotOwner();
+        _requireOwner(params.owner);
+        _requireUniV4CodeIds(codeIds);
+
+        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+        out = uniV4Helper.deployUniV4Strategies(params, codeIds, baseSalt);
+
+        emit UniV4StrategiesDeployed(
+            params.creatorToken,
+            params.owner,
+            params.vault,
+            out.hookRegistry,
+            out.fullRangeStrategy,
+            out.concentratedStrategy,
+            out.limitOrderStrategy,
+            out.creatorLPManager,
+            params.poolHook,
+            params.registryOwner
+        );
+    }
+
     // ================================
     // SOLANA CONFIG (ADMIN)
     // ================================
@@ -1222,6 +1454,16 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     function _requirePhase2CodeIds(CodeIds calldata codeIds) internal pure {
         if (codeIds.gauge == bytes32(0) || codeIds.cca == bytes32(0) || codeIds.oracle == bytes32(0)) {
+            revert InvalidCodeId();
+        }
+    }
+
+    function _requireUniV4CodeIds(UniV4CodeIds calldata codeIds) internal pure {
+        if (
+            codeIds.approvedV4HooksRegistry == bytes32(0) || codeIds.fullRangeStrategy == bytes32(0)
+                || codeIds.concentratedStrategy == bytes32(0) || codeIds.limitOrderStrategy == bytes32(0)
+                || codeIds.creatorLPManager == bytes32(0)
+        ) {
             revert InvalidCodeId();
         }
     }

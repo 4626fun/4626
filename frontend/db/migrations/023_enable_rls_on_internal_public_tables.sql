@@ -25,14 +25,12 @@ DECLARE
     'telegram_funnel_events',
     'telegram_miniapp_replay_nonces',
     'telegram_miniapp_sessions',
-    'telegram_arena_watchers',
     'creator_metrics_daily_snapshots',
     'telegram_onboarding_sessions',
     'telegram_private_dm_welcome_sent',
     'telegram_link_start_token_claims',
     'telegram_inline_signal_feeds',
-    'telegram_active_messages',
-    'agent_subdomains'
+    'telegram_active_messages'
   ];
 BEGIN
   FOREACH table_name IN ARRAY internal_tables
