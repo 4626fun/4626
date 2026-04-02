@@ -89,7 +89,7 @@ export function ExploreContentTransactions() {
     return [...pools].sort((a, b) => parseNumber(b.totalValueLockedUSD) - parseNumber(a.totalValueLockedUSD))[0]
   }, [pools])
 
-  const { data: swaps = [], isLoading: swapsLoading } = useQuery({
+  const { data: swaps = [], isLoading: swapsLoading, dataUpdatedAt: swapsDataUpdatedAt } = useQuery({
     queryKey: ['uniswap', 'poolSwaps', primaryPool?.id, 'transactionsPage'],
     queryFn: async () => {
       if (!primaryPool?.id) return []
@@ -123,9 +123,8 @@ export function ExploreContentTransactions() {
 
   const filteredRows = useMemo(() => {
     if (rows.length === 0) return rows
-    const referenceTimestampMs = rows.reduce((maxTs, row) => Math.max(maxTs, toRowTimestampMs(row.timestamp)), 0)
     const windowMs = contentTransactionsWindowMs(currentTimeFilter)
-    const cutoffMs = windowMs != null && referenceTimestampMs > 0 ? referenceTimestampMs - windowMs : null
+    const cutoffMs = windowMs != null && swapsDataUpdatedAt > 0 ? swapsDataUpdatedAt - windowMs : null
     const trimmedQuery = searchQuery.trim().toLowerCase()
 
     const scopedRows =
@@ -159,7 +158,7 @@ export function ExploreContentTransactions() {
     }
 
     return [...searchFiltered].sort((a, b) => toRowTimestampMs(b.timestamp) - toRowTimestampMs(a.timestamp))
-  }, [currentSort, currentTimeFilter, rows, searchQuery])
+  }, [currentSort, currentTimeFilter, rows, searchQuery, swapsDataUpdatedAt])
 
   if (!isValid || !contentCoinAddress) {
     return <Navigate replace to="/explore/transactions" />
