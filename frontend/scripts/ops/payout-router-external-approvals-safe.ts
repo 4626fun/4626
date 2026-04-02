@@ -3,7 +3,7 @@
 import Safe from '@safe-global/protocol-kit'
 import SafeApiKit from '@safe-global/api-kit'
 import { OperationType } from '@safe-global/types-kit'
-import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, type Address } from 'viem'
+import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
 declare const process: {
@@ -197,13 +197,15 @@ function isTransientRpcError(message: string): boolean {
   )
 }
 
-function isLegacyExternalLaneProbeError(message: string): boolean {
+function isLikelyMissingSelectorError(message: string): boolean {
   const lc = message.toLowerCase()
   return (
-    (lc.includes('approvedexternalswaptargets') && lc.includes('revert')) ||
-    (lc.includes('approvedexternalswaptargets') && lc.includes('returned no data')) ||
     lc.includes('function selector was not recognized') ||
-    lc.includes('function does not exist')
+    lc.includes('function does not exist') ||
+    lc.includes('returned no data') ||
+    lc.includes('execution reverted') ||
+    lc.includes('reverted') ||
+    lc.includes('revert')
   )
 }
 
@@ -211,7 +213,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function readContractWithRetry<T>(context: string, operation: () => Promise<T>): Promise<T> {
+async function runWithRetry<T>(context: string, operation: () => Promise<T>): Promise<T> {
   let lastError: unknown = null
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
@@ -227,6 +229,130 @@ async function readContractWithRetry<T>(context: string, operation: () => Promis
     }
   }
   throw new Error(`${context}: ${toErrorMessage(lastError)}`)
+}
+
+function bytecodeContainsSelector(bytecode: Hex, callData: Hex): boolean {
+  const selector = callData.slice(2, 10).toLowerCase()
+  return bytecode.slice(2).toLowerCase().includes(selector)
+}
+
+async function probeGetterRawCall(params: {
+  client: any
+  router: Address
+  callData: Hex
+  label: string
+}): Promise<{ returnsWord: boolean; error?: string }> {
+  try {
+    const raw = (await runWithRetry(
+      `Failed raw-call probe (${params.label}) for router ${params.router}`,
+      () =>
+        params.client.call({
+          to: params.router,
+          data: params.callData,
+        }),
+    )) as { data?: Hex }
+    const returnData = raw?.data
+    if (!returnData || returnData === '0x') {
+      return { returnsWord: false, error: `${params.label}:empty_return_data` }
+    }
+    if (returnData.length !== 66) {
+      return { returnsWord: false, error: `${params.label}:unexpected_return_size_${returnData.length}` }
+    }
+    return { returnsWord: true }
+  } catch (error) {
+    return { returnsWord: false, error: toErrorMessage(error) }
+  }
+}
+
+async function assertExternalLaneSupport(params: {
+  client: any
+  router: Address
+  probeAddress: Address
+}): Promise<void> {
+  const targetGetterData = encodeFunctionData({
+    abi: PAYOUT_ROUTER_APPROVAL_ABI,
+    functionName: 'approvedExternalSwapTargets',
+    args: [params.probeAddress],
+  })
+  const spenderGetterData = encodeFunctionData({
+    abi: PAYOUT_ROUTER_APPROVAL_ABI,
+    functionName: 'approvedExternalSwapSpenders',
+    args: [params.probeAddress],
+  })
+
+  try {
+    await runWithRetry(
+      `Failed probing router ${params.router} target-approval getter`,
+      () =>
+        params.client.readContract({
+          address: params.router,
+          abi: PAYOUT_ROUTER_APPROVAL_ABI,
+          functionName: 'approvedExternalSwapTargets',
+          args: [params.probeAddress],
+        }),
+    )
+    await runWithRetry(
+      `Failed probing router ${params.router} spender-approval getter`,
+      () =>
+        params.client.readContract({
+          address: params.router,
+          abi: PAYOUT_ROUTER_APPROVAL_ABI,
+          functionName: 'approvedExternalSwapSpenders',
+          args: [params.probeAddress],
+        }),
+    )
+    return
+  } catch (error) {
+    const probeMessage = toErrorMessage(error)
+
+    const bytecode = (await runWithRetry(
+      `Failed reading bytecode for router ${params.router}`,
+      () => params.client.getBytecode({ address: params.router }),
+    )) as Hex | undefined
+    if (!bytecode || bytecode === '0x') {
+      throw new Error(`Router ${params.router} has no bytecode`)
+    }
+
+    const selectorsPresent =
+      bytecodeContainsSelector(bytecode, targetGetterData) && bytecodeContainsSelector(bytecode, spenderGetterData)
+    const [targetProbe, spenderProbe] = await Promise.all([
+      probeGetterRawCall({
+        client: params.client,
+        router: params.router,
+        callData: targetGetterData,
+        label: 'approvedExternalSwapTargets',
+      }),
+      probeGetterRawCall({
+        client: params.client,
+        router: params.router,
+        callData: spenderGetterData,
+        label: 'approvedExternalSwapSpenders',
+      }),
+    ])
+
+    if (targetProbe.returnsWord && spenderProbe.returnsWord) return
+
+    const likelyLegacy =
+      !selectorsPresent &&
+      !targetProbe.returnsWord &&
+      !spenderProbe.returnsWord &&
+      isLikelyMissingSelectorError(targetProbe.error ?? '') &&
+      isLikelyMissingSelectorError(spenderProbe.error ?? '')
+
+    if (likelyLegacy) {
+      throw new Error(
+        `Router ${params.router} does not support external swap approvals (legacy router). ` +
+          'Redeploy the payout router and repoint payout recipient before running this script.',
+      )
+    }
+
+    throw new Error(
+      `Unable to confirm external swap support for router ${params.router}. ` +
+        `probe="${probeMessage}"; selectorsPresent=${selectorsPresent}; ` +
+        `targetProbe="${targetProbe.error ?? 'ok'}"; spenderProbe="${spenderProbe.error ?? 'ok'}". ` +
+        'Retry with a healthy RPC before assuming migration is required.',
+    )
+  }
 }
 
 async function buildPlan(params: {
@@ -273,38 +399,17 @@ async function buildPlan(params: {
       continue
     }
 
-    let externalLaneSupported = true
     if (params.targets.length > 0) {
-      try {
-        await readContractWithRetry(
-          `Failed probing router ${router} for external swap support`,
-          () =>
-            client.readContract({
-              address: router,
-              abi: PAYOUT_ROUTER_APPROVAL_ABI,
-              functionName: 'approvedExternalSwapTargets',
-              args: [params.targets[0]!],
-            }),
-        )
-      } catch (error) {
-        const message = toErrorMessage(error)
-        if (isLegacyExternalLaneProbeError(message)) {
-          externalLaneSupported = false
-        } else {
-          throw error
-        }
-      }
-    }
-    if (!externalLaneSupported) {
-      throw new Error(
-        `Router ${router} does not support external swap approvals (legacy router). ` +
-          'Redeploy the payout router and repoint payout recipient before running this script.',
-      )
+      await assertExternalLaneSupport({
+        client,
+        router,
+        probeAddress: params.targets[0]!,
+      })
     }
 
     const missingTargets: Address[] = []
     for (const target of params.targets) {
-      const approved = await readContractWithRetry(
+      const approved = await runWithRetry(
         `Failed reading target approval for router ${router} target ${target}`,
         () =>
           client.readContract({
@@ -331,7 +436,7 @@ async function buildPlan(params: {
 
     const missingSpenders: Address[] = []
     for (const spender of params.spenders) {
-      const approved = await readContractWithRetry(
+      const approved = await runWithRetry(
         `Failed reading spender approval for router ${router} spender ${spender}`,
         () =>
           client.readContract({
