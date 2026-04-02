@@ -19,6 +19,7 @@ import {
   flattenExplorePagedNodes,
   matchesCoinSearchQuery,
   normalizeCoinSearchQuery,
+  recordExploreQueryRefresh,
   useDebouncedValue,
   useExploreSubnavParams,
 } from './exploreShared'
@@ -229,6 +230,7 @@ export function ExploreCreators() {
     sortAliases: { fees24h: 'priceChange' },
     timeValues: CREATORS_TIME_FILTER_VALUES,
     defaultTime: '1d',
+    debugScope: 'explore-creators',
     })
 
   const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_CREATORS_24H'
@@ -311,7 +313,10 @@ export function ExploreCreators() {
   // currently fetched ranking pages can still be discovered from the search box.
   const directSearchQuery = useQuery({
     queryKey: ['explore', 'creators', 'direct-search', debouncedSearchQuery.toLowerCase()],
-    queryFn: () => resolveCreatorSearchCandidates(debouncedSearchQuery),
+    queryFn: () => {
+      recordExploreQueryRefresh('explore-creators-remote-search', debouncedSearchQuery)
+      return resolveCreatorSearchCandidates(debouncedSearchQuery)
+    },
     enabled: debouncedSearchQuery.length >= REMOTE_SEARCH_MIN_QUERY_LENGTH && localFilteredCoins.length === 0,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,

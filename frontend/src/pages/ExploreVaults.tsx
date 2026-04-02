@@ -13,6 +13,7 @@ import {
   formatDateLabel,
   formatShortAddress,
   formatUsd,
+  recordExploreQueryRefresh,
   useDebouncedValue,
   useExploreSubnavParams,
 } from './exploreShared'
@@ -121,6 +122,7 @@ export function ExploreVaults() {
     sortAliases: { priceChange: 'fees24h' },
     timeValues: VAULT_TIME_FILTER_VALUES,
     defaultTime: '1d',
+    debugScope: 'explore-vaults',
     })
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
   const debouncedSearchQuery = useDebouncedValue(normalizedSearchQuery, 250)
@@ -136,6 +138,7 @@ export function ExploreVaults() {
   } = useInfiniteQuery({
     queryKey: ['explore', 'vaults', currentSort, currentTimeFilter, debouncedSearchQuery],
     queryFn: async ({ pageParam }) => {
+      recordExploreQueryRefresh('explore-vaults', debouncedSearchQuery)
       return fetchExploreVaultsPage({
         cursor: typeof pageParam === 'string' ? pageParam : undefined,
         sort: currentSort,

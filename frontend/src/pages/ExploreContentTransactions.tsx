@@ -60,6 +60,7 @@ export function ExploreContentTransactions() {
       defaultSort: 'new',
       timeValues: CONTENT_TRANSACTIONS_TIME_FILTER_VALUES,
       defaultTime: '1d',
+      debugScope: 'explore-content-transactions',
     })
 
   const params = useParams()

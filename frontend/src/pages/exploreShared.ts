@@ -39,6 +39,65 @@ type ExploreSubnavParamsOptions<TSort extends string, TTime extends string> = {
   defaultTime: TTime
   timeAliases?: Readonly<Record<string, TTime>>
   searchParamKey?: string
+  debugScope?: string
+}
+
+type ExploreQueryDebugScopeStats = {
+  searchInputUpdates: number
+  queryRefreshes: number
+  lastQuery: string
+}
+
+type ExploreQueryDebugStore = {
+  updatedAt: number
+  scopes: Record<string, ExploreQueryDebugScopeStats>
+}
+
+declare global {
+  interface Window {
+    __exploreQueryDebug__?: ExploreQueryDebugStore
+  }
+}
+
+function isExploreDebugEnabled(): boolean {
+  return import.meta.env.DEV && typeof window !== 'undefined'
+}
+
+function getExploreQueryDebugStore(): ExploreQueryDebugStore | null {
+  if (!isExploreDebugEnabled()) return null
+  const existing = window.__exploreQueryDebug__
+  if (existing) return existing
+  const created: ExploreQueryDebugStore = { updatedAt: Date.now(), scopes: {} }
+  window.__exploreQueryDebug__ = created
+  return created
+}
+
+function upsertExploreQueryDebugScope(scope: string): ExploreQueryDebugScopeStats | null {
+  const store = getExploreQueryDebugStore()
+  if (!store) return null
+  if (!store.scopes[scope]) {
+    store.scopes[scope] = {
+      searchInputUpdates: 0,
+      queryRefreshes: 0,
+      lastQuery: '',
+    }
+  }
+  store.updatedAt = Date.now()
+  return store.scopes[scope]
+}
+
+export function recordExploreSearchInputUpdate(scope: string, query: string): void {
+  const stats = upsertExploreQueryDebugScope(scope)
+  if (!stats) return
+  stats.searchInputUpdates += 1
+  stats.lastQuery = query
+}
+
+export function recordExploreQueryRefresh(scope: string, query: string): void {
+  const stats = upsertExploreQueryDebugScope(scope)
+  if (!stats) return
+  stats.queryRefreshes += 1
+  stats.lastQuery = query
 }
 
 export function normalizeCoinSearchQuery(query: string): {
@@ -138,19 +197,49 @@ export function useExploreSubnavParams<TSort extends string, TTime extends strin
 } {
   const [searchParams, setSearchParams] = useSearchParams()
   const searchParamKey = options.searchParamKey ?? 'q'
+  const rawSort = searchParams.get('sort')
+  const rawTime = searchParams.get('time')
+  const rawSearch = searchParams.get(searchParamKey)
 
   const currentSort = normalizeExploreOption(
-    searchParams.get('sort'),
+    rawSort,
     options.sortValues,
     options.defaultSort,
     options.sortAliases,
   )
   const currentTimeFilter = normalizeExploreOption(
-    searchParams.get('time'),
+    rawTime,
     options.timeValues,
     options.defaultTime,
     options.timeAliases,
   )
+  const normalizedSearchQuery = rawSearch?.trim() ?? ''
+
+  useEffect(() => {
+    const shouldCanonicalizeSort = rawSort != null && rawSort !== currentSort
+    const shouldCanonicalizeTime = rawTime != null && rawTime !== currentTimeFilter
+    const shouldCanonicalizeSearch = rawSearch != null && rawSearch !== normalizedSearchQuery
+    if (!shouldCanonicalizeSort && !shouldCanonicalizeTime && !shouldCanonicalizeSearch) return
+
+    const next = new URLSearchParams(searchParams)
+    if (shouldCanonicalizeSort) next.set('sort', currentSort)
+    if (shouldCanonicalizeTime) next.set('time', currentTimeFilter)
+    if (shouldCanonicalizeSearch) {
+      if (normalizedSearchQuery) next.set(searchParamKey, normalizedSearchQuery)
+      else next.delete(searchParamKey)
+    }
+    setSearchParams(next, { replace: true })
+  }, [
+    currentSort,
+    currentTimeFilter,
+    normalizedSearchQuery,
+    rawSearch,
+    rawSort,
+    rawTime,
+    searchParamKey,
+    searchParams,
+    setSearchParams,
+  ])
 
   const handleSortChange = useCallback(
     (sort: string) => {
@@ -175,15 +264,16 @@ export function useExploreSubnavParams<TSort extends string, TTime extends strin
 
   const handleSearchChange = useCallback(
     (query: string) => {
+      if (options.debugScope) recordExploreSearchInputUpdate(options.debugScope, query)
       setExploreSearchQueryParam(searchParams, setSearchParams, query, searchParamKey)
     },
-    [searchParamKey, searchParams, setSearchParams],
+    [options.debugScope, searchParamKey, searchParams, setSearchParams],
   )
 
   return {
     currentSort,
     currentTimeFilter,
-    searchQuery: searchParams.get(searchParamKey) ?? '',
+    searchQuery: rawSearch ?? '',
     handleSortChange,
     handleTimeFilterChange,
     handleSearchChange,

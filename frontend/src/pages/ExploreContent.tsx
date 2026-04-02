@@ -37,6 +37,7 @@ export function ExploreContent() {
     sortAliases: { fees24h: 'priceChange' },
     timeValues: CONTENT_TIME_FILTER_VALUES,
     defaultTime: '1d',
+    debugScope: 'explore-content',
     })
 
   const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_24H'

@@ -102,6 +102,23 @@ describe('token image renderer', () => {
     expect(__testables.normalizeSourceArtworkUrl('chrome-extension://abc/token.png')).toBeNull()
   })
 
+  it('allows raw mode only for trusted artwork hosts', () => {
+    expect(__testables.isTrustedRawArtworkUrl('ipfs://bafybeigdyrzt2q/cover.png')).toBe(true)
+    expect(__testables.isTrustedRawArtworkUrl('ar://QmTestArId')).toBe(true)
+    expect(__testables.isTrustedRawArtworkUrl('https://untrusted.example/raw.png')).toBe(false)
+  })
+
+  it('accepts likely image payloads and rejects non-image payloads', () => {
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
+    const svgBytes = new Uint8Array(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8'))
+    const junkBytes = new Uint8Array(Buffer.from('not-an-image', 'utf8'))
+
+    expect(__testables.isLikelyImagePayload(pngBytes, 'image/png')).toBe(true)
+    expect(__testables.isLikelyImagePayload(svgBytes, 'application/octet-stream')).toBe(true)
+    expect(__testables.isLikelyImagePayload(junkBytes, 'application/octet-stream')).toBe(false)
+    expect(__testables.isLikelyImagePayload(junkBytes, 'text/plain')).toBe(false)
+  })
+
   it('resolves creator token artwork contract with optional hero cutout URL', () => {
     const artwork = __testables.resolveCreatorTokenArtwork({
       mediaContent: { originalUri: 'https://cdn.example/artwork.png' },

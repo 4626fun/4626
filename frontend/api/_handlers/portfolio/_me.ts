@@ -2,8 +2,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
+  checkRateLimit,
+  getClientIp,
   handleOptions,
   readJsonBody,
+  rateLimitKey,
   setCors,
   setNoStore,
   getDb,
@@ -87,6 +90,51 @@ const MANUAL_FIELD_KEYS = [
   'avatar_lens_uri',
   'banner_lens_uri',
 ] as const
+
+const PUBLIC_PORTFOLIO_RATE_LIMIT = { windowMs: 60_000, maxRequests: 40 } as const
+const PUBLIC_PORTFOLIO_SUMMARY_CACHE_TTL_MS = 30_000
+const PUBLIC_PORTFOLIO_SUMMARY_CACHE_MAX_ENTRIES = 500
+
+type OnchainSummary = { totalUsdValue: number | null; asOf: string | null }
+type SummaryCacheEntry = {
+  value: OnchainSummary
+  expiresAt: number
+}
+
+const publicOnchainSummaryCache = new Map<string, SummaryCacheEntry>()
+
+function trimPublicOnchainSummaryCache(now = Date.now()): void {
+  for (const [key, entry] of publicOnchainSummaryCache) {
+    if (entry.expiresAt <= now) publicOnchainSummaryCache.delete(key)
+  }
+  while (publicOnchainSummaryCache.size > PUBLIC_PORTFOLIO_SUMMARY_CACHE_MAX_ENTRIES) {
+    const firstKey = publicOnchainSummaryCache.keys().next().value
+    if (!firstKey) break
+    publicOnchainSummaryCache.delete(firstKey)
+  }
+}
+
+function readCachedPublicOnchainSummary(address: string): OnchainSummary | null {
+  const now = Date.now()
+  trimPublicOnchainSummaryCache(now)
+  const key = address.toLowerCase()
+  const cached = publicOnchainSummaryCache.get(key)
+  if (!cached || cached.expiresAt <= now) {
+    if (cached) publicOnchainSummaryCache.delete(key)
+    return null
+  }
+  return cached.value
+}
+
+function writeCachedPublicOnchainSummary(address: string, value: OnchainSummary): void {
+  const now = Date.now()
+  const key = address.toLowerCase()
+  publicOnchainSummaryCache.set(key, {
+    value,
+    expiresAt: now + PUBLIC_PORTFOLIO_SUMMARY_CACHE_TTL_MS,
+  })
+  trimPublicOnchainSummaryCache(now)
+}
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -188,23 +236,34 @@ function applyOnchainFieldFallback(
 async function fetchOnchainSummary(address: string | null): Promise<{ totalUsdValue: number | null; asOf: string | null }> {
   const accessKey = String(process.env.DEBANK_ACCESS_KEY ?? '').trim()
   if (!accessKey || !address) return { totalUsdValue: null, asOf: null }
+  const normalizedAddress = address.toLowerCase()
+  const cached = readCachedPublicOnchainSummary(normalizedAddress)
+  if (cached) return cached
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 5000)
   try {
     const response = await fetch(
-      `https://pro-openapi.debank.com/v1/user/total_balance?id=${encodeURIComponent(address.toLowerCase())}`,
+      `https://pro-openapi.debank.com/v1/user/total_balance?id=${encodeURIComponent(normalizedAddress)}`,
       {
         headers: { Accept: 'application/json', AccessKey: accessKey },
         signal: controller.signal,
       },
     )
-    if (!response.ok) return { totalUsdValue: null, asOf: null }
+    if (!response.ok) {
+      const fallback = { totalUsdValue: null, asOf: null }
+      writeCachedPublicOnchainSummary(normalizedAddress, fallback)
+      return fallback
+    }
     const json = (await response.json().catch(() => null)) as { total_usd_value?: number } | null
     const total = typeof json?.total_usd_value === 'number' && Number.isFinite(json.total_usd_value) ? json.total_usd_value : null
-    return { totalUsdValue: total, asOf: new Date().toISOString() }
+    const result = { totalUsdValue: total, asOf: new Date().toISOString() }
+    writeCachedPublicOnchainSummary(normalizedAddress, result)
+    return result
   } catch {
-    return { totalUsdValue: null, asOf: null }
+    const fallback = { totalUsdValue: null, asOf: null }
+    writeCachedPublicOnchainSummary(normalizedAddress, fallback)
+    return fallback
   } finally {
     clearTimeout(timeout)
   }
@@ -381,6 +440,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isAddressLike(addressQuery)) {
         return res.status(400).json({ success: false, error: 'Invalid address' } satisfies ApiEnvelope<never>)
       }
+      const publicRateLimit = checkRateLimit(
+        rateLimitKey('portfolio-public', getClientIp(req)),
+        PUBLIC_PORTFOLIO_RATE_LIMIT,
+      )
+      res.setHeader('X-RateLimit-Limit', String(PUBLIC_PORTFOLIO_RATE_LIMIT.maxRequests))
+      res.setHeader('X-RateLimit-Remaining', String(Math.max(0, publicRateLimit.remaining)))
+      res.setHeader('X-RateLimit-Reset', String(Math.floor(publicRateLimit.resetAt / 1000)))
+      if (!publicRateLimit.allowed) {
+        const retryAfterSeconds = Math.max(
+          1,
+          Math.ceil((publicRateLimit.resetAt - Date.now()) / 1000),
+        )
+        res.setHeader('Retry-After', String(retryAfterSeconds))
+        return res
+          .status(429)
+          .json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+      }
       const row = await resolveProfileRow(db as any, 'public', addressQuery)
       if (!row) {
         return res.status(404).json({ success: false, error: 'Profile not found' } satisfies ApiEnvelope<never>)
@@ -489,4 +565,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const row = freshRow.rows?.[0]
   const data = await buildResponse(db as any, 'self', row)
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<PortfolioMeResponse>)
+}
+
+export const __testables = {
+  clearPublicOnchainSummaryCacheForTests: () => {
+    publicOnchainSummaryCache.clear()
+  },
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { setExploreSearchParam, setExploreSearchQueryParam } from './exploreShared'
+import {
+  recordExploreQueryRefresh,
+  recordExploreSearchInputUpdate,
+  setExploreSearchParam,
+  setExploreSearchQueryParam,
+} from './exploreShared'
 
 describe('setExploreSearchParam', () => {
   it('does not write URL params when value is unchanged', () => {
@@ -88,5 +93,28 @@ describe('setExploreSearchQueryParam', () => {
     const [nextParams] = setSearchParams.mock.calls[0] as [URLSearchParams]
     expect(nextParams.get('sort')).toBe('volume')
     expect(nextParams.has('q')).toBe(false)
+  })
+})
+
+describe('explore query debug counters', () => {
+  it('records per-scope search updates and query refreshes in dev mode', () => {
+    const prevWindow = (globalThis as any).window
+    ;(globalThis as any).window = { __exploreQueryDebug__: undefined }
+
+    recordExploreSearchInputUpdate('explore-vaults', 'ab')
+    recordExploreSearchInputUpdate('explore-vaults', 'abc')
+    recordExploreQueryRefresh('explore-vaults', 'abc')
+
+    const store = (globalThis as any).window.__exploreQueryDebug__
+    if (import.meta.env.DEV) {
+      expect(store).toBeTruthy()
+      expect(store.scopes['explore-vaults'].searchInputUpdates).toBe(2)
+      expect(store.scopes['explore-vaults'].queryRefreshes).toBe(1)
+      expect(store.scopes['explore-vaults'].lastQuery).toBe('abc')
+    } else {
+      expect(store).toBeUndefined()
+    }
+
+    ;(globalThis as any).window = prevWindow
   })
 })

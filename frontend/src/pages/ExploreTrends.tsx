@@ -43,6 +43,7 @@ export function ExploreTrends() {
     sortAliases: { fees24h: 'priceChange' },
     timeValues: TRENDS_TIME_FILTER_VALUES,
     defaultTime: '1d',
+    debugScope: 'explore-trends',
     })
 
   const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_TRENDS_24H'

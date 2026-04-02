@@ -36,11 +36,103 @@ const IPNS_GATEWAY = IPFS_GATEWAY.replace(/\/ipfs\/$/i, '/')
 const MAX_SOURCE_IMAGE_BYTES = 12 * 1024 * 1024
 const MAX_SOURCE_IMAGE_PIXELS = 16_000_000
 const MAX_SOURCE_IMAGE_DIMENSION = 8192
+const SOURCE_FETCH_TIMEOUT_MS = 8_000
 
 ensureFontconfig()
 
 function isSafeSourceByteLength(bytes: Uint8Array | null | undefined): bytes is Uint8Array {
   return !!bytes && bytes.length > 0 && bytes.length <= MAX_SOURCE_IMAGE_BYTES
+}
+
+function readHostname(rawUrl: string): string | null {
+  try {
+    return new URL(rawUrl).hostname.trim().toLowerCase() || null
+  } catch {
+    return null
+  }
+}
+
+function parseRawStyleTrustedHosts(raw: string | undefined): Set<string> {
+  const trusted = new Set<string>(['arweave.net'])
+  for (const candidate of [IPFS_GATEWAY, IPNS_GATEWAY]) {
+    const host = readHostname(candidate)
+    if (host) trusted.add(host)
+  }
+  const extras = String(raw ?? '')
+    .split(/[\s,]+/g)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+  for (const host of extras) trusted.add(host)
+  return trusted
+}
+
+const RAW_STYLE_TRUSTED_HOSTS = parseRawStyleTrustedHosts(
+  process.env.TOKEN_IMAGE_RAW_TRUSTED_HOSTS,
+)
+
+function hasBytesPrefix(bytes: Uint8Array, prefix: number[]): boolean {
+  if (bytes.length < prefix.length) return false
+  for (let i = 0; i < prefix.length; i += 1) {
+    if (bytes[i] !== prefix[i]) return false
+  }
+  return true
+}
+
+function isIsoBaseMediaImage(bytes: Uint8Array): boolean {
+  if (bytes.length < 12) return false
+  const boxType = Buffer.from(bytes.slice(4, 8)).toString('ascii').toLowerCase()
+  const majorBrand = Buffer.from(bytes.slice(8, 12)).toString('ascii').toLowerCase()
+  if (boxType !== 'ftyp') return false
+  return (
+    majorBrand === 'avif' ||
+    majorBrand === 'avis' ||
+    majorBrand === 'heic' ||
+    majorBrand === 'heix' ||
+    majorBrand === 'mif1' ||
+    majorBrand === 'msf1'
+  )
+}
+
+function looksLikeSvg(bytes: Uint8Array): boolean {
+  const sample = Buffer.from(bytes.slice(0, 768)).toString('utf8').toLowerCase()
+  return sample.includes('<svg')
+}
+
+function isLikelyImagePayload(bytes: Uint8Array, contentType: string | null): boolean {
+  if (!isSafeSourceByteLength(bytes)) return false
+
+  const ct = String(contentType ?? '')
+    .split(';')[0]
+    ?.trim()
+    .toLowerCase()
+  const imageMime = ct.startsWith('image/')
+  if (ct && !imageMime && ct !== 'application/octet-stream') {
+    return false
+  }
+
+  const hasKnownMagic =
+    hasBytesPrefix(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) || // png
+    hasBytesPrefix(bytes, [0xff, 0xd8, 0xff]) || // jpeg
+    hasBytesPrefix(bytes, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) || // gif87a
+    hasBytesPrefix(bytes, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]) || // gif89a
+    (hasBytesPrefix(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+      Buffer.from(bytes.slice(8, 12)).toString('ascii') === 'WEBP') ||
+    hasBytesPrefix(bytes, [0x42, 0x4d]) || // bmp
+    hasBytesPrefix(bytes, [0x00, 0x00, 0x01, 0x00]) || // ico
+    hasBytesPrefix(bytes, [0x49, 0x49, 0x2a, 0x00]) || // tiff (little-endian)
+    hasBytesPrefix(bytes, [0x4d, 0x4d, 0x00, 0x2a]) || // tiff (big-endian)
+    isIsoBaseMediaImage(bytes) ||
+    looksLikeSvg(bytes)
+
+  return hasKnownMagic || imageMime
+}
+
+function isTrustedRawArtworkUrl(upstreamUrl: string | null | undefined): boolean {
+  const normalized = normalizeSourceArtworkUrl(upstreamUrl)
+  if (!normalized) return false
+  const host = readHostname(normalized)
+  if (!host) return false
+  return RAW_STYLE_TRUSTED_HOSTS.has(host)
 }
 
 function normalizeHttpUrl(value: string): string | null {
@@ -295,9 +387,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (vaultAddress && requestedTokenKind !== 'creator' && !requestedAddressIsCreatorCoin) {
       const aiOverride = await getCompletedImageProjectForVault(vaultAddress).catch(() => null)
       if (aiOverride) {
-        const fetched = await fetchBytes(aiOverride.outputBlobUrl).catch(() => null)
+        const fetched = await fetchBytes(aiOverride.outputBlobUrl, {
+          maxBytes: MAX_SOURCE_IMAGE_BYTES,
+          timeoutMs: SOURCE_FETCH_TIMEOUT_MS,
+          requireImageContentType: true,
+        }).catch(() => null)
         const rawBytes = fetched?.bytes
-        if (isSafeSourceByteLength(rawBytes)) {
+        if (
+          isSafeSourceByteLength(rawBytes) &&
+          isLikelyImagePayload(rawBytes, fetched?.contentType ?? null)
+        ) {
           preferredSourceBytes = rawBytes
           preferredSourceFingerprint = sha256Hex(Buffer.from(rawBytes).toString('base64'))
         }
@@ -309,27 +408,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const artworkUrl = creatorTokenArtwork?.artworkUrl ?? null
     const heroCutoutArtworkUrl = creatorTokenArtwork?.heroCutoutArtworkUrl ?? null
 
-    if (preferRawSourceImage) {
+    const allowRawSourceImage =
+      preferRawSourceImage &&
+      (isLocalPreview || Boolean(preferredSourceBytes) || isTrustedRawArtworkUrl(artworkUrl))
+    if (preferRawSourceImage && !allowRawSourceImage) {
+      console.warn('[token/image] blocked raw style for untrusted artwork source')
+    }
+
+    if (allowRawSourceImage) {
       const rawBytes = preferredSourceBytes ?? (await fetchSourceArtworkBytes({ upstreamUrl: artworkUrl }))
       if (rawBytes && rawBytes.length > 0) {
         try {
           const normalizedRaw = await normalizeImageToPng(rawBytes)
-          res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
-          if (format === 'svg') {
-            const contentType = 'image/png'
-            const b64 = Buffer.from(normalizedRaw).toString('base64')
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:${contentType};base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
-            res.setHeader('Content-Type', 'image/svg+xml')
-            return res.status(200).send(svg)
-          }
-          const resized = await sharp(Buffer.from(normalizedRaw), { limitInputPixels: MAX_SOURCE_IMAGE_PIXELS })
+          const boundedRaw = await sharp(Buffer.from(normalizedRaw), {
+            limitInputPixels: MAX_SOURCE_IMAGE_PIXELS,
+          })
             .resize(size, size, { fit: 'cover' })
             // Keep icon corners opaque/dark across wallets and image viewers.
             .flatten({ background: TOKEN_ICON_STYLE.backgroundOuter })
             .png()
             .toBuffer()
+          res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
+          if (format === 'svg') {
+            const contentType = 'image/png'
+            const b64 = boundedRaw.toString('base64')
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:${contentType};base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
+            res.setHeader('Content-Type', 'image/svg+xml')
+            return res.status(200).send(svg)
+          }
           res.setHeader('Content-Type', 'image/png')
-          return res.status(200).send(resized)
+          return res.status(200).send(boundedRaw)
         } catch (error) {
           console.warn('[token/image] raw source processing failed; falling back to deterministic icon:', error)
         }
@@ -1299,8 +1407,11 @@ async function fetchSourceArtworkBytes(params: {
   const url = normalizeSourceArtworkUrl(params.upstreamUrl)
   if (!url) return null
   try {
-    const fetched = await fetchBytes(url)
-    if (!isSafeSourceByteLength(fetched.bytes)) return null
+    const fetched = await fetchBytes(url, {
+      maxBytes: MAX_SOURCE_IMAGE_BYTES,
+      timeoutMs: SOURCE_FETCH_TIMEOUT_MS,
+    })
+    if (!isLikelyImagePayload(fetched.bytes, fetched.contentType)) return null
     return fetched.bytes
   } catch (error) {
     console.warn('[token/image] source artwork fetch failed; using deterministic fallback icon:', {
@@ -2563,6 +2674,8 @@ function generateFramedSvg({
 }
 
 export const __testables = {
+  isLikelyImagePayload,
+  isTrustedRawArtworkUrl,
   normalizeSourceArtworkUrl,
   resolveHeroCutoutLoadPolicy,
   resolveCreatorTokenArtwork,

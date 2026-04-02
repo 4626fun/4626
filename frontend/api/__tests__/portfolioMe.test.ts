@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { makeSessionToken } from '../../server/auth/_shared.ts'
-import handler from '../_handlers/portfolio/_me.ts'
+import handler, { __testables as portfolioTestables } from '../_handlers/portfolio/_me.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const { getDbMock, ensureWaitlistSchemaMock, resolveOnchainIdentityProfileMock } = vi.hoisted(() => ({
@@ -115,6 +115,7 @@ describe('portfolio /api/portfolio/me', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    portfolioTestables.clearPublicOnchainSummaryCacheForTests()
     resolveOnchainIdentityProfileMock.mockResolvedValue(null)
     restoreEnv = applyEnv({
       AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
@@ -123,6 +124,7 @@ describe('portfolio /api/portfolio/me', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     if (restoreEnv) restoreEnv()
     restoreEnv = null
   })
@@ -144,6 +146,42 @@ describe('portfolio /api/portfolio/me', () => {
     expect(Array.isArray(res.body?.data?.wallets)).toBe(true)
     expect(res.body?.data?.wallets).toHaveLength(1)
     expect(res.body?.data?.wallets?.[0]?.address).toBe('0x00000000000000000000000000000000000000aa')
+    expect(res.getHeader('x-ratelimit-limit')).toBeTruthy()
+    expect(res.getHeader('x-ratelimit-remaining')).toBeTruthy()
+  })
+
+  it('caches Debank summaries for repeated public requests', async () => {
+    if (restoreEnv) restoreEnv()
+    restoreEnv = applyEnv({
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      DEBANK_ACCESS_KEY: 'test-debank-key',
+    })
+    portfolioTestables.clearPublicOnchainSummaryCacheForTests()
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ total_usd_value: 1234 }),
+    }))
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    getDbMock.mockResolvedValue(createPortfolioDb('manual'))
+    const req1 = createMockReq({
+      method: 'GET',
+      query: { address: '0x00000000000000000000000000000000000000aa' },
+    })
+    const res1 = createMockRes()
+    await handler(req1, res1)
+
+    const req2 = createMockReq({
+      method: 'GET',
+      query: { address: '0x00000000000000000000000000000000000000aa' },
+    })
+    const res2 = createMockRes()
+    await handler(req2, res2)
+
+    expect(res1.statusCode).toBe(200)
+    expect(res2.statusCode).toBe(200)
+    expect(res2.body?.data?.onchainSummary?.totalUsdValue).toBe(1234)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('hydrates blank profile fields from ENS profile data', async () => {
