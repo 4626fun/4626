@@ -2119,10 +2119,55 @@ async function main() {
 // Exposes GET /healthz on $PORT (default 8080) so Railway/Docker can verify
 // the agent is alive. Returns 200 during boot ("booting") and after agents
 // start ("ok"). Only returns 503 if the process is up but agents crashed.
+const KEEPR_ROBOTS_TXT = ['User-agent: *', 'Disallow: /', 'Allow: /healthz', 'Allow: /readyz'].join('\n')
+const KEEPR_EMPTY_SITEMAP_XML =
+  '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>'
+
+function writeStaticTextResponse(params: {
+  req: http.IncomingMessage
+  res: http.ServerResponse
+  statusCode: number
+  body: string
+  contentType: string
+  cacheControl?: string
+}): void {
+  const method = String(params.req.method ?? 'GET').toUpperCase()
+  const sendBody = method !== 'HEAD'
+  const payload = sendBody ? params.body : ''
+  params.res.writeHead(params.statusCode, {
+    'Content-Type': params.contentType,
+    'Cache-Control': params.cacheControl ?? 'public, max-age=900',
+    'X-Robots-Tag': 'noindex, nofollow, noarchive',
+    'Content-Length': String(Buffer.byteLength(payload)),
+  })
+  params.res.end(payload)
+}
+
 function startHealthServer() {
   const port = Number(process.env.PORT ?? '8080') || 8080
   const server = http.createServer(async (_req, res) => {
+    const method = String(_req.method ?? 'GET').toUpperCase()
     const url = (_req.url ?? '/').split('?')[0]
+    if ((method === 'GET' || method === 'HEAD') && url === '/robots.txt') {
+      writeStaticTextResponse({
+        req: _req,
+        res,
+        statusCode: 200,
+        body: KEEPR_ROBOTS_TXT,
+        contentType: 'text/plain; charset=utf-8',
+      })
+      return
+    }
+    if ((method === 'GET' || method === 'HEAD') && url === '/sitemap.xml') {
+      writeStaticTextResponse({
+        req: _req,
+        res,
+        statusCode: 200,
+        body: KEEPR_EMPTY_SITEMAP_XML,
+        contentType: 'application/xml; charset=utf-8',
+      })
+      return
+    }
     if (url !== '/healthz' && url !== '/readyz') {
       res.writeHead(404)
       res.end('Not found')
