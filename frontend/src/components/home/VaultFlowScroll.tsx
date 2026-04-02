@@ -158,9 +158,9 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
     const f = hardStopFired.current
     // Checkpoint 1: vault fully sealed + cage walls drawn (vaultTopProgress hits 1.0 at 0.34)
     if (!f.s1 && v >= 0.34) { f.s1 = true; fireHardStop('vault sealed', 2.0) }
-    // Checkpoint 2: deposit fill done (0.48) + ■AKITA right column fully visible (0.55)
-    // 0.56 is the first frame where both card columns are at 100% opacity
-    if (!f.s2 && v >= 0.56) { f.s2 = true; fireHardStop('shares minted', 2.0) }
+    // Checkpoint 2: deposit fill done (0.48) + ■AKITA right column fully visible (0.52)
+    // 0.52 is the ideal freeze: both columns at 100% opacity, zero distribution paths drawn
+    if (!f.s2 && v >= 0.52) { f.s2 = true; fireHardStop('shares minted', 2.0) }
     // Checkpoint 3: all 3 distribution paths complete (_n2Raw hits 1.0 at 0.72)
     if (!f.s3 && v >= 0.72) { f.s3 = true; fireHardStop('take a moment', 3.2) }
     // Checkpoint 4: all 4 strategy cards at 90%+ opacity (s4c3o reaches ~0.90 at 0.99)
@@ -307,22 +307,22 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
   // Card fades in once, then PERSISTS through stage 4 — it IS the principal card.
   const depositNodeOpacity = useTransform(scroll, [0.36, 0.40], [0, 1])
   // Left col — akita deposit counter:
-  //   • visible while filling (card appears → deposit complete ~0.60)
+  //   • visible while filling (card appears → deposit complete ~0.48)
   //   • fades out once minted so right col can take the spotlight during distributions
-  //   • returns for stage 4 (principal deployment)
+  //   • returns immediately as dive ends (0.78) for stage 4 principal deployment
   const depositedSideOp = useTransform(
     scroll,
-    [0.36, 0.40, 0.50, 0.56, 0.82, 0.88],
+    [0.36, 0.40, 0.50, 0.56, 0.78, 0.84],
     [0,    1,    1,    0,    0,    1   ],
   )
   // Right col + arrow — ■AKITA minted / distributing counter:
   //   • hidden during the fill phase (left col is the star)
-  //   • fades in at deposit complete (minting moment, ~0.50)
+  //   • fades in as deposit completes (0.48), fully visible at 0.52 — before any path draws
   //   • stays visible through all 3 distributions
   //   • fades out as the dive begins; stage 4 is left-col only
   const rightColWrapOp = useTransform(
     scroll,
-    [0.50, 0.55, 0.74, 0.78],
+    [0.48, 0.52, 0.74, 0.78],
     [0,    1,    1,    0   ],
   )
   // Right column content: distributing counter fades out as all distributions complete.
@@ -798,14 +798,14 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
               <div
                 className="relative flex flex-col overflow-hidden rounded-xl backdrop-blur-md"
                 style={{
-                  width: 'min(256px, 90vw)',
+                  width: 'min(284px, 92vw)',
                   border: '1px solid rgba(255,255,255,0.16)',
                   background: 'rgba(10,12,28,0.92)',
                   boxShadow: [
                     '0 0 0 1px rgba(255,255,255,0.07)',
-                    '0 0 42px -6px rgba(249,115,22,0.40)',
-                    '0 0 42px -6px rgba(0,82,255,0.38)',
-                    '0 8px 48px -6px rgba(0,0,0,0.70)',
+                    '0 0 48px -6px rgba(249,115,22,0.42)',
+                    '0 0 48px -6px rgba(0,82,255,0.40)',
+                    '0 8px 52px -6px rgba(0,0,0,0.72)',
                   ].join(', '),
                 }}
               >
@@ -857,16 +857,16 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                 <div className="flex items-stretch">
                   {/* Left — akita deposit counter; label flips to "deposited" once fill is complete */}
                   <motion.div
-                    className="flex flex-1 flex-col gap-0.5 border-r border-white/[0.05] px-3 py-3"
+                    className="flex flex-1 flex-col gap-0.5 border-r border-white/[0.05] px-3 py-3.5"
                     style={{ opacity: depositedSideOp }}
                   >
-                    <span className="font-mono text-[8px] tracking-[0.20em]" style={{ color: 'rgba(249,115,22,0.65)' }}>
+                    <span className="font-mono text-[8.5px] tracking-[0.20em]" style={{ color: 'rgba(249,115,22,0.72)' }}>
                       {depositComplete ? 'deposited' : 'depositing...'}
                     </span>
-                    <span className="font-mono text-[15px] font-bold tabular-nums text-white/90">
+                    <span className="font-mono text-[18px] font-bold tabular-nums text-white/92 leading-tight">
                       {depositCount.toLocaleString()}
                     </span>
-                    <span className="font-mono text-[7px] tracking-[0.16em]" style={{ color: depositComplete ? 'rgba(100,210,160,0.65)' : 'rgba(249,115,22,0.35)' }}>
+                    <span className="font-mono text-[7.5px] tracking-[0.16em]" style={{ color: depositComplete ? 'rgba(100,210,160,0.72)' : 'rgba(249,115,22,0.38)' }}>
                       {depositComplete ? 'vault initiated ✓' : 'min 50,000,000'}
                     </span>
                   </motion.div>
@@ -883,11 +883,11 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                   <motion.div className="relative flex flex-1 flex-col" style={{ opacity: rightColWrapOp }}>
                     {/* Stage 3: distributing counter */}
                     <motion.div
-                      className="flex flex-col gap-0.5 px-3 py-3"
+                      className="flex flex-col gap-0.5 px-3 py-3.5"
                       style={{ opacity: rightColDistOp }}
                     >
-                      <span className="font-mono text-[8px] tracking-[0.20em]" style={{ color: 'rgba(100,160,255,0.82)' }}>distributing</span>
-                      <span className="font-mono text-[15px] font-bold tabular-nums" style={{ color: 'rgba(120,175,255,1.00)' }}>
+                      <span className="font-mono text-[8.5px] tracking-[0.20em]" style={{ color: 'rgba(100,160,255,0.88)' }}>distributing</span>
+                      <span className="font-mono text-[18px] font-bold tabular-nums leading-tight" style={{ color: 'rgba(120,175,255,1.00)' }}>
                         {remainingCount.toLocaleString()}
                       </span>
                     </motion.div>
@@ -905,7 +905,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
 
                 {/* Fill bar — fades with deposited side */}
                 <motion.div
-                  className="mx-3 mb-3 h-[2px] overflow-hidden rounded-full bg-white/[0.04]"
+                  className="mx-3 mb-3 h-[3px] overflow-hidden rounded-full bg-white/[0.04]"
                   style={{ opacity: depositedSideOp }}
                 >
                   <motion.div
@@ -1146,104 +1146,101 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                   aria-hidden="true"
                 />
 
-                {/* HP/MP token bars — akita deposited (orange) + ■AKITA shares (blue) */}
-                <motion.div
-                  className="pointer-events-none absolute"
-                  style={{
-                    bottom: -84,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'clamp(200px, 48vw, 228px)',
-                    opacity: tokenBarOp,
-                  }}
-                  aria-hidden="true"
-                >
-                  {/* akita row */}
-                  <div className="mb-[7px]">
-                    <div className="mb-[3px] flex items-baseline justify-between">
-                      <span
-                        className="font-mono text-[6.5px] uppercase tracking-[0.18em]"
-                        style={{ color: 'rgba(249,115,22,0.65)' }}
-                      >
-                        akita
-                      </span>
-                      <span
-                        className="font-mono text-[6.5px] tabular-nums"
-                        style={{ color: 'rgba(249,115,22,0.45)' }}
-                      >
-                        {depositCount.toLocaleString()}
-                      </span>
-                    </div>
-                    <div
-                      className="relative overflow-hidden rounded-full"
-                      style={{ height: 2, background: 'rgba(249,115,22,0.12)' }}
-                    >
-                      <motion.div
-                        style={{
-                          height: '100%',
-                          width: depositFillWidth,
-                          borderRadius: 9999,
-                          background: 'linear-gradient(90deg, rgba(249,115,22,0.90), rgba(249,115,22,0.55))',
-                          boxShadow: '0 0 6px 2px rgba(249,115,22,0.30)',
-                        }}
-                      />
-                      {/* green completion flash */}
-                      <motion.div
-                        className="pointer-events-none absolute inset-0 rounded-full"
-                        style={{
-                          opacity: barFillGlow,
-                          background: 'rgba(57,255,20,0.40)',
-                          boxShadow: '0 0 10px 4px rgba(57,255,20,0.55)',
-                        }}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </div>
-
-                  {/* ■AKITA row */}
-                  <div>
-                    <div className="mb-[3px] flex items-baseline justify-between">
-                      <span
-                        className="font-mono text-[6.5px] uppercase tracking-[0.18em]"
-                        style={{ color: 'rgba(100,160,255,0.65)' }}
-                      >
-                        ■AKITA
-                      </span>
-                      <span
-                        className="font-mono text-[6.5px] tabular-nums"
-                        style={{ color: 'rgba(100,160,255,0.45)' }}
-                      >
-                        {remainingCount.toLocaleString()}
-                      </span>
-                    </div>
-                    <div
-                      className="relative overflow-hidden rounded-full"
-                      style={{ height: 2, background: 'rgba(100,160,255,0.12)' }}
-                    >
-                      <motion.div
-                        style={{
-                          height: '100%',
-                          width: shareFillWidth,
-                          borderRadius: 9999,
-                          background: 'linear-gradient(90deg, rgba(100,160,255,0.90), rgba(100,160,255,0.55))',
-                          boxShadow: '0 0 6px 2px rgba(100,160,255,0.30)',
-                        }}
-                      />
-                      {/* green completion flash — same beat as akita bar */}
-                      <motion.div
-                        className="pointer-events-none absolute inset-0 rounded-full"
-                        style={{
-                          opacity: barFillGlow,
-                          background: 'rgba(57,255,20,0.40)',
-                          boxShadow: '0 0 10px 4px rgba(57,255,20,0.55)',
-                        }}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-
                 <ZorbViewer size={96} />
+              </div>
+            </motion.div>
+
+            {/* HP/MP token bars — float inside the cage above the Zorb */}
+            <motion.div
+              className="pointer-events-none absolute left-1/2 z-[25]"
+              style={{
+                top: 'calc(44vh - 128px)',
+                transform: 'translateX(-50%)',
+                width: 'clamp(210px, 52vw, 244px)',
+                opacity: tokenBarOp,
+              }}
+              aria-hidden="true"
+            >
+              {/* akita row */}
+              <div className="mb-[9px]">
+                <div className="mb-[4px] flex items-baseline justify-between">
+                  <span
+                    className="font-mono text-[7px] uppercase tracking-[0.18em]"
+                    style={{ color: 'rgba(249,115,22,0.70)' }}
+                  >
+                    akita
+                  </span>
+                  <span
+                    className="font-mono text-[7px] tabular-nums"
+                    style={{ color: 'rgba(249,115,22,0.50)' }}
+                  >
+                    {depositCount.toLocaleString()}
+                  </span>
+                </div>
+                <div
+                  className="relative overflow-hidden rounded-full"
+                  style={{ height: 3, background: 'rgba(249,115,22,0.10)' }}
+                >
+                  <motion.div
+                    style={{
+                      height: '100%',
+                      width: depositFillWidth,
+                      borderRadius: 9999,
+                      background: 'linear-gradient(90deg, rgba(249,115,22,0.92), rgba(249,115,22,0.58))',
+                      boxShadow: '0 0 8px 3px rgba(249,115,22,0.35)',
+                    }}
+                  />
+                  <motion.div
+                    className="pointer-events-none absolute inset-0 rounded-full"
+                    style={{
+                      opacity: barFillGlow,
+                      background: 'rgba(57,255,20,0.40)',
+                      boxShadow: '0 0 12px 5px rgba(57,255,20,0.55)',
+                    }}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+
+              {/* ■AKITA row */}
+              <div>
+                <div className="mb-[4px] flex items-baseline justify-between">
+                  <span
+                    className="font-mono text-[7px] uppercase tracking-[0.18em]"
+                    style={{ color: 'rgba(100,160,255,0.70)' }}
+                  >
+                    ■AKITA
+                  </span>
+                  <span
+                    className="font-mono text-[7px] tabular-nums"
+                    style={{ color: 'rgba(100,160,255,0.50)' }}
+                  >
+                    {remainingCount.toLocaleString()}
+                  </span>
+                </div>
+                <div
+                  className="relative overflow-hidden rounded-full"
+                  style={{ height: 3, background: 'rgba(100,160,255,0.10)' }}
+                >
+                  <motion.div
+                    style={{
+                      height: '100%',
+                      width: shareFillWidth,
+                      borderRadius: 9999,
+                      background: 'linear-gradient(90deg, rgba(100,160,255,0.92), rgba(100,160,255,0.58))',
+                      boxShadow: '0 0 8px 3px rgba(100,160,255,0.35)',
+                    }}
+                  />
+                  <motion.div
+                    className="pointer-events-none absolute inset-0 rounded-full"
+                    style={{
+                      opacity: barFillGlow,
+                      background: 'rgba(57,255,20,0.40)',
+                      boxShadow: '0 0 12px 5px rgba(57,255,20,0.55)',
+                    }}
+                    aria-hidden="true"
+                  />
+                </div>
               </div>
             </motion.div>
 
