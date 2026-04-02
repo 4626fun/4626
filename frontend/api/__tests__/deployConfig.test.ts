@@ -8,13 +8,17 @@ const {
   readRequestPrincipalAddressMock,
   isServerAdminAddressMock,
   resolvePayoutRouterKeeperAddressMock,
+  resolvePayoutRouterExternalSwapApprovalsMock,
   resolvePayoutRouterFeeConfigMock,
+  resolvePayoutRouterZoraTokenMock,
 } = vi.hoisted(() => ({
   getApiContractsMock: vi.fn(),
   readRequestPrincipalAddressMock: vi.fn(),
   isServerAdminAddressMock: vi.fn(),
   resolvePayoutRouterKeeperAddressMock: vi.fn(),
+  resolvePayoutRouterExternalSwapApprovalsMock: vi.fn(),
   resolvePayoutRouterFeeConfigMock: vi.fn(),
+  resolvePayoutRouterZoraTokenMock: vi.fn(),
 }))
 
 vi.mock('../../packages/server-core/src/index.js', () => ({
@@ -31,7 +35,9 @@ vi.mock('../../server/_lib/trust.js', () => ({
 
 vi.mock('../../server/_lib/payoutRouterRuntime.js', () => ({
   resolvePayoutRouterKeeperAddress: resolvePayoutRouterKeeperAddressMock,
+  resolvePayoutRouterExternalSwapApprovals: resolvePayoutRouterExternalSwapApprovalsMock,
   resolvePayoutRouterFeeConfig: resolvePayoutRouterFeeConfigMock,
+  resolvePayoutRouterZoraToken: resolvePayoutRouterZoraTokenMock,
 }))
 
 describe('deploy config handler', () => {
@@ -44,10 +50,15 @@ describe('deploy config handler', () => {
     readRequestPrincipalAddressMock.mockReturnValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
     isServerAdminAddressMock.mockReturnValue(true)
     resolvePayoutRouterKeeperAddressMock.mockReturnValue('0x4444444444444444444444444444444444444444')
+    resolvePayoutRouterExternalSwapApprovalsMock.mockReturnValue({
+      targets: ['0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+      spenders: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+    })
     resolvePayoutRouterFeeConfigMock.mockReturnValue({
       zoraWethFee: 123,
       wethCreatorFee: 456,
     })
+    resolvePayoutRouterZoraTokenMock.mockReturnValue('0x3333333333333333333333333333333333333333')
     delete process.env.ALLOW_API_CONTRACT_OVERRIDES
     delete process.env.VITE_DEPLOY_USE_SERVER_CONTINUE
     delete process.env.VITE_DEPLOY_MODE
@@ -84,6 +95,8 @@ describe('deploy config handler', () => {
       deployMode: 'no_eoa_strict',
       serverContinue: false,
       payoutRouterKeeperAddress: '0x4444444444444444444444444444444444444444',
+      payoutRouterApprovedExternalSwapTargets: ['0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+      payoutRouterApprovedExternalSwapSpenders: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
       zoraToken: '0x3333333333333333333333333333333333333333',
       payoutRouterZoraWethFee: 123,
       payoutRouterWethCreatorFee: 456,

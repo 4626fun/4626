@@ -36,6 +36,7 @@ interface ICharmFactory {
 
     function createVault(VaultParams calldata params) external returns (address vault);
     function governance() external view returns (address);
+    function protocolFee() external view returns (uint24);
 }
 
 interface ICharmVaultManager {
@@ -65,6 +66,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
     // Charm managerFee uses 1e6 precision (100% = 1_000_000).
     uint24 private constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16%
+    uint24 private constant CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000; // 1%
     int24 private constant CHARM_MAX_TWAP_DEVIATION = 500;
     uint32 private constant CHARM_TWAP_DURATION = 300;
 
@@ -76,6 +78,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     error ZeroVault();
     error NotProtocolOwner();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
+    error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
 
     modifier onlyProtocolOwner() {
@@ -248,6 +251,14 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
             }
         } catch {
             revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, address(0));
+        }
+
+        try ICharmFactory(CHARM_FACTORY).protocolFee() returns (uint24 protocolFeePips) {
+            if (protocolFeePips != CHARM_EXPECTED_PROTOCOL_FEE_PIPS) {
+                revert CharmFactoryProtocolFeeMismatch(CHARM_EXPECTED_PROTOCOL_FEE_PIPS, protocolFeePips);
+            }
+        } catch {
+            revert CharmFactoryProtocolFeeMismatch(CHARM_EXPECTED_PROTOCOL_FEE_PIPS, type(uint256).max);
         }
     }
 

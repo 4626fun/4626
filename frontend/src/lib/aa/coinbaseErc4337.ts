@@ -40,7 +40,6 @@ const BUNDLER_PROBE_TIMEOUT_MS = 3_000
 const RPC_READ_TIMEOUT_MS = 8_000
 const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
 const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
-const UNIVERSAL_ROUTER_BASE_LEGACY = getAddress('0x2626664c2603336e57b271c5c0b26f421741e481').toLowerCase()
 const UNISWAP_UNIVERSAL_ROUTER_ABI = [
   {
     type: 'function',
@@ -57,7 +56,7 @@ const UNISWAP_UNIVERSAL_ROUTER_ABI = [
 
 function isUniversalRouterTarget(to: Address): boolean {
   const target = String(to).toLowerCase()
-  return target === UNIVERSAL_ROUTER_BASE_CURRENT || target === UNIVERSAL_ROUTER_BASE_LEGACY
+  return target === UNIVERSAL_ROUTER_BASE_CURRENT
 }
 
 function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | undefined): Hex | undefined {

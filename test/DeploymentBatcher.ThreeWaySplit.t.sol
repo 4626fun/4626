@@ -62,7 +62,8 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             solanaMaxNavDeltaBpsPerUpdate: 500,
             solanaMinBaseLiquidityBps: 1_000,
             solanaBridgeAddress: makeAddr("solanaBridge"),
-            enableAutoAllocate: false
+            enableAutoAllocate: false,
+            expectedCharmProtocolFeePips: 10_000
         });
 
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({

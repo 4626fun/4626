@@ -8,7 +8,6 @@ const {
   resolveAuthorizedRequestPrincipalMock,
   getDbMock,
   ensureWaitlistSchemaMock,
-  ensureWaitlistPointsSchemaMock,
   awardWaitlistPointsMock,
   checkRateLimitMock,
   rateLimitKeyMock,
@@ -21,7 +20,6 @@ const {
   resolveAuthorizedRequestPrincipalMock: vi.fn(async () => null),
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
-  ensureWaitlistPointsSchemaMock: vi.fn(async () => {}),
   awardWaitlistPointsMock: vi.fn(async () => {}),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   rateLimitKeyMock: vi.fn(() => 'rl-key'),
@@ -52,7 +50,6 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
 }))
 
 vi.mock('../../server/_lib/waitlistPoints.js', () => ({
-  ensureWaitlistPointsSchema: ensureWaitlistPointsSchemaMock,
   awardWaitlistPoints: awardWaitlistPointsMock,
   WAITLIST_POINTS: { qualifiedReferral: 25 },
 }))

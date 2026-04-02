@@ -640,6 +640,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
               { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
               { name: 'solanaBridgeAddress', type: 'address' },
               { name: 'enableAutoAllocate', type: 'bool' },
+              { name: 'expectedCharmProtocolFeePips', type: 'uint24' },
             ],
           },
           {
@@ -701,6 +702,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           solanaMinBaseLiquidityBps: 100,
           solanaBridgeAddress: sender,
           enableAutoAllocate: false,
+          expectedCharmProtocolFeePips: 10_000,
         },
         {
           charmAlphaVaultDeploy: CHARM_FACTORY_SENTINEL_CODE_ID,
@@ -713,7 +715,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       ],
     })
 
-    expect(phase3Data.slice(0, 10).toLowerCase()).toBe('0x35a75a09')
+    expect(phase3Data.slice(0, 10).toLowerCase()).toBe('0x881d4960')
 
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
@@ -874,6 +876,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
               { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
               { name: 'solanaBridgeAddress', type: 'address' },
               { name: 'enableAutoAllocate', type: 'bool' },
+              { name: 'expectedCharmProtocolFeePips', type: 'uint24' },
             ],
           },
           {
@@ -958,6 +961,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           solanaMinBaseLiquidityBps: 100,
           solanaBridgeAddress: sender,
           enableAutoAllocate: false,
+          expectedCharmProtocolFeePips: 10_000,
         },
         {
           charmAlphaVaultDeploy: CHARM_FACTORY_SENTINEL_CODE_ID,

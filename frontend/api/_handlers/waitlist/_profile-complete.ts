@@ -18,7 +18,7 @@ import { isCswOwner, verifyCswProvenance } from '../../../server/_lib/cswOwner.j
 
 import { isAddressLike, normalizeAddress, normalizeEmail } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
+import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 
 
 type Body = { email?: string }
@@ -66,7 +66,6 @@ export default async function handler(req: any, res: any) {
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
 
   await ensureWaitlistSchema(db as any)
-  await ensureWaitlistPointsSchema(db as any)
 
   const exists = await db.sql`
     SELECT id, csw_address, primary_smart_wallet, base_sub_account

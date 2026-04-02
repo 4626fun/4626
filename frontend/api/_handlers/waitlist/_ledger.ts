@@ -16,7 +16,6 @@ import { normalizeReferralCode } from '../../../server/_lib/referrals.js'
 
 
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { ensureWaitlistPointsSchema } from '../../../server/_lib/waitlistPoints.js'
 
 type LedgerEntry = {
   source: string
@@ -84,7 +83,6 @@ export default async function handler(req: any, res: any) {
   const db = await getDb()
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureWaitlistSchema(db as any)
-  await ensureWaitlistPointsSchema(db as any)
 
   const principalAddress = readRequestPrincipalAddress(req)
 

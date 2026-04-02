@@ -40,4 +40,7 @@ interface ICharmFactory {
 
     /// @notice Charm governance address
     function governance() external view returns (address);
+
+    /// @notice Factory-level protocol fee (1e6 precision)
+    function protocolFee() external view returns (uint24);
 }

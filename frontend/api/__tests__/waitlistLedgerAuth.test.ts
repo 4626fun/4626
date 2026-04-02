@@ -10,7 +10,7 @@ const {
   getClientIpMock,
   rateLimitKeyMock,
   ensureWaitlistSchemaMock,
-  ensureWaitlistPointsSchemaMock,
+  isAuthorizedWalletForProfileMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   readRequestPrincipalAddressMock: vi.fn(() => ''),
@@ -18,7 +18,7 @@ const {
   getClientIpMock: vi.fn(() => '127.0.0.1'),
   rateLimitKeyMock: vi.fn(() => 'waitlist-ledger:test'),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
-  ensureWaitlistPointsSchemaMock: vi.fn(async () => {}),
+  isAuthorizedWalletForProfileMock: vi.fn(async () => false),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -49,8 +49,8 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/waitlistPoints.js', () => ({
-  ensureWaitlistPointsSchema: ensureWaitlistPointsSchemaMock,
+vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  isAuthorizedWalletForProfile: isAuthorizedWalletForProfileMock,
 }))
 
 function createDb() {
@@ -189,6 +189,7 @@ describe('waitlist/ledger ownership hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue(createDb() as any)
+    isAuthorizedWalletForProfileMock.mockResolvedValue(false)
   })
 
   it('returns null for unauthenticated email lookup', async () => {
@@ -220,6 +221,7 @@ describe('waitlist/ledger ownership hardening', () => {
   })
 
   it('returns ledger data for authorized owner', async () => {
+    isAuthorizedWalletForProfileMock.mockResolvedValueOnce(true)
     readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000aa')
     const req = createMockReq({
       method: 'GET',
@@ -237,6 +239,7 @@ describe('waitlist/ledger ownership hardening', () => {
 
   it('returns null when caller is only a historical linked wallet', async () => {
     getDbMock.mockResolvedValue(createDbHistoricalLinkedWallet() as any)
+    isAuthorizedWalletForProfileMock.mockResolvedValueOnce(false)
     readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000bb')
     const req = createMockReq({
       method: 'GET',

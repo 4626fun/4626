@@ -8,6 +8,10 @@ import { Connection, Keypair, PublicKey } from '@solana/web3.js'
 import { createPublicClient, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 import {
+  runWrapToken,
+  toExecErrorText as toErrorText,
+} from '../_lib/solanaBridgeCliRunner.js'
+import {
   WRAP_TOKEN_NAME_MAX_LENGTH,
   WRAP_TOKEN_SYMBOL_MAX_LENGTH,
   isLikelyUnsupportedMetadataUriFlagError,
@@ -16,14 +20,17 @@ import {
   normalizeWrapTokenMetadataUri,
   readBridgeTokenMetadata,
 } from '../_lib/solanaBridgeTokenMetadata.js'
+import {
+  parseMintPubkeyFromAlreadyExistsError,
+  parseMintPubkeyFromWrapOutput,
+  solanaPubkeyToBytes32Hex,
+} from '../_lib/solanaBridgePubkey.js'
 
 const execFileAsync = promisify(execFile)
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 const SOLANA_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
 const SOLANA_SPL_TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 const SOLANA_TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-const BASE58_MAP = new Map(BASE58_ALPHABET.split('').map((ch, idx) => [ch, idx]))
 
 const BASE_SOLANA_BRIDGE_ABI = [
   {
@@ -61,12 +68,6 @@ type MeteoraIxsBody = {
   alphaVaultProgramId?: string
   expectedRemoteAmount?: number | string
   depositAccounts?: MeteoraAccountMetaBody[]
-}
-
-type WrapRunner = {
-  bin: string
-  args: string[]
-  label: string
 }
 
 const PROVISIONER_MAX_BODY_BYTES = 64 * 1024
@@ -129,48 +130,6 @@ function isRetryableWrapTokenError(message: string): boolean {
     lower.includes('econnreset') ||
     lower.includes('socket hang up')
   )
-}
-
-function parseMintPubkeyFromWrapOutput(text: string): string | null {
-  const match = text.match(/Mint:\s*([1-9A-HJ-NP-Za-km-z]{32,44})/i)
-  return match?.[1] ?? null
-}
-
-function parseMintPubkeyFromAlreadyExistsError(text: string): string | null {
-  const match = text.match(/Address\s*\{\s*address:\s*([1-9A-HJ-NP-Za-km-z]{32,44})/i)
-  return match?.[1] ?? null
-}
-
-function decodeBase58(value: string): Uint8Array {
-  if (!value || typeof value !== 'string') throw new Error('Invalid base58 input')
-  let num = 0n
-  for (const ch of value.trim()) {
-    const idx = BASE58_MAP.get(ch)
-    if (idx === undefined) throw new Error(`Invalid base58 character: ${ch}`)
-    num = num * 58n + BigInt(idx)
-  }
-  let hex = num.toString(16)
-  if (hex.length % 2) hex = `0${hex}`
-  let bytes = hex ? Uint8Array.from(Buffer.from(hex, 'hex')) : new Uint8Array()
-  let leadingZeroes = 0
-  for (const ch of value) {
-    if (ch === '1') leadingZeroes += 1
-    else break
-  }
-  if (leadingZeroes > 0) {
-    const prefixed = new Uint8Array(leadingZeroes + bytes.length)
-    prefixed.set(bytes, leadingZeroes)
-    bytes = prefixed
-  }
-  return bytes
-}
-
-function solanaPubkeyToBytes32Hex(pubkey: string): Hex {
-  const decoded = decodeBase58(pubkey)
-  if (decoded.length !== 32) {
-    throw new Error(`Expected 32-byte Solana pubkey, got ${decoded.length} bytes`)
-  }
-  return `0x${Buffer.from(decoded).toString('hex')}` as Hex
 }
 
 function parseUint64(value: unknown): bigint | null {
@@ -542,109 +501,6 @@ async function readProvisionerPayerHealth(): Promise<{
       payerError: error instanceof Error ? error.message : String(error),
     }
   }
-}
-
-function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[], cliDir: string): WrapRunner[] {
-  const normalized = cliBinRaw.trim().toLowerCase()
-  const runners: WrapRunner[] = []
-  const pushUnique = (runner: WrapRunner): void => {
-    if (!runners.some((r) => r.bin === runner.bin && r.args.join('\u0000') === runner.args.join('\u0000'))) {
-      runners.push(runner)
-    }
-  }
-
-  const pushDefaultFallbacks = (): void => {
-    const bunEntrypoint = `${cliDir}/src/bin.ts`
-    const hasBunEntrypoint = existsSync(bunEntrypoint)
-    const home = String(process.env.HOME ?? '').trim()
-    const homeBun = home ? `${home}/.bun/bin/bun` : ''
-    if (hasBunEntrypoint) {
-      if (homeBun && existsSync(homeBun)) {
-        pushUnique({ bin: homeBun, args: ['run', 'src/bin.ts', ...wrapArgs], label: `${homeBun} run src/bin.ts` })
-      }
-      pushUnique({ bin: 'bun', args: ['run', 'src/bin.ts', ...wrapArgs], label: 'bun run src/bin.ts' })
-    }
-    if (homeBun && existsSync(homeBun)) {
-      pushUnique({ bin: homeBun, args: ['cli', ...wrapArgs], label: `${homeBun} cli` })
-    }
-    pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
-    pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
-    pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
-    pushUnique({ bin: 'cli', args: wrapArgs, label: 'cli' })
-  }
-
-  if (!normalized || normalized === 'auto') {
-    pushDefaultFallbacks()
-    return runners
-  }
-
-  if (normalized === 'bun' || normalized.endsWith('/bun')) {
-    const hasBunEntrypoint = existsSync(`${cliDir}/src/bin.ts`)
-    if (hasBunEntrypoint) {
-      pushUnique({ bin: cliBinRaw, args: ['run', 'src/bin.ts', ...wrapArgs], label: `${cliBinRaw} run src/bin.ts` })
-    }
-    pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
-    pushDefaultFallbacks()
-    return runners
-  }
-  if (normalized === 'pnpm') {
-    pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
-    return runners
-  }
-  if (normalized === 'npm') {
-    pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
-    return runners
-  }
-  if (normalized === 'cli') {
-    pushUnique({ bin: 'cli', args: wrapArgs, label: 'cli' })
-    return runners
-  }
-
-  pushUnique({ bin: cliBinRaw, args: ['cli', ...wrapArgs], label: `${cliBinRaw} cli` })
-  return runners
-}
-
-function toErrorText(error: unknown): string {
-  if (!error || typeof error !== 'object') return String(error)
-  const err = error as { message?: string; stderr?: string; stdout?: string }
-  return [err.message, err.stderr, err.stdout].filter(Boolean).join('\n')
-}
-
-function isRunnerUnavailable(error: unknown): boolean {
-  const code = (error as { code?: string } | null)?.code
-  if (code === 'ENOENT') return true
-  const text = toErrorText(error).toLowerCase()
-  return (
-    text.includes('enoent') ||
-    text.includes('command not found') ||
-    text.includes('bun: not found') ||
-    text.includes('not recognized as an internal or external command') ||
-    text.includes('missing script: cli') ||
-    text.includes('none of the selected packages has a "cli" script')
-  )
-}
-
-async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[]): Promise<{ output: string; runner: string }> {
-  const runners = buildWrapRunnerList(cliBinRaw, wrapArgs, cliDir)
-  const failures: string[] = []
-
-  for (const runner of runners) {
-    try {
-      const { stdout, stderr } = await execFileAsync(runner.bin, runner.args, {
-        cwd: cliDir,
-        timeout: 20 * 60_000,
-        maxBuffer: 4 * 1024 * 1024,
-      })
-      return { output: `${stdout ?? ''}\n${stderr ?? ''}`, runner: runner.label }
-    } catch (error) {
-      failures.push(`${runner.label}: ${toErrorText(error)}`)
-      if (!isRunnerUnavailable(error)) throw error
-    }
-  }
-
-  throw new Error(
-    `No usable bridge CLI runner found. Configure SOLANA_BRIDGE_CLI_BIN or install one of: bun, pnpm, npm, cli. Details: ${failures.join(' | ')}`,
-  )
 }
 
 async function runWrapTokenWithRetry(

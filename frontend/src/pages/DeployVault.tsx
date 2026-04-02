@@ -83,6 +83,7 @@ const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
 const BASE_CHAINLINK_ETH_USD = addr('71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70')
 const DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE = 10_000
 const DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE = 10_000
+const DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE = 3_000
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
@@ -102,6 +103,7 @@ const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS
 const DEFAULT_SOLANA_MAX_NAV_AGE = 3_600n
 const DEFAULT_SOLANA_MAX_NAV_DELTA_BPS = 500
 const DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS = 1_000
+const DEFAULT_CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000 // 1% in Charm 1e6 precision
 const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
@@ -205,6 +207,21 @@ function normalizeAddressLike(value: unknown): Address | null {
   } catch {
     return null
   }
+}
+
+function normalizeAddressArray(value: unknown): Address[] {
+  if (!Array.isArray(value)) return []
+  const out: Address[] = []
+  const seen = new Set<string>()
+  for (const entry of value) {
+    const normalized = normalizeAddressLike(entry)
+    if (!normalized) continue
+    const key = normalized.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(normalized)
+  }
+  return out
 }
 
 function sameAddress(a: unknown, b: unknown): boolean {
@@ -609,6 +626,8 @@ type DeployRuntimeConfigResponse = {
   deployMode: string
   serverContinue: boolean
   payoutRouterKeeperAddress: Address | null
+  payoutRouterApprovedExternalSwapTargets: Address[]
+  payoutRouterApprovedExternalSwapSpenders: Address[]
   zoraToken: Address | null
   payoutRouterZoraWethFee: number
   payoutRouterWethCreatorFee: number
@@ -1058,9 +1077,43 @@ const PAYOUT_ROUTER_ADMIN_ABI = [
   },
   {
     type: 'function',
+    name: 'approvedExternalSwapTargets',
+    stateMutability: 'view',
+    inputs: [{ name: 'target', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'approvedExternalSwapSpenders',
+    stateMutability: 'view',
+    inputs: [{ name: 'spender', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
     name: 'setKeeper',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'newKeeper', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setExternalSwapTargetApproval',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'target', type: 'address' },
+      { name: 'approved', type: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setExternalSwapSpenderApproval',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'approved', type: 'bool' },
+    ],
     outputs: [],
   },
   {
@@ -1072,6 +1125,20 @@ const PAYOUT_ROUTER_ADMIN_ABI = [
       { name: 'path', type: 'bytes' },
     ],
     outputs: [],
+  },
+] as const
+
+const UNISWAP_V3_FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'getPool',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+    ],
+    outputs: [{ name: 'pool', type: 'address' }],
   },
 ] as const
 
@@ -1754,6 +1821,7 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
           { name: 'solanaBridgeAddress', type: 'address' },
           { name: 'enableAutoAllocate', type: 'bool' },
+          { name: 'expectedCharmProtocolFeePips', type: 'uint24' },
         ],
       },
       {
@@ -3352,6 +3420,12 @@ function DeployVaultBatcher({
         )
       }
       const payoutRouterKeeperAddress = normalizeAddressLike(runtimeConfig?.payoutRouterKeeperAddress)
+      const payoutRouterApprovedExternalSwapTargets = normalizeAddressArray(
+        runtimeConfig?.payoutRouterApprovedExternalSwapTargets,
+      )
+      const payoutRouterApprovedExternalSwapSpenders = normalizeAddressArray(
+        runtimeConfig?.payoutRouterApprovedExternalSwapSpenders,
+      )
       const payoutRouterZoraToken =
         normalizeAddressLike(runtimeConfig?.zoraToken) ?? normalizeAddressLike(CONTRACTS.zora)
       const payoutRouterZoraWethFee =
@@ -3401,6 +3475,7 @@ function DeployVaultBatcher({
       const payoutForDeploy = ZERO_ADDRESS as Address
 
       const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
+      const usdc = getAddress((CONTRACTS.usdc ?? BASE_USDC) as Address)
       const burnStreamSalt = deriveVaultShareBurnStreamSalt({ creatorToken, owner })
       const burnStreamConstructorArgs = encodeAbiParameters(parseAbiParameters('address'), [expected.vault])
       const burnStreamDeployCall = {
@@ -3463,26 +3538,146 @@ function DeployVaultBatcher({
       })()
 
       const payoutRouterDesiredSwapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' }> = []
+      const uniswapV3Factory = normalizeAddressLike(CONTRACTS.uniswapV3Factory)
+      const hasV3Pool = async (tokenA: Address, tokenB: Address, fee: number): Promise<boolean> => {
+        if (!uniswapV3Factory) return false
+        if (sameAddress(tokenA, tokenB)) return false
+        try {
+          const pool = await publicClient.readContract({
+            address: uniswapV3Factory,
+            abi: UNISWAP_V3_FACTORY_ABI,
+            functionName: 'getPool',
+            args: [tokenA, tokenB, fee],
+          })
+          return typeof pool === 'string' && isAddress(pool) && !sameAddress(pool as Address, ZERO_ADDRESS)
+        } catch {
+          return false
+        }
+      }
+      const candidateV3Fees = (preferredFee: number): number[] => {
+        const common = [preferredFee, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE, 500, 3_000, 10_000, 100]
+        const out: number[] = []
+        for (const fee of common) {
+          if (!Number.isInteger(fee) || fee <= 0 || fee > 1_000_000) continue
+          if (!out.includes(fee)) out.push(fee)
+        }
+        return out
+      }
+      const resolveV3Fee = async (tokenA: Address, tokenB: Address, preferredFee: number): Promise<number | null> => {
+        for (const fee of candidateV3Fees(preferredFee)) {
+          if (await hasV3Pool(tokenA, tokenB, fee)) return fee
+        }
+        return null
+      }
+      const usdcCreatorFee = !sameAddress(usdc, creatorToken)
+        ? await resolveV3Fee(usdc, creatorToken, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+        : null
+
       if (!sameAddress(weth, creatorToken)) {
-        payoutRouterDesiredSwapPaths.push({
-          tokenIn: weth,
-          path: encodeUniswapV3Path([weth, creatorToken], [payoutRouterWethCreatorFee]),
-          label: 'WETH',
-        })
+        const directWethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
+        if (directWethCreatorFee !== null) {
+          payoutRouterDesiredSwapPaths.push({
+            tokenIn: weth,
+            path: encodeUniswapV3Path([weth, creatorToken], [directWethCreatorFee]),
+            label: 'WETH',
+          })
+        } else {
+          const wethUsdcFee = await resolveV3Fee(weth, usdc, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+          if (wethUsdcFee !== null && usdcCreatorFee !== null) {
+            payoutRouterDesiredSwapPaths.push({
+              tokenIn: weth,
+              path: encodeUniswapV3Path(
+                [weth, usdc, creatorToken],
+                [wethUsdcFee, usdcCreatorFee],
+              ),
+              label: 'WETH',
+            })
+          } else {
+            logger.warn('[DeployVault] No viable WETH->creator V3 route found; skipping WETH swap-path auto-config', {
+              directWethCreatorFee,
+              wethUsdcFee,
+              usdcCreatorFee,
+              creatorToken,
+            })
+          }
+        }
       }
       if (payoutRouterZoraToken) {
-        if (!sameAddress(payoutRouterZoraToken, creatorToken) && !sameAddress(payoutRouterZoraToken, weth)) {
-          payoutRouterDesiredSwapPaths.push({
-            tokenIn: payoutRouterZoraToken,
-            path: encodeUniswapV3Path(
-              [payoutRouterZoraToken, weth, creatorToken],
-              [payoutRouterZoraWethFee, payoutRouterWethCreatorFee],
-            ),
-            label: 'ZORA',
-          })
+        if (
+          !sameAddress(payoutRouterZoraToken, creatorToken) &&
+          !sameAddress(payoutRouterZoraToken, weth) &&
+          !sameAddress(payoutRouterZoraToken, usdc)
+        ) {
+          const directZoraCreatorFee = await resolveV3Fee(
+            payoutRouterZoraToken,
+            creatorToken,
+            DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
+          )
+          if (directZoraCreatorFee !== null) {
+            payoutRouterDesiredSwapPaths.push({
+              tokenIn: payoutRouterZoraToken,
+              path: encodeUniswapV3Path(
+                [payoutRouterZoraToken, creatorToken],
+                [directZoraCreatorFee],
+              ),
+              label: 'ZORA',
+            })
+          } else {
+            const zoraWethFee = await resolveV3Fee(payoutRouterZoraToken, weth, payoutRouterZoraWethFee)
+            const wethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
+            if (zoraWethFee !== null && wethCreatorFee !== null) {
+              payoutRouterDesiredSwapPaths.push({
+                tokenIn: payoutRouterZoraToken,
+                path: encodeUniswapV3Path(
+                  [payoutRouterZoraToken, weth, creatorToken],
+                  [zoraWethFee, wethCreatorFee],
+                ),
+                label: 'ZORA',
+              })
+            } else {
+              const zoraUsdcFee = await resolveV3Fee(
+                payoutRouterZoraToken,
+                usdc,
+                DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
+              )
+              if (zoraUsdcFee !== null && usdcCreatorFee !== null) {
+                payoutRouterDesiredSwapPaths.push({
+                  tokenIn: payoutRouterZoraToken,
+                  path: encodeUniswapV3Path(
+                    [payoutRouterZoraToken, usdc, creatorToken],
+                    [zoraUsdcFee, usdcCreatorFee],
+                  ),
+                  label: 'ZORA',
+                })
+              } else {
+                logger.warn('[DeployVault] No viable ZORA->creator V3 route found; skipping ZORA swap-path auto-config', {
+                  directZoraCreatorFee,
+                  zoraWethFee,
+                  wethCreatorFee,
+                  zoraUsdcFee,
+                  usdcCreatorFee,
+                  zoraToken: payoutRouterZoraToken,
+                  creatorToken,
+                })
+              }
+            }
+          }
         }
       } else {
         logger.warn('[DeployVault] Missing runtime ZORA token address; skipping payout router ZORA swap-path auto-config')
+      }
+      if (payoutRouterZoraToken) {
+        const isCreatorToken = sameAddress(payoutRouterZoraToken, creatorToken)
+        const isWethToken = sameAddress(payoutRouterZoraToken, weth)
+        const isUsdcToken = sameAddress(payoutRouterZoraToken, usdc)
+        if (isCreatorToken || isWethToken || isUsdcToken) {
+          logger.warn('[DeployVault] Runtime ZORA token overlaps with creator/WETH/USDC; skipping ZORA swap-path auto-config', {
+            zoraToken: payoutRouterZoraToken,
+            creatorToken,
+            weth,
+            usdc,
+          })
+        }
       }
 
       const currentPayoutRouterKeeper = await (async () => {
@@ -3523,6 +3718,50 @@ function DeployVaultBatcher({
         return out
       })()
 
+      const currentRouterExternalTargetApprovals = await (async () => {
+        const out = new Map<string, boolean>()
+        if (!payoutRouterAlreadyDeployed || payoutRouterApprovedExternalSwapTargets.length === 0) return out
+        const reads = await Promise.all(
+          payoutRouterApprovedExternalSwapTargets.map(async (target) => {
+            try {
+              const raw = await publicClient.readContract({
+                address: expectedPayoutRouter,
+                abi: PAYOUT_ROUTER_ADMIN_ABI,
+                functionName: 'approvedExternalSwapTargets',
+                args: [target],
+              })
+              return [target.toLowerCase(), raw === true] as const
+            } catch {
+              return [target.toLowerCase(), false] as const
+            }
+          }),
+        )
+        for (const [target, approved] of reads) out.set(target, approved)
+        return out
+      })()
+
+      const currentRouterExternalSpenderApprovals = await (async () => {
+        const out = new Map<string, boolean>()
+        if (!payoutRouterAlreadyDeployed || payoutRouterApprovedExternalSwapSpenders.length === 0) return out
+        const reads = await Promise.all(
+          payoutRouterApprovedExternalSwapSpenders.map(async (spender) => {
+            try {
+              const raw = await publicClient.readContract({
+                address: expectedPayoutRouter,
+                abi: PAYOUT_ROUTER_ADMIN_ABI,
+                functionName: 'approvedExternalSwapSpenders',
+                args: [spender],
+              })
+              return [spender.toLowerCase(), raw === true] as const
+            } catch {
+              return [spender.toLowerCase(), false] as const
+            }
+          }),
+        )
+        for (const [spender, approved] of reads) out.set(spender, approved)
+        return out
+      })()
+
       const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
 
       const payoutRouterSetKeeperCall =
@@ -3539,6 +3778,36 @@ function DeployVaultBatcher({
               }),
             } as const)
           : null
+
+      const payoutRouterSetExternalSwapTargetApprovalCalls: Array<{ target: Address; value: bigint; data: Hex }> =
+        senderCanAdminPayoutRouter
+          ? payoutRouterApprovedExternalSwapTargets
+              .filter((target) => currentRouterExternalTargetApprovals.get(target.toLowerCase()) !== true)
+              .map((target) => ({
+                target: expectedPayoutRouter,
+                value: 0n,
+                data: encodeFunctionData({
+                  abi: PAYOUT_ROUTER_ADMIN_ABI,
+                  functionName: 'setExternalSwapTargetApproval',
+                  args: [target, true],
+                }),
+              }))
+          : []
+
+      const payoutRouterSetExternalSwapSpenderApprovalCalls: Array<{ target: Address; value: bigint; data: Hex }> =
+        senderCanAdminPayoutRouter
+          ? payoutRouterApprovedExternalSwapSpenders
+              .filter((spender) => currentRouterExternalSpenderApprovals.get(spender.toLowerCase()) !== true)
+              .map((spender) => ({
+                target: expectedPayoutRouter,
+                value: 0n,
+                data: encodeFunctionData({
+                  abi: PAYOUT_ROUTER_ADMIN_ABI,
+                  functionName: 'setExternalSwapSpenderApproval',
+                  args: [spender, true],
+                }),
+              }))
+          : []
 
       const payoutRouterSetSwapPathCalls: Array<{ target: Address; value: bigint; data: Hex }> = senderCanAdminPayoutRouter
         ? payoutRouterDesiredSwapPaths
@@ -3560,9 +3829,15 @@ function DeployVaultBatcher({
       if (!payoutRouterKeeperAddress) {
         logger.warn('[DeployVault] Missing payoutRouter keeper runtime config; skipping setKeeper auto-config')
       }
-      if (!senderCanAdminPayoutRouter && (payoutRouterKeeperAddress || payoutRouterDesiredSwapPaths.length > 0)) {
+      if (
+        !senderCanAdminPayoutRouter &&
+        (payoutRouterKeeperAddress ||
+          payoutRouterDesiredSwapPaths.length > 0 ||
+          payoutRouterApprovedExternalSwapTargets.length > 0 ||
+          payoutRouterApprovedExternalSwapSpenders.length > 0)
+      ) {
         logger.warn(
-          '[DeployVault] PayoutRouter owner is protocol treasury; skipping creator-side setKeeper/setSwapPath auto-config',
+          '[DeployVault] PayoutRouter owner is protocol treasury; skipping creator-side setKeeper/setSwapPath/setExternalSwap* auto-config',
         )
       }
 
@@ -4120,6 +4395,7 @@ function DeployVaultBatcher({
           solanaMinBaseLiquidityBps: DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS,
           solanaBridgeAddress,
           enableAutoAllocate: false,
+          expectedCharmProtocolFeePips: DEFAULT_CHARM_EXPECTED_PROTOCOL_FEE_PIPS,
         } as const
 
         // ============================================================
@@ -4319,6 +4595,12 @@ function DeployVaultBatcher({
         if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
         if (payoutRouterSetKeeperCall) phase2Calls.push(payoutRouterSetKeeperCall)
+        if (payoutRouterSetExternalSwapTargetApprovalCalls.length > 0) {
+          phase2Calls.push(...payoutRouterSetExternalSwapTargetApprovalCalls)
+        }
+        if (payoutRouterSetExternalSwapSpenderApprovalCalls.length > 0) {
+          phase2Calls.push(...payoutRouterSetExternalSwapSpenderApprovalCalls)
+        }
         if (payoutRouterSetSwapPathCalls.length > 0) phase2Calls.push(...payoutRouterSetSwapPathCalls)
         if (payoutMismatch) {
           if (!canSetPayoutRecipientFromOwner) {

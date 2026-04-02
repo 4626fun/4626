@@ -546,7 +546,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       },
     ] as const
 
-    const baseSwapRouter = '0x2626664c2603336E57B271c5C0b26F421741e481'
+    const baseSwapRouter = '0x6ff5693b99212da76ad316178a184ab56d299b43'
     const swapData = encodeFunctionData({
       abi: UNIVERSAL_ROUTER_ABI,
       functionName: 'execute',
@@ -634,7 +634,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       },
     ] as const
 
-    const baseSwapRouter = '0x2626664c2603336E57B271c5C0b26F421741e481'
+    const baseSwapRouter = '0x6ff5693b99212da76ad316178a184ab56d299b43'
     const permit2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3'
     const token = '0x5555555555555555555555555555555555555555'
     const approveData = encodeFunctionData({
@@ -809,7 +809,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       },
     ] as const
 
-    const baseSwapRouter = '0x2626664c2603336E57B271c5C0b26F421741e481'
+    const baseSwapRouter = '0x6ff5693b99212da76ad316178a184ab56d299b43'
     const permit2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3'
     const tokenA = '0x5555555555555555555555555555555555555555'
     const tokenB = '0x6666666666666666666666666666666666666666'
@@ -901,7 +901,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       },
     ] as const
 
-    const baseSwapRouter = '0x2626664c2603336E57B271c5C0b26F421741e481'
+    const baseSwapRouter = '0x6ff5693b99212da76ad316178a184ab56d299b43'
     const canonicalSwapData = encodeFunctionData({
       abi: UNIVERSAL_ROUTER_ABI,
       functionName: 'execute',

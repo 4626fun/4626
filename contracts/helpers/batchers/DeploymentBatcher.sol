@@ -36,6 +36,7 @@ contract DeploymentBatcherPhase3Helper {
     uint24 internal constant V3_FEE_TIER = 3000;
     // Charm managerFee uses 1e6 precision (100% = 1_000_000).
     uint24 internal constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16%
+    uint24 internal constant CHARM_DEFAULT_PROTOCOL_FEE_PIPS = 10_000; // 1%
     int24 internal constant CHARM_MAX_TWAP_DEVIATION = 500;
     uint32 internal constant CHARM_TWAP_DURATION = 300;
 
@@ -47,6 +48,7 @@ contract DeploymentBatcherPhase3Helper {
     error MissingInitialSqrtPriceX96();
     error V3PoolMissing();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
+    error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
@@ -90,7 +92,7 @@ contract DeploymentBatcherPhase3Helper {
         }
         out.v3Pool = v3Pool;
 
-        _enforceCharmFactoryGovernance();
+        _enforceCharmFactoryGovernance(params.expectedCharmProtocolFeePips);
         out.charmVault = ICharmFactory(CHARM_FACTORY)
             .createVault(
                 ICharmFactory.VaultParams({
@@ -175,13 +177,23 @@ contract DeploymentBatcherPhase3Helper {
         return keccak256(abi.encodePacked(baseSalt, label));
     }
 
-    function _enforceCharmFactoryGovernance() internal view {
+    function _enforceCharmFactoryGovernance(uint24 expectedProtocolFeePipsConfig) internal view {
         try ICharmFactory(CHARM_FACTORY).governance() returns (address governance) {
             if (!_isAllowedCharmFactoryGovernance(governance)) {
                 revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, governance);
             }
         } catch {
             revert CharmFactoryGovernanceMismatch(CHARM_FACTORY_GOVERNANCE, address(0));
+        }
+
+        uint24 expectedProtocolFeePips =
+            expectedProtocolFeePipsConfig == 0 ? CHARM_DEFAULT_PROTOCOL_FEE_PIPS : expectedProtocolFeePipsConfig;
+        try ICharmFactory(CHARM_FACTORY).protocolFee() returns (uint24 protocolFeePips) {
+            if (protocolFeePips != expectedProtocolFeePips) {
+                revert CharmFactoryProtocolFeeMismatch(expectedProtocolFeePips, protocolFeePips);
+            }
+        } catch {
+            revert CharmFactoryProtocolFeeMismatch(expectedProtocolFeePips, type(uint256).max);
         }
     }
 
@@ -421,6 +433,7 @@ interface ICharmFactory {
 
     function createVault(VaultParams calldata params) external returns (address vault);
     function governance() external view returns (address);
+    function protocolFee() external view returns (uint24);
 }
 
 interface ICharmVaultManager {
@@ -623,6 +636,9 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint16 solanaMinBaseLiquidityBps;
         address solanaBridgeAddress;
         bool enableAutoAllocate;
+        // Optional override: expected Charm factory protocol fee in 1e6 precision.
+        // Set to 0 to use CHARM_DEFAULT_PROTOCOL_FEE_PIPS.
+        uint24 expectedCharmProtocolFeePips;
     }
 
     struct Phase3Result {
@@ -696,6 +712,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     error InvalidCreatorTreasury(address provided);
     error InvalidPayoutRecipient();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
+    error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
     error InvalidTickSpacing();
     error InvalidPoolCurrencies();

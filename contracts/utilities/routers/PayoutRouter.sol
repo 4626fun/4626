@@ -54,6 +54,27 @@ interface IProtocolRewards {
 contract PayoutRouter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    struct ExternalSwapParams {
+        address tokenIn;
+        uint256 amountIn;
+        uint256 minCreatorOut;
+        address spender;
+        address swapTarget;
+        bytes swapCallData;
+    }
+
+    struct BatchAction {
+        // kind=0 => convertAndQueue (v3 path/direct creator coin)
+        // kind=1 => convertViaExternalAndQueue (allowlisted external swap target/spender)
+        uint8 kind;
+        address tokenIn;
+        uint256 amountIn;
+        uint256 minCreatorOut;
+        address spender;
+        address swapTarget;
+        bytes swapCallData;
+    }
+
     // ================================
     // IMMUTABLES
     // ================================
@@ -76,6 +97,12 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     /// @dev Path encoding: tokenIn (20) + fee (3) + tokenMid (20) [+ fee (3) + tokenOut (20) ...]
     mapping(address => bytes) public swapPathToCreator;
 
+    /// @notice Optional allowlist of external swap executors (e.g. universal routers).
+    mapping(address => bool) public approvedExternalSwapTargets;
+
+    /// @notice Optional allowlist of spenders approved for tokenIn transferFrom.
+    mapping(address => bool) public approvedExternalSwapSpenders;
+
     // ================================
     // EVENTS
     // ================================
@@ -83,6 +110,17 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     event KeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event SwapPathSet(address indexed tokenIn, bytes path);
     event ConvertedAndQueued(address indexed tokenIn, uint256 amountIn, uint256 creatorOut, uint256 vaultSharesQueued);
+    event ExternalSwapTargetApprovalSet(address indexed target, bool approved);
+    event ExternalSwapSpenderApprovalSet(address indexed spender, bool approved);
+    event ExternalSwapAndQueued(
+        address indexed tokenIn,
+        address indexed swapTarget,
+        address indexed spender,
+        uint256 amountIn,
+        uint256 creatorOut,
+        uint256 vaultSharesQueued
+    );
+    event BatchProcessed(uint256 actionCount, uint256 totalCreatorOut, uint256 totalSharesQueued);
     event ProtocolRewardsClaimed(address indexed claimer, uint256 amount);
     event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
 
@@ -95,6 +133,12 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error PathNotSet(address tokenIn);
     error InvalidPath(address tokenIn);
+    error ExternalSwapTargetNotApproved(address target);
+    error ExternalSwapSpenderNotApproved(address spender);
+    error ExternalSwapOverspent(address tokenIn, uint256 spent, uint256 maxAmountIn);
+    error MinCreatorOutNotMet(uint256 minExpected, uint256 actualOut);
+    error InvalidBatchAction(uint8 kind);
+    error ExternalSwapCallFailed();
     error ProtocolRewardsClaimFailed();
 
     // ================================
@@ -178,6 +222,24 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         emit SwapPathSet(tokenIn, path);
     }
 
+    /**
+     * @notice Approve or revoke an external swap execution target.
+     */
+    function setExternalSwapTargetApproval(address target, bool approved) external onlyOwner {
+        if (target == address(0)) revert ZeroAddress();
+        approvedExternalSwapTargets[target] = approved;
+        emit ExternalSwapTargetApprovalSet(target, approved);
+    }
+
+    /**
+     * @notice Approve or revoke an external swap spender (token allowance receiver).
+     */
+    function setExternalSwapSpenderApproval(address spender, bool approved) external onlyOwner {
+        if (spender == address(0)) revert ZeroAddress();
+        approvedExternalSwapSpenders[spender] = approved;
+        emit ExternalSwapSpenderApprovalSet(spender, approved);
+    }
+
     // ================================
     // PROCESSING
     // ================================
@@ -194,42 +256,69 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         onlyOwnerOrKeeper
         returns (uint256 creatorOut, uint256 sharesQueued)
     {
-        if (tokenIn == address(0)) revert ZeroAddress();
-        if (amountIn == 0) revert ZeroAmount();
+        return _convertAndQueueViaV3OrDirect(tokenIn, amountIn, minCreatorOut);
+    }
 
-        if (tokenIn == address(creatorCoin)) {
-            // Inject already-held creatorCoin (no swap).
-            creatorOut = amountIn;
-        } else {
-            bytes memory path = swapPathToCreator[tokenIn];
-            if (path.length == 0) revert PathNotSet(tokenIn);
+    /**
+     * @notice Convert via allowlisted external swap target, then queue creatorCoin into the vault.
+     * @dev This is intended for aggregated routing flows (e.g. offchain quote + encoded calldata).
+     */
+    function convertViaExternalAndQueue(ExternalSwapParams calldata params)
+        external
+        nonReentrant
+        onlyOwnerOrKeeper
+        returns (uint256 creatorOut, uint256 sharesQueued)
+    {
+        return _convertViaExternalAndQueue(
+            params.tokenIn,
+            params.amountIn,
+            params.minCreatorOut,
+            params.spender,
+            params.swapTarget,
+            params.swapCallData
+        );
+    }
 
-            // Swap using funds already held in this router.
-            IERC20 inToken = IERC20(tokenIn);
-            uint256 bal = inToken.balanceOf(address(this));
-            if (bal < amountIn) revert ZeroAmount();
+    /**
+     * @notice Structured batch processing for swap/deposit actions in one transaction.
+     * @dev kind=0 => convertAndQueue path; kind=1 => external swap path.
+     */
+    function processBatch(BatchAction[] calldata actions)
+        external
+        nonReentrant
+        onlyOwnerOrKeeper
+        returns (uint256 totalCreatorOut, uint256 totalSharesQueued)
+    {
+        if (actions.length == 0) revert ZeroAmount();
 
-            creatorOut = ISwapRouterV3(swapRouter)
-                .exactInput(
-                    ISwapRouterV3.ExactInputParams({
-                    path: path,
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountIn: amountIn,
-                    amountOutMinimum: minCreatorOut
-                })
+        uint256 len = actions.length;
+        for (uint256 i = 0; i < len; i++) {
+            BatchAction calldata action = actions[i];
+            uint256 creatorOut;
+            uint256 sharesQueued;
+
+            if (action.kind == 0) {
+                (creatorOut, sharesQueued) = _convertAndQueueViaV3OrDirect(
+                    action.tokenIn, action.amountIn, action.minCreatorOut
                 );
+            } else if (action.kind == 1) {
+                (creatorOut, sharesQueued) = _convertViaExternalAndQueue(
+                    action.tokenIn,
+                    action.amountIn,
+                    action.minCreatorOut,
+                    action.spender,
+                    action.swapTarget,
+                    action.swapCallData
+                );
+            } else {
+                revert InvalidBatchAction(action.kind);
+            }
+
+            totalCreatorOut += creatorOut;
+            totalSharesQueued += sharesQueued;
         }
 
-        if (creatorOut == 0) revert ZeroAmount();
-        sharesQueued = ICreatorOVaultDeposit(vault).deposit(creatorOut, burnStream);
-        if (sharesQueued == 0) revert ZeroAmount();
-
-        // Queue minted vault shares for NEXT epoch drip/burn.
-        // Anyone can call `checkpoint()` later to start/drip when the epoch begins.
-        IVaultShareBurnStream(burnStream).queueShares(sharesQueued);
-
-        emit ConvertedAndQueued(tokenIn, amountIn, creatorOut, sharesQueued);
+        emit BatchProcessed(actions.length, totalCreatorOut, totalSharesQueued);
     }
 
     /**
@@ -285,11 +374,102 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     // INTERNAL HELPERS
     // ================================
 
+    function _convertAndQueueViaV3OrDirect(address tokenIn, uint256 amountIn, uint256 minCreatorOut)
+        internal
+        returns (uint256 creatorOut, uint256 sharesQueued)
+    {
+        if (tokenIn == address(0)) revert ZeroAddress();
+        if (amountIn == 0) revert ZeroAmount();
+
+        if (tokenIn == address(creatorCoin)) {
+            // Inject already-held creatorCoin (no swap).
+            creatorOut = amountIn;
+        } else {
+            bytes memory path = swapPathToCreator[tokenIn];
+            if (path.length == 0) revert PathNotSet(tokenIn);
+
+            // Swap using funds already held in this router.
+            IERC20 inToken = IERC20(tokenIn);
+            uint256 bal = inToken.balanceOf(address(this));
+            if (bal < amountIn) revert ZeroAmount();
+
+            creatorOut = ISwapRouterV3(swapRouter).exactInput(
+                ISwapRouterV3.ExactInputParams({
+                    path: path,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: amountIn,
+                    amountOutMinimum: minCreatorOut
+                })
+            );
+        }
+
+        sharesQueued = _queueCreatorOut(creatorOut);
+        emit ConvertedAndQueued(tokenIn, amountIn, creatorOut, sharesQueued);
+    }
+
+    function _convertViaExternalAndQueue(
+        address tokenIn,
+        uint256 amountIn,
+        uint256 minCreatorOut,
+        address spender,
+        address swapTarget,
+        bytes calldata swapCallData
+    ) internal returns (uint256 creatorOut, uint256 sharesQueued) {
+        if (tokenIn == address(0) || spender == address(0) || swapTarget == address(0)) revert ZeroAddress();
+        if (tokenIn == address(creatorCoin)) revert InvalidPath(tokenIn);
+        if (amountIn == 0) revert ZeroAmount();
+        if (!approvedExternalSwapTargets[swapTarget]) revert ExternalSwapTargetNotApproved(swapTarget);
+        if (!approvedExternalSwapSpenders[spender]) revert ExternalSwapSpenderNotApproved(spender);
+
+        IERC20 inToken = IERC20(tokenIn);
+        uint256 tokenInBefore = inToken.balanceOf(address(this));
+        if (tokenInBefore < amountIn) revert ZeroAmount();
+        uint256 creatorBefore = creatorCoin.balanceOf(address(this));
+
+        // Scope allowance to this call only.
+        inToken.forceApprove(spender, 0);
+        inToken.forceApprove(spender, amountIn);
+
+        (bool ok, bytes memory returnData) = swapTarget.call(swapCallData);
+        inToken.forceApprove(spender, 0);
+        if (!ok) _revertWithBytes(returnData);
+
+        uint256 tokenInAfter = inToken.balanceOf(address(this));
+        if (tokenInAfter + amountIn < tokenInBefore) {
+            revert ExternalSwapOverspent(tokenIn, tokenInBefore - tokenInAfter, amountIn);
+        }
+
+        uint256 creatorAfter = creatorCoin.balanceOf(address(this));
+        creatorOut = creatorAfter - creatorBefore;
+        if (creatorOut < minCreatorOut) revert MinCreatorOutNotMet(minCreatorOut, creatorOut);
+
+        sharesQueued = _queueCreatorOut(creatorOut);
+        emit ExternalSwapAndQueued(tokenIn, swapTarget, spender, amountIn, creatorOut, sharesQueued);
+    }
+
+    function _queueCreatorOut(uint256 creatorOut) internal returns (uint256 sharesQueued) {
+        if (creatorOut == 0) revert ZeroAmount();
+        sharesQueued = ICreatorOVaultDeposit(vault).deposit(creatorOut, burnStream);
+        if (sharesQueued == 0) revert ZeroAmount();
+
+        // Queue minted vault shares for NEXT epoch drip/burn.
+        // Anyone can call `checkpoint()` later to start/drip when the epoch begins.
+        IVaultShareBurnStream(burnStream).queueShares(sharesQueued);
+    }
+
     function _readAddress(bytes memory data, uint256 offset) internal pure returns (address addr) {
         // Read 20 bytes from `data` at `offset`.
         // solhint-disable-next-line no-inline-assembly
         assembly {
             addr := shr(96, mload(add(add(data, 0x20), offset)))
+        }
+    }
+
+    function _revertWithBytes(bytes memory revertData) internal pure {
+        if (revertData.length == 0) revert ExternalSwapCallFailed();
+        assembly {
+            revert(add(revertData, 0x20), mload(revertData))
         }
     }
 

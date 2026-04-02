@@ -42,7 +42,10 @@ import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/s
 
 
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
-import { resolvePayoutRouterKeeperAddress } from '../../server/_lib/payoutRouterRuntime.js'
+import {
+  resolvePayoutRouterExternalSwapApprovals,
+  resolvePayoutRouterKeeperAddress,
+} from '../../server/_lib/payoutRouterRuntime.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -631,6 +634,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
           { name: 'solanaBridgeAddress', type: 'address' },
           { name: 'enableAutoAllocate', type: 'bool' },
+          { name: 'expectedCharmProtocolFeePips', type: 'uint24' },
         ],
       },
       {
@@ -685,6 +689,8 @@ const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
 const SELECTOR_SWAP_ROUTER_EXECUTE = '0x3593564c' // execute(bytes,bytes[],uint256)
 const SELECTOR_PAYOUT_ROUTER_SET_KEEPER = '0x748747e6' // setKeeper(address)
 const SELECTOR_PAYOUT_ROUTER_SET_SWAP_PATH = '0xc772f341' // setSwapPath(address,bytes)
+const SELECTOR_PAYOUT_ROUTER_SET_EXTERNAL_SWAP_TARGET_APPROVAL = '0x7b88bf17' // setExternalSwapTargetApproval(address,bool)
+const SELECTOR_PAYOUT_ROUTER_SET_EXTERNAL_SWAP_SPENDER_APPROVAL = '0x8173e18f' // setExternalSwapSpenderApproval(address,bool)
 
 // Coinbase Smart Wallet owner management (used for deploy sessions)
 const SELECTOR_CSW_ADD_OWNER_ADDRESS = '0x0f0f3f24' // addOwnerAddress(address)
@@ -707,7 +713,7 @@ const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
 const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0xab56c176'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
-const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x35a75a09'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x881d4960'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 
@@ -892,6 +898,26 @@ const PAYOUT_ROUTER_ADMIN_ABI = [
     ],
     outputs: [],
   },
+  {
+    type: 'function',
+    name: 'setExternalSwapTargetApproval',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'target', type: 'address' },
+      { name: 'approved', type: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setExternalSwapSpenderApproval',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'approved', type: 'bool' },
+    ],
+    outputs: [],
+  },
 ] as const
 
 const SELECTOR_VESTING_RELEASE = '0x86d1a69f'
@@ -928,9 +954,10 @@ const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 const ZERO_ADDRESS = getAddress(`0x${'0'.repeat(40)}`)
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
-// Uniswap Universal Router on Base (compatibility + current deployments).
-const BASE_SWAP_ROUTER_LEGACY = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
-const BASE_SWAP_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
+// Uniswap Universal Router on Base (current deployment).
+const BASE_UNIVERSAL_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
+// Uniswap v3 SwapRouter02 on Base (exactInput/exactInputSingle).
+const BASE_V3_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
 const CREATOR_OVAULT_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex)
 
 const UNISWAP_UNIVERSAL_ROUTER_ABI = [
@@ -1754,6 +1781,13 @@ async function validateInnerCalls(params: {
 }): Promise<{ expectedCreatorToken: Address | null; mode: string }> {
   const contracts = getApiContracts()
   const expectedPayoutRouterKeeper = resolvePayoutRouterKeeperAddress()
+  const expectedPayoutRouterExternalApprovals = resolvePayoutRouterExternalSwapApprovals()
+  const expectedPayoutRouterExternalTargets = new Set<Address>(
+    expectedPayoutRouterExternalApprovals.targets.map((target) => getAddress(target)),
+  )
+  const expectedPayoutRouterExternalSpenders = new Set<Address>(
+    expectedPayoutRouterExternalApprovals.spenders.map((spender) => getAddress(spender)),
+  )
   const expectedZoraToken = contracts.zora && isAddress(contracts.zora) ? getAddress(contracts.zora) : null
   const expectedWethToken = contracts.weth && isAddress(contracts.weth) ? getAddress(contracts.weth) : BASE_WETH
   const expectedProtocolTreasury =
@@ -1764,12 +1798,14 @@ async function validateInnerCalls(params: {
   const permit2 = getAddress(contracts.permit2)
   const configuredSwapRouter =
     contracts.swapRouter && isAddress(contracts.swapRouter) ? getAddress(contracts.swapRouter) : null
-  const allowedSwapRouters = new Set<Address>([
-    BASE_SWAP_ROUTER_LEGACY,
-    BASE_SWAP_ROUTER_CURRENT,
+  const allowedUniversalSwapRouters = new Set<Address>([
+    BASE_UNIVERSAL_ROUTER_CURRENT,
+  ])
+  const allowedPayoutRouterV3Routers = new Set<Address>([
+    BASE_V3_SWAP_ROUTER,
     ...(configuredSwapRouter ? [configuredSwapRouter] : []),
   ])
-  const defaultSwapRouterForDerivedAddresses = configuredSwapRouter ?? BASE_SWAP_ROUTER_CURRENT
+  const defaultSwapRouterForDerivedAddresses = configuredSwapRouter ?? BASE_V3_SWAP_ROUTER
   const create2DeployerFromStoreRaw = contracts.universalCreate2DeployerFromStore
   if (!create2DeployerFromStoreRaw) throw new Error('create2_deployer_from_store_not_configured')
   const create2DeployerFromStore = getAddress(create2DeployerFromStoreRaw)
@@ -1796,7 +1832,8 @@ async function validateInnerCalls(params: {
   for (const c of innerCalls) {
     if (c.value === 0n) continue
     const selector = getSelector(c.data)
-    const isRouterSwapCall = allowedSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+    const isRouterSwapCall =
+      allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
     if (!isRouterSwapCall) throw new Error('value_transfer_not_allowed')
   }
 
@@ -2044,7 +2081,7 @@ async function validateInnerCalls(params: {
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
 
-          if (allowedSwapRouters.has(c.target)) {
+          if (allowedUniversalSwapRouters.has(c.target)) {
             if (selector !== SELECTOR_SWAP_ROUTER_EXECUTE) {
               return { matched: false, creatorToken: null as Address | null }
             }
@@ -2628,7 +2665,9 @@ async function validateInnerCalls(params: {
           throw new Error('payout_router_burn_stream_mismatch')
         }
         if (!ownerArg || ownerArg !== expectedProtocolTreasury) throw new Error('payout_router_owner_mismatch')
-        if (!swapRouterArg || !allowedSwapRouters.has(swapRouterArg)) throw new Error('payout_router_swap_router_mismatch')
+        if (!swapRouterArg || !allowedPayoutRouterV3Routers.has(swapRouterArg)) {
+          throw new Error('payout_router_swap_router_mismatch')
+        }
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
       } else if (codeIdLc === String(CREATOR_COIN_POLICY_CONTROLLER_CODE_ID).toLowerCase()) {
         const expectedSalt = deriveCreatorCoinPolicyControllerSalt({
@@ -2661,7 +2700,12 @@ async function validateInnerCalls(params: {
       if (!expectedProtocolTreasury || params.sender !== expectedProtocolTreasury) {
         throw new Error('payout_router_admin_sender_not_allowed')
       }
-      if (selector !== SELECTOR_PAYOUT_ROUTER_SET_KEEPER && selector !== SELECTOR_PAYOUT_ROUTER_SET_SWAP_PATH) {
+      if (
+        selector !== SELECTOR_PAYOUT_ROUTER_SET_KEEPER &&
+        selector !== SELECTOR_PAYOUT_ROUTER_SET_SWAP_PATH &&
+        selector !== SELECTOR_PAYOUT_ROUTER_SET_EXTERNAL_SWAP_TARGET_APPROVAL &&
+        selector !== SELECTOR_PAYOUT_ROUTER_SET_EXTERNAL_SWAP_SPENDER_APPROVAL
+      ) {
         throw new Error('payout_router_selector_not_allowed')
       }
 
@@ -2699,6 +2743,26 @@ async function validateInnerCalls(params: {
         const pathEnd = decodeAddressFromPackedPath(pathArg, pathBytesLength - 20)
         if (!pathStart || pathStart !== tokenInArg) throw new Error('payout_router_swap_path_start_mismatch')
         if (!pathEnd || pathEnd !== expectedCreatorToken) throw new Error('payout_router_swap_path_end_mismatch')
+        continue
+      }
+
+      if (decodedRouter.functionName === 'setExternalSwapTargetApproval') {
+        const targetArg = getAddress(decodedRouter.args[0] as Address)
+        const approvedArg = decodedRouter.args[1] as boolean
+        if (approvedArg !== true) throw new Error('payout_router_external_approval_must_enable')
+        if (!expectedPayoutRouterExternalTargets.has(targetArg)) {
+          throw new Error('payout_router_external_target_not_allowed')
+        }
+        continue
+      }
+
+      if (decodedRouter.functionName === 'setExternalSwapSpenderApproval') {
+        const spenderArg = getAddress(decodedRouter.args[0] as Address)
+        const approvedArg = decodedRouter.args[1] as boolean
+        if (approvedArg !== true) throw new Error('payout_router_external_approval_must_enable')
+        if (!expectedPayoutRouterExternalSpenders.has(spenderArg)) {
+          throw new Error('payout_router_external_spender_not_allowed')
+        }
         continue
       }
 

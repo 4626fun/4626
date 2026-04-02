@@ -167,6 +167,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
     bytes4 internal constant CREATE_VAULT_SELECTOR =
         bytes4(keccak256("createVault((address,address,uint24,address,uint256,int24,int24,uint24,uint32,int24,int24,uint32,string,string))"));
     bytes4 internal constant GOVERNANCE_SELECTOR = bytes4(keccak256("governance()"));
+    bytes4 internal constant PROTOCOL_FEE_SELECTOR = bytes4(keccak256("protocolFee()"));
 
     bytes32 internal constant CHARM_ALPHA_VAULT_DEPLOY_CODE_ID = keccak256("charm-alpha-vault-deploy");
     bytes32 internal constant CREATOR_CHARM_STRATEGY_CODE_ID = keccak256("creator-charm-strategy");
@@ -175,6 +176,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
     bytes32 internal constant AJNA_ADAPTER_CODE_ID = keccak256("ajna-adapter");
     bytes32 internal constant SOLANA_STRATEGY_CODE_ID = keccak256("solana-strategy");
     uint24 internal constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16% in Charm's 1e6 precision
+    uint24 internal constant CHARM_PROTOCOL_FEE_PIPS = 10_000; // 1% in Charm's 1e6 precision
 
     address internal immutable ownerAddr = makeAddr("owner");
     address internal immutable protocolTreasury = makeAddr("protocolTreasury");
@@ -219,6 +221,9 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             abi.encode(address(0x424cdd9021AF88A86C76b245e24583f9a71e32a1))
         );
         vm.mockCall(
+            batcher.CHARM_FACTORY(), abi.encodeWithSelector(PROTOCOL_FEE_SELECTOR), abi.encode(CHARM_PROTOCOL_FEE_PIPS)
+        );
+        vm.mockCall(
             batcher.CHARM_FACTORY(),
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
             abi.encode(address(new MockCharmVault(protocolTreasury)))
@@ -247,7 +252,8 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             solanaMaxNavDeltaBpsPerUpdate: 500,
             solanaMinBaseLiquidityBps: 1_000,
             solanaBridgeAddress: makeAddr("solanaBridge"),
-            enableAutoAllocate: true
+            enableAutoAllocate: true,
+            expectedCharmProtocolFeePips: CHARM_PROTOCOL_FEE_PIPS
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
@@ -296,7 +302,8 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             solanaMaxNavDeltaBpsPerUpdate: 500,
             solanaMinBaseLiquidityBps: 1_000,
             solanaBridgeAddress: makeAddr("solanaBridge"),
-            enableAutoAllocate: true
+            enableAutoAllocate: true,
+            expectedCharmProtocolFeePips: CHARM_PROTOCOL_FEE_PIPS
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
@@ -331,6 +338,136 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         batcher.deployPhase3Strategies(params, codeIds);
     }
 
+    function test_deployPhase3Strategies_revertsWhenCharmFactoryProtocolFeeMismatches() external {
+        DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
+            creatorToken: makeAddr("creatorToken"),
+            owner: ownerAddr,
+            vault: address(vault),
+            version: "v1",
+            initialSqrtPriceX96: 0,
+            charmVaultName: "Charm Vault",
+            charmVaultSymbol: "CHV",
+            ajnaVaultName: "Ajna Inner Vault",
+            ajnaVaultSymbol: "AIV",
+            charmWeightBps: 7000,
+            ajnaWeightBps: 2000,
+            solanaWeightBps: 1000,
+            ajnaBufferRatioBps: 1_500,
+            ajnaMinBucketIndex: 4_156,
+            ajnaKeeper: makeAddr("ajnaKeeper"),
+            solanaKeeper: makeAddr("solanaKeeper"),
+            solanaMaxNavAge: 3600,
+            solanaMaxNavDeltaBpsPerUpdate: 500,
+            solanaMinBaseLiquidityBps: 1_000,
+            solanaBridgeAddress: makeAddr("solanaBridge"),
+            enableAutoAllocate: true,
+            expectedCharmProtocolFeePips: CHARM_PROTOCOL_FEE_PIPS
+        });
+        DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
+            charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
+            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            ajnaVaultAuth: AJNA_AUTH_CODE_ID,
+            ajnaVault: AJNA_VAULT_CODE_ID,
+            erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID
+        });
+
+        uint24 mismatchedProtocolFee = CHARM_PROTOCOL_FEE_PIPS + 1;
+        vm.mockCall(
+            batcher.CHARM_FACTORY(), abi.encodeWithSelector(PROTOCOL_FEE_SELECTOR), abi.encode(mismatchedProtocolFee)
+        );
+
+        vm.prank(ownerAddr);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeploymentBatcher.CharmFactoryProtocolFeeMismatch.selector,
+                uint256(CHARM_PROTOCOL_FEE_PIPS),
+                uint256(mismatchedProtocolFee)
+            )
+        );
+        batcher.deployPhase3Strategies(params, codeIds);
+    }
+
+    function test_deployPhase3Strategies_usesDefaultCharmProtocolFeeWhenParamIsZero() external {
+        DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
+            creatorToken: makeAddr("creatorToken"),
+            owner: ownerAddr,
+            vault: address(vault),
+            version: "v1",
+            initialSqrtPriceX96: 0,
+            charmVaultName: "Charm Vault",
+            charmVaultSymbol: "CHV",
+            ajnaVaultName: "Ajna Inner Vault",
+            ajnaVaultSymbol: "AIV",
+            charmWeightBps: 7000,
+            ajnaWeightBps: 2000,
+            solanaWeightBps: 1000,
+            ajnaBufferRatioBps: 1_500,
+            ajnaMinBucketIndex: 4_156,
+            ajnaKeeper: makeAddr("ajnaKeeper"),
+            solanaKeeper: makeAddr("solanaKeeper"),
+            solanaMaxNavAge: 3600,
+            solanaMaxNavDeltaBpsPerUpdate: 500,
+            solanaMinBaseLiquidityBps: 1_000,
+            solanaBridgeAddress: makeAddr("solanaBridge"),
+            enableAutoAllocate: true,
+            expectedCharmProtocolFeePips: 0
+        });
+        DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
+            charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
+            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            ajnaVaultAuth: AJNA_AUTH_CODE_ID,
+            ajnaVault: AJNA_VAULT_CODE_ID,
+            erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID
+        });
+
+        vm.prank(ownerAddr);
+        DeploymentBatcher.Phase3Result memory out = batcher.deployPhase3Strategies(params, codeIds);
+        assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "default protocol fee guard should pass");
+    }
+
+    function test_deployPhase3Strategies_acceptsCustomExpectedCharmProtocolFee() external {
+        DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
+            creatorToken: makeAddr("creatorToken"),
+            owner: ownerAddr,
+            vault: address(vault),
+            version: "v1",
+            initialSqrtPriceX96: 0,
+            charmVaultName: "Charm Vault",
+            charmVaultSymbol: "CHV",
+            ajnaVaultName: "Ajna Inner Vault",
+            ajnaVaultSymbol: "AIV",
+            charmWeightBps: 7000,
+            ajnaWeightBps: 2000,
+            solanaWeightBps: 1000,
+            ajnaBufferRatioBps: 1_500,
+            ajnaMinBucketIndex: 4_156,
+            ajnaKeeper: makeAddr("ajnaKeeper"),
+            solanaKeeper: makeAddr("solanaKeeper"),
+            solanaMaxNavAge: 3600,
+            solanaMaxNavDeltaBpsPerUpdate: 500,
+            solanaMinBaseLiquidityBps: 1_000,
+            solanaBridgeAddress: makeAddr("solanaBridge"),
+            enableAutoAllocate: true,
+            expectedCharmProtocolFeePips: 12_345
+        });
+        DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
+            charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
+            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            ajnaVaultAuth: AJNA_AUTH_CODE_ID,
+            ajnaVault: AJNA_VAULT_CODE_ID,
+            erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID
+        });
+
+        vm.mockCall(batcher.CHARM_FACTORY(), abi.encodeWithSelector(PROTOCOL_FEE_SELECTOR), abi.encode(uint24(12_345)));
+
+        vm.prank(ownerAddr);
+        DeploymentBatcher.Phase3Result memory out = batcher.deployPhase3Strategies(params, codeIds);
+        assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "custom protocol fee guard should pass");
+    }
+
     function test_deployPhase3Strategies_revertsWhenCharmVaultManagerMismatches() external {
         DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
             creatorToken: makeAddr("creatorToken"),
@@ -353,7 +490,8 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             solanaMaxNavDeltaBpsPerUpdate: 500,
             solanaMinBaseLiquidityBps: 1_000,
             solanaBridgeAddress: makeAddr("solanaBridge"),
-            enableAutoAllocate: true
+            enableAutoAllocate: true,
+            expectedCharmProtocolFeePips: CHARM_PROTOCOL_FEE_PIPS
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,

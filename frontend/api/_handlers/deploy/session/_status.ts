@@ -438,6 +438,7 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
           { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
           { name: 'solanaBridgeAddress', type: 'address' },
           { name: 'enableAutoAllocate', type: 'bool' },
+          { name: 'expectedCharmProtocolFeePips', type: 'uint24' },
         ],
       },
       {

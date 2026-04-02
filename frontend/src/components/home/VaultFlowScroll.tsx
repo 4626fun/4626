@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AnimatePresence,
@@ -129,13 +129,25 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
 
   const [activeStageIdx, setActiveStageIdx] = useState(0)
   const [cameoIcons, setCameoIcons] = useState<Record<string, string>>({})
-  const [hardStopActive, setHardStopActive] = useState(false)
+  // Generalised checkpoint system — 4 hard stops, one per stage completion.
+  const [hardStop, setHardStop] = useState<{
+    active: boolean; dur: number; label: string; id: number
+  }>({ active: false, dur: 2, label: '', id: 0 })
   const smoothstep = (t: number) => t * t * (3 - 2 * t)
 
-  // Hard stop — fires once all 3 distribution paths are drawn (~0.82).
-  // Locks scroll for 2 s so users can clearly read all 3 distribution cards,
-  // then releases and shows the dive animation into Stage 4.
-  const distHardStop = useRef(false)
+  const hardStopFired = useRef({ s1: false, s2: false, s3: false, s4: false })
+
+  const fireHardStop = useCallback((label: string, dur: number) => {
+    setHardStop(prev => ({ active: true, dur, label, id: prev.id + 1 }))
+    const block = (e: Event) => e.preventDefault()
+    document.addEventListener('wheel',     block, { passive: false })
+    document.addEventListener('touchmove', block, { passive: false })
+    setTimeout(() => {
+      document.removeEventListener('wheel',     block)
+      document.removeEventListener('touchmove', block)
+      setHardStop(prev => ({ ...prev, active: false }))
+    }, dur * 1000)
+  }, [])
 
   useMotionValueEvent(scroll, 'change', (v) => {
     if (v < 0.32) setActiveStageIdx(0)
@@ -143,18 +155,16 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
     else if (v < 0.73) setActiveStageIdx(2)
     else setActiveStageIdx(3)
 
-    if (!distHardStop.current && v >= 0.72) {
-      distHardStop.current = true
-      setHardStopActive(true)
-      const blockScroll = (e: Event) => e.preventDefault()
-      document.addEventListener('wheel',     blockScroll, { passive: false })
-      document.addEventListener('touchmove', blockScroll, { passive: false })
-      setTimeout(() => {
-        document.removeEventListener('wheel',     blockScroll)
-        document.removeEventListener('touchmove', blockScroll)
-        setHardStopActive(false)
-      }, 3200)
-    }
+    const f = hardStopFired.current
+    // Checkpoint 1: vault fully sealed + cage walls drawn (vaultTopProgress hits 1.0 at 0.34)
+    if (!f.s1 && v >= 0.34) { f.s1 = true; fireHardStop('vault sealed', 2.0) }
+    // Checkpoint 2: deposit fill done (0.48) + ■AKITA right column fully visible (0.55)
+    // 0.56 is the first frame where both card columns are at 100% opacity
+    if (!f.s2 && v >= 0.56) { f.s2 = true; fireHardStop('shares minted', 2.0) }
+    // Checkpoint 3: all 3 distribution paths complete (_n2Raw hits 1.0 at 0.72)
+    if (!f.s3 && v >= 0.72) { f.s3 = true; fireHardStop('take a moment', 3.2) }
+    // Checkpoint 4: all 4 strategy cards at 90%+ opacity (s4c3o reaches ~0.90 at 0.99)
+    if (!f.s4 && v >= 0.99) { f.s4 = true; fireHardStop('strategies deployed', 2.5) }
   })
 
   // Prefetch real token/profile images for creator cameos.
@@ -354,8 +364,13 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
   const coinEntryGlow = useTransform(scroll, [0.50, 0.55, 0.73, 0.77], [0, 1, 1, 0])
   // Zora neon-green mint flash — a quick tribute to Zora's new identity.
   const zoraGreenFlash = useTransform(scroll, [0.48, 0.505, 0.54], [0, 1, 0])
-  // Platform edge flare — same beat, fades into the dive
-  const coinEntryFlare = useTransform(scroll, [0.50, 0.55, 0.73, 0.77], [0, 1, 0.65, 0])
+  // Platform edge flare removed — replaced by HP/MP token bars
+  // Green flash on bars when deposit fill completes (same beat as zoraGreenFlash)
+  const barFillGlow = zoraGreenFlash
+  // Green flash on each distribution card when its path finishes drawing
+  const distGreen0 = useTransform(scroll, [0.60, 0.615, 0.65], [0, 1, 0])
+  const distGreen1 = useTransform(scroll, [0.67, 0.685, 0.72], [0, 1, 0])
+  const distGreen2 = useTransform(scroll, [0.72, 0.735, 0.76], [0, 1, 0])
   // Entry radial bloom: peaks as vault rushes through camera, fully faded before deploy content reads
   const vaultEntry = useTransform(scroll, [0.76, 0.80, 0.84], [0, 1, 0])
 
@@ -421,6 +436,10 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
     },
   )
   const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
+  // HP/MP bars — appear with deposit card, fade with dive
+  const tokenBarOp = useTransform(scroll, [0.36, 0.42, 0.73, 0.77], [0, 1, 1, 0])
+  // ■AKITA share fill width — rises with deposit fill, then drains as distributions draw down
+  const shareFillWidth = useTransform(remainingMinted, v => `${((v / 50_000_000) * 100).toFixed(1)}%`)
   // "Vault initiated" confirmation badge — flashes after fill completes
   const vaultInitOp = useTransform(scroll, [0.50, 0.53, 0.55, 0.60], [0, 1, 1, 0])
 
@@ -1127,26 +1146,102 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                   aria-hidden="true"
                 />
 
-                {/* Platform near-edge flare — vault seal "seals" with a bright rim */}
+                {/* HP/MP token bars — akita deposited (orange) + ■AKITA shares (blue) */}
                 <motion.div
                   className="pointer-events-none absolute"
                   style={{
-                    bottom: -46,
-                    left: -72,
-                    right: -72,
-                    height: 4,
-                    borderRadius: 2,
-                    opacity: coinEntryFlare,
-                    background: 'linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.60) 25%, rgba(160,180,255,0.90) 50%, rgba(249,115,22,0.60) 75%, transparent 100%)',
-                    boxShadow: [
-                      '0 0 0 1px rgba(200,220,255,0.55)',
-                      '0 0 12px 4px rgba(200,220,255,0.40)',
-                      '0 0 36px 12px rgba(0,82,255,0.24)',
-                      '0 0 80px 28px rgba(249,115,22,0.14)',
-                    ].join(', '),
+                    bottom: -84,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 'clamp(200px, 48vw, 228px)',
+                    opacity: tokenBarOp,
                   }}
                   aria-hidden="true"
-                />
+                >
+                  {/* akita row */}
+                  <div className="mb-[7px]">
+                    <div className="mb-[3px] flex items-baseline justify-between">
+                      <span
+                        className="font-mono text-[6.5px] uppercase tracking-[0.18em]"
+                        style={{ color: 'rgba(249,115,22,0.65)' }}
+                      >
+                        akita
+                      </span>
+                      <span
+                        className="font-mono text-[6.5px] tabular-nums"
+                        style={{ color: 'rgba(249,115,22,0.45)' }}
+                      >
+                        {depositCount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div
+                      className="relative overflow-hidden rounded-full"
+                      style={{ height: 2, background: 'rgba(249,115,22,0.12)' }}
+                    >
+                      <motion.div
+                        style={{
+                          height: '100%',
+                          width: depositFillWidth,
+                          borderRadius: 9999,
+                          background: 'linear-gradient(90deg, rgba(249,115,22,0.90), rgba(249,115,22,0.55))',
+                          boxShadow: '0 0 6px 2px rgba(249,115,22,0.30)',
+                        }}
+                      />
+                      {/* green completion flash */}
+                      <motion.div
+                        className="pointer-events-none absolute inset-0 rounded-full"
+                        style={{
+                          opacity: barFillGlow,
+                          background: 'rgba(57,255,20,0.40)',
+                          boxShadow: '0 0 10px 4px rgba(57,255,20,0.55)',
+                        }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ■AKITA row */}
+                  <div>
+                    <div className="mb-[3px] flex items-baseline justify-between">
+                      <span
+                        className="font-mono text-[6.5px] uppercase tracking-[0.18em]"
+                        style={{ color: 'rgba(100,160,255,0.65)' }}
+                      >
+                        ■AKITA
+                      </span>
+                      <span
+                        className="font-mono text-[6.5px] tabular-nums"
+                        style={{ color: 'rgba(100,160,255,0.45)' }}
+                      >
+                        {remainingCount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div
+                      className="relative overflow-hidden rounded-full"
+                      style={{ height: 2, background: 'rgba(100,160,255,0.12)' }}
+                    >
+                      <motion.div
+                        style={{
+                          height: '100%',
+                          width: shareFillWidth,
+                          borderRadius: 9999,
+                          background: 'linear-gradient(90deg, rgba(100,160,255,0.90), rgba(100,160,255,0.55))',
+                          boxShadow: '0 0 6px 2px rgba(100,160,255,0.30)',
+                        }}
+                      />
+                      {/* green completion flash — same beat as akita bar */}
+                      <motion.div
+                        className="pointer-events-none absolute inset-0 rounded-full"
+                        style={{
+                          opacity: barFillGlow,
+                          background: 'rgba(57,255,20,0.40)',
+                          boxShadow: '0 0 10px 4px rgba(57,255,20,0.55)',
+                        }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
 
                 <ZorbViewer size={96} />
               </div>
@@ -1305,6 +1400,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                     const ops = [node0Op, node1Op, node2Op]
                     const ys = [dist0CardY, dist1CardY, dist2CardY]
                     const glows = [nodeGlow0, nodeGlow1, nodeGlow2]
+                    const greenFlashes = [distGreen0, distGreen1, distGreen2]
                     return (
                       <motion.div
                         key={row.title}
@@ -1321,7 +1417,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                       >
                         {/* Top edge highlight */}
                         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                        {/* Arrival glow — soft white ring */}
+                        {/* Arrival glow — soft white/blue ring */}
                         <motion.div
                           className="pointer-events-none absolute rounded-[18px]"
                           style={{
@@ -1329,6 +1425,20 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                             opacity: glows[i],
                             boxShadow:
                               '0 0 0 1px rgba(255,255,255,0.28), 0 0 24px 6px rgba(255,255,255,0.12), 0 0 60px 18px rgba(200,215,255,0.08)',
+                          }}
+                          aria-hidden="true"
+                        />
+                        {/* Green completion flash — fires when path finishes drawing */}
+                        <motion.div
+                          className="pointer-events-none absolute rounded-[14px] sm:rounded-[18px]"
+                          style={{
+                            inset: -1,
+                            opacity: greenFlashes[i],
+                            boxShadow: [
+                              '0 0 0 1px rgba(57,255,20,0.55)',
+                              '0 0 18px 4px rgba(57,255,20,0.35)',
+                              '0 0 50px 14px rgba(57,255,20,0.12)',
+                            ].join(', '),
                           }}
                           aria-hidden="true"
                         />
@@ -1376,11 +1486,11 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
               </div>
             </motion.div>
 
-            {/* Hard-stop progress bar — depletes over 3.2 s while scroll is locked */}
+            {/* Checkpoint progress bar — fires at each of the 4 stage completions */}
             <AnimatePresence>
-              {hardStopActive && (
+              {hardStop.active && (
                 <motion.div
-                  key="hard-stop-bar"
+                  key={`hard-stop-${hardStop.id}`}
                   className="pointer-events-none absolute bottom-8 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2.5"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1392,7 +1502,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                     className="font-mono text-[8px] uppercase tracking-[0.32em]"
                     style={{ color: 'rgba(255,255,255,0.50)' }}
                   >
-                    take a moment
+                    {hardStop.label}
                   </span>
                   <div
                     className="overflow-hidden rounded-full"
@@ -1404,6 +1514,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                     }}
                   >
                     <motion.div
+                      key={`bar-fill-${hardStop.id}`}
                       className="h-full rounded-full"
                       style={{
                         background:
@@ -1413,7 +1524,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                       }}
                       initial={{ scaleX: 1 }}
                       animate={{ scaleX: 0 }}
-                      transition={{ duration: 3.2, ease: 'linear' }}
+                      transition={{ duration: hardStop.dur, ease: 'linear' }}
                     />
                   </div>
                   <motion.span

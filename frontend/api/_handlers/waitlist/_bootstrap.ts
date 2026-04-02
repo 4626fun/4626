@@ -13,7 +13,6 @@ import {
 import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
 import {
   dedupeReferralCodeCandidates,
-  ensureReferralsSchema,
   getClientIp,
   getUserAgent,
   hashForAttribution,
@@ -21,7 +20,7 @@ import {
   referralCodeFromEmail,
 } from '../../../server/_lib/referrals.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
+import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
@@ -313,8 +312,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   await ensureWaitlistSchema(db as any)
-  await ensureWaitlistPointsSchema(db as any)
-  await ensureReferralsSchema(db as any)
 
   if (!token) {
     let waitlistEntryId: number | null = null

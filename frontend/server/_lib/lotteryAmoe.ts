@@ -2,7 +2,6 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from './postgres.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
-import { ensureWaitlistPointsSchema } from './waitlistPoints.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -123,7 +122,6 @@ function nowIso(): string {
 async function ensureAmoeSchema(db: Db): Promise<void> {
   if (amoeSchemaEnsured) return
   await ensureWaitlistSchema(db as any)
-  await ensureWaitlistPointsSchema(db as any)
   await db.sql`
     CREATE TABLE IF NOT EXISTS lottery_amoe_nonces (
       nonce TEXT PRIMARY KEY,

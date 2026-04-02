@@ -6,7 +6,6 @@ import { verifyPrivyRequest } from './canonicalCswDelegation.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
 import { extractPrivyVerifiedEmail } from './trust.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
-import { ensureWaitlistPointsSchema } from './waitlistPoints.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
 import { resolveCanonicalCsw } from './canonicalCswDelegation.js'
 import { fetchZoraProfile } from './zoraProfile.js'
@@ -456,7 +455,6 @@ async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId
 
 async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountScore> {
   await ensureWaitlistSchema(db)
-  await ensureWaitlistPointsSchema(db as any)
   const profileIds = await listProfileIdsForPrivyUser(db, privyUserId)
   if (profileIds.length === 0) return { points: 0, tier: 0 }
 
@@ -525,7 +523,6 @@ export async function applyPointEvent(params: {
   }
 
   await ensureWaitlistSchema(db)
-  await ensureWaitlistPointsSchema(db as any)
   let canonicalProfileId = 0
   try {
     canonicalProfileId = await resolveOrCreateCanonicalProfileIdForPrivyUser(db, privyUserId)

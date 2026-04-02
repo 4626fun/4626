@@ -164,6 +164,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     bytes4 internal constant CREATE_VAULT_SELECTOR =
         bytes4(keccak256("createVault((address,address,uint24,address,uint256,int24,int24,uint24,uint32,int24,int24,uint32,string,string))"));
     bytes4 internal constant GOVERNANCE_SELECTOR = bytes4(keccak256("governance()"));
+    bytes4 internal constant PROTOCOL_FEE_SELECTOR = bytes4(keccak256("protocolFee()"));
 
     bytes32 internal constant CHARM_ALPHA_CODE_ID = bytes32(uint256(1));
     bytes32 internal constant CREATOR_CHARM_STRATEGY_CODE_ID = bytes32(uint256(2));
@@ -172,6 +173,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     bytes32 internal constant AJNA_ADAPTER_CODE_ID = bytes32(uint256(5));
     bytes32 internal constant SOLANA_STRATEGY_CODE_ID = bytes32(uint256(6));
     uint24 internal constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16% in Charm's 1e6 precision
+    uint24 internal constant CHARM_PROTOCOL_FEE_PIPS = 10_000; // 1% in Charm's 1e6 precision
 
     DeploymentBatcher internal batcher;
     MockCreate2DeployerForPhase3 internal create2Deployer;
@@ -241,6 +243,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
             abi.encodeWithSelector(GOVERNANCE_SELECTOR),
             abi.encode(address(0x424cdd9021AF88A86C76b245e24583f9a71e32a1))
         );
+        vm.mockCall(CHARM_FACTORY, abi.encodeWithSelector(PROTOCOL_FEE_SELECTOR), abi.encode(CHARM_PROTOCOL_FEE_PIPS));
         vm.mockCall(
             CHARM_FACTORY,
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
@@ -270,7 +273,8 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
             solanaMaxNavDeltaBpsPerUpdate: 500,
             solanaMinBaseLiquidityBps: 1_000,
             solanaBridgeAddress: solanaBridge,
-            enableAutoAllocate: true
+            enableAutoAllocate: true,
+            expectedCharmProtocolFeePips: CHARM_PROTOCOL_FEE_PIPS
         });
     }
 
@@ -336,6 +340,33 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
 
         vm.expectCall(CHARM_FACTORY, abi.encodeWithSelector(CREATE_VAULT_SELECTOR, expectedVaultParams));
 
+        batcher.deployPhase3Strategies(params, _strategyCodeIds());
+    }
+
+    function test_deployPhase3Strategies_revertsWhenCharmFactoryProtocolFeeMismatches() public {
+        uint24 mismatchedProtocolFee = CHARM_PROTOCOL_FEE_PIPS + 1;
+        vm.mockCall(CHARM_FACTORY, abi.encodeWithSelector(PROTOCOL_FEE_SELECTOR), abi.encode(mismatchedProtocolFee));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeploymentBatcher.CharmFactoryProtocolFeeMismatch.selector,
+                uint256(CHARM_PROTOCOL_FEE_PIPS),
+                uint256(mismatchedProtocolFee)
+            )
+        );
+        batcher.deployPhase3Strategies(_phase3Params(), _strategyCodeIds());
+    }
+
+    function test_deployPhase3Strategies_usesDefaultCharmProtocolFeeWhenExpectedIsZero() public {
+        DeploymentBatcher.Phase3Params memory params = _phase3Params();
+        params.expectedCharmProtocolFeePips = 0;
+        batcher.deployPhase3Strategies(params, _strategyCodeIds());
+    }
+
+    function test_deployPhase3Strategies_acceptsCustomExpectedCharmProtocolFee() public {
+        DeploymentBatcher.Phase3Params memory params = _phase3Params();
+        params.expectedCharmProtocolFeePips = 12_345;
+        vm.mockCall(CHARM_FACTORY, abi.encodeWithSelector(PROTOCOL_FEE_SELECTOR), abi.encode(uint24(12_345)));
         batcher.deployPhase3Strategies(params, _strategyCodeIds());
     }
 

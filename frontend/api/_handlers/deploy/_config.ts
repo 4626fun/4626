@@ -10,7 +10,12 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { resolvePayoutRouterFeeConfig, resolvePayoutRouterKeeperAddress } from '../../../server/_lib/payoutRouterRuntime.js'
+import {
+  resolvePayoutRouterExternalSwapApprovals,
+  resolvePayoutRouterFeeConfig,
+  resolvePayoutRouterKeeperAddress,
+  resolvePayoutRouterZoraToken,
+} from '../../../server/_lib/payoutRouterRuntime.js'
 import { isServerAdminAddress } from '../../../server/_lib/trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -22,6 +27,8 @@ type DeployConfigResponse = {
   deployMode: string
   serverContinue: boolean
   payoutRouterKeeperAddress: `0x${string}` | null
+  payoutRouterApprovedExternalSwapTargets: `0x${string}`[]
+  payoutRouterApprovedExternalSwapSpenders: `0x${string}`[]
   zoraToken: `0x${string}` | null
   payoutRouterZoraWethFee: number
   payoutRouterWethCreatorFee: number
@@ -47,6 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const contracts = getApiContracts()
   const payoutRouterKeeperAddress = resolvePayoutRouterKeeperAddress()
+  const payoutRouterExternalApprovals = resolvePayoutRouterExternalSwapApprovals()
   const payoutRouterFees = resolvePayoutRouterFeeConfig()
   const deployMode = String(process.env.VITE_DEPLOY_MODE ?? process.env.DEPLOY_MODE ?? 'default')
     .trim()
@@ -60,7 +68,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     deployMode,
     serverContinue: envBool('VITE_DEPLOY_USE_SERVER_CONTINUE'),
     payoutRouterKeeperAddress: payoutRouterKeeperAddress ?? null,
-    zoraToken: contracts.zora ?? null,
+    payoutRouterApprovedExternalSwapTargets: payoutRouterExternalApprovals.targets,
+    payoutRouterApprovedExternalSwapSpenders: payoutRouterExternalApprovals.spenders,
+    zoraToken: resolvePayoutRouterZoraToken(contracts.zora ?? null),
     payoutRouterZoraWethFee: payoutRouterFees.zoraWethFee,
     payoutRouterWethCreatorFee: payoutRouterFees.wethCreatorFee,
   }
