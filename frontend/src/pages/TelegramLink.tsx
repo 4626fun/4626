@@ -43,7 +43,7 @@ type TelegramLinkCompleteData = {
 
 const OTP_RESEND_DELAY_MS = 30_000
 const OTP_SEND_TIMEOUT_MS = 12_000
-const PRIVY_SYNC_TIMEOUT_MS = 20_000
+const PRIVY_SYNC_TIMEOUT_MS = 45_000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const TG_VIEWPORT_STYLE: CSSProperties = {
@@ -174,7 +174,7 @@ function buildTelegramSessionError(error: string, statusCode: number): FlowError
 function buildPrivySyncFailure(message?: string, recoverable = true): FlowError {
   return createFlowError({
     code: 'PRIVY_SYNC_FAILED',
-    message: message || '4626 account sync did not complete after email verification.',
+    message: message || '4626 account sync did not complete after email verification. Retry to continue.',
     recoverable,
   })
 }
@@ -1450,8 +1450,16 @@ export function TelegramLink() {
               body={`Connected to ${state.account.email}. Your Telegram account is verified and attached to your 4626 account.`}
             />
             {walletSetupPending ? (
-              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED]">
-                Wallet setup pending. Telegram is connected, but wallet and trading actions unlock after your Coinbase Smart Wallet is confirmed.
+              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED] space-y-2">
+                <div>
+                  Wallet setup pending. Telegram is connected, but wallet and trading actions unlock after your Coinbase Smart Wallet owner setup is confirmed.
+                </div>
+                <div className="text-xs text-[#A9B9FF]">
+                  Next step: sign in as a current owner of your canonical CSW and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span> in Accounts.
+                </div>
+                <a href="/accounts" className="inline-flex text-xs font-medium text-[#8FB0FF] underline underline-offset-2 hover:text-[#BBD0FF]">
+                  Open Accounts
+                </a>
               </div>
             ) : null}
             <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.025] p-3.5">
