@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/apiBase'
 
 export type CreatorAllowlistMode = 'disabled' | 'enforced'
 
@@ -23,7 +24,7 @@ async function fetchCreatorAllowlistStatus(params: CreatorAllowlistQuery): Promi
   if (params.address) qs.set('address', params.address)
   if (params.coin) qs.set('coin', params.coin)
 
-  const res = await fetch(`${API_ENDPOINTS.creator.allowlist}?${qs.toString()}`, { method: 'GET' })
+  const res = await apiFetch(`${API_ENDPOINTS.creator.allowlist}?${qs.toString()}`, { method: 'GET' })
   if (!res.ok) throw new Error(`Allowlist check failed (${res.status})`)
   const json = await parseApiEnvelope<CreatorAllowlistStatus>(res)
   if (!json?.success) throw new Error(resolveApiErrorMessage(json, 'Allowlist check failed'))
@@ -52,5 +53,4 @@ export function useCreatorAllowlist(
     retry: 1,
   })
 }
-
 

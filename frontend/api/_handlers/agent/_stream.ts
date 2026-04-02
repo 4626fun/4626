@@ -9,7 +9,7 @@ import {
   readSessionFromRequest,
   setCors,
   setNoStore,
-  RATE_LIMITS,
+  getClientIp,
   checkRateLimit,
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
@@ -18,7 +18,9 @@ import {
 
 
 const STREAM_MESSAGE_MAX_CHARS = 4_000
-const STREAM_CONTEXT_MAX_CHARS = 8_000
+const STREAM_CONTEXT_MAX_CHARS = 4_000
+const STREAM_RATE_LIMIT = { windowMs: 60_000, maxRequests: 24 } as const
+const STREAM_IP_RATE_LIMIT = { windowMs: 60_000, maxRequests: 36 } as const
 
 function firstQueryValue(value: string | string[] | undefined): string {
   if (typeof value === 'string') return value
@@ -44,9 +46,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isAddressLike(sessionAddress)) {
     return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
-  const rate = checkRateLimit(rateLimitKey('agent-stream', sessionAddress), RATE_LIMITS.general)
-  if (!rate.allowed) {
-    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+  const clientIp = getClientIp(req)
+  const principalRate = checkRateLimit(
+    rateLimitKey('agent-stream-principal', sessionAddress),
+    STREAM_RATE_LIMIT,
+  )
+  const ipRate = checkRateLimit(rateLimitKey('agent-stream-ip', clientIp), STREAM_IP_RATE_LIMIT)
+  const rateRemaining = Math.min(principalRate.remaining, ipRate.remaining)
+  const rateResetAt = Math.min(principalRate.resetAt, ipRate.resetAt)
+  res.setHeader('X-RateLimit-Limit', String(STREAM_RATE_LIMIT.maxRequests))
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, rateRemaining)))
+  res.setHeader('X-RateLimit-Reset', String(Math.floor(rateResetAt / 1000)))
+  if (!principalRate.allowed || !ipRate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rateResetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
@@ -69,7 +81,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? String((req.body as any).context).trim()
       : ''
   const vaultContextRaw = bodyContext || queryContext
-  const vaultContext = vaultContextRaw.slice(0, STREAM_CONTEXT_MAX_CHARS)
+  if (vaultContextRaw.length > STREAM_CONTEXT_MAX_CHARS) {
+    return res.status(400).json({ success: false, error: 'context is too long' })
+  }
+  const vaultContext = vaultContextRaw
 
   const correlationId = createCorrelationId('sse')
   const llm = getElizaLlmService()

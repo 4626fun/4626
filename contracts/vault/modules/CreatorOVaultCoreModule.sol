@@ -9,6 +9,7 @@ import {IStrategy} from "../../interfaces/IStrategy.sol";
 import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
 
 import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
+import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 
 interface ICreatorOVaultStrategiesModuleInternal {
     function __withdrawFromStrategies(uint256 amountNeeded) external returns (uint256 totalWithdrawn);
@@ -17,8 +18,10 @@ interface ICreatorOVaultStrategiesModuleInternal {
 
 /// @notice Core ERC-4626 + queue + profit unlocking + reporting logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
-contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
+contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
+    bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1");
 
     // ---- constants (must match vault) ----
     uint16 internal constant MAX_FEE = 2_000;
@@ -67,6 +70,14 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
     // =================================
     // PROFIT UNLOCKING
     // =================================
+
+    function moduleKind() external pure returns (bytes32) {
+        return MODULE_KIND;
+    }
+
+    function moduleStorageVersion() external pure returns (bytes32) {
+        return MODULE_STORAGE_VERSION;
+    }
 
     function unlockedShares() external view onlyDelegateCall returns (uint256) {
         uint256 locked = totalLockedShares;

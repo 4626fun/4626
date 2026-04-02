@@ -18,6 +18,11 @@ function setCache(res: VercelResponse, seconds: number = 60) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 5}`)
 }
 
+function setPrivateNoStore(res: VercelResponse) {
+  res.setHeader('Cache-Control', 'private, no-store')
+  res.setHeader('Vary', 'Authorization, Cookie')
+}
+
 function clampInt(n: number, min: number, max: number): number {
   if (!Number.isFinite(n)) return min
   return Math.max(min, Math.min(max, Math.floor(n)))
@@ -79,7 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cursor: cursor ?? undefined,
       creatorAddress: creatorAddress ?? undefined,
     })
-    setCache(res, 60)
+    if (includeUnlistedRequested) setPrivateNoStore(res)
+    else setCache(res, 60)
     return res.status(200).json({
       success: true,
       data: {

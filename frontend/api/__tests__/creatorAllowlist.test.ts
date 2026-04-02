@@ -156,5 +156,32 @@ describe('/api/creator-allowlist', () => {
     expect(res.body?.data?.mode).toBe('enforced')
     expect(res.body?.data?.allowed).toBe(true)
   })
-})
 
+  it('does not fail the endpoint when Supabase allowlist query errors', async () => {
+    isSupabaseAdminConfiguredMock.mockReturnValue(true)
+    isDbConfiguredMock.mockReturnValue(false)
+
+    getSupabaseAdminMock.mockReturnValue(
+      createSupabaseMock(async (state) => {
+        if (state.table === 'allowlist') return { data: [], error: { message: 'temporary_error' } }
+        if (state.table === 'creator_wallets') return { data: [], error: null }
+        if (state.table === 'profiles') return { data: [], error: null }
+        if (state.table === 'profile_wallets') return { data: [], error: null }
+        return { data: [], error: null }
+      }),
+    )
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { address: '0x2182f4e72fcc5d9cdd789457aab798aa79587b46' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.mode).toBe('enforced')
+    expect(res.body?.data?.allowed).toBe(false)
+  })
+})

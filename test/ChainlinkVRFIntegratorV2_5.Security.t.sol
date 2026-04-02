@@ -4,6 +4,15 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 
+contract GasHeavyOwnerReceiver {
+    uint256 public totalReceived;
+
+    receive() external payable {
+        // Storage write exceeds transfer()'s 2300 gas stipend.
+        totalReceived += msg.value;
+    }
+}
+
 contract ChainlinkVRFIntegratorV2_5SecurityTest is Test {
     ChainlinkVRFIntegratorV2_5 internal integrator;
 
@@ -60,5 +69,20 @@ contract ChainlinkVRFIntegratorV2_5SecurityTest is Test {
         vm.prank(owner);
         vm.expectRevert(bytes("Hub peer not set"));
         integrator.requestRandomWordsPayable{value: 1}();
+    }
+
+    function test_Withdraw_SucceedsWhenOwnerIsGasHeavyContract() public {
+        GasHeavyOwnerReceiver receiver = new GasHeavyOwnerReceiver();
+
+        vm.prank(owner);
+        integrator.transferOwnership(address(receiver));
+
+        vm.deal(address(integrator), 1 ether);
+
+        vm.prank(address(receiver));
+        integrator.withdraw();
+
+        assertEq(address(integrator).balance, 0);
+        assertEq(receiver.totalReceived(), 1 ether);
     }
 }

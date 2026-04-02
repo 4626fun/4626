@@ -52,22 +52,26 @@ async function dbIsAllowlisted(
   addresses: string[],
 ): Promise<boolean> {
   if (addresses.length === 0) return false
-  await ensureCreatorAccessSchema()
+  try {
+    await ensureCreatorAccessSchema()
 
-  // Query one-by-one (small list, keeps SQL simple and reliable).
-  for (const a of addresses) {
-    const addr = a.toLowerCase()
-    if (!isAddressLike(addr)) continue
-    const { rows } = await db.sql`
-      SELECT address
-      FROM allowlist
-      WHERE (lower(address) = ${addr} OR lower(csw_address) = ${addr})
-        AND revoked_at IS NULL
-      LIMIT 1;
-    `
-    if (rows.length > 0) return true
+    // Query one-by-one (small list, keeps SQL simple and reliable).
+    for (const a of addresses) {
+      const addr = a.toLowerCase()
+      if (!isAddressLike(addr)) continue
+      const { rows } = await db.sql`
+        SELECT address
+        FROM allowlist
+        WHERE (lower(address) = ${addr} OR lower(csw_address) = ${addr})
+          AND revoked_at IS NULL
+        LIMIT 1;
+      `
+      if (rows.length > 0) return true
+    }
+    return false
+  } catch {
+    return false
   }
-  return false
 }
 
 async function dbHasLinkedWallet(
@@ -134,16 +138,20 @@ async function supabaseIsAllowlisted(addresses: string[]): Promise<boolean> {
     .filter((a) => isAddressLike(a))
   if (addrs.length === 0) return false
 
-  const supabase = getSupabaseAdmin()
-  const orFilters = addrs.map((a) => `address.ilike.${a},csw_address.ilike.${a}`).join(',')
-  const res = await supabase
-    .from('allowlist')
-    .select('address')
-    .or(orFilters)
-    .is('revoked_at', null)
-    .limit(1)
-  if (res.error) throw new Error(res.error.message)
-  return Array.isArray(res.data) && res.data.length > 0
+  try {
+    const supabase = getSupabaseAdmin()
+    const orFilters = addrs.map((a) => `address.ilike.${a},csw_address.ilike.${a}`).join(',')
+    const res = await supabase
+      .from('allowlist')
+      .select('address')
+      .or(orFilters)
+      .is('revoked_at', null)
+      .limit(1)
+    if (res.error) return false
+    return Array.isArray(res.data) && res.data.length > 0
+  } catch {
+    return false
+  }
 }
 
 async function supabaseHasLinkedWallet(address: string | null, coin: string | null): Promise<boolean> {
@@ -290,4 +298,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies CreatorAllowlistResponse,
   } satisfies ApiEnvelope<CreatorAllowlistResponse>)
 }
-

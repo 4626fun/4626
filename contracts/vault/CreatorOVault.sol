@@ -11,6 +11,7 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IStrategyValuation} from "../interfaces/IStrategyValuation.sol";
+import {ICreatorOVaultModuleIdentity} from "./modules/ICreatorOVaultModuleIdentity.sol";
 
 /**
  * @title CreatorOVault
@@ -62,6 +63,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1");
+    bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
+    bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies");
+    bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin");
 
     // =================================
     // ANTI-INFLATION ATTACK CONSTANTS
@@ -575,12 +580,29 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (coreModule.code.length == 0 || strategiesModule.code.length == 0 || adminModule.code.length == 0) {
             revert InvalidModuleAddress();
         }
+        _validateModuleIdentity(coreModule, MODULE_KIND_CORE);
+        _validateModuleIdentity(strategiesModule, MODULE_KIND_STRATEGIES);
+        _validateModuleIdentity(adminModule, MODULE_KIND_ADMIN);
 
         _coreModule = coreModule;
         _strategiesModule = strategiesModule;
         _adminModule = adminModule;
 
         emit ModulesSet(coreModule, strategiesModule, adminModule);
+    }
+
+    function _validateModuleIdentity(address module, bytes32 expectedKind) internal view {
+        try ICreatorOVaultModuleIdentity(module).moduleKind() returns (bytes32 moduleKind) {
+            if (moduleKind != expectedKind) revert InvalidModuleAddress();
+        } catch {
+            revert InvalidModuleAddress();
+        }
+
+        try ICreatorOVaultModuleIdentity(module).moduleStorageVersion() returns (bytes32 moduleStorageVersion) {
+            if (moduleStorageVersion != MODULE_STORAGE_VERSION) revert InvalidModuleAddress();
+        } catch {
+            revert InvalidModuleAddress();
+        }
     }
 
     function _requireModulesSet() internal view {

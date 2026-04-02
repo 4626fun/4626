@@ -67,6 +67,7 @@ const DEFAULT_MAX_CHAIN_SCAN_CHUNKS = 8
 const DEFAULT_ENRICH_BATCH_SIZE = 200
 const MAX_SYNC_RETRIES = 4
 let creatorMetricsSchemaEnsured = false
+let creatorMetricsSchemaEnsurePromise: Promise<void> | null = null
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const n = Number(value)
@@ -206,94 +207,125 @@ async function fetchCountCandidate(sdk: any, list: ExploreList, pageSize: number
 
 export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
   if (creatorMetricsSchemaEnsured) return
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS creator_coins (
-      coin_address TEXT PRIMARY KEY,
-      creator_address TEXT NOT NULL,
-      created_at TIMESTAMPTZ,
-      chain_id INTEGER NOT NULL DEFAULT 8453,
-      market_cap_usd NUMERIC(38, 12),
-      volume_24h_usd NUMERIC(38, 12),
-      fees_24h_usd NUMERIC(38, 12),
-      fee_model TEXT NOT NULL DEFAULT 'v4',
-      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_creator_idx ON creator_coins (creator_address);`
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_created_at_idx ON creator_coins (created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_chain_idx ON creator_coins (chain_id);`
+  if (creatorMetricsSchemaEnsurePromise) return creatorMetricsSchemaEnsurePromise
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS creators (
-      creator_address TEXT PRIMARY KEY,
-      first_seen_at TIMESTAMPTZ,
-      coin_count INTEGER NOT NULL DEFAULT 0,
-      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS creators_last_seen_idx ON creators (last_seen_at DESC);`
+  creatorMetricsSchemaEnsurePromise = (async () => {
+    const preflight = await db.sql`
+      SELECT
+        to_regclass('public.creator_coins') IS NOT NULL AS has_creator_coins,
+        to_regclass('public.creators') IS NOT NULL AS has_creators,
+        to_regclass('public.creator_metrics_state') IS NOT NULL AS has_state,
+        to_regclass('public.creator_metrics_daily_snapshots') IS NOT NULL AS has_daily;
+    `
+    const status = preflight.rows?.[0] ?? {}
+    if (
+      Boolean(status.has_creator_coins) &&
+      Boolean(status.has_creators) &&
+      Boolean(status.has_state) &&
+      Boolean(status.has_daily)
+    ) {
+      creatorMetricsSchemaEnsured = true
+      return
+    }
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS creator_metrics_state (
-      id SMALLINT PRIMARY KEY,
-      checkpoint_cursor TEXT,
-      checkpoint_block BIGINT,
-      checkpoint_log_index INTEGER,
-      checkpoint_updated_at TIMESTAMPTZ,
-      backfill_complete BOOLEAN NOT NULL DEFAULT false,
-      sync_status TEXT NOT NULL DEFAULT 'idle',
-      sync_error TEXT,
-      sync_error_count INTEGER NOT NULL DEFAULT 0,
-      last_sync_started_at TIMESTAMPTZ,
-      last_sync_finished_at TIMESTAMPTZ,
-      last_full_sync_at TIMESTAMPTZ,
-      last_run_id TEXT,
-      sampled_creators INTEGER NOT NULL DEFAULT 0,
-      drift_estimate_total INTEGER,
-      drift_pct NUMERIC(12, 6),
-      last_drift_checked_at TIMESTAMPTZ
-    );
-  `
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_block BIGINT;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS creator_coins (
+        coin_address TEXT PRIMARY KEY,
+        creator_address TEXT NOT NULL,
+        created_at TIMESTAMPTZ,
+        chain_id INTEGER NOT NULL DEFAULT 8453,
+        market_cap_usd NUMERIC(38, 12),
+        volume_24h_usd NUMERIC(38, 12),
+        fees_24h_usd NUMERIC(38, 12),
+        fee_model TEXT NOT NULL DEFAULT 'v4',
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_creator_idx ON creator_coins (creator_address);`
+    await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_created_at_idx ON creator_coins (created_at DESC);`
+    await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_chain_idx ON creator_coins (chain_id);`
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS creator_metrics_daily_snapshots (
-      day DATE PRIMARY KEY,
-      creators_total BIGINT,
-      creator_coins_market_cap_usd NUMERIC(38, 12),
-      creator_coins_volume_24h_usd NUMERIC(38, 12),
-      creator_coins_fees_24h_usd NUMERIC(38, 12),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_metrics_daily_snapshots_day_idx ON creator_metrics_daily_snapshots (day DESC);`
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS creators (
+        creator_address TEXT PRIMARY KEY,
+        first_seen_at TIMESTAMPTZ,
+        coin_count INTEGER NOT NULL DEFAULT 0,
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`CREATE INDEX IF NOT EXISTS creators_last_seen_idx ON creators (last_seen_at DESC);`
 
-  await db.sql`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_id_check'
-      ) THEN
-        ALTER TABLE creator_metrics_state
-          ADD CONSTRAINT creator_metrics_state_id_check CHECK (id = 1);
-      END IF;
-    END $$;
-  `
-  await db.sql`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_sync_status_check'
-      ) THEN
-        ALTER TABLE creator_metrics_state
-          ADD CONSTRAINT creator_metrics_state_sync_status_check
-          CHECK (sync_status IN ('idle', 'running', 'error'));
-      END IF;
-    END $$;
-  `
-  await db.sql`INSERT INTO creator_metrics_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;`
-  creatorMetricsSchemaEnsured = true
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS creator_metrics_state (
+        id SMALLINT PRIMARY KEY,
+        checkpoint_cursor TEXT,
+        checkpoint_block BIGINT,
+        checkpoint_log_index INTEGER,
+        checkpoint_updated_at TIMESTAMPTZ,
+        backfill_complete BOOLEAN NOT NULL DEFAULT false,
+        sync_status TEXT NOT NULL DEFAULT 'idle',
+        sync_error TEXT,
+        sync_error_count INTEGER NOT NULL DEFAULT 0,
+        last_sync_started_at TIMESTAMPTZ,
+        last_sync_finished_at TIMESTAMPTZ,
+        last_full_sync_at TIMESTAMPTZ,
+        last_run_id TEXT,
+        sampled_creators INTEGER NOT NULL DEFAULT 0,
+        drift_estimate_total INTEGER,
+        drift_pct NUMERIC(12, 6),
+        last_drift_checked_at TIMESTAMPTZ
+      );
+    `
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_block BIGINT;`
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
+
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS creator_metrics_daily_snapshots (
+        day DATE PRIMARY KEY,
+        creators_total BIGINT,
+        creator_coins_market_cap_usd NUMERIC(38, 12),
+        creator_coins_volume_24h_usd NUMERIC(38, 12),
+        creator_coins_fees_24h_usd NUMERIC(38, 12),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+    await db.sql`CREATE INDEX IF NOT EXISTS creator_metrics_daily_snapshots_day_idx ON creator_metrics_daily_snapshots (day DESC);`
+
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_id_check'
+        ) THEN
+          ALTER TABLE creator_metrics_state
+            ADD CONSTRAINT creator_metrics_state_id_check CHECK (id = 1);
+        END IF;
+      END $$;
+    `
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_sync_status_check'
+        ) THEN
+          ALTER TABLE creator_metrics_state
+            ADD CONSTRAINT creator_metrics_state_sync_status_check
+            CHECK (sync_status IN ('idle', 'running', 'error'));
+        END IF;
+      END $$;
+    `
+    await db.sql`INSERT INTO creator_metrics_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;`
+    creatorMetricsSchemaEnsured = true
+  })()
+    .catch((error) => {
+      creatorMetricsSchemaEnsured = false
+      throw error
+    })
+    .finally(() => {
+      creatorMetricsSchemaEnsurePromise = null
+    })
+
+  return creatorMetricsSchemaEnsurePromise
 }
 
 async function loadState(db: Db): Promise<StateRow> {

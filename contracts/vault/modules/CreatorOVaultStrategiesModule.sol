@@ -8,11 +8,14 @@ import {IStrategy} from "../../interfaces/IStrategy.sol";
 import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
 
 import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
+import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 
 /// @notice Strategy management + strategy interaction logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
-contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase {
+contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
+    bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.strategies");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -52,6 +55,14 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase {
     // =================================
     // STRATEGY MANAGEMENT
     // =================================
+
+    function moduleKind() external pure returns (bytes32) {
+        return MODULE_KIND;
+    }
+
+    function moduleStorageVersion() external pure returns (bytes32) {
+        return MODULE_STORAGE_VERSION;
+    }
 
     function addStrategy(address strategy, uint256 weight) external onlyDelegateCall {
         addStrategy(strategy, weight, true);

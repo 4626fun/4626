@@ -2,10 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
 
-const { streamResponseMock, getElizaLlmServiceMock, readSessionFromRequestMock } = vi.hoisted(() => ({
+const {
+  streamResponseMock,
+  getElizaLlmServiceMock,
+  readSessionFromRequestMock,
+  checkRateLimitMock,
+  getClientIpMock,
+} = vi.hoisted(() => ({
   streamResponseMock: vi.fn(),
   getElizaLlmServiceMock: vi.fn(),
   readSessionFromRequestMock: vi.fn(),
+  checkRateLimitMock: vi.fn(),
+  getClientIpMock: vi.fn(),
 }))
 
 vi.mock('../../server/agent/eliza/llm.js', () => ({
@@ -20,11 +28,26 @@ vi.mock('../../server/auth/_shared.js', async () => {
   }
 })
 
+vi.mock('../../server/_lib/rateLimit.js', async () => {
+  const actual = await vi.importActual<typeof import('../../server/_lib/rateLimit.js')>('../../server/_lib/rateLimit.js')
+  return {
+    ...actual,
+    checkRateLimit: checkRateLimitMock,
+    getClientIp: getClientIpMock,
+  }
+})
+
 describe('agent stream handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readSessionFromRequestMock.mockReturnValue({
       address: '0x1111111111111111111111111111111111111111',
+    })
+    getClientIpMock.mockReturnValue('127.0.0.1')
+    checkRateLimitMock.mockReturnValue({
+      allowed: true,
+      remaining: 10,
+      resetAt: Date.now() + 60_000,
     })
     getElizaLlmServiceMock.mockReturnValue({
       streamResponse: streamResponseMock,
@@ -102,6 +125,55 @@ describe('agent stream handler', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body).toEqual({ success: false, error: 'message is required' })
+  })
+
+  it('returns 400 when context is too long', async () => {
+    const mod = await import('../_handlers/agent/_stream.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { message: 'hi', context: 'x'.repeat(4001) },
+      url: '/api/agent/stream',
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ success: false, error: 'context is too long' })
+    expect(streamResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 429 when stream rate limit is exceeded', async () => {
+    checkRateLimitMock
+      .mockReturnValueOnce({
+        allowed: false,
+        remaining: 0,
+        resetAt: Date.now() + 20_000,
+      })
+      .mockReturnValueOnce({
+        allowed: true,
+        remaining: 20,
+        resetAt: Date.now() + 20_000,
+      })
+
+    const mod = await import('../_handlers/agent/_stream.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { message: 'hi' },
+      url: '/api/agent/stream',
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body).toEqual({ success: false, error: 'Rate limit exceeded' })
+    expect(res.getHeader('x-ratelimit-limit')).toBeTruthy()
+    expect(streamResponseMock).not.toHaveBeenCalled()
   })
 
   it('emits SSE error event when streaming fails', async () => {

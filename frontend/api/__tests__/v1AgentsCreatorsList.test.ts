@@ -64,5 +64,7 @@ describe('v1/agents/creators list privacy', () => {
         listedOnly: false,
       }),
     )
+    expect(res.getHeader('cache-control')).toBe('private, no-store')
+    expect(String(res.getHeader('vary') ?? '')).toContain('Authorization')
   })
 })

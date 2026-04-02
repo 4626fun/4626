@@ -7,11 +7,14 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IStrategy} from "../../interfaces/IStrategy.sol";
 
 import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
+import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 
 /// @notice Admin + emergency + rescue + config logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
-contract CreatorOVaultAdminModule is CreatorOVaultModuleBase {
+contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
+    bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.admin");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -62,6 +65,14 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase {
     // =================================
     // EMERGENCY CONTROLS
     // =================================
+
+    function moduleKind() external pure returns (bytes32) {
+        return MODULE_KIND;
+    }
+
+    function moduleStorageVersion() external pure returns (bytes32) {
+        return MODULE_STORAGE_VERSION;
+    }
 
     function shutdownVault() external onlyDelegateCall {
         isShutdown = true;

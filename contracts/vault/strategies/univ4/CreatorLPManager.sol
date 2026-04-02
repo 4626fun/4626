@@ -265,6 +265,17 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
                     || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert InvalidPoolKey();
         if (_poolKey.tickSpacing == 0) revert InvalidPoolKey();
 
+        address previousPermit2 = permit2;
+        address previousPositionManager = positionManager;
+        if (previousPermit2 != address(0)) {
+            if (previousPositionManager != address(0)) {
+                IAllowanceTransfer(previousPermit2).approve(address(CREATOR_COIN), previousPositionManager, 0, 0);
+                IAllowanceTransfer(previousPermit2).approve(address(PAIRED_TOKEN), previousPositionManager, 0, 0);
+            }
+            CREATOR_COIN.forceApprove(previousPermit2, 0);
+            PAIRED_TOKEN.forceApprove(previousPermit2, 0);
+        }
+
         poolManager = IPoolManager(_poolManager);
         positionManager = _positionManager;
         permit2 = _permit2;

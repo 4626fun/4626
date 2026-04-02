@@ -348,7 +348,8 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     }
 
     function withdraw() external onlyOwner {
-        payable(owner()).transfer(address(this).balance);
+        (bool ok,) = payable(owner()).call{value: address(this).balance}("");
+        require(ok, "ETH transfer failed");
     }
 
     receive() external payable {}

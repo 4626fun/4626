@@ -4,11 +4,21 @@ import { getDb, isDbConfigured } from './postgres.js'
 type Db = { query?: (text: string, params?: any[]) => Promise<{ rows: any[] }>; sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 let schemaEnsured = false
+let schemaEnsurePromise: Promise<void> | null = null
 
 async function ensureSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
-  schemaEnsured = true
-  try {
+  if (schemaEnsurePromise) return schemaEnsurePromise
+
+  schemaEnsurePromise = (async () => {
+    const preflight = await db.sql`
+      SELECT to_regclass('public.agent_rate_limits') IS NOT NULL AS table_exists;
+    `
+    if (Boolean(preflight.rows?.[0]?.table_exists)) {
+      schemaEnsured = true
+      return
+    }
+
     await db.sql`
       CREATE TABLE IF NOT EXISTS agent_rate_limits (
         key TEXT NOT NULL,
@@ -18,10 +28,16 @@ async function ensureSchema(db: Db): Promise<void> {
         PRIMARY KEY (key, window_id)
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS agent_rate_limits_key_idx ON agent_rate_limits (key);`
-  } catch {
-    schemaEnsured = false
-  }
+    schemaEnsured = true
+  })()
+    .catch(() => {
+      schemaEnsured = false
+    })
+    .finally(() => {
+      schemaEnsurePromise = null
+    })
+
+  return schemaEnsurePromise
 }
 
 function windowId(nowMs: number, windowMs: number): bigint {
