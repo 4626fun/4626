@@ -14,8 +14,6 @@ import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
 const nodeRequire = createRequire(import.meta.url)
 
-const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
-
 function loadDotEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return
   const raw = fs.readFileSync(filePath, 'utf8')
@@ -442,7 +440,6 @@ export default defineConfig(({ command }) => {
     },
   },
   build: {
-<<<<<<< HEAD
     // Keep the Telegram link standalone artifact isolated from the main app
     // graph. This avoids reintroducing the shared-chunk crash path that the
     // standalone extraction is meant to prevent.
@@ -451,26 +448,6 @@ export default defineConfig(({ command }) => {
     sourcemap: enableSourcemap,
     rollupOptions: {
       input: buildInputs,
-=======
-    // Disable Vite's module-preload helper so the root entry chunk does not
-    // eagerly import the wallet-auth chunk before Telegram-only routes render.
-    modulePreload: false,
-    // Keep the Telegram link standalone bundle simple and unminified. The
-    // route is small enough that a larger artifact is acceptable, and it
-    // avoids reintroducing the minified TDZ crash we saw in production.
-    minify: buildTelegramLinkStandalone ? false : 'esbuild',
-    sourcemap: enableSourcemap,
-    rollupOptions: {
-      input: buildTelegramLinkStandalone
-        ? {
-            telegramLink: resolve(__dirname, 'telegram-link.html'),
-          }
-        : {
-            index: resolve(__dirname, 'index.html'),
-            app: resolve(__dirname, 'app.html'),
-            telegramMenu: resolve(__dirname, 'telegram-menu.html'),
-          },
->>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
       output: {
         // Route-level lazy imports already split page code well. The remaining
         // hotspots are shared SDK families that otherwise collapse into a few

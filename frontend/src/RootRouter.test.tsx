@@ -1,14 +1,8 @@
 // @vitest-environment happy-dom
 
-<<<<<<< HEAD
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-=======
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
->>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
 
 vi.mock('@/lib/host', async () => {
   const actual = await vi.importActual<typeof import('@/lib/host')>('@/lib/host')
@@ -19,24 +13,17 @@ vi.mock('@/lib/host', async () => {
   }
 })
 
-<<<<<<< HEAD
 vi.mock('./App', () => ({
   default: () => <div data-testid="protected-app">protected app</div>,
 }))
 vi.mock('./web3/Web3Providers', () => ({
   AppQueryProvider: ({ children }: { children: unknown }) => <>{children}</>,
 }))
-=======
-vi.mock('./ProtectedApp', () => ({
-  default: () => <div data-testid="protected-app">protected app</div>,
-}))
->>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
 
 vi.mock('./pages/Home', () => ({
   Home: () => <div data-testid="home-page">home</div>,
 }))
 
-<<<<<<< HEAD
 vi.mock('./pages/WaitlistInviteEntry', () => ({
   WaitlistInviteEntry: () => <div data-testid="waitlist-invite-entry">waitlist invite</div>,
 }))
@@ -56,23 +43,10 @@ describe('RootRouter', () => {
 
     render(
       <MemoryRouter initialEntries={[`${pathname}?tgEntry=link&tgLinkToken=abc123#step=otp`]}>
-=======
-vi.mock('./pages/TelegramMenuEntry', () => ({
-  TelegramMenuEntryRoute: () => <div data-testid="telegram-menu-entry">telegram menu entry</div>,
-}))
-
-import { RootRouter } from './RootRouter'
-
-describe('RootRouter', () => {
-  it('routes telegram mini app menu directly without loading ProtectedApp', async () => {
-    render(
-      <MemoryRouter initialEntries={['/telegram/menu']}>
->>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
         <RootRouter />
       </MemoryRouter>,
     )
 
-<<<<<<< HEAD
     await waitFor(() =>
       expect(replaceSpy).toHaveBeenCalledWith('/telegram-link.html?tgEntry=link&tgLinkToken=abc123#step=otp'),
     )
@@ -82,13 +56,6 @@ describe('RootRouter', () => {
   )
 
   it('keeps non-telegram routes on the protected app boundary', async () => {
-=======
-    expect(await screen.findByTestId('telegram-menu-entry')).toBeTruthy()
-    expect(screen.queryByTestId('protected-app')).toBeNull()
-  })
-
-  it('keeps non-telegram routes on ProtectedApp', async () => {
->>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
     render(
       <MemoryRouter initialEntries={['/swap']}>
         <RootRouter />
@@ -96,7 +63,6 @@ describe('RootRouter', () => {
     )
 
     expect(await screen.findByTestId('protected-app')).toBeTruthy()
-<<<<<<< HEAD
   })
 
   it('routes the root marketing path through Home', async () => {
@@ -108,8 +74,5 @@ describe('RootRouter', () => {
 
     expect(await screen.findByTestId('home-page')).toBeTruthy()
     expect(screen.queryByTestId('protected-app')).toBeNull()
-=======
-    expect(screen.queryByTestId('telegram-menu-entry')).toBeNull()
->>>>>>> 56704031 (Preserve Telegram standalone entry and probe-noise cleanup)
   })
 })

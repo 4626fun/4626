@@ -154,7 +154,7 @@ beforeEach(() => {
   privyState.authenticated = true
   privyState.user = { id: 'did:privy:user-1', linkedAccounts: [] }
   privyState.getAccessToken = vi.fn(async () => 'privy-access-token')
-  privyState.linkTelegram = (...args: any[]) => linkTelegramMock(...args)
+  privyState.linkTelegram = linkTelegramMock as any
   sendCodeMock.mockResolvedValue(undefined)
   loginWithCodeMock.mockResolvedValue(undefined)
   linkTelegramMock.mockResolvedValue(undefined)
