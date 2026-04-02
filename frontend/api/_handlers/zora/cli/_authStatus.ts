@@ -5,7 +5,7 @@ import { okParams, withCliReadHandler } from './_shared.js'
 export default withCliReadHandler({
   endpointPath: zoraCliRoutePaths.authStatus,
   cacheSeconds: 30,
-  requireServerKey: false,
+  requireServerKey: true,
   parse() {
     return okParams({})
   },

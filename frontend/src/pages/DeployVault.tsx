@@ -4688,7 +4688,12 @@ function DeployVaultBatcher({
           }
 
           const txHash = txHashRaw as Hex
-          await (publicClient as any).waitForTransactionReceipt({ hash: txHash })
+          const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: txHash })
+          if (receipt?.status !== 'success') {
+            throw new Error(
+              `Direct owner executeBatch fallback reverted (tx: ${txHash}, status: ${String(receipt?.status ?? 'unknown')}).`,
+            )
+          }
           persistUserOpResult(
             phaseLabel,
             logPhaseLabel,

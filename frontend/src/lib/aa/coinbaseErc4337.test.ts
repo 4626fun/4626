@@ -5,6 +5,7 @@ import {
   findCoinbaseSmartWalletOwnerIndex,
   pollUserOperationStatus,
   resetOwnerIndexCacheForTests,
+  simulateSmartWalletCalls,
   verifyBundlerSupportsV06,
 } from './coinbaseErc4337'
 
@@ -115,6 +116,56 @@ describe('coinbaseErc4337 latency helpers', () => {
 
     const fnCalls = readContract.mock.calls.map(([arg]) => (arg as ReadContractArgs).functionName)
     expect(fnCalls.filter((name) => name === 'nextOwnerIndex')).toHaveLength(2)
+  })
+
+  it('treats Unauthorized executeBatch simulation as non-blocking', async () => {
+    const simulateContract = vi.fn(async () => {
+      const err = new Error('execution reverted') as Error & { data?: string }
+      err.data = '0x82b42900'
+      throw err
+    })
+    const client = {
+      simulateContract,
+      call: vi.fn(),
+    }
+
+    const result = await simulateSmartWalletCalls({
+      publicClient: client as any,
+      smartWallet: SMART_WALLET as `0x${string}`,
+      calls: [
+        { to: OWNER_ADDRESS as `0x${string}`, data: '0x1234' as `0x${string}` },
+        { to: OTHER_ADDRESS as `0x${string}`, data: '0xabcd' as `0x${string}` },
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    expect(simulateContract).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps direct-call revert when execute simulation is Unauthorized', async () => {
+    const call = vi.fn(async () => {
+      const err = new Error('execution reverted') as Error & { data?: string }
+      err.data = '0x30cd7471'
+      throw err
+    })
+    const simulateContract = vi.fn(async () => {
+      const err = new Error('execution reverted') as Error & { data?: string }
+      err.data = '0x82b42900'
+      throw err
+    })
+    const client = {
+      call,
+      simulateContract,
+    }
+
+    const result = await simulateSmartWalletCalls({
+      publicClient: client as any,
+      smartWallet: SMART_WALLET as `0x${string}`,
+      calls: [{ to: OWNER_ADDRESS as `0x${string}`, data: '0x1234' as `0x${string}` }],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.errorName).toBe('NotOwner()')
   })
 
   it('treats bundler probe timeout as non-fatal', async () => {

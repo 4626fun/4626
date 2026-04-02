@@ -157,7 +157,11 @@ const sidebars: SidebarsConfig = {
       link: { type: 'doc', id: 'integrations/index' },
       items: [
         'integrations/oft',
+        'integrations/lens',
+        'integrations/lens-grove',
+        'integrations/farcaster-close-gap-phases',
         'integrations/solana-integration',
+        'integrations/solana-spoke-article',
       ],
     },
 
@@ -177,6 +181,15 @@ const sidebars: SidebarsConfig = {
             'operations/deployment/cca-verification',
             'operations/deployment/approvals-checklist',
             'operations/deployment/create2-registry',
+            'operations/deployment/infra-epoch-redeploy',
+            {
+              type: 'category',
+              label: 'Releases',
+              items: [
+                'operations/deployment/releases/v1.7.1-mainnet',
+                'operations/deployment/releases/v1.7.1-post-broadcast-checklist',
+              ],
+            },
             {
               type: 'category',
               label: 'Multisig',
@@ -196,8 +209,11 @@ const sidebars: SidebarsConfig = {
             'operations/automation/quick-start',
             'operations/automation/full-automation',
             'operations/automation/completion-options',
+            'operations/automation/cre-runtime-api',
+            'operations/automation/cre-runtime-hardening-checklist',
           ],
         },
+        'operations/telegram-canonical-link-preservation',
         'operations/domain-setup',
         'operations/supabase-setup',
       ],
@@ -212,8 +228,13 @@ const sidebars: SidebarsConfig = {
       items: [
         'reference/addresses',
         'reference/glossary',
+        'reference/chains',
+        'reference/current-contract-inventory',
         'reference/diagram-style-guide',
         'reference/erc4337-debugging',
+        'reference/coins-metadata',
+        'reference/token-image',
+        'reference/account-context',
       ],
     },
 
@@ -223,7 +244,89 @@ const sidebars: SidebarsConfig = {
       label: 'Frontend',
       collapsed: true,
       link: { type: 'doc', id: 'frontend/index' },
-      items: [],
+      items: [
+        'frontend/creator-workspace',
+        'frontend/creator-workspace-implementation-plan',
+      ],
+    },
+
+    // Security
+    {
+      type: 'category',
+      label: 'Security',
+      collapsed: true,
+      link: { type: 'doc', id: 'security/index' },
+      items: [
+        'security/scan-overview',
+      ],
+    },
+
+    // Audits
+    {
+      type: 'category',
+      label: 'Audits',
+      collapsed: true,
+      link: { type: 'doc', id: 'audits/README' },
+      items: [
+        {
+          type: 'category',
+          label: 'Ajna',
+          items: [
+            'audits/ajna/executive-brief',
+            'audits/ajna/adversarial-audit',
+            'audits/ajna/master-qna',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Charm',
+          items: [
+            'audits/charm/executive-brief',
+            'audits/charm/adversarial-audit',
+            'audits/charm/master-qa',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Codex',
+          items: [
+            'audits/codex/security-second-pass-review',
+            'audits/codex/security-findings',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Token Image',
+          items: [
+            'audits/token-image/deep-research-report',
+            'audits/token-image/deep-research-report-1',
+            'audits/token-image/deep-research-report-2',
+            'audits/token-image/breakout-report',
+          ],
+        },
+      ],
+    },
+
+    // Legal
+    {
+      type: 'category',
+      label: 'Legal',
+      collapsed: true,
+      link: { type: 'doc', id: 'legal/index' },
+      items: [
+        'legal/terms',
+        'legal/privacy',
+      ],
+    },
+
+    // Plans
+    {
+      type: 'category',
+      label: 'Plans',
+      collapsed: true,
+      items: [
+        'plans/onboarding-optimization-nikita-bier',
+      ],
     },
 
     // API Reference (auto-generated)

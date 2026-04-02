@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { getTokenLogo, markTokenLogoSuccess, type TokenLogoSeed } from '@/lib/tokens/tokenLogo'
 
@@ -36,8 +36,11 @@ export function TokenAvatar(props: {
     }
     return getTokenLogo(props.token)
   }, [props.token])
-  const [index, setIndex] = useState(0)
-  const [failed, setFailed] = useState(false)
+  const [cursor, setCursor] = useState(() => ({
+    candidateKey: '',
+    index: 0,
+    failed: false,
+  }))
 
   const candidates = useMemo(() => {
     const seen = new Set<string>()
@@ -52,24 +55,42 @@ export function TokenAvatar(props: {
   }, [props.imageUrl, tokenLogo.preferred, tokenLogo.fallbackUrls])
 
   const candidateKey = useMemo(() => candidates.join('|'), [candidates])
-  const resolvedIndex = index < candidates.length ? index : 0
+  const activeCursor =
+    cursor.candidateKey === candidateKey
+      ? cursor
+      : {
+          candidateKey,
+          index: 0,
+          failed: false,
+        }
+  const resolvedIndex = activeCursor.index < candidates.length ? activeCursor.index : 0
   const current = candidates[resolvedIndex]
   const finalRingClass = props.ringClass ?? 'border-white/12'
 
-  useEffect(() => {
-    // Reset failed/image cursor whenever the token candidate list changes.
-    // Without this, one failed token can leave subsequent tokens stuck on fallback initials.
-    setIndex(0)
-    setFailed(false)
-  }, [candidateKey])
-
   function handleImageError() {
     if (resolvedIndex < candidates.length - 1) {
-      setIndex((value) => value + 1)
-      setFailed(false)
+      setCursor((value) => {
+        const base =
+          value.candidateKey === candidateKey
+            ? value
+            : {
+                candidateKey,
+                index: 0,
+                failed: false,
+              }
+        return {
+          candidateKey,
+          index: base.index + 1,
+          failed: false,
+        }
+      })
       return
     }
-    setFailed(true)
+    setCursor({
+      candidateKey,
+      index: resolvedIndex,
+      failed: true,
+    })
   }
 
   function handleImageLoad() {
@@ -98,7 +119,7 @@ export function TokenAvatar(props: {
         style={{ width: size, height: size }}
       >
         <div className="absolute inset-0 rounded-full overflow-hidden bg-black border border-white/10 shadow-[inset_0_0_24px_rgba(0,0,0,0.9)]">
-          {!failed ? (
+          {!activeCursor.failed ? (
             <img
               key={current}
               src={current}
@@ -140,7 +161,7 @@ export function TokenAvatar(props: {
         overflow: 'hidden',
       }}
     >
-      {!failed ? (
+      {!activeCursor.failed ? (
         <img
           key={current}
           src={current}

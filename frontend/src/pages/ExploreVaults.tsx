@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
@@ -9,7 +9,13 @@ import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
-import { formatDateLabel, formatShortAddress, formatUsd } from './exploreShared'
+import {
+  formatDateLabel,
+  formatShortAddress,
+  formatUsd,
+  useDebouncedValue,
+  useExploreSubnavParams,
+} from './exploreShared'
 
 type ExploreVaultItem = {
   vaultAddress: `0x${string}` | null
@@ -41,18 +47,13 @@ const VAULT_SORT_OPTIONS = [
   { label: '24h fees', value: 'fees24h' },
   { label: 'Recently updated', value: 'new' },
 ] as const
+const VAULT_SORT_VALUES = ['volume', 'marketCap', 'fees24h', 'new'] as const
 const VAULT_TIME_FILTERS = [
   { label: '24H', value: '1d' },
   { label: '7D', value: '1w' },
   { label: 'All', value: '1y' },
 ] as const
-
-function normalizeVaultSort(value: string | null): string {
-  if (!value) return 'volume'
-  if (value === 'priceChange') return 'fees24h'
-  if (value === 'volume' || value === 'marketCap' || value === 'fees24h' || value === 'new') return value
-  return 'volume'
-}
+const VAULT_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
 
 function formatMetricUsd(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '-'
@@ -113,12 +114,16 @@ function VaultRowSkeleton({ rowKey }: { rowKey: string }) {
 }
 
 export function ExploreVaults() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState('')
-
-  const currentTimeFilter = searchParams.get('time') || '1d'
-  const currentSort = normalizeVaultSort(searchParams.get('sort'))
+  const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
+    useExploreSubnavParams({
+    sortValues: VAULT_SORT_VALUES,
+    defaultSort: 'volume',
+    sortAliases: { priceChange: 'fees24h' },
+    timeValues: VAULT_TIME_FILTER_VALUES,
+    defaultTime: '1d',
+    })
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const debouncedSearchQuery = useDebouncedValue(normalizedSearchQuery, 250)
 
   const {
     data,
@@ -129,13 +134,13 @@ export function ExploreVaults() {
     isError,
     error,
   } = useInfiniteQuery({
-    queryKey: ['explore', 'vaults', currentSort, currentTimeFilter, normalizedSearchQuery],
+    queryKey: ['explore', 'vaults', currentSort, currentTimeFilter, debouncedSearchQuery],
     queryFn: async ({ pageParam }) => {
       return fetchExploreVaultsPage({
         cursor: typeof pageParam === 'string' ? pageParam : undefined,
         sort: currentSort,
         time: currentTimeFilter,
-        query: normalizedSearchQuery,
+        query: debouncedSearchQuery,
         chainId: BASE_CHAIN_ID,
       })
     },
@@ -154,18 +159,6 @@ export function ExploreVaults() {
     isFetchingNextPage,
     onLoadMore: fetchNextPage,
   })
-
-  const handleTimeFilterChange = (filter: string) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('time', filter)
-    setSearchParams(next, { replace: true })
-  }
-
-  const handleSortChange = (sort: string) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('sort', sort)
-    setSearchParams(next, { replace: true })
-  }
 
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
@@ -194,7 +187,8 @@ export function ExploreVaults() {
         >
           <ExploreSubnav
             searchPlaceholder="Search vault, creator coin, or group"
-            onSearch={setSearchQuery}
+            searchValue={searchQuery}
+            onSearch={handleSearchChange}
             onTimeFilterChange={handleTimeFilterChange}
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}

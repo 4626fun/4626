@@ -190,13 +190,22 @@ function normalizeLocalMarkdownLinks(content: string): { content: string; rewrit
     }
 
     const [pathPart, hashPart] = rawTarget.split('#', 2);
-    if (!pathPart.endsWith('.md')) {
+    const looksLikeMarkdownLink = pathPart.endsWith('.md') || /(^|\/)README$/.test(pathPart);
+    if (!looksLikeMarkdownLink) {
       return match;
     }
 
     rewrites++;
-    const withoutExtension = pathPart.slice(0, -3);
-    return `](${withoutExtension}${hashPart ? `#${hashPart}` : ''})`;
+    let normalizedPath = pathPart
+      .replace(/\.md$/, '')
+      .replace(/\/README$/, '')
+      .replace(/\/index$/, '');
+
+    if (normalizedPath === '' || normalizedPath === '.' || normalizedPath === 'README' || normalizedPath === 'index') {
+      normalizedPath = './';
+    }
+
+    return `](${normalizedPath}${hashPart ? `#${hashPart}` : ''})`;
   });
 
   return { content: normalized, rewrites };
@@ -227,9 +236,15 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
           return match;
         }
 
-        const cleanPath = linkPath.replace(/\.md$/, '');
+        let cleanPath = linkPath
+          .replace(/\.md$/, '')
+          .replace(/\/README$/, '');
+        if (cleanPath === 'README' || cleanPath === 'index') {
+          cleanPath = '';
+        }
+        const resolvedPath = cleanPath === '' ? apiRoot.generatedBasePath : `${apiRoot.generatedBasePath}${cleanPath}`;
         fileRewrites++;
-        return `](${apiRoot.generatedBasePath}${cleanPath})`;
+        return `](${resolvedPath})`;
       }
     );
 
@@ -238,11 +253,16 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
     content = content.replace(
       /\]\((docs\/[^)#]+)(#[^)]+)?\)/g,
       (_match, docsPath, hashPart) => {
-        const cleanPath = String(docsPath)
+        let cleanPath = String(docsPath)
           .replace(/^docs\//, '')
-          .replace(/\.md$/, '');
+          .replace(/\.md$/, '')
+          .replace(/\/README$/, '');
+        if (cleanPath === 'README' || cleanPath === 'index') {
+          cleanPath = '';
+        }
         fileRewrites++;
-        return `](/${cleanPath}${hashPart ?? ''})`;
+        const resolvedPath = cleanPath === '' ? '/' : `/${cleanPath}`;
+        return `](${resolvedPath}${hashPart ?? ''})`;
       }
     );
 
@@ -275,6 +295,43 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
       return '](https://github.com/wenakita/4626/blob/main/AGENTS.md)';
     });
   }
+
+  // Pattern 1f: TypeDoc sometimes emits self-prefixed relative paths in module
+  // pages (e.g. accountContext/types from src/wallet/accountContext.md). For a
+  // page already at /.../accountContext, that creates /.../accountContext/accountContext/types.
+  if (apiRoot.key === 'frontend') {
+    const currentBase = path.basename(filePath, '.md');
+    const repeatedPrefix = `${currentBase}/`;
+    const relFileFromRoot = path.relative(apiRoot.dir, filePath).split(path.sep).join('/');
+    const relDirFromRoot = path.posix.dirname(relFileFromRoot);
+    content = content.replace(/\]\(([^)#]+)(#[^)]+)?\)/g, (match, linkPath, hashPart) => {
+      if (
+        String(linkPath).startsWith('http') ||
+        String(linkPath).startsWith('mailto:') ||
+        String(linkPath).startsWith('#') ||
+        String(linkPath).startsWith('/')
+      ) {
+        return match;
+      }
+      if (!String(linkPath).startsWith(repeatedPrefix)) {
+        return match;
+      }
+      fileRewrites++;
+      const absoluteTarget = path.posix.join(apiRoot.generatedBasePath, relDirFromRoot, String(linkPath));
+      return `](${absoluteTarget}${hashPart ?? ''})`;
+    });
+  }
+
+  // Pattern 1g: TypeDoc anchor suffixes like "-1" are often emitted for
+  // duplicate symbol references even when the canonical heading has no suffix.
+  content = content.replace(/\]\(([^)#]+)#([A-Za-z0-9_-]+)-1\)/g, (_m, linkPath, anchor) => {
+    fileRewrites++;
+    return `](${linkPath}#${anchor})`;
+  });
+  content = content.replace(/\]\(#([A-Za-z0-9_-]+)-1\)/g, (_m, anchor) => {
+    fileRewrites++;
+    return `](#${anchor})`;
+  });
 
   // Pattern 2: Local markdown links should omit the extension for Docusaurus
   const normalized = normalizeLocalMarkdownLinks(content);

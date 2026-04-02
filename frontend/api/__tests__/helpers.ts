@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { makeSessionToken } from '../../server/auth/_shared.ts'
 
 type ReqOptions = {
   method?: string
@@ -103,5 +104,16 @@ export function applyEnv(overrides: Record<string, string | undefined>): () => v
         process.env[k] = v
       }
     }
+  }
+}
+
+export function withAuthHeader(
+  headers: Record<string, string | undefined> = {},
+  address = '0x0000000000000000000000000000000000000001',
+): Record<string, string | undefined> {
+  const token = makeSessionToken({ address })
+  return {
+    ...headers,
+    authorization: `Bearer ${token}`,
   }
 }

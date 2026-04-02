@@ -17,7 +17,7 @@ const {
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
-  awardWaitlistPointsMock: vi.fn(async () => {}),
+  awardWaitlistPointsMock: vi.fn(async () => true),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
   rateLimitKeyMock: vi.fn(() => 'rl-key'),

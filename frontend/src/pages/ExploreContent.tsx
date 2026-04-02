@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
@@ -11,7 +10,11 @@ import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
-import { flattenExplorePagedNodes, matchesCoinSearchQuery } from './exploreShared'
+import {
+  flattenExplorePagedNodes,
+  matchesCoinSearchQuery,
+  useExploreSubnavParams,
+} from './exploreShared'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_24H',
@@ -21,14 +24,20 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 }
 
 const PAGE_SIZE = 20
+const CONTENT_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new'] as const
+const CONTENT_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
 
 export function ExploreContent() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState('')
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
 
-  const currentTimeFilter = searchParams.get('time') || '1d'
-  const currentSort = searchParams.get('sort') || 'volume'
+  const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
+    useExploreSubnavParams({
+    sortValues: CONTENT_SORT_VALUES,
+    defaultSort: 'volume',
+    sortAliases: { fees24h: 'priceChange' },
+    timeValues: CONTENT_TIME_FILTER_VALUES,
+    defaultTime: '1d',
+    })
 
   const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_24H'
   
@@ -80,18 +89,6 @@ export function ExploreContent() {
     onLoadMore: fetchNextPage,
   })
 
-  const handleTimeFilterChange = (filter: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('time', filter)
-    setSearchParams(newParams, { replace: true })
-  }
-
-  const handleSortChange = (sort: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('sort', sort)
-    setSearchParams(newParams, { replace: true })
-  }
-
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
       <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
@@ -121,7 +118,8 @@ export function ExploreContent() {
         >
           <ExploreSubnav
             searchPlaceholder="Search content"
-            onSearch={setSearchQuery}
+            searchValue={searchQuery}
+            onSearch={handleSearchChange}
             onTimeFilterChange={handleTimeFilterChange}
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}

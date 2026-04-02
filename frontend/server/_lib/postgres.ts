@@ -129,10 +129,9 @@ function shouldRetryWithRelaxedTls(params: {
   if (!requiresSsl(params.connectionString)) return false
   // Respect explicit operator choice. If this is set (true/false), do not auto-fallback.
   if (parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED) !== undefined) return false
-  // Default on for operational resilience; can be disabled explicitly.
+  // Secure by default: only allow this fallback when explicitly enabled.
   const allowFallback = parseEnvBool(process.env.POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK)
-  if (allowFallback === false) return false
-  return true
+  return allowFallback === true
 }
 
 type DbResult = { rows: any[]; rowCount?: number }
@@ -443,8 +442,8 @@ export async function getDb(): Promise<DbPool | null> {
             ssl,
           })) {
             console.warn(
-              'Postgres TLS validation failed with SELF_SIGNED_CERT_IN_CHAIN; retrying once with rejectUnauthorized=false. ' +
-                'Set POSTGRES_SSL_REJECT_UNAUTHORIZED=false to make this explicit, or POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK=false to disable fallback.',
+              'Postgres TLS validation failed with SELF_SIGNED_CERT_IN_CHAIN; retrying once with rejectUnauthorized=false because POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK=true. ' +
+                'Set POSTGRES_SSL_REJECT_UNAUTHORIZED=false to make this explicit for all connections.',
             )
             const relaxedSsl = { ...(ssl && typeof ssl === 'object' ? ssl : {}), rejectUnauthorized: false }
             cachedDb = await createPgDb(relaxedSsl)

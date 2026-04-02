@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS public.keepr_vaults_owner_idx;
+DROP INDEX IF EXISTS public.keepr_vaults_lens_group_idx;
+DROP INDEX IF EXISTS public.keepr_actions_group_idx;
+DROP INDEX IF EXISTS public.keepr_audit_vault_idx;
+DROP INDEX IF EXISTS public.keepr_join_requests_status_idx;
+DROP INDEX IF EXISTS public.agent_subdomains_owner_idx;
+DROP INDEX IF EXISTS public.agent_subdomains_lens_owner_idx;
+DROP INDEX IF EXISTS public.agent_subdomains_updated_idx;
+DROP INDEX IF EXISTS public.creator_coins_last_seen_idx;
+DROP INDEX IF EXISTS public.creators_first_seen_idx;;

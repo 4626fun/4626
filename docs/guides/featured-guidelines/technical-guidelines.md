@@ -21,7 +21,7 @@ Metadata includes your Base Build app registration plus the homepage metadata re
 
 * Register the correct app URL in Base Build
 * Serve the app ID meta tag from the homepage head on that URL
-* Implement [embed metadata](/mini-apps/core-concepts/embeds-and-previews#implementation)
+* Implement [embed metadata](https://docs.base.org/mini-apps/core-concepts/embeds-and-previews#implementation)
 
 <Note>
   Do not rely on `/.well-known/farcaster.json` for Base Build ownership. Validate the live app URL directly and verify it in <a href="https://base.dev/">base.dev</a>.
@@ -39,7 +39,7 @@ Users must remain in the Base app throughout the authentication flow. Eliminate 
 
 **How to Implement**
 
-* Follow the [Authentication guide](/mini-apps/core-concepts/authentication)
+* Follow the [Authentication guide](https://docs.base.org/mini-apps/core-concepts/authentication)
 * Prefer in‑app SIWF/Quick Auth or wallet auth;
 
 ## Client-Agnostic
@@ -54,12 +54,12 @@ There must be no client‑specific behaviors or wording that degrade the experie
 
 **How to Implement**
 
-* Update all links according to the [Links](/mini-apps/technical-guides/links) guide
-* Review the [Base App Compatability](/mini-apps/troubleshooting/base-app-compatibility) guide for functionality not supported in the Base app. All other functionality must keep users in the Base app.
+* Update all links according to the [Links](https://docs.base.org/mini-apps/technical-guides/links) guide
+* Review the [Base App Compatability](https://docs.base.org/mini-apps/troubleshooting/base-app-compatibility) guide for functionality not supported in the Base app. All other functionality must keep users in the Base app.
 
 ## Sponsor Transactions
 
-Sponsor transaction fees to remove friction and reduce drop‑off for new users. For mini apps on Base, we recommend using the [Base Paymaster](/onchainkit/paymaster/quickstart-guide).
+Sponsor transaction fees to remove friction and reduce drop‑off for new users. For mini apps on Base, we recommend using the [Base Paymaster](https://docs.base.org/onchainkit/paymaster/quickstart-guide).
 
 **Acceptance criteria**
 
@@ -67,7 +67,7 @@ Sponsor transaction fees to remove friction and reduce drop‑off for new users.
 
 **How to Implement**
 
-* Recommended: [Base Paymaster](/onchainkit/paymaster/quickstart-guide)
+* Recommended: [Base Paymaster](https://docs.base.org/onchainkit/paymaster/quickstart-guide)
 
 <Note>
   Claim free gas credits on <a href="https://base.dev">base.dev</a>.
@@ -83,5 +83,5 @@ Batch sequential actions where applicable to minimize signatures and reduce fric
 
 **How to Implement**
 
-* See [Batch Transactions](/base-account/improve-ux/batch-transactions)
-* Provider APIs: [`wallet_sendCalls`](/base-account/reference/core/provider-rpc-methods/wallet_sendCalls), [`wallet_getCapabilities`](/base-account/reference/core/provider-rpc-methods/wallet_getCapabilities)
+* See [Batch Transactions](https://docs.base.org/base-account/improve-ux/batch-transactions)
+* Provider APIs: [`wallet_sendCalls`](https://docs.base.org/base-account/reference/core/provider-rpc-methods/wallet_sendCalls), [`wallet_getCapabilities`](https://docs.base.org/base-account/reference/core/provider-rpc-methods/wallet_getCapabilities)

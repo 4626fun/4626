@@ -512,6 +512,38 @@ describe('generateLlmResponse memory integration', () => {
   // Edge cases
   // -----------------------------------------------------------------------
 
+  it('blocks AI commands when sender wallet is zero address', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:chat-zero-wallet',
+      senderWallet: '0x0000000000000000000000000000000000000000',
+      text: '/ai summarize this',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.handledByRuntime).toBe(false)
+    expect(result.response).toContain('Connect a verified wallet to use AI commands.')
+    expect(rankActionsMock).not.toHaveBeenCalled()
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks AI commands when sender wallet matches sentinel placeholder format', async () => {
+    const { generateLlmResponse } = await import('../chat.ts')
+    const result = await generateLlmResponse({
+      groupId: 'telegram:chat-sentinel-wallet',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/ai summarize this',
+      vault: null,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.handledByRuntime).toBe(false)
+    expect(result.response).toContain('Connect a verified wallet to use AI commands.')
+    expect(rankActionsMock).not.toHaveBeenCalled()
+    expect(generateResponseMock).not.toHaveBeenCalled()
+  })
+
   it('returns empty response for empty text', async () => {
     const { generateLlmResponse } = await import('../chat.ts')
     const result = await generateLlmResponse({

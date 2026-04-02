@@ -14,6 +14,6 @@ Base is treated as the hub chain for deployment and shared services. Other chain
 
 ## References
 
-- [Supported Chains](/chains)
+- [Supported Chains](/reference/chains)
 - [Integrations: OFT](/integrations/oft)
 

@@ -18,7 +18,7 @@ Rebuild the Telegram Mini App account-link flow from first principles so it is r
 ## Current state
 
 - The prior Telegram link-flow implementation was intentionally removed.
-- [TelegramLink.tsx](/home/akitav2/projects/4626/frontend/src/pages/TelegramLink.tsx) is now a placeholder route.
+- [TelegramLink.tsx](https://github.com/wenakita/4626/blob/main/frontend/src/pages/TelegramLink.tsx) is now a placeholder route.
 - The deleted files were:
   - `frontend/src/pages/telegramLinkFlow.ts`
   - `frontend/src/pages/TelegramLink.test.ts`
@@ -54,16 +54,16 @@ Rules:
 
 ## Main files to read
 
-- [App.tsx](/home/akitav2/projects/4626/frontend/src/App.tsx)
-- [TelegramLink.tsx](/home/akitav2/projects/4626/frontend/src/pages/TelegramLink.tsx)
-- [TelegramMenu.tsx](/home/akitav2/projects/4626/frontend/src/pages/TelegramMenu.tsx)
-- [telegramMiniAppLink.ts](/home/akitav2/projects/4626/frontend/src/lib/telegramMiniAppLink.ts)
-- [telegramWebApp.ts](/home/akitav2/projects/4626/frontend/src/lib/telegramWebApp.ts)
-- [trust.ts](/home/akitav2/projects/4626/frontend/server/_lib/trust.ts)
-- [accountsIdentity.ts](/home/akitav2/projects/4626/frontend/server/_lib/accountsIdentity.ts)
-- [frontend/api/_handlers/telegram](/home/akitav2/projects/4626/frontend/api/_handlers/telegram)
-- [account-auth-invariants.md](/home/akitav2/projects/4626/frontend/docs/account-auth-invariants.md)
-- [waitlist-accounts-architecture.md](/home/akitav2/projects/4626/frontend/docs/waitlist-accounts-architecture.md)
+- [App.tsx](https://github.com/wenakita/4626/blob/main/frontend/src/App.tsx)
+- [TelegramLink.tsx](https://github.com/wenakita/4626/blob/main/frontend/src/pages/TelegramLink.tsx)
+- [TelegramMenu.tsx](https://github.com/wenakita/4626/blob/main/frontend/src/pages/TelegramMenu.tsx)
+- [telegramMiniAppLink.ts](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramMiniAppLink.ts)
+- [telegramWebApp.ts](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts)
+- [trust.ts](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts)
+- [accountsIdentity.ts](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts)
+- [frontend/api/_handlers/telegram](https://github.com/wenakita/4626/tree/main/frontend/api/_handlers/telegram)
+- [account-auth-invariants.md](/frontend/docs/account-auth-invariants)
+- [waitlist-accounts-architecture.md](/frontend/docs/waitlist-accounts-architecture)
 
 ## Routing facts
 

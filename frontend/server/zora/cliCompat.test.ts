@@ -187,8 +187,6 @@ describe('server/zora/cliCompat', () => {
 
     expect(result).toEqual({
       authenticated: true,
-      key: 'abcdefgh...wxyz',
-      source: 'env:ZORA_SERVER_API_KEY',
     })
   })
 

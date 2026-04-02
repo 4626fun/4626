@@ -10,7 +10,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 import { checkSharesEligibility, getKeeprBaseRpcUrls } from '../../../server/_lib/keeprGating.js'
-import { enqueueKeeprAction, getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
+import { enqueueKeeprAction, getKeeprVaultByVaultAddress, isKeeprJoinLocked } from '../../../server/_lib/keeprRegistry.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 
 import { verifyKeeprJoinProof } from '../../../server/_lib/keeprProof.js'
@@ -154,6 +154,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const sharedJoinContext = {
     lensGroupAddress: vault.lensGroupAddress ?? undefined,
+  }
+
+  if (isKeeprJoinLocked(vault)) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...sharedJoinContext,
+        eligible: false,
+        reason: 'join_locked',
+        actionStatus: 'needs_user_setup',
+        nextSteps: ['Joins are temporarily locked for this vault. Contact the creator/admin to reopen access.'],
+      } satisfies JoinResponse,
+    } satisfies ApiEnvelope<JoinResponse>)
   }
 
   if (!vault.gatingEnabled || vault.gatingMode === 'none') {

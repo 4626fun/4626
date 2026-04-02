@@ -393,12 +393,12 @@ function ChatWidgetInner() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const isChatOverlayActiveOnMobile = isMobile && (showMobileBar || Boolean(activeMobileWindow))
+    const isChatOverlayActiveOnMobile = isConnected && isMobile && (showMobileBar || Boolean(activeMobileWindow))
     window.dispatchEvent(new CustomEvent('vault-mobile-chat-overlay-change', { detail: { active: isChatOverlayActiveOnMobile } }))
     return () => {
       window.dispatchEvent(new CustomEvent('vault-mobile-chat-overlay-change', { detail: { active: false } }))
     }
-  }, [isMobile, showMobileBar, activeMobileWindow])
+  }, [isConnected, isMobile, showMobileBar, activeMobileWindow])
 
   if (!isConnected) return <ConnectToChatPrompt />
 

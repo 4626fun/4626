@@ -76,7 +76,7 @@ async function main() {
   const rejectUnauthorized = parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED)
   const client = new Client({
     connectionString: databaseUrl,
-    ssl: isLocal ? undefined : { rejectUnauthorized: rejectUnauthorized ?? false },
+    ssl: isLocal ? undefined : { rejectUnauthorized: rejectUnauthorized ?? true },
   })
 
   try {

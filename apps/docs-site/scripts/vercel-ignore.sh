@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Production-only deployments: skip all preview environment builds.
+# Never build docs-site on PR previews.
 if [ "${VERCEL_ENV:-}" = "preview" ]; then
+  exit 0
+fi
+
+# Defense-in-depth: skip if Vercel flags this deployment as PR-related.
+if [ -n "${VERCEL_GIT_PULL_REQUEST_ID:-}" ]; then
+  exit 0
+fi
+
+# Production docs deploys should only come from the default branch.
+# This avoids full docs-site builds for branch pushes/PR refs even if
+# project-level deployment settings are changed later.
+if [ -n "${VERCEL_GIT_COMMIT_REF:-}" ] \
+  && [ "${VERCEL_GIT_COMMIT_REF}" != "main" ] \
+  && [ "${VERCEL_GIT_COMMIT_REF}" != "master" ]; then
   exit 0
 fi
 

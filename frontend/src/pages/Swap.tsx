@@ -112,6 +112,8 @@ type ExploreSwapTokenResponse = {
   items: ExploreSwapTokenRow[]
 }
 
+const EMPTY_SWAP_TOKEN_OPTIONS: SwapTokenOption[] = []
+
 function normalizeCreatorCoinLabel(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -475,7 +477,8 @@ export function Swap() {
       })
     },
   })
-  const discoveredCreatorTokenOptions = discoveredCreatorTokenOptionsQuery.data ?? []
+  const discoveredCreatorTokenOptions =
+    discoveredCreatorTokenOptionsQuery.data ?? EMPTY_SWAP_TOKEN_OPTIONS
 
   // ─── LP state ─────────────────────────────────────────────────────────────
   const [lpBusy, setLpBusy] = useState<string | null>(null)

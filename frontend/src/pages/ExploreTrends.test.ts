@@ -1,13 +1,14 @@
 import React from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreTrends } from './ExploreTrends'
 
-const { useInfiniteQueryMock, useQueryMock, fetchZoraExploreMock } = vi.hoisted(() => ({
+const { useInfiniteQueryMock, useQueryMock, fetchZoraExploreMock, searchParamsState } = vi.hoisted(() => ({
   useInfiniteQueryMock: vi.fn(),
   useQueryMock: vi.fn(),
   fetchZoraExploreMock: vi.fn(),
+  searchParamsState: { value: new URLSearchParams() },
 }))
 
 vi.mock('framer-motion', () => ({
@@ -21,7 +22,7 @@ vi.mock('framer-motion', () => ({
 }))
 
 vi.mock('react-router-dom', () => ({
-  useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  useSearchParams: () => [searchParamsState.value, vi.fn()],
 }))
 
 vi.mock('@tanstack/react-query', () => ({
@@ -48,6 +49,10 @@ vi.mock('@/hooks/useMigratedCoins', () => ({
 }))
 
 describe('ExploreTrends', () => {
+  beforeEach(() => {
+    searchParamsState.value = new URLSearchParams()
+  })
+
   it('renders the trends page shell', () => {
     useQueryMock.mockReturnValue({
       data: null,
@@ -106,5 +111,42 @@ describe('ExploreTrends', () => {
       after: undefined,
     })
   })
-})
 
+  it('normalizes legacy sort=fees24h to TRENDING_TRENDS', async () => {
+    searchParamsState.value = new URLSearchParams('sort=fees24h')
+    useQueryMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isFetching: false,
+    })
+    let capturedOptions: any = null
+    useInfiniteQueryMock.mockImplementation((options: any) => {
+      capturedOptions = options
+      return {
+        data: {
+          pages: [{ edges: [], pageInfo: { hasNextPage: false, endCursor: null } }],
+        },
+        fetchNextPage: vi.fn(),
+        hasNextPage: false,
+        isFetchingNextPage: false,
+        isLoading: false,
+        isError: false,
+        error: null,
+      }
+    })
+    fetchZoraExploreMock.mockResolvedValue({
+      edges: [],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    })
+
+    renderToStaticMarkup(React.createElement(ExploreTrends))
+
+    expect(capturedOptions?.queryKey).toEqual(['explore', 'trends', 'TRENDING_TRENDS'])
+    await capturedOptions.queryFn({ pageParam: undefined })
+    expect(fetchZoraExploreMock).toHaveBeenCalledWith({
+      list: 'TRENDING_TRENDS',
+      count: 20,
+      after: undefined,
+    })
+  })
+})

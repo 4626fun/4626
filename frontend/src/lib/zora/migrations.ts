@@ -77,11 +77,13 @@ const BASE_RPC_RAW =
 
 const IS_BROWSER = typeof window !== 'undefined'
 const VERIFY_MIGRATION_IMPLEMENTATION = (() => {
-  // Browser-side contract bytecode verification can trigger large eth_getCode bursts.
-  // Keep it opt-in for frontend usage; server contexts stay strict by default.
+  // Secure by default across browser and server contexts.
+  // Bytecode verification can be explicitly disabled only for emergency RPC cost control.
   if (!IS_BROWSER) return true
   const raw = String(import.meta.env.VITE_ZORA_MIGRATION_VERIFY_IMPLEMENTATION ?? '').trim().toLowerCase()
-  return ['1', 'true', 'yes', 'on'].includes(raw)
+  if (!raw) return true
+  if (['0', 'false', 'no', 'off'].includes(raw)) return false
+  return true
 })()
 
 function isCorsRestrictedRpc(url: string): boolean {

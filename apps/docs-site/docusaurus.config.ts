@@ -48,6 +48,8 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/',
+          // Keep generated API docs with leading-underscore filenames visible.
+          exclude: ['**/*.test.{js,jsx,ts,tsx,md,mdx}', '**/__tests__/**'],
         },
         blog: false,
         theme: {

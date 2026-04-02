@@ -9,19 +9,78 @@ export type ClientRedirect = {
  * We intentionally keep this as an explicit map (vs pattern-based) so changes
  * are reviewable and predictable.
  *
- * Notes:
- * - We include both with and without trailing slash, since the site serves
- *   directory-style routes (e.g. `/overview/`).
- * - Redirect targets should be canonical narrative-first routes.
+ * Redirect targets should be canonical narrative-first routes.
  */
 export const redirects: ClientRedirect[] = [
-  // Intentionally empty for now.
-  //
-  // We keep legacy `/overview/*` and `/concepts/*` as real docs pages so we can:
-  // - avoid breaking internal doc IDs abruptly
-  // - avoid the redirect plugin trying to override existing output paths
-  //
-  // Once those legacy pages are removed from the docs build entirely, add explicit
-  // redirects here to preserve the old URLs.
+  // Docs reorg redirects (v1.7.1 epoch cleanup)
+  { from: '/account-context', to: '/reference/account-context' },
+  { from: '/chains', to: '/reference/chains' },
+  { from: '/coins-metadata', to: '/reference/coins-metadata' },
+  { from: '/current-contract-inventory', to: '/reference/current-contract-inventory' },
+  { from: '/token-image', to: '/reference/token-image' },
+
+  { from: '/cre-runtime-api', to: '/operations/automation/cre-runtime-api' },
+  {
+    from: '/cre-runtime-hardening-checklist',
+    to: '/operations/automation/cre-runtime-hardening-checklist',
+  },
+  {
+    from: '/telegram-canonical-link-preservation',
+    to: '/operations/telegram-canonical-link-preservation',
+  },
+
+  {
+    from: '/creator-workspace',
+    to: '/frontend/creator-workspace',
+  },
+  {
+    from: '/creator-workspace-implementation-plan',
+    to: '/frontend/creator-workspace-implementation-plan',
+  },
+
+  { from: '/lens', to: '/integrations/lens' },
+  { from: '/lens-grove', to: '/integrations/lens-grove' },
+  {
+    from: '/farcaster-close-gap-phases',
+    to: '/integrations/farcaster-close-gap-phases',
+  },
+  { from: '/solana-spoke-article', to: '/integrations/solana-spoke-article' },
+
+  {
+    from: '/onboarding-optimization-nikita-bier',
+    to: '/plans/onboarding-optimization-nikita-bier',
+  },
+  { from: '/security-scan-overview', to: '/security/scan-overview' },
+
+  { from: '/ajna-erc4626-cre-adversarial-audit', to: '/audits/ajna/adversarial-audit' },
+  { from: '/ajna-erc4626-cre-executive-brief', to: '/audits/ajna/executive-brief' },
+  { from: '/ajna-erc4626-cre-master-qna', to: '/audits/ajna/master-qna' },
+  {
+    from: '/charm-alpha-vaults-v2-4626fun-adversarial-audit',
+    to: '/audits/charm/adversarial-audit',
+  },
+  {
+    from: '/charm-alpha-vaults-v2-4626fun-executive-brief',
+    to: '/audits/charm/executive-brief',
+  },
+  { from: '/charm-alpha-vaults-v2-4626fun-master-qa', to: '/audits/charm/master-qa' },
+  { from: '/codex-security-findings', to: '/audits/codex/security-findings' },
+  {
+    from: '/codex-security-second-pass-review',
+    to: '/audits/codex/security-second-pass-review',
+  },
+  { from: '/breakout-report', to: '/audits/token-image/breakout-report' },
+  {
+    from: '/deep-research-report',
+    to: '/audits/token-image/deep-research-report',
+  },
+  {
+    from: ['/deep-research-report-1', '/deep-research-report-(1)'],
+    to: '/audits/token-image/deep-research-report-1',
+  },
+  {
+    from: ['/deep-research-report-2', '/deep-research-report-(2)'],
+    to: '/audits/token-image/deep-research-report-2',
+  },
 ];
 

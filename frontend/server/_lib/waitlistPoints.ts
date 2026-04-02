@@ -115,6 +115,11 @@ export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
         ON points (signup_id, source, source_id)
         WHERE source_id IS NOT NULL;
     `
+    await db.sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS points_csw_link_single_shot
+        ON points (signup_id)
+        WHERE source = 'csw_link' AND source_id IS NULL;
+    `
     await db.sql`CREATE INDEX IF NOT EXISTS points_signup_idx ON points (signup_id, created_at DESC);`
 
     waitlistPointsSchemaEnsured = true
@@ -128,10 +133,10 @@ export async function awardWaitlistPoints(params: {
   db: Db
   signupId: number
   source: string
-  sourceId: string
+  sourceId?: string | null
   amount: number
 }): Promise<boolean> {
-  const { db, signupId, source, sourceId, amount } = params
+  const { db, signupId, source, amount } = params
   const normalizedSource = String(source || '').trim()
   if (!isWaitlistPointSource(normalizedSource)) {
     throw new Error('invalid_waitlist_point_source')
@@ -140,10 +145,25 @@ export async function awardWaitlistPoints(params: {
   if (!Number.isFinite(normalizedAmount) || normalizedAmount < 0) {
     throw new Error('invalid_waitlist_point_amount')
   }
+  const normalizedSourceId = params.sourceId == null ? null : String(params.sourceId).trim() || null
+
+  if (normalizedSource === 'csw_link') {
+    // Hard cap CSW bonus at one award per signup even if callers rotate sourceId.
+    const alreadyAwarded = await db.sql`
+      SELECT 1
+      FROM points
+      WHERE signup_id = ${signupId}
+        AND source = 'csw_link'
+      LIMIT 1;
+    `
+    if (alreadyAwarded?.rows?.length) return false
+  }
+
+  const sourceIdForInsert = normalizedSource === 'csw_link' ? null : normalizedSourceId
 
   const inserted = await db.sql`
     INSERT INTO points (signup_id, source, source_id, amount, created_at)
-    VALUES (${signupId}, ${normalizedSource}, ${sourceId}, ${Math.trunc(normalizedAmount)}, NOW())
+    VALUES (${signupId}, ${normalizedSource}, ${sourceIdForInsert}, ${Math.trunc(normalizedAmount)}, NOW())
     -- points_unique_source is a partial unique index in some envs, so a column-targeted
     -- ON CONFLICT can throw "no unique or exclusion constraint..." in Postgres.
     ON CONFLICT DO NOTHING

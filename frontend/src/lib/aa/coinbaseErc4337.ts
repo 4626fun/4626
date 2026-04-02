@@ -1533,19 +1533,31 @@ export async function simulateSmartWalletCalls(params: {
     return { success: true, directCallResult }
   } catch (e: unknown) {
     const revertInfo = extractRevertInfo(e)
-    
-    // If the execute() simulation failed with Unauthorized but direct call succeeded,
-    // that's expected - the direct call result is more relevant
-    if (revertInfo.errorName === 'Unauthorized()' && directCallResult?.success) {
-      return { 
-        success: true, 
+
+    const unauthorizedExecute =
+      revertInfo.errorName === 'Unauthorized()' ||
+      /unauthorized/i.test(String(revertInfo.error ?? ''))
+
+    // execute/executeBatch simulation is not routed through EntryPoint, so
+    // Unauthorized can be expected even when real ERC-4337 execution succeeds.
+    if (unauthorizedExecute) {
+      if (directCallResult && !directCallResult.success) {
+        return {
+          success: false,
+          error: directCallResult.error,
+          revertData: directCallResult.revertData,
+          errorName: directCallResult.errorName,
+          directCallResult,
+        }
+      }
+      return {
+        success: true,
         directCallResult,
-        // Note: execute() failed but that's expected for simulation
       }
     }
-    
-    return { 
-      success: false, 
+
+    return {
+      success: false,
       ...revertInfo,
       directCallResult,
     }
@@ -1688,6 +1700,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   useTypedDataSigning?: boolean
   retryWithTypedDataSigning?: boolean
   bypassOwnerIndexCache?: boolean
+  ownerIndexOverride?: number
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
     publicClient,
@@ -1709,6 +1722,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     retryOnPrefund = true,
     retryWithLowGasContractSigner = true,
     bypassOwnerIndexCache = false,
+    ownerIndexOverride: ownerIndexOverrideRaw,
   } = params
 
   const submissionStartedAt = Date.now()
@@ -1782,23 +1796,80 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       })
   }
 
+  const ownerIndexOverride =
+    Number.isInteger(ownerIndexOverrideRaw) && Number(ownerIndexOverrideRaw) >= 0
+      ? Math.floor(Number(ownerIndexOverrideRaw))
+      : null
+
   // Find owner index
-  const { ownerIndex, ownerCount } = await findCoinbaseSmartWalletOwnerIndex({
-    publicClient,
-    smartWallet,
-    ownerAddress,
-    useCache: !bypassOwnerIndexCache,
-  })
-  if (AA_DEBUG) {
-    logger.debug('[ERC-4337] Owner index lookup', {
+  let ownerIndex: number | null = ownerIndexOverride
+  let ownerCount = 0
+  if (ownerIndexOverride === null) {
+    const ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
+      publicClient,
       smartWallet,
       ownerAddress,
-      ownerIndex,
-      ownerCount,
+      useCache: !bypassOwnerIndexCache,
+    })
+    ownerIndex = ownerLookup.ownerIndex
+    ownerCount = ownerLookup.ownerCount
+    if (AA_DEBUG) {
+      logger.debug('[ERC-4337] Owner index lookup', {
+        smartWallet,
+        ownerAddress,
+        ownerIndex,
+        ownerCount,
+      })
+    }
+  } else if (AA_DEBUG) {
+    logger.debug('[ERC-4337] Owner index override', {
+      smartWallet,
+      ownerAddress,
+      ownerIndex: ownerIndexOverride,
     })
   }
-  
+
   if (ownerIndex === null) {
+    const ownerLooksLikeSmartWallet = ownerAddress.toLowerCase() === smartWallet.toLowerCase()
+    const maxProbeOwners = 16
+    const probeOwnerCount = Math.min(ownerCount, maxProbeOwners)
+    if (ownerLooksLikeSmartWallet && probeOwnerCount > 0) {
+      let lastSignatureMismatch: unknown = null
+      for (let probeIndex = 0; probeIndex < probeOwnerCount; probeIndex += 1) {
+        try {
+          if (AA_DEBUG) {
+            logger.debug('[ERC-4337] Probing smart-wallet owner index', {
+              smartWallet,
+              ownerAddress,
+              probeIndex,
+              ownerCount,
+            })
+          }
+          return await sendCoinbaseSmartWalletUserOperation({
+            ...params,
+            ownerIndexOverride: probeIndex,
+            bypassOwnerIndexCache: true,
+          })
+        } catch (probeErr: unknown) {
+          const probeMsg = getErrorDiagnosticMessage(probeErr).toLowerCase()
+          const signatureMismatch =
+            probeMsg.includes('invalid signature') ||
+            probeMsg.includes('signature check failed') ||
+            probeMsg.includes('userop signature verification failed')
+          if (!signatureMismatch) throw probeErr
+          lastSignatureMismatch = probeErr
+          if (AA_DEBUG) {
+            logger.debug('[ERC-4337] Owner index probe rejected', {
+              smartWallet,
+              probeIndex,
+              error: probeMsg.slice(0, 220),
+            })
+          }
+        }
+      }
+      if (lastSignatureMismatch) throw lastSignatureMismatch
+    }
+
     throw new Error(
       `Connected wallet (${ownerAddress}) is not an onchain owner of the smart wallet (${smartWallet}). ` +
       'Add this wallet as an owner first, or connect with a wallet that is already an owner.'
@@ -2210,6 +2281,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         skipPaymaster: false,
         retryOnInvalidSignature,
         retryOnPrefund: false,
+        ownerIndexOverride: ownerIndexOverride ?? undefined,
       })
     }
 
@@ -2241,6 +2313,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           skipPaymaster,
           retryOnInvalidSignature: false,
           bypassOwnerIndexCache: true,
+          ownerIndexOverride: ownerIndexOverride ?? undefined,
         })
       }
     }
@@ -2275,6 +2348,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         retryOnInvalidSignature: false,
         retryOnPrefund,
         retryWithLowGasContractSigner: false,
+        ownerIndexOverride: ownerIndexOverride ?? undefined,
       })
     }
 

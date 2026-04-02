@@ -144,6 +144,7 @@ describe('postgres session-mode retry', () => {
   })
 
   it('retries init once with relaxed TLS on SELF_SIGNED_CERT_IN_CHAIN', async () => {
+    vi.stubEnv('POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK', 'true')
     queryBehavior = 'self_signed_once'
     const db = await getDb()
     expect(db).not.toBeNull()

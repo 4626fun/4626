@@ -1,3 +1,6 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+
 const IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const BASENAME_SUFFIX = '.base.eth'
 
@@ -25,6 +28,17 @@ type ExplorePageNode<TNode> = {
 
 type ExplorePage<TNode> = {
   edges?: Array<ExplorePageNode<TNode> | null | undefined> | null
+}
+
+type ExploreSearchParamSetter = (nextInit: URLSearchParams, navigateOpts?: { replace?: boolean }) => void
+type ExploreSubnavParamsOptions<TSort extends string, TTime extends string> = {
+  sortValues: readonly TSort[]
+  defaultSort: TSort
+  sortAliases?: Readonly<Record<string, TSort>>
+  timeValues: readonly TTime[]
+  defaultTime: TTime
+  timeAliases?: Readonly<Record<string, TTime>>
+  searchParamKey?: string
 }
 
 export function normalizeCoinSearchQuery(query: string): {
@@ -69,6 +83,122 @@ export function matchesCoinSearchQuery(
   if (options.includePayoutAddress) fields.push((coin.payoutRecipientAddress || '').toLowerCase())
 
   return candidates.some((candidate) => fields.some((field) => field.includes(candidate)))
+}
+
+export function normalizeExploreOption<TValue extends string>(
+  value: string | null | undefined,
+  allowed: readonly TValue[],
+  fallback: TValue,
+  aliases?: Readonly<Record<string, TValue>>,
+): TValue {
+  if (!value) return fallback
+  const mapped = aliases?.[value] ?? value
+  if (allowed.includes(mapped as TValue)) return mapped as TValue
+  return fallback
+}
+
+export function setExploreSearchParam(
+  searchParams: URLSearchParams,
+  setSearchParams: ExploreSearchParamSetter,
+  key: string,
+  value: string,
+): boolean {
+  if (searchParams.get(key) === value) return false
+  const next = new URLSearchParams(searchParams)
+  next.set(key, value)
+  setSearchParams(next, { replace: true })
+  return true
+}
+
+export function setExploreSearchQueryParam(
+  searchParams: URLSearchParams,
+  setSearchParams: ExploreSearchParamSetter,
+  query: string,
+  key = 'q',
+): boolean {
+  const normalizedQuery = query.trim()
+  const current = (searchParams.get(key) ?? '').trim()
+  if (current === normalizedQuery) return false
+  const next = new URLSearchParams(searchParams)
+  if (normalizedQuery) next.set(key, normalizedQuery)
+  else next.delete(key)
+  setSearchParams(next, { replace: true })
+  return true
+}
+
+export function useExploreSubnavParams<TSort extends string, TTime extends string>(
+  options: ExploreSubnavParamsOptions<TSort, TTime>,
+): {
+  currentSort: TSort
+  currentTimeFilter: TTime
+  searchQuery: string
+  handleSortChange: (sort: string) => void
+  handleTimeFilterChange: (timeFilter: string) => void
+  handleSearchChange: (query: string) => void
+} {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const searchParamKey = options.searchParamKey ?? 'q'
+
+  const currentSort = normalizeExploreOption(
+    searchParams.get('sort'),
+    options.sortValues,
+    options.defaultSort,
+    options.sortAliases,
+  )
+  const currentTimeFilter = normalizeExploreOption(
+    searchParams.get('time'),
+    options.timeValues,
+    options.defaultTime,
+    options.timeAliases,
+  )
+
+  const handleSortChange = useCallback(
+    (sort: string) => {
+      const normalizedSort = normalizeExploreOption(sort, options.sortValues, options.defaultSort, options.sortAliases)
+      setExploreSearchParam(searchParams, setSearchParams, 'sort', normalizedSort)
+    },
+    [options.defaultSort, options.sortAliases, options.sortValues, searchParams, setSearchParams],
+  )
+
+  const handleTimeFilterChange = useCallback(
+    (timeFilter: string) => {
+      const normalizedTime = normalizeExploreOption(
+        timeFilter,
+        options.timeValues,
+        options.defaultTime,
+        options.timeAliases,
+      )
+      setExploreSearchParam(searchParams, setSearchParams, 'time', normalizedTime)
+    },
+    [options.defaultTime, options.timeAliases, options.timeValues, searchParams, setSearchParams],
+  )
+
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setExploreSearchQueryParam(searchParams, setSearchParams, query, searchParamKey)
+    },
+    [searchParamKey, searchParams, setSearchParams],
+  )
+
+  return {
+    currentSort,
+    currentTimeFilter,
+    searchQuery: searchParams.get(searchParamKey) ?? '',
+    handleSortChange,
+    handleTimeFilterChange,
+    handleSearchChange,
+  }
+}
+
+export function useDebouncedValue<TValue>(value: TValue, delayMs: number): TValue {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), Math.max(0, delayMs))
+    return () => window.clearTimeout(timer)
+  }, [delayMs, value])
+
+  return debounced
 }
 
 export function flattenExplorePagedNodes<TNode>(

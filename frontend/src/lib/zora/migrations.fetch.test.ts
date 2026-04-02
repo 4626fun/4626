@@ -46,7 +46,7 @@ describe('fetchMigratedCoins single-flight behavior', () => {
     expect(mockGetBlockNumber).toHaveBeenCalledTimes(1)
   })
 
-  it('does not run eth_getCode trust checks in browser by default', async () => {
+  it('runs eth_getCode trust checks in browser by default', async () => {
     ;(globalThis as Record<string, unknown>).window = {}
     const coin = '0x1de553883334a880e7149597f3d67ffdf2e0fa85'
     const data = encodeAbiParameters(MIGRATION_DATA_ABI, [
@@ -69,7 +69,7 @@ describe('fetchMigratedCoins single-flight behavior', () => {
     await fetchMigratedCoins()
 
     const getCodeCalls = mockRequest.mock.calls.filter(([args]) => args?.method === 'eth_getCode')
-    expect(getCodeCalls).toHaveLength(0)
+    expect(getCodeCalls.length).toBeGreaterThan(0)
   })
 
   it('backs off and retries the same log range when the rpc returns 429', async () => {

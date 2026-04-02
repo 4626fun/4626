@@ -36,20 +36,56 @@ const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
 const ERC8004_AGENT_URI_DEFAULT = ''
 const ERC8004_AGENT_URI_PLACEHOLDER = 'https://... (gateway), ipfs://..., ar://..., or data:application/json;base64,...'
 
-function isContentAddressedAgentUri(uri: string): boolean {
-  const u = uri.trim().toLowerCase()
-  return (
-    u.startsWith('https://') ||
-    u.startsWith('http://') ||
-    u.startsWith('ipfs://') ||
-    u.startsWith('data:') ||
-    u.startsWith('ar://')
-  )
-}
-
 function isStrictContentAddressedAgentUri(uri: string): boolean {
   const u = uri.trim().toLowerCase()
   return u.startsWith('ipfs://') || u.startsWith('data:') || u.startsWith('ar://')
+}
+
+function normalizeAllowlistedHost(raw: string): string {
+  const normalized = raw.trim().toLowerCase().replace(/\.+$/g, '')
+  if (!normalized) return ''
+  if (normalized.startsWith('*.')) return `.${normalized.slice(2)}`
+  return normalized
+}
+
+const AGENT_URI_HTTPS_ALLOWLIST = new Set(
+  String(import.meta.env.VITE_AGENT_URI_HTTPS_ALLOWLIST ?? '')
+    .split(/[\s,]+/g)
+    .map((entry) => normalizeAllowlistedHost(entry))
+    .filter(Boolean),
+)
+
+function isAllowlistedHttpsAgentUri(uri: string): boolean {
+  if (AGENT_URI_HTTPS_ALLOWLIST.size === 0) return false
+  let parsed: URL
+  try {
+    parsed = new URL(uri.trim())
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:') return false
+  const hostname = normalizeAllowlistedHost(parsed.hostname)
+  if (!hostname) return false
+  for (const allowedHost of AGENT_URI_HTTPS_ALLOWLIST) {
+    if (allowedHost.startsWith('.')) {
+      const suffix = allowedHost.slice(1)
+      if (hostname === suffix || hostname.endsWith(`.${suffix}`)) return true
+      continue
+    }
+    if (hostname === allowedHost) return true
+  }
+  return false
+}
+
+function isContentAddressedAgentUri(uri: string): boolean {
+  return isStrictContentAddressedAgentUri(uri) || isAllowlistedHttpsAgentUri(uri)
+}
+
+function agentUriValidationMessage(): string {
+  if (AGENT_URI_HTTPS_ALLOWLIST.size > 0) {
+    return 'Agent URI must be ipfs://, ar://, data:, or an https:// URL on the VITE_AGENT_URI_HTTPS_ALLOWLIST.'
+  }
+  return 'Agent URI must be strict content-addressed (ipfs://, ar://, or data:). HTTPS/http and lens:// are blocked for on-chain writes.'
 }
 
 function toRegistrationDataUri(payload: unknown): string {
@@ -948,10 +984,7 @@ function AgentRegistration() {
       const trimmedUri = agentUri.trim()
       if (!trimmedUri) throw new Error('Agent URI is required.')
       if (!isContentAddressedAgentUri(trimmedUri)) {
-        throw new Error(
-          'Agent URI must use a supported scheme (https://, http://, ipfs://, ar://, or data:). ' +
-            'Strict no-warning mode prefers data:, ipfs://, or ar://. If using Lens, paste gatewayUrl instead of lens://.',
-        )
+        throw new Error(agentUriValidationMessage())
       }
 
       const registryAddress = ERC8004_IDENTITY_REGISTRY as Address
@@ -1052,10 +1085,7 @@ function AgentRegistration() {
       const trimmedUri = agentUri.trim()
       if (!trimmedUri) throw new Error('Agent URI is required.')
       if (!isContentAddressedAgentUri(trimmedUri)) {
-        throw new Error(
-          'Agent URI must use a supported scheme (https://, http://, ipfs://, ar://, or data:). ' +
-            'Strict no-warning mode prefers data:, ipfs://, or ar://. If using Lens, paste gatewayUrl instead of lens://.',
-        )
+        throw new Error(agentUriValidationMessage())
       }
       const rawId = agentIdInput.trim()
       if (!/^\d+$/.test(rawId)) throw new Error('Agent ID must be a non-negative integer.')
@@ -1550,7 +1580,9 @@ function AgentRegistration() {
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
-                <span>Strict mode keeps a content-addressed URI (data:, ipfs://, ar://) by default. HTTPS gateway URLs are optional fallback.</span>
+                <span>
+                  Strict mode keeps a content-addressed URI (data:, ipfs://, ar://) by default. HTTPS gateways require explicit allowlisting.
+                </span>
                 <button
                   type="button"
                   onClick={() => void buildContentAddressedUri()}
@@ -1559,9 +1591,9 @@ function AgentRegistration() {
                   Build strict data URI
                 </button>
               </div>
-              {agentUri.trim() && !usingStrictAgentUri ? (
+              {agentUri.trim() && !usingStrictAgentUri && isContentAddressedAgentUri(agentUri) ? (
                 <div className="text-xs text-amber-300/90">
-                  Current URI is not strict content-addressed. 8004scan may flag this (`IA040`) even though it remains valid.
+                  Current URI uses an allowlisted HTTPS gateway (mutable). Strict content-addressed URIs are safer for long-term integrity.
                 </div>
               ) : null}
               <button
@@ -1598,7 +1630,7 @@ function AgentRegistration() {
                       onClick={() => setAgentUri(lensPublishResult.gatewayUrl ?? '')}
                       className="text-xs text-zinc-300 hover:text-white transition-colors"
                     >
-                      Use gateway URL anyway (mutable)
+                      Use gateway URL (requires allowlist)
                     </button>
                   </div>
                 </div>

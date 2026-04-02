@@ -19,9 +19,49 @@ import {
   isSupportedExploreChain,
   parseNumber,
   toDisplayAssetUrl,
+  useExploreSubnavParams,
 } from './exploreShared'
 
+const CONTENT_TRANSACTIONS_TIME_FILTERS = [
+  { label: '1D', value: '1d' },
+  { label: '1W', value: '1w' },
+  { label: 'All-time', value: '1y' },
+] as const
+
+const CONTENT_TRANSACTIONS_SORT_OPTIONS = [
+  { label: 'Newest', value: 'new' },
+  { label: 'USD', value: 'volume' },
+] as const
+const CONTENT_TRANSACTIONS_SORT_VALUES = ['new', 'volume'] as const
+const CONTENT_TRANSACTIONS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+
+function toRowTimestampMs(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  return value < 1_000_000_000_000 ? value * 1000 : value
+}
+
+function contentTransactionsWindowMs(filter: string): number | null {
+  switch (filter) {
+    case '1d':
+      return 24 * 60 * 60 * 1000
+    case '1w':
+      return 7 * 24 * 60 * 60 * 1000
+    case '1y':
+      return 365 * 24 * 60 * 60 * 1000
+    default:
+      return null
+  }
+}
+
 export function ExploreContentTransactions() {
+  const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
+    useExploreSubnavParams({
+      sortValues: CONTENT_TRANSACTIONS_SORT_VALUES,
+      defaultSort: 'new',
+      timeValues: CONTENT_TRANSACTIONS_TIME_FILTER_VALUES,
+      defaultTime: '1d',
+    })
+
   const params = useParams()
   const chain = String(params.chain ?? '').trim()
   const contentCoinAddressRaw = String(params.contentCoinAddress ?? '').trim()
@@ -80,6 +120,46 @@ export function ExploreContentTransactions() {
       }
     })
   }, [swaps, contentCoinAddress])
+
+  const filteredRows = useMemo(() => {
+    if (rows.length === 0) return rows
+    const referenceTimestampMs = rows.reduce((maxTs, row) => Math.max(maxTs, toRowTimestampMs(row.timestamp)), 0)
+    const windowMs = contentTransactionsWindowMs(currentTimeFilter)
+    const cutoffMs = windowMs != null && referenceTimestampMs > 0 ? referenceTimestampMs - windowMs : null
+    const trimmedQuery = searchQuery.trim().toLowerCase()
+
+    const scopedRows =
+      cutoffMs == null
+        ? rows
+        : rows.filter((row) => {
+            const rowTsMs = toRowTimestampMs(row.timestamp)
+            return rowTsMs >= cutoffMs
+          })
+
+    const searchFiltered =
+      trimmedQuery.length === 0
+        ? scopedRows
+        : scopedRows.filter((row) => {
+            const symbol0 = row.token0Symbol.toLowerCase()
+            const symbol1 = row.token1Symbol.toLowerCase()
+            const wallet = row.wallet.toLowerCase()
+            const txHash = row.txHash.toLowerCase()
+            const side = row.side.toLowerCase()
+            return (
+              symbol0.includes(trimmedQuery) ||
+              symbol1.includes(trimmedQuery) ||
+              wallet.includes(trimmedQuery) ||
+              txHash.includes(trimmedQuery) ||
+              side.includes(trimmedQuery)
+            )
+          })
+
+    if (currentSort === 'volume') {
+      return [...searchFiltered].sort((a, b) => b.amountUsd - a.amountUsd)
+    }
+
+    return [...searchFiltered].sort((a, b) => toRowTimestampMs(b.timestamp) - toRowTimestampMs(a.timestamp))
+  }, [currentSort, currentTimeFilter, rows, searchQuery])
 
   if (!isValid || !contentCoinAddress) {
     return <Navigate replace to="/explore/transactions" />
@@ -187,7 +267,18 @@ export function ExploreContentTransactions() {
             </div>
           </div>
 
-          <ExploreSubnav searchPlaceholder="Filter transactions…" />
+          <ExploreSubnav
+            searchPlaceholder="Filter by wallet, symbol, or tx hash"
+            searchValue={searchQuery}
+            onSearch={handleSearchChange}
+            onTimeFilterChange={handleTimeFilterChange}
+            onSortChange={handleSortChange}
+            currentTimeFilter={currentTimeFilter}
+            currentSort={currentSort}
+            timeFilters={CONTENT_TRANSACTIONS_TIME_FILTERS}
+            sortOptions={CONTENT_TRANSACTIONS_SORT_OPTIONS}
+            disableUniswapTimeGating
+          />
 
           <div className="mt-10 rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-6">
             <div className="overflow-x-auto">
@@ -210,14 +301,16 @@ export function ExploreContentTransactions() {
                         Loading transactions...
                       </td>
                     </tr>
-                  ) : rows.length === 0 ? (
+                  ) : filteredRows.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-3 py-8 text-center text-zinc-600">
-                        No swap transactions found for this content pool yet.
+                        {searchQuery.trim()
+                          ? 'No transactions matched your filters.'
+                          : 'No swap transactions found for this content pool yet.'}
                       </td>
                     </tr>
                   ) : (
-                    rows.map((row) => (
+                    filteredRows.map((row) => (
                       <tr key={row.id} className="border-b border-white/8/70">
                         <td className="px-3 py-3 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
                         <td className="px-3 py-3">

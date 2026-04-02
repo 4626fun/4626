@@ -94,6 +94,11 @@ export type KeeprVaultRow = {
   config: KeeprConfigV1
 }
 
+export function isKeeprJoinLocked(vault: Pick<KeeprVaultRow, 'joinLocked' | 'config'>): boolean {
+  if (vault.joinLocked) return true
+  return Boolean(vault.config?.gating?.joinLocked)
+}
+
 function mapVaultRow(row: any): KeeprVaultRow {
   return {
     vaultAddress: String(row.vault_address).toLowerCase() as `0x${string}`,

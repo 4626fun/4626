@@ -2,7 +2,7 @@
 
 Repo workflows that rely on GitHub’s **Dependency graph** and **Dependency review**:
 
-- [.github/workflows/dependency-review.yml](../../.github/workflows/dependency-review.yml)
+- [.github/workflows/dependency-review.yml](https://github.com/wenakita/4626/blob/main/.github/workflows/dependency-review.yml)
 
 ## 1. Dependency graph
 
@@ -35,4 +35,4 @@ Docs: [Require status checks before merging](https://docs.github.com/en/reposito
 | `fail-on-scopes` | `runtime`, `development` |
 | `license-check` | `true` |
 
-Tune in [.github/workflows/dependency-review.yml](../../.github/workflows/dependency-review.yml) if the team wants stricter (`moderate`) or looser (`critical`-only) gates.
+Tune in [.github/workflows/dependency-review.yml](https://github.com/wenakita/4626/blob/main/.github/workflows/dependency-review.yml) if the team wants stricter (`moderate`) or looser (`critical`-only) gates.

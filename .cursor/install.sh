@@ -5,9 +5,10 @@ set -euo pipefail
 
 # ── Foundry (Solidity toolchain) ──────────────────────────────────────────────
 if ! command -v forge &>/dev/null; then
-  curl -L https://foundry.paradigm.xyz | bash
-  export PATH="$HOME/.foundry/bin:$PATH"
-  foundryup
+  echo "forge is not installed."
+  echo "Install Foundry manually from the official docs before re-running setup:"
+  echo "  https://book.getfoundry.sh/getting-started/installation"
+  exit 1
 fi
 
 # ── Git submodules (required for forge build / test) ──────────────────────────

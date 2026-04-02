@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { useSearchParams } from 'react-router-dom'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -16,7 +15,13 @@ import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
-import { flattenExplorePagedNodes, matchesCoinSearchQuery, normalizeCoinSearchQuery } from './exploreShared'
+import {
+  flattenExplorePagedNodes,
+  matchesCoinSearchQuery,
+  normalizeCoinSearchQuery,
+  useDebouncedValue,
+  useExploreSubnavParams,
+} from './exploreShared'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
@@ -31,6 +36,8 @@ const REMOTE_SEARCH_MIN_QUERY_LENGTH = 3
 const LIVE_METRICS_REFETCH_MS = 10_000
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
+const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new'] as const
+const CREATORS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 const CREATOR_SEARCH_MATCH_OPTIONS = {
   includeCreatorAddress: true,
@@ -209,16 +216,20 @@ function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number
 }
 
 export function ExploreCreators() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState('')
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
 
-  const currentTimeFilter = searchParams.get('time') || '1d'
-  const currentSort = searchParams.get('sort') || 'volume'
+  const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
+    useExploreSubnavParams({
+    sortValues: CREATORS_SORT_VALUES,
+    defaultSort: 'volume',
+    sortAliases: { fees24h: 'priceChange' },
+    timeValues: CREATORS_TIME_FILTER_VALUES,
+    defaultTime: '1d',
+    })
 
   const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_CREATORS_24H'
   
@@ -286,6 +297,7 @@ export function ExploreCreators() {
   }, [data?.pages])
 
   const trimmedSearchQuery = searchQuery.trim()
+  const debouncedSearchQuery = useDebouncedValue(trimmedSearchQuery, 250)
 
   // Local filtering over currently loaded ranking pages.
   const localFilteredCoins = useMemo(() => {
@@ -298,9 +310,9 @@ export function ExploreCreators() {
   // Fallback search resolves by creator handle/profile/address so creators outside
   // currently fetched ranking pages can still be discovered from the search box.
   const directSearchQuery = useQuery({
-    queryKey: ['explore', 'creators', 'direct-search', trimmedSearchQuery.toLowerCase()],
-    queryFn: () => resolveCreatorSearchCandidates(trimmedSearchQuery),
-    enabled: trimmedSearchQuery.length >= REMOTE_SEARCH_MIN_QUERY_LENGTH && localFilteredCoins.length === 0,
+    queryKey: ['explore', 'creators', 'direct-search', debouncedSearchQuery.toLowerCase()],
+    queryFn: () => resolveCreatorSearchCandidates(debouncedSearchQuery),
+    enabled: debouncedSearchQuery.length >= REMOTE_SEARCH_MIN_QUERY_LENGTH && localFilteredCoins.length === 0,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
     retry: 1,
@@ -514,18 +526,6 @@ export function ExploreCreators() {
     }
   }, [filteredCoins.length, currentTimeFilter, updateHorizontalControls])
 
-  const handleTimeFilterChange = (filter: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('time', filter)
-    setSearchParams(newParams, { replace: true })
-  }
-
-  const handleSortChange = (sort: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('sort', sort)
-    setSearchParams(newParams, { replace: true })
-  }
-
   const columnScrollStops = useMemo(() => {
     const columns = getExploreColumns({ variant: 'creators', timeframe: currentTimeFilter, collapseIdentity })
     const nonStickyWidths = columns.filter((c) => !c.sticky).map((c) => c.widthPx)
@@ -639,7 +639,8 @@ export function ExploreCreators() {
         >
           <ExploreSubnav
             searchPlaceholder="Search creators"
-            onSearch={setSearchQuery}
+            searchValue={searchQuery}
+            onSearch={handleSearchChange}
             onTimeFilterChange={handleTimeFilterChange}
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}

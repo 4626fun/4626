@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { applyEnv, createMockReq, createMockRes } from './helpers'
+import { applyEnv, createMockReq, createMockRes, withAuthHeader } from './helpers'
 
 async function loadQueryHandler() {
   const mod = await import('../_handlers/uniswap/_query.ts')
@@ -40,7 +40,7 @@ describe('graph proxy hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://evil.test', 'x-forwarded-for': '10.1.1.1' },
+      headers: withAuthHeader({ origin: 'https://evil.test', 'x-forwarded-for': '10.1.1.1' }),
       body: { query: 'query HealthMeta { _meta { block { number } } }' },
     })
     const res = createMockRes()
@@ -59,7 +59,7 @@ describe('graph proxy hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.2' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.2' }),
       body: { query: 'query HealthMeta { _meta { block { number } } }' },
     })
     const res = createMockRes()
@@ -81,7 +81,7 @@ describe('graph proxy hardening', () => {
     for (let i = 0; i < 61; i++) {
       const req = createMockReq({
         method: 'POST',
-        headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.9.9.9' },
+        headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.9.9.9' }),
         body: { query: 'query HealthMeta { _meta { block { number } } }' },
       })
       lastRes = createMockRes()
@@ -99,7 +99,7 @@ describe('graph proxy hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.4' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.4' }),
       body: { query: 'query UnknownOp { pools { id } }' },
     })
     const res = createMockRes()
@@ -125,7 +125,7 @@ describe('graph proxy hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.5' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.5' }),
       body: { query: 'query HealthMeta { _meta { block { number } } }' },
     })
     const res = createMockRes()
@@ -146,7 +146,7 @@ describe('graph proxy hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.7' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.7' }),
       body: { query: 'query HealthMeta { _meta { block { number } } }' },
     })
     const res = createMockRes()
@@ -163,7 +163,7 @@ describe('graph proxy hardening', () => {
 
     const req = createMockReq({
       method: 'GET',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.6' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.6' }),
       query: { token: '0x0000000000000000000000000000000000000001', timeframe: '1d' },
     })
     const res = createMockRes()

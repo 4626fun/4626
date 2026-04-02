@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -13,7 +12,11 @@ import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
-import { flattenExplorePagedNodes, matchesCoinSearchQuery } from './exploreShared'
+import {
+  flattenExplorePagedNodes,
+  matchesCoinSearchQuery,
+  useExploreSubnavParams,
+} from './exploreShared'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_TRENDS_24H',
@@ -24,17 +27,23 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 
 const PAGE_SIZE = 20
 const LIVE_REFETCH_MS = 12_000
+const TRENDS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new'] as const
+const TRENDS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
 
 export function ExploreTrends() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState('')
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
 
-  const currentTimeFilter = searchParams.get('time') || '1d'
-  const currentSort = searchParams.get('sort') || 'volume'
+  const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
+    useExploreSubnavParams({
+    sortValues: TRENDS_SORT_VALUES,
+    defaultSort: 'volume',
+    sortAliases: { fees24h: 'priceChange' },
+    timeValues: TRENDS_TIME_FILTER_VALUES,
+    defaultTime: '1d',
+    })
 
   const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_TRENDS_24H'
 
@@ -115,18 +124,6 @@ export function ExploreTrends() {
     }
   }, [filteredCoins.length, currentTimeFilter, updateHorizontalControls])
 
-  const handleTimeFilterChange = (filter: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('time', filter)
-    setSearchParams(newParams, { replace: true })
-  }
-
-  const handleSortChange = (sort: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('sort', sort)
-    setSearchParams(newParams, { replace: true })
-  }
-
   const columnScrollStops = useMemo(() => {
     const columns = getExploreColumns({ variant: 'content', timeframe: currentTimeFilter })
     const nonStickyWidths = columns.filter((c) => !c.sticky).map((c) => c.widthPx)
@@ -194,7 +191,8 @@ export function ExploreTrends() {
         >
           <ExploreSubnav
             searchPlaceholder="Search trends"
-            onSearch={setSearchQuery}
+            searchValue={searchQuery}
+            onSearch={handleSearchChange}
             onTimeFilterChange={handleTimeFilterChange}
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}

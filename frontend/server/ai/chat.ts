@@ -50,6 +50,17 @@ const LLM_COOLDOWN_CACHE_LIMIT = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_CACHE_LIMIT, 2_000))
 
 const groupCooldowns = new Map<string, number>()
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const SENTINEL_ADDRESS_PATTERN = /^0x0{38}[a-f0-9]{2}$/
+
+function isUnauthenticatedSenderWallet(address: string): boolean {
+  const normalized = String(address ?? '').trim().toLowerCase()
+  if (!normalized) return true
+  if (normalized === ZERO_ADDRESS) return true
+  // Placeholder/sentinel addresses should never satisfy wallet-gated AI auth.
+  if (SENTINEL_ADDRESS_PATTERN.test(normalized)) return true
+  return false
+}
 
 function pruneCooldowns(now = Date.now()): void {
   for (const [groupId, timestamp] of groupCooldowns) {
@@ -359,6 +370,7 @@ function resolveConversationSource(conversationType: string): string {
 function toSenderAddress(senderWallet: string): string | null {
   const normalized = String(senderWallet ?? '').trim().toLowerCase()
   if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null
+  if (isUnauthenticatedSenderWallet(normalized)) return null
   return normalized
 }
 

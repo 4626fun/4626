@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowUpRight, ArrowDownLeft, ExternalLink } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
@@ -14,7 +14,12 @@ import {
   getZoraExploreVolumeHeaderLabel,
   getZoraExploreVolumeNote,
 } from '@/lib/zora/exploreVolume'
-import { flattenExplorePagedNodes, formatShortAddress } from './exploreShared'
+import {
+  flattenExplorePagedNodes,
+  formatShortAddress,
+  matchesCoinSearchQuery,
+  useExploreSubnavParams,
+} from './exploreShared'
 
 function formatTimeAgo(dateStr: string | undefined): string {
   if (!dateStr) return '-'
@@ -67,14 +72,10 @@ function activityDateString(coin: ZoraCoin): string | undefined {
 
 function timeFilterWindowMs(filter: string): number | null {
   switch (filter) {
-    case '1h':
-      return 60 * 60 * 1000
     case '1d':
       return 24 * 60 * 60 * 1000
     case '1w':
       return 7 * 24 * 60 * 60 * 1000
-    case '1m':
-      return 30 * 24 * 60 * 60 * 1000
     case '1y':
       return 365 * 24 * 60 * 60 * 1000
     default:
@@ -89,12 +90,14 @@ const TRANSACTIONS_SORT_OPTIONS = [
   { label: 'Price change', value: 'priceChange' },
 ] as const
 
-function normalizeTransactionsSort(value: string | null): string {
-  if (!value) return 'new'
-  if (value === 'fees24h') return 'priceChange'
-  if (value === 'new' || value === 'volume' || value === 'marketCap' || value === 'priceChange') return value
-  return 'new'
-}
+const TRANSACTIONS_SORT_VALUES = ['new', 'volume', 'marketCap', 'priceChange'] as const
+const TRANSACTIONS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const TRANSACTIONS_SEARCH_MATCH_OPTIONS = {
+  includeCreatorAddress: true,
+  includePayoutAddress: true,
+  includeQueryVariants: true,
+  includeHandleBasenameVariant: true,
+} as const
 
 function toNumber(value: string | undefined): number {
   if (!value) return 0
@@ -113,12 +116,10 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
   const time = formatTimeAgo(activityDateString(coin))
   const address = coin.address || ''
   const creatorAddress = coin.creatorAddress
+  const hasAddress = address.length > 0
 
-  return (
-    <Link
-      to={`/explore/creators/base/${address}`}
-      className="grid grid-cols-[64px_56px_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 hover:bg-zinc-800/30 transition-colors text-sm"
-    >
+  const rowContent = (
+    <>
       {/* Type indicator */}
       <div className="flex items-center gap-2">
         <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isBuy ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
@@ -164,15 +165,36 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
       <span className="hidden sm:block text-sm text-zinc-400">{formatShortAddress(creatorAddress)}</span>
 
       {/* External link */}
-      <a
-        href={`https://basescan.org/address/${address}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="hidden sm:block text-zinc-500 hover:text-white transition-colors"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <ExternalLink className="w-4 h-4" />
-      </a>
+      <span className="hidden sm:block text-zinc-500">
+        {hasAddress ? (
+          <a
+            href={`https://basescan.org/address/${address}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex hover:text-white transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        ) : (
+          <ExternalLink className="w-4 h-4 opacity-30" />
+        )}
+      </span>
+    </>
+  )
+
+  const rowClassName = 'grid grid-cols-[64px_56px_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 transition-colors text-sm'
+
+  if (!hasAddress) {
+    return <div className={`${rowClassName} opacity-90`}>{rowContent}</div>
+  }
+
+  return (
+    <Link
+      to={`/explore/creators/base/${address}`}
+      className={`${rowClassName} hover:bg-zinc-800/30`}
+    >
+      {rowContent}
     </Link>
   )
 }
@@ -216,14 +238,20 @@ function ActivityRowSkeleton() {
 const PAGE_SIZE = 20
 
 export function ExploreTransactions() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState('')
+  const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
+    useExploreSubnavParams({
+      sortValues: TRANSACTIONS_SORT_VALUES,
+      defaultSort: 'new',
+      sortAliases: { fees24h: 'priceChange' },
+      timeValues: TRANSACTIONS_TIME_FILTER_VALUES,
+      defaultTime: '1d',
+    })
+  const trimmedSearchQuery = searchQuery.trim()
 
-  const currentTimeFilter = searchParams.get('time') || '1d'
-  const currentSort = normalizeTransactionsSort(searchParams.get('sort'))
 
   const {
     data,
+    dataUpdatedAt,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -233,12 +261,19 @@ export function ExploreTransactions() {
   } = useInfiniteQuery({
     queryKey: ['explore', 'transactions', 'LAST_TRADED'],
     queryFn: async ({ pageParam }) => {
-      const result = await fetchZoraExplore({
-        list: 'LAST_TRADED',
-        count: PAGE_SIZE,
-        after: pageParam,
-      })
-      return result
+      try {
+        return await fetchZoraExplore({
+          list: 'LAST_TRADED',
+          count: PAGE_SIZE,
+          after: pageParam,
+        })
+      } catch {
+        return await fetchZoraExplore({
+          list: 'LAST_TRADED_UNIQUE',
+          count: PAGE_SIZE,
+          after: pageParam,
+        })
+      }
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
@@ -257,21 +292,16 @@ export function ExploreTransactions() {
   // Filter + sort based on current controls.
   const filteredActivity = useMemo(() => {
     const windowMs = timeFilterWindowMs(currentTimeFilter)
-    const newestActivityMs = allActivity.length > 0 ? activityTimestamp(allActivity[0]) : 0
-    const cutoff = windowMs != null && newestActivityMs > 0 ? newestActivityMs - windowMs : null
+    const cutoff = windowMs != null && dataUpdatedAt > 0 ? dataUpdatedAt - windowMs : null
     const timeScoped = cutoff != null
       ? allActivity.filter((coin) => activityTimestamp(coin) >= cutoff)
       : allActivity
 
-    const filtered = !searchQuery.trim()
+    const filtered = !trimmedSearchQuery
       ? timeScoped
-      : timeScoped.filter((coin) => {
-          const query = searchQuery.toLowerCase()
-          const name = (coin.name || '').toLowerCase()
-          const symbol = (coin.symbol || '').toLowerCase()
-          const address = (coin.address || '').toLowerCase()
-          return name.includes(query) || symbol.includes(query) || address.includes(query)
-        })
+      : timeScoped.filter((coin) =>
+          matchesCoinSearchQuery(coin, trimmedSearchQuery, TRANSACTIONS_SEARCH_MATCH_OPTIONS),
+        )
 
     if (filtered.length <= 1) return filtered
 
@@ -297,25 +327,13 @@ export function ExploreTransactions() {
 
     sorted.sort((a, b) => activityTimestamp(b) - activityTimestamp(a))
     return sorted
-  }, [allActivity, currentSort, currentTimeFilter, searchQuery])
+  }, [allActivity, currentSort, currentTimeFilter, dataUpdatedAt, trimmedSearchQuery])
 
   useWindowInfiniteScrollLoadMore({
     hasNextPage: Boolean(hasNextPage),
     isFetchingNextPage,
     onLoadMore: fetchNextPage,
   })
-
-  const handleTimeFilterChange = (filter: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('time', filter)
-    setSearchParams(newParams, { replace: true })
-  }
-
-  const handleSortChange = (sort: string) => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('sort', sort)
-    setSearchParams(newParams, { replace: true })
-  }
 
   return (
     <div className="relative pb-24 md:pb-0 min-h-screen">
@@ -346,7 +364,8 @@ export function ExploreTransactions() {
         >
           <ExploreSubnav
             searchPlaceholder="Filter by token"
-            onSearch={setSearchQuery}
+            searchValue={searchQuery}
+            onSearch={handleSearchChange}
             onTimeFilterChange={handleTimeFilterChange}
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}

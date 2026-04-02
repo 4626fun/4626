@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { applyEnv, createMockReq, createMockRes } from '../helpers'
+import { applyEnv, createMockReq, createMockRes, withAuthHeader } from '../helpers'
 
 async function loadHandler() {
   const mod = await import('../../_handlers/uniswap/_swap7702.ts')
@@ -40,9 +40,11 @@ describe('x-erc20eth-enabled header forwarding (swap7702)', () => {
     const req = createMockReq({
       method: 'POST',
       headers: {
-        origin: 'https://v1.4626.fun',
-        'x-forwarded-for': '10.1.1.3',
-        'x-erc20eth-enabled': 'true',
+        ...withAuthHeader({
+          origin: 'https://v1.4626.fun',
+          'x-forwarded-for': '10.1.1.3',
+          'x-erc20eth-enabled': 'true',
+        }),
       },
       body: {
         chainId: 8453,
@@ -66,4 +68,3 @@ describe('x-erc20eth-enabled header forwarding (swap7702)', () => {
     expect(sentHeaders.get('x-erc20eth-enabled')).toBe('true')
   })
 })
-

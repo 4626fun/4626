@@ -211,6 +211,7 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     uint8 private constant IGNORE_REASON_DUPLICATE_SEQUENCE = 1;
     uint8 private constant IGNORE_REASON_VRF_NOT_CONFIGURED = 2;
     uint8 private constant IGNORE_REASON_INVALID_PAYLOAD = 3;
+    uint8 private constant IGNORE_REASON_RATE_LIMITED = 4;
 
     // ================================
     // ERRORS
@@ -346,7 +347,8 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
             return;
         }
         if (!_consumeRateLimit(_origin.srcEid, sequence, _origin.sender)) {
-            revert CrossChainRateLimitExceeded(_origin.srcEid, sequence);
+            emit CrossChainRequestIgnored(_origin.srcEid, _origin.sender, sequence, IGNORE_REASON_RATE_LIMITED);
+            return;
         }
 
         // Request VRF

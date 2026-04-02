@@ -149,7 +149,7 @@ export default async function handler(req: any, res: any) {
 
   // Award CSW link points (idempotent via ledger unique key)
   // Use csw: prefix to match format in _waitlist.ts
-  await awardWaitlistPoints({
+  const cswPointsAwarded = await awardWaitlistPoints({
     db,
     signupId,
     source: 'csw_link',
@@ -168,7 +168,7 @@ export default async function handler(req: any, res: any) {
     ? (referrerResult.rows[0].referred_by_signup_id as number)
     : null
 
-  if (referrerId) {
+  if (referrerId && cswPointsAwarded) {
     // Award referrer the CSW link bonus
     await awardWaitlistPoints({
       db,
@@ -189,8 +189,8 @@ export default async function handler(req: any, res: any) {
   const data: CswLinkResponse = {
     email,
     cswAddress,
-    awarded: true,
-    points: WAITLIST_POINTS.linkCsw,
+    awarded: cswPointsAwarded,
+    points: cswPointsAwarded ? WAITLIST_POINTS.linkCsw : 0,
   }
   
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<CswLinkResponse>)

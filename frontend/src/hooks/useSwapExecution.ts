@@ -666,7 +666,14 @@ export function useSwapExecution(params: {
         executionAddress: params.executionAddress ?? null,
         expectedSessionAddress: params.signerAddress ?? null,
       }),
-    [params.executionAddress, params.executionMode, params.hasSession, params.sessionAddress, params.sessionHydrated],
+    [
+      params.executionAddress,
+      params.executionMode,
+      params.hasSession,
+      params.sessionAddress,
+      params.sessionHydrated,
+      params.signerAddress,
+    ],
   )
 
   const getTokenDecimals = useCallback(async (token: string): Promise<number> => {

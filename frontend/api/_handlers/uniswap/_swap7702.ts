@@ -8,6 +8,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
+  readRequestPrincipalAddress,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -31,8 +32,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  const principalAddress = readRequestPrincipalAddress(req, { lowercase: true })
+  if (!principalAddress) {
+    return res.status(401).json({ success: false, error: 'Authentication required' })
+  }
+
   const clientIp = getClientIp(req)
-  const rate = checkRateLimit(rateLimitKey('uniswap-swap-7702', clientIp), RATE_LIMITS.general)
+  const rate = checkRateLimit(
+    rateLimitKey('uniswap-swap-7702', principalAddress, clientIp),
+    RATE_LIMITS.general,
+  )
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })

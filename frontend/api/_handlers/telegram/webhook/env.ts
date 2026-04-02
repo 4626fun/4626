@@ -70,21 +70,39 @@ export type SenderWalletResolution = {
   source: SenderWalletResolutionSource
 }
 
+function normalizeResolvedWallet(value: unknown): `0x${string}` | null {
+  if (!isAddressLike(value)) return null
+  const normalized = value.toLowerCase() as `0x${string}`
+  return normalized
+}
+
 export function resolveSenderWalletWithSource(userId: string): SenderWalletResolution {
   const config = getTelegramWebhookConfig()
   const userWalletMap = parseJsonObject(config.userWalletMapJsonRaw)
-  const mapped = asTrimmed(userWalletMap[userId])
-  if (isAddressLike(mapped)) {
+  const mapped = normalizeResolvedWallet(asTrimmed(userWalletMap[userId]))
+  if (mapped) {
+    if (mapped === ZERO_ADDRESS) {
+      return {
+        wallet: ZERO_ADDRESS,
+        source: 'zero',
+      }
+    }
     return {
-      wallet: mapped.toLowerCase() as `0x${string}`,
+      wallet: mapped,
       source: 'user_map',
     }
   }
 
-  const fallback = config.defaultSenderWallet
-  if (isAddressLike(fallback)) {
+  const fallback = normalizeResolvedWallet(config.defaultSenderWallet)
+  if (fallback) {
+    if (fallback === ZERO_ADDRESS) {
+      return {
+        wallet: ZERO_ADDRESS,
+        source: 'zero',
+      }
+    }
     return {
-      wallet: fallback.toLowerCase() as `0x${string}`,
+      wallet: fallback,
       source: 'default',
     }
   }

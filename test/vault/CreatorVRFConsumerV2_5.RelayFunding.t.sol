@@ -166,17 +166,16 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         assertTrue(responseSent);
     }
 
-    function test_rateLimitRejectsExcessRemoteRequests() external {
+    function test_rateLimitIgnoresExcessRemoteRequestsWithoutRevert() external {
         consumer.setRateLimitDefaults(60, 1, true);
 
         _submitRemoteRequest(100);
         assertEq(consumer.sequenceToRequestId(REMOTE_EID, 100), 1);
+        uint256 nextRequestIdAfterFirst = coordinator.nextRequestId();
 
-        vm.expectRevert(
-            abi.encodeWithSelector(CreatorVRFConsumerV2_5.CrossChainRateLimitExceeded.selector, REMOTE_EID, uint64(101))
-        );
         _submitRemoteRequest(101);
         assertEq(consumer.sequenceToRequestId(REMOTE_EID, 101), 0);
+        assertEq(coordinator.nextRequestId(), nextRequestIdAfterFirst);
     }
 
     function _submitRemoteRequest(uint64 sequence) internal {

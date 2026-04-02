@@ -17,6 +17,9 @@ type ExploreSortOption = {
   value: string
 }
 
+type ExploreParamKey = 'time' | 'sort'
+type ExploreSearchParamSetter = (nextInit: URLSearchParams, navigateOpts?: { replace?: boolean }) => void
+
 const TABS: Tab[] = [
   { label: 'Creators', to: '/explore/creators' },
   { label: 'Content', to: '/explore/content' },
@@ -45,8 +48,32 @@ function isActive(pathname: string, to: string): boolean {
   return pathname.startsWith(`${to}/`)
 }
 
+export function applyExploreParamChange({
+  key,
+  value,
+  onChange,
+  searchParams,
+  setSearchParams,
+}: {
+  key: ExploreParamKey
+  value: string
+  onChange?: (value: string) => void
+  searchParams: URLSearchParams
+  setSearchParams: ExploreSearchParamSetter
+}) {
+  if (onChange) {
+    onChange(value)
+    return
+  }
+  if (searchParams.get(key) === value) return
+  const newParams = new URLSearchParams(searchParams)
+  newParams.set(key, value)
+  setSearchParams(newParams, { replace: true })
+}
+
 export function ExploreSubnav({
   searchPlaceholder = 'Search tokens',
+  searchValue,
   onSearch,
   onTimeFilterChange,
   onSortChange,
@@ -58,6 +85,7 @@ export function ExploreSubnav({
   disableUniswapTimeGating = false,
 }: {
   searchPlaceholder?: string
+  searchValue?: string
   onSearch?: (query: string) => void
   onTimeFilterChange?: (filter: string) => void
   onSortChange?: (sort: string) => void
@@ -77,21 +105,23 @@ export function ExploreSubnav({
   const uniswapAvailable = uniswapStatus?.available === true
 
   const handleTimeFilterClick = (value: string) => {
-    if (onTimeFilterChange) {
-      onTimeFilterChange(value)
-    }
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('time', value)
-    setSearchParams(newParams, { replace: true })
+    applyExploreParamChange({
+      key: 'time',
+      value,
+      onChange: onTimeFilterChange,
+      searchParams,
+      setSearchParams,
+    })
   }
 
   const handleSortClick = (value: string) => {
-    if (onSortChange) {
-      onSortChange(value)
-    }
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('sort', value)
-    setSearchParams(newParams, { replace: true })
+    applyExploreParamChange({
+      key: 'sort',
+      value,
+      onChange: onSortChange,
+      searchParams,
+      setSearchParams,
+    })
   }
 
   return (
@@ -127,6 +157,7 @@ export function ExploreSubnav({
             <input
               type="text"
               placeholder={searchPlaceholder}
+              value={searchValue}
               className="w-full sm:w-[260px] h-9 sm:h-10 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 pl-9 sm:pl-10 pr-4 text-[13px] sm:text-sm text-white placeholder:text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all duration-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
               aria-label="Search"
               onChange={(e) => onSearch?.(e.target.value)}

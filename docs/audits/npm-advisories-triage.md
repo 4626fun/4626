@@ -1,12 +1,12 @@
 # pnpm audit triage (4626)
 
-Rolling notes for lockfiles under **root**, **frontend**, **cre**, and **apps/docs-site**. CI summary: [.github/workflows/security-scanning.yml](../../.github/workflows/security-scanning.yml) `dependency-audit` job.
+Rolling notes for lockfiles under **root**, **frontend**, **cre**, and **apps/docs-site**. CI summary: [.github/workflows/security-scanning.yml](https://github.com/wenakita/4626/blob/main/.github/workflows/security-scanning.yml) `dependency-audit` job.
 
-Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.sh](../../scripts/security-audit-local.sh)).
+Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.sh](https://github.com/wenakita/4626/blob/main/scripts/security-audit-local.sh)).
 
 ---
 
-## Root — [pnpm-lock.yaml](../../pnpm-lock.yaml)
+## Root — [pnpm-lock.yaml](https://github.com/wenakita/4626/blob/main/pnpm-lock.yaml)
 
 ### Remediation applied
 
@@ -26,7 +26,7 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 
 ---
 
-## Frontend — [frontend/pnpm-lock.yaml](../../frontend/pnpm-lock.yaml)
+## Frontend — [frontend/pnpm-lock.yaml](https://github.com/wenakita/4626/blob/main/frontend/pnpm-lock.yaml)
 
 ### Remediation applied
 
@@ -42,7 +42,7 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 
 ---
 
-## CRE — [cre/pnpm-lock.yaml](../../cre/pnpm-lock.yaml)
+## CRE — [cre/pnpm-lock.yaml](https://github.com/wenakita/4626/blob/main/cre/pnpm-lock.yaml)
 
 | Issue | Mitigation |
 |-------|------------|
@@ -50,7 +50,7 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 
 ---
 
-## Docs site — [apps/docs-site/pnpm-lock.yaml](../../apps/docs-site/pnpm-lock.yaml)
+## Docs site — [apps/docs-site/pnpm-lock.yaml](https://github.com/wenakita/4626/blob/main/apps/docs-site/pnpm-lock.yaml)
 
 | Issue | Mitigation |
 |-------|------------|

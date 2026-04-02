@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { applyEnv, createMockReq, createMockRes } from '../helpers'
+import { applyEnv, createMockReq, createMockRes, withAuthHeader } from '../helpers'
 
 async function loadHandler() {
   const mod = await import('../../_handlers/uniswap/_checkDelegation.ts')
@@ -38,8 +38,10 @@ describe('/api/uniswap/checkDelegation', () => {
     const req = createMockReq({
       method: 'POST',
       headers: {
-        origin: 'https://v1.4626.fun',
-        'x-forwarded-for': '10.1.1.3',
+        ...withAuthHeader({
+          origin: 'https://v1.4626.fun',
+          'x-forwarded-for': '10.1.1.3',
+        }),
       },
       body: {
         chainIds: [8453],
@@ -65,7 +67,7 @@ describe('/api/uniswap/checkDelegation', () => {
     restoreEnv = applyEnv({ UNISWAP_API_KEY: 'test-key' })
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.4' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.4' }),
       body: { walletAddresses: ['0x0000000000000000000000000000000000000002'] },
     })
     const res = createMockRes()
@@ -85,7 +87,7 @@ describe('/api/uniswap/checkDelegation', () => {
     })
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.5' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.5' }),
       body: {
         chainIds: [10],
         walletAddresses: ['0x0000000000000000000000000000000000000002'],
@@ -104,7 +106,7 @@ describe('/api/uniswap/checkDelegation', () => {
     restoreEnv = applyEnv({ UNISWAP_API_KEY: 'test-key' })
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.6' },
+      headers: withAuthHeader({ origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.6' }),
       body: {
         chainIds: [8453],
         walletAddresses: ['0xnot-an-address'],
@@ -119,4 +121,3 @@ describe('/api/uniswap/checkDelegation', () => {
     expect(String(res.body?.error ?? '')).toMatch(/walletaddresses/i)
   })
 })
-

@@ -4,7 +4,7 @@ https://github.com/ourzora/zora-protocol/blob/main/MONOREPO_ARCHITECTURE.md
 
 This comprehensive technical guide documents the monorepo setup, build system architecture, and patterns that future agents need to understand to work effectively with the Zora Protocol codebase.
 
-**For day-to-day development commands and workflows, see [CLAUDE.md](CLAUDE.md).**
+**For day-to-day development commands and workflows, see [AGENTS.md](https://github.com/wenakita/4626/blob/main/AGENTS.md).**
 
 ## Table of Contents
 
@@ -285,7 +285,7 @@ pnpm test             # Complete test suite
 pnpm changeset        # Version management
 ```
 
-**For complete command reference, see [CLAUDE.md](CLAUDE.md#development-commands).**
+**For complete command reference, see [AGENTS.md](https://github.com/wenakita/4626/blob/main/AGENTS.md#running-services).**
 
 ### Testing Strategies
 
@@ -309,7 +309,7 @@ pnpm test:integration    # In SDK packages
 pnpm run coverage       # Generates LCOV reports
 ```
 
-**For detailed testing workflows, see [CLAUDE.md](CLAUDE.md#testing).**
+**For detailed testing workflows, see [AGENTS.md](https://github.com/wenakita/4626/blob/main/AGENTS.md#lint--test--typecheck).**
 
 ### Documentation Build System
 

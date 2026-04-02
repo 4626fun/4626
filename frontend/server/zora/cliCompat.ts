@@ -93,8 +93,6 @@ export type ZoraCliPriceHistoryResult = {
 
 export type ZoraCliAuthStatusResult = {
   authenticated: boolean
-  key: string | null
-  source: string | null
 }
 
 export type ZoraCliErrorPayload = {
@@ -296,11 +294,6 @@ function intervalWindowMs(interval: ZoraCliInterval): number | null {
   if (interval === '1w') return 7 * 24 * 60 * 60 * 1000
   if (interval === '1m') return 30 * 24 * 60 * 60 * 1000
   return null
-}
-
-function maskApiKey(raw: string): string {
-  if (raw.length <= 8) return '*'.repeat(raw.length)
-  return `${raw.slice(0, 8)}...${raw.slice(-4)}`
 }
 
 export function toCliErrorPayload(error: unknown, fallbackSuggestion?: string): { status: number; body: ZoraCliErrorPayload } {
@@ -507,16 +500,7 @@ export async function priceHistoryCli(params: {
 
 export function authStatusCli(): ZoraCliAuthStatusResult {
   const key = String(process.env.ZORA_SERVER_API_KEY ?? '').trim()
-  if (!key) {
-    return {
-      authenticated: false,
-      key: null,
-      source: null,
-    }
-  }
   return {
-    authenticated: true,
-    key: maskApiKey(key),
-    source: 'env:ZORA_SERVER_API_KEY',
+    authenticated: key.length > 0,
   }
 }

@@ -33,4 +33,4 @@ Internal engineering and release-readiness notes. These are **not** a substitute
 
 **Supply chain**
 
-- [`.github/dependabot.yml`](../../.github/dependabot.yml) — weekly npm updates for `/`, `/frontend`, and `/cre`; weekly Bun updates for `cre/cre-workflows` packages that commit `bun.lock`; monthly GitHub Actions bumps.
+- [`.github/dependabot.yml`](https://github.com/wenakita/4626/blob/main/.github/dependabot.yml) — weekly npm updates for `/`, `/frontend`, and `/cre`; weekly Bun updates for `cre/cre-workflows` packages that commit `bun.lock`; monthly GitHub Actions bumps.

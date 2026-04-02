@@ -799,9 +799,10 @@ async function hasOpfsDatabase(): Promise<boolean> {
       opfs.close()
     }
   } catch (err) {
-    // OPFS not supported or other error — assume DB might exist
-    console.warn('[xmtp] OPFS check failed (assuming DB might exist):', err)
-    return true
+    // OPFS not supported or transiently unavailable. Treat as "no readable DB"
+    // so we can still fall back to Client.create instead of hard-failing init.
+    console.warn('[xmtp] OPFS check failed (treating as no local DB):', err)
+    return false
   }
 }
 
